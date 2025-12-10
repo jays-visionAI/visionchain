@@ -1,0 +1,7 @@
+{
+  "name": "Vision Chain",
+  "description": "Official website for Vision Chain - The first Agentic AI Blockchain. Features a modern minimalist design and integrated AI tools powered by Gemini.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
