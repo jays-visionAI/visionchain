@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { createSignal, Show } from 'solid-js';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Stats from './components/Stats';
@@ -16,15 +16,17 @@ import Academy from './components/Academy';
 import DeveloperCommunity from './components/DeveloperCommunity';
 import ContactUs from './components/ContactUs';
 import TokenDynamics from './components/TokenDynamics';
-import { Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-solid';
+
+export type PageType = 'home' | 'research' | 'technology' | 'privacy' | 'community' | 'academy' | 'developer-community' | 'contact' | 'terms' | 'cookies' | 'token-dynamics';
 
 function App() {
-  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'home' | 'research' | 'technology' | 'privacy' | 'community' | 'academy' | 'developer-community' | 'contact' | 'terms' | 'cookies' | 'token-dynamics'>('home');
+  const [isAIModalOpen, setIsAIModalOpen] = createSignal(false);
+  const [currentPage, setCurrentPage] = createSignal<PageType>('home');
 
-  const handleNavigation = (page: 'home' | 'research' | 'technology' | 'privacy' | 'community' | 'academy' | 'developer-community' | 'contact' | 'terms' | 'cookies' | 'token-dynamics', sectionId?: string) => {
+  const handleNavigation = (page: PageType, sectionId?: string) => {
     setCurrentPage(page);
-    
+
     // If we are navigating to a section, wait for state update/render then scroll
     if (sectionId) {
       setTimeout(() => {
@@ -46,16 +48,16 @@ function App() {
   };
 
   return (
-    <div className="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
-      
-      <div className="relative z-10">
+    <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
+
+      <div class="relative z-10">
         <Navbar onNavigate={handleNavigation} />
-        
+
         <main>
-          {currentPage === 'home' && (
+          <Show when={currentPage() === 'home'}>
             <>
               <Hero />
-              
+
               {/* Stats Section */}
               <Stats />
 
@@ -69,84 +71,84 @@ function App() {
                 <Architecture />
               </div>
             </>
-          )}
+          </Show>
 
-          {currentPage === 'research' && (
+          <Show when={currentPage() === 'research'}>
             <div id="research">
               <Research />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'technology' && (
+          <Show when={currentPage() === 'technology'}>
             <div id="technology">
               <Technology />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'token-dynamics' && (
+          <Show when={currentPage() === 'token-dynamics'}>
             <div id="token-dynamics">
-               <TokenDynamics />
+              <TokenDynamics />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'community' && (
+          <Show when={currentPage() === 'community'}>
             <div id="community">
               <Community />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'academy' && (
+          <Show when={currentPage() === 'academy'}>
             <div id="academy">
-               <Academy />
+              <Academy />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'developer-community' && (
+          <Show when={currentPage() === 'developer-community'}>
             <div id="developer-community">
-               <DeveloperCommunity />
+              <DeveloperCommunity />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'contact' && (
+          <Show when={currentPage() === 'contact'}>
             <div id="contact">
-               <ContactUs />
+              <ContactUs />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'privacy' && (
+          <Show when={currentPage() === 'privacy'}>
             <div id="privacy">
-               <PrivacyPolicy />
+              <PrivacyPolicy />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'terms' && (
+          <Show when={currentPage() === 'terms'}>
             <div id="terms">
-               <TermsOfService />
+              <TermsOfService />
             </div>
-          )}
+          </Show>
 
-          {currentPage === 'cookies' && (
+          <Show when={currentPage() === 'cookies'}>
             <div id="cookies">
-               <CookiePolicy />
+              <CookiePolicy />
             </div>
-          )}
+          </Show>
         </main>
 
         <Footer onNavigate={handleNavigation} />
       </div>
 
       {/* Floating Action Button for AI if modal closed */}
-      {!isAIModalOpen && (
-        <button 
+      <Show when={!isAIModalOpen()}>
+        <button
           onClick={() => setIsAIModalOpen(true)}
-          className="fixed bottom-8 right-8 p-4 bg-blue-600 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 transition-transform z-40 group"
+          class="fixed bottom-8 right-8 p-4 bg-blue-600 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 transition-transform z-40 group"
         >
-          <Sparkles className="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
+          <Sparkles class="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
         </button>
-      )}
+      </Show>
 
       {/* AI Hub Modal */}
-      <AIChat isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} />
+      <AIChat isOpen={isAIModalOpen()} onClose={() => setIsAIModalOpen(false)} />
     </div>
   );
 }

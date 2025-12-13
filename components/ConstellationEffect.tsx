@@ -1,11 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import { onMount, onCleanup } from 'solid-js';
+import type { JSX } from 'solid-js';
 
-const ConstellationEffect: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouseRef = useRef({ x: -9999, y: -9999 });
+const ConstellationEffect = (): JSX.Element => {
+  let canvasRef: HTMLCanvasElement | undefined;
+  let mouse = { x: -9999, y: -9999 };
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
+  onMount(() => {
+    const canvas = canvasRef;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
@@ -13,7 +14,7 @@ const ConstellationEffect: React.FC = () => {
 
     let width = 0;
     let height = 0;
-    
+
     // Resize handler to fit parent container
     const resize = () => {
       const parent = canvas.parentElement;
@@ -24,36 +25,36 @@ const ConstellationEffect: React.FC = () => {
         canvas.height = height;
       }
     };
-    
+
     window.addEventListener('resize', resize);
     resize();
 
     // Mouse tracking
     const handleMouseMove = (e: MouseEvent) => {
-        const rect = canvas.getBoundingClientRect();
-        mouseRef.current = {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top
-        };
+      const rect = canvas.getBoundingClientRect();
+      mouse = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+      };
     };
     window.addEventListener('mousemove', handleMouseMove);
 
     // Configuration
     // Higher density divisor = fewer particles. 
     // Adjusted for a balance between performance and "busy-ness"
-    const particleCount = Math.floor((width * height) / 10000); 
+    const particleCount = Math.floor((width * height) / 10000);
     const connectionDist = 120;
     const mouseInteractionDist = 180;
 
     interface Particle {
-        x: number;
-        y: number;
-        vx: number;
-        vy: number;
-        size: number;
-        baseSize: number;
-        pulseAngle: number;
-        pulseSpeed: number;
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      size: number;
+      baseSize: number;
+      pulseAngle: number;
+      pulseSpeed: number;
     }
 
     const particles: Particle[] = [];
@@ -75,7 +76,7 @@ const ConstellationEffect: React.FC = () => {
     let animationId: number;
     const animate = () => {
       ctx.clearRect(0, 0, width, height);
-      
+
       particles.forEach((p, i) => {
         // Update position
         p.x += p.vx;
@@ -90,27 +91,27 @@ const ConstellationEffect: React.FC = () => {
         p.size = p.baseSize + Math.sin(p.pulseAngle) * 0.5;
 
         // Mouse Interaction
-        const dx = p.x - mouseRef.current.x;
-        const dy = p.y - mouseRef.current.y;
+        const dx = p.x - mouse.x;
+        const dy = p.y - mouse.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < mouseInteractionDist) {
-            // Repulsion effect: push particles slightly away from cursor
-            const force = (mouseInteractionDist - dist) / mouseInteractionDist;
-            const angle = Math.atan2(dy, dx);
-            const moveX = Math.cos(angle) * force * 2; // Strength of push
-            const moveY = Math.sin(angle) * force * 2;
-            
-            p.x += moveX;
-            p.y += moveY;
+          // Repulsion effect: push particles slightly away from cursor
+          const force = (mouseInteractionDist - dist) / mouseInteractionDist;
+          const angle = Math.atan2(dy, dx);
+          const moveX = Math.cos(angle) * force * 2; // Strength of push
+          const moveY = Math.sin(angle) * force * 2;
 
-            // Draw Connection to Mouse
-            ctx.beginPath();
-            ctx.moveTo(p.x, p.y);
-            ctx.lineTo(mouseRef.current.x, mouseRef.current.y);
-            ctx.strokeStyle = `rgba(59, 130, 246, ${force * 0.6})`; // Blue connection
-            ctx.lineWidth = 1;
-            ctx.stroke();
+          p.x += moveX;
+          p.y += moveY;
+
+          // Draw Connection to Mouse
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(mouse.x, mouse.y);
+          ctx.strokeStyle = `rgba(59, 130, 246, ${force * 0.6})`; // Blue connection
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
 
         // Draw Particle
@@ -118,7 +119,7 @@ const ConstellationEffect: React.FC = () => {
         ctx.arc(p.x, p.y, Math.max(0.5, p.size), 0, Math.PI * 2);
         // Twinkle opacity
         const opacity = 0.4 + (Math.sin(p.pulseAngle) + 1) * 0.2;
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`; 
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
         ctx.fill();
 
         // Draw Connections between nearby particles
@@ -139,20 +140,20 @@ const ConstellationEffect: React.FC = () => {
           }
         }
       });
-      
+
       animationId = requestAnimationFrame(animate);
     };
 
     animate();
 
-    return () => {
+    onCleanup(() => {
       window.removeEventListener('resize', resize);
       window.removeEventListener('mousemove', handleMouseMove);
       cancelAnimationFrame(animationId);
-    };
-  }, []);
+    });
+  });
 
-  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+  return <canvas ref={canvasRef} class="absolute inset-0 w-full h-full pointer-events-none" />;
 };
 
 export default ConstellationEffect;
