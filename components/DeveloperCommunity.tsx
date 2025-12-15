@@ -31,11 +31,11 @@ const FeatureCard = (props: FeatureCardProps): JSX.Element => {
 
   return (
     <Motion.div
-      initial={{ opacity: 0, y: 20 }}
-      inView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      inView={{ opacity: 1 }}
       inViewOptions={{ once: true }}
       transition={{ delay: props.delay, duration: 0.5 }}
-      class="relative rounded-2xl overflow-hidden group border border-white/5"
+      class="relative rounded-2xl overflow-hidden group border border-white/5 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
     >
       {/* Moving Light Border Effect - Extra Long Tail */}
       <div class="absolute inset-[-100%] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0">
@@ -112,8 +112,8 @@ const DeveloperCommunity = (): JSX.Element => {
 
         {/* Header */}
         <Motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
           class="mb-16 max-w-4xl mx-auto"
         >
@@ -172,8 +172,8 @@ const DeveloperCommunity = (): JSX.Element => {
 
         {/* Github Integration */}
         <Motion.div
-          initial={{ opacity: 0, y: 20 }}
-          inView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          inView={{ opacity: 1 }}
           inViewOptions={{ once: true }}
           class="w-full max-w-4xl mb-24 relative group"
         >

@@ -79,10 +79,10 @@ const SocialCard = (props: SocialCardProps): JSX.Element => {
 
   return (
     <Motion.div
-      initial={{ opacity: 0, y: 20 }}
-      inView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      inView={{ opacity: 1 }}
       inViewOptions={{ once: true }}
-      transition={{ duration: 0.5, delay: props.idx * 0.1 }}
+      transition={{ duration: 0.4, delay: props.idx * 0.05 }}
       class="group relative rounded-3xl overflow-hidden border border-white/5 hover:-translate-y-1 transition-transform duration-300"
     >
       {/* Moving Light Border Effect */}
@@ -131,7 +131,7 @@ const Community = (): JSX.Element => {
         {/* Hero Section */}
         <Motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
           class="text-center mb-20"
         >

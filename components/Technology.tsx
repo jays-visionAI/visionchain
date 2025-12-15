@@ -60,12 +60,13 @@ const TechCard = (props: TechCardProps): JSX.Element => {
 
   return (
     <Motion.div
-      initial={{ opacity: 0, y: 20 }}
-      inView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      inView={{ opacity: 1 }}
       inViewOptions={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.5, delay: props.delay ?? 0 }}
       class={`
         relative rounded-[32px] overflow-hidden group border border-white/5 
+        hover:shadow-2xl transition-all duration-300 hover:-translate-y-1
         ${props.class ?? ''}
       `}
     >
@@ -141,9 +142,9 @@ const Technology = (): JSX.Element => {
 
         <div class="max-w-[1200px] mx-auto text-center relative z-10">
           <Motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.2 }}
           >
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium uppercase tracking-wider mb-6">
               <Terminal class="w-3 h-3" />
@@ -166,16 +167,16 @@ const Technology = (): JSX.Element => {
         {/* Section Heading */}
         <div class="text-left mb-16">
           <Motion.span
-            initial={{ opacity: 0, y: 10 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             class="text-blue-500 font-semibold tracking-wide uppercase text-xs mb-3 block"
           >
             Core Technology
           </Motion.span>
           <Motion.h2
-            initial={{ opacity: 0, y: 10 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             transition={{ delay: 0.1 }}
             class="text-3xl md:text-5xl font-semibold text-white tracking-tight mb-6 leading-[1.1]"
@@ -183,8 +184,8 @@ const Technology = (): JSX.Element => {
             Cryptographic Foundations.
           </Motion.h2>
           <Motion.p
-            initial={{ opacity: 0, y: 10 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             transition={{ delay: 0.2 }}
             class="text-xl text-gray-400 max-w-2xl font-medium leading-relaxed"

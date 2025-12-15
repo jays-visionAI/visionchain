@@ -67,10 +67,10 @@ const CourseCard = (props: CourseCardProps): JSX.Element => {
 
     return (
         <Motion.div
-            initial={{ opacity: 0, y: 20 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
-            transition={{ delay: props.idx * 0.1, duration: 0.5 }}
+            transition={{ delay: props.idx * 0.05, duration: 0.4 }}
             class="group rounded-3xl relative overflow-hidden border border-white/5 hover:-translate-y-1 transition-transform"
         >
             {/* Moving Light Border Effect - Extra Long Tail */}
@@ -137,7 +137,7 @@ const Academy = (): JSX.Element => {
                 <div class="text-center mb-24 max-w-4xl mx-auto">
                     <Motion.div
                         initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        animate={{ opacity: 1 }}
                         transition={{ duration: 0.8 }}
                     >
                         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium uppercase tracking-wider mb-6">

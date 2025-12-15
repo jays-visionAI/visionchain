@@ -1,0 +1,15 @@
+# Robots.txt for Vision Chain
+# https://visionchain.co
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://visionchain.co/sitemap.xml
+
+# Crawl-delay (optional, for politeness)
+Crawl-delay: 1
+
+# Disallow admin and private paths (if any in the future)
+Disallow: /api/
+Disallow: /admin/

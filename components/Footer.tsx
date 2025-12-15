@@ -1,23 +1,12 @@
 import { createSignal, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
+import { A } from '@solidjs/router';
 import Logo from './Logo';
 import { Twitter, Github, Linkedin, Send, Youtube, BookOpen, Check } from 'lucide-solid';
-import type { PageType } from '../App';
 
-interface FooterProps {
-  onNavigate?: (page: PageType, sectionId?: string) => void;
-}
-
-const Footer = (props: FooterProps): JSX.Element => {
+const Footer = (): JSX.Element => {
   const [email, setEmail] = createSignal('');
   const [isSubmitted, setIsSubmitted] = createSignal(false);
-
-  const handleLinkClick = (e: MouseEvent, page: PageType, sectionId?: string) => {
-    e.preventDefault();
-    if (props.onNavigate) {
-      props.onNavigate(page, sectionId);
-    }
-  }
 
   const handleSubscribe = (e: SubmitEvent) => {
     e.preventDefault();
@@ -43,9 +32,9 @@ const Footer = (props: FooterProps): JSX.Element => {
         <div class="grid grid-cols-1 md:grid-cols-12 gap-12 mb-16">
           {/* Brand Column */}
           <div class="md:col-span-4 space-y-6">
-            <div onClick={(e) => handleLinkClick(e, 'home')} class="cursor-pointer inline-block">
+            <A href="/" class="cursor-pointer inline-block">
               <Logo class="w-6 h-6" showText={true} />
-            </div>
+            </A>
             <p class="max-w-xs leading-relaxed text-gray-500">
               The first Agentic AI Blockchain. Empowering autonomous agents with seamless access to identity, compute, and liquidity.
             </p>
@@ -63,9 +52,9 @@ const Footer = (props: FooterProps): JSX.Element => {
           <div class="md:col-span-2 space-y-4">
             <h4 class="text-white font-medium mb-4">Protocol</h4>
             <div class="flex flex-col space-y-3">
-              <button onClick={(e) => handleLinkClick(e, 'technology')} class="text-left hover:text-blue-400 transition-colors">Technology</button>
-              <button onClick={(e) => handleLinkClick(e, 'research')} class="text-left hover:text-blue-400 transition-colors">Research</button>
-              <button onClick={(e) => handleLinkClick(e, 'token-dynamics')} class="text-left hover:text-blue-400 transition-colors">Token Dynamics</button>
+              <A href="/technology" class="hover:text-blue-400 transition-colors">Technology</A>
+              <A href="/research" class="hover:text-blue-400 transition-colors">Research</A>
+              <a href="https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="hover:text-blue-400 transition-colors">Token Dynamics</a>
               <a href="https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="hover:text-blue-400 transition-colors">Whitepaper</a>
             </div>
           </div>
@@ -73,10 +62,10 @@ const Footer = (props: FooterProps): JSX.Element => {
           <div class="md:col-span-2 space-y-4">
             <h4 class="text-white font-medium mb-4">Ecosystem</h4>
             <div class="flex flex-col space-y-3">
-              <button onClick={(e) => handleLinkClick(e, 'community')} class="text-left hover:text-blue-400 transition-colors">Community</button>
-              <button onClick={(e) => handleLinkClick(e, 'academy')} class="text-left hover:text-blue-400 transition-colors">Academy</button>
-              <button onClick={(e) => handleLinkClick(e, 'developer-community')} class="text-left hover:text-blue-400 transition-colors">Developer Hub</button>
-              <button onClick={(e) => handleLinkClick(e, 'contact')} class="text-left hover:text-blue-400 transition-colors">Contact Us</button>
+              <A href="/community" class="hover:text-blue-400 transition-colors">Community</A>
+              <A href="/academy" class="hover:text-blue-400 transition-colors">Academy</A>
+              <A href="/developer-community" class="hover:text-blue-400 transition-colors">Developer Hub</A>
+              <A href="/contact" class="hover:text-blue-400 transition-colors">Contact Us</A>
             </div>
           </div>
 
@@ -111,9 +100,9 @@ const Footer = (props: FooterProps): JSX.Element => {
             <p>© 2025 Vision Chain Foundation. All rights reserved.</p>
           </div>
           <div class="flex gap-8">
-            <button onClick={(e) => handleLinkClick(e, 'privacy')} class="hover:text-white transition-colors">Privacy Policy</button>
-            <button onClick={(e) => handleLinkClick(e, 'terms')} class="hover:text-white transition-colors">Terms of Service</button>
-            <button onClick={(e) => handleLinkClick(e, 'cookies')} class="hover:text-white transition-colors">Cookie Policy</button>
+            <A href="/privacy" class="hover:text-white transition-colors">Privacy Policy</A>
+            <A href="/terms" class="hover:text-white transition-colors">Terms of Service</A>
+            <A href="/cookies" class="hover:text-white transition-colors">Cookie Policy</A>
           </div>
         </div>
 

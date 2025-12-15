@@ -94,8 +94,8 @@ const Stats = (): JSX.Element => {
 
       <div class="max-w-[1200px] mx-auto px-6 relative z-10">
         <Motion.div
-          initial={{ opacity: 0, y: 20 }}
-          inView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          inView={{ opacity: 1 }}
           inViewOptions={{ once: true }}
           transition={{ duration: 0.8 }}
           class="text-center mb-20"

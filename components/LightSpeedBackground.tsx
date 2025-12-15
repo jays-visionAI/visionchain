@@ -26,8 +26,8 @@ const LightSpeedBackground = (): JSX.Element => {
 
         // Star properties
         const stars: { x: number, y: number, z: number }[] = [];
-        const numStars = 500;
-        const speed = 25; // Speed of travel
+        const numStars = 250; // Reduced for performance
+        const speed = 12; // Speed of travel (slowed down for smoother effect)
         const focalLength = 300; // FOV
 
         // Initialize stars

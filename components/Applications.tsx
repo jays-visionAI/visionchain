@@ -104,8 +104,8 @@ const BentoCard = (props: BentoCardProps): JSX.Element => {
 
   return (
     <Motion.div
-      initial={{ opacity: 0, y: 20 }}
-      inView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      inView={{ opacity: 1 }}
       inViewOptions={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.4, easing: "ease-out" }}
       class={`
@@ -185,16 +185,16 @@ const Applications = (): JSX.Element => {
       <div class="max-w-[1200px] mx-auto px-6 relative z-10">
         <div class="text-center mb-20">
           <Motion.span
-            initial={{ opacity: 0, y: 10 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             class="text-blue-500 font-semibold tracking-wide uppercase text-xs mb-3 block"
           >
             Ecosystem Applications
           </Motion.span>
           <Motion.h2
-            initial={{ opacity: 0, y: 10 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             transition={{ delay: 0.1 }}
             class="text-4xl md:text-6xl font-semibold text-white tracking-tight mb-6"
@@ -202,8 +202,8 @@ const Applications = (): JSX.Element => {
             Built for Agents.
           </Motion.h2>
           <Motion.p
-            initial={{ opacity: 0, y: 10 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             inViewOptions={{ once: true }}
             transition={{ delay: 0.2 }}
             class="text-xl text-gray-400 max-w-2xl mx-auto font-medium leading-relaxed"

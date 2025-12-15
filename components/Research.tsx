@@ -12,8 +12,8 @@ interface FadeInProps {
 
 const FadeIn = (props: FadeInProps): JSX.Element => (
   <Motion.div
-    initial={{ opacity: 0, y: 20 }}
-    inView={{ opacity: 1, y: 0 }}
+    initial={{ opacity: 0 }}
+    inView={{ opacity: 1 }}
     inViewOptions={{ once: true, margin: "-50px" }}
     transition={{ duration: 0.6, delay: props.delay ?? 0, easing: "ease-out" }}
     class={props.class ?? ""}
@@ -48,8 +48,14 @@ const ResearchCard = (props: ResearchCardProps): JSX.Element => {
   };
 
   return (
-    <FadeIn delay={props.delay} class={`h-full ${props.class ?? ''}`}>
-      <div class="relative h-full rounded-3xl overflow-hidden group border border-white/5 hover:border-white/10 transition-colors">
+    <Motion.div
+      initial={{ opacity: 0 }}
+      inView={{ opacity: 1 }}
+      inViewOptions={{ once: true, margin: "-50px" }}
+      transition={{ duration: 0.5, delay: props.delay ?? 0 }}
+      class={`h-full group hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 ${props.class ?? ''}`}
+    >
+      <div class="relative h-full rounded-3xl overflow-hidden border border-white/5 hover:border-white/10 transition-colors">
 
         {/* Moving Light Border Effect */}
         <div class="absolute inset-[-100%] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0">
@@ -82,7 +88,7 @@ const ResearchCard = (props: ResearchCardProps): JSX.Element => {
           </div>
         </div>
       </div>
-    </FadeIn>
+    </Motion.div>
   );
 };
 
@@ -115,8 +121,8 @@ const InfrastructureCard = (props: InfrastructureCardProps): JSX.Element => {
 
   return (
     <Motion.div
-      initial={{ opacity: 0, y: 20 }}
-      inView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      inView={{ opacity: 1 }}
       inViewOptions={{ once: true }}
       transition={{ duration: 0.6, delay: props.delay ?? 0, easing: "ease-out" }}
       class="relative rounded-3xl overflow-hidden group border border-white/10 hover:border-white/20 h-full shadow-lg transition-all"
@@ -180,8 +186,8 @@ const Research = (): JSX.Element => {
 
         <div class="max-w-[1200px] mx-auto text-center relative z-10">
           <Motion.div
-            initial={{ opacity: 0, y: 20 }}
-            inView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            inView={{ opacity: 1 }}
             transition={{ duration: 0.8 }}
           >
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium uppercase tracking-wider mb-6">

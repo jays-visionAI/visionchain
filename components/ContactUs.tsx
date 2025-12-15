@@ -1,12 +1,27 @@
 import { createSignal, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion } from 'solid-motionone';
-import { Mail, MessageSquare, MapPin, Send, CheckCircle, ArrowRight, Building2, Users } from 'lucide-solid';
+import { Mail, MessageSquare, MapPin, ArrowRight, CheckCircle, Building2, Users } from 'lucide-solid';
 
 const ContactUs = (): JSX.Element => {
     const [formState, setFormState] = createSignal({ name: '', email: '', subject: 'General Inquiry', message: '' });
     const [isSubmitting, setIsSubmitting] = createSignal(false);
     const [isSubmitted, setIsSubmitted] = createSignal(false);
+
+    // Spotlight effect state for Direct Channels
+    let channelsRef: HTMLDivElement | undefined;
+    const [channelsPos, setChannelsPos] = createSignal({ x: 0, y: 0 });
+    const [channelsOpacity, setChannelsOpacity] = createSignal(0);
+
+    // Spotlight effect state for HQ
+    let hqRef: HTMLDivElement | undefined;
+    const [hqPos, setHqPos] = createSignal({ x: 0, y: 0 });
+    const [hqOpacity, setHqOpacity] = createSignal(0);
+
+    // Spotlight effect state for Form
+    let formRef: HTMLDivElement | undefined;
+    const [formPos, setFormPos] = createSignal({ x: 0, y: 0 });
+    const [formOpacity, setFormOpacity] = createSignal(0);
 
     const handleSubmit = (e: SubmitEvent) => {
         e.preventDefault();
@@ -42,8 +57,8 @@ const ContactUs = (): JSX.Element => {
 
                 {/* Header */}
                 <Motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     transition={{ duration: 0.8 }}
                     class="text-center mb-16"
                 >
@@ -63,167 +78,249 @@ const ContactUs = (): JSX.Element => {
 
                     {/* Contact Info Column */}
                     <div class="lg:col-span-5 space-y-8">
+                        {/* Direct Channels Box */}
                         <Motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            class="p-8 rounded-3xl bg-[#111] border border-white/5 space-y-8"
+                            class="relative rounded-3xl overflow-hidden group"
                         >
-                            <h3 class="text-2xl font-semibold text-white">Direct Channels</h3>
+                            {/* Moving Light Border Effect */}
+                            <div class="absolute inset-[-100%] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0">
+                                <div class="absolute inset-0 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_200deg,#2997ff_360deg)]" />
+                            </div>
 
-                            <div class="space-y-6">
-                                <div class="flex gap-4 items-start group">
-                                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                                        <Users class="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <h4 class="text-white font-medium mb-1">Partnerships</h4>
-                                        <p class="text-sm text-gray-500 mb-1">For ecosystem grants and integrations.</p>
-                                        <a href="mailto:jp@visai.io" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">jp@visai.io</a>
-                                    </div>
-                                </div>
+                            <div
+                                ref={channelsRef}
+                                onMouseMove={(e) => {
+                                    if (!channelsRef) return;
+                                    const rect = channelsRef.getBoundingClientRect();
+                                    setChannelsPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                    setChannelsOpacity(1);
+                                }}
+                                onMouseLeave={() => setChannelsOpacity(0)}
+                                class="relative m-[1px] rounded-[23px] bg-[#111] border border-white/5 p-8 space-y-8 overflow-hidden"
+                            >
+                                {/* Spotlight Effect */}
+                                <div
+                                    class="pointer-events-none absolute -inset-px transition duration-300 z-0"
+                                    style={{
+                                        opacity: channelsOpacity(),
+                                        background: `radial-gradient(600px circle at ${channelsPos().x}px ${channelsPos().y}px, rgba(41, 151, 255, 0.08), transparent 40%)`
+                                    }}
+                                />
 
-                                <div class="flex gap-4 items-start group">
-                                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                                        <Building2 class="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <h4 class="text-white font-medium mb-1">Press & Media</h4>
-                                        <p class="text-sm text-gray-500 mb-1">For media kits and interview requests.</p>
-                                        <a href="mailto:jp@visai.io" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">jp@visai.io</a>
-                                    </div>
-                                </div>
+                                <h3 class="text-2xl font-semibold text-white relative z-10">Direct Channels</h3>
 
-                                <div class="flex gap-4 items-start group">
-                                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                                        <MessageSquare class="w-5 h-5" />
+                                <div class="space-y-6 relative z-10">
+                                    <div class="flex gap-4 items-start group/item">
+                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover/item:bg-blue-500 group-hover/item:text-white transition-colors">
+                                            <Users class="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h4 class="text-white font-medium mb-1">Partnerships</h4>
+                                            <p class="text-sm text-gray-500 mb-1">For ecosystem grants and integrations.</p>
+                                            <a href="mailto:jp@visai.io" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">jp@visai.io</a>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h4 class="text-white font-medium mb-1">Technical Support</h4>
-                                        <p class="text-sm text-gray-500 mb-1">Issues with nodes or smart contracts?</p>
-                                        <a href="mailto:jays@visai.io" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">jays@visai.io</a>
+
+                                    <div class="flex gap-4 items-start group/item">
+                                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover/item:bg-purple-500 group-hover/item:text-white transition-colors">
+                                            <Building2 class="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h4 class="text-white font-medium mb-1">Press & Media</h4>
+                                            <p class="text-sm text-gray-500 mb-1">For media kits and interview requests.</p>
+                                            <a href="mailto:jp@visai.io" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">jp@visai.io</a>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-4 items-start group/item">
+                                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover/item:bg-emerald-500 group-hover/item:text-white transition-colors">
+                                            <MessageSquare class="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h4 class="text-white font-medium mb-1">Technical Support</h4>
+                                            <p class="text-sm text-gray-500 mb-1">Issues with nodes or smart contracts?</p>
+                                            <a href="mailto:jays@visai.io" class="text-sm text-blue-400 hover:text-blue-300 transition-colors">jays@visai.io</a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </Motion.div>
 
+                        {/* Headquarters Box */}
                         <Motion.div
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
                             transition={{ delay: 0.3 }}
-                            class="p-8 rounded-3xl bg-[#0c0c0c] border border-white/5 relative overflow-hidden"
+                            class="relative rounded-3xl overflow-hidden group"
                         >
-                            <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-full pointer-events-none" />
-                            <div class="flex items-center gap-3 mb-4 text-white">
-                                <MapPin class="w-5 h-5 text-gray-400" />
-                                <span class="font-semibold">Headquarters</span>
+                            {/* Moving Light Border Effect */}
+                            <div class="absolute inset-[-100%] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0">
+                                <div class="absolute inset-0 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_200deg,#2997ff_360deg)]" />
                             </div>
-                            <address class="text-gray-400 text-sm not-italic leading-relaxed">
-                                Vision Chain Foundation<br />
-                                HONG LIM COMPLEX<br />
-                                531A UPPER CROSS STREET #04-098<br />
-                                Singapore 051531
-                            </address>
+
+                            <div
+                                ref={hqRef}
+                                onMouseMove={(e) => {
+                                    if (!hqRef) return;
+                                    const rect = hqRef.getBoundingClientRect();
+                                    setHqPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                    setHqOpacity(1);
+                                }}
+                                onMouseLeave={() => setHqOpacity(0)}
+                                class="relative m-[1px] rounded-[23px] bg-[#0c0c0c] border border-white/5 p-8 overflow-hidden"
+                            >
+                                {/* Spotlight Effect */}
+                                <div
+                                    class="pointer-events-none absolute -inset-px transition duration-300 z-0"
+                                    style={{
+                                        opacity: hqOpacity(),
+                                        background: `radial-gradient(600px circle at ${hqPos().x}px ${hqPos().y}px, rgba(41, 151, 255, 0.08), transparent 40%)`
+                                    }}
+                                />
+
+                                <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-full pointer-events-none" />
+                                <div class="flex items-center gap-3 mb-4 text-white relative z-10">
+                                    <MapPin class="w-5 h-5 text-gray-400" />
+                                    <span class="font-semibold">Headquarters</span>
+                                </div>
+                                <address class="text-gray-400 text-sm not-italic leading-relaxed relative z-10">
+                                    Vision Chain Foundation<br />
+                                    HONG LIM COMPLEX<br />
+                                    531A UPPER CROSS STREET #04-098<br />
+                                    Singapore 051531
+                                </address>
+                            </div>
                         </Motion.div>
                     </div>
 
                     {/* Form Column */}
                     <div class="lg:col-span-7">
                         <Motion.div
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
                             transition={{ delay: 0.2 }}
-                            class="p-8 md:p-10 rounded-[32px] bg-[#1d1d1f] border border-white/10 shadow-2xl relative"
+                            class="relative rounded-[32px] overflow-hidden group"
                         >
-                            <Show when={isSubmitted()}>
-                                <div class="absolute inset-0 flex flex-col items-center justify-center bg-[#1d1d1f] rounded-[32px] z-10 text-center p-8">
-                                    <Motion.div
-                                        initial={{ scale: 0.8, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        class="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-6"
-                                    >
-                                        <CheckCircle class="w-8 h-8" />
-                                    </Motion.div>
-                                    <h3 class="text-2xl font-bold text-white mb-2">Email Client Opened!</h3>
-                                    <p class="text-gray-400 max-w-sm">We've prepared a draft in your email client addressed to jp@visai.io. Please hit send to complete your inquiry.</p>
-                                    <button
-                                        onClick={() => setIsSubmitted(false)}
-                                        class="mt-8 px-6 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full text-sm font-medium transition-colors"
-                                    >
-                                        Send another message
-                                    </button>
-                                </div>
-                            </Show>
+                            {/* Moving Light Border Effect */}
+                            <div class="absolute inset-[-100%] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-0">
+                                <div class="absolute inset-0 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_200deg,#2997ff_360deg)]" />
+                            </div>
 
-                            <h2 class="text-2xl font-bold text-white mb-6">Send us a message</h2>
+                            <div
+                                ref={formRef}
+                                onMouseMove={(e) => {
+                                    if (!formRef) return;
+                                    const rect = formRef.getBoundingClientRect();
+                                    setFormPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                    setFormOpacity(1);
+                                }}
+                                onMouseLeave={() => setFormOpacity(0)}
+                                class="relative m-[1px] rounded-[30px] p-8 md:p-10 bg-[#1d1d1f] border border-white/10 shadow-2xl overflow-hidden"
+                            >
+                                {/* Spotlight Effect */}
+                                <div
+                                    class="pointer-events-none absolute -inset-px transition duration-300 z-0"
+                                    style={{
+                                        opacity: formOpacity(),
+                                        background: `radial-gradient(600px circle at ${formPos().x}px ${formPos().y}px, rgba(41, 151, 255, 0.08), transparent 40%)`
+                                    }}
+                                />
 
-                            <form onSubmit={handleSubmit} class="space-y-6">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div class="space-y-2">
-                                        <label class="text-xs font-medium text-gray-400 ml-1">Your Name</label>
-                                        <input
-                                            required
-                                            type="text"
-                                            value={formState().name}
-                                            onInput={e => updateFormField('name', e.currentTarget.value)}
-                                            class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-700"
-                                            placeholder="John Doe"
-                                        />
+                                <Show when={isSubmitted()}>
+                                    <div class="absolute inset-0 flex flex-col items-center justify-center bg-[#1d1d1f] rounded-[30px] z-20 text-center p-8">
+                                        <Motion.div
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            class="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-6"
+                                        >
+                                            <CheckCircle class="w-8 h-8" />
+                                        </Motion.div>
+                                        <h3 class="text-2xl font-bold text-white mb-2">Email Client Opened!</h3>
+                                        <p class="text-gray-400 max-w-sm">We've prepared a draft in your email client addressed to jp@visai.io. Please hit send to complete your inquiry.</p>
+                                        <button
+                                            onClick={() => setIsSubmitted(false)}
+                                            class="mt-8 px-6 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full text-sm font-medium transition-colors"
+                                        >
+                                            Send another message
+                                        </button>
                                     </div>
-                                    <div class="space-y-2">
-                                        <label class="text-xs font-medium text-gray-400 ml-1">Email Address</label>
-                                        <input
-                                            required
-                                            type="email"
-                                            value={formState().email}
-                                            onInput={e => updateFormField('email', e.currentTarget.value)}
-                                            class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-700"
-                                            placeholder="john@company.com"
-                                        />
-                                    </div>
-                                </div>
+                                </Show>
 
-                                <div class="space-y-2">
-                                    <label class="text-xs font-medium text-gray-400 ml-1">Subject</label>
-                                    <select
-                                        value={formState().subject}
-                                        onChange={e => updateFormField('subject', e.currentTarget.value)}
-                                        class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none cursor-pointer"
-                                    >
-                                        <option>General Inquiry</option>
-                                        <option>Partnership Proposal</option>
-                                        <option>Technical Support</option>
-                                        <option>Media/Press</option>
-                                    </select>
-                                </div>
+                                <div class="relative z-10">
+                                    <h2 class="text-2xl font-bold text-white mb-6">Send us a message</h2>
 
-                                <div class="space-y-2">
-                                    <label class="text-xs font-medium text-gray-400 ml-1">Message</label>
-                                    <textarea
-                                        required
-                                        value={formState().message}
-                                        onInput={e => updateFormField('message', e.currentTarget.value)}
-                                        class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-700 min-h-[160px] resize-none"
-                                        placeholder="Tell us about your project or inquiry..."
-                                    />
-                                </div>
+                                    <form onSubmit={handleSubmit} class="space-y-6">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div class="space-y-2">
+                                                <label class="text-xs font-medium text-gray-400 ml-1">Your Name</label>
+                                                <input
+                                                    required
+                                                    type="text"
+                                                    value={formState().name}
+                                                    onInput={e => updateFormField('name', e.currentTarget.value)}
+                                                    class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-700"
+                                                    placeholder="John Doe"
+                                                />
+                                            </div>
+                                            <div class="space-y-2">
+                                                <label class="text-xs font-medium text-gray-400 ml-1">Email Address</label>
+                                                <input
+                                                    required
+                                                    type="email"
+                                                    value={formState().email}
+                                                    onInput={e => updateFormField('email', e.currentTarget.value)}
+                                                    class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-700"
+                                                    placeholder="john@company.com"
+                                                />
+                                            </div>
+                                        </div>
 
-                                <div class="pt-2">
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmitting()}
-                                        class="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-4 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <Show when={isSubmitting()} fallback={
-                                            <>
-                                                Send Message <ArrowRight class="w-4 h-4" />
-                                            </>
-                                        }>
-                                            <span class="animate-pulse">Preparing...</span>
-                                        </Show>
-                                    </button>
+                                        <div class="space-y-2">
+                                            <label class="text-xs font-medium text-gray-400 ml-1">Subject</label>
+                                            <select
+                                                value={formState().subject}
+                                                onChange={e => updateFormField('subject', e.currentTarget.value)}
+                                                class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors appearance-none cursor-pointer"
+                                            >
+                                                <option>General Inquiry</option>
+                                                <option>Partnership Proposal</option>
+                                                <option>Technical Support</option>
+                                                <option>Media/Press</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <label class="text-xs font-medium text-gray-400 ml-1">Message</label>
+                                            <textarea
+                                                required
+                                                value={formState().message}
+                                                onInput={e => updateFormField('message', e.currentTarget.value)}
+                                                class="w-full bg-[#000] border border-white/10 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:border-blue-500 transition-colors placeholder:text-gray-700 min-h-[160px] resize-none"
+                                                placeholder="Tell us about your project or inquiry..."
+                                            />
+                                        </div>
+
+                                        <div class="pt-2">
+                                            <button
+                                                type="submit"
+                                                disabled={isSubmitting()}
+                                                class="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-4 font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <Show when={isSubmitting()} fallback={
+                                                    <>
+                                                        Send Message <ArrowRight class="w-4 h-4" />
+                                                    </>
+                                                }>
+                                                    <span class="animate-pulse">Preparing...</span>
+                                                </Show>
+                                            </button>
+                                        </div>
+                                    </form>
                                 </div>
-                            </form>
+                            </div>
                         </Motion.div>
                     </div>
                 </div>

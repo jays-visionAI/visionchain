@@ -1,17 +1,13 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
+import { A, useLocation } from '@solidjs/router';
 import { ChevronDown, Menu, X, Wallet } from 'lucide-solid';
 import Logo from './Logo';
-import type { PageType } from '../App';
-
-interface NavbarProps {
-  onNavigate: (page: PageType, sectionId?: string) => void;
-}
 
 interface NavChild {
   label: string;
-  page?: PageType;
+  path?: string;
   href?: string;
   target?: string;
   badge?: string;
@@ -19,15 +15,16 @@ interface NavChild {
 
 interface NavItem {
   label: string;
-  page?: PageType;
+  path?: string;
   type: 'link' | 'dropdown';
   children?: NavChild[];
 }
 
-const Navbar = (props: NavbarProps): JSX.Element => {
+const Navbar = (): JSX.Element => {
   const [hoveredNav, setHoveredNav] = createSignal<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = createSignal(false);
   const [mobileExpandedNav, setMobileExpandedNav] = createSignal<string | null>(null);
+  const location = useLocation();
 
   // Lock scroll when mobile menu is open
   createEffect(() => {
@@ -39,17 +36,17 @@ const Navbar = (props: NavbarProps): JSX.Element => {
   });
 
   const navItems: NavItem[] = [
-    { label: 'Home', page: 'home', type: 'link' },
-    { label: 'Research', page: 'research', type: 'link' },
-    { label: 'Technology', page: 'technology', type: 'link' },
+    { label: 'Home', path: '/', type: 'link' },
+    { label: 'Research', path: '/research', type: 'link' },
+    { label: 'Technology', path: '/technology', type: 'link' },
     {
       label: 'Ecosystem',
       type: 'dropdown',
       children: [
-        { label: 'Community', page: 'community' },
-        { label: 'Academy', page: 'academy' },
-        { label: 'Developer Hub', page: 'developer-community' },
-        { label: 'Contact Us', page: 'contact' }
+        { label: 'Community', path: '/community' },
+        { label: 'Academy', path: '/academy' },
+        { label: 'Developer Hub', path: '/developer-community' },
+        { label: 'Contact Us', path: '/contact' }
       ]
     },
     {
@@ -58,16 +55,14 @@ const Navbar = (props: NavbarProps): JSX.Element => {
       children: [
         { label: 'Newsletter', href: 'https://www.linkedin.com/newsletters/visionchaincollective-7345370837543198720/', target: '_blank' },
         { label: 'Whitepaper', href: 'https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing', target: '_blank' },
-        { label: 'Token Dynamics', page: 'token-dynamics' }
+        { label: 'Token Dynamics', href: 'https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing', target: '_blank' }
       ]
     }
   ];
 
-  const handleNavClick = (e: MouseEvent, page: PageType, section?: string) => {
-    e.preventDefault();
-    setMobileMenuOpen(false);
-    props.onNavigate(page, section);
-  };
+  const isActive = (path: string) => location.pathname === path;
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
 
   return (
     <>
@@ -77,13 +72,13 @@ const Navbar = (props: NavbarProps): JSX.Element => {
         class="fixed top-0 left-0 w-full z-50 h-[56px] md:h-[44px] bg-[#161617]/80 backdrop-blur-md border-b border-white/[0.08]"
       >
         <div class="max-w-[980px] mx-auto px-4 h-full flex items-center justify-between text-[13px] font-normal tracking-tight text-[#e8e8ed]">
-          {/* Logo - click to go home top */}
-          <div
-            onClick={(e) => handleNavClick(e, 'home')}
+          {/* Logo - click to go home */}
+          <A
+            href="/"
             class="flex-shrink-0 cursor-pointer opacity-90 hover:opacity-100 transition-opacity z-50 relative"
           >
             <Logo class="w-5 h-5 md:w-5 md:h-5" showText={true} />
-          </div>
+          </A>
 
           {/* Centered Links - Desktop */}
           <div class="hidden md:flex items-center gap-8">
@@ -92,12 +87,15 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                 <Show
                   when={item.type === 'dropdown'}
                   fallback={
-                    <button
-                      onClick={(e) => handleNavClick(e, item.page!)}
-                      class="text-[#e8e8ed] hover:text-white transition-colors opacity-80 hover:opacity-100 cursor-pointer bg-transparent border-none p-0 font-normal"
+                    <A
+                      href={item.path!}
+                      class={`transition-colors cursor-pointer bg-transparent border-none p-0 font-normal ${isActive(item.path!)
+                        ? 'text-white opacity-100'
+                        : 'text-[#e8e8ed] hover:text-white opacity-80 hover:opacity-100'
+                        }`}
                     >
                       {item.label}
-                    </button>
+                    </A>
                   }
                 >
                   <div
@@ -125,7 +123,7 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                             <For each={item.children}>
                               {(child) => (
                                 <Show
-                                  when={child.page}
+                                  when={child.path}
                                   fallback={
                                     <a
                                       href={child.href}
@@ -143,9 +141,10 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                                     </a>
                                   }
                                 >
-                                  <button
-                                    onClick={(e) => handleNavClick(e, child.page!)}
-                                    class="px-4 py-2 text-left text-[#e8e8ed] hover:bg-white/10 hover:text-white transition-colors text-[14px] flex items-center justify-between w-full"
+                                  <A
+                                    href={child.path!}
+                                    class={`px-4 py-2 text-left hover:bg-white/10 hover:text-white transition-colors text-[14px] flex items-center justify-between w-full ${isActive(child.path!) ? 'text-white bg-white/5' : 'text-[#e8e8ed]'
+                                      }`}
                                   >
                                     <span>{child.label}</span>
                                     {child.badge && (
@@ -153,7 +152,7 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                                         {child.badge}
                                       </span>
                                     )}
-                                  </button>
+                                  </A>
                                 </Show>
                               )}
                             </For>
@@ -209,15 +208,20 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                   <Show
                     when={item.type === 'dropdown'}
                     fallback={
-                      <Motion.button
+                      <Motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index() * 0.05 }}
-                        onClick={(e) => handleNavClick(e, item.page!)}
-                        class="text-left py-5 text-[18px] font-medium text-[#f5f5f7] border-b border-white/10 last:border-0"
                       >
-                        {item.label}
-                      </Motion.button>
+                        <A
+                          href={item.path!}
+                          onClick={closeMobileMenu}
+                          class={`block py-5 text-[18px] font-medium border-b border-white/10 last:border-0 ${isActive(item.path!) ? 'text-blue-400' : 'text-[#f5f5f7]'
+                            }`}
+                        >
+                          {item.label}
+                        </A>
+                      </Motion.div>
                     }
                   >
                     <div class="border-b border-white/10 last:border-0">
@@ -240,7 +244,7 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                               <For each={item.children}>
                                 {(child) => (
                                   <Show
-                                    when={child.page}
+                                    when={child.path}
                                     fallback={
                                       <a
                                         href={child.href}
@@ -252,13 +256,15 @@ const Navbar = (props: NavbarProps): JSX.Element => {
                                       </a>
                                     }
                                   >
-                                    <button
-                                      onClick={(e) => handleNavClick(e, child.page!)}
-                                      class="text-[16px] text-[#86868b] hover:text-white transition-colors block text-left w-full flex items-center gap-2"
+                                    <A
+                                      href={child.path!}
+                                      onClick={closeMobileMenu}
+                                      class={`text-[16px] transition-colors block text-left w-full flex items-center gap-2 ${isActive(child.path!) ? 'text-blue-400' : 'text-[#86868b] hover:text-white'
+                                        }`}
                                     >
                                       {child.label}
                                       {child.badge && <span class="text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">{child.badge}</span>}
-                                    </button>
+                                    </A>
                                   </Show>
                                 )}
                               </For>
