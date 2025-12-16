@@ -23,6 +23,14 @@ const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./components/TermsOfService'));
 const CookiePolicy = lazy(() => import('./components/CookiePolicy'));
 
+// Admin components (lazy-loaded)
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const AdminUsers = lazy(() => import('./components/admin/AdminUsers'));
+const AdminSettings = lazy(() => import('./components/admin/AdminSettings'));
+const AdminAIManagement = lazy(() => import('./components/admin/AdminAIManagement'));
+const AdminApiDocs = lazy(() => import('./components/admin/AdminApiDocs'));
+
 // Loading spinner component
 function PageLoader() {
   return (
@@ -121,6 +129,62 @@ function CookiesPage() {
   return <div id="cookies"><CookiePolicy /></div>;
 }
 
+// Admin Page wrapper components
+function AdminDashboardPage() {
+  document.title = 'Dashboard | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminDashboard />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminUsersPage() {
+  document.title = 'Users | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminUsers />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminSettingsPage() {
+  document.title = 'Settings | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminSettings />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminAIManagementPage() {
+  document.title = 'AI Management | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminAIManagement />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminApiDocsPage() {
+  document.title = 'API Documentation | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminApiDocs />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -138,5 +202,12 @@ render(() => (
     <Route path="/privacy" component={PrivacyPage} />
     <Route path="/terms" component={TermsPage} />
     <Route path="/cookies" component={CookiesPage} />
+    {/* Admin Routes */}
+    <Route path="/admin" component={AdminDashboardPage} />
+    <Route path="/admin/users" component={AdminUsersPage} />
+    <Route path="/admin/ai" component={AdminAIManagementPage} />
+    <Route path="/admin/api-docs" component={AdminApiDocsPage} />
+    <Route path="/admin/api-docs/*" component={AdminApiDocsPage} />
+    <Route path="/admin/settings" component={AdminSettingsPage} />
   </Router>
 ), rootElement);
