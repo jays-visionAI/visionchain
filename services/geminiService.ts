@@ -2,8 +2,15 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio } from '../types';
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
 
-// Get API key from localStorage (active key) or fall back to environment variable
+// Get API key: prioritize environment variable (shared for all users), then localStorage
 const getApiKey = (): string => {
+  // 1. First check environment variable (set at build time, shared for all users)
+  const envKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (envKey) {
+    return envKey;
+  }
+
+  // 2. Fall back to localStorage (admin-set key for development)
   try {
     const savedKeys = localStorage.getItem('visionchain_api_keys');
     if (savedKeys) {
@@ -16,7 +23,8 @@ const getApiKey = (): string => {
   } catch (e) {
     console.error('Failed to get API key from localStorage:', e);
   }
-  return process.env.API_KEY || '';
+
+  return '';
 };
 
 // Create AI instance with dynamic API key

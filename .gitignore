@@ -25,3 +25,8 @@ dist-ssr
 
 # NPM cache
 .npm-cache/
+
+# Environment variables (API keys - DO NOT COMMIT)
+.env
+.env.local
+.env.*.local
