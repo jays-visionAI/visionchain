@@ -2,9 +2,29 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio } from '../types';
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
 
-const apiKey = process.env.API_KEY || '';
-// Export ai instance for Live API usage in components
-export const ai = new GoogleGenAI({ apiKey });
+// Get API key from localStorage (active key) or fall back to environment variable
+const getApiKey = (): string => {
+  try {
+    const savedKeys = localStorage.getItem('visionchain_api_keys');
+    if (savedKeys) {
+      const keys = JSON.parse(savedKeys);
+      const activeKey = keys.find((k: any) => k.isActive && k.isValid);
+      if (activeKey) {
+        return activeKey.key;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to get API key from localStorage:', e);
+  }
+  return process.env.API_KEY || '';
+};
+
+// Create AI instance with dynamic API key
+const createAiInstance = () => new GoogleGenAI({ apiKey: getApiKey() });
+
+// Export ai instance getter for components
+export const getAi = () => createAiInstance();
+export const ai = createAiInstance();
 
 // Helper to decode base64 audio (for the frontend to play)
 export const getAudioContext = () => new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
@@ -12,29 +32,29 @@ export const getAudioContext = () => new (window.AudioContext || (window as any)
 export const generateText = async (prompt: string, imageBase64?: string, useFastModel: boolean = false): Promise<string> => {
   try {
     let modelName = useFastModel ? 'gemini-2.5-flash-lite' : 'gemini-3-pro-preview';
-    
+
     // Switch to Flash for multimodal vision tasks as it has excellent vision capabilities
     if (imageBase64) {
-        modelName = 'gemini-2.5-flash';
+      modelName = 'gemini-2.5-flash';
     }
 
     let contents: any = prompt;
 
     if (imageBase64) {
-        contents = {
-            parts: [
-                { text: prompt },
-                {
-                    inlineData: {
-                        mimeType: "image/jpeg", // Assuming JPEG/PNG conversion on frontend
-                        data: imageBase64
-                    }
-                }
-            ]
-        };
+      contents = {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: "image/jpeg", // Assuming JPEG/PNG conversion on frontend
+              data: imageBase64
+            }
+          }
+        ]
+      };
     }
 
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
       model: modelName,
       contents: contents,
       config: {
@@ -50,7 +70,7 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
 
 export const generateImage = async (prompt: string, aspectRatio: AspectRatio): Promise<string | null> => {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: {
         parts: [{ text: prompt }],
@@ -77,7 +97,7 @@ export const generateImage = async (prompt: string, aspectRatio: AspectRatio): P
 
 export const generateSpeech = async (text: string): Promise<string | null> => {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: [{ parts: [{ text }] }],
       config: {

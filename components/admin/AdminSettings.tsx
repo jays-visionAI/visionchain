@@ -1,4 +1,4 @@
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show, onMount } from 'solid-js';
 import {
     Settings,
     Bell,
@@ -8,8 +8,16 @@ import {
     Mail,
     Smartphone,
     Key,
-    Save
+    Save,
+    Lock,
+    Eye,
+    EyeOff,
+    Check
 } from 'lucide-solid';
+
+// Storage key for admin password
+const PASSWORD_STORAGE_KEY = 'visionchain_admin_password';
+const DEFAULT_PASSWORD = 'visionchain2024';
 
 interface ToggleProps {
     checked: boolean;
@@ -32,129 +40,312 @@ function Toggle(props: ToggleProps) {
 }
 
 export default function AdminSettings() {
+    const [activeTab, setActiveTab] = createSignal('general');
     const [emailNotifications, setEmailNotifications] = createSignal(true);
     const [pushNotifications, setPushNotifications] = createSignal(false);
     const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
     const [darkMode, setDarkMode] = createSignal(true);
 
-    const settingsSections = [
-        {
-            title: 'General',
-            icon: Settings,
-            settings: [
-                {
-                    label: 'Dark Mode',
-                    description: 'Enable dark theme across the admin panel',
-                    icon: Moon,
-                    value: darkMode,
-                    onChange: setDarkMode,
-                },
-                {
-                    label: 'Language',
-                    description: 'Choose your preferred language',
-                    icon: Globe,
-                    type: 'select',
-                    options: ['English', 'Korean', 'Japanese', 'Chinese'],
-                },
-            ],
-        },
-        {
-            title: 'Notifications',
-            icon: Bell,
-            settings: [
-                {
-                    label: 'Email Notifications',
-                    description: 'Receive important updates via email',
-                    icon: Mail,
-                    value: emailNotifications,
-                    onChange: setEmailNotifications,
-                },
-                {
-                    label: 'Push Notifications',
-                    description: 'Get instant notifications on your device',
-                    icon: Smartphone,
-                    value: pushNotifications,
-                    onChange: setPushNotifications,
-                },
-            ],
-        },
-        {
-            title: 'Security',
-            icon: Shield,
-            settings: [
-                {
-                    label: 'Two-Factor Authentication',
-                    description: 'Add an extra layer of security to your account',
-                    icon: Key,
-                    value: twoFactorAuth,
-                    onChange: setTwoFactorAuth,
-                },
-            ],
-        },
+    // Password state
+    const [currentPassword, setCurrentPassword] = createSignal('');
+    const [newPassword, setNewPassword] = createSignal('');
+    const [confirmPassword, setConfirmPassword] = createSignal('');
+    const [showCurrentPassword, setShowCurrentPassword] = createSignal(false);
+    const [showNewPassword, setShowNewPassword] = createSignal(false);
+    const [showConfirmPassword, setShowConfirmPassword] = createSignal(false);
+    const [passwordError, setPasswordError] = createSignal('');
+    const [passwordSuccess, setPasswordSuccess] = createSignal(false);
+    const [savedPassword, setSavedPassword] = createSignal(DEFAULT_PASSWORD);
+
+    // Load saved password on mount
+    onMount(() => {
+        const saved = localStorage.getItem(PASSWORD_STORAGE_KEY);
+        if (saved) {
+            setSavedPassword(saved);
+        }
+    });
+
+    const handleChangePassword = (e: Event) => {
+        e.preventDefault();
+        setPasswordError('');
+        setPasswordSuccess(false);
+
+        // Validate current password
+        if (currentPassword() !== savedPassword()) {
+            setPasswordError('Current password is incorrect');
+            return;
+        }
+
+        // Validate new password
+        if (newPassword().length < 8) {
+            setPasswordError('New password must be at least 8 characters');
+            return;
+        }
+
+        // Validate confirmation
+        if (newPassword() !== confirmPassword()) {
+            setPasswordError('Passwords do not match');
+            return;
+        }
+
+        // Save new password
+        localStorage.setItem(PASSWORD_STORAGE_KEY, newPassword());
+        setSavedPassword(newPassword());
+        setPasswordSuccess(true);
+
+        // Reset form
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+
+        // Hide success after 3 seconds
+        setTimeout(() => setPasswordSuccess(false), 3000);
+    };
+
+    const tabs = [
+        { id: 'general', label: 'General', icon: Settings },
+        { id: 'notifications', label: 'Notifications', icon: Bell },
+        { id: 'security', label: 'Security', icon: Shield },
+        { id: 'password', label: 'Password', icon: Lock },
     ];
 
     return (
         <div class="space-y-8">
             {/* Header */}
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold text-white">Settings</h1>
-                    <p class="text-gray-400 mt-1">Manage your admin preferences.</p>
-                </div>
-                <button class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all duration-300">
-                    <Save class="w-4 h-4" />
-                    Save Changes
-                </button>
+            <div>
+                <h1 class="text-3xl font-bold text-white">Settings</h1>
+                <p class="text-gray-400 mt-1">Manage your admin preferences.</p>
             </div>
 
-            {/* Settings Sections */}
-            <div class="space-y-6">
-                <For each={settingsSections}>
-                    {(section) => (
-                        <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                            {/* Section Header */}
-                            <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                                <div class="p-2 rounded-xl bg-cyan-500/20">
-                                    <section.icon class="w-5 h-5 text-cyan-400" />
-                                </div>
-                                <h2 class="text-lg font-semibold text-white">{section.title}</h2>
-                            </div>
-
-                            {/* Settings List */}
-                            <div class="divide-y divide-white/5">
-                                <For each={section.settings}>
-                                    {(setting) => (
-                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                                            <div class="flex items-start gap-4">
-                                                <div class="p-2 rounded-lg bg-white/5">
-                                                    <setting.icon class="w-5 h-5 text-gray-400" />
-                                                </div>
-                                                <div>
-                                                    <p class="text-white font-medium">{setting.label}</p>
-                                                    <p class="text-gray-400 text-sm mt-0.5">{setting.description}</p>
-                                                </div>
-                                            </div>
-
-                                            {setting.type === 'select' ? (
-                                                <select class="appearance-none px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 cursor-pointer">
-                                                    <For each={setting.options}>
-                                                        {(option) => <option value={option}>{option}</option>}
-                                                    </For>
-                                                </select>
-                                            ) : (
-                                                <Toggle
-                                                    checked={setting.value?.() ?? false}
-                                                    onChange={setting.onChange ?? (() => { })}
-                                                />
-                                            )}
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
-                        </div>
+            {/* Tabs */}
+            <div class="flex flex-wrap gap-2 border-b border-white/10 pb-4">
+                <For each={tabs}>
+                    {(tab) => (
+                        <button
+                            onClick={() => setActiveTab(tab.id)}
+                            class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${activeTab() === tab.id
+                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                }`}
+                        >
+                            <tab.icon class="w-4 h-4" />
+                            {tab.label}
+                        </button>
                     )}
                 </For>
             </div>
+
+            {/* General Tab */}
+            <Show when={activeTab() === 'general'}>
+                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                        <div class="p-2 rounded-xl bg-cyan-500/20">
+                            <Settings class="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <h2 class="text-lg font-semibold text-white">General Settings</h2>
+                    </div>
+                    <div class="divide-y divide-white/5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex items-start gap-4">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Moon class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium">Dark Mode</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Enable dark theme across the admin panel</p>
+                                </div>
+                            </div>
+                            <Toggle checked={darkMode()} onChange={setDarkMode} />
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex items-start gap-4">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Globe class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium">Language</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Choose your preferred language</p>
+                                </div>
+                            </div>
+                            <select class="appearance-none px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 cursor-pointer">
+                                <option value="en">English</option>
+                                <option value="ko">Korean</option>
+                                <option value="ja">Japanese</option>
+                                <option value="zh">Chinese</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
+            {/* Notifications Tab */}
+            <Show when={activeTab() === 'notifications'}>
+                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                        <div class="p-2 rounded-xl bg-cyan-500/20">
+                            <Bell class="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <h2 class="text-lg font-semibold text-white">Notification Settings</h2>
+                    </div>
+                    <div class="divide-y divide-white/5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex items-start gap-4">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Mail class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium">Email Notifications</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Receive important updates via email</p>
+                                </div>
+                            </div>
+                            <Toggle checked={emailNotifications()} onChange={setEmailNotifications} />
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex items-start gap-4">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Smartphone class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium">Push Notifications</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Get instant notifications on your device</p>
+                                </div>
+                            </div>
+                            <Toggle checked={pushNotifications()} onChange={setPushNotifications} />
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
+            {/* Security Tab */}
+            <Show when={activeTab() === 'security'}>
+                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                        <div class="p-2 rounded-xl bg-cyan-500/20">
+                            <Shield class="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <h2 class="text-lg font-semibold text-white">Security Settings</h2>
+                    </div>
+                    <div class="divide-y divide-white/5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex items-start gap-4">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Key class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium">Two-Factor Authentication</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Add an extra layer of security to your account</p>
+                                </div>
+                            </div>
+                            <Toggle checked={twoFactorAuth()} onChange={setTwoFactorAuth} />
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
+            {/* Password Tab */}
+            <Show when={activeTab() === 'password'}>
+                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                        <div class="p-2 rounded-xl bg-cyan-500/20">
+                            <Lock class="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <h2 class="text-lg font-semibold text-white">Change Admin Password</h2>
+                    </div>
+                    <form onSubmit={handleChangePassword} class="p-6 space-y-6">
+                        {/* Current Password */}
+                        <div>
+                            <label class="text-gray-400 text-sm mb-2 block">Current Password</label>
+                            <div class="relative">
+                                <input
+                                    type={showCurrentPassword() ? 'text' : 'password'}
+                                    value={currentPassword()}
+                                    onInput={(e) => setCurrentPassword(e.currentTarget.value)}
+                                    placeholder="Enter current password"
+                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCurrentPassword(!showCurrentPassword())}
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                >
+                                    <Show when={showCurrentPassword()} fallback={<Eye class="w-4 h-4" />}>
+                                        <EyeOff class="w-4 h-4" />
+                                    </Show>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* New Password */}
+                        <div>
+                            <label class="text-gray-400 text-sm mb-2 block">New Password</label>
+                            <div class="relative">
+                                <input
+                                    type={showNewPassword() ? 'text' : 'password'}
+                                    value={newPassword()}
+                                    onInput={(e) => setNewPassword(e.currentTarget.value)}
+                                    placeholder="Enter new password (min. 8 characters)"
+                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewPassword(!showNewPassword())}
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                >
+                                    <Show when={showNewPassword()} fallback={<Eye class="w-4 h-4" />}>
+                                        <EyeOff class="w-4 h-4" />
+                                    </Show>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Confirm Password */}
+                        <div>
+                            <label class="text-gray-400 text-sm mb-2 block">Confirm New Password</label>
+                            <div class="relative">
+                                <input
+                                    type={showConfirmPassword() ? 'text' : 'password'}
+                                    value={confirmPassword()}
+                                    onInput={(e) => setConfirmPassword(e.currentTarget.value)}
+                                    placeholder="Confirm new password"
+                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowConfirmPassword(!showConfirmPassword())}
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                >
+                                    <Show when={showConfirmPassword()} fallback={<Eye class="w-4 h-4" />}>
+                                        <EyeOff class="w-4 h-4" />
+                                    </Show>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Error Message */}
+                        <Show when={passwordError()}>
+                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                                {passwordError()}
+                            </div>
+                        </Show>
+
+                        {/* Success Message */}
+                        <Show when={passwordSuccess()}>
+                            <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
+                                <Check class="w-4 h-4" />
+                                Password changed successfully!
+                            </div>
+                        </Show>
+
+                        <button
+                            type="submit"
+                            class="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
+                        >
+                            <Save class="w-4 h-4" />
+                            Update Password
+                        </button>
+                    </form>
+                </div>
+            </Show>
 
             {/* Danger Zone */}
             <div class="rounded-2xl bg-red-500/5 border border-red-500/20 overflow-hidden">

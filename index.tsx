@@ -1,5 +1,5 @@
 import { render } from 'solid-js/web';
-import { Router, Route } from '@solidjs/router';
+import { Router, Route, useLocation } from '@solidjs/router';
 import { createSignal, Show, lazy, Suspense } from 'solid-js';
 
 // Core components (loaded immediately for homepage)
@@ -43,21 +43,29 @@ function PageLoader() {
 // Layout wrapper for all pages
 function Layout(props: { children?: any }) {
   const [isAIModalOpen, setIsAIModalOpen] = createSignal(false);
+  const location = useLocation();
+
+  // Hide Navbar, Footer, and AI button for Admin pages
+  const isAdminRoute = () => location.pathname.startsWith('/admin');
 
   return (
     <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
       <div class="relative z-10">
-        <Navbar />
+        <Show when={!isAdminRoute()}>
+          <Navbar />
+        </Show>
         <main>
           <Suspense fallback={<PageLoader />}>
             {props.children}
           </Suspense>
         </main>
-        <Footer />
+        <Show when={!isAdminRoute()}>
+          <Footer />
+        </Show>
       </div>
 
-      {/* Floating Action Button for AI */}
-      <Show when={!isAIModalOpen()}>
+      {/* Floating Action Button for AI - hide for Admin */}
+      <Show when={!isAIModalOpen() && !isAdminRoute()}>
         <button
           onClick={() => setIsAIModalOpen(true)}
           class="fixed bottom-8 right-8 p-4 bg-blue-600 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 transition-transform z-40 group"
@@ -66,7 +74,9 @@ function Layout(props: { children?: any }) {
         </button>
       </Show>
 
-      <AIChat isOpen={isAIModalOpen()} onClose={() => setIsAIModalOpen(false)} />
+      <Show when={!isAdminRoute()}>
+        <AIChat isOpen={isAIModalOpen()} onClose={() => setIsAIModalOpen(false)} />
+      </Show>
     </div>
   );
 }

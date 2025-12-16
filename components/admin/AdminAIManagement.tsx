@@ -9,6 +9,7 @@ import {
     RotateCcw,
     Search,
     Eye,
+    EyeOff,
     Trash2,
     Bot,
     User,
@@ -19,11 +20,19 @@ import {
     Mic,
     Volume2,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    Key,
+    Plus,
+    Check,
+    X,
+    Power,
+    Shield,
+    Loader2
 } from 'lucide-solid';
 
 // Tabs configuration
 const tabs = [
+    { id: 'apikeys', label: 'API Keys', icon: Key },
     { id: 'knowledge', label: 'Knowledge Base', icon: Database },
     { id: 'conversations', label: 'Conversations', icon: MessageSquare },
     { id: 'models', label: 'Model Settings', icon: Settings2 },
@@ -94,11 +103,24 @@ const STORAGE_KEYS = {
     prompt: 'visionchain_ai_prompt',
     model: 'visionchain_ai_model',
     voice: 'visionchain_ai_voice',
-    ttsVoice: 'visionchain_ai_tts_voice'
+    ttsVoice: 'visionchain_ai_tts_voice',
+    apiKeys: 'visionchain_api_keys'
 };
 
+// API Key interface
+interface ApiKey {
+    id: string;
+    name: string;
+    key: string;
+    provider: 'gemini' | 'openai' | 'anthropic';
+    isActive: boolean;
+    isValid: boolean | null;
+    lastTested: string | null;
+    createdAt: string;
+}
+
 export default function AdminAIManagement() {
-    const [activeTab, setActiveTab] = createSignal('knowledge');
+    const [activeTab, setActiveTab] = createSignal('apikeys');
     const [knowledgeContent, setKnowledgeContent] = createSignal(defaultKnowledge);
     const [systemPrompt, setSystemPrompt] = createSignal(defaultSystemPrompt);
     const [selectedModel, setSelectedModel] = createSignal('gemini-3-pro-preview');
@@ -108,6 +130,15 @@ export default function AdminAIManagement() {
     const [saveSuccess, setSaveSuccess] = createSignal(false);
     const [lastSaved, setLastSaved] = createSignal<string | null>(null);
 
+    // API Keys state
+    const [apiKeys, setApiKeys] = createSignal<ApiKey[]>([]);
+    const [newKeyName, setNewKeyName] = createSignal('');
+    const [newKeyValue, setNewKeyValue] = createSignal('');
+    const [newKeyProvider, setNewKeyProvider] = createSignal<'gemini' | 'openai' | 'anthropic'>('gemini');
+    const [showNewKeyValue, setShowNewKeyValue] = createSignal(false);
+    const [isTesting, setIsTesting] = createSignal(false);
+    const [testResult, setTestResult] = createSignal<{ success: boolean; message: string } | null>(null);
+
     // Load saved settings on mount
     onMount(() => {
         const savedKnowledge = localStorage.getItem(STORAGE_KEYS.knowledge);
@@ -115,13 +146,108 @@ export default function AdminAIManagement() {
         const savedModel = localStorage.getItem(STORAGE_KEYS.model);
         const savedVoice = localStorage.getItem(STORAGE_KEYS.voice);
         const savedTtsVoice = localStorage.getItem(STORAGE_KEYS.ttsVoice);
+        const savedApiKeys = localStorage.getItem(STORAGE_KEYS.apiKeys);
 
         if (savedKnowledge) setKnowledgeContent(savedKnowledge);
         if (savedPrompt) setSystemPrompt(savedPrompt);
         if (savedModel) setSelectedModel(savedModel);
         if (savedVoice) setSelectedVoice(savedVoice);
         if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
+        if (savedApiKeys) {
+            try {
+                setApiKeys(JSON.parse(savedApiKeys));
+            } catch (e) {
+                console.error('Failed to parse saved API keys:', e);
+            }
+        }
     });
+
+    // Test API key
+    const testApiKey = async (key: string, provider: string) => {
+        setIsTesting(true);
+        setTestResult(null);
+
+        try {
+            if (provider === 'gemini') {
+                const response = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
+                );
+                if (response.ok) {
+                    setTestResult({ success: true, message: 'API key is valid!' });
+                    return true;
+                } else {
+                    const error = await response.json();
+                    setTestResult({ success: false, message: error.error?.message || 'Invalid API key' });
+                    return false;
+                }
+            }
+            // Add other providers later
+            setTestResult({ success: false, message: 'Provider not supported yet' });
+            return false;
+        } catch (error) {
+            setTestResult({ success: false, message: 'Connection error. Check your internet.' });
+            return false;
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    // Add new API key
+    const addApiKey = async () => {
+        if (!newKeyName() || !newKeyValue()) return;
+
+        const isValid = await testApiKey(newKeyValue(), newKeyProvider());
+
+        const newKey: ApiKey = {
+            id: Date.now().toString(),
+            name: newKeyName(),
+            key: newKeyValue(),
+            provider: newKeyProvider(),
+            isActive: isValid && apiKeys().filter(k => k.isActive).length === 0,
+            isValid: isValid,
+            lastTested: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+        };
+
+        const updatedKeys = [...apiKeys(), newKey];
+        setApiKeys(updatedKeys);
+        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
+
+        // Reset form
+        setNewKeyName('');
+        setNewKeyValue('');
+        setTestResult(null);
+    };
+
+    // Toggle API key active status
+    const toggleKeyActive = (id: string) => {
+        const updatedKeys = apiKeys().map(key => ({
+            ...key,
+            isActive: key.id === id ? !key.isActive : false // Only one active at a time
+        }));
+        setApiKeys(updatedKeys);
+        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
+    };
+
+    // Delete API key
+    const deleteApiKey = (id: string) => {
+        const updatedKeys = apiKeys().filter(key => key.id !== id);
+        setApiKeys(updatedKeys);
+        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
+    };
+
+    // Retest API key
+    const retestApiKey = async (id: string) => {
+        const key = apiKeys().find(k => k.id === id);
+        if (!key) return;
+
+        const isValid = await testApiKey(key.key, key.provider);
+        const updatedKeys = apiKeys().map(k =>
+            k.id === id ? { ...k, isValid, lastTested: new Date().toISOString() } : k
+        );
+        setApiKeys(updatedKeys);
+        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -182,6 +308,225 @@ export default function AdminAIManagement() {
 
             {/* Tab Content */}
             <div class="min-h-[500px]">
+                {/* API Keys Tab */}
+                <Show when={activeTab() === 'apikeys'}>
+                    <div class="space-y-6">
+                        {/* Header */}
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-xl font-semibold text-white flex items-center gap-2">
+                                <Key class="w-5 h-5 text-cyan-400" />
+                                API Key Management
+                            </h2>
+                            <div class="flex items-center gap-2 text-sm">
+                                <span class="text-gray-400">Active Key:</span>
+                                <Show when={apiKeys().find(k => k.isActive)} fallback={
+                                    <span class="text-red-400 flex items-center gap-1">
+                                        <X class="w-4 h-4" /> None
+                                    </span>
+                                }>
+                                    <span class="text-green-400 flex items-center gap-1">
+                                        <Check class="w-4 h-4" /> {apiKeys().find(k => k.isActive)?.name}
+                                    </span>
+                                </Show>
+                            </div>
+                        </div>
+
+                        {/* Add New Key Form */}
+                        <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
+                            <h3 class="text-white font-medium flex items-center gap-2">
+                                <Plus class="w-4 h-4 text-cyan-400" />
+                                Add New API Key
+                            </h3>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="text-gray-400 text-sm mb-1 block">Key Name</label>
+                                    <input
+                                        type="text"
+                                        value={newKeyName()}
+                                        onInput={(e) => setNewKeyName(e.currentTarget.value)}
+                                        placeholder="e.g. Production Key"
+                                        class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label class="text-gray-400 text-sm mb-1 block">Provider</label>
+                                    <select
+                                        value={newKeyProvider()}
+                                        onChange={(e) => setNewKeyProvider(e.currentTarget.value as 'gemini' | 'openai' | 'anthropic')}
+                                        class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
+                                    >
+                                        <option value="gemini">Google Gemini</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Anthropic</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="text-gray-400 text-sm mb-1 block">API Key</label>
+                                    <div class="relative">
+                                        <input
+                                            type={showNewKeyValue() ? 'text' : 'password'}
+                                            value={newKeyValue()}
+                                            onInput={(e) => setNewKeyValue(e.currentTarget.value)}
+                                            placeholder="Enter your API key"
+                                            class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 font-mono text-sm"
+                                        />
+                                        <button
+                                            onClick={() => setShowNewKeyValue(!showNewKeyValue())}
+                                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                                        >
+                                            <Show when={showNewKeyValue()} fallback={<Eye class="w-4 h-4" />}>
+                                                <EyeOff class="w-4 h-4" />
+                                            </Show>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Test Result */}
+                            <Show when={testResult()}>
+                                <div class={`flex items-center gap-2 text-sm px-4 py-2 rounded-xl ${testResult()?.success
+                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                    }`}>
+                                    <Show when={testResult()?.success} fallback={<X class="w-4 h-4" />}>
+                                        <Check class="w-4 h-4" />
+                                    </Show>
+                                    <span>{testResult()?.message}</span>
+                                </div>
+                            </Show>
+
+                            <div class="flex gap-2">
+                                <button
+                                    onClick={() => testApiKey(newKeyValue(), newKeyProvider())}
+                                    disabled={!newKeyValue() || isTesting()}
+                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                                >
+                                    <Show when={isTesting()} fallback={<Shield class="w-4 h-4" />}>
+                                        <Loader2 class="w-4 h-4 animate-spin" />
+                                    </Show>
+                                    {isTesting() ? 'Testing...' : 'Test Key'}
+                                </button>
+                                <button
+                                    onClick={addApiKey}
+                                    disabled={!newKeyName() || !newKeyValue() || isTesting()}
+                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
+                                >
+                                    <Plus class="w-4 h-4" />
+                                    Add Key
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* API Keys List */}
+                        <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                            <div class="p-4 border-b border-white/5 flex items-center justify-between">
+                                <h3 class="text-white font-medium">Saved API Keys</h3>
+                                <span class="text-gray-500 text-sm">{apiKeys().length} key(s)</span>
+                            </div>
+
+                            <Show when={apiKeys().length === 0}>
+                                <div class="p-8 text-center text-gray-500">
+                                    <Key class="w-12 h-12 mx-auto mb-3 opacity-30" />
+                                    <p>No API keys added yet.</p>
+                                    <p class="text-sm mt-1">Add your first API key above to get started.</p>
+                                </div>
+                            </Show>
+
+                            <div class="divide-y divide-white/5">
+                                <For each={apiKeys()}>
+                                    {(key) => (
+                                        <div class="p-4 hover:bg-white/[0.02] transition-colors">
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex items-center gap-4">
+                                                    <div class={`p-2 rounded-xl ${key.isActive ? 'bg-green-500/20' : 'bg-white/5'}`}>
+                                                        <Key class={`w-5 h-5 ${key.isActive ? 'text-green-400' : 'text-gray-400'}`} />
+                                                    </div>
+                                                    <div>
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="text-white font-medium">{key.name}</span>
+                                                            <span class={`text-xs px-2 py-0.5 rounded ${key.provider === 'gemini' ? 'bg-blue-500/20 text-blue-400' :
+                                                                    key.provider === 'openai' ? 'bg-green-500/20 text-green-400' :
+                                                                        'bg-purple-500/20 text-purple-400'
+                                                                }`}>
+                                                                {key.provider === 'gemini' ? 'Gemini' : key.provider === 'openai' ? 'OpenAI' : 'Anthropic'}
+                                                            </span>
+                                                            <Show when={key.isActive}>
+                                                                <span class="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 flex items-center gap-1">
+                                                                    <Power class="w-3 h-3" /> Active
+                                                                </span>
+                                                            </Show>
+                                                        </div>
+                                                        <div class="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                                                            <span class="font-mono">
+                                                                {key.key.substring(0, 8)}...{key.key.substring(key.key.length - 4)}
+                                                            </span>
+                                                            <span class="flex items-center gap-1">
+                                                                <Show when={key.isValid === true}>
+                                                                    <Check class="w-3 h-3 text-green-400" />
+                                                                    <span class="text-green-400">Valid</span>
+                                                                </Show>
+                                                                <Show when={key.isValid === false}>
+                                                                    <X class="w-3 h-3 text-red-400" />
+                                                                    <span class="text-red-400">Invalid</span>
+                                                                </Show>
+                                                                <Show when={key.isValid === null}>
+                                                                    <span class="text-gray-400">Not tested</span>
+                                                                </Show>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => retestApiKey(key.id)}
+                                                        class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-cyan-400 transition-colors"
+                                                        title="Retest key"
+                                                    >
+                                                        <RotateCcw class="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => toggleKeyActive(key.id)}
+                                                        class={`p-2 rounded-lg transition-colors ${key.isActive
+                                                                ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                                                                : 'hover:bg-white/10 text-gray-400 hover:text-green-400'
+                                                            }`}
+                                                        title={key.isActive ? 'Deactivate' : 'Activate'}
+                                                    >
+                                                        <Power class="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => deleteApiKey(key.id)}
+                                                        class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-red-400 transition-colors"
+                                                        title="Delete key"
+                                                    >
+                                                        <Trash2 class="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                        </div>
+
+                        {/* Info */}
+                        <div class="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
+                            <AlertCircle class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <p class="text-amber-400 font-medium">Important:</p>
+                                <ul class="text-amber-400/70 text-sm mt-1 space-y-1">
+                                    <li>• Only one API key can be active at a time</li>
+                                    <li>• The active key will be used for all AI features</li>
+                                    <li>• API keys are stored securely in your browser</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </Show>
+
                 {/* Knowledge Base Tab */}
                 <Show when={activeTab() === 'knowledge'}>
                     <div class="space-y-4">
