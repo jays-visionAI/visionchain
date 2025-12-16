@@ -431,8 +431,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
                   <div class="max-w-[80%] space-y-1">
                     <div class={`p-3.5 rounded-2xl text-[13.5px] leading-relaxed shadow-sm backdrop-blur-sm ${msg.role === 'user'
-                        ? 'bg-blue-600 text-white rounded-tr-sm'
-                        : 'bg-[#1d1d1f] text-gray-200 border border-white/10 rounded-tl-sm'
+                      ? 'bg-blue-600 text-white rounded-tr-sm'
+                      : 'bg-[#1d1d1f] text-gray-200 border border-white/10 rounded-tl-sm'
                       }`}>
                       <Show when={msg.imageUrl}>
                         <div class="mb-3 rounded-xl overflow-hidden border border-white/10 shadow-md">
@@ -524,8 +524,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                   class={`w-full bg-[#1c1c1e] text-white text-sm rounded-xl py-3 pl-4 pr-10 outline-none border transition-all placeholder:text-gray-600 ${isImageGenMode() ? 'border-purple-500/50 focus:border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'border-white/10 focus:border-blue-500/50 focus:shadow-[0_0_15px_rgba(59,130,246,0.15)]'}`}
                   placeholder={isImageGenMode() ? "Describe the image to generate..." : "Ask anything..."}
                   value={input()}
-                  onInput={(e) => setInput(e.currentTarget.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  onChange={(e) => setInput(e.currentTarget.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !(e as any).isComposing && handleSend()}
                 />
                 <button
                   onClick={handleSend}

@@ -31,6 +31,11 @@ export const getAudioContext = () => new (window.AudioContext || (window as any)
 
 export const generateText = async (prompt: string, imageBase64?: string, useFastModel: boolean = false): Promise<string> => {
   try {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      return "⚠️ API key is not configured. Please go to Admin > AI Management > API Keys to add your Gemini API key.";
+    }
+
     let modelName = useFastModel ? 'gemini-2.5-flash-lite' : 'gemini-3-pro-preview';
 
     // Switch to Flash for multimodal vision tasks as it has excellent vision capabilities
