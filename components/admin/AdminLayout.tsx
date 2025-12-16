@@ -96,7 +96,7 @@ export default function AdminLayout(props: AdminLayoutProps) {
                                     <input
                                         type={showPassword() ? 'text' : 'password'}
                                         value={password()}
-                                        onChange={(e) => setPassword(e.currentTarget.value)}
+                                        onInput={(e) => setPassword(e.currentTarget.value)}
                                         placeholder="Enter admin password"
                                         class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
                                         autofocus

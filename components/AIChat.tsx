@@ -524,7 +524,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                   class={`w-full bg-[#1c1c1e] text-white text-sm rounded-xl py-3 pl-4 pr-10 outline-none border transition-all placeholder:text-gray-600 ${isImageGenMode() ? 'border-purple-500/50 focus:border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'border-white/10 focus:border-blue-500/50 focus:shadow-[0_0_15px_rgba(59,130,246,0.15)]'}`}
                   placeholder={isImageGenMode() ? "Describe the image to generate..." : "Ask anything..."}
                   value={input()}
-                  onChange={(e) => setInput(e.currentTarget.value)}
+                  onInput={(e) => setInput(e.currentTarget.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !(e as any).isComposing && handleSend()}
                 />
                 <button
