@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, onMount } from 'solid-js';
 import {
     Database,
     MessageSquare,
@@ -88,19 +88,70 @@ Guidelines:
 3. Cite specific technologies (PoV, INN, SSLE) when relevant
 4. Keep responses concise but informative`;
 
+// LocalStorage keys
+const STORAGE_KEYS = {
+    knowledge: 'visionchain_ai_knowledge',
+    prompt: 'visionchain_ai_prompt',
+    model: 'visionchain_ai_model',
+    voice: 'visionchain_ai_voice',
+    ttsVoice: 'visionchain_ai_tts_voice'
+};
+
 export default function AdminAIManagement() {
     const [activeTab, setActiveTab] = createSignal('knowledge');
     const [knowledgeContent, setKnowledgeContent] = createSignal(defaultKnowledge);
     const [systemPrompt, setSystemPrompt] = createSignal(defaultSystemPrompt);
     const [selectedModel, setSelectedModel] = createSignal('gemini-3-pro-preview');
     const [selectedVoice, setSelectedVoice] = createSignal('Kore');
+    const [selectedTtsVoice, setSelectedTtsVoice] = createSignal('Kore');
     const [isSaving, setIsSaving] = createSignal(false);
+    const [saveSuccess, setSaveSuccess] = createSignal(false);
+    const [lastSaved, setLastSaved] = createSignal<string | null>(null);
+
+    // Load saved settings on mount
+    onMount(() => {
+        const savedKnowledge = localStorage.getItem(STORAGE_KEYS.knowledge);
+        const savedPrompt = localStorage.getItem(STORAGE_KEYS.prompt);
+        const savedModel = localStorage.getItem(STORAGE_KEYS.model);
+        const savedVoice = localStorage.getItem(STORAGE_KEYS.voice);
+        const savedTtsVoice = localStorage.getItem(STORAGE_KEYS.ttsVoice);
+
+        if (savedKnowledge) setKnowledgeContent(savedKnowledge);
+        if (savedPrompt) setSystemPrompt(savedPrompt);
+        if (savedModel) setSelectedModel(savedModel);
+        if (savedVoice) setSelectedVoice(savedVoice);
+        if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
+    });
 
     const handleSave = async () => {
         setIsSaving(true);
-        // Simulate save operation
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setIsSaving(false);
+        setSaveSuccess(false);
+
+        try {
+            // Save to localStorage based on active tab
+            if (activeTab() === 'knowledge') {
+                localStorage.setItem(STORAGE_KEYS.knowledge, knowledgeContent());
+            } else if (activeTab() === 'prompts') {
+                localStorage.setItem(STORAGE_KEYS.prompt, systemPrompt());
+            } else if (activeTab() === 'models') {
+                localStorage.setItem(STORAGE_KEYS.model, selectedModel());
+                localStorage.setItem(STORAGE_KEYS.voice, selectedVoice());
+                localStorage.setItem(STORAGE_KEYS.ttsVoice, selectedTtsVoice());
+            }
+
+            // Simulate network delay for UX
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            setLastSaved(new Date().toLocaleTimeString());
+            setSaveSuccess(true);
+
+            // Hide success message after 3 seconds
+            setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -118,8 +169,8 @@ export default function AdminAIManagement() {
                         <button
                             onClick={() => setActiveTab(tab.id)}
                             class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${activeTab() === tab.id
-                                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             <tab.icon class="w-4 h-4" />
@@ -173,10 +224,20 @@ export default function AdminAIManagement() {
                             />
                         </div>
 
-                        <div class="flex items-center gap-2 text-sm text-gray-500">
-                            <AlertCircle class="w-4 h-4" />
-                            <span>Changes will be applied to the AI after saving.</span>
-                        </div>
+                        <Show when={saveSuccess()}>
+                            <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Saved successfully! Last saved: {lastSaved()}</span>
+                            </div>
+                        </Show>
+                        <Show when={!saveSuccess()}>
+                            <div class="flex items-center gap-2 text-sm text-gray-500">
+                                <AlertCircle class="w-4 h-4" />
+                                <span>Changes will be applied to the AI after saving.</span>
+                            </div>
+                        </Show>
                     </div>
                 </Show>
 
@@ -314,7 +375,11 @@ export default function AdminAIManagement() {
                                         <p class="text-gray-500 text-sm">TTS voice configuration</p>
                                     </div>
                                 </div>
-                                <select class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50">
+                                <select
+                                    value={selectedTtsVoice()}
+                                    onChange={(e) => setSelectedTtsVoice(e.currentTarget.value)}
+                                    class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
+                                >
                                     <option value="Kore">Kore (Default)</option>
                                     <option value="Puck">Puck</option>
                                     <option value="Charon">Charon</option>
@@ -330,6 +395,15 @@ export default function AdminAIManagement() {
                             <Save class="w-4 h-4" />
                             {isSaving() ? 'Saving...' : 'Save Settings'}
                         </button>
+
+                        <Show when={saveSuccess()}>
+                            <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Settings saved! Last saved: {lastSaved()}</span>
+                            </div>
+                        </Show>
                     </div>
                 </Show>
 
@@ -464,6 +538,15 @@ export default function AdminAIManagement() {
                                 placeholder="Enter system prompt..."
                             />
                         </div>
+
+                        <Show when={saveSuccess()}>
+                            <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Prompt saved! Last saved: {lastSaved()}</span>
+                            </div>
+                        </Show>
 
                         <div class="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
                             <AlertCircle class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />

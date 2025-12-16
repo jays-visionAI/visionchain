@@ -47,8 +47,8 @@ export default function AdminLayout(props: AdminLayoutProps) {
                         href={item.path}
                         onClick={() => setIsSidebarOpen(false)}
                         class={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive(item.path)
-                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 shadow-lg shadow-cyan-500/10'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 shadow-lg shadow-cyan-500/10'
+                            : 'text-gray-400 hover:text-white hover:bg-white/5'
                             }`}
                         style={{ "padding-left": paddingLeft }}
                     >
@@ -68,8 +68,8 @@ export default function AdminLayout(props: AdminLayoutProps) {
                     <button
                         onClick={() => toggleExpanded(item.id)}
                         class={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive(item.path)
-                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                            ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400'
+                            : 'text-gray-400 hover:text-white hover:bg-white/5'
                             }`}
                         style={{ "padding-left": paddingLeft }}
                     >
@@ -108,7 +108,7 @@ export default function AdminLayout(props: AdminLayoutProps) {
                     </Show>
                 </button>
                 <span class="text-lg font-semibold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                    Vision Admin
+                    Vision Chain Admin
                 </span>
                 <div class="w-9" />
             </div>
@@ -129,7 +129,7 @@ export default function AdminLayout(props: AdminLayoutProps) {
                 {/* Logo */}
                 <div class="h-16 flex items-center px-6 border-b border-white/5">
                     <span class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                        Vision Admin
+                        Vision Chain Admin
                     </span>
                 </div>
 
