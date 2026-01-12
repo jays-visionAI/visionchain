@@ -38,9 +38,7 @@ export default function Login() {
                 const role = await getUserRole(emailVal);
 
                 if (role === 'admin' || role === 'partner') {
-                    // Admin and Partner both access the Admin System 
-                    // (Partners will see restricted view later)
-                    navigate('/adminsystem', { replace: true });
+                    navigate('/wallet', { replace: true });
                 } else {
                     navigate('/wallet', { replace: true });
                 }
@@ -82,10 +80,10 @@ export default function Login() {
                         <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-6 border border-cyan-500/20">
                             <Lock class="w-10 h-10 text-cyan-400" />
                         </div>
-                        <h1 class="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                            Vision Chain
+                        <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
+                            Vision Wallet
                         </h1>
-                        <p class="text-[10px] text-gray-500 mt-2 font-black uppercase tracking-[0.2em]">Token Platform Access</p>
+                        <p class="text-[10px] text-gray-500 mt-2 font-black uppercase tracking-[0.2em]">Personal Account Access</p>
                     </div>
 
                     {/* Form */}

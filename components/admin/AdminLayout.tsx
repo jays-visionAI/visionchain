@@ -1,5 +1,5 @@
-import { createSignal, Show, For, onMount } from 'solid-js';
-import { A, useLocation, useNavigate } from '@solidjs/router';
+import { createSignal, Show, For, onMount, createEffect } from 'solid-js';
+import { A, useLocation, useNavigate, Navigate } from '@solidjs/router';
 import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity, Globe } from 'lucide-solid';
 import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
 import { useAuth } from '../auth/authContext';
@@ -15,29 +15,16 @@ export default function AdminLayout(props: AdminLayoutProps) {
     const navigate = useNavigate();
     const auth = useAuth();
 
-    // Redirect to login if not authenticated
-    onMount(() => {
+    // Reactive redirect to login if not authenticated
+    createEffect(() => {
         if (!auth.loading() && !auth.user()) {
-            navigate('/login', { replace: true });
+            navigate('/admin-login', { replace: true });
         }
     });
 
-    // Watch for auth state changes
-    const checkAuth = () => {
-        if (!auth.loading() && !auth.user()) {
-            navigate('/login', { replace: true });
-        }
-    };
-
-    // Check auth on every render
-    if (!auth.loading() && !auth.user()) {
-        navigate('/login', { replace: true });
-        return null;
-    }
-
     const handleLogout = async () => {
         await auth.logout();
-        navigate('/login', { replace: true });
+        navigate('/admin-login', { replace: true });
     };
 
     const isActive = (path: string) => {

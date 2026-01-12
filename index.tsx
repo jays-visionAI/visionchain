@@ -29,6 +29,7 @@ const Testnet = lazy(() => import('./components/Testnet'));
 
 // Auth components
 const Login = lazy(() => import('./components/auth/Login'));
+const AdminLogin = lazy(() => import('./components/auth/AdminLogin'));
 const ActivateAccount = lazy(() => import('./components/auth/ActivateAccount'));
 
 // Admin components (lazy-loaded)
@@ -60,7 +61,7 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem');
 
   return (
     <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
@@ -166,6 +167,15 @@ function VisionScanPage() {
 function TestnetPage() {
   document.title = 'Testnet Hub | Vision Chain';
   return <div id="testnet"><Testnet /></div>;
+}
+
+function AdminLoginPage() {
+  document.title = 'Admin HQ | Vision Chain';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLogin />
+    </Suspense>
+  );
 }
 
 // Admin Page wrapper components
@@ -299,6 +309,7 @@ render(() => (
   <AuthProvider>
     <Router root={Layout}>
       <Route path="/login" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+      <Route path="/admin-login" component={AdminLoginPage} />
       <Route path="/activate" component={() => <Suspense fallback={<PageLoader />}><ActivateAccount /></Suspense>} />
       <Route path="/" component={HomePage} />
       <Route path="/research" component={ResearchPage} />
