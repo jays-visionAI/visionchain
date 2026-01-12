@@ -14,7 +14,8 @@ import {
     Puzzle,
     Wallet,
     Trophy,
-    Activity
+    Activity,
+    Folder
 } from 'lucide-solid';
 
 // Icon mapping for dynamic icon resolution
@@ -33,7 +34,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Puzzle,
     Wallet,
     Trophy,
-    Activity
+    Activity,
+    Folder
 };
 
 // Menu item interface with optional children for sub-menus
@@ -123,9 +125,17 @@ export const adminMenuConfig: AdminMenuItem[] = [
         id: 'vcn-distribution',
         path: '/adminsystem/vcn',
         label: 'VCN Distribution',
-        icon: 'FileText',
+        icon: 'Activity',
         category: 'core',
         order: 7
+    },
+    {
+        id: 'documents',
+        path: '/adminsystem/documents',
+        label: 'Documents',
+        icon: 'Folder',
+        category: 'core',
+        order: 8
     },
     {
         id: 'vcn-settings',
