@@ -18,5 +18,6 @@ export const firebaseConfig = {
     projectId: getEnv('VITE_FIREBASE_PROJECT_ID', "YOUR_PROJECT_ID"),
     storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET', "YOUR_PROJECT_ID.appspot.com"),
     messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', "YOUR_SENDER_ID"),
-    appId: getEnv('VITE_FIREBASE_APP_ID', "YOUR_APP_ID")
+    appId: getEnv('VITE_FIREBASE_APP_ID', "YOUR_APP_ID"),
+    resendApiKey: getEnv('VITE_RESEND_API_KEY', '')
 };

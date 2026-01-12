@@ -11,7 +11,10 @@ import {
     FileText,
     Terminal,
     Shield,
-    Puzzle
+    Puzzle,
+    Wallet,
+    Trophy,
+    Activity
 } from 'lucide-solid';
 
 // Icon mapping for dynamic icon resolution
@@ -27,7 +30,10 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     FileText,
     Terminal,
     Shield,
-    Puzzle
+    Puzzle,
+    Wallet,
+    Trophy,
+    Activity
 };
 
 // Menu item interface with optional children for sub-menus
@@ -67,7 +73,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
     // ===== CORE PAGES =====
     {
         id: 'dashboard',
-        path: '/admin',
+        path: '/adminsystem',
         label: 'Dashboard',
         icon: 'LayoutDashboard',
         category: 'core',
@@ -75,7 +81,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
     },
     {
         id: 'users',
-        path: '/admin/users',
+        path: '/adminsystem/users',
         label: 'Users',
         icon: 'Users',
         category: 'core',
@@ -83,17 +89,57 @@ export const adminMenuConfig: AdminMenuItem[] = [
     },
     {
         id: 'ai-management',
-        path: '/admin/ai',
+        path: '/adminsystem/ai',
         label: 'AI Management',
         icon: 'Bot',
         category: 'core',
         order: 3
     },
+    {
+        id: 'wallet-management',
+        path: '/adminsystem/wallet',
+        label: 'Wallet Control',
+        icon: 'Wallet',
+        category: 'core',
+        order: 4
+    },
+    {
+        id: 'campaign-management',
+        path: '/adminsystem/campaigns',
+        label: 'Campaigns',
+        icon: 'Trophy',
+        category: 'core',
+        order: 5
+    },
+    {
+        id: 'system-activity',
+        path: '/adminsystem/activity',
+        label: 'Activity Log',
+        icon: 'Activity',
+        category: 'core',
+        order: 6
+    },
+    {
+        id: 'vcn-distribution',
+        path: '/adminsystem/vcn',
+        label: 'VCN Distribution',
+        icon: 'FileText',
+        category: 'core',
+        order: 7
+    },
+    {
+        id: 'vcn-settings',
+        path: '/adminsystem/vcn-settings',
+        label: 'Security Settings',
+        icon: 'Shield',
+        category: 'custom',
+        order: 10
+    },
 
     // ===== DEVELOPER PAGES =====
     {
         id: 'api-docs',
-        path: '/admin/api-docs',
+        path: '/adminsystem/api-docs',
         label: 'API Documentation',
         icon: 'Book',
         category: 'developer',
@@ -101,21 +147,21 @@ export const adminMenuConfig: AdminMenuItem[] = [
         children: [
             {
                 id: 'api-rest',
-                path: '/admin/api-docs/rest',
+                path: '/adminsystem/api-docs/rest',
                 label: 'REST API',
                 icon: 'Code',
                 category: 'developer'
             },
             {
                 id: 'api-webhooks',
-                path: '/admin/api-docs/webhooks',
+                path: '/adminsystem/api-docs/webhooks',
                 label: 'Webhooks',
                 icon: 'Webhook',
                 category: 'developer'
             },
             {
                 id: 'api-sdk',
-                path: '/admin/api-docs/sdk',
+                path: '/adminsystem/api-docs/sdk',
                 label: 'SDKs',
                 icon: 'Terminal',
                 category: 'developer'
@@ -126,7 +172,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
     // ===== SETTINGS (always last) =====
     {
         id: 'settings',
-        path: '/admin/settings',
+        path: '/adminsystem/settings',
         label: 'Settings',
         icon: 'Settings',
         category: 'core',

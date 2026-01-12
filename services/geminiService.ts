@@ -44,11 +44,11 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
       return "⚠️ API key is not configured. Please go to Admin > AI Management > API Keys to add your Gemini API key.";
     }
 
-    let modelName = useFastModel ? 'gemini-2.5-flash-lite' : 'gemini-3-pro-preview';
+    let modelName = useFastModel ? 'gemini-1.5-flash' : 'gemini-1.5-pro';
 
     // Switch to Flash for multimodal vision tasks as it has excellent vision capabilities
     if (imageBase64) {
-      modelName = 'gemini-2.5-flash';
+      modelName = 'gemini-1.5-flash';
     }
 
     let contents: any = prompt;
@@ -84,7 +84,7 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
 export const generateImage = async (prompt: string, aspectRatio: AspectRatio): Promise<string | null> => {
   try {
     const response = await getAi().models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-1.5-pro',
       contents: {
         parts: [{ text: prompt }],
       },
@@ -111,7 +111,7 @@ export const generateImage = async (prompt: string, aspectRatio: AspectRatio): P
 export const generateSpeech = async (text: string): Promise<string | null> => {
   try {
     const response = await getAi().models.generateContent({
-      model: 'gemini-2.5-flash-preview-tts',
+      model: 'gemini-1.5-flash',
       contents: [{ parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],

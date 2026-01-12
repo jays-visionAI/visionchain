@@ -203,7 +203,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
       });
 
       const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: 'gemini-1.5-flash',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -345,7 +345,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
               <Show when={useFastModel()} fallback={<Sparkles class="w-3 h-3" />}>
                 <Bolt class="w-3 h-3" />
               </Show>
-              <span class="font-medium">{useFastModel() ? 'Flash 2.5' : 'Pro 3.0'}</span>
+              <span class="font-medium">{useFastModel() ? 'Flash 1.5' : 'Pro 1.5'}</span>
             </button>
           </div>
 

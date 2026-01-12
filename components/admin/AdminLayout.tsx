@@ -1,18 +1,8 @@
 import { createSignal, Show, For, onMount } from 'solid-js';
-import { A, useLocation } from '@solidjs/router';
-import { Menu, X, ChevronRight, ChevronDown, LogOut, Lock, Eye, EyeOff } from 'lucide-solid';
+import { A, useLocation, useNavigate } from '@solidjs/router';
+import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity, Globe } from 'lucide-solid';
 import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
-
-// Simple admin password (임시 비밀번호)
-const DEFAULT_PASSWORD = 'visionchain2024';
-const AUTH_KEY = 'visionchain_admin_auth';
-const PASSWORD_STORAGE_KEY = 'visionchain_admin_password';
-
-// Get current password (from localStorage or default)
-const getAdminPassword = (): string => {
-    const saved = localStorage.getItem(PASSWORD_STORAGE_KEY);
-    return saved || DEFAULT_PASSWORD;
-};
+import { useAuth } from '../auth/authContext';
 
 interface AdminLayoutProps {
     children?: any;
@@ -21,42 +11,38 @@ interface AdminLayoutProps {
 export default function AdminLayout(props: AdminLayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
     const [expandedMenus, setExpandedMenus] = createSignal<Set<string>>(new Set());
-    const [isAuthenticated, setIsAuthenticated] = createSignal(false);
-    const [password, setPassword] = createSignal('');
-    const [showPassword, setShowPassword] = createSignal(false);
-    const [authError, setAuthError] = createSignal('');
     const location = useLocation();
+    const navigate = useNavigate();
+    const auth = useAuth();
 
-    // Check if already authenticated on mount
+    // Redirect to login if not authenticated
     onMount(() => {
-        const auth = sessionStorage.getItem(AUTH_KEY);
-        if (auth === 'true') {
-            setIsAuthenticated(true);
+        if (!auth.loading() && !auth.user()) {
+            navigate('/login', { replace: true });
         }
     });
 
-    const handleLogin = (e: Event) => {
-        e.preventDefault();
-        const currentPassword = getAdminPassword();
-        const enteredPassword = password();
-        console.log('Debug - Entered:', enteredPassword, 'Expected:', currentPassword, 'Match:', enteredPassword === currentPassword);
-        if (enteredPassword === currentPassword) {
-            setIsAuthenticated(true);
-            sessionStorage.setItem(AUTH_KEY, 'true');
-            setAuthError('');
-        } else {
-            setAuthError('Invalid password');
+    // Watch for auth state changes
+    const checkAuth = () => {
+        if (!auth.loading() && !auth.user()) {
+            navigate('/login', { replace: true });
         }
     };
 
-    const handleLogout = () => {
-        setIsAuthenticated(false);
-        sessionStorage.removeItem(AUTH_KEY);
+    // Check auth on every render
+    if (!auth.loading() && !auth.user()) {
+        navigate('/login', { replace: true });
+        return null;
+    }
+
+    const handleLogout = async () => {
+        await auth.logout();
+        navigate('/login', { replace: true });
     };
 
     const isActive = (path: string) => {
-        if (path === '/admin') {
-            return location.pathname === '/admin';
+        if (path === '/adminsystem') {
+            return location.pathname === '/adminsystem';
         }
         return location.pathname.startsWith(path);
     };
@@ -75,69 +61,6 @@ export default function AdminLayout(props: AdminLayoutProps) {
 
     const isExpanded = (id: string) => expandedMenus().has(id);
 
-    // Login Screen Component
-    const LoginScreen = () => (
-        <div class="min-h-screen bg-[#050505] flex items-center justify-center p-4">
-            <div class="w-full max-w-md">
-                <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-8 backdrop-blur-xl">
-                    <div class="text-center mb-8">
-                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-4">
-                            <Lock class="w-8 h-8 text-cyan-400" />
-                        </div>
-                        <h1 class="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                            Vision Chain Admin
-                        </h1>
-                        <p class="text-gray-400 mt-2">Enter password to continue</p>
-                    </div>
-
-                    <form onSubmit={handleLogin} class="space-y-4">
-                        <div>
-                            <label class="text-gray-400 text-sm mb-1 block">Password</label>
-                            <div class="relative">
-                                <input
-                                    type={showPassword() ? 'text' : 'password'}
-                                    value={password()}
-                                    onInput={(e) => setPassword(e.currentTarget.value)}
-                                    placeholder="Enter admin password"
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                    autofocus
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
-                            </div>
-                        </div>
-
-                        <Show when={authError()}>
-                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-2">
-                                {authError()}
-                            </div>
-                        </Show>
-
-                        <button
-                            type="submit"
-                            class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
-                        >
-                            Login
-                        </button>
-                    </form>
-
-                    <div class="mt-6 pt-6 border-t border-white/5 text-center">
-                        <a href="/" class="text-gray-400 hover:text-cyan-400 text-sm transition-colors">
-                            ← Back to Home
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-
     // Render a single menu item
     const MenuItem = (props: { item: AdminMenuItem; depth?: number }) => {
         const { item, depth = 0 } = props;
@@ -151,21 +74,24 @@ export default function AdminLayout(props: AdminLayoutProps) {
                     <A
                         href={item.path}
                         onClick={() => setIsSidebarOpen(false)}
-                        class={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${isActive(item.path)
-                            ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 shadow-lg shadow-cyan-500/10'
-                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        class={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive(item.path)
+                            ? 'bg-gradient-to-r from-cyan-500/15 to-blue-500/5 text-cyan-400'
+                            : 'text-gray-400/80 hover:text-white hover:bg-white/[0.03]'
                             }`}
                         style={{ "padding-left": paddingLeft }}
                     >
-                        <Icon class={`w-5 h-5 ${isActive(item.path) ? 'text-cyan-400' : 'group-hover:text-cyan-400'}`} />
-                        <span class="font-medium">{item.label}</span>
+                        <Show when={isActive(item.path)}>
+                            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-cyan-500 rounded-r-full shadow-[0_0_12px_rgba(6,182,212,0.5)]" />
+                        </Show>
+                        <Icon class={`w-5 h-5 transition-transform duration-300 group-hover:scale-110 ${isActive(item.path) ? 'text-cyan-400' : 'group-hover:text-cyan-400'}`} />
+                        <span class="font-bold text-[13px] tracking-tight">{item.label}</span>
                         <Show when={item.badge}>
-                            <span class="ml-auto text-[10px] px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded-full font-medium">
+                            <span class="ml-auto text-[9px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-md font-black uppercase tracking-tighter">
                                 {item.badge}
                             </span>
                         </Show>
                         <Show when={isActive(item.path) && !item.badge}>
-                            <ChevronRight class="w-4 h-4 ml-auto" />
+                            <div class="ml-auto w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
                         </Show>
                     </A>
                 }>
@@ -201,7 +127,14 @@ export default function AdminLayout(props: AdminLayoutProps) {
     const menuItems = getSortedMenuItems();
 
     return (
-        <Show when={isAuthenticated()} fallback={<LoginScreen />}>
+        <Show
+            when={!auth.loading()}
+            fallback={
+                <div class="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+                    <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                </div>
+            }
+        >
             <div class="min-h-screen bg-[#0a0a0f] text-white">
                 {/* Mobile Header */}
                 <div class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#0a0a0f]/95 backdrop-blur-xl border-b border-white/5 z-50 flex items-center justify-between px-4">
@@ -229,32 +162,70 @@ export default function AdminLayout(props: AdminLayoutProps) {
 
                 {/* Sidebar */}
                 <aside
-                    class={`fixed top-0 left-0 h-full w-64 bg-[#0d0d14] border-r border-white/5 z-50 transform transition-transform duration-300 lg:translate-x-0 ${isSidebarOpen() ? 'translate-x-0' : '-translate-x-full'
+                    class={`fixed top-0 left-0 h-full w-64 bg-[#08080c]/80 backdrop-blur-2xl border-r border-white/5 z-50 transform transition-all duration-500 lg:translate-x-0 ${isSidebarOpen() ? 'translate-x-0 shadow-2xl shadow-cyan-500/10' : '-translate-x-full'
                         }`}
                 >
-                    {/* Logo */}
-                    <div class="h-16 flex items-center px-6 border-b border-white/5">
-                        <span class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-                            Vision Chain Admin
-                        </span>
+                    {/* Glowing Accent */}
+                    <div class="absolute top-0 right-0 w-[1px] h-full bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
+
+                    {/* Logo Section */}
+                    <div class="h-20 flex items-center px-6 relative overflow-hidden">
+                        <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-50" />
+                        <div class="relative flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                                <Shield class="w-5 h-5 text-white" />
+                            </div>
+                            <span class="text-lg font-black tracking-tight bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent italic uppercase">
+                                Vision<span class="text-cyan-400">HQ</span>
+                            </span>
+                        </div>
                     </div>
 
-                    {/* Navigation */}
-                    <nav class="p-4 space-y-2 overflow-y-auto max-h-[calc(100vh-140px)]">
-                        <For each={menuItems}>
-                            {(item) => <MenuItem item={item} />}
-                        </For>
-                    </nav>
+                    {/* Navigation Container */}
+                    <div class="px-3 py-4 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar">
+                        <div class="mb-4 px-3 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Management</div>
+                        <nav class="space-y-1.5 px-1">
+                            <For each={menuItems}>
+                                {(item) => <MenuItem item={item} />}
+                            </For>
+                        </nav>
+                    </div>
 
-                    {/* Bottom Section */}
-                    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-white/5">
+                    {/* Bottom Utility Section */}
+                    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-white/5 bg-[#08080c]/40 backdrop-blur-md">
+                        {/* System Status Indicator */}
+                        <div class="mb-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">System Status</span>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                    <span class="text-[10px] font-bold text-green-400 uppercase">Online</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <Activity class="w-3.5 h-3.5 text-cyan-400 opacity-50" />
+                                <div class="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div class="h-full w-[85%] bg-gradient-to-r from-cyan-500 to-blue-500" />
+                                </div>
+                            </div>
+                        </div>
+
                         <A
                             href="/"
-                            class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200"
+                            class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-300 group"
+                        >
+                            <Globe class="w-5 h-5 group-hover:text-cyan-400" />
+                            <span class="font-medium text-sm">Public Website</span>
+                            <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                        </A>
+
+                        <button
+                            onClick={handleLogout}
+                            class="w-full flex items-center gap-3 px-4 py-3 mt-1 rounded-xl text-red-400/70 hover:text-red-400 hover:bg-red-500/5 transition-all duration-300"
                         >
                             <LogOut class="w-5 h-5" />
-                            <span class="font-medium">Back to Site</span>
-                        </A>
+                            <span class="font-medium text-sm">Logout Session</span>
+                        </button>
                     </div>
                 </aside>
 

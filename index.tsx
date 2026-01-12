@@ -1,6 +1,7 @@
 import { render } from 'solid-js/web';
 import { Router, Route, useLocation } from '@solidjs/router';
 import { createSignal, Show, lazy, Suspense } from 'solid-js';
+import { AuthProvider } from './components/auth/authContext';
 
 // Core components (loaded immediately for homepage)
 import Navbar from './components/Navbar';
@@ -22,14 +23,26 @@ const ContactUs = lazy(() => import('./components/ContactUs'));
 const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./components/TermsOfService'));
 const CookiePolicy = lazy(() => import('./components/CookiePolicy'));
+const Wallet = lazy(() => import('./components/Wallet'));
+const VisionScan = lazy(() => import('./components/VisionScan'));
+const Testnet = lazy(() => import('./components/Testnet'));
+
+// Auth components
+const Login = lazy(() => import('./components/auth/Login'));
+const ActivateAccount = lazy(() => import('./components/auth/ActivateAccount'));
 
 // Admin components (lazy-loaded)
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
-const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const AdminUsers = lazy(() => import('./components/admin/AdminUsers'));
 const AdminSettings = lazy(() => import('./components/admin/AdminSettings'));
 const AdminAIManagement = lazy(() => import('./components/admin/AdminAIManagement'));
 const AdminApiDocs = lazy(() => import('./components/admin/AdminApiDocs'));
+const AdminWallet = lazy(() => import('./components/admin/AdminWallet'));
+const AdminCampaign = lazy(() => import('./components/admin/AdminCampaign'));
+const AdminActivity = lazy(() => import('./components/admin/AdminActivity'));
+const AdminVCNDistribution = lazy(() => import('./components/admin/AdminVCNDistribution'));
+const VcnSettings = lazy(() => import('./components/admin/VcnSettings'));
 
 // Loading spinner component
 function PageLoader() {
@@ -59,7 +72,7 @@ function Layout(props: { children?: any }) {
             {props.children}
           </Suspense>
         </main>
-        <Show when={!isAdminRoute()}>
+        <Show when={!isAdminRoute() && location.pathname !== '/wallet'}>
           <Footer />
         </Show>
       </div>
@@ -139,6 +152,21 @@ function CookiesPage() {
   return <div id="cookies"><CookiePolicy /></div>;
 }
 
+function WalletPage() {
+  document.title = 'Wallet | Vision Chain';
+  return <div id="wallet"><Wallet /></div>;
+}
+
+function VisionScanPage() {
+  document.title = 'Vision Scan | Accounting-Grade Explorer';
+  return <div id="vision-scan"><VisionScan /></div>;
+}
+
+function TestnetPage() {
+  document.title = 'Testnet Hub | Vision Chain';
+  return <div id="testnet"><Testnet /></div>;
+}
+
 // Admin Page wrapper components
 function AdminDashboardPage() {
   document.title = 'Dashboard | Admin';
@@ -195,29 +223,96 @@ function AdminApiDocsPage() {
   );
 }
 
+function AdminWalletPage() {
+  document.title = 'Wallet Control | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminWallet />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminCampaignsPage() {
+  document.title = 'Campaigns | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminCampaign />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminActivityPage() {
+  document.title = 'Activity Log | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminActivity />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function AdminVCNDistributionPage() {
+  document.title = 'VCN Distribution | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminVCNDistribution />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
+function VcnSettingsPage() {
+  document.title = 'Security Settings | Vision Chain';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <VcnSettings />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
 render(() => (
-  <Router root={Layout}>
-    <Route path="/" component={HomePage} />
-    <Route path="/research" component={ResearchPage} />
-    <Route path="/technology" component={TechnologyPage} />
-    <Route path="/community" component={CommunityPage} />
-    <Route path="/academy" component={AcademyPage} />
-    <Route path="/developer-community" component={DeveloperCommunityPage} />
-    <Route path="/contact" component={ContactPage} />
-    <Route path="/privacy" component={PrivacyPage} />
-    <Route path="/terms" component={TermsPage} />
-    <Route path="/cookies" component={CookiesPage} />
-    {/* Admin Routes */}
-    <Route path="/admin" component={AdminDashboardPage} />
-    <Route path="/admin/users" component={AdminUsersPage} />
-    <Route path="/admin/ai" component={AdminAIManagementPage} />
-    <Route path="/admin/api-docs" component={AdminApiDocsPage} />
-    <Route path="/admin/api-docs/*" component={AdminApiDocsPage} />
-    <Route path="/admin/settings" component={AdminSettingsPage} />
-  </Router>
+  <AuthProvider>
+    <Router root={Layout}>
+      <Route path="/login" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+      <Route path="/activate" component={() => <Suspense fallback={<PageLoader />}><ActivateAccount /></Suspense>} />
+      <Route path="/" component={HomePage} />
+      <Route path="/research" component={ResearchPage} />
+      <Route path="/technology" component={TechnologyPage} />
+      <Route path="/community" component={CommunityPage} />
+      <Route path="/academy" component={AcademyPage} />
+      <Route path="/developer-community" component={DeveloperCommunityPage} />
+      <Route path="/contact" component={ContactPage} />
+      <Route path="/privacy" component={PrivacyPage} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/cookies" component={CookiesPage} />
+      <Route path="/wallet" component={WalletPage} />
+      <Route path="/visionscan" component={VisionScanPage} />
+      <Route path="/testnet" component={TestnetPage} />
+      {/* Admin Routes */}
+      <Route path="/adminsystem" component={AdminDashboardPage} />
+      <Route path="/adminsystem/users" component={AdminUsersPage} />
+      <Route path="/adminsystem/wallet" component={AdminWalletPage} />
+      <Route path="/adminsystem/campaigns" component={AdminCampaignsPage} />
+      <Route path="/adminsystem/activity" component={AdminActivityPage} />
+      <Route path="/adminsystem/vcn" component={AdminVCNDistributionPage} />
+      <Route path="/adminsystem/vcn-settings" component={VcnSettingsPage} />
+      <Route path="/adminsystem/ai" component={AdminAIManagementPage} />
+      <Route path="/adminsystem/api-docs" component={AdminApiDocsPage} />
+      <Route path="/adminsystem/api-docs/*" component={AdminApiDocsPage} />
+      <Route path="/adminsystem/settings" component={AdminSettingsPage} />
+    </Router>
+  </AuthProvider>
 ), rootElement);

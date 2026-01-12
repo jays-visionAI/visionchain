@@ -52,20 +52,23 @@ const Footer = (): JSX.Element => {
           <div class="md:col-span-2 space-y-4">
             <h4 class="text-white font-medium mb-4">Protocol</h4>
             <div class="flex flex-col space-y-3">
-              <A href="/technology" class="hover:text-blue-400 transition-colors">Technology</A>
-              <A href="/research" class="hover:text-blue-400 transition-colors">Research</A>
-              <a href="https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="hover:text-blue-400 transition-colors">Token Dynamics</a>
-              <a href="https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="hover:text-blue-400 transition-colors">Whitepaper</a>
+              <A href="/technology" class="text-[#86868b] hover:text-white transition-colors">Technology</A>
+              <A href="/research" class="text-[#86868b] hover:text-white transition-colors">Research</A>
+              <a href="https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Token Dynamics</a>
+              <a href="https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Whitepaper</a>
+              <A href="/wallet" class="text-[#86868b] hover:text-white transition-colors">Wallet</A>
+              <A href="/testnet" class="text-[#86868b] hover:text-white transition-colors">Testnet</A>
+              <A href="/visionscan" class="text-[#86868b] hover:text-white transition-colors">Vision Scan</A>
             </div>
           </div>
 
           <div class="md:col-span-2 space-y-4">
             <h4 class="text-white font-medium mb-4">Ecosystem</h4>
             <div class="flex flex-col space-y-3">
-              <A href="/community" class="hover:text-blue-400 transition-colors">Community</A>
-              <A href="/academy" class="hover:text-blue-400 transition-colors">Academy</A>
-              <A href="/developer-community" class="hover:text-blue-400 transition-colors">Developer Hub</A>
-              <A href="/contact" class="hover:text-blue-400 transition-colors">Contact Us</A>
+              <A href="/community" class="text-[#86868b] hover:text-white transition-colors">Community</A>
+              <A href="/academy" class="text-[#86868b] hover:text-white transition-colors">Academy</A>
+              <A href="/developer-community" class="text-[#86868b] hover:text-white transition-colors">Developer Hub</A>
+              <A href="/contact" class="text-[#86868b] hover:text-white transition-colors">Contact Us</A>
             </div>
           </div>
 
@@ -100,9 +103,9 @@ const Footer = (): JSX.Element => {
             <p>© 2025 Vision Chain Foundation. All rights reserved.</p>
           </div>
           <div class="flex gap-8">
-            <A href="/privacy" class="hover:text-white transition-colors">Privacy Policy</A>
-            <A href="/terms" class="hover:text-white transition-colors">Terms of Service</A>
-            <A href="/cookies" class="hover:text-white transition-colors">Cookie Policy</A>
+            <A href="/privacy" class="text-[#86868b] hover:text-white transition-colors">Privacy Policy</A>
+            <A href="/terms" class="text-[#86868b] hover:text-white transition-colors">Terms of Service</A>
+            <A href="/cookies" class="text-[#86868b] hover:text-white transition-colors">Cookie Policy</A>
           </div>
         </div>
 

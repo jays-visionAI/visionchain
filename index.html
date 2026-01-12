@@ -72,8 +72,8 @@
   <script>
     // Suppress TailwindCSS CDN warning
     if (typeof tailwind !== 'undefined') {
-      tailwind.config = { 
-        ...tailwind.config, 
+      tailwind.config = {
+        ...tailwind.config,
         corePlugins: { preflight: false }
       };
     }
@@ -111,6 +111,16 @@
     h5,
     h6 {
       letter-spacing: -0.02em;
+    }
+
+    a {
+      text-decoration: none;
+    }
+
+    button {
+      background: transparent;
+      border: none;
+      cursor: pointer;
     }
 
     .link-arrow {
