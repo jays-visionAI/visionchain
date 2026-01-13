@@ -37,7 +37,8 @@ import {
     Star,
     Download,
     AlertTriangle,
-    Info
+    Info,
+    ShieldCheck
 } from 'lucide-solid';
 import {
     updateWalletStatus,
@@ -2911,7 +2912,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             disabled={selectedWords().length !== seedPhrase().length}
                                                             class={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl ${selectedWords().length === seedPhrase().length ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20 hover:scale-[1.02]' : 'bg-[#1a1a1e] text-gray-500 border border-white/5 cursor-not-allowed'}`}
                                                         >
-                                                            Create Wallet
+                                                            Confirm & Create
                                                         </button>
                                                     </div>
                                                 </div>
