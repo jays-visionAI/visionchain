@@ -723,7 +723,7 @@ const Wallet = (): JSX.Element => {
 
             // 5. Success state
             setShowPasswordModal(false);
-            setOnboardingSuccess(true);
+            setOnboardingStep(4); // Move to Success Screen AFTER password is set
 
         } catch (error) {
             console.error('Wallet completion error:', error);
@@ -2874,7 +2874,8 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                         setWalletAddressSignal(address);
                                                                         setUserProfile(prev => ({ ...prev, address: address }));
 
-                                                                        setOnboardingStep(4); // Move to final success step
+                                                                        // Prompt for password immediately
+                                                                        setShowPasswordModal(true);
                                                                     } catch (err) {
                                                                         console.error("Failed to derive address:", err);
                                                                         alert("Error generating wallet address. Please try again.");
@@ -3880,7 +3881,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             onClick={finishOnboarding}
                                             class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
                                         >
-                                            Get Started
+                                            Go to Wallet
                                         </button>
                                     </div>
                                 </Motion.div>
