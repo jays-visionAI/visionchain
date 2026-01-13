@@ -168,12 +168,42 @@ const Wallet = (): JSX.Element => {
     const [copiedSeed, setCopiedSeed] = createSignal(false);
     const [referralBonus, setReferralBonus] = createSignal('0');
 
-    const copySeedPhrase = () => {
+    const copyToClipboard = async (text: string) => {
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } else {
+                // Fallback for non-secure contexts or older browsers
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                textArea.style.top = "0";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                return successful;
+            }
+        } catch (err) {
+            console.error('Copy failed:', err);
+            return false;
+        }
+    };
+
+    const copySeedPhrase = async () => {
         const phrase = seedPhrase().join(' ');
         if (!phrase) return;
-        navigator.clipboard.writeText(phrase);
-        setCopiedSeed(true);
-        setTimeout(() => setCopiedSeed(false), 2000);
+
+        const success = await copyToClipboard(phrase);
+        if (success) {
+            setCopiedSeed(true);
+            setTimeout(() => setCopiedSeed(false), 2000);
+        } else {
+            alert('Failed to copy to clipboard. Please try selecting the words manually.');
+        }
     };
     const [contacts, setContacts] = createSignal([
         { id: 1, name: 'Alex Rivers', address: '0x742d...44e', avatar: 'AR', isUser: true, isFavorite: true },
