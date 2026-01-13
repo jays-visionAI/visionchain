@@ -104,8 +104,8 @@ export default function Signup() {
             <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
             <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
 
-            <div class="w-full max-w-md relative z-10">
-                <div class="rounded-3xl bg-white/[0.02] border border-white/10 p-8 backdrop-blur-xl shadow-2xl overflow-hidden">
+            <div class="w-full max-w-[480px] relative z-10">
+                <div class="rounded-[32px] bg-white/[0.03] border border-white/10 p-10 backdrop-blur-2xl shadow-2xl overflow-hidden">
                     {/* Header */}
                     <div class="text-center mb-8">
                         <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-6 border border-purple-500/20">
@@ -129,7 +129,8 @@ export default function Signup() {
                                     value={email()}
                                     onInput={(e) => setEmail(e.currentTarget.value)}
                                     placeholder="your@email.com"
-                                    class="w-full p-4 pl-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] transition-all box-border"
+                                    class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20"
+                                    style={{ "padding-left": "3.5rem" }}
                                     required
                                 />
                             </div>
@@ -145,7 +146,8 @@ export default function Signup() {
                                     value={password()}
                                     onInput={(e) => setPassword(e.currentTarget.value)}
                                     placeholder="Enter your password"
-                                    class="w-full p-4 pl-12 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] transition-all box-border"
+                                    class="w-full py-4 pl-14 pr-12 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20"
+                                    style={{ "padding-left": "3.5rem" }}
                                     required
                                 />
                                 <button
@@ -170,7 +172,8 @@ export default function Signup() {
                                     value={confirmPassword()}
                                     onInput={(e) => setConfirmPassword(e.currentTarget.value)}
                                     placeholder="Re-enter your password"
-                                    class="w-full p-4 pl-12 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.07] transition-all box-border"
+                                    class="w-full py-4 pl-14 pr-12 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20"
+                                    style={{ "padding-left": "3.5rem" }}
                                     required
                                 />
                                 <button
@@ -207,11 +210,11 @@ export default function Signup() {
                     </form>
 
                     {/* Back Link */}
-                    <div class="mt-8 pt-6 border-t border-white/5 text-center">
-                        <p class="text-gray-400 text-sm mb-2">Already have an account?</p>
+                    <div class="mt-10 pt-8 border-t border-white/5 text-center">
+                        <p class="text-gray-500 text-sm mb-3">Already have an account?</p>
                         <a
                             href="/login"
-                            class="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 font-semibold text-sm transition-colors"
+                            class="inline-flex items-center gap-2 px-8 py-3 rounded-xl border border-white/10 text-cyan-400 hover:text-cyan-300 hover:bg-white/5 font-semibold text-sm transition-all"
                         >
                             Log in
                         </a>

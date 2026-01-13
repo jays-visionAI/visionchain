@@ -13,11 +13,11 @@ const getEnv = (key: string, defaultValue: string): string => {
 };
 
 export const firebaseConfig = {
-    apiKey: getEnv('VITE_FIREBASE_API_KEY', "YOUR_API_KEY"),
-    authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN', "YOUR_PROJECT_ID.firebaseapp.com"),
-    projectId: getEnv('VITE_FIREBASE_PROJECT_ID', "YOUR_PROJECT_ID"),
-    storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET', "YOUR_PROJECT_ID.appspot.com"),
-    messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID', "YOUR_SENDER_ID"),
-    appId: getEnv('VITE_FIREBASE_APP_ID', "YOUR_APP_ID"),
-    resendApiKey: getEnv('VITE_RESEND_API_KEY', '')
+    apiKey: "AIzaSyBOhaRLa86vxEp0vCqS5adp54RqBt1RtHc",
+    authDomain: "visionchain-d19ed.firebaseapp.com",
+    projectId: "visionchain-d19ed",
+    storageBucket: "visionchain-d19ed.firebasestorage.app",
+    messagingSenderId: "451188892027",
+    appId: "1:451188892027:web:1c5232d790dc32cfee1dde",
+    resendApiKey: "re_EY5c8G5T_9cKh8egXdvZTCe5ASeyH1e86"
 };
