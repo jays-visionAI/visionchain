@@ -165,7 +165,16 @@ const Wallet = (): JSX.Element => {
     const [importStep, setImportStep] = createSignal(0);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [copied, setCopied] = createSignal(false);
+    const [copiedSeed, setCopiedSeed] = createSignal(false);
     const [referralBonus, setReferralBonus] = createSignal('0');
+
+    const copySeedPhrase = () => {
+        const phrase = seedPhrase().join(' ');
+        if (!phrase) return;
+        navigator.clipboard.writeText(phrase);
+        setCopiedSeed(true);
+        setTimeout(() => setCopiedSeed(false), 2000);
+    };
     const [contacts, setContacts] = createSignal([
         { id: 1, name: 'Alex Rivers', address: '0x742d...44e', avatar: 'AR', isUser: true, isFavorite: true },
         { id: 2, name: 'Sarah Chen', address: '0x123c...89a', avatar: 'SC', isUser: true, isFavorite: true },
@@ -2653,11 +2662,13 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                                 <Show when={showSeed()}>
                                                     <div class="flex gap-4">
                                                         <button
-                                                            onClick={copyAddress}
-                                                            class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"
+                                                            onClick={copySeedPhrase}
+                                                            class={`flex-1 flex items-center justify-center gap-2 py-4 border rounded-2xl font-black text-sm transition-all ${copiedSeed() ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20'}`}
                                                         >
-                                                            <Copy class="w-4 h-4 text-gray-400" />
-                                                            Copy Phrase
+                                                            <Show when={copiedSeed()} fallback={<Copy class="w-4 h-4 text-gray-400" />}>
+                                                                <Check class="w-4 h-4 text-green-400" />
+                                                            </Show>
+                                                            {copiedSeed() ? 'Copied!' : 'Copy Phrase'}
                                                         </button>
                                                         <button
                                                             class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"

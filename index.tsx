@@ -310,6 +310,7 @@ render(() => (
   <AuthProvider>
     <Router root={Layout}>
       <Route path="/login" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+      <Route path="/newlogin" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
       <Route path="/signup" component={() => <Suspense fallback={<PageLoader />}><Signup /></Suspense>} />
       <Route path="/admin-login" component={AdminLoginPage} />
       <Route path="/activate" component={() => <Suspense fallback={<PageLoader />}><ActivateAccount /></Suspense>} />
