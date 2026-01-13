@@ -15,6 +15,11 @@ export const ActivateContract = () => {
         p => p.vestingTx
     ) || [];
 
+    // New: Filter for users who are uploaded but haven't created a wallet yet
+    const pendingParticipants = () => participants()?.filter(
+        p => p.status !== 'WalletCreated' && !p.vestingTx && p.status !== 'VestingDeployed'
+    ) || [];
+
     const handleDeploy = async (email: string, walletAddress: string, amount: number, unlockRatio: number, cliff: number, duration: number) => {
         setDeployingFor(email);
         try {
@@ -63,9 +68,9 @@ export const ActivateContract = () => {
                 </div>
             </div>
 
-            {/* List */}
+            {/* List: Ready for Deployment */}
             <h3 class="text-lg font-semibold text-white mb-4">Ready for Deployment</h3>
-            <div class="overflow-x-auto rounded-xl border border-slate-800">
+            <div class="overflow-x-auto rounded-xl border border-slate-800 mb-8">
                 <table class="w-full text-left bg-[#0B0E14]">
                     <thead class="bg-slate-800 text-slate-400 text-sm uppercase">
                         <tr>
@@ -78,7 +83,7 @@ export const ActivateContract = () => {
                     </thead>
                     <tbody class="divide-y divide-slate-800">
                         <For each={readyParticipants()} fallback={
-                            <tr><td colspan="5" class="p-8 text-center text-slate-500">No users ready for activation.</td></tr>
+                            <tr><td colspan="5" class="p-8 text-center text-slate-500">No users ready for activation (Wallet not connected).</td></tr>
                         }>
                             {(user) => (
                                 <tr class="hover:bg-slate-800/50 transition-colors">
@@ -89,8 +94,8 @@ export const ActivateContract = () => {
                                     <td class="p-4">
                                         <button
                                             class={`px-4 py-2 rounded-lg text-sm font-bold shadow-lg transition-all ${deployingFor() === user.email
-                                                    ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                                                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-indigo-500/20'
+                                                ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-indigo-500/20'
                                                 }`}
                                             onClick={() => handleDeploy(
                                                 user.email,
@@ -112,7 +117,41 @@ export const ActivateContract = () => {
                 </table>
             </div>
 
-            {/* Completed List (optional expanded view) */}
+            {/* List: Pending User Action (Waiting for Wallet Creation) */}
+            <Show when={pendingParticipants().length > 0}>
+                <h3 class="text-lg font-semibold text-white mb-4 text-amber-500 flex items-center gap-2">
+                    <div class="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    Pending User Action (Waiting for Wallet Creation)
+                </h3>
+                <div class="overflow-x-auto rounded-xl border border-slate-800 mb-8 opacity-80">
+                    <table class="w-full text-left bg-[#0B0E14]">
+                        <thead class="bg-slate-800 text-slate-400 text-sm uppercase">
+                            <tr>
+                                <th class="p-4">Email</th>
+                                <th class="p-4">Partner</th>
+                                <th class="p-4">Amount</th>
+                                <th class="p-4">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                            <For each={pendingParticipants()}>
+                                {(user) => (
+                                    <tr class="hover:bg-slate-800/20">
+                                        <td class="p-4 text-slate-300">{user.email}</td>
+                                        <td class="p-4">{user.partnerCode}</td>
+                                        <td class="p-4">{user.amountToken.toLocaleString()} VCN</td>
+                                        <td class="p-4 text-amber-500 text-sm font-bold uppercase tracking-wider">
+                                            {user.status || 'Pending'}
+                                        </td>
+                                    </tr>
+                                )}
+                            </For>
+                        </tbody>
+                    </table>
+                </div>
+            </Show>
+
+            {/* List: Completed */}
             <Show when={deployedParticipants().length > 0}>
                 <div class="mt-8">
                     <h3 class="text-lg font-semibold text-white mb-4 text-slate-500">Already Deployed</h3>
