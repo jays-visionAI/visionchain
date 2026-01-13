@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, createEffect, Switch, Match } from 'solid-js';
+import { createSignal, Show, For, onMount, createEffect, Switch, Match, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import {
@@ -151,7 +151,7 @@ const Wallet = (): JSX.Element => {
         address: ''
     });
     const [walletAddressSignal, setWalletAddressSignal] = createSignal('');
-    const walletAddress = () => userProfile().address || walletAddressSignal() || '';
+    const walletAddress = createMemo(() => userProfile().address || walletAddressSignal() || '');
     const [showSeed, setShowSeed] = createSignal(false);
     const [seedPhrase, setSeedPhrase] = createSignal<string[]>([]);
     const [selectedWords, setSelectedWords] = createSignal<string[]>([]);
@@ -2813,11 +2813,23 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                                     <button
                                                         onClick={() => {
                                                             const phrase = seedPhrase().join(' ');
-                                                            if (selectedWords().join(' ') === phrase) {
-                                                                // Derive address immediately to show on success screen
-                                                                const { address } = WalletService.deriveEOA(phrase);
-                                                                setWalletAddressSignal(address);
-                                                                setOnboardingStep(4); // Move to final success step
+                                                            const selected = selectedWords().join(' ');
+
+                                                            if (selected === phrase) {
+                                                                // Derive address immediately
+                                                                try {
+                                                                    const { address } = WalletService.deriveEOA(phrase);
+                                                                    console.log("Onboarding Success - Derived Address:", address);
+
+                                                                    // Update all possible state holders for reactivity
+                                                                    setWalletAddressSignal(address);
+                                                                    setUserProfile(prev => ({ ...prev, address: address }));
+
+                                                                    setOnboardingStep(4); // Move to final success step
+                                                                } catch (err) {
+                                                                    console.error("Failed to derive address:", err);
+                                                                    alert("Error generating wallet address. Please try again.");
+                                                                }
                                                             } else {
                                                                 alert('Incorrect order. Please try again.');
                                                                 setSelectedWords([]);
