@@ -169,6 +169,8 @@ const Wallet = (): JSX.Element => {
     const [copied, setCopied] = createSignal(false);
     const [copiedSeed, setCopiedSeed] = createSignal(false);
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+    const [passwordMode, setPasswordMode] = createSignal<'setup' | 'verify'>('setup');
+    const [pendingAction, setPendingAction] = createSignal<{ type: string, data?: any } | null>(null);
     const [walletPassword, setWalletPassword] = createSignal('');
     const [confirmWalletPassword, setConfirmWalletPassword] = createSignal('');
     const [showWalletPassword, setShowWalletPassword] = createSignal(false);
@@ -257,65 +259,124 @@ const Wallet = (): JSX.Element => {
     // const refreshNodeData = async () => { ... };
 
     const purchaseNode = async (type: 'Validator' | 'Enterprise') => {
+        // Direct to setup if no wallet exists
+        if (!WalletService.hasWallet()) {
+            alert('Please create or import a wallet first to purchase nodes.');
+            setActiveView('profile');
+            return;
+        }
+
+        // Use internal wallet flow
+        setPasswordMode('verify');
+        setPendingAction({ type: 'purchase_node', data: type });
+        setWalletPassword('');
+        setConfirmWalletPassword('');
+        setShowPasswordModal(true);
+    };
+
+    const executePendingAction = async () => {
+        const action = pendingAction();
+        if (!action) return;
+
         try {
             setIsLoading(true);
-            // 1. Connect Wallet (if not already)
-            await contractService.connectWallet();
+            setShowPasswordModal(false);
 
-            // 2. Generate a random UUID for the Node (In reality, this might come from the physical node)
-            const uuid = crypto.randomUUID();
+            if (action.type === 'purchase_node') {
+                const nodeType = action.data as 'Validator' | 'Enterprise';
+                console.log(`Executing internal purchase for ${nodeType}...`);
 
-            // 3. Call Smart Contract
-            console.log(`Purchasing ${type} node...`);
-            const receipt = await contractService.purchaseLicense(uuid, type);
-            console.log("Purchase Receipt:", receipt);
+                // 1. Decrypt Mnemonic
+                const encrypted = WalletService.getEncryptedWallet();
+                if (!encrypted) throw new Error("No encrypted wallet found locally.");
 
-            // 4. Update UI (Optimistic or fetch)
-            setOwnedNodes([...ownedNodes(), {
-                id: `#${uuid.substring(0, 8)}`,
-                type: type,
-                hashPower: type === 'Validator' ? '1x' : '12x',
-                aor: 100, // Initial AOR
-                dailyReward: type === 'Validator' ? 12.5 : 150, // Approx
-                uptime: '0h 0m',
-                status: 'Operating'
-            }]);
+                const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
+                if (!WalletService.validateMnemonic(mnemonic)) {
+                    throw new Error("Invalid decryption. Please check your spending password.");
+                }
 
-            setNodeStats({
-                ...nodeStats(),
-                activeNodes: nodeStats().activeNodes + 1,
-                totalNodes: nodeStats().totalNodes + 1
-            });
+                // 2. Derive Signer and Connect Service
+                const { privateKey } = WalletService.deriveEOA(mnemonic);
+                const address = await contractService.connectInternalWallet(privateKey);
+                console.log("Internal Signer Address:", address);
 
-            alert(`Successfully deployed ${type} Node! Tx: ${receipt.hash}`);
+                // 3. Generate UUID and Execute Contract Call
+                const uuid = crypto.randomUUID();
+                const receipt = await contractService.purchaseLicense(uuid, nodeType);
+                console.log("Purchase Successful. Receipt:", receipt);
+
+                // 4. Update UI
+                setOwnedNodes(prev => [...prev, {
+                    id: `#${uuid.substring(0, 8)}`,
+                    type: nodeType,
+                    hashPower: nodeType === 'Validator' ? '1x' : '12x',
+                    aor: 100,
+                    dailyReward: nodeType === 'Validator' ? 12.5 : 150,
+                    uptime: '0h 0m',
+                    status: 'Operating'
+                }]);
+
+                setNodeStats(prev => ({
+                    ...prev,
+                    activeNodes: prev.activeNodes + 1,
+                    totalNodes: prev.totalNodes + 1
+                }));
+
+                alert(`Successfully deployed ${nodeType} Node! Tx: ${receipt.hash}`);
+            } else if (action.type === 'send_tokens') {
+                const { amount, recipient, symbol } = action.data;
+                setFlowLoading(true);
+
+                // 1. Decrypt Mnemonic
+                const encrypted = WalletService.getEncryptedWallet();
+                const mnemonic = await WalletService.decrypt(encrypted!, walletPassword());
+                const { privateKey } = WalletService.deriveEOA(mnemonic);
+
+                // 2. Connect Internal Wallet
+                await contractService.connectInternalWallet(privateKey);
+
+                // 3. Execute Send
+                const receipt = await contractService.sendTokens(recipient, amount, symbol);
+                console.log("Send Transaction Successful:", receipt.hash);
+
+                setFlowSuccess(true);
+                setFlowStep(3);
+            } else if (action.type === 'claim_rewards') {
+                // 1. Decrypt Mnemonic
+                const encrypted = WalletService.getEncryptedWallet();
+                const mnemonic = await WalletService.decrypt(encrypted!, walletPassword());
+                const { privateKey } = WalletService.deriveEOA(mnemonic);
+
+                // 2. Connect Internal Wallet
+                await contractService.connectInternalWallet(privateKey);
+
+                // 3. Execute Claim (Placeholder logic for demo)
+                // await contractService.claimReward(1); 
+                console.log("Rewards Claimed via Internal Wallet");
+
+                setNodeStats(prev => ({
+                    ...prev,
+                    totalRewards: 0
+                }));
+                alert("Rewards Claimed Successfully!");
+            }
         } catch (error: any) {
-            console.error("Purchase failed:", error);
-            alert(`Purchase failed: ${error.message || error}`);
+            console.error("Internal Action Failed:", error);
+            alert(`Execution failed: ${error.message || error}`);
         } finally {
             setIsLoading(false);
+            setPendingAction(null);
+            setWalletPassword('');
         }
     };
 
     const claimNodeRewards = async () => {
-        try {
-            setIsLoading(true);
-            await contractService.connectWallet();
+        if (!WalletService.hasWallet()) return;
 
-            // TODO: We need the actual Token ID belonging to the user. 
-            // For this demo, we'll try to claim for a hardcoded ID or just show success if logic passes.
-            // Since we don't have a way to fetch owned IDs efficiently without an indexer yet,
-            // we will mock the *call* but successful execution depends on contract state.
-
-            // Example: Claim for Token ID 1 (if it exists)
-            // await contractService.claimReward(1); 
-
-            alert("Reward Claim Transaction Sent! (Note: Requires valid Token ID on-chain)");
-        } catch (error: any) {
-            console.error("Claim failed:", error);
-            alert(`Claim failed: ${error.message}`);
-        } finally {
-            setIsLoading(false);
-        }
+        setPasswordMode('verify');
+        setPendingAction({ type: 'claim_rewards' });
+        setWalletPassword('');
+        setShowPasswordModal(true);
     };
 
     // User's token holdings (balance only)
@@ -522,7 +583,7 @@ const Wallet = (): JSX.Element => {
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
-            'VCN': { name: 'Vision Chain', price: 3.50 },
+            'VCN': { name: 'Vision Chain', price: 0.37 },
             'ETH': { name: 'Ethereum', price: 3200.00 },
             'USDC': { name: 'USDC', price: 1.00 }
         };
@@ -610,12 +671,26 @@ const Wallet = (): JSX.Element => {
     };
 
     const handleTransaction = async () => {
-        setFlowLoading(true);
-        // Simulate transaction processing
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        setFlowLoading(false);
-        setFlowSuccess(true);
-        setFlowStep(3); // Result step
+        if (activeFlow() === 'send') {
+            setPasswordMode('verify');
+            setPendingAction({
+                type: 'send_tokens',
+                data: {
+                    amount: sendAmount(),
+                    recipient: recipientAddress(),
+                    symbol: selectedToken()
+                }
+            });
+            setWalletPassword('');
+            setShowPasswordModal(true);
+        } else {
+            // For other flows (swap, stake), we keep the simulation for now or implement as needed
+            setFlowLoading(true);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            setFlowLoading(false);
+            setFlowSuccess(true);
+            setFlowStep(3);
+        }
     };
 
     const importMobileContacts = () => {
@@ -818,7 +893,6 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
             });
         }, 300);
     };
-    type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'nodes' | 'profile' | 'settings' | 'contacts';
 
     const menuItems = [
         { id: 'chat' as ViewType, label: 'Chat', icon: Sparkles },
@@ -2174,7 +2248,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                     </div>
                                     <div>
                                         <p class="text-xs text-blue-200/80 leading-relaxed">
-                                            The <span class="text-white font-bold">'Purchased (VCN)'</span> balance reflects your total token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details show your current vesting progress.
+                                            The <span class="text-white font-bold">'Purchased (VCN)'</span> balance reflects your total token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details will be calculated after the vesting contract is officially executed.
                                         </p>
                                     </div>
                                 </div>
@@ -2210,7 +2284,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Locked (VCN)</span>
                                             </div>
                                             <div class="text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-amber-400 transition-colors">
-                                                {portfolioStats().locked.toLocaleString()}
+                                                0
                                             </div>
                                         </div>
                                     </div>
@@ -2227,15 +2301,15 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     </div>
                                                     <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Vesting</span>
                                                 </div>
-                                                <span class="text-xs font-bold text-purple-400">{portfolioStats().progress.toFixed(1)}%</span>
+                                                <span class="text-xs font-bold text-purple-400">0.0%</span>
                                             </div>
                                             <div class="text-3xl font-bold text-white mb-4 tracking-tight tabular-nums">
-                                                {portfolioStats().unlocked.toFixed(0)} / {portfolioStats().total.toFixed(0)}
+                                                0 / {portfolioStats().total.toFixed(0)}
                                             </div>
                                             <div class="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                                                 <div
                                                     class="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full shadow-[0_0_10px_rgba(168,85,247,0.5)] transition-all duration-1000"
-                                                    style={{ width: `${portfolioStats().progress}%` }}
+                                                    style={{ width: `0%` }}
                                                 />
                                             </div>
                                         </div>
@@ -2254,12 +2328,12 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Next Unlock</span>
                                                 </div>
                                                 <span class="text-xs font-bold text-cyan-400 tracking-wide">
-                                                    {portfolioStats().nextUnlockDays > 0 ? `${portfolioStats().nextUnlockDays} days` : 'Completed'}
+                                                    N/A
                                                 </span>
                                             </div>
                                             <div class="flex items-baseline gap-2 group-hover:text-cyan-400 transition-colors">
                                                 <div class="text-3xl font-bold text-white tracking-tight group-hover:text-inherit">
-                                                    {portfolioStats().nextUnlock.toFixed(2)}
+                                                    0.00
                                                 </div>
                                                 <div class="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">VCN</div>
                                             </div>
@@ -2346,6 +2420,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                     }>
                                                                         <span class="text-base font-medium text-white group-hover/row:text-white transition-colors">
                                                                             ${asset().price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                            {symbol === 'VCN' && <span class="text-[11px] text-gray-500 ml-1">/ VCN</span>}
                                                                         </span>
                                                                     </Show>
                                                                 </div>
@@ -3799,9 +3874,14 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
                                                 <Lock class="w-8 h-8 text-blue-400" />
                                             </div>
-                                            <h3 class="text-2xl font-bold text-white mb-2">Set Wallet Spending Password</h3>
+                                            <h3 class="text-2xl font-bold text-white mb-2">
+                                                {passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password'}
+                                            </h3>
                                             <p class="text-sm text-gray-400">
-                                                This password encrypts your private key locally and is required for transactions.<br />
+                                                {passwordMode() === 'setup'
+                                                    ? 'This password encrypts your private key locally and is required for transactions.'
+                                                    : 'Please enter your spending password to authorize this transaction.'}
+                                                <br />
                                                 <span class="text-blue-400 font-bold">It is different from your login password.</span>
                                             </p>
                                         </div>
@@ -3810,10 +3890,11 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             <div class="relative w-full">
                                                 <input
                                                     type={showWalletPassword() ? "text" : "password"}
-                                                    placeholder="Create spending password"
+                                                    placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
                                                     class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
                                                     value={walletPassword()}
                                                     onInput={(e) => setWalletPassword(e.currentTarget.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
                                                 />
                                                 <button
                                                     onClick={() => setShowWalletPassword(!showWalletPassword())}
@@ -3823,16 +3904,18 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 </button>
                                             </div>
 
-                                            <div class="relative w-full">
-                                                <input
-                                                    type={showWalletPassword() ? "text" : "password"}
-                                                    placeholder="Confirm spending password"
-                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
-                                                    value={confirmWalletPassword()}
-                                                    onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
-                                                    onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
-                                                />
-                                            </div>
+                                            <Show when={passwordMode() === 'setup'}>
+                                                <div class="relative w-full">
+                                                    <input
+                                                        type={showWalletPassword() ? "text" : "password"}
+                                                        placeholder="Confirm spending password"
+                                                        class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
+                                                        value={confirmWalletPassword()}
+                                                        onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                                    />
+                                                </div>
+                                            </Show>
 
                                             <div class="flex items-center justify-center gap-2">
                                                 <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
@@ -3850,13 +3933,13 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 Cancel
                                             </button>
                                             <button
-                                                onClick={finalizeWalletCreation}
-                                                disabled={!walletPassword() || isLoading()}
+                                                onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
+                                                disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !confirmWalletPassword())}
                                                 class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
                                             >
-                                                <Show when={isLoading()} fallback="Create Wallet">
+                                                <Show when={isLoading()} fallback={passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment"}>
                                                     <RefreshCw class="w-4 h-4 animate-spin" />
-                                                    Encrypting...
+                                                    {passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...'}
                                                 </Show>
                                             </button>
                                         </div>

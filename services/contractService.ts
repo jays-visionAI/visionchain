@@ -12,11 +12,13 @@ const ADDRESSES = {
     VCN_VESTING: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
 
     // Legacy / Other
-    VCNVesting: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+    // Vision Chain RPC Endpoint
+    RPC_URL: "https://tdstest.visionchain.bk.simplyfi.tech/rpc", // Fallback to public testnet
+    LOCAL_RPC: "http://127.0.0.1:8545"
 };
 
 export class ContractService {
-    private provider: BrowserProvider | null = null;
+    private provider: BrowserProvider | ethers.JsonRpcProvider | null = null;
     private signer: any = null;
 
     // Contracts
@@ -29,20 +31,52 @@ export class ContractService {
 
     async connectWallet(): Promise<string> {
         if (!(window as any).ethereum) {
-            throw new Error("No crypto wallet found. Please install MetaMask.");
+            // If No MetaMask, we don't throw yet, we might use internal wallet
+            console.warn("No crypto wallet found. MetaMask not available.");
+            return "";
         }
 
         this.provider = new BrowserProvider((window as any).ethereum);
         this.signer = await this.provider.getSigner();
         const address = await this.signer.getAddress();
 
-        // Initialize Contracts
-        this.nodeLicense = new ethers.Contract(ADDRESSES.NODE_LICENSE, NodeLicenseABI.abi, this.signer);
-        this.miningPool = new ethers.Contract(ADDRESSES.MINING_POOL, MiningPoolABI.abi, this.signer);
-        this.vcnToken = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, this.signer);
-        this.vcnVesting = new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, this.signer);
+        this.initializeContracts(this.signer);
 
         return address;
+    }
+
+    async connectInternalWallet(privateKey: string): Promise<string> {
+        try {
+            // Use local RPC if possible, otherwise public testnet
+            const rpcUrl = ADDRESSES.LOCAL_RPC;
+            const provider = new ethers.JsonRpcProvider(rpcUrl);
+
+            // Validate connection
+            try {
+                await provider.getNetwork();
+                this.provider = provider;
+            } catch (e) {
+                console.warn("Local RPC failed, falling back to public testnet");
+                this.provider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+            }
+
+            this.signer = new ethers.Wallet(privateKey, this.provider);
+            const address = await this.signer.getAddress();
+
+            this.initializeContracts(this.signer);
+
+            return address;
+        } catch (error) {
+            console.error("Failed to connect internal wallet:", error);
+            throw error;
+        }
+    }
+
+    private initializeContracts(signerOrProvider: any) {
+        this.nodeLicense = new ethers.Contract(ADDRESSES.NODE_LICENSE, NodeLicenseABI.abi, signerOrProvider);
+        this.miningPool = new ethers.Contract(ADDRESSES.MINING_POOL, MiningPoolABI.abi, signerOrProvider);
+        this.vcnToken = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, signerOrProvider);
+        this.vcnVesting = new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, signerOrProvider);
     }
 
     async purchaseLicense(uuid: string, tier: 'Validator' | 'Enterprise') {
@@ -76,6 +110,26 @@ export class ContractService {
         // relying on sub-optimal event filtering or assuming limited ID range for now.
         // In production, use The Graph or Vision Scan API.
         return [];
+    }
+
+    async sendTokens(to: string, amount: string, tokenSymbol: string = 'VCN') {
+        if (!this.signer) throw new Error("Signer not initialized");
+
+        const amountWei = ethers.parseUnits(amount, 18); // Default to 18 decimals
+
+        if (tokenSymbol === 'ETH') {
+            const tx = await this.signer.sendTransaction({
+                to,
+                value: amountWei
+            });
+            return await tx.wait();
+        } else if (tokenSymbol === 'VCN') {
+            if (!this.vcnToken) throw new Error("VCN Token contract not initialized");
+            const tx = await this.vcnToken.transfer(to, amountWei);
+            return await tx.wait();
+        } else {
+            throw new Error(`Token ${tokenSymbol} transfer not implemented in this demo.`);
+        }
     }
 
     // --- Admin Functions ---
