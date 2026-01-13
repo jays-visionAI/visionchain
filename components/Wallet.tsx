@@ -3507,8 +3507,8 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                         <Show when={activeFlow() === 'receive'}>
                                             <div class="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                                 <div>
-                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-3 text-center">Select Network</label>
-                                                    <div class="flex gap-2">
+                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-4 text-center">Select Network</label>
+                                                    <div class="flex flex-wrap justify-center gap-2">
                                                         <For each={['Vision Chain', 'Ethereum', 'Base', 'Solana']}>
                                                             {(net) => (
                                                                 <button
@@ -3522,27 +3522,37 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     </div>
                                                 </div>
 
-                                                <div class="w-56 h-56 bg-white p-6 rounded-[32px] shadow-2xl relative group overflow-hidden">
-                                                    <div class="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    <div class="w-full h-full border-2 border-dashed border-gray-100 rounded-2xl flex items-center justify-center relative z-10">
-                                                        <div class="flex flex-col items-center gap-2">
-                                                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-xl">
-                                                                <Sparkles class="w-8 h-8 text-white" />
-                                                            </div>
-                                                            <div class="grid grid-cols-4 gap-1 transform scale-75 opacity-20">
-                                                                {Array.from({ length: 16 }).map(() => <div class="w-4 h-4 bg-black rounded-[2px]" />)}
-                                                            </div>
+                                                <div class="relative group">
+                                                    <div class="absolute -inset-4 bg-green-500/10 rounded-[48px] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                                    <div class="relative w-64 h-64 bg-white p-6 rounded-[40px] shadow-2xl flex flex-col items-center justify-center">
+                                                        <div class="relative w-full h-full p-2 bg-white rounded-2xl flex items-center justify-center">
+                                                            <Show when={walletAddress()} fallback={<div class="w-full h-full bg-gray-100 animate-pulse rounded-xl" />}>
+                                                                <img
+                                                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${walletAddress()}&margin=10&color=000000&bgcolor=FFFFFF`}
+                                                                    alt="Wallet QR Code"
+                                                                    class="w-full h-full"
+                                                                />
+                                                                {/* Central Logo Overlay */}
+                                                                <div class="absolute inset-0 flex items-center justify-center">
+                                                                    <div class="w-12 h-12 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-center p-1.5">
+                                                                        <div class="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                                                                            <Sparkles class="w-5 h-5 text-white" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
                                                         </div>
-                                                    </div>
-                                                    <div class="absolute top-2 right-2">
-                                                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                                        <div class="absolute top-4 right-4">
+                                                            <div class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)] animate-pulse" />
+                                                        </div>
                                                     </div>
                                                 </div>
 
                                                 <div class="w-full space-y-4">
-                                                    <div class="p-5 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-center group active:scale-[0.99] transition-all cursor-pointer" onClick={copyAddress}>
-                                                        <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-2">Your {receiveNetwork()} Address</div>
-                                                        <div class="text-white font-mono break-all text-xs lg:text-sm tracking-tight">{walletAddress()}</div>
+                                                    <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-[24px] text-center group active:scale-[0.99] transition-all cursor-pointer relative overflow-hidden" onClick={copyAddress}>
+                                                        <div class="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                        <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">Your {receiveNetwork()} Address</div>
+                                                        <div class="text-white font-mono break-all text-xs lg:text-sm tracking-tight leading-relaxed px-2">{walletAddress() || 'Fetching address...'}</div>
                                                     </div>
                                                     <button
                                                         onClick={copyAddress}
