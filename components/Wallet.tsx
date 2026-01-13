@@ -572,10 +572,27 @@ const Wallet = (): JSX.Element => {
         { text: 'Recent activity', icon: MessageSquare, color: 'green' },
     ];
 
-    const copyAddress = () => {
-        navigator.clipboard.writeText(walletAddress());
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const copyAddress = async () => {
+        const success = await copyToClipboard(walletAddress());
+        if (success) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    const downloadSeedPhrase = () => {
+        const phrase = seedPhrase().join(' ');
+        if (!phrase) return;
+
+        const blob = new Blob([phrase], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'vision-wallet-seed-phrase.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     const startFlow = (flow: 'send' | 'receive' | 'swap' | 'stake') => {
@@ -2702,7 +2719,7 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                                         </button>
                                                         <button
                                                             class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"
-                                                            onClick={() => alert('Seed phrase downloaded as encrypted file (Simulated)')}
+                                                            onClick={downloadSeedPhrase}
                                                         >
                                                             <Download class="w-4 h-4 text-gray-400" />
                                                             Download
