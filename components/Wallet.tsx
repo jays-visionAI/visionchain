@@ -397,17 +397,33 @@ const Wallet = (): JSX.Element => {
                     address: data.walletAddress || ''
                 });
 
-                // If not verified (no wallet), start onboarding
-                if (!data.isVerified && !WalletService.hasWallet()) {
+                // Check if wallet exists in backend OR locally
+                if (data.walletAddress) {
+                    // Wallet exists in backend, sync it
+                    setWalletAddressSignal(data.walletAddress);
+                    setOnboardingStep(0); // Ensure onboarding is CLOSED
+                } else if (WalletService.hasWallet()) {
+                    // No backend wallet, but local exists
+                    try {
+                        // Recover address from local encrypted wallet (user needs to unlock really, but for now just acknowledge existence)
+                        // Ideally we prompt for password to unlock? 
+                        // For now, let's just NOT force onboarding step 1.
+                        // Or maybe we can't derive address without password.
+                        // Let's assume user needs to "Unlock" rather than "Create".
+                        setOnboardingStep(0);
+                    } catch (e) {
+                        setOnboardingStep(1);
+                    }
+                } else {
+                    // No wallet anywhere -> Onboarding
                     setOnboardingStep(1);
                     setActiveView('profile');
-                } else if (!data.isVerified && WalletService.hasWallet()) {
-                    // They have a wallet locally but not linked to account
-                    setOnboardingStep(1);
-                    setActiveView('profile');
+                    // Ensure Clean State
+                    setSeedPhrase([]);
+                    setSelectedWords([]);
                 }
             } else {
-                // No profile data yet
+                // No profile data found at all -> Onboarding
                 setOnboardingStep(1);
                 setActiveView('profile');
             }
