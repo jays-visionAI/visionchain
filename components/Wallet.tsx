@@ -700,10 +700,6 @@ const Wallet = (): JSX.Element => {
         setOnboardingStep(prev => prev + 1);
     };
 
-    const completeOnboarding = async () => {
-        // Just show the password modal instead of native prompt
-        setShowPasswordModal(true);
-    };
 
     const finalizeWalletCreation = async () => {
         if (!walletPassword()) {
@@ -3087,7 +3083,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             Copy Address
                                                         </button>
                                                         <button
-                                                            onClick={completeOnboarding}
+                                                            onClick={finishOnboarding}
                                                             class="w-full py-5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all border border-white/10"
                                                         >
                                                             Go to Wallet
