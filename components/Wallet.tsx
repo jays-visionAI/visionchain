@@ -957,15 +957,20 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             <WalletIcon class="w-5 h-5 text-white" />
                                         </div>
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-[13px] font-semibold text-white">Connected</div>
-                                            <div class="flex items-center gap-1.5 mt-0.5">
+                                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Logged in as</div>
+                                            <div class="text-[12px] font-bold text-white truncate mb-1" title={userProfile().email}>
+                                                {userProfile().email || 'Loading...'}
+                                            </div>
+                                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-white/10">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                                <span class="text-[12px] text-gray-400 font-mono">{shortAddress()}</span>
-                                                <button onClick={copyAddress} class="p-1 hover:bg-white/10 rounded-md transition-colors ml-0.5">
-                                                    <Show when={copied()} fallback={<Copy class="w-3 h-3 text-gray-500" />}>
-                                                        <Check class="w-3 h-3 text-green-400" />
-                                                    </Show>
-                                                </button>
+                                                <span class="text-[11px] text-gray-400 font-mono">{shortAddress() || 'Not Created'}</span>
+                                                <Show when={shortAddress()}>
+                                                    <button onClick={copyAddress} class="p-1 hover:bg-white/10 rounded-md transition-colors ml-auto">
+                                                        <Show when={copied()} fallback={<Copy class="w-3 h-3 text-gray-500" />}>
+                                                            <Check class="w-3 h-3 text-green-400" />
+                                                        </Show>
+                                                    </button>
+                                                </Show>
                                             </div>
                                         </div>
                                     </div>
