@@ -157,7 +157,7 @@ export const activateAccount = async (email: string, password: string, partnerCo
     const db = getFirebaseDb();
 
     // 1. Verify Email and Partner Code in token_sales
-    const saleRef = doc(db, 'token_sales', email);
+    const saleRef = doc(db, 'token_sales', email.toLowerCase());
     const saleSnap = await getDoc(saleRef);
 
     if (!saleSnap.exists()) {
@@ -257,6 +257,11 @@ export interface UserData {
     isVerified?: boolean;
     tier?: number;
     name?: string;
+    phone?: string;
+    bio?: string;
+    twitter?: string;
+    discord?: string;
+    walletReady?: boolean;
 }
 
 export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
@@ -371,9 +376,14 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
             role: user?.role || 'user',
             name: user?.name || user?.displayName || emailLower.split('@')[0],
             walletAddress: user?.walletAddress || sale?.walletAddress || '',
-            status: sale?.status || 'Registered',
+            status: sale?.status || user?.status || 'Registered',
             isVerified: !!(user?.walletAddress || sale?.walletAddress),
-            tier: sale?.tier || 0
+            tier: sale?.tier || user?.tier || 0,
+            phone: user?.phone || '',
+            bio: user?.bio || '',
+            twitter: user?.twitter || '',
+            discord: user?.discord || '',
+            walletReady: user?.walletReady || sale?.walletReady || false
         };
     }
     return null;
@@ -455,7 +465,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
     const emailLower = email.toLowerCase();
 
     // 1. Update Token Sale Entry (New System)
-    const tokenSaleRef = doc(db, 'token_sales', email); // Assuming CSV email case matches, or normalize
+    const tokenSaleRef = doc(db, 'token_sales', emailLower);
     const tokenSaleSnap = await getDoc(tokenSaleRef);
     if (tokenSaleSnap.exists()) {
         await setDoc(tokenSaleRef, {
@@ -465,16 +475,13 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
         console.log(`[Firebase] Updated token_sales for ${email}`);
     }
 
-    // 2. Update User Profile (Legacy/Auth)
+    // 2. Update User Profile (Always update/create)
     const userRef = doc(db, 'users', emailLower);
-    const userSnap = await getDoc(userRef);
-    if (userSnap.exists()) {
-        await setDoc(userRef, {
-            walletReady: true,
-            walletAddress: walletAddress
-        }, { merge: true });
-        console.log(`[Firebase] Updated user profile for ${email}`);
-    }
+    await setDoc(userRef, {
+        walletReady: true,
+        walletAddress: walletAddress
+    }, { merge: true });
+    console.log(`[Firebase] Updated user profile for ${email}`);
 
     // 3. Update Purchases (Legacy)
     // Optional: Only if you still use 'purchases' collection
@@ -495,7 +502,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
 
 export const deployVestingStatus = async (email: string, txHash: string) => {
     const db = getFirebaseDb();
-    const ref = doc(db, 'token_sales', email);
+    const ref = doc(db, 'token_sales', email.toLowerCase());
     await setDoc(ref, {
         vestingTx: txHash,
         status: 'VestingDeployed'
@@ -609,7 +616,7 @@ export const saveVcnPurchases = async (purchases: Omit<VcnPurchase, 'createdAt' 
     purchases.forEach((p) => {
         // 1. Record in vcn_purchases (for Admin History)
         const purchaseId = `vcn_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-        const docRef = doc(db, 'vcn_purchases', p.email); // Use email as ID for uniqueness in this list? Or unique ID? 
+        const docRef = doc(db, 'vcn_purchases', p.email.toLowerCase());
         // Screenshot implies Unique Email, so let's use Email as ID for simplicity
 
         batch.set(docRef, {
@@ -920,7 +927,7 @@ export const activateAccountWithToken = async (token: string, password: string) 
     }
 
     // 3. Update Status in token_sales
-    const saleRef = doc(db, 'token_sales', email);
+    const saleRef = doc(db, 'token_sales', email.toLowerCase());
     await updateDoc(saleRef, {
         status: 'Registered'
     });

@@ -389,44 +389,31 @@ const Wallet = (): JSX.Element => {
                     username: data.name || user.email.split('@')[0],
                     displayName: data.name || user.email.split('@')[0],
                     email: user.email,
-                    bio: '',
-                    twitter: '',
-                    discord: '',
-                    phone: '',
+                    bio: data.bio || '',
+                    twitter: data.twitter || '',
+                    discord: data.discord || '',
+                    phone: data.phone || '',
                     isVerified: data.isVerified || false,
                     tier: data.tier || 0,
                     address: data.walletAddress || ''
                 });
 
                 // Check if wallet exists in backend OR locally
-                if (data.walletAddress) {
-                    // Wallet exists in backend, sync it
-                    setWalletAddressSignal(data.walletAddress);
-                    setOnboardingStep(0); // Ensure onboarding is CLOSED
-                } else if (WalletService.hasWallet()) {
-                    // No backend wallet, but local exists
-                    try {
-                        // Recover address from local encrypted wallet (user needs to unlock really, but for now just acknowledge existence)
-                        // Ideally we prompt for password to unlock? 
-                        // For now, let's just NOT force onboarding step 1.
-                        // Or maybe we can't derive address without password.
-                        // Let's assume user needs to "Unlock" rather than "Create".
-                        setOnboardingStep(0);
-                    } catch (e) {
+                if (data.walletAddress || WalletService.hasWallet()) {
+                    if (data.walletAddress) {
+                        setWalletAddressSignal(data.walletAddress);
+                    }
+                    setOnboardingStep(0);
+                } else {
+                    // No wallet anywhere AND we are in profile view, show step 1
+                    // Don't force view switch if user is somewhere else
+                    if (activeView() === 'profile' || onboardingStep() > 0) {
                         setOnboardingStep(1);
                     }
-                } else {
-                    // No wallet anywhere -> Onboarding
-                    setOnboardingStep(1);
-                    setActiveView('profile');
-                    // Ensure Clean State
-                    setSeedPhrase([]);
-                    setSelectedWords([]);
                 }
             } else {
-                // No profile data found at all -> Onboarding
-                setOnboardingStep(1);
-                setActiveView('profile');
+                // No data yet, wait for it or default to no onboarding
+                setOnboardingStep(0);
             }
         } catch (error) {
             console.error('Error fetching profile:', error);
