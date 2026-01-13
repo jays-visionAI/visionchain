@@ -2528,8 +2528,8 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                 <Show when={onboardingStep() > 0}>
                                     <div class="max-w-xl mx-auto mb-12">
                                         <div class="text-center mb-8">
-                                            <h2 class="text-3xl font-bold text-white mb-2">VisionChain Account Creation</h2>
-                                            <p class="text-gray-400 text-sm">Vision Chain Identity (VID) creation for Vision Chain.</p>
+                                            <h2 class="text-3xl font-bold text-white mb-2">Secure Wallet Setup</h2>
+                                            <p class="text-gray-400 text-sm">Your account is active. Now, let's secure your digital assets by creating your wallet.</p>
                                         </div>
                                         <div class="flex items-center justify-center gap-4 relative">
                                             <div class="flex flex-col items-center gap-2 relative z-10">
