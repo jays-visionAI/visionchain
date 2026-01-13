@@ -3,6 +3,8 @@ import type { JSX } from 'solid-js';
 import { A } from '@solidjs/router';
 import Logo from './Logo';
 import { Twitter, Github, Linkedin, Send, Youtube, BookOpen, Check } from 'lucide-solid';
+import { useAuth } from './auth/authContext';
+import { useNavigate } from '@solidjs/router';
 
 const Footer = (): JSX.Element => {
   const [email, setEmail] = createSignal('');
@@ -23,6 +25,18 @@ const Footer = (): JSX.Element => {
 
     // Reset success state after a delay
     setTimeout(() => setIsSubmitted(false), 3000);
+  };
+
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleWalletClick = (e: MouseEvent) => {
+    e.preventDefault();
+    if (!user()) {
+      navigate('/login');
+    } else {
+      navigate('/wallet');
+    }
   };
 
   return (
@@ -56,7 +70,13 @@ const Footer = (): JSX.Element => {
               <A href="/research" class="text-[#86868b] hover:text-white transition-colors">Research</A>
               <a href="https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Token Dynamics</a>
               <a href="https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-[#86868b] hover:text-white transition-colors">Whitepaper</a>
-              <A href="/wallet" class="text-[#86868b] hover:text-white transition-colors">Wallet</A>
+              <a
+                href="/wallet"
+                onClick={handleWalletClick}
+                class="text-[#86868b] hover:text-white transition-colors cursor-pointer"
+              >
+                Wallet
+              </a>
               <A href="/testnet" class="text-[#86868b] hover:text-white transition-colors">Testnet</A>
               <A href="/visionscan" class="text-[#86868b] hover:text-white transition-colors">Vision Scan</A>
             </div>
