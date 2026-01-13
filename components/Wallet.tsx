@@ -312,11 +312,12 @@ const Wallet = (): JSX.Element => {
     };
 
     // User's token holdings (balance only)
-    const userHoldings = {
-        VCN: 2450.00,
-        ETH: 1.245,
-        USDC: 900.00
-    };
+    // User's actual holdings (will be updated via fetchPortfolioData)
+    const [userHoldings, setUserHoldings] = createSignal({
+        VCN: 0,
+        ETH: 0,
+        USDC: 0
+    });
 
     const shortAddress = () => {
         const addr = walletAddress();
@@ -483,6 +484,9 @@ const Wallet = (): JSX.Element => {
                 nextUnlockDays: nextUnlockDays === 999 ? 0 : nextUnlockDays,
                 progress
             });
+
+            // Update userHoldings with real VCN data
+            setUserHoldings(prev => ({ ...prev, VCN: unlocked }));
         } catch (error) {
             console.error('Failed to fetch portfolio data:', error);
         }
@@ -501,18 +505,17 @@ const Wallet = (): JSX.Element => {
     const getAssetData = (symbol: string): AssetData => {
         const data = marketData();
         const token = data.get(symbol);
-        const balance = userHoldings[symbol as keyof typeof userHoldings] || 0;
+        const balance = (userHoldings() as any)[symbol] || 0;
 
         if (symbol === 'VCN') {
-            // VCN is mock data
             return {
                 symbol: 'VCN',
                 name: 'Vision Chain',
                 balance,
                 image: null,
-                price: 3.50,
-                change24h: 8.2,
-                sparkline: [3.2, 3.25, 3.3, 3.28, 3.35, 3.4, 3.38, 3.45, 3.5],
+                price: 3.50, // Initial VCN Price
+                change24h: 0,
+                sparkline: [3.5, 3.5, 3.5, 3.5, 3.5],
                 isLoading: false
             };
         }
@@ -545,7 +548,7 @@ const Wallet = (): JSX.Element => {
 
     const totalValue = () => {
         let total = 0;
-        ['VCN', 'ETH', 'USDC'].forEach(symbol => {
+        ['VCN'].forEach(symbol => {
             const asset = getAssetData(symbol);
             total += asset.balance * asset.price;
         });
@@ -559,11 +562,20 @@ const Wallet = (): JSX.Element => {
         maximumFractionDigits: 2
     });
 
-    const tokens: Token[] = [
-        { symbol: 'VCN', name: 'Vision Chain', balance: '2,450.00', value: '$8,575.00', change: 8.2, color: 'from-blue-500 to-cyan-400' },
-        { symbol: 'ETH', name: 'Ethereum', balance: '1.245', value: '$2,983.32', change: -2.1, color: 'from-purple-500 to-indigo-400' },
-        { symbol: 'USDC', name: 'USD Coin', balance: '900.00', value: '$900.00', change: 0, color: 'from-green-500 to-emerald-400' },
-    ];
+    // Derived list of tokens based on actual balances
+    const tokens = createMemo(() => {
+        const list: Token[] = [];
+        const vcnAsset = getAssetData('VCN');
+        list.push({
+            symbol: 'VCN',
+            name: 'Vision Chain',
+            balance: vcnAsset.balance.toLocaleString(),
+            value: (vcnAsset.balance * vcnAsset.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+            change: 0,
+            color: 'from-blue-500 to-cyan-400'
+        });
+        return list;
+    });
 
     const suggestions = [
         { text: 'Send 100 VCN', icon: ArrowUpRight, color: 'blue' },
@@ -744,7 +756,7 @@ const Wallet = (): JSX.Element => {
 Current Portfolio Summary:
 Total Value: ${totalValueStr()}
 Holdings:
-${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
+${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
 `;
             const fullPrompt = `${context}\n\nUser Question: ${userMessage}\n\nPlease answer the user's question based on their portfolio context if relevant. keep it concise.`;
 
@@ -1226,9 +1238,9 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                     <div class="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-colors duration-700" />
                                     <div class="flex items-center justify-between mb-4">
                                         <div class="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Net Worth</div>
-                                        <div class="flex items-center gap-1.5 px-2 py-1 bg-green-500/10 rounded-full border border-green-500/10">
-                                            <span class="w-1 h-1 rounded-full bg-green-400 animate-pulse" />
-                                            <span class="text-[10px] text-green-400 font-bold">+5.24%</span>
+                                        <div class="flex items-center gap-1.5 px-2 py-1 bg-white/[0.04] rounded-full border border-white/[0.06]">
+                                            <span class="w-1 h-1 rounded-full bg-gray-500" />
+                                            <span class="text-[10px] text-gray-500 font-bold">0.00%</span>
                                         </div>
                                     </div>
                                     <div class="text-3xl font-bold text-white mb-8 tracking-tight font-mono">
@@ -1237,7 +1249,7 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
 
                                     {/* Mini Token List */}
                                     <div class="space-y-4">
-                                        <For each={['VCN', 'ETH', 'USDC']}>
+                                        <For each={['VCN']}>
                                             {(symbol) => {
                                                 const asset = () => getAssetData(symbol);
                                                 const valueStr = () => (asset().balance * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -1825,12 +1837,7 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                 </div>
 
                                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                                    <For each={[
-                                        { name: 'Vision Pioneers', type: 'NFT', items: 12, color: 'from-blue-500 to-cyan-400', date: '2 days ago' },
-                                        { name: 'VC Governance', type: 'Fungible', items: '1.2M', color: 'from-purple-500 to-pink-500', date: '1 week ago' },
-                                        { name: 'Early Adopters', type: 'NFT', items: 1, color: 'from-emerald-500 to-teal-400', date: '3 weeks ago' },
-                                        { name: 'Utility Token', type: 'Fungible', items: '500k', color: 'from-orange-500 to-amber-400', date: '1 month ago' }
-                                    ]}>
+                                    <For each={[] as any[]}>
                                         {(collection) => (
                                             <div class="bg-[#111113] border border-white/[0.06] rounded-[24px] overflow-hidden group hover:border-white/20 hover:scale-[1.02] hover:shadow-2xl hover:shadow-cyan-500/5 transition-all duration-500 cursor-pointer flex flex-col">
                                                 <div class={`h-32 bg-gradient-to-br ${collection.color} p-6 flex items-end relative overflow-hidden`}>
@@ -2088,9 +2095,9 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                             <span class="text-4xl sm:text-5xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
                                                 {totalValueStr()}
                                             </span>
-                                            <div class="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 rounded-full border border-green-500/10">
-                                                <TrendingUp class="w-3.5 h-3.5 text-green-400" />
-                                                <span class="text-sm text-green-400 font-bold">+$621.47 (5.24%)</span>
+                                            <div class="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full border border-white/10">
+                                                <TrendingUp class="w-3.5 h-3.5 text-gray-500" />
+                                                <span class="text-sm text-gray-500 font-bold">+$0.00 (0.00%)</span>
                                             </div>
                                         </div>
                                     </div>
