@@ -33,25 +33,18 @@ export default function Login() {
             // 1. Try normal login
             await auth.login(emailVal, pwdVal);
 
-            // 1.5. CHECK EMAIL VERIFICATION (with Exception for Invitations)
+            // 1.5. EMAIL VERIFICATION CHECK (Simplified for testing/UX)
+            /* 
             const currentUser = auth.user();
             if (currentUser && !currentUser.emailVerified) {
-                // Check if they are an invited user (who doesn't need double verification)
                 const userData = await getUserData(emailVal);
-                // We access the raw data from getUserData if possible, but getUserData returns a formatted UserData object.
-                // However, UserData interface doesn't have accountOrigin.
-                // We should probably check the raw doc or just rely on 'status'.
-                // If status is 'Registered' and NOT 'PendingVerification', we allow it.
-                // invited users get 'Registered', self-signup new users get 'PendingVerification'.
-
                 if (userData?.status !== 'Registered' && userData?.status !== 'WalletCreated' && userData?.status !== 'VestingDeployed') {
                     await auth.logout();
                     setError('Please verify your email before logging in.');
                     return;
                 }
-                // If status IS 'Registered' (which invitees are), we proceed.
-                // Note: Self-signups now get 'PendingVerification', so they will be blocked. Correct.
             }
+            */
 
             // 2. Check User Role from Firestore
             try {
