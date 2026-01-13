@@ -166,6 +166,9 @@ const Wallet = (): JSX.Element => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [copied, setCopied] = createSignal(false);
     const [copiedSeed, setCopiedSeed] = createSignal(false);
+    const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+    const [walletPassword, setWalletPassword] = createSignal('');
+    const [onboardingSuccess, setOnboardingSuccess] = createSignal(false);
     const [referralBonus, setReferralBonus] = createSignal('0');
 
     const copyToClipboard = async (text: string) => {
@@ -676,8 +679,20 @@ const Wallet = (): JSX.Element => {
     };
 
     const completeOnboarding = async () => {
+        // Just show the password modal instead of native prompt
+        setShowPasswordModal(true);
+    };
+
+    const finalizeWalletCreation = async () => {
+        if (!walletPassword()) {
+            alert('Please enter a password');
+            return;
+        }
+
         try {
-            console.log("Completing onboarding...");
+            setIsLoading(true);
+            console.log("Finalizing wallet creation...");
+
             // 1. Derive EOA for metadata
             const mnemonic = seedPhrase().join(' ');
             if (!WalletService.validateMnemonic(mnemonic)) {
@@ -685,17 +700,8 @@ const Wallet = (): JSX.Element => {
             }
             const { address } = WalletService.deriveEOA(mnemonic);
 
-
             // 2. Encrypt and Save 
-            // Ideally we'd have a UI step for this, but using prompt for simplicity now.
-            const walletPassword = prompt('Create a Secure Password to encrypt your wallet. You will need this to unlock your account later.');
-            if (!walletPassword) {
-                alert('Wallet password is required to secure your account locally.');
-                return;
-            }
-
-            setIsLoading(true);
-            const encrypted = await WalletService.encrypt(mnemonic, walletPassword);
+            const encrypted = await WalletService.encrypt(mnemonic, walletPassword());
             WalletService.saveEncryptedWallet(encrypted);
 
             // 3. Update Backend Status
@@ -712,9 +718,9 @@ const Wallet = (): JSX.Element => {
                 address: address
             }));
 
-            // 5. Exit Onboarding and show Assets
-            setOnboardingStep(0);
-            setActiveView('assets');
+            // 5. Success state
+            setShowPasswordModal(false);
+            setOnboardingSuccess(true);
 
         } catch (error) {
             console.error('Wallet completion error:', error);
@@ -722,6 +728,12 @@ const Wallet = (): JSX.Element => {
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const finishOnboarding = () => {
+        setOnboardingSuccess(false);
+        setOnboardingStep(0);
+        setActiveView('assets');
     };
 
     const startVerification = () => {
@@ -2628,19 +2640,19 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">Network Activity</h3>
                                                 <div class="grid grid-cols-2 gap-4">
                                                     <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
-                                                        <div class="text-2xl font-black text-white">24</div>
+                                                        <div class="text-2xl font-black text-white">0</div>
                                                         <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">TX Sent</div>
                                                     </div>
                                                     <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
-                                                        <div class="text-2xl font-black text-white">82%</div>
+                                                        <div class="text-2xl font-black text-white">100%</div>
                                                         <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Trust Score</div>
                                                     </div>
                                                     <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
-                                                        <div class="text-2xl font-black">Level 3</div>
+                                                        <div class="text-2xl font-black">Level {userProfile().tier + 1}</div>
                                                         <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Account Tier</div>
                                                     </div>
                                                     <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-purple-400">
-                                                        <div class="text-2xl font-black">64d</div>
+                                                        <div class="text-2xl font-black">0d</div>
                                                         <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Age</div>
                                                     </div>
                                                 </div>
@@ -3706,6 +3718,130 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             </div>
                                         </Show>
                                     </div>
+                                </div>
+                            </Motion.div>
+                        </div>
+                    </Show>
+                </Presence>
+                {/* Password Modal */}
+                <Presence>
+                    <Show when={showPasswordModal()}>
+                        <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <Motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                                onClick={() => setShowPasswordModal(false)}
+                            />
+                            <Motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                class="relative w-full max-w-md bg-[#0e0e12] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                            >
+                                <div class="p-8 space-y-6">
+                                    <div class="text-center">
+                                        <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                                            <Lock class="w-8 h-8 text-blue-400" />
+                                        </div>
+                                        <h3 class="text-2xl font-bold text-white mb-2">Secure Your Wallet</h3>
+                                        <p class="text-sm text-gray-400">Create a password to encrypt your mnemonic phrase locally.</p>
+                                    </div>
+
+                                    <div class="space-y-4">
+                                        <input
+                                            type="password"
+                                            placeholder="Enter secure password"
+                                            class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                            value={walletPassword()}
+                                            onInput={(e) => setWalletPassword(e.currentTarget.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                        />
+                                        <p class="text-[10px] text-gray-500 text-center uppercase tracking-widest font-bold">
+                                            This password is never sent to our servers.
+                                        </p>
+                                    </div>
+
+                                    <div class="flex gap-3">
+                                        <button
+                                            onClick={() => setShowPasswordModal(false)}
+                                            class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={finalizeWalletCreation}
+                                            disabled={!walletPassword() || isLoading()}
+                                            class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Show when={isLoading()} fallback="Create Wallet">
+                                                <RefreshCw class="w-4 h-4 animate-spin" />
+                                                Encrypting...
+                                            </Show>
+                                        </button>
+                                    </div>
+                                </div>
+                            </Motion.div>
+                        </div>
+                    </Show>
+
+                    {/* Onboarding Success Modal */}
+                    <Show when={onboardingSuccess()}>
+                        <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                            <Motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                            />
+                            <Motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                class="relative w-full max-w-lg bg-gradient-to-b from-[#111116] to-[#0a0a0b] border border-white/10 rounded-[40px] p-10 text-center shadow-[0_0_50px_rgba(34,197,94,0.1)] overflow-hidden"
+                            >
+                                {/* Success Confetti Effect (simulated with glow) */}
+                                <div class="absolute -top-20 -left-20 w-64 h-64 bg-green-500/10 rounded-full blur-[100px]" />
+                                <div class="absolute -bottom-20 -right-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]" />
+
+                                <div class="relative z-10 space-y-8">
+                                    <div class="w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto rotate-12 shadow-2xl shadow-green-500/30">
+                                        <Check class="w-12 h-12 text-white -rotate-12" />
+                                    </div>
+
+                                    <div class="space-y-3">
+                                        <h3 class="text-4xl font-black text-white tracking-tight">Welcome to Vision Chain</h3>
+                                        <p class="text-gray-400 font-medium text-lg leading-relaxed">
+                                            Your decentralized identity is ready. Your assets and nodes are now under your full control.
+                                        </p>
+                                    </div>
+
+                                    <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-3xl space-y-4 text-left">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                                <Shield class="w-5 h-5 text-blue-400" />
+                                            </div>
+                                            <div>
+                                                <div class="text-sm font-bold text-white">Encrypted & Secure</div>
+                                                <div class="text-xs text-gray-500">Your seed phrase is locked with your password.</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                <Zap class="w-5 h-5 text-purple-400" />
+                                            </div>
+                                            <div>
+                                                <div class="text-sm font-bold text-white">Asset Ready</div>
+                                                <div class="text-xs text-gray-500">Your purchases have been detected and linked.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={finishOnboarding}
+                                        class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
+                                    >
+                                        Get Started
+                                    </button>
                                 </div>
                             </Motion.div>
                         </div>
