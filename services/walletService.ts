@@ -1,4 +1,3 @@
-import * as bip39 from 'bip39';
 import { ethers } from 'ethers';
 
 const ENCRYPTION_KEY_SALT = 'vcn-platform-v1';
@@ -8,14 +7,17 @@ export class WalletService {
      * Generates a 15-word mnemonic (160-bit entropy)
      */
     static generateMnemonic(): string {
-        return bip39.generateMnemonic(160);
+        // 160 bits = 20 bytes
+        const entropy = ethers.randomBytes(20);
+        const mnemonic = ethers.Mnemonic.fromEntropy(entropy);
+        return mnemonic.phrase;
     }
 
     /**
      * Validates a mnemonic
      */
     static validateMnemonic(mnemonic: string): boolean {
-        return bip39.validateMnemonic(mnemonic);
+        return ethers.Mnemonic.isValidMnemonic(mnemonic);
     }
 
     /**

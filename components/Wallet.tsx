@@ -32,17 +32,23 @@ import {
     ArrowRight,
     Phone,
     Eye,
-    EyeOff
+    EyeOff,
+    Leaf,
+    Star,
+    Download,
+    AlertTriangle
 } from 'lucide-solid';
 import {
     updateWalletStatus,
     getUserPurchases,
+    getUserData,
     VcnPurchase
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import { generateText } from '../services/geminiService';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
+import { useNavigate } from '@solidjs/router';
 
 type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes';
 
@@ -119,6 +125,7 @@ const Sparkline = (props: { data: number[], positive: boolean, width?: number, h
 };
 
 const Wallet = (): JSX.Element => {
+    const navigate = useNavigate();
     const auth = useAuth();
     // State Declarations
     const [activeView, setActiveView] = createSignal('assets');
@@ -144,7 +151,7 @@ const Wallet = (): JSX.Element => {
         address: ''
     });
     const [walletAddressSignal, setWalletAddressSignal] = createSignal('');
-    const walletAddress = () => userProfile().address || walletAddressSignal() || '0x7F3A...8E2D';
+    const walletAddress = () => userProfile().address || walletAddressSignal() || '';
     const [showSeed, setShowSeed] = createSignal(false);
     const [seedPhrase, setSeedPhrase] = createSignal<string[]>([]);
     const [selectedWords, setSelectedWords] = createSignal<string[]>([]);
@@ -301,7 +308,16 @@ const Wallet = (): JSX.Element => {
     };
 
     // Fetch data on mount
-    onMount(() => {
+    onMount(async () => {
+        // Auth Guard: Redirect if not logged in
+        if (!auth.loading()) {
+            if (!auth.user()) {
+                navigate('/login', { replace: true });
+                return;
+            }
+            await fetchFullProfile();
+        }
+
         fetchMarketData();
         // Auto-open sidebar only on desktop
         if (window.innerWidth >= 1024) {
@@ -310,6 +326,54 @@ const Wallet = (): JSX.Element => {
         // Refresh every 60 seconds
         const interval = setInterval(fetchMarketData, 60000);
         return () => clearInterval(interval);
+    });
+
+    const fetchFullProfile = async () => {
+        const user = auth.user();
+        if (!user || !user.email) return;
+
+        try {
+            setIsLoading(true);
+            const data = await getUserData(user.email);
+            if (data) {
+                setUserProfile({
+                    username: data.name || user.email.split('@')[0],
+                    displayName: data.name || user.email.split('@')[0],
+                    email: user.email,
+                    bio: '',
+                    twitter: '',
+                    discord: '',
+                    phone: '',
+                    isVerified: data.isVerified || false,
+                    tier: data.tier || 0,
+                    address: data.walletAddress || ''
+                });
+
+                // If not verified (no wallet), start onboarding
+                if (!data.isVerified && !WalletService.hasWallet()) {
+                    setOnboardingStep(1);
+                    setActiveView('profile');
+                } else if (!data.isVerified && WalletService.hasWallet()) {
+                    // They have a wallet locally but not linked to account
+                    setOnboardingStep(1);
+                    setActiveView('profile');
+                }
+            } else {
+                // No profile data yet
+                setOnboardingStep(1);
+                setActiveView('profile');
+            }
+        } catch (error) {
+            console.error('Error fetching profile:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    createEffect(() => {
+        if (!auth.loading() && !auth.user()) {
+            navigate('/login', { replace: true });
+        }
     });
 
     // Helper to get asset data with live prices
@@ -521,11 +585,22 @@ const Wallet = (): JSX.Element => {
     };
 
     const generateSeedPhrase = () => {
-        const mnemonic = WalletService.generateMnemonic(); // 160-bit entropy = 15 words
-        const words = mnemonic.split(' ');
-        setSeedPhrase(words);
-        setShuffledSeed([...words].sort(() => Math.random() - 0.5));
-        setSelectedWords([]);
+        try {
+            console.log("Generating seed phrase...");
+            const mnemonic = WalletService.generateMnemonic(); // 160-bit entropy = 15 words
+            if (!mnemonic) throw new Error("Failed to generate mnemonic");
+
+            const words = mnemonic.split(' ');
+            console.log("Generated words:", words.length);
+            setSeedPhrase(words);
+            setShuffledSeed([...words].sort(() => Math.random() - 0.5));
+            setSelectedWords([]);
+            // Auto-show seed when generated to improve UX
+            setShowSeed(true);
+        } catch (err) {
+            console.error("Error generating seed phrase:", err);
+            alert("Failed to generate seed phrase. Please try again or check console.");
+        }
     };
 
     const nextOnboardingStep = () => {
@@ -534,19 +609,24 @@ const Wallet = (): JSX.Element => {
 
     const completeOnboarding = async () => {
         try {
+            console.log("Completing onboarding...");
             // 1. Derive EOA for metadata
             const mnemonic = seedPhrase().join(' ');
+            if (!WalletService.validateMnemonic(mnemonic)) {
+                throw new Error("Invalid mnemonic during finalization");
+            }
             const { address } = WalletService.deriveEOA(mnemonic);
 
-            // 2. Encrypt and Save (using a default or prompt-based password if we had one,
-            // for now using a placeholder or user password if available)
-            // Ideally we'd prompt for a 'Wallet Password' here.
-            const walletPassword = prompt('Set a password to encrypt your mnemonic (Required for non-custodial storage):');
+
+            // 2. Encrypt and Save 
+            // Ideally we'd have a UI step for this, but using prompt for simplicity now.
+            const walletPassword = prompt('Create a Secure Password to encrypt your wallet. You will need this to unlock your account later.');
             if (!walletPassword) {
-                alert('Wallet password is required to secure your account.');
+                alert('Wallet password is required to secure your account locally.');
                 return;
             }
 
+            setIsLoading(true);
             const encrypted = await WalletService.encrypt(mnemonic, walletPassword);
             WalletService.saveEncryptedWallet(encrypted);
 
@@ -561,14 +641,18 @@ const Wallet = (): JSX.Element => {
                 ...prev,
                 isVerified: true,
                 tier: 1,
-                address: address // Assuming userProfile has address or we use local state
+                address: address
             }));
-            setOnboardingStep(0);
 
-            alert('Wallet created and secured successfully!');
+            // 5. Exit Onboarding and show Assets
+            setOnboardingStep(0);
+            setActiveView('assets');
+
         } catch (error) {
             console.error('Wallet completion error:', error);
             alert('Failed to complete wallet setup. Please try again.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -734,7 +818,8 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                         <div class="p-4">
                             <button
                                 onClick={startNewChat}
-                                class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-xl text-white font-medium transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98]"
+                                disabled={onboardingStep() > 0}
+                                class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-xl text-white font-medium transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                                 <Plus class="w-4 h-4" />
                                 New Conversation
@@ -746,11 +831,14 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                             <For each={menuItems}>
                                 {(item) => (
                                     <button
-                                        onClick={() => setActiveView(item.id)}
+                                        onClick={() => {
+                                            if (onboardingStep() === 0) setActiveView(item.id);
+                                        }}
+                                        disabled={onboardingStep() > 0 && item.id !== 'profile'}
                                         class={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-all group bg-transparent border-none cursor-pointer ${activeView() === item.id
                                             ? 'bg-white/[0.08] text-white shadow-lg shadow-black/20'
                                             : 'text-gray-400 hover:bg-white/[0.04] hover:text-white'
-                                            }`}
+                                            } ${onboardingStep() > 0 && item.id !== 'profile' ? 'opacity-30 cursor-not-allowed' : ''}`}
                                         style={{ background: activeView() === item.id ? 'rgba(255,255,255,0.08)' : 'transparent' }}
                                     >
                                         <div class={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${activeView() === item.id
@@ -803,8 +891,11 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                 {/* Top Bar */}
                 <div class="flex items-center gap-4 px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-14 z-20">
                     <button
-                        onClick={() => setSidebarOpen(!sidebarOpen())}
-                        class="p-2.5 hover:bg-white/[0.06] rounded-xl transition-all hover:scale-105 active:scale-95"
+                        onClick={() => {
+                            if (onboardingStep() === 0) setSidebarOpen(!sidebarOpen());
+                        }}
+                        disabled={onboardingStep() > 0}
+                        class="p-2.5 hover:bg-white/[0.06] rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                         <Menu class="w-5 h-5 text-gray-400" />
                     </button>
@@ -2338,24 +2429,34 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                     <div class="flex-1 overflow-y-auto p-4 lg:p-8">
                         <div class="max-w-4xl mx-auto space-y-6">
 
-                            {/* Onboarding Header (Progress Stepper) */}
+                            {/* Onboarding Header (Progress Stepper) - Redesigned to match image */}
                             <Show when={onboardingStep() > 0}>
-                                <div class="bg-blue-600/10 border border-blue-500/20 rounded-3xl p-6 mb-8">
-                                    <div class="flex items-center justify-between mb-6">
-                                        <div>
-                                            <h3 class="text-xl font-bold text-white">Complete Your Vision Profile</h3>
-                                            <p class="text-blue-400/80 text-sm mt-1">Unlock full potential and earn verification rewards.</p>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="text-2xl font-black text-white">{onboardingStep()}<span class="text-blue-500/50 text-base">/3</span></span>
-                                        </div>
+                                <div class="max-w-xl mx-auto mb-12">
+                                    <div class="text-center mb-8">
+                                        <h2 class="text-3xl font-bold text-white mb-2">VisionChain Account Creation</h2>
+                                        <p class="text-gray-400 text-sm">Vision Chain Identity (VID) creation for Vision Chain.</p>
                                     </div>
-                                    <div class="flex gap-2">
-                                        <For each={[1, 2, 3]}>
-                                            {(step) => (
-                                                <div class={`h-1.5 flex-1 rounded-full transition-all duration-500 ${onboardingStep() >= step ? 'bg-blue-500 shadow-[0_0_10px_#3b82f6]' : 'bg-white/10'}`} />
-                                            )}
-                                        </For>
+                                    <div class="flex items-center justify-center gap-4 relative">
+                                        <div class="flex flex-col items-center gap-2 relative z-10">
+                                            <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 1 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
+                                                <Leaf class="w-5 h-5" />
+                                            </div>
+                                            <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 1 ? 'text-white' : 'text-gray-600'}`}>Seed</span>
+                                        </div>
+                                        <div class={`h-[1px] w-20 transition-colors duration-500 ${onboardingStep() >= 1.5 ? 'bg-[#7e61ff]' : 'bg-gray-800'}`} />
+                                        <div class="flex flex-col items-center gap-2 relative z-10">
+                                            <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 1.5 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
+                                                <CheckCircle class="w-5 h-5" />
+                                            </div>
+                                            <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 1.5 ? 'text-white' : 'text-gray-600'}`}>Confirm</span>
+                                        </div>
+                                        <div class={`h-[1px] w-20 transition-colors duration-500 ${onboardingStep() >= 4 ? 'bg-[#7e61ff]' : 'bg-gray-800'}`} />
+                                        <div class="flex flex-col items-center gap-2 relative z-10">
+                                            <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 4 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
+                                                <Star class="w-5 h-5" />
+                                            </div>
+                                            <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 4 ? 'text-white' : 'text-gray-600'}`}>Done</span>
+                                        </div>
                                     </div>
                                 </div>
                             </Show>
@@ -2401,6 +2502,9 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                                     >
                                                         Create Wallet
                                                         <ArrowRight class="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => setOnboardingStep(3)} class="ml-4 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs rounded-2xl hover:bg-red-500/20 transition-all">
+                                                        [Debug] Skip
                                                     </button>
                                                 </Show>
                                             </div>
@@ -2482,212 +2586,273 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                     </Motion.div>
                                 </Match>
 
-                                {/* Step 1: Wallet Setup */}
+                                {/* Step 1: Wallet Setup - Redesigned to match image 0 & 1 */}
                                 <Match when={onboardingStep() === 1}>
-                                    <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} class="max-w-xl mx-auto space-y-8">
-                                        <div class="text-center">
-                                            <div class="w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-6">
-                                                <Shield class="w-8 h-8 text-blue-400" />
-                                            </div>
-                                            <h2 class="text-3xl font-bold text-white mb-2">Secure Your Wallet</h2>
-                                            <p class="text-gray-500">Generate your 12-word seed phrase. This is the only way to recover your account.</p>
-                                        </div>
-
-                                        <Show when={seedPhrase().length === 0} fallback={
-                                            <div class="bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6">
-                                                <div class="flex items-center justify-between mb-4 px-2">
-                                                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest">Secret Recovery Phrase</h3>
-                                                    <button
-                                                        onClick={() => setShowSeed(!showSeed())}
-                                                        class="flex items-center gap-2 text-[10px] font-bold text-blue-400 hover:text-white transition-colors"
-                                                    >
-                                                        {showSeed() ? <EyeOff class="w-3 h-3" /> : <Eye class="w-3 h-3" />}
-                                                        {showSeed() ? 'Hide' : 'Reveal'}
-                                                    </button>
+                                    <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto">
+                                        <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                            <div class="bg-gradient-to-b from-blue-900/10 to-transparent p-10 flex flex-col items-center text-center">
+                                                <div class="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                                                    <Leaf class="w-8 h-8 text-blue-400" />
                                                 </div>
-                                                <div class="grid grid-cols-3 gap-3">
-                                                    <For each={seedPhrase()}>
-                                                        {(word, i) => (
-                                                            <div class="flex items-center gap-2 p-3 bg-white/[0.04] rounded-xl border border-white/[0.06] relative overflow-hidden group">
-                                                                <span class="text-[10px] font-mono text-gray-600 w-4">{i() + 1}</span>
-                                                                <span class={`text-sm font-bold text-white transition-all duration-300 ${!showSeed() ? 'blur-md select-none' : ''}`}>{word}</span>
+                                                <h2 class="text-3xl font-black text-white mb-2">Secret Recovery Phrase</h2>
+                                                <p class="text-gray-400 font-medium">Write down these 15 words in the exact order shown</p>
+                                            </div>
+
+                                            <div class="p-8 space-y-8">
+                                                {/* Critical Security Link Style */}
+                                                <div class="p-6 bg-red-500/5 border border-red-500/20 rounded-xl">
+                                                    <div class="flex items-center gap-2 text-red-400 font-black uppercase tracking-widest text-xs mb-4">
+                                                        <AlertTriangle class="w-4 h-4" />
+                                                        Critical Security Information
+                                                    </div>
+                                                    <ul class="space-y-2 text-[13px] font-bold text-red-500/80">
+                                                        <li>• Never share this phrase with anyone</li>
+                                                        <li>• Store it in a secure, offline location</li>
+                                                        <li>• Anyone with this phrase can access your wallet</li>
+                                                        <li>• We cannot recover this phrase if lost</li>
+                                                    </ul>
+                                                </div>
+
+                                                <div class="space-y-4">
+                                                    <div class="flex items-center justify-between px-2">
+                                                        <span class="text-[13px] font-bold text-gray-400">Recovery Phrase</span>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (seedPhrase().length === 0) generateSeedPhrase();
+                                                                setShowSeed(!showSeed());
+                                                            }}
+                                                            class="flex items-center gap-2 text-blue-400 text-[13px] font-bold hover:text-blue-300 transition-colors"
+                                                        >
+                                                            {showSeed() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
+                                                            {showSeed() ? 'Hide Phrase' : 'Show Phrase'}
+                                                        </button>
+                                                    </div>
+
+                                                    <Show when={showSeed()} fallback={
+                                                        <div class="p-12 bg-blue-500/5 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center gap-4 group cursor-pointer" onClick={() => { if (seedPhrase().length === 0) generateSeedPhrase(); setShowSeed(true); }}>
+                                                            <Leaf class="w-8 h-8 text-blue-500/40 group-hover:text-blue-500 transition-colors" />
+                                                            <div class="text-[13px] font-medium text-gray-500">
+                                                                Recovery phrase is hidden<br />
+                                                                <span class="text-blue-400/60 font-bold group-hover:text-blue-400">Click "Show Phrase" to reveal</span>
+                                                            </div>
+                                                        </div>
+                                                    }>
+                                                        <div class="grid grid-cols-3 gap-3">
+                                                            <For each={seedPhrase()}>
+                                                                {(word, i) => (
+                                                                    <div class="flex items-center gap-3 p-3.5 bg-white/5 text-white rounded-xl border border-white/10 font-mono text-[14px] font-bold tracking-wide">
+                                                                        <span class="text-gray-500 w-4 text-left">{i() + 1}.</span>
+                                                                        <span class="flex-1 text-cyan-500/90">{word}</span>
+                                                                    </div>
+                                                                )}
+                                                            </For>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+
+                                                <Show when={showSeed()}>
+                                                    <div class="flex gap-4">
+                                                        <button
+                                                            onClick={copyAddress}
+                                                            class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"
+                                                        >
+                                                            <Copy class="w-4 h-4 text-gray-400" />
+                                                            Copy Phrase
+                                                        </button>
+                                                        <button
+                                                            class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"
+                                                            onClick={() => alert('Seed phrase downloaded as encrypted file (Simulated)')}
+                                                        >
+                                                            <Download class="w-4 h-4 text-gray-400" />
+                                                            Download
+                                                        </button>
+                                                    </div>
+                                                </Show>
+
+                                                <button
+                                                    onClick={() => setOnboardingStep(1.5)}
+                                                    disabled={seedPhrase().length === 0 || !showSeed()}
+                                                    class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
+                                                >
+                                                    Continue
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </Motion.div>
+                                </Match>
+
+                                {/* Step 1.5: Confirmation - Redesigned to match image 2 */}
+                                <Match when={onboardingStep() === 1.5}>
+                                    <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto">
+                                        <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                            <div class="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-10 flex flex-col items-center text-center">
+                                                <h2 class="text-2xl font-black text-white mb-2 uppercase tracking-tight">Confirm Recovery Phrase</h2>
+                                                <p class="text-gray-400 font-bold text-sm">Select the words in the correct order to verify your backup</p>
+                                            </div>
+
+                                            <div class="p-8 space-y-6">
+                                                <div class="flex justify-between items-end px-1">
+                                                    <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
+                                                        Progress: <span class="text-white">{selectedWords().length}/{seedPhrase().length}</span>
+                                                    </div>
+                                                    <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
+                                                        Select word {selectedWords().length + 1}
+                                                    </div>
+                                                </div>
+
+                                                {/* Selected Words Area - Fixed Slots Style */}
+                                                <div class="grid grid-cols-3 gap-3 p-6 bg-black/40 rounded-3xl border border-white/[0.05]">
+                                                    <For each={Array.from({ length: seedPhrase().length })}>
+                                                        {(_, i) => (
+                                                            <div class="flex items-center gap-3 p-3 bg-white/5 border border-white/5 rounded-xl font-mono text-[13px] font-black min-h-[44px]">
+                                                                <span class="text-gray-600">{i() + 1}.</span>
+                                                                <Show when={selectedWords()[i()]}>
+                                                                    <span class="text-white animate-in zoom-in-95">{selectedWords()[i()]}</span>
+                                                                </Show>
+                                                                <Show when={!selectedWords()[i()]}>
+                                                                    <div class="w-10 h-[1.5px] bg-gray-700/50 mt-1" />
+                                                                </Show>
                                                             </div>
                                                         )}
                                                     </For>
                                                 </div>
-                                                <div class="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-4">
-                                                    <AlertCircle class="w-5 h-5 text-red-400 flex-shrink-0" />
-                                                    <p class="text-[12px] text-red-400">Never share your seed phrase with anyone. Store it in a safe offline location.</p>
+
+                                                <div class="flex justify-end">
+                                                    <button onClick={() => setSelectedWords([])} class="text-[11px] font-black text-blue-400 uppercase tracking-widest hover:text-white transition-colors">Reset</button>
                                                 </div>
-                                                <button
-                                                    onClick={() => setOnboardingStep(1.5)}
-                                                    class="w-full mt-8 py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20"
-                                                >
-                                                    I've saved my seed phrase
-                                                </button>
-                                            </div>
-                                        }>
-                                            <button
-                                                onClick={generateSeedPhrase}
-                                                class="w-full py-12 bg-white/[0.03] border-2 border-dashed border-white/10 rounded-3xl text-gray-400 hover:text-white hover:border-blue-500/50 transition-all font-bold group"
-                                            >
-                                                <div class="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
-                                                    <Sparkles class="w-8 h-8 text-blue-500" />
+
+                                                {/* Word Pool Area */}
+                                                <div class="grid grid-cols-3 gap-3 pt-4 border-t border-white/[0.04]">
+                                                    <For each={shuffledSeed()}>
+                                                        {(word) => (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!selectedWords().includes(word)) {
+                                                                        setSelectedWords(prev => [...prev, word]);
+                                                                    }
+                                                                }}
+                                                                disabled={selectedWords().includes(word)}
+                                                                class={`p-4 rounded-xl border font-bold text-xs transition-all ${selectedWords().includes(word)
+                                                                    ? 'bg-white/5 border-white/5 text-transparent select-none opacity-0'
+                                                                    : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:text-white hover:bg-blue-500/5 text-center active:scale-95'
+                                                                    }`}
+                                                            >
+                                                                {word}
+                                                            </button>
+                                                        )}
+                                                    </For>
                                                 </div>
-                                                Generate 15-Word Recovery Phrase
-                                            </button>
-                                        </Show>
-                                    </Motion.div>
-                                </Match>
 
-                                {/* Step 1.5: Verification */}
-                                <Match when={onboardingStep() === 1.5}>
-                                    <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} class="max-w-xl mx-auto space-y-8">
-                                        <div class="text-center">
-                                            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-6">
-                                                <CheckCircle class="w-8 h-8 text-cyan-400" />
-                                            </div>
-                                            <h2 class="text-3xl font-bold text-white mb-2">Verify Mnemonic</h2>
-                                            <p class="text-gray-500 px-4">Tap the words in the correct order to prove you've backed up your seed phrase.</p>
-                                        </div>
+                                                <div class="pt-6 space-y-4">
+                                                    <button
+                                                        onClick={() => setSelectedWords(prev => prev.slice(0, -1))}
+                                                        disabled={selectedWords().length === 0}
+                                                        class="w-full py-4 bg-[#444455] text-white rounded-2xl font-black text-sm hover:bg-[#555566] transition-all disabled:opacity-30"
+                                                    >
+                                                        Remove Last Word
+                                                    </button>
 
-                                        <div class="bg-white/[0.02] border border-white/[0.06] rounded-3xl p-6">
-                                            {/* Selected Words Area */}
-                                            <div class="min-h-[160px] p-4 bg-black/20 rounded-2xl border border-white/5 mb-6 grid grid-cols-3 gap-2">
-                                                <For each={selectedWords()}>
-                                                    {(word, i) => (
-                                                        <button
-                                                            onClick={() => setSelectedWords(prev => prev.filter((_, idx) => idx !== i()))}
-                                                            class="flex items-center gap-2 p-2 bg-blue-500/20 border border-blue-500/30 rounded-lg text-xs font-bold text-white animate-in zoom-in-95"
-                                                        >
-                                                            <span class="text-[9px] text-blue-400/50">{i() + 1}</span>
-                                                            {word}
-                                                        </button>
-                                                    )}
-                                                </For>
-                                            </div>
-
-                                            {/* Word Pool Area */}
-                                            <div class="grid grid-cols-3 gap-2">
-                                                <For each={shuffledSeed()}>
-                                                    {(word) => (
-                                                        <button
-                                                            onClick={() => {
-                                                                if (!selectedWords().includes(word)) {
-                                                                    setSelectedWords(prev => [...prev, word]);
-                                                                }
-                                                            }}
-                                                            disabled={selectedWords().includes(word)}
-                                                            class={`p-3 rounded-xl border text-xs font-bold transition-all ${selectedWords().includes(word)
-                                                                ? 'bg-white/5 border-white/5 text-gray-700 opacity-30'
-                                                                : 'bg-white/[0.04] border-white/[0.08] text-white hover:border-cyan-500/50 hover:bg-white/[0.08]'
-                                                                }`}
-                                                        >
-                                                            {word}
-                                                        </button>
-                                                    )}
-                                                </For>
-                                            </div>
-
-                                            <div class="mt-8 flex gap-4">
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedWords([]);
-                                                        setOnboardingStep(1);
-                                                    }}
-                                                    class="flex-1 py-4 bg-white/5 text-gray-400 rounded-2xl font-bold hover:bg-white/10 transition-all"
-                                                >
-                                                    Retry
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        if (selectedWords().join(' ') === seedPhrase().join(' ')) {
-                                                            setOnboardingStep(2);
-                                                        } else {
-                                                            alert('Incorrect order. Please try again.');
-                                                            setSelectedWords([]);
-                                                        }
-                                                    }}
-                                                    disabled={selectedWords().length !== seedPhrase().length}
-                                                    class="flex-[2] py-4 bg-cyan-600 text-white rounded-2xl font-bold hover:bg-cyan-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                                                >
-                                                    Verify & Proceed
-                                                </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (selectedWords().join(' ') === seedPhrase().join(' ')) {
+                                                                setOnboardingStep(4); // Move to final success step
+                                                            } else {
+                                                                alert('Incorrect order. Please try again.');
+                                                                setSelectedWords([]);
+                                                            }
+                                                        }}
+                                                        disabled={selectedWords().length !== seedPhrase().length}
+                                                        class={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl ${selectedWords().length === seedPhrase().length ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20 hover:scale-[1.02]' : 'bg-[#1a1a1e] text-gray-500 border border-white/5 cursor-not-allowed'}`}
+                                                    >
+                                                        Create Wallet
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </Motion.div>
                                 </Match>
 
-                                {/* Step 2: Phone Verification */}
+                                {/* Step 2: Phone Verification - Styled to match current theme */}
                                 <Match when={onboardingStep() === 2}>
-                                    <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} class="max-w-xl mx-auto space-y-8">
-                                        <div class="text-center">
-                                            <div class="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-6">
-                                                <Phone class="w-8 h-8 text-purple-400" />
-                                            </div>
-                                            <h2 class="text-3xl font-bold text-white mb-2">Connect Your Phone</h2>
-                                            <p class="text-gray-500">Verify your identity to unlock higher limits and social features.</p>
-                                        </div>
-
-                                        <div class="bg-white/[0.02] border border-white/[0.06] rounded-3xl p-8 space-y-6">
-                                            <div>
-                                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Phone Number</label>
-                                                <div class="relative">
-                                                    <Phone class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                                    <input
-                                                        type="tel"
-                                                        placeholder="+1 (555) 000-0000"
-                                                        value={userProfile().phone}
-                                                        onInput={(e) => setUserProfile({ ...userProfile(), phone: e.currentTarget.value })}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 pl-11 pr-4 text-white placeholder:text-gray-600 outline-none focus:border-purple-500/30 transition-all"
-                                                    />
+                                    <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto">
+                                        <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                            <div class="bg-gradient-to-b from-purple-900/10 to-transparent p-10 flex flex-col items-center text-center">
+                                                <div class="w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+                                                    <Phone class="w-8 h-8 text-purple-400" />
                                                 </div>
+                                                <h2 class="text-3xl font-black text-white mb-2 uppercase tracking-tight">Identity Access</h2>
+                                                <p class="text-gray-400 font-medium">Verify your phone to unlock advanced features</p>
                                             </div>
 
-                                            <Show when={verificationStep() < 2}>
-                                                <button
-                                                    onClick={startVerification}
-                                                    disabled={isVerifying()}
-                                                    class="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-500 transition-all flex items-center justify-center gap-3"
-                                                >
-                                                    <Show when={isVerifying()}>
-                                                        <div class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                                        Sending SMS...
-                                                    </Show>
-                                                    <Show when={!isVerifying()}>
-                                                        Verify via SMS
-                                                    </Show>
-                                                </button>
-                                            </Show>
-
-                                            <Show when={verificationStep() === 2}>
-                                                <div class="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 flex items-center gap-3 text-green-400">
-                                                    <CheckCircle class="w-6 h-6" />
-                                                    <div class="text-sm font-bold">Phone Number Verified!</div>
+                                            <div class="p-8 space-y-8">
+                                                <div class="space-y-4">
+                                                    <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Phone Number</label>
+                                                    <div class="relative group">
+                                                        <Phone class="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-purple-400 transition-colors" />
+                                                        <input
+                                                            type="tel"
+                                                            placeholder="+1 (555) 000-0000"
+                                                            value={userProfile().phone}
+                                                            onInput={(e) => setUserProfile({ ...userProfile(), phone: e.currentTarget.value })}
+                                                            class="w-full bg-white/[0.03] border border-white/[0.1] rounded-2xl py-4.5 pl-12 pr-4 text-white placeholder:text-gray-600 outline-none focus:border-purple-500/50 transition-all font-medium"
+                                                        />
+                                                    </div>
                                                 </div>
+
+                                                <Show when={verificationStep() < 2}>
+                                                    <button
+                                                        onClick={startVerification}
+                                                        disabled={isVerifying()}
+                                                        class="w-full py-5 bg-[#a855f7] text-white rounded-2xl font-black text-lg hover:bg-[#9333ea] transition-all flex items-center justify-center gap-3 shadow-xl shadow-purple-500/20 disabled:opacity-50"
+                                                    >
+                                                        <Show when={isVerifying()}>
+                                                            <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                            Sending SMS...
+                                                        </Show>
+                                                        <Show when={!isVerifying()}>
+                                                            Verify via SMS
+                                                        </Show>
+                                                    </button>
+                                                </Show>
+
+                                                <Show when={verificationStep() === 2}>
+                                                    <div class="p-6 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center gap-4 text-green-400">
+                                                        <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                                                            <CheckCircle class="w-6 h-6" />
+                                                        </div>
+                                                        <div class="text-sm font-black uppercase tracking-widest">Verified!</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={nextOnboardingStep}
+                                                        class="w-full py-5 bg-white text-black rounded-2xl font-black text-lg hover:bg-white/90 transition-all shadow-xl"
+                                                    >
+                                                        Continue
+                                                    </button>
+                                                </Show>
+
                                                 <button
-                                                    onClick={nextOnboardingStep}
-                                                    class="w-full py-4 bg-white text-black rounded-2xl font-bold hover:bg-white/90 transition-all"
+                                                    onClick={() => setOnboardingStep(3)}
+                                                    class="w-full py-3 text-gray-500 font-bold text-xs uppercase tracking-widest hover:text-white transition-colors"
                                                 >
-                                                    Continue to Profile
+                                                    Skip for now
                                                 </button>
-                                            </Show>
+                                            </div>
                                         </div>
                                     </Motion.div>
                                 </Match>
 
-                                {/* Step 3: Personal Info */}
+                                {/* Step 3: Personal Info (Keep existing but align style) */}
                                 <Match when={onboardingStep() === 3}>
                                     <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} class="max-w-xl mx-auto space-y-8">
                                         <div class="text-center">
-                                            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-6">
+                                            <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
                                                 <User class="w-8 h-8 text-cyan-400" />
                                             </div>
-                                            <h2 class="text-3xl font-bold text-white mb-2">Personalize Your ID</h2>
-                                            <p class="text-gray-500">Choose how you appear to others on Vision Chain.</p>
+                                            <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Personalize Your ID</h2>
+                                            <p class="text-gray-400 font-medium">Choose how you appear to others on Vision Chain.</p>
                                         </div>
 
-                                        <div class="bg-white/[0.02] border border-white/[0.06] rounded-3xl p-8 space-y-6">
+                                        <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] p-8 space-y-6 shadow-2xl">
                                             <div class="space-y-4">
                                                 <div>
                                                     <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Display Name</label>
@@ -2696,7 +2861,7 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                                         placeholder="Visionary Pioneer"
                                                         value={userProfile().displayName}
                                                         onInput={(e) => setUserProfile({ ...userProfile(), displayName: e.currentTarget.value })}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/30 transition-all"
+                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-medium"
                                                     />
                                                 </div>
                                                 <div>
@@ -2706,17 +2871,90 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
                                                         placeholder="Describe your vision..."
                                                         value={userProfile().bio}
                                                         onInput={(e) => setUserProfile({ ...userProfile(), bio: e.currentTarget.value })}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/30 transition-all resize-none"
+                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all resize-none font-medium"
                                                     />
                                                 </div>
                                             </div>
 
                                             <button
-                                                onClick={completeOnboarding}
-                                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-blue-500/20"
+                                                onClick={() => {
+                                                    setOnboardingStep(4);
+                                                }}
+                                                class="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all border border-white/10"
                                             >
-                                                Finish Setup
+                                                Review Account
                                             </button>
+                                        </div>
+                                    </Motion.div>
+                                </Match>
+
+                                {/* Step 4: Success/Done - Match image 3 */}
+                                <Match when={onboardingStep() === 4}>
+                                    <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto">
+                                        <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                            <div class="bg-gradient-to-b from-green-900/20 to-transparent p-12 flex flex-col items-center text-center">
+                                                <div class="w-14 h-14 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+                                                    <Check class="w-8 h-8 text-green-400" />
+                                                </div>
+                                                <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Account Created</h2>
+                                                <p class="text-gray-400 font-medium">Your Vision Chain Account has been successfully created</p>
+                                            </div>
+
+                                            <div class="p-8 space-y-6">
+                                                <div class="p-6 bg-white/[0.02] border border-white/[0.05] rounded-3xl space-y-4">
+                                                    <div class="space-y-2">
+                                                        <label class="text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Your Wallet Address</label>
+                                                        <div class="flex items-center gap-3 p-4 bg-black/40 rounded-2xl border border-white/[0.05] group">
+                                                            <code class="flex-1 font-mono text-xs text-green-400 truncate">{walletAddress()}</code>
+                                                            <button onClick={copyAddress} class="p-2 hover:bg-white/5 rounded-lg transition-all">
+                                                                <Copy class="w-3.5 h-3.5 text-gray-500 group-hover:text-white" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="pt-4 border-t border-white/[0.05] space-y-3">
+                                                        <div class="flex items-center justify-between text-[13px]">
+                                                            <span class="font-bold text-gray-500">Wallet Details</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between">
+                                                            <span class="text-xs text-gray-400">Network:</span>
+                                                            <span class="text-xs font-bold text-white">VisionChain Mainnet</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between">
+                                                            <span class="text-xs text-gray-400">Type:</span>
+                                                            <span class="text-xs font-bold text-white">HD Wallet</span>
+                                                        </div>
+                                                        <div class="flex items-center justify-between">
+                                                            <span class="text-xs text-gray-400">Created:</span>
+                                                            <span class="text-xs font-bold text-white">{new Date().toLocaleDateString()}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="space-y-4">
+                                                    <button onClick={copyAddress} class="w-full py-4 bg-[#1e1e24] text-white border border-white/5 rounded-2xl font-black text-sm hover:bg-[#2a2a35] transition-all">
+                                                        Copy Address
+                                                    </button>
+                                                    <button
+                                                        onClick={completeOnboarding}
+                                                        class="w-full py-5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all border border-white/10"
+                                                    >
+                                                        Go to Wallet
+                                                    </button>
+                                                </div>
+
+                                                <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl space-y-2">
+                                                    <div class="flex items-center gap-2 text-amber-500 font-black uppercase tracking-widest text-[10px]">
+                                                        <AlertTriangle class="w-3 h-3" />
+                                                        Security Reminder
+                                                    </div>
+                                                    <ul class="text-[11px] font-medium text-amber-500/80 space-y-1">
+                                                        <li>• Your wallet is now eligible for token distribution</li>
+                                                        <li>• Keep your recovery phrase and keystore file safe</li>
+                                                        <li>• Never share your private keys with anyone</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
                                         </div>
                                     </Motion.div>
                                 </Match>

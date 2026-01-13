@@ -105,8 +105,51 @@ export const adminLogin = async (email: string, password: string): Promise<User>
 
 export const adminRegister = async (email: string, password: string): Promise<User> => {
     const auth = getFirebaseAuth();
-    const { createUserWithEmailAndPassword } = await import('firebase/auth');
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const db = getFirebaseDb();
+    const emailLower = email.toLowerCase().trim();
+
+    const { createUserWithEmailAndPassword, sendEmailVerification } = await import('firebase/auth');
+    const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
+
+    // Send Verification Email
+    try {
+        await sendEmailVerification(userCredential.user);
+        console.log('[Auth] Verification email sent to', emailLower);
+    } catch (error) {
+        console.error('[Auth] Failed to send verification email:', error);
+        // Don't block registration if email fails, but log it
+    }
+
+    // Check if user doc exists (pre-registered via CSV)
+    const userRef = doc(db, 'users', emailLower);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+        const userData = userSnap.data();
+        if (userData.status === 'PendingActivation') {
+            await setDoc(userRef, {
+                status: 'Registered',
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            // Also update token_sales status if it was Pending
+            const saleRef = doc(db, 'token_sales', emailLower);
+            const saleSnap = await getDoc(saleRef);
+            if (saleSnap.exists()) {
+                await setDoc(saleRef, { status: 'Registered' }, { merge: true });
+            }
+        }
+    } else {
+        // New user from scratch (not in CSV)
+        await setDoc(userRef, {
+            email: emailLower,
+            role: 'user',
+            status: 'PendingVerification',
+            accountOrigin: 'self-signup',
+            createdAt: new Date().toISOString()
+        });
+    }
+
     return userCredential.user;
 };
 
@@ -174,7 +217,20 @@ export const manualInviteUser = async (data: {
         createdAt: new Date().toISOString()
     }, { merge: true });
 
-    // 2. Send Invitation Email
+    // 2. Pre-register user in users collection if not exists
+    const userRef = doc(db, 'users', emailLower);
+    const userSnap = await getDoc(userRef);
+    if (!userSnap.exists()) {
+        await setDoc(userRef, {
+            email: emailLower,
+            role: 'user',
+            partnerCode: data.partnerCode,
+            status: 'PendingActivation',
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    // 3. Send Invitation Email
     await sendInvitationEmail(emailLower, data.partnerCode, window.location.origin);
 
     return true;
@@ -281,26 +337,46 @@ export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
         throw err;
     }
 };
+export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'partner'> => {
+    try {
+        const db = getFirebaseDb();
+        const userRef = doc(db, 'users', email.toLowerCase());
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+            return userSnap.data().role || 'user';
+        }
+    } catch (error) {
+        console.error('Error fetching user role:', error);
+    }
+    return 'user';
+};
 
-export const getUserRole = async (email: string): Promise<'admin' | 'partner' | 'user'> => {
+export const getUserData = async (email: string): Promise<UserData | null> => {
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase();
 
-    // Check 'users' collection
-    // We assume an 'role' field exists. If not, default to 'user'
-    // UNLESS it is the super admin email (hardcoded fallback for safety)
-    if (emailLower === 'ceo@antigravity.kr') return 'admin';
-
+    // 1. Get from 'users'
     const userRef = doc(db, 'users', emailLower);
     const userSnap = await getDoc(userRef);
 
-    if (userSnap.exists()) {
-        const data = userSnap.data();
-        if (data.role === 'admin') return 'admin';
-        if (data.role === 'partner') return 'partner';
-    }
+    // 2. Get from 'token_sales' for tier/status
+    const saleRef = doc(db, 'token_sales', emailLower);
+    const saleSnap = await getDoc(saleRef);
 
-    return 'user';
+    if (userSnap.exists() || saleSnap.exists()) {
+        const user = userSnap.data();
+        const sale = saleSnap.data();
+        return {
+            email: emailLower,
+            role: user?.role || 'user',
+            name: user?.name || user?.displayName || emailLower.split('@')[0],
+            walletAddress: user?.walletAddress || sale?.walletAddress || '',
+            status: sale?.status || 'Registered',
+            isVerified: !!(user?.walletAddress || sale?.walletAddress),
+            tier: sale?.tier || 0
+        };
+    }
+    return null;
 };
 
 // ==================== Token Sale & Vesting ====================
@@ -319,17 +395,57 @@ export interface TokenSaleEntry {
 
 export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     const db = getFirebaseDb();
-    const batch = writeBatch(db);
-    // Note: writeBatch usually needs 'writeBatch(db)' import. 
-    // To avoid import issues in this replace block, we'll iterate. 
-    // For large uploads, batch is better, but iteration works for <500 items.
+    const newInvitations: { email: string; partnerCode: string }[] = [];
+    const existingMembers: string[] = [];
 
-    // Using individual sets for simplicity in this helper
+    // Process entries sequentially or in small batches to avoid rate limits
+    // For simplicity, we'll process Firestore writes in parallel but limit concurrency if needed.
+    // Here we'll just do a loop.
+
     for (const entry of entries) {
-        const ref = doc(db, 'token_sales', entry.email);
-        await setDoc(ref, entry, { merge: true });
+        const emailLower = entry.email.toLowerCase().trim();
+
+        // 1. Update token_sales
+        const saleRef = doc(db, 'token_sales', emailLower);
+        await setDoc(saleRef, {
+            ...entry,
+            email: emailLower,
+            status: entry.status || 'Pending'
+        }, { merge: true });
+
+        // 2. Check users collection
+        const userRef = doc(db, 'users', emailLower);
+        const userSnap = await getDoc(userRef);
+
+        if (!userSnap.exists()) {
+            // New committed user - Pre-register
+            await setDoc(userRef, {
+                email: emailLower,
+                role: 'user',
+                partnerCode: entry.partnerCode,
+                status: 'PendingActivation',
+                createdAt: new Date().toISOString()
+            });
+            newInvitations.push({ email: emailLower, partnerCode: entry.partnerCode });
+        } else {
+            existingMembers.push(entry.email);
+        }
     }
-    return entries.length;
+
+    // 3. Send Invitation Emails (in parallel)
+    console.log(`[Batch] Sending ${newInvitations.length} invitation emails...`);
+    const emailPromises = newInvitations.map(invite =>
+        sendInvitationEmail(invite.email, invite.partnerCode, window.location.origin)
+            .catch(err => console.error(`Failed to send invite to ${invite.email}:`, err))
+    );
+
+    await Promise.allSettled(emailPromises);
+
+    return {
+        count: entries.length,
+        newInvitations: newInvitations.map(i => i.email),
+        existingMembers
+    };
 };
 
 
@@ -812,9 +928,11 @@ export const activateAccountWithToken = async (token: string, password: string) 
     // 4. Update User Profile
     const userRef = doc(db, 'users', email.toLowerCase());
     await setDoc(userRef, {
-        email: email,
+        email: email.toLowerCase(),
         role: 'user',
-        createdAt: new Date()
+        status: 'Registered',
+        accountOrigin: 'invitation',
+        updatedAt: new Date().toISOString()
     }, { merge: true });
 
     // 5. Mark Token as Used

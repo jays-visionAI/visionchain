@@ -29,6 +29,7 @@ const Testnet = lazy(() => import('./components/Testnet'));
 
 // Auth components
 const Login = lazy(() => import('./components/auth/Login'));
+const Signup = lazy(() => import('./components/auth/Signup'));
 const AdminLogin = lazy(() => import('./components/auth/AdminLogin'));
 const ActivateAccount = lazy(() => import('./components/auth/ActivateAccount'));
 
@@ -309,6 +310,7 @@ render(() => (
   <AuthProvider>
     <Router root={Layout}>
       <Route path="/login" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
+      <Route path="/signup" component={() => <Suspense fallback={<PageLoader />}><Signup /></Suspense>} />
       <Route path="/admin-login" component={AdminLoginPage} />
       <Route path="/activate" component={() => <Suspense fallback={<PageLoader />}><ActivateAccount /></Suspense>} />
       <Route path="/" component={HomePage} />

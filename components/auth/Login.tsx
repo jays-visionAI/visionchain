@@ -9,7 +9,7 @@ import {
     ArrowLeft
 } from 'lucide-solid';
 import { useAuth } from './authContext';
-import { getUserRole } from '../../services/firebaseService';
+import { getUserRole, getUserData } from '../../services/firebaseService';
 
 export default function Login() {
     const [email, setEmail] = createSignal('');
@@ -33,6 +33,26 @@ export default function Login() {
             // 1. Try normal login
             await auth.login(emailVal, pwdVal);
 
+            // 1.5. CHECK EMAIL VERIFICATION (with Exception for Invitations)
+            const currentUser = auth.user();
+            if (currentUser && !currentUser.emailVerified) {
+                // Check if they are an invited user (who doesn't need double verification)
+                const userData = await getUserData(emailVal);
+                // We access the raw data from getUserData if possible, but getUserData returns a formatted UserData object.
+                // However, UserData interface doesn't have accountOrigin.
+                // We should probably check the raw doc or just rely on 'status'.
+                // If status is 'Registered' and NOT 'PendingVerification', we allow it.
+                // invited users get 'Registered', self-signup new users get 'PendingVerification'.
+
+                if (userData?.status !== 'Registered' && userData?.status !== 'WalletCreated' && userData?.status !== 'VestingDeployed') {
+                    await auth.logout();
+                    setError('Please verify your email before logging in.');
+                    return;
+                }
+                // If status IS 'Registered' (which invitees are), we proceed.
+                // Note: Self-signups now get 'PendingVerification', so they will be blocked. Correct.
+            }
+
             // 2. Check User Role from Firestore
             try {
                 const role = await getUserRole(emailVal);
@@ -53,13 +73,13 @@ export default function Login() {
 
             // Error mapping
             if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-                setError('존재하지 않는 계정이거나 정보가 일치하지 않습니다.');
+                setError('Account not found or incorrect credentials.');
             } else if (err.code === 'auth/wrong-password') {
-                setError('비밀번호가 올바르지 않습니다.');
+                setError('Incorrect password.');
             } else if (err.code === 'auth/invalid-email') {
-                setError('유효하지 않은 이메일 형식입니다.');
+                setError('Invalid email format.');
             } else {
-                setError('로그인에 실패했습니다. 다시 시도해주세요.');
+                setError('Login failed. Please try again.');
             }
         } finally {
             setIsLoading(false);
@@ -90,7 +110,7 @@ export default function Login() {
                     <form onSubmit={handleSubmit} class="space-y-5">
                         {/* Email Input */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block font-medium">이메일</label>
+                            <label class="text-gray-400 text-sm mb-2 block font-medium">Email</label>
                             <div class="relative">
                                 <Mail class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                                 <input
@@ -106,14 +126,14 @@ export default function Login() {
 
                         {/* Password Input */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block font-medium">비밀번호</label>
+                            <label class="text-gray-400 text-sm mb-2 block font-medium">Password</label>
                             <div class="relative">
                                 <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                                 <input
                                     type={showPassword() ? 'text' : 'password'}
                                     value={password()}
                                     onInput={(e) => setPassword(e.currentTarget.value)}
-                                    placeholder="비밀번호 입력"
+                                    placeholder="Enter your password"
                                     class="w-full p-4 pl-12 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] transition-all box-border"
                                     required
                                 />
@@ -143,30 +163,19 @@ export default function Login() {
                             disabled={isLoading()}
                             class="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            <Show when={isLoading()} fallback="로그인">
+                            <Show when={isLoading()} fallback="Log In">
                                 <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                로그인 중...
+                                Logging in...
                             </Show>
                         </button>
 
-                        <div class="text-center mt-4">
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    setIsLoading(true);
-                                    try {
-                                        await auth.register(email(), password());
-                                        navigate('/admin', { replace: true });
-                                    } catch (err: any) {
-                                        setError(err.message);
-                                    } finally {
-                                        setIsLoading(false);
-                                    }
-                                }}
-                                class="text-xs text-gray-500 hover:text-white underline"
+                        <div class="text-center mt-6">
+                            <a
+                                href="/signup"
+                                class="block w-full py-3 rounded-xl border border-white/10 text-gray-300 font-medium hover:bg-white/5 hover:border-white/20 transition-all text-sm"
                             >
-                                (Dev) Create Account
-                            </button>
+                                Create Account
+                            </a>
                         </div>
                     </form>
 
@@ -177,7 +186,7 @@ export default function Login() {
                             class="inline-flex items-center gap-2 text-gray-400 hover:text-cyan-400 text-sm transition-colors"
                         >
                             <ArrowLeft class="w-4 h-4" />
-                            홈으로 돌아가기
+                            Back to Home
                         </a>
                     </div>
                 </div>

@@ -108,7 +108,7 @@ export default function AdminLogin() {
                                         value={email()}
                                         onInput={(e) => setEmail(e.currentTarget.value)}
                                         placeholder="ADMIN@VISION.HQ"
-                                        class="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold text-white placeholder:text-gray-700 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all uppercase"
+                                        class="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm font-bold text-white placeholder:text-gray-700 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all"
                                         required
                                     />
                                 </div>

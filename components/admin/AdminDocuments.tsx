@@ -67,6 +67,7 @@ export default function AdminDocuments() {
     const [isEditorOpen, setIsEditorOpen] = createSignal(false);
     const [selectedDoc, setSelectedDoc] = createSignal<Document | null>(null);
     const [isSaving, setIsSaving] = createSignal(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
 
     // Form Signals
     const [title, setTitle] = createSignal('');
@@ -156,6 +157,19 @@ export default function AdminDocuments() {
         setIsEditorOpen(false);
     };
 
+    const handleDelete = async () => {
+        if (!selectedDoc()) return;
+
+        // Mock deletion delay
+        setIsSaving(true);
+        await new Promise(r => setTimeout(r, 500));
+
+        setDocuments(docs => docs.filter(d => d.id !== selectedDoc()!.id));
+        setIsSaving(false);
+        setShowDeleteConfirm(false);
+        setIsEditorOpen(false);
+    };
+
     const filteredDocs = () => {
         return documents().filter(doc =>
             doc.title.toLowerCase().includes(searchQuery().toLowerCase()) ||
@@ -165,6 +179,44 @@ export default function AdminDocuments() {
 
     return (
         <div class="space-y-8 animate-in fade-in duration-700">
+            <style>{`
+                .ql-toolbar.ql-snow {
+                    border: none !important;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+                    background: rgba(255, 255, 255, 0.02);
+                    padding: 12px 16px !important;
+                }
+                .ql-container.ql-snow {
+                    border: none !important;
+                    background: transparent;
+                }
+                .ql-editor {
+                    padding: 20px 24px !important;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: rgba(255, 255, 255, 0.8);
+                }
+                .ql-editor.ql-blank::before {
+                    color: rgba(255, 255, 255, 0.2);
+                    left: 24px !important;
+                    font-style: normal;
+                }
+                .ql-stroke {
+                    stroke: #6b7280 !important;
+                }
+                .ql-fill {
+                    fill: #6b7280 !important;
+                }
+                .ql-picker {
+                    color: #6b7280 !important;
+                }
+                .ql-picker-options {
+                    background-color: #0c0c0c !important;
+                    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                    border-radius: 8px !important;
+                }
+            `}</style>
             {/* Header Section */}
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -380,12 +432,23 @@ export default function AdminDocuments() {
 
                         {/* Modal Footer */}
                         <div class="p-8 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
-                            <button
-                                onClick={() => setIsEditorOpen(false)}
-                                class="px-8 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 transition-all"
-                            >
-                                Cancel
-                            </button>
+                            <div class="flex items-center gap-3">
+                                <button
+                                    onClick={() => setIsEditorOpen(false)}
+                                    class="px-8 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <Show when={selectedDoc()}>
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                        class="px-8 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20 flex items-center gap-2"
+                                    >
+                                        <Trash2 class="w-4 h-4" />
+                                        Delete
+                                    </button>
+                                </Show>
+                            </div>
                             <button
                                 onClick={handleSave}
                                 disabled={isSaving() || !title()}
@@ -395,6 +458,52 @@ export default function AdminDocuments() {
                                     <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                 </Show>
                                 {isSaving() ? 'Saving Changes...' : 'Save & Publish'}
+                            </button>
+                        </div>
+                    </Motion.div>
+                </div>
+            </Show>
+
+            {/* Deletion Confirmation Modal */}
+            <Show when={showDeleteConfirm()}>
+                <div class="fixed inset-0 z-[300] flex items-center justify-center p-6">
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowDeleteConfirm(false)}
+                        class="absolute inset-0 bg-black/90 backdrop-blur-xl"
+                    />
+                    <Motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        class="relative w-full max-w-md bg-[#0c0c0c] border border-red-500/20 rounded-[32px] p-8 shadow-2xl shadow-red-500/5 text-center"
+                    >
+                        <div class="w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-6 text-red-500">
+                            <Trash2 class="w-10 h-10" />
+                        </div>
+                        <h3 class="text-2xl font-black italic tracking-tight mb-2">DELETE DOCUMENT?</h3>
+                        <p class="text-sm text-gray-500 font-medium mb-8">
+                            Are you sure you want to delete <span class="text-white font-bold">"{selectedDoc()?.title}"</span>?<br />
+                            This action cannot be undone.
+                        </p>
+
+                        <div class="flex flex-col gap-3">
+                            <button
+                                onClick={handleDelete}
+                                disabled={isSaving()}
+                                class="w-full py-4 bg-red-500 hover:bg-red-400 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-red-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                <Show when={isSaving()}>
+                                    <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                </Show>
+                                YES, DELETE PERMANENTLY
+                            </button>
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                class="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                            >
+                                Keep Document
                             </button>
                         </div>
                     </Motion.div>
