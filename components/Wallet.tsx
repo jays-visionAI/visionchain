@@ -1387,8 +1387,18 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                         </div>
                                     </div>
 
-                                    {/* System Health */}
+                                    {/* System Health & User Info */}
                                     <div class="grid grid-cols-2 gap-3 pt-4">
+                                        <div class="col-span-2 p-3 bg-white/[0.02] border border-white/[0.04] rounded-2xl flex items-center gap-3">
+                                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shrink-0">
+                                                <User class="w-4 h-4 text-white" />
+                                            </div>
+                                            <div class="overflow-hidden">
+                                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Logged In As</div>
+                                                <div class="text-[11px] font-bold text-white truncate w-full" title={userProfile().email}>{userProfile().email}</div>
+                                            </div>
+                                        </div>
+
                                         <div class="p-3 bg-white/[0.02] border border-white/[0.04] rounded-2xl">
                                             <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Network</div>
                                             <div class="flex items-center gap-2">
