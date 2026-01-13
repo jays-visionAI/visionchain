@@ -169,6 +169,8 @@ const Wallet = (): JSX.Element => {
     const [copiedSeed, setCopiedSeed] = createSignal(false);
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
     const [walletPassword, setWalletPassword] = createSignal('');
+    const [confirmWalletPassword, setConfirmWalletPassword] = createSignal('');
+    const [showWalletPassword, setShowWalletPassword] = createSignal(false);
     const [onboardingSuccess, setOnboardingSuccess] = createSignal(false);
     const [referralBonus, setReferralBonus] = createSignal('0');
 
@@ -3794,15 +3796,35 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                         </div>
 
                                         <div class="space-y-4">
-                                            <input
-                                                type="password"
-                                                placeholder="Enter secure password"
-                                                class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono"
-                                                value={walletPassword()}
-                                                onInput={(e) => setWalletPassword(e.currentTarget.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
-                                            />
+                                            <div class="relative">
+                                                <input
+                                                    type={showWalletPassword() ? "text" : "password"}
+                                                    placeholder="Create spending password"
+                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-6 pr-12 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                                    value={walletPassword()}
+                                                    onInput={(e) => setWalletPassword(e.currentTarget.value)}
+                                                />
+                                                <button
+                                                    onClick={() => setShowWalletPassword(!showWalletPassword())}
+                                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                                >
+                                                    {showWalletPassword() ? <EyeOff class="w-5 h-5" /> : <Eye class="w-5 h-5" />}
+                                                </button>
+                                            </div>
+
+                                            <div class="relative">
+                                                <input
+                                                    type={showWalletPassword() ? "text" : "password"}
+                                                    placeholder="Confirm spending password"
+                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-6 pr-12 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                                    value={confirmWalletPassword()}
+                                                    onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                                />
+                                            </div>
+
                                             <p class="text-[10px] text-gray-500 text-center uppercase tracking-widest font-bold">
+                                                <ShieldCheck class="w-3 h-3 inline mr-1 text-green-500" />
                                                 This password is never sent to our servers.
                                             </p>
                                         </div>
