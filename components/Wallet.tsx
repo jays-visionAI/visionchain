@@ -2812,7 +2812,11 @@ ${tokens.map(t => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
 
                                                     <button
                                                         onClick={() => {
-                                                            if (selectedWords().join(' ') === seedPhrase().join(' ')) {
+                                                            const phrase = seedPhrase().join(' ');
+                                                            if (selectedWords().join(' ') === phrase) {
+                                                                // Derive address immediately to show on success screen
+                                                                const { address } = WalletService.deriveEOA(phrase);
+                                                                setWalletAddressSignal(address);
                                                                 setOnboardingStep(4); // Move to final success step
                                                             } else {
                                                                 alert('Incorrect order. Please try again.');
