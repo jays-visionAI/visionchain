@@ -358,15 +358,21 @@ export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'pa
 
 export const getUserData = async (email: string): Promise<UserData | null> => {
     const db = getFirebaseDb();
-    const emailLower = email.toLowerCase();
+    const emailLower = email.toLowerCase().trim();
 
-    // 1. Get from 'users'
-    const userRef = doc(db, 'users', emailLower);
-    const userSnap = await getDoc(userRef);
+    // 1. Try lowercase lookup
+    let userSnap = await getDoc(doc(db, 'users', emailLower));
+    let saleSnap = await getDoc(doc(db, 'token_sales', emailLower));
 
-    // 2. Get from 'token_sales' for tier/status
-    const saleRef = doc(db, 'token_sales', emailLower);
-    const saleSnap = await getDoc(saleRef);
+    // 2. Fallback to original lookup for legacy support
+    if (!userSnap.exists() && email !== emailLower) {
+        const legacySnap = await getDoc(doc(db, 'users', email));
+        if (legacySnap.exists()) userSnap = legacySnap;
+    }
+    if (!saleSnap.exists() && email !== emailLower) {
+        const legacySnap = await getDoc(doc(db, 'token_sales', email));
+        if (legacySnap.exists()) saleSnap = legacySnap;
+    }
 
     if (userSnap.exists() || saleSnap.exists()) {
         const user = userSnap.data();
@@ -653,37 +659,14 @@ export const getVcnPurchases = async (limitCount = 100): Promise<VcnPurchase[]> 
 
 export const getUserPurchases = async (email: string): Promise<VcnPurchase[]> => {
     const db = getFirebaseDb();
-    // For specific user, limiting doesn't make sense usually, but strict query does
-    const purchasesCollection = collection(db, 'vcn_purchases'); // Corrected from 'purchases'
-    // This was fetching ALL and filtering in JS. BAD for performance.
-    // Use Firestore query instead.
-    const { where } = await import('firebase/firestore');
-    const q = query(purchasesCollection, where('email', '==', email.toLowerCase()));
+    const emailLower = email.toLowerCase().trim();
+    const purchasesCollection = collection(db, 'vcn_purchases');
 
-    // Note: 'where' needs to be imported or use full qualified import above if added.
-    // Let's assume standard query for now or fix import later. 
-    // Actually, let's keep it simple for this step and just optimize the collection name and filter.
-    // Ideally we should add 'where' to top imports.
+    // Performance Optimized Firestore Query - Check both cases
+    const q = query(purchasesCollection, where('email', 'in', [emailLower, email]));
+    const snapshot = await getDocs(q);
 
-    // Fallback if 'where' not imported at top:
-    // const snapshot = await getDocs(purchasesCollection); 
-    // return snapshot.docs.map...
-
-    // BUT we are fixing performance. Fetching all is bad.
-    // I will add 'where' to the top import in the first chunk? 
-    // No, I can't modify the first chunk easily now. 
-    // I'll stick to JS filtering but on the correct collection 'vcn_purchases', 
-    // OR best effort: just Limit 100 for now and filter. 
-    // Actually, 'getUserPurchases' is critical for user dashboard. 
-    // I'll just update collection name and keep JS filter for safety unless I add 'where'.
-
-    // Wait, I can just use 'where' if I add it to top imports.
-    // I'll add 'where' to the top import chunk.
-
-    const snapshot = await getDocs(purchasesCollection);
-    return snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as VcnPurchase))
-        .filter(p => p.email.toLowerCase() === email.toLowerCase());
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VcnPurchase));
 };
 
 export const activateVesting = async (purchaseId: string, contractAddress: string): Promise<void> => {
