@@ -61,6 +61,8 @@ export default function Signup() {
                 setError('Invalid email format.');
             } else if (err.code === 'auth/weak-password') {
                 setError('Password is too weak.');
+            } else if (err.code === 'auth/api-key-not-valid' || err.code === 'auth/invalid-api-key') {
+                setError('Configuration Error: Invalid Firebase API Key. Please check your .env file and restart the server.');
             } else {
                 setError(err.message || 'Signup failed.');
             }

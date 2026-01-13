@@ -254,33 +254,69 @@ export const UploadCSV = () => {
                 </div>
             </Show>
 
-            {/* Result Table (New Invitations) */}
-            <Show when={uploadResult() && uploadResult()?.newInvitations.length! > 0}>
-                <div class="mt-8">
-                    <h3 class="text-white font-bold mb-4 flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                        Newly Invited Users ({uploadResult()?.newInvitations.length})
-                    </h3>
-                    <div class="bg-[#0B0E14] border border-slate-700 rounded-xl overflow-hidden">
-                        <div class="max-h-60 overflow-y-auto">
-                            <table class="w-full text-sm text-left text-slate-400">
-                                <thead class="text-xs text-slate-500 uppercase bg-slate-900 sticky top-0">
-                                    <tr>
-                                        <th class="px-6 py-3">Email</th>
-                                        <th class="px-6 py-3 text-right">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {uploadResult()?.newInvitations.map((email) => (
-                                        <tr class="border-b border-slate-800/50 hover:bg-slate-800/20">
-                                            <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
-                                            <td class="px-6 py-3 text-right text-green-500 text-xs font-bold uppercase">Invited</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+            {/* Result Tables Container */}
+            <Show when={uploadResult()}>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+
+                    {/* Newly Invited Users */}
+                    <Show when={uploadResult()?.newInvitations.length! > 0}>
+                        <div>
+                            <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></span>
+                                Newly Invited ({uploadResult()?.newInvitations.length})
+                            </h3>
+                            <div class="bg-[#0B0E14] border border-green-900/30 rounded-xl overflow-hidden shadow-lg shadow-green-900/10">
+                                <div class="max-h-60 overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-sm text-left text-slate-400">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 sticky top-0 backdrop-blur-sm">
+                                            <tr>
+                                                <th class="px-6 py-3">Email</th>
+                                                <th class="px-6 py-3 text-right">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {uploadResult()?.newInvitations.map((email) => (
+                                                <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                                    <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
+                                                    <td class="px-6 py-3 text-right text-green-400 text-xs font-bold uppercase">Invited</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    </Show>
+
+                    {/* Existing/Updated Members */}
+                    <Show when={uploadResult()?.existingMembers.length! > 0}>
+                        <div>
+                            <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></span>
+                                Updated Members ({uploadResult()?.existingMembers.length})
+                            </h3>
+                            <div class="bg-[#0B0E14] border border-blue-900/30 rounded-xl overflow-hidden shadow-lg shadow-blue-900/10">
+                                <div class="max-h-60 overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-sm text-left text-slate-400">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 sticky top-0 backdrop-blur-sm">
+                                            <tr>
+                                                <th class="px-6 py-3">Email</th>
+                                                <th class="px-6 py-3 text-right">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {uploadResult()?.existingMembers.map((email) => (
+                                                <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                                    <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
+                                                    <td class="px-6 py-3 text-right text-blue-400 text-xs font-bold uppercase">Updated</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
                 </div>
             </Show>
         </div>
