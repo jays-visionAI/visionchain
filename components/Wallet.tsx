@@ -3786,8 +3786,11 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
                                                 <Lock class="w-8 h-8 text-blue-400" />
                                             </div>
-                                            <h3 class="text-2xl font-bold text-white mb-2">Secure Your Wallet</h3>
-                                            <p class="text-sm text-gray-400">Create a password to encrypt your mnemonic phrase locally.</p>
+                                            <h3 class="text-2xl font-bold text-white mb-2">Set Wallet Spending Password</h3>
+                                            <p class="text-sm text-gray-400">
+                                                This password encrypts your private key locally and is required for transactions.<br />
+                                                <span class="text-blue-400 font-bold">It is different from your login password.</span>
+                                            </p>
                                         </div>
 
                                         <div class="space-y-4">
