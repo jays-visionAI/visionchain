@@ -36,7 +36,8 @@ import {
     Leaf,
     Star,
     Download,
-    AlertTriangle
+    AlertTriangle,
+    Info
 } from 'lucide-solid';
 import {
     updateWalletStatus,
@@ -2157,6 +2158,18 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
                         {/* Main Content */}
                         <div class="max-w-[1440px] mx-auto px-8 py-10">
+                            {/* Token Info Banner */}
+                            <div class="mb-8 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-start gap-3 backdrop-blur-sm">
+                                <div class="mt-0.5 p-1.5 bg-blue-500/20 rounded-lg shrink-0">
+                                    <Info class="w-4 h-4 text-blue-400" />
+                                </div>
+                                <div>
+                                    <p class="text-xs text-blue-200/80 leading-relaxed">
+                                        The <span class="text-white font-bold">'Available (VCN)'</span> balance reflects your token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details will be updated once the vesting contract is executed.
+                                    </p>
+                                </div>
+                            </div>
+
                             {/* Stats Row */}
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                                 <div class="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/[0.08] rounded-3xl p-6 relative overflow-hidden group hover:border-blue-500/30 transition-all duration-500 shadow-xl">
