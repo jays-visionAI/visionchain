@@ -360,11 +360,11 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase().trim();
 
-    // 1. Try lowercase lookup
+    // 1. Try lowercase lookup (Preferred)
     let userSnap = await getDoc(doc(db, 'users', emailLower));
     let saleSnap = await getDoc(doc(db, 'token_sales', emailLower));
 
-    // 2. Fallback to original lookup for legacy support
+    // 2. Fallback to original lookup (Support legacy/case-sensitive IDs)
     if (!userSnap.exists() && email !== emailLower) {
         const legacySnap = await getDoc(doc(db, 'users', email));
         if (legacySnap.exists()) userSnap = legacySnap;
@@ -372,6 +372,12 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
     if (!saleSnap.exists() && email !== emailLower) {
         const legacySnap = await getDoc(doc(db, 'token_sales', email));
         if (legacySnap.exists()) saleSnap = legacySnap;
+    }
+
+    // 3. One more fallback: uppercase email (sometimes used in legacy systems)
+    if (!userSnap.exists()) {
+        const upperSnap = await getDoc(doc(db, 'users', email.toUpperCase()));
+        if (upperSnap.exists()) userSnap = upperSnap;
     }
 
     if (userSnap.exists() || saleSnap.exists()) {
@@ -481,13 +487,15 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
         console.log(`[Firebase] Updated token_sales for ${email}`);
     }
 
-    // 2. Update User Profile (Always update/create)
+    // 2. Update User Profile (Ensuring top-level and potential sub-structure)
     const userRef = doc(db, 'users', emailLower);
     await setDoc(userRef, {
         walletReady: true,
-        walletAddress: walletAddress
+        walletAddress: walletAddress,
+        updatedAt: new Date().toISOString()
     }, { merge: true });
-    console.log(`[Firebase] Updated user profile for ${email}`);
+
+    console.log(`[Firebase] Saved wallet address ${walletAddress} to users/${emailLower}`);
 
     // 3. Update Purchases (Legacy)
     // Optional: Only if you still use 'purchases' collection

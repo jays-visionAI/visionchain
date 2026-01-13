@@ -347,17 +347,8 @@ const Wallet = (): JSX.Element => {
             });
             setMarketData(dataMap);
         } catch (error) {
-            console.warn('CoinGecko fetch failed, using fallback data:', error);
-            // Fallback for CORS/429
-            const fallbackData: any[] = [
-                { id: 'ethereum', symbol: 'eth', name: 'Ethereum', current_price: 3500, price_change_percentage_24h: 2.4 },
-                { id: 'usd-coin', symbol: 'usdc', name: 'USDC', current_price: 1.0, price_change_percentage_24h: 0.01 }
-            ];
-            const dataMap = new Map<string, CoinGeckoToken>();
-            fallbackData.forEach(token => {
-                dataMap.set(token.symbol.toUpperCase(), token);
-            });
-            setMarketData(dataMap);
+            console.error('Error fetching market data from CoinGecko:', error);
+            // No fallback data - UI will show current zero/loading state until successful fetch
         } finally {
             setMarketLoading(false);
         }
@@ -408,21 +399,35 @@ const Wallet = (): JSX.Element => {
                 });
 
                 // Check if wallet exists in backend OR locally
-                if (data.walletAddress || WalletService.hasWallet()) {
-                    if (data.walletAddress) {
+                const hasBackendWallet = !!data.walletAddress;
+                const hasLocalWallet = WalletService.hasWallet();
+
+                if (hasBackendWallet || hasLocalWallet) {
+                    if (hasBackendWallet) {
                         setWalletAddressSignal(data.walletAddress);
                     }
                     setOnboardingStep(0);
+
+                    // Update userProfile with verified status if wallet exists anywhere
+                    setUserProfile(prev => ({
+                        ...prev,
+                        isVerified: true,
+                        address: data.walletAddress || prev.address || (hasLocalWallet ? '[Encrypted Local Wallet]' : '')
+                    }));
                 } else {
                     // No wallet anywhere AND we are in profile view, show step 1
-                    // Don't force view switch if user is somewhere else
                     if (activeView() === 'profile' || onboardingStep() > 0) {
                         setOnboardingStep(1);
                     }
                 }
             } else {
-                // No data yet, wait for it or default to no onboarding
-                setOnboardingStep(0);
+                // No profile data found in database, but maybe user exists in Auth
+                if (WalletService.hasWallet()) {
+                    setOnboardingStep(0);
+                    setUserProfile(prev => ({ ...prev, isVerified: true }));
+                } else {
+                    setOnboardingStep(0);
+                }
             }
         } catch (error) {
             console.error('Error fetching profile:', error);
@@ -569,7 +574,7 @@ const Wallet = (): JSX.Element => {
 
     const totalValue = () => {
         let total = 0;
-        ['VCN'].forEach(symbol => {
+        ['VCN', 'ETH', 'USDC'].forEach(symbol => {
             const asset = getAssetData(symbol);
             total += asset.balance * asset.price;
         });
@@ -2455,48 +2460,66 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <div class="relative w-48 h-48 mx-auto mb-10">
                                                     <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90 filter drop-shadow-[0_0_15px_rgba(59,130,246,0.15)]">
                                                         <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.02)" stroke-width="12" />
-                                                        <circle cx="50" cy="50" r="38" fill="none" stroke="#3b82f6" stroke-width="12"
-                                                            stroke-dasharray="164.8 238.7" stroke-dashoffset="0" stroke-linecap="butt" class="transition-all duration-1000 ease-out" />
-                                                        <circle cx="50" cy="50" r="38" fill="none" stroke="#8b5cf6" stroke-width="12"
-                                                            stroke-dasharray="57.1 238.7" stroke-dashoffset="-164.8" stroke-linecap="butt" class="transition-all duration-1000 ease-out" />
-                                                        <circle cx="50" cy="50" r="38" fill="none" stroke="#10b981" stroke-width="12"
-                                                            stroke-dasharray="16.8 238.7" stroke-dashoffset="-221.9" stroke-linecap="butt" class="transition-all duration-1000 ease-out" />
+                                                        {(() => {
+                                                            const tv = totalValue();
+                                                            if (tv === 0) return (
+                                                                <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12" />
+                                                            );
+
+                                                            let offset = 0;
+                                                            return ['VCN', 'ETH', 'USDC'].map((symbol, idx) => {
+                                                                const asset = getAssetData(symbol);
+                                                                const val = asset.balance * asset.price;
+                                                                const ratio = val / tv;
+                                                                const dashArray = `${(ratio * 238.7).toFixed(2)} 238.7`;
+                                                                const currentOffset = offset;
+                                                                offset -= ratio * 238.7;
+                                                                const colors = ['#3b82f6', '#8b5cf6', '#10b981'];
+
+                                                                if (ratio === 0) return null;
+
+                                                                return (
+                                                                    <circle
+                                                                        cx="50" cy="50" r="38" fill="none"
+                                                                        stroke={colors[idx]} stroke-width="12"
+                                                                        stroke-dasharray={dashArray}
+                                                                        stroke-dashoffset={currentOffset.toFixed(2)}
+                                                                        stroke-linecap="butt"
+                                                                        class="transition-all duration-1000 ease-out"
+                                                                    />
+                                                                );
+                                                            });
+                                                        })()}
                                                     </svg>
                                                     <div class="absolute inset-0 flex flex-col items-center justify-center">
                                                         <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total</div>
-                                                        <div class="text-2xl font-bold text-white tracking-tighter">100%</div>
+                                                        <div class="text-2xl font-bold text-white tracking-tighter">
+                                                            {totalValue() > 0 ? '100%' : '0%'}
+                                                        </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Legend */}
                                                 <div class="space-y-4">
-                                                    <div class="flex items-center justify-between group/item cursor-pointer">
-                                                        <div class="flex items-center gap-3">
-                                                            <div class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                                                            <span class="text-sm font-bold text-gray-400 group-hover/item:text-white transition-colors">VCN</span>
-                                                        </div>
-                                                        <div class="text-right">
-                                                            <span class="text-sm font-black text-white tabular-nums">68.8%</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex items-center justify-between group/item cursor-pointer">
-                                                        <div class="flex items-center gap-3">
-                                                            <div class="w-3 h-3 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(139,92,246,0.5)]" />
-                                                            <span class="text-sm font-bold text-gray-400 group-hover/item:text-white transition-colors">ETH</span>
-                                                        </div>
-                                                        <div class="text-right">
-                                                            <span class="text-sm font-black text-white tabular-nums">23.9%</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex items-center justify-between group/item cursor-pointer">
-                                                        <div class="flex items-center gap-3">
-                                                            <div class="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                                            <span class="text-sm font-bold text-gray-400 group-hover/item:text-white transition-colors">USDC</span>
-                                                        </div>
-                                                        <div class="text-right">
-                                                            <span class="text-sm font-black text-white tabular-nums">7.2%</span>
-                                                        </div>
-                                                    </div>
+                                                    {['VCN', 'ETH', 'USDC'].map((symbol, idx) => {
+                                                        const asset = getAssetData(symbol);
+                                                        const tv = totalValue();
+                                                        const ratio = tv > 0 ? ((asset.balance * asset.price) / tv) * 100 : 0;
+                                                        const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500'];
+                                                        const shadowColors = ['rgba(59,130,246,0.5)', 'rgba(139,92,246,0.5)', 'rgba(16,185,129,0.5)'];
+
+                                                        return (
+                                                            <div class="flex items-center justify-between group/item cursor-pointer">
+                                                                <div class="flex items-center gap-3">
+                                                                    <div class={`w-3 h-3 rounded-full ${colors[idx]}`} style={{ 'box-shadow': `0 0 8px ${shadowColors[idx]}` }} />
+                                                                    <span class="text-sm font-bold text-gray-400 group-hover/item:text-white transition-colors">{symbol}</span>
+                                                                </div>
+                                                                <div class="text-right">
+                                                                    <span class="text-sm font-black text-white tabular-nums">{ratio.toFixed(1)}%</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         </div>
@@ -2533,7 +2556,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                         </div>
                                                         <div>
                                                             <div class="text-[15px] font-bold text-white group-hover:text-purple-400 transition-colors">Claim Rewards</div>
-                                                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">1,500 points available</div>
+                                                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Check for available rewards</div>
                                                         </div>
                                                     </div>
                                                     <ChevronRight class="w-5 h-5 text-gray-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
