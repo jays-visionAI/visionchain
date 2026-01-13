@@ -23,9 +23,9 @@ const campaigns = [
         name: 'Genesis Referrals',
         status: 'active',
         reward: '500 VCN',
-        participants: 1240,
-        conversion: '12.5%',
-        endDate: '2024-06-01'
+        participants: 0,
+        conversion: '0%',
+        endDate: '--'
     },
     {
         id: 'camp_02',
@@ -39,11 +39,11 @@ const campaigns = [
     {
         id: 'camp_03',
         name: 'Node Validator Bonus',
-        status: 'ended',
-        reward: '2.5 ETH',
-        participants: 284,
-        conversion: '100%',
-        endDate: '2024-03-30'
+        status: 'pending',
+        reward: '-- VCN',
+        participants: 0,
+        conversion: '0%',
+        endDate: '--'
     },
 ];
 
@@ -66,18 +66,18 @@ export default function AdminCampaign() {
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
                     <div class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2">Total Rewards Paid</div>
-                    <div class="text-2xl font-black text-white">4.2M VCN</div>
-                    <div class="mt-2 flex items-center gap-1.5 text-[10px] text-green-400 font-bold">
-                        <ArrowUpRight class="w-3 h-3" />
-                        +12% from last month
+                    <div class="text-2xl font-black text-white">-- VCN</div>
+                    <div class="mt-2 flex items-center gap-1.5 text-[10px] text-gray-500 font-bold">
+                        <Activity class="w-3 h-3" />
+                        Awaiting data
                     </div>
                 </div>
                 <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
                     <div class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2">Active Participants</div>
-                    <div class="text-2xl font-black text-white">12,847</div>
-                    <div class="mt-2 flex items-center gap-1.5 text-[10px] text-cyan-400 font-bold">
+                    <div class="text-2xl font-black text-white">--</div>
+                    <div class="mt-2 flex items-center gap-1.5 text-[10px] text-gray-500 font-bold">
                         <Users class="w-3 h-3" />
-                        Live tracking
+                        Ready
                     </div>
                 </div>
                 <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">

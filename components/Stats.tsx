@@ -107,10 +107,10 @@ const Stats = (): JSX.Element => {
         </Motion.div>
 
         <div class="grid grid-cols-2 md:grid-cols-4 gap-y-16 gap-x-8">
-          <StatItem value={100} suffix="K+" label="Transactions on Devnet" />
-          <StatItem value={1000} suffix="+" label="Smart Accounts" />
-          <StatItem value={100} suffix="+" label="Observer Nodes" />
-          <StatItem value={100000} suffix="" label="TPS" />
+          <StatItem value={0} suffix="+" label="Transactions on Devnet" sub="Live" />
+          <StatItem value={0} suffix="+" label="Smart Accounts" sub="Active" />
+          <StatItem value={0} suffix="+" label="Observer Nodes" sub="Distributed" />
+          <StatItem value={97500} suffix="" label="Peak TPS" sub="Simulated High Stress" />
         </div>
       </div>
     </section>

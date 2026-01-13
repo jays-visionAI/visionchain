@@ -7,10 +7,22 @@ export class WalletService {
      * Generates a 15-word mnemonic (160-bit entropy)
      */
     static generateMnemonic(): string {
-        // 160 bits = 20 bytes
-        const entropy = ethers.randomBytes(20);
-        const mnemonic = ethers.Mnemonic.fromEntropy(entropy);
-        return mnemonic.phrase;
+        // Keep generating until we get 15 unique words
+        let mnemonic: string = '';
+        let words: string[] = [];
+        let attempts = 0;
+
+        do {
+            // 160 bits = 20 bytes = 15 words
+            const entropy = ethers.randomBytes(20);
+            mnemonic = ethers.Mnemonic.fromEntropy(entropy).phrase;
+            words = mnemonic.split(' ');
+            attempts++;
+            // Statistically very likely to succeed in the first or second try
+            if (attempts > 100) break;
+        } while (new Set(words).size !== words.length);
+
+        return mnemonic;
     }
 
     /**

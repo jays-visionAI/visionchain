@@ -333,25 +333,9 @@ const Wallet = (): JSX.Element => {
     };
 
     const fetchMarketData = async () => {
-        try {
-            setMarketLoading(true);
-            const response = await fetch(
-                'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=ethereum,usd-coin&sparkline=true&price_change_percentage=24h'
-            );
-            if (!response.ok) throw new Error(`CoinGecko Error: ${response.status}`);
-            const data: CoinGeckoToken[] = await response.json();
-
-            const dataMap = new Map<string, CoinGeckoToken>();
-            data.forEach(token => {
-                dataMap.set(token.symbol.toUpperCase(), token);
-            });
-            setMarketData(dataMap);
-        } catch (error) {
-            console.error('Error fetching market data from CoinGecko:', error);
-            // No fallback data - UI will show current zero/loading state until successful fetch
-        } finally {
-            setMarketLoading(false);
-        }
+        // CoinGecko API removed as per user request to avoid rate-limiting and CORS issues
+        console.log('Market data fetch skipped - using static/mock prices');
+        setMarketLoading(false);
     };
 
     // Auth & Data Effect
@@ -400,11 +384,14 @@ const Wallet = (): JSX.Element => {
 
                 // Check if wallet exists in backend OR locally
                 const hasBackendWallet = !!data.walletAddress;
+                // Try to get address from local storage if not in profile
+                const localAddress = localStorage.getItem('vcn_wallet_address');
                 const hasLocalWallet = WalletService.hasWallet();
 
                 if (hasBackendWallet || hasLocalWallet) {
-                    if (hasBackendWallet) {
-                        setWalletAddressSignal(data.walletAddress);
+                    const finalAddress = data.walletAddress || localAddress || '';
+                    if (finalAddress) {
+                        setWalletAddressSignal(finalAddress);
                     }
                     setOnboardingStep(0);
 
@@ -412,7 +399,7 @@ const Wallet = (): JSX.Element => {
                     setUserProfile(prev => ({
                         ...prev,
                         isVerified: true,
-                        address: data.walletAddress || prev.address || (hasLocalWallet ? '[Encrypted Local Wallet]' : '')
+                        address: finalAddress || prev.address
                     }));
                 } else {
                     // No wallet anywhere AND we are in profile view, show step 1
@@ -422,9 +409,11 @@ const Wallet = (): JSX.Element => {
                 }
             } else {
                 // No profile data found in database, but maybe user exists in Auth
+                const localAddress = localStorage.getItem('vcn_wallet_address');
                 if (WalletService.hasWallet()) {
+                    setWalletAddressSignal(localAddress || '');
                     setOnboardingStep(0);
-                    setUserProfile(prev => ({ ...prev, isVerified: true }));
+                    setUserProfile(prev => ({ ...prev, isVerified: true, address: localAddress || '' }));
                 } else {
                     setOnboardingStep(0);
                 }
@@ -511,8 +500,8 @@ const Wallet = (): JSX.Element => {
                 progress
             });
 
-            // Update userHoldings with real VCN data
-            setUserHoldings(prev => ({ ...prev, VCN: unlocked }));
+            // Update userHoldings with total VCN for portfolio value calculation
+            setUserHoldings(prev => ({ ...prev, VCN: total }));
         } catch (error) {
             console.error('Failed to fetch portfolio data:', error);
         }
@@ -529,46 +518,26 @@ const Wallet = (): JSX.Element => {
     });
 
     const getAssetData = (symbol: string): AssetData => {
-        const data = marketData();
-        const token = data.get(symbol);
         const balance = (userHoldings() as any)[symbol] || 0;
 
-        if (symbol === 'VCN') {
-            return {
-                symbol: 'VCN',
-                name: 'Vision Chain',
-                balance,
-                image: null,
-                price: 3.50, // Initial VCN Price
-                change24h: 0,
-                sparkline: [3.5, 3.5, 3.5, 3.5, 3.5],
-                isLoading: false
-            };
-        }
+        // Use static/mock prices for stability
+        const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
+            'VCN': { name: 'Vision Chain', price: 3.50 },
+            'ETH': { name: 'Ethereum', price: 3200.00 },
+            'USDC': { name: 'USDC', price: 1.00 }
+        };
 
-        if (token) {
-            return {
-                symbol: token.symbol.toUpperCase(),
-                name: token.name,
-                balance,
-                image: token.image,
-                price: token.current_price,
-                change24h: token.price_change_percentage_24h,
-                sparkline: token.sparkline_in_7d?.price?.slice(-24) || [],
-                isLoading: false
-            };
-        }
+        const config = staticPrices[symbol] || { name: symbol, price: 0 };
 
-        // Fallback while loading
         return {
             symbol,
-            name: symbol,
+            name: config.name,
             balance,
             image: null,
-            price: 0,
+            price: config.price,
             change24h: 0,
-            sparkline: [],
-            isLoading: marketLoading()
+            sparkline: [config.price, config.price, config.price],
+            isLoading: false
         };
     };
 
@@ -722,6 +691,8 @@ const Wallet = (): JSX.Element => {
             // 2. Encrypt and Save 
             const encrypted = await WalletService.encrypt(mnemonic, walletPassword());
             WalletService.saveEncryptedWallet(encrypted);
+            // Save address unencrypted for UI consistency
+            localStorage.setItem('vcn_wallet_address', address);
 
             // 3. Update Backend Status
             const user = auth.user();
@@ -1237,7 +1208,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                 {/* Input Area - Floating Style */}
                                 <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/95 to-transparent pt-20">
                                     <div class="max-w-3xl mx-auto">
-                                        <div class="relative bg-[#17171a] border border-white/[0.08] rounded-2xl overflow-hidden shadow-2xl shadow-black/40 focus-within:border-cyan-500/30 focus-within:shadow-cyan-500/5 transition-all duration-300">
+                                        <div class="relative bg-[#17171a] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/40 focus-within:border-cyan-500/40 focus-within:shadow-[0_0_20px_rgba(6,182,212,0.05)] transition-all duration-300">
                                             <textarea
                                                 class="w-full bg-transparent text-white text-[15px] py-5 px-6 pr-16 outline-none resize-none placeholder:text-gray-500 min-h-[60px] max-h-[180px]"
                                                 placeholder="Message Vision AI..."
@@ -1360,7 +1331,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <p class="text-[12px] text-gray-400 mb-4 font-medium">Auto-compounding rewards</p>
                                                 <div class="flex items-center gap-2">
                                                     <div class="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/10 text-[10px] font-bold text-blue-400">HOT</div>
-                                                    <span class="text-[10px] text-gray-500 font-bold">$2.4M TVL</span>
+                                                    <span class="text-[10px] text-gray-500 font-bold">New Pool</span>
                                                 </div>
                                             </div>
 
@@ -1378,15 +1349,15 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     </div>
                                                     <ChevronRight class="w-3.5 h-3.5 text-gray-600 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                                                 </div>
-                                                <div class="text-[17px] font-bold text-white mb-1 group-hover:text-purple-400 transition-colors">Season 2 is Live</div>
+                                                <div class="text-[17px] font-bold text-white mb-1 group-hover:text-purple-400 transition-colors">Season 1 is Live</div>
                                                 <div class="flex items-center justify-between mt-4">
                                                     <div class="flex items-center gap-3 flex-1 mr-4">
                                                         <div class="h-1 flex-1 bg-white/[0.04] rounded-full overflow-hidden">
-                                                            <div class="h-full w-[35%] bg-gradient-to-r from-purple-500 to-indigo-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]" />
+                                                            <div class="h-full w-[10%] bg-gradient-to-r from-purple-500 to-indigo-400 shadow-[0_0_10px_rgba(168,85,247,0.4)]" />
                                                         </div>
-                                                        <span class="text-[11px] font-bold text-white/40">3/10</span>
+                                                        <span class="text-[11px] font-bold text-white/40">1/10</span>
                                                     </div>
-                                                    <span class="text-[11px] font-bold text-purple-400">1,500 PTS</span>
+                                                    <span class="text-[11px] font-bold text-purple-400">JOIN NOW</span>
                                                 </div>
                                             </div>
 
@@ -1470,12 +1441,12 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                         <div class="flex items-center gap-6 mb-8">
                                             <div>
                                                 <div class="text-xs text-gray-500 uppercase font-bold tracking-tight mb-1">Total TVL</div>
-                                                <div class="text-lg font-bold text-white font-mono">$2,458,920</div>
+                                                <div class="text-lg font-bold text-white font-mono">--</div>
                                             </div>
                                             <div class="w-px h-8 bg-white/10" />
                                             <div>
                                                 <div class="text-xs text-gray-500 uppercase font-bold tracking-tight mb-1">Stakers</div>
-                                                <div class="text-lg font-bold text-white font-mono">1,234</div>
+                                                <div class="text-lg font-bold text-white font-mono">--</div>
                                             </div>
                                         </div>
                                         <button class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20">
@@ -1485,18 +1456,18 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
                                     <div class="bg-[#111113] border border-white/[0.06] rounded-[24px] p-8 hover:border-purple-500/30 transition-all group">
                                         <div class="flex items-center justify-between mb-6">
-                                            <div class="px-3 py-1 bg-purple-500/10 rounded-full text-[10px] font-bold text-purple-400 uppercase tracking-widest">Season 2</div>
+                                            <div class="px-3 py-1 bg-purple-500/10 rounded-full text-[10px] font-bold text-purple-400 uppercase tracking-widest">Season 1</div>
                                             <Sparkles class="w-5 h-5 text-gray-600 group-hover:text-purple-400 transition-colors" />
                                         </div>
                                         <h2 class="text-2xl font-bold text-white mb-2">Community Airdrop</h2>
-                                        <p class="text-gray-400 mb-6 font-medium">Complete daily missions to earn Vision Points. Top 10,000 participants will share a 1,000,000 VCN pool.</p>
+                                        <p class="text-gray-400 mb-6 font-medium">Complete daily missions to earn Vision Points. Top participants will share in the reward pool.</p>
                                         <div class="mb-8">
                                             <div class="flex items-center justify-between mb-2">
                                                 <span class="text-xs text-gray-500 font-bold uppercase">Your Progress</span>
-                                                <span class="text-xs text-white font-bold">1,500 / 5,000 pts</span>
+                                                <span class="text-xs text-white font-bold">In Progress</span>
                                             </div>
                                             <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                                                <div class="w-[30%] h-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]" />
+                                                <div class="w-[5%] h-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]" />
                                             </div>
                                         </div>
                                         <button class="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-500/20">
@@ -2203,7 +2174,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                     </div>
                                     <div>
                                         <p class="text-xs text-blue-200/80 leading-relaxed">
-                                            The <span class="text-white font-bold">'Available (VCN)'</span> balance reflects your token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details will be updated once the vesting contract is executed.
+                                            The <span class="text-white font-bold">'Purchased (VCN)'</span> balance reflects your total token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details show your current vesting progress.
                                         </p>
                                     </div>
                                 </div>
@@ -2219,10 +2190,10 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shadow-inner">
                                                     <WalletIcon class="w-5 h-5" />
                                                 </div>
-                                                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Available (VCN)</span>
+                                                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Purchased (VCN)</span>
                                             </div>
                                             <div class="text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-blue-400 transition-colors">
-                                                {portfolioStats().unlocked.toLocaleString()}
+                                                {portfolioStats().total.toLocaleString()}
                                             </div>
                                         </div>
                                     </div>
@@ -3835,38 +3806,40 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             </p>
                                         </div>
 
-                                        <div class="space-y-4">
-                                            <div class="relative">
+                                        <div class="px-2 space-y-4">
+                                            <div class="relative w-full">
                                                 <input
                                                     type={showWalletPassword() ? "text" : "password"}
                                                     placeholder="Create spending password"
-                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-6 pr-12 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
                                                     value={walletPassword()}
                                                     onInput={(e) => setWalletPassword(e.currentTarget.value)}
                                                 />
                                                 <button
                                                     onClick={() => setShowWalletPassword(!showWalletPassword())}
-                                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
                                                 >
-                                                    {showWalletPassword() ? <EyeOff class="w-5 h-5" /> : <Eye class="w-5 h-5" />}
+                                                    {showWalletPassword() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
                                                 </button>
                                             </div>
 
-                                            <div class="relative">
+                                            <div class="relative w-full">
                                                 <input
                                                     type={showWalletPassword() ? "text" : "password"}
                                                     placeholder="Confirm spending password"
-                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-6 pr-12 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
                                                     value={confirmWalletPassword()}
                                                     onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
                                                     onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
                                                 />
                                             </div>
 
-                                            <p class="text-[10px] text-gray-500 text-center uppercase tracking-widest font-bold">
-                                                <ShieldCheck class="w-3 h-3 inline mr-1 text-green-500" />
-                                                This password is never sent to our servers.
-                                            </p>
+                                            <div class="flex items-center justify-center gap-2">
+                                                <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
+                                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                                                    Encrypted Locally. AES-256 GCM.
+                                                </p>
+                                            </div>
                                         </div>
 
                                         <div class="flex gap-3">

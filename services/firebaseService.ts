@@ -670,11 +670,36 @@ export const getUserPurchases = async (email: string): Promise<VcnPurchase[]> =>
     const emailLower = email.toLowerCase().trim();
     const purchasesCollection = collection(db, 'vcn_purchases');
 
-    // Performance Optimized Firestore Query - Check both cases
+    // 1. Get from vcn_purchases
     const q = query(purchasesCollection, where('email', 'in', [emailLower, email]));
     const snapshot = await getDocs(q);
+    const purchases = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VcnPurchase));
 
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VcnPurchase));
+    // 2. Fallback to token_sales (Integration for CSV-uploaded data)
+    const saleRef = doc(db, 'token_sales', emailLower);
+    const saleSnap = await getDoc(saleRef);
+    if (saleSnap.exists()) {
+        const saleData = saleSnap.data() as TokenSaleEntry;
+
+        // Prevent duplication if it already exists in vcn_purchases
+        const isDuplicate = purchases.some(p => Math.abs(p.amount - saleData.amountToken) < 0.01);
+
+        if (!isDuplicate) {
+            purchases.push({
+                id: 'sale_' + emailLower,
+                email: saleData.email,
+                amount: saleData.amountToken,
+                purchaseDate: saleData.date,
+                initialUnlockRatio: saleData.unlockRatio,
+                cliffMonths: 0, // CSV doesn't have cliff currently
+                vestingMonths: saleData.vestingPeriod,
+                status: 'active',
+                createdAt: saleData.date || new Date().toISOString()
+            });
+        }
+    }
+
+    return purchases;
 };
 
 export const activateVesting = async (purchaseId: string, contractAddress: string): Promise<void> => {
