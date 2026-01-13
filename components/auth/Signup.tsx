@@ -129,8 +129,7 @@ export default function Signup() {
                                     value={email()}
                                     onInput={(e) => setEmail(e.currentTarget.value)}
                                     placeholder="your@email.com"
-                                    class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20"
-                                    style={{ "padding-left": "3.5rem" }}
+                                    class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
                                     required
                                 />
                             </div>
@@ -146,8 +145,7 @@ export default function Signup() {
                                     value={password()}
                                     onInput={(e) => setPassword(e.currentTarget.value)}
                                     placeholder="Enter your password"
-                                    class="w-full py-4 pl-14 pr-12 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20"
-                                    style={{ "padding-left": "3.5rem" }}
+                                    class="w-full py-4 pl-14 pr-12 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
                                     required
                                 />
                                 <button
@@ -172,8 +170,7 @@ export default function Signup() {
                                     value={confirmPassword()}
                                     onInput={(e) => setConfirmPassword(e.currentTarget.value)}
                                     placeholder="Re-enter your password"
-                                    class="w-full py-4 pl-14 pr-12 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20"
-                                    style={{ "padding-left": "3.5rem" }}
+                                    class="w-full py-4 pl-14 pr-12 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
                                     required
                                 />
                                 <button
