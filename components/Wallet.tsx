@@ -2747,8 +2747,11 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             <span class="text-[13px] font-bold text-gray-400">Recovery Phrase</span>
                                                             <button
                                                                 onClick={() => {
-                                                                    if (seedPhrase().length === 0) generateSeedPhrase();
-                                                                    setShowSeed(!showSeed());
+                                                                    if (seedPhrase().length === 0) {
+                                                                        generateSeedPhrase();
+                                                                    } else {
+                                                                        setShowSeed(!showSeed());
+                                                                    }
                                                                 }}
                                                                 class="flex items-center gap-2 text-blue-400 text-[13px] font-bold hover:text-blue-300 transition-colors"
                                                             >
