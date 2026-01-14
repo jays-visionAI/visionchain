@@ -2103,6 +2103,85 @@
       "artifacts": [
         "IERC721Metadata"
       ]
+    },
+    "/Users/sangjaeseo/Antigravity/Vision-Chain/blockchain/contracts/interop/VisionVault.sol": {
+      "lastModificationDate": 1768398039154,
+      "contentHash": "b8022431432052cfcf9f1c808abc60c0",
+      "sourceName": "contracts/interop/VisionVault.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/access/AccessControl.sol",
+        "@openzeppelin/contracts/token/ERC20/IERC20.sol",
+        "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "VisionVault"
+      ]
+    },
+    "/Users/sangjaeseo/Antigravity/Vision-Chain/blockchain/contracts/interop/VisionEqualizer.sol": {
+      "lastModificationDate": 1768398022670,
+      "contentHash": "9b2202f49d4f9eddf9984d64f843c560",
+      "sourceName": "contracts/interop/VisionEqualizer.sol",
+      "solcConfig": {
+        "version": "0.8.20",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/access/AccessControl.sol",
+        "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.20"
+      ],
+      "artifacts": [
+        "VisionEqualizer"
+      ]
     }
   }
 }

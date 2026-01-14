@@ -31,7 +31,7 @@ module.exports = {
   solidity: "0.8.24",
   networks: {
     hardhat: {
-      chainId: 31337,
+      chainId: 3151909,
       mining: {
         auto: true,
         interval: 1000

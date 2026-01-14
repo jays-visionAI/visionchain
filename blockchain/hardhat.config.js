@@ -30,7 +30,7 @@ module.exports = {
         },
         // Vision Chain Custom Testnet v1 (New)
         vision_v1: {
-            url: "http://127.0.0.1:8545",
+            url: "http://46.224.221.201:8545",
             chainId: 3151909,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
         }

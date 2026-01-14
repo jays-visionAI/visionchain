@@ -3,6 +3,8 @@ import NodeLicenseABI from './abi/VisionNodeLicense.json';
 import MiningPoolABI from './abi/VisionMiningPool.json';
 import VCNTokenABI from './abi/VCNToken.json';
 import VCNVestingABI from './abi/VCNVesting.json';
+import VisionEqualizerABI from './abi/VisionEqualizer.json';
+import VisionVaultABI from './abi/VisionVault.json';
 
 const ADDRESSES = {
     // Vision Chain Custom Testnet v1 (Chain ID: 3151909)
@@ -13,8 +15,13 @@ const ADDRESSES = {
 
     // Legacy / Other
     // Vision Chain RPC Endpoint
-    RPC_URL: "https://tdstest.visionchain.bk.simplyfi.tech/rpc", // Fallback to public testnet
-    LOCAL_RPC: "http://127.0.0.1:8545"
+    RPC_URL: "http://46.224.221.201:8545", // Custom Testnet v1
+    LOCAL_RPC: "http://46.224.221.201:8545",
+    SEQUENCER_URL: "http://46.224.221.201:3000/rpc/submit",
+
+    // Interoperability (Equalizer Model)
+    VISION_EQUALIZER: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
 };
 
 export class ContractService {
@@ -26,6 +33,8 @@ export class ContractService {
     public miningPool: Contract | null = null;
     public vcnToken: Contract | null = null;
     public vcnVesting: Contract | null = null;
+    public visionEqualizer: Contract | null = null;
+    public visionVault: Contract | null = null;
 
     constructor() { }
 
@@ -77,6 +86,53 @@ export class ContractService {
         this.miningPool = new ethers.Contract(ADDRESSES.MINING_POOL, MiningPoolABI.abi, signerOrProvider);
         this.vcnToken = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, signerOrProvider);
         this.vcnVesting = new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, signerOrProvider);
+
+        // Interop Contracts
+        this.visionEqualizer = new ethers.Contract(ADDRESSES.VISION_EQUALIZER, VisionEqualizerABI.abi, signerOrProvider);
+        this.visionVault = new ethers.Contract(ADDRESSES.VISION_VAULT_SEPOLIA_MOCK, VisionVaultABI.abi, signerOrProvider);
+    }
+
+    // --- Interoperability Functions ---
+    async bridgeAsset(amount: string, destinationChainId: number) {
+        // This is a simplified "Deposit to Vault" flow for the demo
+        if (!this.visionVault || !this.vcnToken) throw new Error("Interop contracts not ready");
+
+        const amountWei = ethers.parseEther(amount);
+
+        // 1. Approve Vault
+        const approveTx = await this.vcnToken.approve(ADDRESSES.VISION_VAULT_SEPOLIA_MOCK, amountWei);
+        await approveTx.wait();
+
+        // 2. Deposit to Vault (Lock)
+        const tx = await this.visionVault.depositToVision(amountWei, destinationChainId);
+        return await tx.wait();
+    }
+
+    async submitToSequencer(signedTx: string, chainId: number = 3151909) {
+        try {
+            const response = await fetch(ADDRESSES.SEQUENCER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chainId,
+                    signedTx,
+                    type: 'evm'
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Sequencer Error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log("🚀 Submitted to Sequencer:", data);
+            return data;
+        } catch (error) {
+            console.error("Failed to submit to sequencer:", error);
+            throw error;
+        }
     }
 
     async purchaseLicense(uuid: string, tier: 'Validator' | 'Enterprise') {
@@ -130,6 +186,24 @@ export class ContractService {
         } else {
             throw new Error(`Token ${tokenSymbol} transfer not implemented in this demo.`);
         }
+    }
+
+    async fastTransfer(to: string, amount: string) {
+        if (!this.signer || !this.signer.signTransaction) {
+            throw new Error("Internal Wallet required for Fast Transfer (Sequencer)");
+        }
+
+        const amountWei = ethers.parseUnits(amount, 18);
+
+        // Populate transaction without sending
+        const txRequest = await this.vcnToken!.transfer.populateTransaction(to, amountWei);
+
+        // Internal Wallet Sign
+        const signedTx = await this.signer.signTransaction(txRequest);
+
+        // Submit to Shared Sequencer
+        const mysubmission = await this.submitToSequencer(signedTx);
+        return mysubmission;
     }
 
     // --- Admin Functions ---
