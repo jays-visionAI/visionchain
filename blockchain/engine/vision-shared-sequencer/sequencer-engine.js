@@ -1,9 +1,29 @@
 require('dotenv').config();
 const { Kafka } = require('kafkajs');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
 const KAFKA_BROKERS = [process.env.KAFKA_BROKER || '46.224.221.201:9092'];
 const GROUP_ID = 'vision-shared-sequencer-group';
 const BATCH_INTERVAL_MS = 500; // Build a block every 500ms (High Throughput)
+
+// SQLite Setup
+const dbPath = path.resolve(__dirname, 'sequencer.db');
+const db = new sqlite3.Database(dbPath);
+
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS transactions (
+        hash TEXT PRIMARY KEY,
+        chainId INTEGER,
+        type TEXT,
+        from_addr TEXT,
+        to_addr TEXT,
+        value TEXT,
+        timestamp INTEGER,
+        metadata_json TEXT,
+        status TEXT DEFAULT 'sequenced'
+    )`);
+});
 
 const kafka = new Kafka({
     clientId: 'vision-shared-sequencer-engine',
@@ -28,12 +48,32 @@ const connectEngine = async () => {
         consumer.run({
             eachMessage: async ({ topic, partition, message }) => {
                 const payload = JSON.parse(message.value.toString());
-                const { chainId, signedTx } = payload;
+                const { chainId, signedTx, type, timestamp, metadata } = payload;
 
+                // 1. Buffer for Batching
                 if (!mempool[chainId]) mempool[chainId] = [];
                 mempool[chainId].push(payload);
 
-                console.log(`📥 [Chain ${chainId}] Buffered Tx. Pool Size: ${mempool[chainId].length}`);
+                // 2. Persist to SQLite (VisionScan Indexing)
+                // In a real system, we'd extract from/to from signedTx. 
+                // For this demo, we assume metadata or basic parsing.
+                const mockHash = '0x' + Math.random().toString(16).slice(2, 12) + '...'; // Mock Hash for non-EVM demo
+
+                const stmt = db.prepare(`INSERT OR REPLACE INTO transactions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                stmt.run(
+                    mockHash,
+                    chainId,
+                    type || 'S200',
+                    metadata?.from || '0xUser',
+                    metadata?.to || '0xSystem',
+                    metadata?.value || '0',
+                    timestamp || Date.now(),
+                    JSON.stringify(metadata || {}),
+                    'sequenced'
+                );
+                stmt.finalize();
+
+                console.log(`📥 [Chain ${chainId}] Buffered & Indexed. Pool: ${mempool[chainId].length}`);
             },
         });
 

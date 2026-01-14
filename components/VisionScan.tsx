@@ -38,154 +38,6 @@ import {
 import { ethers } from 'ethers';
 import LightSpeedBackground from './LightSpeedBackground';
 
-// Mock Blockchain Data
-const latestBlocks = [
-    { number: '18,482,931', miner: 'Vision Node #4', txs: 142, time: '12s ago', reward: '2.14 VCN' },
-    { number: '18,482,930', miner: 'Starlight Prime', txs: 89, time: '24s ago', reward: '1.98 VCN' },
-    { number: '18,482,929', miner: 'Vision Node #12', txs: 215, time: '36s ago', reward: '3.42 VCN' },
-];
-
-const mockTransactions = [
-    {
-        hash: '0x3a2b...f910',
-        type: 'S200',
-        method: 'Swap',
-        from: '0x7F3A...BE29',
-        to: 'Uniswap V3',
-        value: '14.5 ETH',
-        time: '2m ago',
-        status: 'completed',
-        asset: 'ETH/USDC',
-        direction: 'out',
-        counterparty: 'Uniswap',
-        timestamp: new Date().getTime() - 120000,
-        confidence: 98,
-        trustStatus: 'tagged',
-        path: ['Ethereum', 'Vision Chain'],
-        accountingBasis: 'Accrual',
-        taxCategory: 'Taxable',
-        netEffect: [
-            { asset: 'ETH', amount: '+14.5', type: 'debit' },
-            { asset: 'USDC', amount: '-29,400', type: 'credit' }
-        ],
-        journalEntries: [
-            { account: 'DigitalAssets:ETH', amount: '14.50', type: 'Dr' },
-            { account: 'DigitalAssets:USDC', amount: '29,400.00', type: 'Cr' },
-            { account: 'Expense:Gas', amount: '0.0042', type: 'Dr' },
-            { account: 'Cash:Native', amount: '0.0042', type: 'Cr' }
-        ],
-        fees: { gas: 0.0042, protocol: 0 }
-    },
-    {
-        hash: '0x9dE2...4A1B',
-        type: 'A110',
-        method: 'Transfer',
-        from: 'Binance',
-        to: '0x3C1F...8B02',
-        value: '50,000 VCN',
-        time: '5m ago',
-        status: 'completed',
-        asset: 'VCN',
-        direction: 'in',
-        counterparty: 'Binance',
-        timestamp: new Date().getTime() - 300000,
-        confidence: 95,
-        trustStatus: 'attested',
-        path: ['Vision Chain'],
-        accountingBasis: 'Cash',
-        taxCategory: 'Tax-Exempt',
-        netEffect: [
-            { asset: 'VCN', amount: '+50,000', type: 'debit' }
-        ],
-        journalEntries: [
-            { account: 'DigitalAssets:VCN', amount: '50,000.00', type: 'Dr' },
-            { account: 'Equity:Revenue', amount: '50,000.00', type: 'Cr' }
-        ],
-        fees: { gas: 0.0001, protocol: 0 }
-    },
-    {
-        hash: '0x1A2B...3C4D',
-        type: 'R500',
-        method: 'Claim',
-        from: 'Staking Pool',
-        to: '0x5E6F...7G8H',
-        value: '1,200 VCN',
-        time: '12m ago',
-        status: 'completed',
-        asset: 'VCN',
-        direction: 'in',
-        counterparty: 'Staking Pool',
-        timestamp: new Date().getTime() - 720000,
-        confidence: 85,
-        trustStatus: 'inferred',
-        path: ['Vision Chain'],
-        accountingBasis: 'Accrual',
-        taxCategory: 'Taxable',
-        netEffect: [
-            { asset: 'VCN', amount: '+1,200', type: 'debit' }
-        ],
-        journalEntries: [
-            { account: 'DigitalAssets:VCN', amount: '1,200.00', type: 'Dr' },
-            { account: 'Revenue:Rewards', amount: '1,200.00', type: 'Cr' }
-        ],
-        fees: { gas: 0.0002, protocol: 0 }
-    },
-    {
-        hash: '0x5E6F...7G8H',
-        type: 'B410',
-        method: 'Bridge In',
-        from: 'Arbitrum',
-        to: 'Vision Gateway',
-        value: '2.5 ETH',
-        time: '18m ago',
-        status: 'processing',
-        asset: 'ETH',
-        direction: 'in',
-        counterparty: 'Arbitrum',
-        timestamp: new Date().getTime() - 1080000,
-        confidence: 99,
-        trustStatus: 'tagged',
-        path: ['Arbitrum', 'Vision Chain'],
-        accountingBasis: 'Accrual',
-        taxCategory: 'Non-Taxable',
-        netEffect: [
-            { asset: 'ETH', amount: '+2.5', type: 'debit' }
-        ],
-        journalEntries: [
-            { account: 'DigitalAssets:ETH', amount: '2.50', type: 'Dr' },
-            { account: 'Bridge:Transit', amount: '2.50', type: 'Cr' }
-        ],
-        fees: { gas: 0.0015, protocol: 0.0005 }
-    },
-    {
-        hash: '0xBE29...7F3A',
-        type: 'D600',
-        method: 'Stake',
-        from: '0x7F3A...BE29',
-        to: 'Vision Staking',
-        value: '10,000 VCN',
-        time: '25m ago',
-        status: 'completed',
-        asset: 'VCN',
-        direction: 'out',
-        counterparty: 'Vision Staking',
-        timestamp: new Date().getTime() - 1500000,
-        confidence: 99,
-        trustStatus: 'tagged',
-        path: ['Vision Chain'],
-        accountingBasis: 'Cash',
-        taxCategory: 'Non-Taxable',
-        netEffect: [
-            { asset: 'VCN', amount: '-10,000', type: 'credit' }
-        ],
-        journalEntries: [
-            { account: 'Asset:StakedVCN', amount: '10,000.00', type: 'Dr' },
-            { account: 'DigitalAssets:VCN', amount: '10,000.00', type: 'Cr' }
-        ],
-        fees: { gas: 0.0002, protocol: 0 }
-    }
-];
-
 const StatCard = (props: { label: string; value: string; subValue?: string; icon: JSX.Element }) => (
     <div class="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
         <div class="flex items-center gap-3 text-gray-500 mb-2">
@@ -203,8 +55,22 @@ const StatCard = (props: { label: string; value: string; subValue?: string; icon
     </div>
 );
 
+// Fallback / Mock Data
+const latestBlocks = [
+    { number: '18,482,931', miner: 'Vision Node #4', txs: 142, time: '12s ago', reward: '2.14 VCN' },
+    { number: '18,482,930', miner: 'Starlight Prime', txs: 89, time: '24s ago', reward: '1.98 VCN' },
+    { number: '18,482,929', miner: 'Vision Node #12', txs: 215, time: '36s ago', reward: '3.42 VCN' },
+];
+
 export default function VisionScan() {
+    // UI State
     const [view, setView] = createSignal<'blockchain' | 'accounting'>('accounting');
+    const [drawerTab, setDrawerTab] = createSignal<'overview' | 'accounting' | 'path' | 'evidence' | 'audit'>('overview');
+    const [isExportModalOpen, setIsExportModalOpen] = createSignal(false);
+    const [isExporting, setIsExporting] = createSignal(false);
+    const [selectedTx, setSelectedTx] = createSignal<any>(null);
+
+    // Filters
     const [typeFilter, setTypeFilter] = createSignal('All');
     const [periodFilter, setPeriodFilter] = createSignal('All Time');
     const [directionFilter, setDirectionFilter] = createSignal('All');
@@ -212,62 +78,21 @@ export default function VisionScan() {
     const [basisFilter, setBasisFilter] = createSignal('All');
     const [taxFilter, setTaxFilter] = createSignal('All');
     const [confidenceThreshold, setConfidenceThreshold] = createSignal(0);
-    const [isExporting, setIsExporting] = createSignal(false);
-    const [isExportModalOpen, setIsExportModalOpen] = createSignal(false);
-    const [selectedTx, setSelectedTx] = createSignal<any>(null);
-    const [drawerTab, setDrawerTab] = createSignal<'overview' | 'accounting' | 'path' | 'evidence' | 'audit'>('overview');
 
-    // Live Blockchain State
+    // Blockchain Stats
     const [blockHeight, setBlockHeight] = createSignal<string>('0');
     const [gasPrice, setGasPrice] = createSignal<string>('0');
     const [blocks, setBlocks] = createSignal<any[]>([]);
     const [isLive, setIsLive] = createSignal(false);
 
-    const provider = new ethers.JsonRpcProvider("http://localhost:8545");
+    // API Data (Live Sequencer)
+    const [transactions, setTransactions] = createSignal<any[]>([]);
+    const [isLoading, setIsLoading] = createSignal(false);
+    const API_URL = "http://46.224.221.201:3000/api/transactions";
+    const RPC_URL = "http://46.224.221.201:8545";
 
-    const fetchLiveStats = async () => {
-        try {
-            const height = await provider.getBlockNumber();
-            setBlockHeight(height.toLocaleString());
-
-            const feeData = await provider.getFeeData();
-            if (feeData.gasPrice) {
-                setGasPrice((Number(ethers.formatUnits(feeData.gasPrice, 'gwei'))).toFixed(2));
-            }
-
-            // Fetch last 5 blocks
-            const blockPromises = [];
-            for (let i = 0; i < 5; i++) {
-                blockPromises.push(provider.getBlock(height - i));
-            }
-            const blockResults = await Promise.all(blockPromises);
-            setBlocks(blockResults.map(b => ({
-                number: b?.number.toLocaleString(),
-                miner: 'Vision Node',
-                txs: b?.transactions.length,
-                time: 'Just now',
-                reward: '2.0 VCN'
-            })));
-            setIsLive(true);
-        } catch (error) {
-            console.error("RPC Connection Error:", error);
-            setIsLive(false);
-        }
-    };
-
-    // Polling for live data
-    let timer: any;
-    const startPolling = () => {
-        fetchLiveStats();
-        timer = setInterval(fetchLiveStats, 3000); // 3s block time simulation
-    };
-
-    startPolling();
-
-    const handleExport = () => {
-        setIsExportModalOpen(true);
-    };
-
+    // Functions
+    const handleExport = () => setIsExportModalOpen(true);
     const runExport = () => {
         setIsExporting(true);
         setTimeout(() => {
@@ -276,29 +101,83 @@ export default function VisionScan() {
         }, 2000);
     };
 
-    const filteredTransactions = createMemo(() => {
-        return mockTransactions.filter(tx => {
-            const matchesType = typeFilter() === 'All' || tx.type === typeFilter();
-            const matchesDirection = directionFilter() === 'All' || tx.direction === directionFilter().toLowerCase();
-            const matchesCounterparty = counterpartyFilter() === 'All' || tx.counterparty === counterpartyFilter();
-            const matchesBasis = basisFilter() === 'All' || tx.accountingBasis === basisFilter();
-            const matchesTax = taxFilter() === 'All' || tx.taxCategory === taxFilter();
-            const matchesConfidence = tx.confidence >= confidenceThreshold();
+    const fetchTransactions = async () => {
+        setIsLoading(true);
+        try {
+            const params = new URLSearchParams();
+            if (typeFilter() !== 'All') params.append('type', typeFilter());
+            // Add other filters as query params if backend supports them, or filter client-side if needed headers
+            // For now backend only supports type, from, to. 
+            // We fetch 50 and let client logic handle some display formatting.
 
-            // Period filtering logic
-            let matchesPeriod = true;
-            const now = new Date().getTime();
-            if (periodFilter() === 'Last 24h') {
-                matchesPeriod = (now - tx.timestamp) <= 24 * 60 * 60 * 1000;
-            } else if (periodFilter() === 'Last 7d') {
-                matchesPeriod = (now - tx.timestamp) <= 7 * 24 * 60 * 60 * 1000;
-            } else if (periodFilter() === 'Last 30d') {
-                matchesPeriod = (now - tx.timestamp) <= 30 * 24 * 60 * 60 * 1000;
+            const response = await fetch(`${API_URL}?${params.toString()}&limit=50`);
+            const data = await response.json();
+
+            const formatted = data.map((tx: any) => ({
+                hash: tx.hash,
+                type: tx.type,
+                method: tx.metadata?.method || 'Unknown',
+                from: tx.from_addr,
+                to: tx.to_addr,
+                value: tx.value,
+                time: new Date(tx.timestamp).toLocaleTimeString(),
+                status: 'completed', // Sequenced = completed for now
+                asset: 'VCN',
+                direction: 'out', // Simplified
+                counterparty: tx.metadata?.counterparty || 'Unknown',
+                timestamp: tx.timestamp,
+                confidence: tx.metadata?.confidence || 100,
+                trustStatus: tx.metadata?.trustStatus || 'inferred',
+                path: ['Vision Chain'],
+                accountingBasis: tx.metadata?.accountingBasis || 'Cash',
+                taxCategory: tx.metadata?.taxCategory || 'N/A',
+                netEffect: tx.metadata?.netEffect || [],
+                journalEntries: tx.metadata?.journalEntries || [],
+                fees: { gas: 0.0001, protocol: 0 }
+            }));
+
+            setTransactions(formatted);
+        } catch (error) {
+            console.error("Failed to fetch transactions:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchLiveStats = async () => {
+        try {
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const height = await provider.getBlockNumber();
+            setBlockHeight(height.toLocaleString());
+            const feeData = await provider.getFeeData();
+            if (feeData.gasPrice) {
+                setGasPrice((Number(ethers.formatUnits(feeData.gasPrice, 'gwei'))).toFixed(2));
             }
+            setIsLive(true);
+        } catch (error) {
+            console.warn("RPC Connection Error (Stats):", error);
+            setIsLive(false);
+        }
+    };
 
-            return matchesType && matchesDirection && matchesCounterparty && matchesPeriod && matchesBasis && matchesTax && matchesConfidence;
-        });
+    // Auto-fetch effects
+    createMemo(() => {
+        fetchTransactions();
+        typeFilter(); // dependency
+        periodFilter(); // dependency
     });
+
+    const startPolling = () => {
+        fetchLiveStats();
+        setInterval(() => {
+            fetchTransactions();
+            fetchLiveStats();
+        }, 5000);
+    };
+
+    startPolling();
+
+    const filteredTransactions = transactions; // Direct mapping as API handles basics
 
     return (
         <div class="bg-black min-h-screen text-white pt-20">
