@@ -466,6 +466,7 @@ const Wallet = (): JSX.Element => {
                 } else {
                     // Force onboarding if no wallet exists - Redirect to mnemonic generation flow
                     setOnboardingStep(1);
+                    setActiveView('profile');
                 }
             } else {
                 // No profile data found in database, but maybe user exists in Auth
@@ -476,6 +477,7 @@ const Wallet = (): JSX.Element => {
                     setUserProfile(prev => ({ ...prev, isVerified: true, address: localAddress || '' }));
                 } else {
                     setOnboardingStep(1);
+                    setActiveView('profile');
                 }
             }
         } catch (error) {
@@ -488,6 +490,13 @@ const Wallet = (): JSX.Element => {
     createEffect(() => {
         if (!auth.loading() && !auth.user()) {
             navigate('/login', { replace: true });
+        }
+    });
+
+    // Enforce Onboarding View Integrity
+    createEffect(() => {
+        if (onboardingStep() > 0 && activeView() !== 'profile') {
+            setActiveView('profile');
         }
     });
 
@@ -905,9 +914,12 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
     ];
 
     return (
-        <Show when={!auth.loading()} fallback={
-            <div class="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
-                <div class="animate-spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+        <Show when={!auth.loading() && !isLoading()} fallback={
+            <div class="fixed inset-0 bg-[#0a0a0b] flex items-center justify-center z-[100]">
+                <div class="flex flex-col items-center gap-4">
+                    <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+                    <div class="text-white text-sm font-bold tracking-widest animate-pulse">LOADING WALLET</div>
+                </div>
             </div>
         }>
             <section class="bg-[#0a0a0b] min-h-screen pt-14 flex overflow-hidden">
@@ -940,7 +952,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             animate={{ x: 0, opacity: 1 }}
                             exit={{ x: -280, opacity: 0 }}
                             transition={{ duration: 0.3, easing: [0.25, 0.1, 0.25, 1] }}
-                            class="w-[280px] h-[calc(100vh-56px)] bg-[#111113]/95 lg:bg-[#111113]/80 backdrop-blur-2xl border-r border-white/[0.06] flex flex-col fixed left-0 top-14 z-40 lg:z-30 shadow-2xl lg:shadow-none"
+                            class="w-[280px] h-[calc(100vh-56px)] bg-[#111113]/95 lg:bg-[#111113]/80 backdrop-blur-2xl border-r border-white/[0.06] flex flex-col fixed left-0 top-14 z-40 lg:z-30 shadow-2xl lg:shadow-none overflow-y-auto"
                         >
                             {/* Logo Area */}
                             <div class="p-5 border-b border-white/[0.06] flex items-center justify-between">

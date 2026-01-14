@@ -180,16 +180,17 @@ const Navbar = (): JSX.Element => {
               </a>
             </Show>
 
-            {/* Mobile Menu Toggle */}
+            {/* Mobile Menu Toggle (Commented out) 
             <button
-              class="md:hidden p-2 text-[#e8e8ed] hover:text-white hover:bg-white/10 rounded-full transition-colors"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen())}
-              aria-label={mobileMenuOpen() ? "Close menu" : "Open menu"}
-            >
-              <Show when={mobileMenuOpen()} fallback={<Menu class="w-6 h-6" />}>
-                <X class="w-6 h-6" />
-              </Show>
-            </button>
+               class="md:hidden p-2 text-[#e8e8ed] hover:text-white hover:bg-white/10 rounded-full transition-colors"
+               onClick={() => setMobileMenuOpen(!mobileMenuOpen())}
+               aria-label={mobileMenuOpen() ? "Close menu" : "Open menu"}
+             >
+               <Show when={mobileMenuOpen()} fallback={<Menu class="w-6 h-6" />}>
+                 <X class="w-6 h-6" />
+               </Show>
+             </button>
+            */}
           </div>
         </div>
       </Motion.nav>
