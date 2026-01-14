@@ -25,6 +25,7 @@ const TermsOfService = lazy(() => import('./components/TermsOfService'));
 const CookiePolicy = lazy(() => import('./components/CookiePolicy'));
 const Wallet = lazy(() => import('./components/Wallet'));
 const VisionScan = lazy(() => import('./components/VisionScan'));
+const TrafficSimulator = lazy(() => import('./components/TrafficSimulator'));
 const Testnet = lazy(() => import('./components/Testnet'));
 
 // Auth components
@@ -158,6 +159,11 @@ function CookiesPage() {
 function WalletPage() {
   document.title = 'Wallet | Vision Chain';
   return <div id="wallet"><Wallet /></div>;
+}
+
+function TrafficSimulatorPage() {
+  document.title = 'Simulation Hub | Vision Chain';
+  return <div id="traffic-sim"><TrafficSimulator /></div>;
 }
 
 function VisionScanPage() {
@@ -325,6 +331,7 @@ render(() => (
       <Route path="/terms" component={TermsPage} />
       <Route path="/cookies" component={CookiesPage} />
       <Route path="/wallet" component={WalletPage} />
+      <Route path="/trafficsim" component={TrafficSimulatorPage} />
       <Route path="/visionscan" component={VisionScanPage} />
       <Route path="/testnet" component={TestnetPage} />
       {/* Admin Routes */}

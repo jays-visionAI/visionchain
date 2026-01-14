@@ -245,7 +245,7 @@ const Applications = (): JSX.Element => {
         </div>
 
         {/* Bottom Row */}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
           <BentoCard
             title="Secure Identity"
             subtitle="Cryptographic provenance (DID) for AI models."
@@ -267,6 +267,60 @@ const Applications = (): JSX.Element => {
             class="min-h-[260px]"
             visual="storage"
           />
+        </div>
+
+        {/* Developer & Testing Section */}
+        <div class="mt-32 pt-20 border-t border-white/5">
+          <div class="flex flex-col md:flex-row justify-between items-end gap-8 mb-16">
+            <div class="max-w-xl">
+              <span class="text-blue-500 font-semibold tracking-wide uppercase text-xs mb-3 block">Developer Hub</span>
+              <h2 class="text-3xl md:text-5xl font-semibold text-white tracking-tight mb-4">Labs & Testing.</h2>
+              <p class="text-gray-400 font-medium leading-relaxed">
+                Advanced environment for stress testing, auditing, and simulating mass economic interactions
+                before mainnet deployment.
+              </p>
+            </div>
+            <a href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
+              <span class="text-sm font-bold text-white uppercase tracking-widest">Enter Developer Console</span>
+              <ArrowUpRight class="w-4 h-4 text-blue-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+            </a>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <a href="/trafficsim" class="group block">
+              <div class="bg-gradient-to-br from-blue-600/20 to-transparent border border-blue-500/20 rounded-[40px] p-10 h-full hover:border-blue-500/40 transition-all">
+                <div class="flex justify-between items-start mb-10">
+                  <div class="w-16 h-16 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                    <Activity class="w-8 h-8" />
+                  </div>
+                  <span class="px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-black text-blue-400 uppercase tracking-widest">Independent Module</span>
+                </div>
+                <h3 class="text-3xl font-black italic text-white mb-4 group-hover:text-blue-300 transition-colors">TRAFFIC SIMULATOR</h3>
+                <p class="text-gray-400 font-medium leading-relaxed mb-8">
+                  Generate high-frequency synthetic transactions, manage randomized wallet generations,
+                  and stress test the cross-chain equalizer logic under extreme conditions.
+                </p>
+                <div class="flex items-center gap-2 text-blue-500 font-bold uppercase text-xs tracking-widest">
+                  Launch Sim Dashboard
+                  <ArrowUpRight class="w-4 h-4" />
+                </div>
+              </div>
+            </a>
+
+            <div class="bg-white/[0.02] border border-white/5 rounded-[40px] p-10 h-full flex flex-col justify-center relative overflow-hidden group">
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div class="relative z-10">
+                <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 mb-10">
+                  <ShieldCheck class="w-8 h-8" />
+                </div>
+                <h3 class="text-3xl font-black italic text-white/40 mb-4 tracking-tighter uppercase line-through decoration-blue-500/50">Audit Protocol</h3>
+                <p class="text-gray-600 font-medium leading-relaxed italic">
+                  Advanced automated audit compliance module.
+                  (Coming soon to Phase 6)
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>
