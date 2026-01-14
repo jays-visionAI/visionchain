@@ -38,7 +38,8 @@ import {
     Download,
     AlertTriangle,
     Info,
-    ShieldCheck
+    ShieldCheck,
+    LogOut
 } from 'lucide-solid';
 import {
     updateWalletStatus,
@@ -463,10 +464,8 @@ const Wallet = (): JSX.Element => {
                         address: finalAddress || prev.address
                     }));
                 } else {
-                    // No wallet anywhere AND we are in profile view, show step 1
-                    if (activeView() === 'profile' || onboardingStep() > 0) {
-                        setOnboardingStep(1);
-                    }
+                    // Force onboarding if no wallet exists - Redirect to mnemonic generation flow
+                    setOnboardingStep(1);
                 }
             } else {
                 // No profile data found in database, but maybe user exists in Auth
@@ -476,7 +475,7 @@ const Wallet = (): JSX.Element => {
                     setOnboardingStep(0);
                     setUserProfile(prev => ({ ...prev, isVerified: true, address: localAddress || '' }));
                 } else {
-                    setOnboardingStep(0);
+                    setOnboardingStep(1);
                 }
             }
         } catch (error) {
@@ -583,7 +582,7 @@ const Wallet = (): JSX.Element => {
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
-            'VCN': { name: 'Vision Chain', price: 0.37 },
+            'VCN': { name: 'Vision Chain', price: 0.375 },
             'ETH': { name: 'Ethereum', price: 3200.00 },
             'USDC': { name: 'USDC', price: 1.00 }
         };
@@ -1010,6 +1009,13 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             {/* Wallet Card */}
                             <div class="p-4 border-t border-white/[0.06]">
                                 <div class="relative overflow-hidden p-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-2xl border border-white/[0.06]">
+                                    <button
+                                        onClick={() => auth.logout()}
+                                        class="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors z-20"
+                                        title="Logout"
+                                    >
+                                        <LogOut class="w-3.5 h-3.5" />
+                                    </button>
                                     <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl" />
                                     <div class="relative flex items-center gap-3">
                                         <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
