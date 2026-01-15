@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # Node 1: Bootnode & Primary RPC
+  node-1:
+    image: ethereum/client-go:latest
+    container_name: vision-node-1
+    ports:
+      - "8545:8545"   # RPC
+      - "30303:30303" # P2P
+    volumes:
+      - ./deploy/v2-testnet/node1:/root/.ethereum
+    command: >
+      --networkid 3151909
+      --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,clique"
+      --nodiscover
+      --allow-insecure-unlock
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '0.5'
+
+  # Node 2: Validator 1
+  node-2:
+    image: ethereum/client-go:latest
+    container_name: vision-node-2
+    ports:
+      - "8546:8545"   # RPC mapped to 8546
+      - "30304:30303" # P2P mapped to 30304
+    volumes:
+      - ./deploy/v2-testnet/node2:/root/.ethereum
+    command: >
+      --networkid 3151909
+      --http --http.addr "0.0.0.0" --http.port 8545
+      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.25'
+
+  # Node 3: Validator 2
+  node-3:
+    image: ethereum/client-go:latest
+    container_name: vision-node-3
+    ports:
+      - "8547:8545"
+      - "30305:30303"
+    volumes:
+      - ./deploy/v2-testnet/node3:/root/.ethereum
+    command: >
+      --networkid 3151909
+      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.25'
+
+  # Node 4: Validator 3
+  node-4:
+    image: ethereum/client-go:latest
+    container_name: vision-node-4
+    ports:
+      - "8548:8545"
+      - "30306:30303"
+    volumes:
+      - ./deploy/v2-testnet/node4:/root/.ethereum
+    command: >
+      --networkid 3151909
+      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.25'
+
+  # Node 5: Validator 4
+  node-5:
+    image: ethereum/client-go:latest
+    container_name: vision-node-5
+    ports:
+      - "8549:8545"
+      - "30307:30303"
+    volumes:
+      - ./deploy/v2-testnet/node5:/root/.ethereum
+    command: >
+      --networkid 3151909
+      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.25'
