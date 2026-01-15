@@ -13,7 +13,11 @@ import {
     Copy,
     CheckCircle2,
     Download,
-    Maximize2
+    Maximize2,
+    Activity,
+    ArrowUpRight,
+    Settings,
+    Info
 } from 'lucide-solid';
 
 const Testnet: Component = () => {
@@ -221,6 +225,61 @@ const Testnet: Component = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Developer & Testing Section (New) */}
+            <div class="max-w-6xl mx-auto px-4 mt-32 pt-20 border-t border-white/5">
+                <div class="flex flex-col md:flex-row justify-between items-end gap-8 mb-16">
+                    <div class="max-w-xl">
+                        <span class="text-blue-500 font-black tracking-widest uppercase text-[10px] mb-3 block">Developer Hub</span>
+                        <h2 class="text-3xl md:text-5xl font-black text-white italic tracking-tighter mb-4">Labs & Testing.</h2>
+                        <p class="text-slate-400 font-medium leading-relaxed">
+                            Advanced environment for stress testing, auditing, and simulating mass economic interactions
+                            before mainnet deployment.
+                        </p>
+                    </div>
+                    <A href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
+                        <span class="text-xs font-black text-white uppercase tracking-widest">Enter Developer Console</span>
+                        <ArrowUpRight class="w-4 h-4 text-blue-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    </A>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <A href="/trafficsim" class="group block">
+                        <div class="bg-gradient-to-br from-blue-600/20 to-transparent border border-blue-500/20 rounded-[40px] p-10 h-full hover:border-blue-500/40 transition-all">
+                            <div class="flex justify-between items-start mb-10">
+                                <div class="w-16 h-16 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
+                                    <Activity class="w-8 h-8" />
+                                </div>
+                                <span class="px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-black text-blue-400 uppercase tracking-widest">Independent Module</span>
+                            </div>
+                            <h3 class="text-3xl font-black italic text-white mb-4 group-hover:text-blue-300 transition-colors uppercase">TRAFFIC SIMULATOR</h3>
+                            <p class="text-slate-400 font-medium leading-relaxed mb-8 text-sm">
+                                Generate high-frequency synthetic transactions, manage randomized wallet generations,
+                                and stress test the cross-chain equalizer logic under extreme conditions v2.
+                            </p>
+                            <div class="flex items-center gap-2 text-blue-500 font-black uppercase text-[10px] tracking-[0.2em]">
+                                Launch Sim Dashboard
+                                <ArrowUpRight class="w-4 h-4" />
+                            </div>
+                        </div>
+                    </A>
+
+                    <div class="bg-white/[0.01] border border-white/5 rounded-[40px] p-10 h-full flex flex-col justify-center relative overflow-hidden group">
+                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div class="relative z-10">
+                            <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 mb-10">
+                                <ShieldCheck class="w-8 h-8" />
+                            </div>
+                            <h3 class="text-3xl font-black italic text-white/20 mb-4 tracking-tighter uppercase line-through decoration-blue-500/50">Audit Protocol</h3>
+                            <p class="text-gray-600 font-medium leading-relaxed italic text-sm">
+                                Advanced automated audit compliance module.
+                                (Coming soon to Phase 6)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
 
             {/* CTA Section */}
             <div class="max-w-4xl mx-auto px-4 mt-32 text-center pb-20">

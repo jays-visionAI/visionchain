@@ -2,6 +2,7 @@ import { createSignal, Show, Switch, Match, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import { Globe, Layers, Lock, Cpu, ArrowUpRight, ShieldCheck, HardDrive, Activity } from 'lucide-solid';
+import { A } from '@solidjs/router';
 
 interface CardVisualProps {
   type: string;
@@ -280,14 +281,14 @@ const Applications = (): JSX.Element => {
                 before mainnet deployment.
               </p>
             </div>
-            <a href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
+            <A href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
               <span class="text-sm font-bold text-white uppercase tracking-widest">Enter Developer Console</span>
               <ArrowUpRight class="w-4 h-4 text-blue-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-            </a>
+            </A>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <a href="/trafficsim" class="group block">
+            <A href="/trafficsim" class="group block">
               <div class="bg-gradient-to-br from-blue-600/20 to-transparent border border-blue-500/20 rounded-[40px] p-10 h-full hover:border-blue-500/40 transition-all">
                 <div class="flex justify-between items-start mb-10">
                   <div class="w-16 h-16 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
@@ -305,7 +306,7 @@ const Applications = (): JSX.Element => {
                   <ArrowUpRight class="w-4 h-4" />
                 </div>
               </div>
-            </a>
+            </A>
 
             <div class="bg-white/[0.02] border border-white/5 rounded-[40px] p-10 h-full flex flex-col justify-center relative overflow-hidden group">
               <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity" />
