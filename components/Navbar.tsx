@@ -169,16 +169,7 @@ const Navbar = (): JSX.Element => {
           {/* Right Actions */}
           <div class="flex items-center gap-4 z-50 relative">
             {/* Desktop Connect Button */}
-            <Show when={location.pathname !== '/wallet'}>
-              <a
-                href="https://wallet.visionchain.co/login"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="hidden md:block text-[#2997ff] hover:text-[#58acff] transition-colors cursor-pointer font-medium"
-              >
-                Connect
-              </a>
-            </Show>
+
 
             {/* Mobile Menu Toggle (Commented out) 
             <button
@@ -281,24 +272,7 @@ const Navbar = (): JSX.Element => {
               </For>
 
               {/* Mobile Connect Button */}
-              <Show when={location.pathname !== '/wallet'}>
-                <Motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  class="mt-8"
-                >
-                  <a
-                    href="https://wallet.visionchain.co/login"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-center justify-center gap-2 w-full py-4 bg-[#1d1d1f] border border-white/10 text-white rounded-xl font-medium text-[16px] hover:bg-[#2c2c2e] transition-colors"
-                  >
-                    <Wallet class="w-5 h-5 text-[#2997ff]" />
-                    Connect Wallet
-                  </a>
-                </Motion.div>
-              </Show>
+
             </div>
           </Motion.div>
         </Show>
