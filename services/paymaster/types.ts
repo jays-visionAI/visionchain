@@ -107,18 +107,108 @@ export interface DAppPaymasterInstance {
 
 export interface FeeQuote {
     quoteId: string;
+    routeId: string;           // e.g., keccak256("VCN/BASE")
     dappId: string;
     userId: string;
     chainId: number;
     tokenIn: string;
+    amountIn: bigint;          // Transfer request amount
+    baseCostNative: bigint;    // Destination gas cost in native
+    surchargeRateBps: number;  // 2000-5000 bps
     totalMaxTokenIn: bigint;
     baseCost: bigint;
     surcharge: bigint;
     buffer: bigint;
     expiry: number;
     status: 'PENDING' | 'EXECUTED' | 'SETTLED' | 'EXPIRED' | 'DECLINED';
+    declineReason?: string;    // CAP_EXCEEDED, POOL_PAUSED, OUT_OF_POLICY, etc.
 }
 
+// ============================================
+// EXPLORER INDEXING EVENT SCHEMA (PRD v1.1 §3)
+// ============================================
+
+/** FeeQuoted - Quote issuance proof */
+export interface FeeQuotedEvent {
+    quoteId: string;
+    routeId: string;
+    dappId: string;
+    userAddress: string;
+    tokenIn: string;
+    amountIn: bigint;
+    baseCostNative: bigint;
+    surchargeRateBps: number;
+    totalMaxTokenIn: bigint;
+    expiry: number;
+    timestamp: number;
+}
+
+/** FeeDeducted - Deduction from user/dApp pool */
+export interface FeeDeductedEvent {
+    quoteId: string;
+    tokenIn: string;
+    deductedAmount: bigint;
+    payerType: 'USER' | 'DAPP_POOL';
+    payerAddress: string;
+    timestamp: number;
+}
+
+/** SponsoredExecutionSubmitted - Destination tx relay proof */
+export interface SponsoredExecutionSubmittedEvent {
+    quoteId: string;
+    destChainId: number;
+    relayerAddress: string;
+    gasPayerAddress: string;  // Paymaster gas account
+    destTxHash?: string;
+    submissionId: string;
+    timestamp: number;
+}
+
+/** FeeSettled - Final cost confirmation and revenue */
+export interface FeeSettledEvent {
+    quoteId: string;
+    actualGasCostNative: bigint;
+    actualSurchargeNative: bigint;
+    actualSurchargeTokenIn: bigint;
+    refundTokenIn: bigint;
+    creditTokenIn: bigint;
+    revenueReceiver: string;  // Revenue vault address
+    timestamp: number;
+}
+
+/** PaymasterRebalanced - Pool top-up proof */
+export interface PaymasterRebalancedEvent {
+    routeId: string;
+    chainId: number;
+    amountNativeGasToken: bigint;
+    fromVault: string;
+    toGasAccount: string;
+    reasonCode: 'BATCH' | 'EMERGENCY';
+    jobId: string;
+    timestamp: number;
+}
+
+/** ModeChanged - State transition tracking */
+export interface ModeChangedEvent {
+    routeId: string;
+    chainId: number;
+    oldMode: PaymasterMode;
+    newMode: PaymasterMode;
+    reasonCode: string;  // e.g., 'LOW_BALANCE', 'GAS_SPIKE', 'MANUAL_PAUSE'
+    triggeredBy: 'SYSTEM' | 'ADMIN';
+    timestamp: number;
+}
+
+/** Union type for all Explorer events */
+export type ExplorerEvent =
+    | { type: 'FeeQuoted'; data: FeeQuotedEvent }
+    | { type: 'FeeDeducted'; data: FeeDeductedEvent }
+    | { type: 'SponsoredExecutionSubmitted'; data: SponsoredExecutionSubmittedEvent }
+    | { type: 'FeeSettled'; data: FeeSettledEvent }
+    | { type: 'PaymasterRebalanced'; data: PaymasterRebalancedEvent }
+    | { type: 'ModeChanged'; data: ModeChangedEvent };
+
+// Legacy PaymasterEvent (keep for backward compat)
 export interface PaymasterEvent {
     type: 'QUOTE' | 'DEDUCT' | 'EXECUTE' | 'SETTLE' | 'REBALANCE' | 'MODE_CHANGE';
     quoteId?: string;
@@ -129,3 +219,4 @@ export interface PaymasterEvent {
     reason?: string;
     timestamp: number;
 }
+

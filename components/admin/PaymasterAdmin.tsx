@@ -31,10 +31,15 @@ const PaymasterAdmin: Component = () => {
                 const V2_CHAIN: ChainConfig = {
                     chainId: 3151909,
                     name: 'Vision Testnet v2',
-                    rpcUrl: 'http://46.224.221.201:8545',
+                    rpcConfig: {
+                        primary: 'http://46.224.221.201:8545',
+                        nodeType: 'MANAGED'
+                    },
                     explorerUrl: 'http://46.224.221.201:8080',
                     nativeGasToken: 'VCN',
-                    status: 'Active'
+                    feeModel: 'LEGACY',
+                    finalityConfirmations: 10,
+                    status: 'ACTIVE_PUBLIC'
                 };
                 await AdminService.registerChain('system_auto', V2_CHAIN);
                 // Re-fetch
