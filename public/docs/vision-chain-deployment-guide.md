@@ -1,63 +1,87 @@
-# Vision Chain Deployment Guide
+# Vision Chain 2.0: Network-Agnostic AI-Native L1
+## Infrastructure & Developer Guideline (v2 Beta)
 
-이 가이드는 Vision Chain 프로젝트를 실제 인터넷 환경(Production)에 배포하는 방법을 설명합니다.
-
----
-
-## 🏗 아키텍처 개요
-1. **Frontend (Cloudflare Pages)**: 사용자 인터페이스 및 지갑 웹앱
-2. **Blockchain Node (Linux Server)**: Vision Testnet v1 (Hardhat Node)
+This document outlines the deployment and integration protocols for **Vision Chain 2.0**, featuring the high-speed Kafka-based sequencing engine, enterprise accounting metadata (VisionScan Beta), and automated stress testing modules.
 
 ---
 
-## 1. 프론트엔드 배포 (Cloudflare Pages)
+## 🏗 v2 Architecture Overview
 
-1. **GitHub 연동**:
-   - GitHub 레포지토리에 최신 소스를 Push합니다.
-2. **Cloudflare Pages 프로젝트 생성**:
-   - Cloudflare Dash에서 **Workers & Pages > Create application > Pages > Connect to Git**을 선택합니다.
-3. **빌드 설정**:
-   - **Framework preset**: `Vite`
-   - **Build command**: `npm run build`
-   - **Build output directory**: `dist`
-4. **환경 변수 설정**:
-   - `Settings > Variables and Secrets`에서 `.env` 파일에 있던 API 키들(`VITE_FIREBASE_API_KEY` 등)을 추가합니다.
+Vision Chain 2.0 moves beyond traditional L2 models to a **Network-Agnostic** liquid settlement layer:
+1.  **API Gateway (Ingestion)**: Receives signed transactions.
+2.  **Redpanda/Kafka (Ordering)**: Microsecond latency message queue for global transaction sequencing.
+3.  **Vision-Sequencer (Execution)**: Consumes batches from Kafka, executes state changes, and commits blocks.
+4.  **Metadata Vault (SQLite)**: Persistent storage for enterprise accounting metadata.
 
 ---
 
-## 2. 테스트넷 노드 배포 (Ubuntu/Linux Server)
+## 1. Core Infrastructure Deployment
 
-임시로 노드를 서버측에 구현하고 가동하는 방법입니다.
+### A. Shared Sequencer Engine (Remote Server)
+The engine is deployed on dedicated Linux infrastructure (`46.224.221.201`).
 
-1. **서버 준비**: AWS EC2 혹은 GCP Compute Engine (Ubuntu 22.04 추천, RAM 4GB 이상)
-2. **환경 구축**:
-   ```bash
-   # Node.js 설치
-   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-   sudo apt-get install -y nodejs
-   ```
-3. **코드 배포**:
-   ```bash
-   git clone [Your-Repo-URL]
-   cd Vision-Chain/blockchain
-   npm install
-   ```
-4. **노드 백그라운드 실행 (PM2 추천)**:
-   ```bash
-   sudo npm install -g pm2
-   # 노드 실행 및 Chain ID 설정 보존
-   pm2 start "npx hardhat node" --name vision-node
-   ```
-5. **컨트랙트 배포**:
-   ```bash
-   # 배포 스크립트 실행 (로컬 RPC 서버로)
-   npx hardhat run scripts/deploy.js --network localhost
-   ```
-6. **포트 개방**: 클라우드 보안 그룹에서 **8545** 포트(RPC)를 공개(0.0.0.0/0)로 설정합니다.
+*   **Deployment Script**: `deploy_sequencer.sh`
+*   **Action**: Syncs source code for the API and Engine, installs production dependencies, and manages services via PM2.
+*   **Command**:
+    ```bash
+    ./deploy_sequencer.sh
+    ```
+
+### B. Frontend & Explorer (Cloudflare Pages)
+The unified interface (Wallet + VisionScan + TrafficSim) is deployed via CI/CD.
+
+*   **Host**: `https://www.visionchain.co`
+*   **Build Preset**: Vite + Solid.js
+*   **Key Routes**:
+    *   `/visionscan`: V2 Accounting Explorer (Live Data via Sequencer API)
+    *   `/trafficsim`: Developer Simulation Hub
 
 ---
 
-## 3. Vision Scan v1 연동
+## 2. Shared Sequencer API (v2)
 
-노드가 서버에 올라가면, `http://[서버-IP]:8545`가 공식 RPC 주소가 됩니다.
-- 프론트엔드의 `contractService.ts`와 `index.tsx`에서 RPC URL을 이 주소로 업데이트하여 배포하면 **Vision Scan v1**이 실제 서버의 블록 데이터를 읽어오기 시작합니다.
+Developers can interact directly with the sequester for high-throughput applications.
+
+### Submit Transaction
+*   **Endpoint**: `POST /rpc/submit`
+*   **Payload**:
+    ```json
+    {
+      "chainId": 1001,
+      "signedTx": "0x...",
+      "type": "A110",
+      "metadata": {
+        "method": "Swap",
+        "taxCategory": "Taxable"
+      }
+    }
+    ```
+
+### Query Live Transactions (VisionScan Backend)
+*   **Endpoint**: `GET /api/transactions?limit=50&type=All`
+
+---
+
+## 3. Automated Stress Testing: Traffic Generator (v2)
+
+A new independent module for simulating mass adoption and verifying accounting logic.
+
+*   **Module Path**: `services/traffic-generator/`
+*   **Deployment**:
+    1.  Configure a funded **Master Faucet Key** in `.env`.
+    2.  The `deploy_sequencer.sh` script will automatically upload and start the `vision-traffic` service on the remote server.
+*   **Monitoring**: Access the **Admin Traffic HQ** at `/adminsystem/traffic` to manage the bot lifecycle.
+
+---
+
+## 4. VisionScan Beta: Accounting Integration
+
+VisionScan v2 is designed for "Audit-Grade" transparency.
+*   **Classification Codes**: Transactions are tagged with codes like `A110` (Asset Transfer), `S200` (Swap), etc.
+*   **Audit Evidence**: Every transaction processed by the v2 engine generates a journal entry preview (Dr/Cr) and cryptographic evidence stored in the metadata vault.
+
+---
+
+**Release Version**: 2.0.0-beta.5
+**Last Updated**: 2026-01-15
+**Maintainers**: Vision Chain Engineering Team
