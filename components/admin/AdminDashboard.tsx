@@ -5,22 +5,87 @@ import {
     Wallet,
     Layers,
     ArrowRight,
-    Search
+    Search,
+    ShieldCheck,
+    Cpu,
+    Database,
+    Clock
 } from 'lucide-solid';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { MetricCard } from './dashboard/MetricCard';
-import { TPSGauge, NodeHealthChart, ActivityMap, TVLPieChart } from './dashboard/DashboardCharts';
+import {
+    TPSGauge,
+    NodeHealthChart,
+    ActivityMap,
+    TVLPieChart,
+    NodeDistributionChart,
+    ResourceMetricGroup,
+    EconomicMetricGroup
+} from './dashboard/DashboardCharts';
+import { Coins } from 'lucide-solid';
 
 export const AdminDashboard: Component = () => {
     const [tps, setTps] = createSignal(97500);
+    const [gpuTflops, setGpuTflops] = createSignal(8420);
+    const [storageTb, setStorageTb] = createSignal(1240);
+    const [wallets, setWallets] = createSignal(142080);
+    const [blockTime, setBlockTime] = createSignal(1.2);
+    const [tvl, setTvl] = createSignal(125.4);
+    const [vcnDistributed, setVcnDistributed] = createSignal(1250000);
+    const [vcnBurned, setVcnBurned] = createSignal(42500);
+    const [apr, setApr] = createSignal(12.5);
+    const [nodeData, setNodeData] = createSignal({
+        authority: 4,
+        consensus: 124,
+        agent: 45,
+        edge: 890
+    });
 
-    // Simulate TPS fluctuation - slow movement between 96000-99500
     const timer = setInterval(() => {
+        // TPS Simulation
         setTps(prev => {
-            const fluctuation = (Math.random() - 0.5) * 200; // Smaller, slower changes
+            const fluctuation = (Math.random() - 0.5) * 200;
             return Math.floor(Math.max(96000, Math.min(99500, prev + fluctuation)));
         });
-    }, 2000); // Slower update interval (2 seconds)
+
+        // Resource Simulation
+        setGpuTflops(prev => {
+            const change = (Math.random() - 0.5) * 50;
+            return Math.floor(Math.max(8000, Math.min(9000, prev + change)));
+        });
+
+        setStorageTb(prev => {
+            const change = Math.random() > 0.8 ? 1 : 0;
+            return prev + change;
+        });
+
+        // Wallets Simulation
+        setWallets(prev => prev + Math.floor(Math.random() * 5));
+
+        // Block Time Simulation
+        setBlockTime(prev => {
+            const target = 1.2;
+            const diff = (Math.random() - 0.5) * 0.1;
+            return Math.max(1.1, Math.min(1.4, prev + diff));
+        });
+
+        // TVL Simulation
+        setTvl(prev => prev + (Math.random() - 0.45) * 0.5);
+
+        // VCN Economy Simulation
+        setVcnDistributed(prev => prev + (Math.random() * 2));
+        setVcnBurned(prev => prev + (Math.random() * 0.5));
+        setApr(prev => {
+            const fluctuation = (Math.random() - 0.5) * 0.05;
+            return Math.max(10, Math.min(15, prev + fluctuation));
+        });
+
+        // Node Count Simulation
+        setNodeData(prev => ({
+            ...prev,
+            edge: Math.max(850, Math.min(950, prev.edge + Math.floor((Math.random() - 0.5) * 10)))
+        }));
+    }, 2000);
 
     onCleanup(() => clearInterval(timer));
 
@@ -31,34 +96,48 @@ export const AdminDashboard: Component = () => {
             {/* Main Grid Layout */}
             <div class="grid grid-cols-1 xl:grid-cols-4 gap-6 mb-6">
 
-                {/* LEFT COLUMN: Node & Wallet Status */}
+                {/* LEFT COLUMN: Node & Resource Status */}
                 <div class="xl:col-span-1 space-y-6">
-                    {/* Active Nodes */}
+                    {/* Active Nodes Taxonomy */}
                     <MetricCard
-                        title="Active Validator Nodes"
-                        value="--"
-                        subValue="/ --"
-                        trend={0}
+                        title="Active Network Nodes"
+                        value={nodeData().authority + nodeData().consensus + nodeData().agent + nodeData().edge}
+                        subValue="Live"
+                        trend={2.4}
                         icon={Server}
+                        color="blue"
+                    >
+                        <div class="mt-4">
+                            <NodeDistributionChart data={nodeData()} />
+                        </div>
+                    </MetricCard>
+
+                    {/* Network Health */}
+                    <MetricCard
+                        title="Operational Health"
+                        value="99.9%"
+                        subValue="Uptime"
+                        icon={ShieldCheck}
                         color="green"
                     >
                         <div class="mt-4">
                             <NodeHealthChart />
+                            <p class="text-[9px] text-slate-500 mt-2 font-bold uppercase tracking-wider">Stability Index: Optimal</p>
                         </div>
                     </MetricCard>
 
                     {/* Total Wallets */}
                     <MetricCard
                         title="Total Wallets"
-                        value="--"
-                        trend={0}
+                        value={wallets().toLocaleString()}
+                        trend={5.8}
                         icon={Wallet}
                         color="blue"
                     >
                         <div class="mt-4 space-y-2">
                             <div class="flex justify-between text-xs text-slate-500">
                                 <span>New (24h)</span>
-                                <span class="text-white font-mono">+0</span>
+                                <span class="text-white font-mono">+1,240</span>
                             </div>
                             <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
                                 <div class="bg-blue-500 h-full w-[75%]" />
@@ -66,10 +145,25 @@ export const AdminDashboard: Component = () => {
                         </div>
                     </MetricCard>
 
+                    {/* Economy & Staking */}
+                    <MetricCard
+                        title="Economy & Staking"
+                        value={`${apr().toFixed(1)}%`}
+                        subValue="Est. APR"
+                        trend={0.5}
+                        icon={Coins}
+                        color="green"
+                    >
+                        <div class="mt-4">
+                            <EconomicMetricGroup distributed={Math.floor(vcnDistributed())} burned={Math.floor(vcnBurned())} />
+                            <p class="text-[9px] text-slate-500 mt-2 font-bold uppercase tracking-wider">Deflationary Pressure: Moderate</p>
+                        </div>
+                    </MetricCard>
+
                     {/* Block Time */}
                     <MetricCard
                         title="Avg Block Time"
-                        value="--"
+                        value={`${blockTime().toFixed(2)}s`}
                         icon={Layers}
                         color="amber"
                         class="border-amber-500/10"
@@ -97,9 +191,21 @@ export const AdminDashboard: Component = () => {
                             {/* Central Stats Overlay */}
                             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-12">
                                 <span class="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Peak TPS</span>
-                                <span class="text-lg font-mono text-white">--</span>
+                                <span class="text-lg font-mono text-white">99,842</span>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Resource Hero Section: GPU & Storage */}
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center px-2">
+                            <h3 class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Network Contributed Resources</h3>
+                            <div class="flex items-center gap-2 text-[10px] font-bold text-blue-400">
+                                <span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                Monitoring dApp SLA
+                            </div>
+                        </div>
+                        <ResourceMetricGroup gpuTflops={gpuTflops()} storageTb={storageTb()} />
                     </div>
 
                     {/* User Activity Bar Chart */}
@@ -117,8 +223,8 @@ export const AdminDashboard: Component = () => {
                     {/* TVL Hero */}
                     <MetricCard
                         title="Total Value Locked"
-                        value="$0"
-                        trend={0}
+                        value={`$${tvl().toFixed(1)}M`}
+                        trend={1.2}
                         icon={Activity}
                         color="purple"
                         class="bg-gradient-to-br from-[#13161F] to-[#1e1b4b]"

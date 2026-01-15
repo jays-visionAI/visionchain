@@ -170,3 +170,131 @@ export const TVLPieChart: Component = () => {
         </div>
     );
 };
+
+// ==================== Node Distribution Chart (Stacked Segmented Bar) ====================
+interface NodeDistributionProps {
+    data: {
+        authority: number;
+        consensus: number;
+        agent: number;
+        edge: number;
+    };
+}
+
+export const NodeDistributionChart: Component<NodeDistributionProps> = (props) => {
+    const total = () => props.data.authority + props.data.consensus + props.data.agent + props.data.edge;
+
+    const segments = [
+        { label: 'Authority', key: 'authority', color: 'bg-blue-500', shadow: 'shadow-blue-500/50' },
+        { label: 'Consensus', key: 'consensus', color: 'bg-green-500', shadow: 'shadow-green-500/50' },
+        { label: 'Agent', key: 'agent', color: 'bg-purple-500', shadow: 'shadow-purple-500/50' },
+        { label: 'Edge', key: 'edge', color: 'bg-slate-500', shadow: 'shadow-slate-500/50' },
+    ];
+
+    return (
+        <div class="space-y-4">
+            <div class="h-3 w-full flex rounded-full overflow-hidden bg-white/5">
+                <For each={segments}>
+                    {(seg) => (
+                        <div
+                            class={`${seg.color} h-full transition-all duration-1000 ease-out ${seg.shadow} shadow-[0_0_15px_rgba(0,0,0,0.3)]`}
+                            style={{ width: `${(props.data[seg.key as keyof typeof props.data] / total()) * 100}%` }}
+                        />
+                    )}
+                </For>
+            </div>
+            <div class="grid grid-cols-2 gap-y-2 gap-x-4">
+                <For each={segments}>
+                    {(seg) => (
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class={`w-1.5 h-1.5 rounded-full ${seg.color}`} />
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{seg.label}</span>
+                            </div>
+                            <span class="text-[10px] font-mono text-white">{props.data[seg.key as keyof typeof props.data]}</span>
+                        </div>
+                    )}
+                </For>
+            </div>
+        </div>
+    );
+};
+
+// ==================== Resource Metric Group (GPU/Storage) ====================
+import { Cpu, Database } from 'lucide-solid';
+
+interface ResourceMetricsProps {
+    gpuTflops: number;
+    storageTb: number;
+}
+
+export const ResourceMetricGroup: Component<ResourceMetricsProps> = (props) => {
+    return (
+        <div class="grid grid-cols-2 gap-4 w-full">
+            <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/[0.05] transition-all">
+                <div class="p-3 rounded-xl bg-cyan-500/10 text-cyan-400 group-hover:scale-110 transition-transform">
+                    <Cpu class="w-5 h-5" />
+                </div>
+                <div>
+                    <span class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Compute Power</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-xl font-black text-white">{props.gpuTflops.toLocaleString()}</span>
+                        <span class="text-[10px] font-bold text-cyan-400 uppercase">TFLOPS</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/[0.05] transition-all">
+                <div class="p-3 rounded-xl bg-purple-500/10 text-purple-400 group-hover:scale-110 transition-transform">
+                    <Database class="w-5 h-5" />
+                </div>
+                <div>
+                    <span class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Network Storage</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-xl font-black text-white">{props.storageTb.toLocaleString()}</span>
+                        <span class="text-[10px] font-bold text-purple-400 uppercase">TB</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+// ==================== Economic Metric Group (Incentives/Revenue) ====================
+import { Coins, Flame } from 'lucide-solid';
+
+interface EconomicMetricsProps {
+    distributed: number;
+    burned: number;
+}
+
+export const EconomicMetricGroup: Component<EconomicMetricsProps> = (props) => {
+    return (
+        <div class="grid grid-cols-2 gap-4 w-full">
+            <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/[0.05] transition-all">
+                <div class="p-3 rounded-xl bg-green-500/10 text-green-400 group-hover:scale-110 transition-transform">
+                    <Coins class="w-5 h-5" />
+                </div>
+                <div>
+                    <span class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Rewards</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-xl font-black text-white">{props.distributed.toLocaleString()}</span>
+                        <span class="text-[10px] font-bold text-green-400 uppercase">VCN</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex items-center gap-4 group hover:bg-white/[0.05] transition-all">
+                <div class="p-3 rounded-xl bg-orange-500/10 text-orange-400 group-hover:scale-110 transition-transform">
+                    <Flame class="w-5 h-5" />
+                </div>
+                <div>
+                    <span class="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tokens Burned</span>
+                    <div class="flex items-baseline gap-1">
+                        <span class="text-xl font-black text-white">{props.burned.toLocaleString()}</span>
+                        <span class="text-[10px] font-bold text-orange-400 uppercase">VCN</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
