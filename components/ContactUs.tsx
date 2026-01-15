@@ -188,9 +188,8 @@ const ContactUs = (): JSX.Element => {
                                 </div>
                                 <address class="text-gray-400 text-sm not-italic leading-relaxed relative z-10">
                                     Vision Chain Foundation<br />
-                                    HONG LIM COMPLEX<br />
-                                    531A UPPER CROSS STREET #04-098<br />
-                                    Singapore 051531
+                                    114 Lavender Street #07-72 CT Hub 2<br />
+                                    (Lobby 1) Singapore 338729
                                 </address>
                             </div>
                         </Motion.div>

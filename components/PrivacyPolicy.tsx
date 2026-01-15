@@ -94,8 +94,8 @@ const PrivacyPolicy = (): JSX.Element => {
                         </p>
                         <div class="mt-4 p-4 bg-white/5 rounded-lg border border-white/5 inline-block">
                             <p class="text-white font-medium">Vision Chain Foundation</p>
-                            <p class="text-gray-400">123 Blockchain Blvd, Suite 100</p>
-                            <p class="text-gray-400">Crypto Valley, Zug</p>
+                            <p class="text-gray-400">114 Lavender Street #07-72 CT Hub 2</p>
+                            <p class="text-gray-400">(Lobby 1) Singapore 338729</p>
                         </div>
                     </Section>
 
