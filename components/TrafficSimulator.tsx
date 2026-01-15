@@ -162,8 +162,8 @@ export default function TrafficSimulator() {
                         <button
                             onClick={() => isRunning() ? stopSimulation() : startSimulation()}
                             class={`px-8 py-3 rounded-xl flex items-center gap-3 font-black text-xs uppercase tracking-widest transition-all ${isRunning()
-                                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
-                                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                                ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
+                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
                                 }`}
                         >
                             {isRunning() ? (
@@ -201,6 +201,45 @@ export default function TrafficSimulator() {
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Live Traffic Feed */}
                     <div class="lg:col-span-8 space-y-6">
+                        {/* Advanced Config Panel (New) */}
+                        <div class="bg-gradient-to-r from-blue-600/10 to-transparent border border-blue-500/20 rounded-[32px] p-8 mb-6">
+                            <div class="flex items-center gap-3 mb-6">
+                                <Settings class="w-5 h-5 text-blue-400" />
+                                <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Developer Override (Custom Scenario)</h3>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="space-y-2">
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Target Contract Address</label>
+                                    <input
+                                        type="text"
+                                        placeholder="0x..."
+                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-blue-400 focus:border-blue-500/50 outline-none"
+                                    />
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Custom Method Name</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. swapTokens"
+                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:border-blue-500/50 outline-none"
+                                    />
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Metadata Type (Accounting)</label>
+                                    <select class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black uppercase text-gray-400 focus:border-blue-500/50 outline-none">
+                                        <option>A110 (Asset Transfer)</option>
+                                        <option>S200 (Swap/Liquidity)</option>
+                                        <option>B410 (Burn/Mint)</option>
+                                        <option>Custom Override</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-2 text-[10px] text-blue-500/70 italic">
+                                <Info class="w-3 h-3" />
+                                When configured, the generator will target these specific parameters instead of random production.
+                            </div>
+                        </div>
+
                         <div class="bg-white/[0.02] border border-white/5 rounded-[32px] overflow-hidden">
                             <div class="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-blue-500/5 to-transparent">
                                 <div class="flex items-center gap-3">
@@ -248,8 +287,8 @@ export default function TrafficSimulator() {
                                                     </td>
                                                     <td class="px-8 py-4">
                                                         <span class={`px-2 py-0.5 rounded text-[10px] font-black border ${tx.type === 'S200' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
-                                                                tx.type === 'A110' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-                                                                    'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                            tx.type === 'A110' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+                                                                'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                             }`}>
                                                             {tx.type}
                                                         </span>
@@ -267,7 +306,7 @@ export default function TrafficSimulator() {
                                                     <td class="px-8 py-4">
                                                         <div class="flex items-center gap-2">
                                                             <div class={`w-1.5 h-1.5 rounded-full ${tx.status === 'success' ? 'bg-green-500' :
-                                                                    tx.status === 'pending' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                                                                tx.status === 'pending' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
                                                                 }`} />
                                                             <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">{tx.status}</span>
                                                         </div>

@@ -80,12 +80,20 @@ Deploying smart contracts to Vision Chain is identical to any EVM chain.
 
 ---
 
-## Step 6: Stress Testing with TrafficSim
-Use the **Traffic Simulator** to test how your contract handles high-frequency volume:
+## Step 6: Stress Testing & Custom Scenarios
+Unlike static simulators, Vision Chain allows you to build and push **Custom Traffic Scenarios** to test your specific contracts.
+
+### 1. Configure via Dashboard (UI)
 1.  Access **Simulator**: `https://www.visionchain.co/trafficsim`
-2.  Set your target **TPS**.
-3.  Monitor **Network Health** and **Sequencer Latency**.
+2.  Input your **Target Contract Address** and **Method Name** in the *Developer Override* panel.
+3.  Set your target **TPS**. The simulator will now prioritize transactions that interact with your contract.
+
+### 2. Build Your Own Environment (CLI)
+You can connect your local test suite (Hardhat/Foundry) to the simulator to visualize your own traffic:
+1.  Initialize a traffic loop in your script using the Sequencer API.
+2.  Tag your transactions with a specific `appId` or `metadata.context`.
+3.  The **Live Feed** in TrafficSim will automatically pick up and label your environment's traffic based on the metadata.
 
 ---
 
-**Support**: Join our Developer Discord or check the [Deployment Guide](./vision-chain-deployment-guide.md).
+**Support**: Join our Developer Discord or contact the Engineering team for custom API hooks.
