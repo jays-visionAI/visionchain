@@ -1021,13 +1021,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             {/* Wallet Card */}
                             <div class="p-4 border-t border-white/[0.06]">
                                 <div class="relative overflow-hidden p-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-2xl border border-white/[0.06]">
-                                    <button
-                                        onClick={() => auth.logout()}
-                                        class="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors z-20"
-                                        title="Logout"
-                                    >
-                                        <LogOut class="w-3.5 h-3.5" />
-                                    </button>
+                                    {/* Logout button moved to bottom */}
                                     <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl" />
                                     <div class="relative flex items-center gap-3">
                                         <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
@@ -1051,6 +1045,15 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Big Red Logout Button (Admin Style) */}
+                                    <button
+                                        onClick={() => auth.logout()}
+                                        class="w-full flex items-center justify-center gap-2 mt-4 px-4 py-2.5 rounded-xl border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 text-red-500/80 hover:text-red-500 transition-all duration-300 group"
+                                    >
+                                        <LogOut class="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                        <span class="font-bold text-[11px] uppercase tracking-wider">Logout Session</span>
+                                    </button>
                                 </div>
                             </div>
                         </Motion.aside>

@@ -22,22 +22,49 @@ const PaymasterAdmin: Component = () => {
                 AdminService.getAllChains()
             ]);
             setStats(metrics);
-            setChains(chainList);
-
-            const poolMap: Record<number, PaymasterPool> = {};
-            await Promise.all(chainList.map(async (c) => {
-                const pool = await AdminService.getPool(c.chainId);
-                if (pool) poolMap[c.chainId] = pool;
-            }));
-            setPools(poolMap);
+            // Auto-seed local chain if list is empty
+            if (chainList.length === 0) {
+                console.log("[PaymasterAdmin] No chains found. Auto-seeding Testnet v2...");
+                const V2_CHAIN: ChainConfig = {
+                    chainId: 3151909,
+                    name: 'Vision Testnet v2',
+                    rpcUrl: 'http://46.224.221.201:8545',
+                    explorerUrl: 'http://46.224.221.201:8080',
+                    nativeGasToken: 'VCN',
+                    status: 'Active'
+                };
+                await AdminService.registerChain('system_auto', V2_CHAIN);
+                // Re-fetch
+                const freshChains = await AdminService.getAllChains();
+                setChains(freshChains);
+                // Also ensure pool exists
+                const pool = await AdminService.getPool(3151909);
+                if (pool) setPools({ ...pools(), 3151909: pool });
+            } else {
+                setChains(chainList);
+                const poolMap: Record<number, PaymasterPool> = {};
+                await Promise.all(chainList.map(async (c) => {
+                    const pool = await AdminService.getPool(c.chainId);
+                    if (pool) poolMap[c.chainId] = pool;
+                }));
+                setPools(poolMap);
+            }
         } catch (error) {
             console.error("Failed to load Paymaster Admin data", error);
         } finally {
+            console.log("[PaymasterAdmin] Loading complete.");
             setLoading(false);
         }
     };
 
     onMount(() => {
+        // Safety Valve: Force loading false after 5s if stuck
+        setTimeout(() => {
+            if (loading()) {
+                console.warn("[PaymasterAdmin] Loading timed out. Forcing UI render.");
+                setLoading(false);
+            }
+        }, 5000);
         console.log("Starting Paymaster Simulation Node...");
         // 1. Start Mock Agent & Orchestrator
         try {
