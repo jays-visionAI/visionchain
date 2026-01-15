@@ -11,7 +11,6 @@ const PaymasterAdmin: Component = () => {
     const [stats, setStats] = createSignal<any>(null);
     const [chains, setChains] = createSignal<ChainConfig[]>([]);
     const [pools, setPools] = createSignal<Record<number, PaymasterPool>>({});
-    const [pools, setPools] = createSignal<Record<number, PaymasterPool>>({});
     const [loading, setLoading] = createSignal(true);
     const [isWizardOpen, setIsWizardOpen] = createSignal(false);
 
