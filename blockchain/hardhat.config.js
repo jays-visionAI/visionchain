@@ -28,8 +28,8 @@ module.exports = {
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
             gasPrice: "auto"
         },
-        // Vision Chain Custom Testnet v1 (New)
-        vision_v1: {
+        // Vision Chain Custom Testnet v2 (New)
+        vision_v2: {
             url: "http://46.224.221.201:8545",
             chainId: 3151909,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],

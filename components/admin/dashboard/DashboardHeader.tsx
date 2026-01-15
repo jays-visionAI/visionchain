@@ -25,7 +25,7 @@ export const DashboardHeader: Component = () => {
             {/* Title Section */}
             <div>
                 <h1 class="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400">Vision Testnet v1</span>
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400">Vision Testnet v2</span>
                     <span class="px-2 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20">Custom Node</span>
                 </h1>
                 <p class="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Sovereign L1 Prototype Infrastructure</p>

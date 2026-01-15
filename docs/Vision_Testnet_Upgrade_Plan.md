@@ -1,8 +1,8 @@
 # Vision Chain Testnet Upgrade Roadmap
 
-This document outlines the strategic development plan to upgrade the current **Vision Chain Testnet v1 (Prototype)** to a fully interoperable and robust **Sovereign Layer 1**.
+This document outlines the strategic development plan to upgrade the current **Vision Chain Testnet v2 (Prototype)** to a fully interoperable and robust **Sovereign Layer 1**.
 
-## Current Status (v1)
+## Current Status (v2)
 - **Strengths**: Validated Business Logic (Node Licenses, Mining Pool, Vesting), Fast Iteration.
 - **Weaknesses**: Simulated Infrastructure (Hardhat), No Cross-Chain Capability (Isolated).
 
