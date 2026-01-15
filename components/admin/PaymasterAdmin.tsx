@@ -3,7 +3,7 @@ import { AdminService } from '../../services/admin/AdminService';
 import { ChainConfig, PaymasterPool } from '../../services/paymaster/types';
 import { PaymasterAgent } from '../../services/paymaster/PaymasterAgent';
 import { GrandOrchestrator } from '../../services/paymaster/GrandOrchestrator';
-import { getFirebaseDb } from '../../firebaseService';
+import { getFirebaseDb } from '../../services/firebaseService';
 import { doc, updateDoc } from 'firebase/firestore';
 
 const PaymasterAdmin: Component = () => {
