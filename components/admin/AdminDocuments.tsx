@@ -31,23 +31,43 @@ import { getDocuments, saveAdminDocument, deleteAdminDocument, AdminDocument } f
 const MOCK_DOCUMENTS: AdminDocument[] = [
     {
         id: '1',
-        title: '주문장과 회원계정 인증 및 매칭 이슈',
-        category: '운영 매뉴얼',
-        type: '텍스트/매뉴얼',
-        content: '기획안...',
-        author: 'Admin',
+        title: '비전체인 노드 분류 체계 (Authority, Consensus, Agent, Edge)',
+        category: '기술 문서',
+        type: '기술 자료',
+        content: `<h1>비전체인 노드 분류 체계</h1><p>Vision Chain v2.0은 역할과 보상 구조에 따라 4가지 핵심 노드로 구성됩니다.</p><ul><li><strong>Authority Node</strong>: 네트워크 거버넌스 및 최종 서명</li><li><strong>Consensus Node</strong>: 트랜잭션 검증 및 블록 생성</li><li><strong>Agent Node</strong>: AI 추론 및 페이마스터 서비스 제공</li><li><strong>Edge Node</strong>: 경량 데이터 처리 및 단말 컴퓨팅</li></ul>`,
+        author: 'Vision Tech Team',
         updatedAt: '2024-03-20',
         attachments: []
     },
     {
         id: '2',
-        title: 'Vision Chain 노드 설치 가이드',
-        category: '기술 문서',
+        title: '리소스 기여 노드 모델 및 보상 구조',
+        category: '경제 모델',
         type: '기술 자료',
-        content: '# 노드 설치 방법...',
-        author: 'Tech Support',
+        content: `<h2>리소스 기여 보상 (RC-Reward)</h2><p>노드 기여도($C_{node}$)는 연산 능력($P_{gpu}$)과 저장 용량($S_{data}$)의 결합으로 계산됩니다.</p><p>보상 공식: $R_{node} = (w_1 \cdot P_{gpu} + w_2 \cdot S_{data}) \times U_{time}$</p>`,
+        author: 'Eco Division',
+        updatedAt: '2024-03-19',
+        attachments: []
+    },
+    {
+        id: '3',
+        title: '비전체인 TVL 성장 전략 및 로드맵',
+        category: '기획안',
+        type: '텍스트/매뉴얼',
+        content: `<h2>TVL 성장 5단계 계획</h2><ol><li><strong>부트스트래핑</strong>: 초기 보상 강화</li><li><strong>유틸리티 확장</strong>: 리소스 스테이킹 도입</li><li><strong>금융 인프라</strong>: DEX 및 LST 활성화</li><li><strong>실질 수익 정착</strong>: AI 서비스 요금 정산</li><li><strong>생태계 락인</strong>: 거버넌스 강화</li></ol>`,
+        author: 'Ops Lead',
         updatedAt: '2024-03-18',
-        attachments: ['setup_v1.pdf']
+        attachments: []
+    },
+    {
+        id: '4',
+        title: '단일 서버 내 5개 노드 배포 가이드',
+        category: '운영 매뉴얼',
+        type: '기술 자료',
+        content: `<h3>5노드 클러스터 배포</h3><p>Docker Compose를 활용하여 포트 충돌 없이 단일 서버에서 5개의 노드를 운영하는 방법입니다. RPC 포트는 8545부터 8549까지 할당됩니다.</p>`,
+        author: 'DevOps',
+        updatedAt: '2024-03-17',
+        attachments: []
     }
 ];
 
