@@ -237,10 +237,20 @@ const Testnet: Component = () => {
                             before mainnet deployment.
                         </p>
                     </div>
-                    <A href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
-                        <span class="text-xs font-black text-white uppercase tracking-widest">Enter Developer Console</span>
-                        <ArrowUpRight class="w-4 h-4 text-blue-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    </A>
+                    <div class="flex items-center gap-4">
+                        <a
+                            href="/docs/vision-chain-testnet-developer-manual.md"
+                            target="_blank"
+                            class="px-8 py-4 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 rounded-2xl flex items-center gap-3 transition-all group"
+                        >
+                            <BookOpen class="w-4 h-4 text-blue-400" />
+                            <span class="text-xs font-black text-blue-400 uppercase tracking-widest">View Manual</span>
+                        </a>
+                        <A href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
+                            <span class="text-xs font-black text-white uppercase tracking-widest">Enter Developer Console</span>
+                            <ArrowUpRight class="w-4 h-4 text-blue-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        </A>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
