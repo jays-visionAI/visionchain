@@ -28,8 +28,8 @@ const Testnet: Component = () => {
     const networkInfo = [
         { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
         { label: 'RPC URL', value: 'http://46.224.221.201:8545', id: 'rpc' },
-        { label: 'Sequencer RPC', value: 'http://46.224.221.201:3000', id: 'seq' },
-        { label: 'Chain ID', value: '3151909', id: 'chainid' },
+        { label: 'Sequencer API', value: 'http://46.224.221.201:3000/rpc/submit', id: 'seq' },
+        { label: 'Chain ID', value: '1001', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
     ];
 
@@ -45,7 +45,7 @@ const Testnet: Component = () => {
                 <div class="max-w-6xl mx-auto text-center relative z-10">
                     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold uppercase tracking-widest mb-6">
                         <Zap class="w-3 h-3" />
-                        AI-Native Layer 1 (Kafka Engine)
+                        AI-Native Layer 1 (Kafka Engine v2)
                     </div>
                     <h1 class="text-5xl md:text-7xl font-black mb-6 tracking-tight">
                         THE FUTURE OF VISION,<br />
@@ -54,7 +54,7 @@ const Testnet: Component = () => {
                         </span>
                     </h1>
                     <p class="text-slate-400 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed font-light">
-                        Join the first agentic AI blockchain ecosystem. Powered by a high-throughput **Shared Sequencer** and **AI Oracle** for dynamic tokenomics.
+                        Join the first agentic AI blockchain ecosystem. Powered by a high-throughput **Shared Sequencer v2** and **AI Oracle** for dynamic tokenomics.
                     </p>
                 </div>
             </div>
@@ -105,14 +105,14 @@ const Testnet: Component = () => {
 
                                 <div class="bg-black/40 rounded-2xl p-6 font-mono text-sm border border-white/10 mb-8">
                                     <div class="flex justify-between items-center mb-4 text-slate-500 text-[10px] uppercase tracking-widest font-bold">
-                                        <span>Terminal Script</span>
-                                        <button onClick={() => copyToClipboard('cd blockchain && npx hardhat run scripts/faucet.js --network vision_v1', 'faucet-cmd')}>
+                                        <span>Terminal Script (v2)</span>
+                                        <button onClick={() => copyToClipboard('cd blockchain && npx hardhat run scripts/faucet.js --network vision_v2', 'faucet-cmd')}>
                                             {copied() === 'faucet-cmd' ? <CheckCircle2 class="w-3 h-3 text-green-500" /> : <Copy class="w-3 h-3" />}
                                         </button>
                                     </div>
                                     <div class="text-white">
                                         <span class="text-slate-500">$</span> cd blockchain<br />
-                                        <span class="text-slate-500">$</span> npx hardhat run scripts/faucet.js --network vision_v1
+                                        <span class="text-slate-500">$</span> npx hardhat run scripts/faucet.js --network vision_v2
                                     </div>
                                 </div>
 
@@ -133,20 +133,20 @@ const Testnet: Component = () => {
                         <section>
                             <h2 class="text-2xl font-bold flex items-center gap-3 mb-8">
                                 <ArrowRightLeft class="w-6 h-6 text-purple-500" />
-                                The Equalizer (State Sync)
+                                The Equalizer (v2 State Sync)
                             </h2>
                             <div class="bg-white/5 border border-white/10 rounded-3xl p-8 space-y-6">
                                 <p class="text-slate-400 leading-relaxed">
-                                    Vision Chain uses the <strong>Equalizer Model</strong> for zero-loss interoperability. Assets are locked on satellite chains (e.g., Sepolia) and instantly synced to Vision via the Sequencer, without burning tokens.
+                                    Vision Chain uses the <strong>v2 Equalizer Model</strong> for zero-loss interoperability. Assets are locked on satellite chains (e.g., Sepolia) and instantly synced to Vision via the Kafka-powered Sequencer.
                                 </p>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                                     <div class="p-6 bg-white/[0.03] rounded-2xl border border-white/5">
-                                        <h4 class="font-bold mb-2">1. Lock on Sepolia</h4>
-                                        <p class="text-xs text-slate-500 leading-relaxed">Deposit assets into the VisionVault contract on Ethereum Sepolia.</p>
+                                        <h4 class="font-bold mb-2">1. Lock on Satellite</h4>
+                                        <p class="text-xs text-slate-500 leading-relaxed">Deposit assets into the VisionVault contract on Ethereum Sepolia or other connected chains.</p>
                                     </div>
                                     <div class="p-6 bg-white/[0.03] rounded-2xl border border-white/5">
-                                        <h4 class="font-bold mb-2">2. Instant Credit</h4>
-                                        <p class="text-xs text-slate-500 leading-relaxed">The Shared Sequencer detects the event and credits your Vision Global Account immediately.</p>
+                                        <h4 class="font-bold mb-2">2. Kafka Sync</h4>
+                                        <p class="text-xs text-slate-500 leading-relaxed">The Shared Sequencer v2 ingests the event and credits your account with microsecond latency.</p>
                                     </div>
                                 </div>
                             </div>
@@ -167,38 +167,42 @@ const Testnet: Component = () => {
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">1</div>
                                     <h4 class="text-sm font-bold mb-1">MetaMask Setup</h4>
-                                    <p class="text-xs text-slate-500">Go to Settings &gt; Networks &gt; Add Network Manually. Use the Public RPC URL provided.</p>
+                                    <p class="text-xs text-slate-500">Use the Vision Testnet v2 RPC and Chain ID 1001 for seamless wallet integration.</p>
                                 </li>
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">2</div>
-                                    <h4 class="text-sm font-bold mb-1">Sequencer API</h4>
-                                    <p class="text-xs text-slate-500">For high-speed txs, POST signed transactions directly to the Sequencer URL.</p>
+                                    <h4 class="text-sm font-bold mb-1">v2 Sequencer API</h4>
+                                    <p class="text-xs text-slate-500">Bypass the mempool. Submit signed transactions with accounting metadata directly to the v2 API.</p>
                                 </li>
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">3</div>
-                                    <h4 class="text-sm font-bold mb-1">AI Agent Interaction</h4>
-                                    <p class="text-xs text-slate-500">Connect your agents to the AI Oracle to receive dynamic mining rewards.</p>
+                                    <h4 class="text-sm font-bold mb-1">Accounting Audit</h4>
+                                    <p class="text-xs text-slate-500">Verify your transaction on VisionScan to see automatic journal entries and tax categories.</p>
                                 </li>
                             </ul>
 
                             <div class="mt-8 pt-6 border-t border-white/5 space-y-3">
                                 <a
-                                    href="/docs/vision-chain-deployment-guide.md"
+                                    href="/docs/vision-chain-testnet-developer-manual.md"
                                     target="_blank"
                                     class="w-full flex justify-between items-center px-4 py-3 bg-blue-600/10 border border-blue-500/20 rounded-xl transition-all group hover:bg-blue-600/20"
                                 >
                                     <div class="flex items-center gap-3">
-                                        <Download class="w-4 h-4 text-blue-400" />
-                                        <span class="text-xs font-bold uppercase tracking-widest text-blue-400">Deployment Guide</span>
+                                        <Maximize2 class="w-4 h-4 text-blue-400" />
+                                        <span class="text-xs font-bold uppercase tracking-widest text-blue-400">Step-by-Step Manual</span>
                                     </div>
                                     <ExternalLink class="w-4 h-4 text-blue-500" />
                                 </a>
-                                <a href="https://github.com/VisionChainNetwork" target="_blank" class="w-full flex justify-between items-center px-4 py-3 bg-white/5 hover:bg-white/10 rounded-xl transition-all group">
+                                <a
+                                    href="/docs/vision-chain-deployment-guide.md"
+                                    target="_blank"
+                                    class="w-full flex justify-between items-center px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group"
+                                >
                                     <div class="flex items-center gap-3">
-                                        <Terminal class="w-4 h-4 text-slate-400" />
-                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400 group-hover:text-white">Github Docs</span>
+                                        <Download class="w-4 h-4 text-slate-400" />
+                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400 group-hover:text-white">Full Deployment Guide</span>
                                     </div>
-                                    <ExternalLink class="w-4 h-4 text-slate-600" />
+                                    <ExternalLink class="w-4 h-4 text-slate-500" />
                                 </a>
                             </div>
                         </section>
@@ -210,17 +214,17 @@ const Testnet: Component = () => {
                                 <div class="flex justify-between items-center text-sm py-3 border-b border-white/5">
                                     <span class="text-slate-500">Engine</span>
                                     <span class="font-bold flex items-center gap-2">
-                                        Kafka Shared Sequencer
+                                        Kafka Shared Sequencer v2
                                         <Cpu class="w-3 h-3 text-blue-400" />
                                     </span>
                                 </div>
                                 <div class="flex justify-between items-center text-sm py-3 border-b border-white/5">
                                     <span class="text-slate-500">Block Time</span>
-                                    <span class="font-bold font-mono text-blue-400">0.5s (Batched)</span>
+                                    <span class="font-bold font-mono text-blue-400">Sub-second (Kafka Ordered)</span>
                                 </div>
                                 <div class="flex justify-between items-center text-sm py-3">
                                     <span class="text-slate-500">Consensus Mode</span>
-                                    <span class="font-bold text-slate-300 italic">AI-Driven PoA</span>
+                                    <span class="font-bold text-slate-300 italic">Sequencer-First Execution</span>
                                 </div>
                             </div>
                         </section>
@@ -232,9 +236,9 @@ const Testnet: Component = () => {
             {/* CTA Section */}
             <div class="max-w-4xl mx-auto px-4 mt-32 text-center pb-20">
                 <div class="p-12 rounded-[2rem] bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-blue-600/10 border border-white/5">
-                    <h2 class="text-3xl font-black mb-6 italic tracking-tight uppercase">Ready to transition to Sovereign L1?</h2>
+                    <h2 class="text-3xl font-black mb-6 italic tracking-tight uppercase">Ready for the Sovereign AI Web?</h2>
                     <p class="text-slate-400 mb-10 max-w-xl mx-auto leading-relaxed">
-                        The Testnet v1 is just the beginning. We are preparing the migration to Polygon CDK for full ZK-Rollup performance and Sovereign autonomy.
+                        The Testnet v2 is the foundation for our upcoming ZK-Autonomy transition. Start building with high-availability accounting today.
                     </p>
                     <a href="/adminsystem" class="inline-flex items-center gap-3 px-8 py-4 bg-white text-black font-black uppercase tracking-widest rounded-full hover:scale-105 active:scale-95 transition-all text-xs">
                         Admin Control Panel
