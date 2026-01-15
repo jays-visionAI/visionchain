@@ -89,13 +89,20 @@ export default function AdminDocuments() {
                 })();
             } else {
                 // Client-side sort (Newest first)
-                docs.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+                // Use updatedAt primarily, then id (timestamp) as a fallback for same-day entries
+                docs.sort((a, b) => {
+                    const dateA = new Date(a.updatedAt || 0).getTime();
+                    const dateB = new Date(b.updatedAt || 0).getTime();
+                    if (dateB !== dateA) return dateB - dateA;
+                    return b.id.localeCompare(a.id);
+                });
                 setDocuments(docs);
             }
         } catch (error) {
             console.error("Failed to load documents:", error);
-            // Fallback to local state just in case of network error, but warn
-            setDocuments(MOCK_DOCUMENTS);
+            // Fallback to local state sorted newest first
+            const sortedMocks = [...MOCK_DOCUMENTS].sort((a, b) => b.id.localeCompare(a.id));
+            setDocuments(sortedMocks);
         } finally {
             setLoading(false);
         }
