@@ -69,20 +69,28 @@ export default function AdminDocuments() {
         try {
             let docs = await getDocuments();
 
-            // Auto-seed if empty (First run initialization)
+            // If Firestore is empty, show MOCK immediately and seed in background
             if (docs.length === 0) {
-                console.log("[AdminDocuments] Seeding default documents to Firestore...");
-                for (const d of MOCK_DOCUMENTS) {
-                    await saveAdminDocument(d);
-                }
-                // Re-fetch after seeding
-                docs = await getDocuments();
+                console.log("[AdminDocuments] Firestore empty. Using mock data & Seeding...");
+                // 1. Show Mock Data Immediately
+                setDocuments(MOCK_DOCUMENTS);
+
+                // 2. Seed in Background (Fire and forget, or silent await)
+                (async () => {
+                    try {
+                        for (const d of MOCK_DOCUMENTS) {
+                            await saveAdminDocument(d);
+                        }
+                        console.log("[AdminDocuments] Seeding completed.");
+                    } catch (e) {
+                        console.warn("[AdminDocuments] Seeding failed (likely permission issue), but Mock data is shown.", e);
+                    }
+                })();
+            } else {
+                // Client-side sort (Newest first)
+                docs.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+                setDocuments(docs);
             }
-
-            // Client-side sort (Newest first)
-            docs.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
-
-            setDocuments(docs);
         } catch (error) {
             console.error("Failed to load documents:", error);
             // Fallback to local state just in case of network error, but warn
