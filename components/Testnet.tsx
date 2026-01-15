@@ -193,17 +193,6 @@ const Testnet: Component = () => {
                                     </div>
                                     <ExternalLink class="w-4 h-4 text-blue-500" />
                                 </a>
-                                <a
-                                    href="/docs/vision-chain-deployment-guide.md"
-                                    target="_blank"
-                                    class="w-full flex justify-between items-center px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all group"
-                                >
-                                    <div class="flex items-center gap-3">
-                                        <Download class="w-4 h-4 text-slate-400" />
-                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400 group-hover:text-white">Full Deployment Guide</span>
-                                    </div>
-                                    <ExternalLink class="w-4 h-4 text-slate-500" />
-                                </a>
                             </div>
                         </section>
 
