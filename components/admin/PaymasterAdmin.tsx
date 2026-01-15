@@ -132,94 +132,94 @@ const PaymasterAdmin: Component = () => {
         }
     };
 
-    if (loading()) return <div class="p-10 text-center text-white">Loading Grand Paymaster Console...</div>;
-
     return (
-        <div class="space-y-8 p-6 text-white min-h-screen bg-[#0F172A]">
-            <header>
-                <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                    Grand Paymaster Orchestrator
-                </h1>
-                <p class="text-gray-400 mt-2">Global control plane for Cross-Chain Gas Sponsorship</p>
-            </header>
+        <Show when={!loading()} fallback={<div class="p-10 text-center text-white">Loading Grand Paymaster Console...</div>}>
+            <div class="space-y-8 p-6 text-white min-h-screen bg-[#0F172A]">
+                <header>
+                    <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                        Grand Paymaster Orchestrator
+                    </h1>
+                    <p class="text-gray-400 mt-2">Global control plane for Cross-Chain Gas Sponsorship</p>
+                </header>
 
-            {/* Global KPI Cards */}
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <KPICard title="24h Sponsor Spend" value={stats()?.totalSpend24h} change="+12.5%" color="blue" />
-                <KPICard title="24h Protocol Revenue" value={stats()?.totalRevenue24h} change="+8.2%" color="green" />
-                <KPICard title="Global Failure Rate" value={`${stats()?.globalFailureRate}%`} change="-0.05%" color="purple" />
-                <KPICard title="Active Chains" value={stats()?.activeChains} color="orange" />
+                {/* Global KPI Cards */}
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <KPICard title="24h Sponsor Spend" value={stats()?.totalSpend24h} change="+12.5%" color="blue" />
+                    <KPICard title="24h Protocol Revenue" value={stats()?.totalRevenue24h} change="+8.2%" color="green" />
+                    <KPICard title="Global Failure Rate" value={`${stats()?.globalFailureRate}%`} change="-0.05%" color="purple" />
+                    <KPICard title="Active Chains" value={stats()?.activeChains} color="orange" />
+                </div>
+
+                {/* Chain & Pool Monitor */}
+                <section>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold">Chain Agent Nodes</h2>
+                        <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition"
+                            onClick={() => alert("Launching Chain Registration Wizard... (Coming Soon)")}>
+                            + Register New Chain
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <For each={chains()}>
+                            {(chain) => {
+                                const pool = pools()[chain.chainId];
+                                return (
+                                    <div class={`relative p-6 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md transition-all hover:border-blue-500/30 ${pool?.mode === 'PAUSED' ? 'border-red-500/50 bg-red-900/10' : ''}`}>
+                                        <div class="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h3 class="text-lg font-bold flex items-center gap-2">
+                                                    {chain.name}
+                                                    <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">ID: {chain.chainId}</span>
+                                                </h3>
+                                                <p class="text-sm text-gray-400">{chain.rpcUrl}</p>
+                                            </div>
+                                            <StatusBadge status={pool?.mode || 'INIT'} />
+                                        </div>
+
+                                        {/* Pool Metrics */}
+                                        <div class="space-y-3 mb-6">
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-400">Gas Balance</span>
+                                                <span class={`font-mono ${formatBalance(pool?.balance) < formatBalance(pool?.minBalance) ? 'text-red-400 font-bold' : 'text-green-400'}`}>
+                                                    {formatBalance(pool?.balance)} ETH
+                                                </span>
+                                            </div>
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-400">Spend Rate (24h)</span>
+                                                <span class="font-mono">{formatBalance(pool?.spendRate24h)} ETH</span>
+                                            </div>
+                                            <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
+                                                <div
+                                                    class="bg-blue-500 h-full"
+                                                    style={{ width: `${Math.min(100, Number(pool?.balance || 0) / Number(pool?.targetBalance || 1) * 100)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div class="flex gap-2 mt-auto">
+                                            <Show when={pool?.mode === 'PAUSED'} fallback={
+                                                <button onClick={() => handlePausePool(chain.chainId)} class="flex-1 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg text-sm font-medium transition">
+                                                    Pause Pool
+                                                </button>
+                                            }>
+                                                <button onClick={() => handleResumePool(chain.chainId)} class="flex-1 py-2 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg text-sm font-medium transition">
+                                                    Resume Pool
+                                                </button>
+                                            </Show>
+                                            <button onClick={() => handleSimulateDrain(chain.chainId)} class="px-3 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-lg text-sm font-medium transition ml-2">
+                                                Sim: Drain
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            }}
+                        </For>
+                    </div>
+                </section>
             </div>
-
-            {/* Chain & Pool Monitor */}
-            <section>
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold">Chain Agent Nodes</h2>
-                    <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition"
-                        onClick={() => alert("Launching Chain Registration Wizard... (Coming Soon)")}>
-                        + Register New Chain
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <For each={chains()}>
-                        {(chain) => {
-                            const pool = pools()[chain.chainId];
-                            return (
-                                <div class={`relative p-6 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md transition-all hover:border-blue-500/30 ${pool?.mode === 'PAUSED' ? 'border-red-500/50 bg-red-900/10' : ''}`}>
-                                    <div class="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 class="text-lg font-bold flex items-center gap-2">
-                                                {chain.name}
-                                                <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">ID: {chain.chainId}</span>
-                                            </h3>
-                                            <p class="text-sm text-gray-400">{chain.rpcUrl}</p>
-                                        </div>
-                                        <StatusBadge status={pool?.mode || 'INIT'} />
-                                    </div>
-
-                                    {/* Pool Metrics */}
-                                    <div class="space-y-3 mb-6">
-                                        <div class="flex justify-between text-sm">
-                                            <span class="text-gray-400">Gas Balance</span>
-                                            <span class={`font-mono ${formatBalance(pool?.balance) < formatBalance(pool?.minBalance) ? 'text-red-400 font-bold' : 'text-green-400'}`}>
-                                                {formatBalance(pool?.balance)} ETH
-                                            </span>
-                                        </div>
-                                        <div class="flex justify-between text-sm">
-                                            <span class="text-gray-400">Spend Rate (24h)</span>
-                                            <span class="font-mono">{formatBalance(pool?.spendRate24h)} ETH</span>
-                                        </div>
-                                        <div class="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden">
-                                            <div
-                                                class="bg-blue-500 h-full"
-                                                style={{ width: `${Math.min(100, Number(pool?.balance || 0) / Number(pool?.targetBalance || 1) * 100)}%` }}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div class="flex gap-2 mt-auto">
-                                        <Show when={pool?.mode === 'PAUSED'} fallback={
-                                            <button onClick={() => handlePausePool(chain.chainId)} class="flex-1 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg text-sm font-medium transition">
-                                                Pause Pool
-                                            </button>
-                                        }>
-                                            <button onClick={() => handleResumePool(chain.chainId)} class="flex-1 py-2 bg-green-600/20 hover:bg-green-600/40 text-green-400 rounded-lg text-sm font-medium transition">
-                                                Resume Pool
-                                            </button>
-                                        </Show>
-                                        <button onClick={() => handleSimulateDrain(chain.chainId)} class="px-3 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-lg text-sm font-medium transition ml-2">
-                                            Sim: Drain
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        }}
-                    </For>
-                </div>
-            </section>
-        </div>
+        </Show>
     );
 };
 
