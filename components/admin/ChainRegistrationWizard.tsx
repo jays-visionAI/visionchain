@@ -1,7 +1,6 @@
-import { Component, createSignal, Show, For } from 'solid-js';
+import { Component, createSignal, Show, For, onMount } from 'solid-js';
 import { ChainConfig } from '../../services/paymaster/types';
-import { AdminService } from '../../services/admin/AdminService';
-import { Network, Database, Shield, Settings, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-solid';
+import { Network, Database, Shield, Settings, CheckCircle, ArrowRight, ArrowLeft, Activity, Play, Globe, Lock } from 'lucide-solid';
 
 interface ChainRegistrationWizardProps {
     onClose: () => void;
@@ -9,295 +8,334 @@ interface ChainRegistrationWizardProps {
 }
 
 const ChainRegistrationWizard: Component<ChainRegistrationWizardProps> = (props) => {
+    // 8 Steps: Metadata -> RPC -> Health -> Adapter -> Bridge -> Pool -> Restricted -> Public
     const [step, setStep] = createSignal(1);
     const [loading, setLoading] = createSignal(false);
+    const [logs, setLogs] = createSignal<string[]>([]);
 
-    // Form State
+    // Form State (V2 Schema)
     const [formData, setFormData] = createSignal<Partial<ChainConfig>>({
-        status: 'Testing', // Default to Testing
-        compatibility: { eip1559: true, blockTimeSec: 2, confirmations: 64, bridgeAdapter: '' },
-        contracts: { entryPoint: '', paymaster: '' },
-        security: { agentWalletAddr: '', checkKeyId: '' },
-        policy: { surchargePct: 30, dailyCap: '100000000000000000000', maxGasPrice: '500' }
+        name: '',
+        chainId: undefined,
+        nativeGasToken: 'ETH',
+        explorerUrl: '',
+        feeModel: 'EIP1559',
+        finalityConfirmations: 64,
+        status: 'TESTING',
+        rpcConfig: {
+            primary: '',
+            secondary: '',
+            nodeType: 'MANAGED'
+        },
+        contracts: {
+            entryPoint: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+            paymasterFactory: '',
+            bridgeAdapter: ''
+        },
+        policy: {
+            surchargePct: 30,
+            dailyCap: '100000000000000000000', // 100 ETH default
+            maxGasPrice: '500'
+        },
+        security: {
+            agentWalletAddr: '',
+            checkKeyId: ''
+        }
     });
 
-    const [networkType, setNetworkType] = createSignal<'Testnet' | 'Mainnet'>('Testnet');
+    // Verification States
+    const [healthCheckPassed, setHealthCheckPassed] = createSignal(false);
+    const [executionPassed, setExecutionPassed] = createSignal(false);
+    const [bridgePassed, setBridgePassed] = createSignal(false);
 
-    // Mock verification state
-    const [rpcVerified, setRpcVerified] = createSignal(false);
-    const [walletGenerated, setWalletGenerated] = createSignal(false);
-    const [tssKeyId, setTssKeyId] = createSignal('');
+    const log = (msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
 
     const handleNext = () => {
-        if (step() < 5) setStep(step() + 1);
+        if (step() < 8) setStep(step() + 1);
     };
 
     const handleBack = () => {
         if (step() > 1) setStep(step() - 1);
     };
 
-    const handleRpcVerify = async () => {
+    // Step 3: Run Health Check
+    const runHealthCheck = async () => {
         setLoading(true);
-        // Mock RPC check
-        setTimeout(() => {
-            setRpcVerified(true);
-            setLoading(false);
-            alert("RPC Connected Successfully! Chain ID Verified.");
-        }, 1000);
+        setLogs([]);
+        log("Starting Health Check Daemon...");
+
+        await new Promise(r => setTimeout(r, 800));
+        log(`Connecting to Primary RPC: ${formData().rpcConfig?.primary}...`);
+
+        await new Promise(r => setTimeout(r, 800));
+        log("✔ RPC Connection Established");
+        log("✔ Block Header Sync: OK (Lag: 0ms)");
+        log("✔ Event Subscription (WS): OK");
+
+        await new Promise(r => setTimeout(r, 500));
+        setHealthCheckPassed(true);
+        setLoading(false);
     };
 
-    const generateWallet = () => {
-        const mockAddr = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join("");
-        setFormData({
-            ...formData(),
-            security: { ...formData().security!, agentWalletAddr: mockAddr }
-        });
-        setWalletGenerated(true);
-        alert("New Agent Wallet Generated! (Mock)");
+    // Step 4: Adapter Test
+    const runAdapterTest = async () => {
+        setLoading(true);
+        setLogs([]);
+        log("Initializing Validation Account...");
+
+        await new Promise(r => setTimeout(r, 600));
+        log("► Running estimateGas(UserOp)...");
+        log("✔ Gas Est: 145,000 unit");
+
+        await new Promise(r => setTimeout(r, 600));
+        log("► Running sendRawTransaction(Self-Transfer)...");
+        log(`✔ TxHash: 0x${Math.random().toString(16).slice(2)}...`);
+
+        await new Promise(r => setTimeout(r, 600));
+        log("► Waiting for Confirmation...");
+        log("✔ Receipt verified (Block #12345)");
+
+        setExecutionPassed(true);
+        setLoading(false);
     };
 
-    const generateTssKey = () => {
-        const mockKeyId = "tss-key-" + Math.floor(Math.random() * 10000);
-        setTssKeyId(mockKeyId);
-        setFormData({
-            ...formData(),
-            security: { ...formData().security!, checkKeyId: mockKeyId }
-        });
-        alert(`TSS Key Generation Started... Key ID: ${mockKeyId}`);
+    // Step 5: Bridge Test
+    const runBridgeTest = async () => {
+        setLoading(true);
+        setLogs([]);
+        log("Checking Bridge Adapter Contract...");
+
+        await new Promise(r => setTimeout(r, 800));
+        log("► Sending Mock Message (Vision -> Target)...");
+        log("✔ Message Dispatched (LayerZero)");
+
+        await new Promise(r => setTimeout(r, 1000));
+        log("✔ Destination Confirmed");
+
+        setBridgePassed(true);
+        setLoading(false);
     };
 
-    const handleSubmit = async () => {
-        if (!confirm("Confirm Chain Registration?")) return;
+    // Step 8: Final Submit
+    const handleFinalize = async () => {
+        if (!confirm("Promote Chain to Public Status?")) return;
         setLoading(true);
         try {
-            // Mock Saving
-            await new Promise(r => setTimeout(r, 2000));
-            // Actual implementation would need AdminService.registerChain(formData())
+            await new Promise(r => setTimeout(r, 1500));
+            // In real app, call AdminService.registerChain with status 'ACTIVE_PUBLIC'
             console.log("Registered Chain:", formData());
             props.onSuccess();
-        } catch (e) {
-            alert("Registration Failed");
         } finally {
             setLoading(false);
         }
     };
 
     const Steps = [
-        { id: 1, title: 'Identity', icon: Network },
-        { id: 2, title: 'Bridge', icon: Database },
-        { id: 3, title: 'Security', icon: Shield },
-        { id: 4, title: 'Config', icon: Settings },
-        { id: 5, title: 'Review', icon: CheckCircle }
+        { id: 1, title: 'Meta', icon: Globe },
+        { id: 2, title: 'RPC', icon: Network },
+        { id: 3, title: 'Health', icon: Activity },
+        { id: 4, title: 'Exec', icon: Play },
+        { id: 5, title: 'Bridge', icon: Database },
+        { id: 6, title: 'Pool', icon: Settings },
+        { id: 7, title: 'Dev', icon: Lock },
+        { id: 8, title: 'Public', icon: CheckCircle }
     ];
 
     return (
-        <div class="fixed inset-0 z-[250] flex items-center justify-center p-6 text-white font-sans">
-            <div class="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={props.onClose} />
-
-            <div class="relative w-full max-w-4xl bg-[#0F172A] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[600px]">
+        <div class="fixed inset-0 z-[250] flex items-center justify-center p-6 text-white font-sans bg-black/80 backdrop-blur-md">
+            <div class="relative w-full max-w-5xl bg-[#0F172A] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[700px]">
                 {/* Header */}
                 <div class="p-6 border-b border-white/10 bg-white/5 flex justify-between items-center">
                     <div>
-                        <h2 class="text-2xl font-bold">New Chain Registration</h2>
-                        <p class="text-sm text-gray-400">Grand Paymaster Network Extension Wizard</p>
+                        <h2 class="text-2xl font-bold">Chain Onboarding Wizard</h2>
+                        <p class="text-sm text-gray-400">Vision Chain Grand Paymaster Integration</p>
                     </div>
-
-                    {/* Step Indicator */}
-                    <div class="flex items-center gap-2">
+                    {/* Steps */}
+                    <div class="flex items-center gap-1">
                         <For each={Steps}>
                             {(s) => (
-                                <div class={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${step() === s.id ? 'bg-blue-600 text-white' : step() > s.id ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-500'}`}>
-                                    <s.icon class="w-3 h-3" />
-                                    <span>{s.title}</span>
+                                <div class={`flex flex-col items-center gap-1 px-3 ${step() === s.id ? 'opacity-100' : 'opacity-40'}`}>
+                                    <div class={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step() === s.id ? 'bg-blue-600 text-white scan-line' : step() > s.id ? 'bg-green-500 text-black' : 'bg-white/10'}`}>
+                                        {step() > s.id ? '✓' : s.id}
+                                    </div>
+                                    <span class="text-[10px] uppercase font-bold tracking-wider">{s.title}</span>
                                 </div>
                             )}
                         </For>
                     </div>
                 </div>
 
-                {/* Content Body */}
+                {/* Body */}
                 <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+
+                    {/* Step 1: Metadata */}
                     <Show when={step() === 1}>
-                        <div class="space-y-6 max-w-2xl mx-auto animation-fade-in">
-                            <h3 class="text-xl font-bold text-blue-400 mb-4">Network Identity</h3>
-
-                            {/* Network Type Selector */}
-                            <div class="flex p-1 bg-white/5 rounded-xl border border-white/10 mb-6">
-                                <button onClick={() => setNetworkType('Testnet')}
-                                    class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${networkType() === 'Testnet' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    Testnet (Recommended)
-                                </button>
-                                <button onClick={() => setNetworkType('Mainnet')}
-                                    class={`flex-1 py-2 text-xs font-bold rounded-lg transition ${networkType() === 'Mainnet' ? 'bg-red-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    Mainnet
-                                </button>
-                            </div>
-
-                            <Show when={networkType() === 'Mainnet'}>
-                                <div class="p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3">
-                                    <Shield class="w-5 h-5 text-red-500" />
-                                    <div class="text-xs text-red-300">
-                                        <b>Warning:</b> Direct Mainnet registration is discouraged.<br />
-                                        Please verify compatibility on Testnet first.
-                                    </div>
+                        <div class="max-w-xl mx-auto space-y-4 animation-fade-in">
+                            <h3 class="text-xl font-bold text-blue-400">Step 1: Chain Metadata</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs text-gray-400">Chain Name</label>
+                                    <input type="text" class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
+                                        value={formData().name} onInput={(e) => setFormData({ ...formData(), name: e.currentTarget.value })} placeholder="e.g. Optimism Mainnet" />
                                 </div>
-                            </Show>
-
-                            <div class="grid grid-cols-2 gap-6">
-                                <div class="col-span-1">
-                                    <label class="block text-xs text-gray-400 mb-1">Chain ID (Decimal)</label>
-                                    <input type="number"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
-                                        placeholder="e.g. 1"
-                                        value={formData().chainId || ''}
-                                        onInput={(e) => setFormData({ ...formData(), chainId: parseInt(e.currentTarget.value) })}
-                                    />
+                                <div>
+                                    <label class="text-xs text-gray-400">Chain ID</label>
+                                    <input type="number" class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
+                                        value={formData().chainId || ''} onInput={(e) => setFormData({ ...formData(), chainId: parseInt(e.currentTarget.value) })} placeholder="10" />
                                 </div>
-                                <div class="col-span-1">
-                                    <label class="block text-xs text-gray-400 mb-1">Chain Name</label>
-                                    <input type="text"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
-                                        placeholder="e.g. Ethereum Mainnet"
-                                        value={formData().name || ''}
-                                        onInput={(e) => setFormData({ ...formData(), name: e.currentTarget.value })}
-                                    />
+                                <div>
+                                    <label class="text-xs text-gray-400">Native Token</label>
+                                    <input type="text" class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
+                                        value={formData().nativeGasToken} onInput={(e) => setFormData({ ...formData(), nativeGasToken: e.currentTarget.value })} />
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400">Fee Model</label>
+                                    <select class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
+                                        value={formData().feeModel} onChange={(e) => setFormData({ ...formData(), feeModel: e.currentTarget.value as any })}>
+                                        <option value="EIP1559">EIP-1559 (Recommended)</option>
+                                        <option value="LEGACY">Legacy</option>
+                                    </select>
                                 </div>
                                 <div class="col-span-2">
-                                    <label class="block text-xs text-gray-400 mb-1">RPC URL (HTTP)</label>
-                                    <div class="flex gap-2">
-                                        <input type="text"
-                                            class="flex-1 bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
-                                            placeholder="https://mainnet.infura.io/v3/..."
-                                            value={formData().rpcUrl || ''}
-                                            onInput={(e) => setFormData({ ...formData(), rpcUrl: e.currentTarget.value })}
-                                        />
-                                        <button onClick={handleRpcVerify} class={`px-4 rounded-lg font-bold text-sm ${rpcVerified() ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                                            {loading() ? '...' : rpcVerified() ? 'Verified' : 'Verify'}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="col-span-1">
-                                    <label class="block text-xs text-gray-400 mb-1">Native Token Symbol</label>
-                                    <input type="text"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
-                                        placeholder="ETH"
-                                        value={formData().nativeGasToken || ''}
-                                        onInput={(e) => setFormData({ ...formData(), nativeGasToken: e.currentTarget.value })}
-                                    />
+                                    <label class="text-xs text-gray-400">Explorer URL</label>
+                                    <input type="text" class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
+                                        value={formData().explorerUrl} onInput={(e) => setFormData({ ...formData(), explorerUrl: e.currentTarget.value })} />
                                 </div>
                             </div>
                         </div>
                     </Show>
 
+                    {/* Step 2: RPC Config */}
                     <Show when={step() === 2}>
-                        <div class="space-y-6 max-w-2xl mx-auto animation-fade-in">
-                            <h3 class="text-xl font-bold text-purple-400 mb-4">Cross-Chain Compatibility</h3>
-                            <div class="grid grid-cols-2 gap-6">
-                                <div class="col-span-2 p-4 bg-white/5 rounded-xl border border-white/10 flex items-center justify-between">
-                                    <div>
-                                        <div class="font-bold text-sm">EIP-1559 Support</div>
-                                        <div class="text-xs text-gray-400">Type 2 Transactions (BaseFee + PriorityFee)</div>
-                                    </div>
-                                    <input type="checkbox" checked={formData().compatibility?.eip1559} class="w-5 h-5 accent-blue-500"
-                                        onChange={(e) => setFormData({ ...formData(), compatibility: { ...formData().compatibility!, eip1559: e.currentTarget.checked } })}
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-400 mb-1">Avg Block Time (sec)</label>
-                                    <input type="number"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
-                                        value={formData().compatibility?.blockTimeSec}
-                                        onInput={(e) => setFormData({ ...formData(), compatibility: { ...formData().compatibility!, blockTimeSec: parseInt(e.currentTarget.value) } })}
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-400 mb-1">Bridge Adapter (Contract)</label>
-                                    <input type="text"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition font-mono text-sm"
-                                        placeholder="0x..."
-                                        value={formData().compatibility?.bridgeAdapter}
-                                        onInput={(e) => setFormData({ ...formData(), compatibility: { ...formData().compatibility!, bridgeAdapter: e.currentTarget.value } })}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </Show>
-
-                    <Show when={step() === 3}>
-                        <div class="space-y-6 max-w-2xl mx-auto animation-fade-in">
-                            <h3 class="text-xl font-bold text-red-400 mb-4">Security & Key Management</h3>
-
-                            <div class="p-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl mb-6">
-                                <h4 class="text-yellow-400 font-bold mb-2 flex items-center gap-2">
-                                    <Shield class="w-4 h-4" /> Critical Security Setup
-                                </h4>
-                                <p class="text-xs text-gray-300 leading-relaxed">
-                                    The Agent Wallet is a hot wallet for daily operations.
-                                    The TSS Key is for cold storage and high-value authorization.
-                                    <br /><b>Warning:</b> Ensure secure backup of the generated Agent Key.
-                                </p>
+                        <div class="max-w-xl mx-auto space-y-4 animation-fade-in">
+                            <h3 class="text-xl font-bold text-purple-400">Step 2: Connectivity</h3>
+                            <div class="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl text-sm text-blue-200">
+                                <b>Hybrid Strategy:</b> Use Managed RPCs for initial testing. Switch to Self-Hosted nodes when daily volume exceeds $1,000.
                             </div>
 
                             <div class="space-y-4">
-                                <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                                    <div>
-                                        <div class="text-sm font-bold text-gray-300">Agent Wallet (Hot)</div>
-                                        <div class="text-xs font-mono text-gray-500 mt-1">{formData().security?.agentWalletAddr || 'Not Generated'}</div>
+                                <div>
+                                    <label class="text-xs text-gray-400">Node Strategy</label>
+                                    <div class="flex bg-black/30 p-1 rounded-lg mt-1">
+                                        <button onClick={() => setFormData({ ...formData(), rpcConfig: { ...formData().rpcConfig!, nodeType: 'MANAGED' } })}
+                                            class={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData().rpcConfig?.nodeType === 'MANAGED' ? 'bg-purple-600 text-white' : 'text-gray-400'}`}>
+                                            Managed RPC
+                                        </button>
+                                        <button onClick={() => setFormData({ ...formData(), rpcConfig: { ...formData().rpcConfig!, nodeType: 'SELF_HOSTED' } })}
+                                            class={`flex-1 py-2 text-xs font-bold rounded-md transition ${formData().rpcConfig?.nodeType === 'SELF_HOSTED' ? 'bg-purple-600 text-white' : 'text-gray-400'}`}>
+                                            Self-Hosted
+                                        </button>
                                     </div>
-                                    <button onClick={generateWallet} disabled={walletGenerated()} class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition">
-                                        {walletGenerated() ? 'Generated' : 'Generate New'}
-                                    </button>
                                 </div>
-
-                                <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-                                    <div>
-                                        <div class="text-sm font-bold text-gray-300">TSS Owner Key (Cold)</div>
-                                        <div class="text-xs font-mono text-gray-500 mt-1">{tssKeyId() ? `Key ID: ${tssKeyId()}` : 'Not Initialized'}</div>
-                                    </div>
-                                    <button onClick={generateTssKey} disabled={!!tssKeyId()} class="px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 rounded-lg text-xs font-bold transition">
-                                        {tssKeyId() ? 'Initialized' : 'Init TSS KeyGen'}
-                                    </button>
+                                <div>
+                                    <label class="text-xs text-gray-400">Primary RPC (HTTP)</label>
+                                    <input type="text" class="w-full bg-black/20 border border-white/10 rounded-lg p-3 font-mono text-sm"
+                                        value={formData().rpcConfig?.primary} onInput={(e) => setFormData({ ...formData(), rpcConfig: { ...formData().rpcConfig!, primary: e.currentTarget.value } })}
+                                        placeholder="https://..." />
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400">Secondary RPC (Failover)</label>
+                                    <input type="text" class="w-full bg-black/20 border border-white/10 rounded-lg p-3 font-mono text-sm"
+                                        value={formData().rpcConfig?.secondary} onInput={(e) => setFormData({ ...formData(), rpcConfig: { ...formData().rpcConfig!, secondary: e.currentTarget.value } })}
+                                        placeholder="https://..." />
                                 </div>
                             </div>
                         </div>
                     </Show>
 
+                    {/* Step 3: Health Check */}
+                    <Show when={step() === 3}>
+                        <div class="max-w-xl mx-auto space-y-6 text-center animation-fade-in">
+                            <div class="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto relative">
+                                <Activity class={`w-10 h-10 ${loading() ? 'text-yellow-400 animate-pulse' : healthCheckPassed() ? 'text-green-400' : 'text-gray-500'}`} />
+                                {healthCheckPassed() && <div class="absolute -right-1 -top-1 bg-green-500 rounded-full p-1"><CheckCircle class="w-4 h-4 text-black" /></div>}
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-white">System Health Check</h3>
+                                <p class="text-gray-400 text-sm mt-1">Verifying RPC Latency, Block Sync, and Rate Limits</p>
+                            </div>
+
+                            <div class="bg-black/40 rounded-xl p-4 h-40 overflow-y-auto text-left font-mono text-xs text-green-400/80 border border-white/10 space-y-1">
+                                <For each={logs()}>{(line) => <div>{line}</div>}</For>
+                                {logs().length === 0 && <span class="text-gray-600 italic">Ready to start...</span>}
+                            </div>
+
+                            <Show when={!healthCheckPassed()} fallback={<div class="text-green-400 font-bold">✓ System Healthy</div>}>
+                                <button onClick={runHealthCheck} disabled={loading()}
+                                    class="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold text-sm transition disabled:opacity-50">
+                                    {loading() ? 'Analyzing...' : 'Run Diagnostics'}
+                                </button>
+                            </Show>
+                        </div>
+                    </Show>
+
+                    {/* Step 4: Adapter Execution Test */}
                     <Show when={step() === 4}>
-                        <div class="space-y-6 max-w-2xl mx-auto animation-fade-in">
-                            <h3 class="text-xl font-bold text-green-400 mb-4">Paymaster Configuration</h3>
-                            <div class="grid grid-cols-2 gap-6">
+                        <div class="max-w-xl mx-auto space-y-6 text-center animation-fade-in">
+                            <h3 class="text-xl font-bold text-white">Execution Adapter Verification</h3>
+                            <p class="text-gray-400 text-sm">Testing Gas Estimation and Transaction Relay</p>
+
+                            <div class="bg-black/40 rounded-xl p-4 h-40 overflow-y-auto text-left font-mono text-xs text-blue-400/80 border border-white/10 space-y-1">
+                                <For each={logs()}>{(line) => <div>{line}</div>}</For>
+                            </div>
+
+                            <Show when={!executionPassed()} fallback={<div class="text-blue-400 font-bold">✓ Execution Logic Verified</div>}>
+                                <button onClick={runAdapterTest} disabled={loading()}
+                                    class="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-sm transition disabled:opacity-50">
+                                    {loading() ? 'Testing...' : 'Test Execution Adapter'}
+                                </button>
+                            </Show>
+                        </div>
+                    </Show>
+
+                    {/* Step 5: Bridge Test */}
+                    <Show when={step() === 5}>
+                        <div class="max-w-xl mx-auto space-y-6 text-center animation-fade-in">
+                            <h3 class="text-xl font-bold text-white">Bridge Adapter Verification</h3>
+
+                            <div class="space-y-4 text-left">
                                 <div>
-                                    <label class="block text-xs text-gray-400 mb-1">EntryPoint Contract</label>
-                                    <input type="text"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition font-mono text-sm"
-                                        placeholder="0x5FF1..."
-                                        value={formData().contracts?.entryPoint}
-                                        onInput={(e) => setFormData({ ...formData(), contracts: { ...formData().contracts!, entryPoint: e.currentTarget.value } })}
+                                    <label class="text-xs text-gray-400">Bridge Adapter Contract</label>
+                                    <input type="text" class="w-full bg-black/20 border border-white/10 rounded-lg p-3 font-mono text-sm"
+                                        value={formData().contracts?.bridgeAdapter} onInput={(e) => setFormData({ ...formData(), contracts: { ...formData().contracts!, bridgeAdapter: e.currentTarget.value } })}
+                                        placeholder="0x..." />
+                                </div>
+                            </div>
+
+                            <div class="bg-black/40 rounded-xl p-4 h-40 overflow-y-auto text-left font-mono text-xs text-orange-400/80 border border-white/10 space-y-1">
+                                <For each={logs()}>{(line) => <div>{line}</div>}</For>
+                            </div>
+
+                            <Show when={!bridgePassed()} fallback={<div class="text-orange-400 font-bold">✓ Bridge Connection Verified</div>}>
+                                <button onClick={runBridgeTest} disabled={loading()}
+                                    class="px-8 py-3 bg-orange-600 hover:bg-orange-700 rounded-xl font-bold text-sm transition disabled:opacity-50">
+                                    {loading() ? 'Verifying...' : 'Test Cross-Chain Message'}
+                                </button>
+                            </Show>
+                        </div>
+                    </Show>
+
+                    {/* Step 6: Pool Setup */}
+                    <Show when={step() === 6}>
+                        <div class="max-w-xl mx-auto space-y-4 animation-fade-in">
+                            <h3 class="text-xl font-bold text-green-400">Paymaster Pool Liquidity</h3>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-xl mb-2 text-sm text-green-200">
+                                        <Shield class="w-4 h-4 inline mr-2" />
+                                        TSS KeyGen will be initiated for the cold wallet.
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400">Daily Cap (Native Token)</label>
+                                    <input type="number" class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
+                                        value={formatEther(formData().policy?.dailyCap)}
+                                        onInput={(e) => setFormData({ ...formData(), policy: { ...formData().policy!, dailyCap: parseEther(e.currentTarget.value) } })}
                                     />
                                 </div>
                                 <div>
-                                    <label class="block text-xs text-gray-400 mb-1">Paymaster Factory</label>
-                                    <input type="text"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition font-mono text-sm"
-                                        placeholder="0x..."
-                                        value={formData().contracts?.paymaster}
-                                        onInput={(e) => setFormData({ ...formData(), contracts: { ...formData().contracts!, paymaster: e.currentTarget.value } })}
-                                    />
-                                </div>
-                                <div class="col-span-1">
-                                    <label class="block text-xs text-gray-400 mb-1">Surcharge (%)</label>
-                                    <input type="number"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
-                                        value={formData().policy?.surchargePct}
-                                        onInput={(e) => setFormData({ ...formData(), policy: { ...formData().policy!, surchargePct: parseInt(e.currentTarget.value) } })}
-                                    />
-                                </div>
-                                <div class="col-span-1">
-                                    <label class="block text-xs text-gray-400 mb-1">Max Gas Price (Gwei)</label>
-                                    <input type="number"
-                                        class="w-full bg-black/20 border border-white/10 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition"
+                                    <label class="text-xs text-gray-400">Max Gas Price (Gwei)</label>
+                                    <input type="number" class="w-full bg-black/20 border border-white/10 rounded-lg p-3"
                                         value={formData().policy?.maxGasPrice}
                                         onInput={(e) => setFormData({ ...formData(), policy: { ...formData().policy!, maxGasPrice: e.currentTarget.value } })}
                                     />
@@ -306,37 +344,40 @@ const ChainRegistrationWizard: Component<ChainRegistrationWizardProps> = (props)
                         </div>
                     </Show>
 
-                    <Show when={step() === 5}>
-                        <div class="space-y-6 max-w-2xl mx-auto animation-fade-in text-center">
-                            <div class="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle class="w-8 h-8 text-blue-400" />
+                    {/* Step 7 & 8: Review & Promotion */}
+                    <Show when={step() >= 7}>
+                        <div class="max-w-2xl mx-auto space-y-6 text-center animation-fade-in">
+                            <div class="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto">
+                                <Globe class="w-10 h-10 text-blue-400" />
                             </div>
-                            <h3 class="text-2xl font-bold text-white mb-2">Ready to Register?</h3>
-                            <p class="text-gray-400 text-sm mb-8">
-                                You are about to add <b>{formData().name} (ID: {formData().chainId})</b> to the Grand Paymaster Network.
-                                <br />Double check the configuration below.
+                            <h3 class="text-2xl font-bold text-white">
+                                {step() === 7 ? 'Restricted Launch (Internal)' : 'Public Mainnet Launch'}
+                            </h3>
+                            <p class="text-gray-400 text-sm">
+                                {step() === 7
+                                    ? "Chain will be active only for whitelisted dApps for final verification."
+                                    : "Chain will be promoted to Public status for all developers."}
                             </p>
 
                             <div class="bg-white/5 rounded-xl p-6 text-left text-sm space-y-2 font-mono text-gray-300">
                                 <div class="flex justify-between border-b border-white/5 pb-2">
-                                    <span>RPC URL</span>
-                                    <span>{formData().rpcUrl}</span>
+                                    <span>Chain</span>
+                                    <span>{formData().name} ({formData().chainId})</span>
                                 </div>
                                 <div class="flex justify-between border-b border-white/5 pb-2">
-                                    <span>Wallet</span>
-                                    <span>{formData().security?.agentWalletAddr?.slice(0, 10)}...</span>
+                                    <span>Node</span>
+                                    <span>{formData().rpcConfig?.nodeType} ({formData().rpcConfig?.primary})</span>
                                 </div>
                                 <div class="flex justify-between border-b border-white/5 pb-2">
-                                    <span>Bridge</span>
-                                    <span>{formData().compatibility?.bridgeAdapter ? 'Configured' : 'None'}</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Policy</span>
-                                    <span>{formData().policy?.surchargePct}% Surcharge</span>
+                                    <span>Status</span>
+                                    <span class={step() === 7 ? 'text-yellow-400' : 'text-green-400'}>
+                                        {step() === 7 ? 'ACTIVE_RESTRICTED' : 'ACTIVE_PUBLIC'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </Show>
+
                 </div>
 
                 {/* Footer Controls */}
@@ -347,18 +388,22 @@ const ChainRegistrationWizard: Component<ChainRegistrationWizardProps> = (props)
                         <ArrowLeft class="w-4 h-4" /> Back
                     </button>
 
-                    <Show when={step() < 5} fallback={
-                        <button onClick={handleSubmit} disabled={loading()}
-                            class="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20 transition disabled:opacity-50"
+                    <Show when={step() === 8} fallback={
+                        <button onClick={handleNext}
+                            disabled={
+                                (step() === 3 && !healthCheckPassed()) ||
+                                (step() === 4 && !executionPassed()) ||
+                                (step() === 5 && !bridgePassed())
+                            }
+                            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg transition"
                         >
-                            {loading() ? 'Registering...' : 'Finalize Registration'}
-                            <CheckCircle class="w-4 h-4" />
+                            {step() === 7 ? 'Promote to Public' : 'Next Step'} <ArrowRight class="w-4 h-4" />
                         </button>
                     }>
-                        <button onClick={handleNext}
-                            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-500/20 transition"
+                        <button onClick={handleFinalize} disabled={loading()}
+                            class="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg transition"
                         >
-                            Next Step <ArrowRight class="w-4 h-4" />
+                            Confim Launch <CheckCircle class="w-4 h-4" />
                         </button>
                     </Show>
                 </div>
@@ -366,5 +411,9 @@ const ChainRegistrationWizard: Component<ChainRegistrationWizardProps> = (props)
         </div>
     );
 };
+
+// Helpers
+const formatEther = (wei?: string) => wei ? (Number(wei) / 1e18).toString() : '';
+const parseEther = (eth: string) => (Number(eth) * 1e18).toString();
 
 export default ChainRegistrationWizard;

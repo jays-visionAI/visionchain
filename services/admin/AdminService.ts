@@ -102,13 +102,13 @@ export const AdminService = {
     },
 
     /**
-     * Change Chain Status (e.g., Active -> Paused)
+     * Change Chain Status (e.g., TESTING -> ACTIVE_RESTRICTED)
      * Requires Timelock check for ACTIVATE.
      */
-    updateChainStatus: async (adminId: string, chainId: number, status: 'Active' | 'Paused'): Promise<void> => {
+    updateChainStatus: async (adminId: string, chainId: number, status: ChainConfig['status']): Promise<void> => {
         const db = getFirebaseDb();
 
-        if (status === 'Active') {
+        if (status === 'ACTIVE_PUBLIC' || status === 'ACTIVE_RESTRICTED') {
             const allowed = await checkTimelock(adminId, 'ACTIVATE_CHAIN');
             if (!allowed) throw new Error("Timelock verification failed.");
         }

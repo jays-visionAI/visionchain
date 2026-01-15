@@ -3,29 +3,44 @@ export type PaymasterMode = 'INIT' | 'NORMAL' | 'SAFE_MODE' | 'THROTTLED' | 'PAU
 export interface ChainConfig {
     chainId: number;
     name: string;
-    rpcUrl: string;
+
+    // Connectivity
+    rpcConfig: {
+        primary: string; // HTTP
+        websocket?: string;
+        secondary?: string; // Failover
+        nodeType: 'MANAGED' | 'SELF_HOSTED';
+    };
+
+    // Properties
     nativeGasToken: string;
     explorerUrl: string;
-    status: 'Testing' | 'Active' | 'Paused';
-    // Extended properties for Registration Wizard
-    compatibility?: {
-        eip1559: boolean;
-        blockTimeSec: number;
-        confirmations: number;
-        bridgeAdapter: string;
+    feeModel: 'EIP1559' | 'LEGACY';
+    finalityConfirmations: number; // e.g., 64 blocks
+
+    // Operational
+    status: 'TESTING' | 'ACTIVE_RESTRICTED' | 'ACTIVE_PUBLIC' | 'PAUSED';
+    health?: {
+        lastCheck: number;
+        status: 'HEALTHY' | 'DEGRADED' | 'DOWN';
     };
+
+    // Adapters (Contracts)
     contracts?: {
         entryPoint: string;
-        paymaster: string;
+        paymasterFactory: string;
+        bridgeAdapter: string;
     };
+
+    // Legacy/Compat (to be refactored)
     security?: {
-        agentWalletAddr: string; // Hot Wallet Public Key
-        checkKeyId: string;      // TSS Key ID
+        agentWalletAddr: string;
+        checkKeyId: string;
     };
     policy?: {
         surchargePct: number;
-        dailyCap: string;     // BigInt String
-        maxGasPrice: string;  // Gwei
+        dailyCap: string;
+        maxGasPrice: string;
     };
 }
 
