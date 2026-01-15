@@ -16,6 +16,11 @@ scp -i $REMOTE_KEY -r blockchain/engine/vision-shared-sequencer/* $REMOTE_HOST:$
 echo "📤 Uploading traffic generator source..."
 ssh -i $REMOTE_KEY $REMOTE_HOST "mkdir -p $REMOTE_DIR/traffic-generator"
 scp -i $REMOTE_KEY -r services/traffic-generator/* $REMOTE_HOST:$REMOTE_DIR/traffic-generator/
+# Upload .env if it exists locally
+if [ -f "services/traffic-generator/.env" ]; then
+    echo "🔑 Uploading Traffic Generator .env..."
+    scp -i $REMOTE_KEY services/traffic-generator/.env $REMOTE_HOST:$REMOTE_DIR/traffic-generator/.env
+fi
 
 # 3. Install Dependencies & Start Services
 echo "🔧 Installing dependencies and starting services..."

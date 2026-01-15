@@ -178,7 +178,14 @@ export const adminMenuConfig: AdminMenuItem[] = [
             }
         ]
     },
-
+    {
+        id: 'traffic-mgmt',
+        path: '/adminsystem/traffic',
+        label: 'Traffic Simulation',
+        icon: 'Activity',
+        category: 'developer',
+        order: 11
+    },
     // ===== SETTINGS (always last) =====
     {
         id: 'settings',

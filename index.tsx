@@ -46,6 +46,7 @@ const AdminCampaign = lazy(() => import('./components/admin/AdminCampaign'));
 const AdminActivity = lazy(() => import('./components/admin/AdminActivity'));
 const AdminDocuments = lazy(() => import('./components/admin/AdminDocuments'));
 const AdminVCNDistribution = lazy(() => import('./components/admin/AdminVCNDistribution'));
+const AdminTraffic = lazy(() => import('./components/admin/AdminTraffic'));
 const VcnSettings = lazy(() => import('./components/admin/VcnSettings'));
 
 // Loading spinner component
@@ -296,6 +297,17 @@ function AdminVCNDistributionPage() {
   );
 }
 
+function AdminTrafficPage() {
+  document.title = 'Traffic Control | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminTraffic />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
 function VcnSettingsPage() {
   document.title = 'Security Settings | Vision Chain';
   return (
@@ -342,6 +354,7 @@ render(() => (
       <Route path="/adminsystem/activity" component={AdminActivityPage} />
       <Route path="/adminsystem/vcn" component={AdminVCNDistributionPage} />
       <Route path="/adminsystem/vcn-settings" component={AdminSettingsPage} />
+      <Route path="/adminsystem/traffic" component={AdminTrafficPage} />
       <Route path="/adminsystem/documents" component={AdminDocumentsPage} />
       <Route path="/adminsystem/ai" component={AdminAIManagementPage} />
       <Route path="/adminsystem/api-docs" component={AdminApiDocsPage} />
