@@ -171,7 +171,7 @@ const Testnet: Component = () => {
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">1</div>
                                     <h4 class="text-sm font-bold mb-1 uppercase tracking-tight">MetaMask Setup (v2)</h4>
-                                    <p class="text-xs text-slate-500 leading-relaxed">Add Vision Testnet v2 manually. **Chain ID: 1001**, RPC: `46.224.221.201:8545`. Use VCN for gas.</p>
+                                    <p class="text-xs text-slate-500 leading-relaxed">Add Vision Testnet v2 manually. **Chain ID: 3151909**, RPC: `46.224.221.201:8545`. Use VCN for gas.</p>
                                 </li>
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">2</div>

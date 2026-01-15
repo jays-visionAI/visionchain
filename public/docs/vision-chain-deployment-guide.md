@@ -16,7 +16,7 @@ If you are not a developer and want to experience Vision Chain v2 immediately, f
 2.  Enter the following details:
     -   **Network Name**: Vision Testnet v2
     -   **RPC URL**: `http://46.224.221.201:8545`
-    -   **Chain ID**: `1001`
+    -   **Chain ID**: `3151909`
     -   **Currency Symbol**: `VCN`
     -   **Explorer**: `https://www.visionchain.co/visionscan`
 
@@ -63,7 +63,7 @@ Instead of broadcast, send the signed transaction to our Gateway:
 -   **Request Body**:
     ```json
     {
-      "chainId": 1001,
+      "chainId": 3151909,
       "signedTx": "0xSIGNED_DATA",
       "type": "A110",
       "metadata": {
