@@ -28,6 +28,35 @@ const checkTimelock = async (adminId: string, action: string): Promise<boolean> 
 
 export const AdminService = {
     /**
+     * Verify Chain RPC Connectivity
+     */
+    validateRpc: async (url: string, chainId: number): Promise<boolean> => {
+        try {
+            console.log(`[AdminService] Verifying RPC ${url} for Chain ${chainId}`);
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'eth_chainId',
+                    params: []
+                })
+            });
+            const data = await response.json();
+            const rpcChainId = parseInt(data.result, 16);
+            if (rpcChainId !== chainId) {
+                console.warn(`Chain ID Mismatch: Expected ${chainId}, got ${rpcChainId}`);
+                return false;
+            }
+            return true;
+        } catch (e) {
+            console.error("RPC Validation Failed", e);
+            return false;
+        }
+    },
+
+    /**
      * Register a new compatible chain.
      * Triggers automatic Pool creation.
      */
@@ -39,7 +68,7 @@ export const AdminService = {
         const exists = (await getDoc(chainRef)).exists();
         if (exists) throw new Error(`Chain ${config.chainId} already registered.`);
 
-        // 2. Register Chain
+        // 2. Register Chain (with extended metadata)
         await setDoc(chainRef, {
             ...config,
             createdAt: Date.now(),
@@ -53,7 +82,7 @@ export const AdminService = {
         const initialPool: PaymasterPool = {
             poolId,
             chainId: config.chainId,
-            gasAccountAddress: '0x0000000000000000000000000000000000000000', // To be filled by Vault Ops
+            gasAccountAddress: config.security?.agentWalletAddr || '0x0000000000000000000000000000000000000000',
             vaultAddress: '0x0000000000000000000000000000000000000000',
             balance: BigInt(0),
             minBalance: BigInt(1000000000000000000), // 1 ETH default
@@ -65,8 +94,7 @@ export const AdminService = {
             anomalyScore: 0
         };
 
-        // Firestore doesn't support BigInt natively, so we convert to strong string or number-string
-        // For MVP, we'll store as string and parse back.
+        // Firestore storage for BigInt
         await setDoc(poolRef, JSON.parse(JSON.stringify(initialPool, (_, v) => typeof v === 'bigint' ? v.toString() : v)));
 
         // 4. Audit Log

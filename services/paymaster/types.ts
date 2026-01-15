@@ -7,6 +7,26 @@ export interface ChainConfig {
     nativeGasToken: string;
     explorerUrl: string;
     status: 'Testing' | 'Active' | 'Paused';
+    // Extended properties for Registration Wizard
+    compatibility?: {
+        eip1559: boolean;
+        blockTimeSec: number;
+        confirmations: number;
+        bridgeAdapter: string;
+    };
+    contracts?: {
+        entryPoint: string;
+        paymaster: string;
+    };
+    security?: {
+        agentWalletAddr: string; // Hot Wallet Public Key
+        checkKeyId: string;      // TSS Key ID
+    };
+    policy?: {
+        surchargePct: number;
+        dailyCap: string;     // BigInt String
+        maxGasPrice: string;  // Gwei
+    };
 }
 
 export interface AuditLog {

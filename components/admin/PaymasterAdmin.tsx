@@ -5,12 +5,15 @@ import { PaymasterAgent } from '../../services/paymaster/PaymasterAgent';
 import { GrandOrchestrator } from '../../services/paymaster/GrandOrchestrator';
 import { getFirebaseDb } from '../../services/firebaseService';
 import { doc, updateDoc } from 'firebase/firestore';
+import ChainRegistrationWizard from './ChainRegistrationWizard';
 
 const PaymasterAdmin: Component = () => {
     const [stats, setStats] = createSignal<any>(null);
     const [chains, setChains] = createSignal<ChainConfig[]>([]);
     const [pools, setPools] = createSignal<Record<number, PaymasterPool>>({});
+    const [pools, setPools] = createSignal<Record<number, PaymasterPool>>({});
     const [loading, setLoading] = createSignal(true);
+    const [isWizardOpen, setIsWizardOpen] = createSignal(false);
 
     let agent: PaymasterAgent | undefined;
     let orchestrator: GrandOrchestrator | undefined;
@@ -155,7 +158,7 @@ const PaymasterAdmin: Component = () => {
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-semibold">Chain Agent Nodes</h2>
                         <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition"
-                            onClick={() => alert("Launching Chain Registration Wizard... (Coming Soon)")}>
+                            onClick={() => setIsWizardOpen(true)}>
                             + Register New Chain
                         </button>
                     </div>
@@ -219,6 +222,17 @@ const PaymasterAdmin: Component = () => {
                     </div>
                 </section>
             </div>
+
+            <Show when={isWizardOpen()}>
+                <ChainRegistrationWizard
+                    onClose={() => setIsWizardOpen(false)}
+                    onSuccess={() => {
+                        setIsWizardOpen(false);
+                        refreshData();
+                        alert("Chain Registered Successfully!");
+                    }}
+                />
+            </Show>
         </Show>
     );
 };
