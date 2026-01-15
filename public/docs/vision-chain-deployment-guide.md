@@ -4,6 +4,34 @@ This manual guides developers on how to build, deploy, and verify applications o
 
 ---
 
+## 🏁 Beginner's Path (No-Code Quick Start)
+If you are not a developer and want to experience Vision Chain v2 immediately, follow this path.
+
+### 1. Prepare your Wallet (MetaMask)
+1.  Download [MetaMask](https://metamask.io/) for your browser.
+2.  Create a new wallet and securely back up your **Recovery Phrase**.
+
+### 2. Connect to Vision v2
+1.  Open MetaMask -> Click Network Selection -> **Add Network Manually**.
+2.  Enter the following details:
+    -   **Network Name**: Vision Testnet v2
+    -   **RPC URL**: `http://46.224.221.201:8545`
+    -   **Chain ID**: `1001`
+    -   **Currency Symbol**: `VCN`
+    -   **Explorer**: `https://www.visionchain.co/visionscan`
+
+### 3. Experience the Ecosystem
+1.  **Acquire VCN**: Use the [Testnet Hub](https://www.visionchain.co/testnet) to request your first 10,000 VCN.
+2.  **Send & Verify**: Send a small amount of VCN to a friend, then search your wallet on [VisionScan](https://www.visionchain.co/visionscan) to see the **AI-generated Accounting entries**.
+3.  **Watch Live Traffic**: Visit the [Traffic Simulator](https://www.visionchain.co/trafficsim) to see real-time agentic interactions.
+
+---
+
+## 🛠️ Developer Path (Technical Integration)
+For engineers building on Vision Chain, proceed with the technical steps below.
+
+---
+
 ## Step 1: Network Configuration
 To interact with the testnet, add the following network settings to your wallet (MetaMask) or development environment (Hardhat/Foundry):
 
