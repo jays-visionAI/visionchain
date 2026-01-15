@@ -192,7 +192,19 @@ export default function VisionScan() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6 }}
                     >
-                        <h1 class="text-5xl md:text-7xl font-black tracking-tighter mb-4 italic translate-y-2">VISION SCAN</h1>
+                        <div class="flex flex-col items-center gap-4 mb-6">
+                            <h1 class="text-5xl md:text-7xl font-black tracking-tighter italic translate-y-2">VISION SCAN</h1>
+                            <div class="flex items-center gap-3">
+                                <div class="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center gap-2">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Testnet v2 Beta</span>
+                                </div>
+                                <div class="px-3 py-1 bg-white/5 border border-white/10 rounded-full flex items-center gap-2">
+                                    <Globe class="w-3 h-3 text-gray-500" />
+                                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Network: 46.224.221.201</span>
+                                </div>
+                            </div>
+                        </div>
                         <p class="text-blue-500 font-black tracking-[0.3em] uppercase text-xs mb-10">Accounting-Grade Blockchain Explorer</p>
                     </Motion.div>
 
@@ -233,10 +245,10 @@ export default function VisionScan() {
             {/* Network Stats */}
             <div class="max-w-7xl mx-auto px-6 -mt-10 mb-12 relative z-20">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard label="VCN INDEX" value="$4.8219" subValue="+12.42%" icon={<TrendingUp class="w-4 h-4" />} />
-                    <StatCard label="NETWORK THROUGHPUT" value="142.82M" subValue="14.2 TPS" icon={<Activity class="w-4 h-4" />} />
-                    <StatCard label="BLOCK HEIGHT" value={blockHeight()} icon={<Database class="w-4 h-4 text-secondary-500" />} />
-                    <StatCard label="GAS SETTLEMENT" value={`${gasPrice()} GWEI`} icon={<Layers class="w-4 h-4 text-blue-500" />} />
+                    <StatCard label="TESTNET VCN INDEX" value="$4.8219" subValue="+12.42%" icon={<TrendingUp class="w-4 h-4" />} />
+                    <StatCard label="TESTNET THROUGHPUT" value="142.82M" subValue="LIVE" icon={<Activity class="w-4 h-4 text-blue-400" />} />
+                    <StatCard label="v2 BLOCK HEIGHT" value={blockHeight()} icon={<Database class="w-4 h-4 text-blue-500" />} />
+                    <StatCard label="GAS SETTLEMENT (v2)" value={`${gasPrice()} GWEI`} icon={<Layers class="w-4 h-4 text-blue-500" />} />
                 </div>
             </div>
 
@@ -283,6 +295,7 @@ export default function VisionScan() {
                                         ))}
                                     </select>
                                 </div>
+
                                 <div class="space-y-2">
                                     <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
                                         <User class="w-3 h-3" /> Counterparty
@@ -403,7 +416,12 @@ export default function VisionScan() {
                                         {filteredTransactions().length} Records
                                     </div>
                                     <div class={`px-3 py-1.5 border rounded-lg text-[9px] font-black uppercase tracking-widest ${isLive() ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse' : 'bg-red-500/10 border-red-500/20 text-red-500'}`}>
-                                        {isLive() ? 'Live' : 'Offline'}
+                                        {isLive() ? (
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                                Vision v2 Testnet Live (Recording)
+                                            </div>
+                                        ) : 'Offline'}
                                     </div>
                                 </div>
                             </div>
