@@ -1,0 +1,11 @@
+{
+    "name": "vision-traffic-generator",
+    "version": "1.0.0",
+    "description": "Automated stress testing bot for Vision Chain Testnet",
+    "main": "index.js",
+    "dependencies": {
+        "ethers": "^6.10.0",
+        "axios": "^1.6.7",
+        "dotenv": "^16.4.1"
+    }
+}
