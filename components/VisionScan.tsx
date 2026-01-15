@@ -215,7 +215,7 @@ export default function VisionScan() {
                             <input
                                 type="text"
                                 placeholder="Address / Tx Hash / Block / Token / Domain"
-                                class="w-full bg-transparent border-none px-4 py-3 text-sm focus:outline-none placeholder-gray-600 font-medium"
+                                class="w-full bg-transparent border-none px-4 py-3 text-sm focus:outline-none placeholder-gray-600 font-medium text-white"
                             />
                             <button class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors mr-1">
                                 Search

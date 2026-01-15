@@ -688,12 +688,13 @@ export const getUserPurchases = async (email: string): Promise<VcnPurchase[]> =>
             purchases.push({
                 id: 'sale_' + emailLower,
                 email: saleData.email,
+                partnerCode: saleData.partnerCode || 'LEGACY',
                 amount: saleData.amountToken,
-                purchaseDate: saleData.date,
                 initialUnlockRatio: saleData.unlockRatio,
                 cliffMonths: 0, // CSV doesn't have cliff currently
                 vestingMonths: saleData.vestingPeriod,
                 status: 'active',
+                walletReady: false,
                 createdAt: saleData.date || new Date().toISOString()
             });
         }
@@ -964,7 +965,46 @@ export const activateAccountWithToken = async (token: string, password: string) 
     return { email, partnerCode };
 };
 
-// Function removed (Duplicate of updateWalletStatus above)
+// ==================== Document Management ====================
+
+export interface AdminDocument {
+    id: string;
+    title: string;
+    category: string;
+    type: string;
+    content: string;
+    author: string;
+    updatedAt: string;
+    attachments: string[];
+}
+
+export const getDocuments = async (): Promise<AdminDocument[]> => {
+    try {
+        const db = getFirebaseDb();
+        const docsCollection = collection(db, 'system_documents');
+        const q = query(docsCollection, orderBy('updatedAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminDocument));
+    } catch (error) {
+        console.error('Error fetching documents:', error);
+        return [];
+    }
+};
+
+export const saveAdminDocument = async (docData: AdminDocument): Promise<void> => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'system_documents', docData.id);
+    await setDoc(docRef, {
+        ...docData,
+        updatedAt: new Date().toISOString().split('T')[0]
+    });
+};
+
+export const deleteAdminDocument = async (id: string): Promise<void> => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'system_documents', id);
+    await deleteDoc(docRef);
+};
 
 // Initialize on import
 initializeFirebase();

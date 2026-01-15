@@ -26,19 +26,9 @@ import {
 import { Motion } from 'solid-motionone';
 import Quill from 'quill';
 import { marked } from 'marked';
+import { getDocuments, saveAdminDocument, deleteAdminDocument, AdminDocument } from '../../services/firebaseService';
 
-interface Document {
-    id: string;
-    title: string;
-    category: string;
-    type: string;
-    content: string;
-    author: string;
-    updatedAt: string;
-    attachments: string[];
-}
-
-const MOCK_DOCUMENTS: Document[] = [
+const MOCK_DOCUMENTS: AdminDocument[] = [
     {
         id: '1',
         title: '주문장과 회원계정 인증 및 매칭 이슈',
@@ -62,12 +52,28 @@ const MOCK_DOCUMENTS: Document[] = [
 ];
 
 export default function AdminDocuments() {
-    const [documents, setDocuments] = createSignal<Document[]>(MOCK_DOCUMENTS);
+    const [documents, setDocuments] = createSignal<AdminDocument[]>([]);
+    const [loading, setLoading] = createSignal(true);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [isEditorOpen, setIsEditorOpen] = createSignal(false);
-    const [selectedDoc, setSelectedDoc] = createSignal<Document | null>(null);
+    const [selectedDoc, setSelectedDoc] = createSignal<AdminDocument | null>(null);
     const [isSaving, setIsSaving] = createSignal(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+
+    onMount(async () => {
+        await loadDocuments();
+    });
+
+    const loadDocuments = async () => {
+        setLoading(true);
+        const docs = await getDocuments();
+        if (docs.length === 0) {
+            setDocuments(MOCK_DOCUMENTS);
+        } else {
+            setDocuments(docs);
+        }
+        setLoading(false);
+    };
 
     // Form Signals
     const [title, setTitle] = createSignal('');
@@ -78,7 +84,7 @@ export default function AdminDocuments() {
     let editorRef: HTMLDivElement | undefined;
     let quill: any;
 
-    const openEditor = (doc: Document | null = null) => {
+    const openEditor = (doc: AdminDocument | null = null) => {
         if (doc) {
             setSelectedDoc(doc);
             setTitle(doc.title);
@@ -133,10 +139,7 @@ export default function AdminDocuments() {
         setIsSaving(true);
         const content = quill.root.innerHTML;
 
-        // Mock save delay
-        await new Promise(r => setTimeout(r, 800));
-
-        const newDoc: Document = {
+        const newDoc: AdminDocument = {
             id: selectedDoc()?.id || Date.now().toString(),
             title: title(),
             category: category(),
@@ -147,27 +150,33 @@ export default function AdminDocuments() {
             attachments: attachments()
         };
 
-        if (selectedDoc()) {
-            setDocuments(docs => docs.map(d => d.id === newDoc.id ? newDoc : d));
-        } else {
-            setDocuments(docs => [newDoc, ...docs]);
+        try {
+            await saveAdminDocument(newDoc);
+            await loadDocuments(); // Reload from Firebase
+            setIsEditorOpen(false);
+        } catch (error) {
+            console.error("Failed to save document:", error);
+            alert("저장에 실패했습니다.");
+        } finally {
+            setIsSaving(false);
         }
-
-        setIsSaving(false);
-        setIsEditorOpen(false);
     };
 
     const handleDelete = async () => {
         if (!selectedDoc()) return;
 
-        // Mock deletion delay
         setIsSaving(true);
-        await new Promise(r => setTimeout(r, 500));
-
-        setDocuments(docs => docs.filter(d => d.id !== selectedDoc()!.id));
-        setIsSaving(false);
-        setShowDeleteConfirm(false);
-        setIsEditorOpen(false);
+        try {
+            await deleteAdminDocument(selectedDoc()!.id);
+            await loadDocuments();
+            setShowDeleteConfirm(false);
+            setIsEditorOpen(false);
+        } catch (error) {
+            console.error("Failed to delete document:", error);
+            alert("삭제에 실패했습니다.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const filteredDocs = () => {
