@@ -33,7 +33,7 @@ const Testnet: Component = () => {
         { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
         { label: 'RPC URL', value: 'http://46.224.221.201:8545', id: 'rpc' },
         { label: 'Sequencer API', value: 'http://46.224.221.201:3000/rpc/submit', id: 'seq' },
-        { label: 'Chain ID', value: '1001', id: 'chainid' },
+        { label: 'Chain ID', value: '3151909', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
     ];
 

@@ -37,7 +37,7 @@ To interact with the testnet, add the following network settings to your wallet 
 
 -   **Network Name**: Vision Testnet v2
 -   **New RPC URL**: `http://46.224.221.201:8545`
--   **Chain ID**: `1001`
+-   **Chain ID**: `3151909`
 -   **Currency Symbol**: `VCN`
 -   **Block Explorer**: `https://www.visionchain.co/visionscan`
 
