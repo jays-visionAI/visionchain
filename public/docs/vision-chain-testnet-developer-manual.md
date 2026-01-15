@@ -131,3 +131,12 @@ You can connect your local test suite (Hardhat/Foundry) to the simulator to visu
 ---
 
 **Support**: Join our Developer Discord or contact the Engineering team for custom API hooks.
+
+---
+
+## Step 7: Cross-chain Bridge
+Vision Chain v2 supports seamless asset migration between disparate networks.
+
+1.  **Deposit (L1 → L2)**: Send tokens from an external Ethereum Testnet (e.g., Sepolia) to the Vision Bridge entry point.
+2.  **Withdrawal (L2 → L1)**: Initiate a return flight for your assets back to the source chain via the L2 Bridge interface.
+3.  **Proof of Migration**: All cross-chain movements are indexed and verifiable via **VisionScan**.

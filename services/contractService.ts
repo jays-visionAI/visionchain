@@ -13,10 +13,12 @@ const ADDRESSES = {
     MINING_POOL: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     VCN_VESTING: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
 
-    // Legacy / Other
-    // Vision Chain RPC Endpoint
-    RPC_URL: "http://46.224.221.201:8545", // Custom Testnet v1
-    LOCAL_RPC: "http://46.224.221.201:8545",
+    // Vision Chain RPC Resource Pool (Added for high-availability)
+    RPC_NODES: [
+        "http://46.224.221.201:8545",  // Primary Node
+        "http://46.224.221.201:8546"   // Backup Node (Simulated for failover)
+    ],
+    RPC_URL: "http://46.224.221.201:8545",
     SEQUENCER_URL: "http://46.224.221.201:3000/rpc/submit",
 
     // Interoperability (Equalizer Model)
@@ -56,19 +58,26 @@ export class ContractService {
 
     async connectInternalWallet(privateKey: string): Promise<string> {
         try {
-            // Use local RPC if possible, otherwise public testnet
-            const rpcUrl = ADDRESSES.LOCAL_RPC;
-            const provider = new ethers.JsonRpcProvider(rpcUrl);
+            let successfulProvider = null;
 
-            // Validate connection
-            try {
-                await provider.getNetwork();
-                this.provider = provider;
-            } catch (e) {
-                console.warn("Local RPC failed, falling back to public testnet");
-                this.provider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+            // RPC Failover Loop
+            for (const rpcUrl of ADDRESSES.RPC_NODES) {
+                try {
+                    const provider = new ethers.JsonRpcProvider(rpcUrl);
+                    await provider.getNetwork();
+                    successfulProvider = provider;
+                    console.log(`✅ Connected to RPC: ${rpcUrl}`);
+                    break;
+                } catch (e) {
+                    console.warn(`❌ RPC Node Failed: ${rpcUrl}. Trying next...`);
+                }
             }
 
+            if (!successfulProvider) {
+                throw new Error("Critical: All RPC nodes are currently unreachable. Check network status.");
+            }
+
+            this.provider = successfulProvider;
             this.signer = new ethers.Wallet(privateKey, this.provider);
             const address = await this.signer.getAddress();
 

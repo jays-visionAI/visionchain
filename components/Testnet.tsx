@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount } from 'solid-js';
+import { Component, createSignal, onMount, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import {
     Network,
@@ -11,17 +11,67 @@ import {
     ShieldCheck,
     Zap,
     Copy,
+    Plus,
     CheckCircle2,
     Download,
     Maximize2,
     Activity,
     ArrowUpRight,
     Settings,
-    Info
+    Info,
+    AlertCircle
 } from 'lucide-solid';
 
 const Testnet: Component = () => {
     const [copied, setCopied] = createSignal<string | null>(null);
+    const [rpcStatus, setRpcStatus] = createSignal<'Checking' | 'Online' | 'Offline'>('Checking');
+
+    const checkRpc = async () => {
+        try {
+            const response = await fetch('http://46.224.221.201:8545', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 })
+            });
+            if (response.ok) setRpcStatus('Online');
+            else setRpcStatus('Offline');
+        } catch (e) {
+            setRpcStatus('Offline');
+        }
+    };
+
+    onMount(() => {
+        window.scrollTo(0, 0);
+        checkRpc();
+    });
+
+    const addToMetaMask = async () => {
+        if (!(window as any).ethereum) {
+            alert('MetaMask is not installed. Please install it to use this feature.');
+            return;
+        }
+
+        try {
+            await (window as any).ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [
+                    {
+                        chainId: '0x' + (3151909).toString(16),
+                        chainName: 'Vision Testnet v2',
+                        nativeCurrency: {
+                            name: 'VCN',
+                            symbol: 'VCN',
+                            decimals: 18,
+                        },
+                        rpcUrls: ['http://46.224.221.201:8545'],
+                        blockExplorerUrls: ['https://www.visionchain.co/visionscan'],
+                    },
+                ],
+            });
+        } catch (error) {
+            console.error('Failed to add network to MetaMask:', error);
+        }
+    };
 
     const copyToClipboard = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
@@ -36,10 +86,6 @@ const Testnet: Component = () => {
         { label: 'Chain ID', value: '3151909', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
     ];
-
-    onMount(() => {
-        window.scrollTo(0, 0);
-    });
 
     return (
         <div class="min-h-screen bg-[#050505] text-white pt-24 pb-20">
@@ -71,10 +117,54 @@ const Testnet: Component = () => {
 
                         {/* Network Configuration */}
                         <section>
-                            <h2 class="text-2xl font-bold flex items-center gap-3 mb-8">
-                                <Network class="w-6 h-6 text-blue-500" />
-                                Network Configuration
-                            </h2>
+                            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                                <h2 class="text-2xl font-bold flex items-center gap-3">
+                                    <Network class="w-6 h-6 text-blue-500" />
+                                    Network Configuration
+                                    <div class="flex items-center gap-2 ml-4 px-2 py-1 rounded-full bg-white/5 border border-white/10 shrink-0">
+                                        <div class={`w-2 h-2 rounded-full ${rpcStatus() === 'Online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' :
+                                            rpcStatus() === 'Offline' ? 'bg-red-500' : 'bg-slate-500 animate-pulse'
+                                            }`} />
+                                        <span class={`text-[10px] font-bold uppercase tracking-widest ${rpcStatus() === 'Online' ? 'text-green-400' :
+                                            rpcStatus() === 'Offline' ? 'text-red-400' : 'text-slate-500'
+                                            }`}>
+                                            RPC: {rpcStatus()}
+                                        </span>
+                                    </div>
+                                </h2>
+                                <div class="flex items-center gap-4">
+                                    <Show when={rpcStatus() === 'Offline'}>
+                                        <button
+                                            onClick={checkRpc}
+                                            class="text-[10px] font-black text-blue-500 hover:text-blue-400 underline decoration-dotted underline-offset-4"
+                                        >
+                                            Retry Connection
+                                        </button>
+                                    </Show>
+                                    <button
+                                        onClick={addToMetaMask}
+                                        class="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-[11px] uppercase tracking-widest transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                                    >
+                                        <Plus class="w-4 h-4" />
+                                        Add to MetaMask
+                                    </button>
+                                </div>
+                            </div>
+
+                            <Show when={rpcStatus() === 'Offline'}>
+                                <div class="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
+                                    <AlertCircle class="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                                    <div>
+                                        <h4 class="text-sm font-bold text-red-400 mb-1">Connection Issue Detected</h4>
+                                        <p class="text-xs text-slate-400 leading-relaxed">
+                                            The RPC endpoint is unreachable. This usually happens because:
+                                            <br />• Your browser is blocking **HTTP** calls on an **HTTPS** site (Mixed Content).
+                                            <br />• The IP Address (`46.224.221.201`) is temporarily restricted by your firewall.
+                                            <br /><strong class="text-slate-300">Solution:</strong> Try accessing the RPC URL directly in a new tab, then click "Advanced {"->"} Proceed" to trust the IP.
+                                        </p>
+                                    </div>
+                                </div>
+                            </Show>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {networkInfo.map((item) => (
                                     <div class="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/[0.07] transition-all group">
@@ -153,6 +243,22 @@ const Testnet: Component = () => {
                                         <p class="text-xs text-slate-500 leading-relaxed">The Shared Sequencer v2 ingests the event and credits your account with microsecond latency.</p>
                                     </div>
                                 </div>
+                                <div class="pt-6">
+                                    <A
+                                        href="/bridge"
+                                        class="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-xl shadow-purple-500/20 active:scale-95"
+                                    >
+                                        <ArrowRightLeft class="w-4 h-4" />
+                                        Launch Vision Bridge
+                                    </A>
+                                    <A
+                                        href="/paymaster"
+                                        class="inline-flex items-center gap-2 px-8 py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-xl active:scale-95"
+                                    >
+                                        <ShieldCheck class="w-4 h-4 text-orange-400" />
+                                        Gasless Hub (Paymaster)
+                                    </A>
+                                </div>
                             </div>
                         </section>
 
@@ -182,6 +288,16 @@ const Testnet: Component = () => {
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">3</div>
                                     <h4 class="text-sm font-bold mb-1 uppercase tracking-tight">AI Accounting Audit</h4>
                                     <p class="text-xs text-slate-500 leading-relaxed">Verify transactions on **VisionScan Beta**. View automated journal entries (Dr/Cr) and tax classification generated by AI.</p>
+                                </li>
+                                <li class="relative pl-8">
+                                    <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400">4</div>
+                                    <h4 class="text-sm font-bold mb-1 uppercase tracking-tight">Cross-chain Bridge</h4>
+                                    <p class="text-xs text-slate-500 leading-relaxed">Simulate asset deposits and withdrawals between external L1 networks and Vision v2 via the **Bridge Dashboard**.</p>
+                                </li>
+                                <li class="relative pl-8">
+                                    <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center text-[10px] font-bold text-orange-400">5</div>
+                                    <h4 class="text-sm font-bold mb-1 uppercase tracking-tight">Gasless Paymaster (AA)</h4>
+                                    <p class="text-xs text-slate-500 leading-relaxed">Experience zero-gas transactions. Developers can sponsor their users' gas fees via the **Paymaster Hub**.</p>
                                 </li>
                             </ul>
 

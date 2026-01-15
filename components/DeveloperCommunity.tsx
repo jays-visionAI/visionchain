@@ -1,7 +1,7 @@
 import { createSignal, Show } from 'solid-js';
 import type { JSX, Component } from 'solid-js';
 import { Motion } from 'solid-motionone';
-import { Terminal, Code, Cpu, Zap, ArrowRight, CheckCircle, Lock, Trophy, Lightbulb, Github } from 'lucide-solid';
+import { Terminal, Code, Cpu, Zap, ArrowRight, CheckCircle, Lock, Trophy, Lightbulb, Github, CreditCard } from 'lucide-solid';
 import ParticleNetwork3D from './ParticleNetwork3D';
 
 interface FeatureCardProps {
@@ -156,11 +156,19 @@ const DeveloperCommunity = (): JSX.Element => {
             icon={Zap}
             delay={0.4}
           />
+          <div class="cursor-pointer" onClick={() => window.location.href = '/paymaster'}>
+            <FeatureCard
+              title="Gas Abstraction (Paymaster)"
+              desc="Onboard users without VCN. Sponsored transactions via ERC-4337 Paymaster integration."
+              icon={CreditCard}
+              delay={0.5}
+            />
+          </div>
           <FeatureCard
             title="Global Hackathons"
-            desc="Participate in seasonal coding challenges to build the next generation of agentic dApps and win prizes."
+            desc="Participate in seasonal coding challenges to build the next generation of agentic dApps."
             icon={Trophy}
-            delay={0.5}
+            delay={0.6}
           />
           <FeatureCard
             title="Ideathon Grants"

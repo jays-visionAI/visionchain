@@ -27,6 +27,8 @@ const Wallet = lazy(() => import('./components/Wallet'));
 const VisionScan = lazy(() => import('./components/VisionScan'));
 const TrafficSimulator = lazy(() => import('./components/TrafficSimulator'));
 const Testnet = lazy(() => import('./components/Testnet'));
+const Bridge = lazy(() => import('./components/Bridge'));
+const Paymaster = lazy(() => import('./components/Paymaster'));
 
 // Auth components
 const Login = lazy(() => import('./components/auth/Login'));
@@ -48,6 +50,7 @@ const AdminDocuments = lazy(() => import('./components/admin/AdminDocuments'));
 const AdminVCNDistribution = lazy(() => import('./components/admin/AdminVCNDistribution'));
 const AdminTraffic = lazy(() => import('./components/admin/AdminTraffic'));
 const VcnSettings = lazy(() => import('./components/admin/VcnSettings'));
+const PaymasterAdmin = lazy(() => import('./components/admin/PaymasterAdmin'));
 
 // Loading spinner component
 function PageLoader() {
@@ -175,6 +178,16 @@ function VisionScanPage() {
 function TestnetPage() {
   document.title = 'Testnet Hub | Vision Chain';
   return <div id="testnet"><Testnet /></div>;
+}
+
+function BridgePage() {
+  document.title = 'Vision Bridge | Cross-chain Asset Migration';
+  return <div id="bridge"><Bridge /></div>;
+}
+
+function PaymasterPage() {
+  document.title = 'Vision Paymaster | Gasless Transaction Hub';
+  return <div id="paymaster"><Paymaster /></div>;
 }
 
 function AdminLoginPage() {
@@ -319,6 +332,17 @@ function VcnSettingsPage() {
   );
 }
 
+function PaymasterAdminPage() {
+  document.title = 'Paymaster Ops | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <PaymasterAdmin />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -346,6 +370,8 @@ render(() => (
       <Route path="/trafficsim" component={TrafficSimulatorPage} />
       <Route path="/visionscan" component={VisionScanPage} />
       <Route path="/testnet" component={TestnetPage} />
+      <Route path="/bridge" component={BridgePage} />
+      <Route path="/paymaster" component={PaymasterPage} />
       {/* Admin Routes */}
       <Route path="/adminsystem" component={AdminDashboardPage} />
       <Route path="/adminsystem/users" component={AdminUsersPage} />
@@ -360,6 +386,7 @@ render(() => (
       <Route path="/adminsystem/api-docs" component={AdminApiDocsPage} />
       <Route path="/adminsystem/api-docs/*" component={AdminApiDocsPage} />
       <Route path="/adminsystem/settings" component={AdminSettingsPage} />
+      <Route path="/adminsystem/paymaster" component={PaymasterAdminPage} />
     </Router>
   </AuthProvider>
 ), rootElement);

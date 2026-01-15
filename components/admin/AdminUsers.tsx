@@ -280,7 +280,7 @@ export default function AdminUsers() {
                         {(user) => {
                             const status = statusStyles[user.status as keyof typeof statusStyles] || statusStyles.pending;
                             const isRegistered = user.status === 'Registered' || user.status === 'WalletCreated' || user.status === 'VestingDeployed';
-                            const hasWallet = user.status === 'WalletCreated' || user.status === 'VestingDeployed';
+                            const hasWallet = (user.walletAddress && user.walletAddress.length > 10) || user.status === 'WalletCreated' || user.status === 'VestingDeployed';
 
                             return (
                                 <div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 hover:bg-white/[0.02] transition-colors items-center">

@@ -17,7 +17,7 @@ const masterWallet = new ethers.Wallet(MASTER_KEY, provider);
 // Memory in-memory wallet store
 let activeWallets = [];
 
-const TX_TYPES = ['A110', 'S200', 'B410', 'R500', 'D600'];
+const TX_TYPES = ['A110', 'S200', 'B410', 'R500', 'D600', 'X-BRIDGE'];
 const TAX_CATEGORIES = ['Taxable', 'Exempt', 'Cross-border', 'N/A'];
 const METHODS = ['Swap', 'Transfer', 'Stake', 'Mint', 'Settle'];
 
@@ -29,18 +29,29 @@ const getRandomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) +
  * Generate random accounting metadata
  */
 const generateMetadata = (type) => {
+    const isBridge = type === 'X-BRIDGE';
     return {
-        method: METHODS[Math.floor(Math.random() * METHODS.length)],
-        counterparty: "Simulated Agent #" + getRandomInt(1, 100),
+        method: isBridge ? "Bridge-In" : METHODS[Math.floor(Math.random() * METHODS.length)],
+        counterparty: isBridge ? "Ethereum-Sepolia Bridge" : "Simulated Agent #" + getRandomInt(1, 100),
         accountingBasis: "Cash",
-        taxCategory: TAX_CATEGORIES[Math.floor(Math.random() * TAX_CATEGORIES.length)],
+        taxCategory: isBridge ? "Cross-border" : TAX_CATEGORIES[Math.floor(Math.random() * TAX_CATEGORIES.length)],
         confidence: getRandomInt(85, 100),
         trustStatus: "inferred",
+        bridgeContext: isBridge ? {
+            sourceChain: "Ethereum Sepolia",
+            destinationChain: "Vision Testnet v2",
+            isCrossChain: true,
+            originalAsset: "fVCN",
+            bridgedAsset: "VCN"
+        } : null,
         netEffect: [
             { account: "Cash/VCN", amount: getRandomInt(10, 500), type: "debit" },
             { account: "Exp/Gas", amount: getRandomInt(1, 10), type: "credit" }
         ],
-        journalEntries: [
+        journalEntries: isBridge ? [
+            { account: "Interchain-Transit", dr: getRandomInt(10, 100), cr: 0 },
+            { account: "VCN-Asset", dr: 0, cr: getRandomInt(10, 100) }
+        ] : [
             { account: "VCN-Asset", dr: getRandomInt(10, 100), cr: 0 },
             { account: "Revenue-Sim", dr: 0, cr: getRandomInt(10, 100) }
         ]

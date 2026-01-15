@@ -145,6 +145,14 @@ export const adminMenuConfig: AdminMenuItem[] = [
         category: 'custom',
         order: 10
     },
+    {
+        id: 'paymaster',
+        path: '/adminsystem/paymaster',
+        label: 'Paymaster Ops',
+        icon: 'Database',
+        category: 'custom',
+        order: 9
+    },
 
     // ===== DEVELOPER PAGES =====
     {

@@ -319,11 +319,18 @@ export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
                 status = 'Registered';
             }
 
+            const validWallet = (userDoc?.walletAddress && userDoc.walletAddress.startsWith('0x')) ||
+                (saleDoc?.walletAddress && saleDoc.walletAddress.startsWith('0x'));
+
+            if (validWallet && (status === 'Pending' || status === 'Registered' || status === 'PendingActivation')) {
+                status = 'WalletCreated';
+            }
+
             mergedUsers.push({
                 email: email,
                 role: userDoc?.role || 'user',
                 name: userDoc?.name || email.split('@')[0],
-                walletAddress: userDoc?.walletAddress || saleDoc?.walletAddress || 'Not Created',
+                walletAddress: validWallet ? (userDoc?.walletAddress || saleDoc?.walletAddress) : 'Not Created',
                 status: status,
                 joinDate: userDoc?.createdAt ? new Date(userDoc.createdAt.seconds * 1000).toLocaleDateString() : (saleDoc?.date || '2024-01-01'),
                 isVerified: !!saleDoc,
@@ -982,12 +989,12 @@ export const getDocuments = async (): Promise<AdminDocument[]> => {
     try {
         const db = getFirebaseDb();
         const docsCollection = collection(db, 'system_documents');
-        const q = query(docsCollection, orderBy('updatedAt', 'desc'));
+        const q = query(docsCollection); // Client-side sort to avoid composite index requirement
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AdminDocument));
     } catch (error) {
         console.error('Error fetching documents:', error);
-        return [];
+        throw error; // Propagate error so UI knows
     }
 };
 

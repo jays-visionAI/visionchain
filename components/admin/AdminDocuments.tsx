@@ -66,13 +66,30 @@ export default function AdminDocuments() {
 
     const loadDocuments = async () => {
         setLoading(true);
-        const docs = await getDocuments();
-        if (docs.length === 0) {
-            setDocuments(MOCK_DOCUMENTS);
-        } else {
+        try {
+            let docs = await getDocuments();
+
+            // Auto-seed if empty (First run initialization)
+            if (docs.length === 0) {
+                console.log("[AdminDocuments] Seeding default documents to Firestore...");
+                for (const d of MOCK_DOCUMENTS) {
+                    await saveAdminDocument(d);
+                }
+                // Re-fetch after seeding
+                docs = await getDocuments();
+            }
+
+            // Client-side sort (Newest first)
+            docs.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+
             setDocuments(docs);
+        } catch (error) {
+            console.error("Failed to load documents:", error);
+            // Fallback to local state just in case of network error, but warn
+            setDocuments(MOCK_DOCUMENTS);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     // Form Signals
