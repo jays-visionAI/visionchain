@@ -63,24 +63,26 @@ let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 
-export const initializeFirebase = (useLongPolling = false) => {
-    if (!getApps().length) {
-        app = initializeApp(firebaseConfig);
+export const initializeFirebase = (useLongPolling = true) => {
+    if (!app) {
+        const apps = getApps();
+        app = apps.length ? apps[0] : initializeApp(firebaseConfig);
+    }
+
+    if (!auth) {
         auth = getAuth(app);
+    }
+
+    // Only initialize Firestore if not already set
+    if (!db) {
         if (useLongPolling) {
-            db = initializeFirestore(app, { experimentalForceLongPolling: true });
-        } else {
-            db = getFirestore(app);
-        }
-    } else {
-        app = getApps()[0];
-        auth = getAuth(app);
-        if (useLongPolling) {
+            console.log('[Firebase] Initializing Firestore with Long Polling...');
             db = initializeFirestore(app, { experimentalForceLongPolling: true });
         } else {
             db = getFirestore(app);
         }
     }
+
     return { app, auth, db };
 };
 
@@ -267,18 +269,24 @@ export interface UserData {
 export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
     const startTime = Date.now();
     console.log('[Performance] getAllUsers started');
-    const db = getFirebaseDb();
 
-    // 10 second timeout for initial fetch
-    const timeoutPromise = new Uint8Array(1).map(() => 0); // dummy
+    let currentDb: Firestore;
+    try {
+        currentDb = getFirebaseDb();
+    } catch (e) {
+        initializeFirebase();
+        currentDb = getFirebaseDb();
+    }
+
+    // 30 second timeout for initial fetch - 10s was too short for some network conditions
     const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore fetch timeout')), 10000)
+        setTimeout(() => reject(new Error('Firestore fetch timeout')), 30000)
     );
 
     try {
         // Parallel Fetching
-        const usersQ = query(collection(db, 'users'), limit(limitCount));
-        const salesQ = query(collection(db, 'token_sales'), limit(limitCount));
+        const usersQ = query(collection(currentDb, 'users'), limit(limitCount));
+        const salesQ = query(collection(currentDb, 'token_sales'), limit(limitCount));
 
         const [usersSnap, salesSnap] = await Promise.race([
             Promise.all([
@@ -341,11 +349,6 @@ export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
         return mergedUsers;
     } catch (err) {
         console.error('[Performance] getAllUsers failed:', err);
-        // If it timed out, try to re-initialize with Long Polling for future calls
-        if (err instanceof Error && err.message === 'Firestore fetch timeout') {
-            console.log('[Performance] Attempting re-initialization with Long Polling...');
-            initializeFirebase(true);
-        }
         throw err;
     }
 };
