@@ -138,10 +138,18 @@ Use the **Deployment Parameters** panel to focus traffic on your specific stack:
 
 ---
 
-## Step 7: Verification & Dashboard Monitoring
--   **Live Feed**: Monitor the **Live Execution Feed** in the simulator for instant feedback.
--   **VisionScan**: Click the **External Link** icon on any transaction in the feed to verify it on **VisionScan**.
--   **Admin Dashboard**: View cluster-wide performance, including **Cluster Load Factor** and **Consensus Efficiency** at `https://www.visionchain.co/adminsystem`.
+---
+
+## 🛠️ Troubleshooting
+
+### Mixed Content Blocking (Empty Transactions)
+If VisionScan appears offline or doesn't show transactions despite being on the correct network:
+-   **Cause**: The site uses HTTPS, but the current Testnet API uses HTTP. Modern browsers block these "Mixed Content" requests.
+-   **Solution (Chrome/Edge)**:
+    1. Click the **Lock icon** next to the URL.
+    2. Go to **Site Settings**.
+    3. Find **Insecure content** and set it to **Allow**.
+    4. Refresh the page.
 
 ---
 
