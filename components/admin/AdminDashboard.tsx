@@ -22,6 +22,7 @@ import {
     ResourceMetricGroup,
     EconomicMetricGroup
 } from './dashboard/DashboardCharts';
+import { MaxTPSSection } from './dashboard/MaxTPSSection';
 import { Coins } from 'lucide-solid';
 
 export const AdminDashboard: Component = () => {
@@ -257,15 +258,8 @@ export const AdminDashboard: Component = () => {
                         </div>
                     </MetricCard>
 
-                    {/* Top dApps */}
-                    <div class="bg-[#13161F] border border-white/5 rounded-2xl p-6">
-                        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Top Ecosystem dApps</h3>
-                        <div class="space-y-4">
-                            <div class="py-10 text-center text-slate-500 text-xs italic">
-                                No dApps registered yet
-                            </div>
-                        </div>
-                    </div>
+                    {/* Max Performance Section */}
+                    <MaxTPSSection />
                 </div>
             </div>
 

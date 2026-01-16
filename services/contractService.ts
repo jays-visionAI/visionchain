@@ -260,7 +260,7 @@ export class ContractService {
         return wallet.connect(tempProvider);
     }
 
-    async injectSimulatorTransaction(wallet: ethers.Wallet, options: { type: string, to: string, value: string, metadata?: any, nonce?: number, gasPrice?: bigint }) {
+    async injectSimulatorTransaction(wallet: any, options: { type: string, to: string, value: string, metadata?: any, nonce?: number, gasPrice?: bigint }) {
         try {
             const { type, to, value, metadata, nonce, gasPrice: providedGasPrice } = options;
 
