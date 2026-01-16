@@ -260,7 +260,7 @@ export default function TrafficSimulator() {
 
     const setBurst = (level: string) => {
         setBurstIntensity(level);
-        const tpsMap: Record<string, number> = { 'Low': 2, 'Medium': 10, 'High': 35, 'Max': 85 };
+        const tpsMap: Record<string, number> = { 'Low': 10, 'Medium': 100, 'High': 1000, 'Max': 100000 };
         handleTpsChange(tpsMap[level]);
     };
 
@@ -303,8 +303,10 @@ export default function TrafficSimulator() {
                             >
                                 <option value="50">50 Transactions</option>
                                 <option value="100">100 Transactions</option>
-                                <option value="500">500 Transactions</option>
-                                <option value="1000">1000 Transactions</option>
+                                <option value="1000">1,000 Transactions</option>
+                                <option value="10000">10,000 Transactions</option>
+                                <option value="100000">100,000 Transactions</option>
+                                <option value="1000000">1,000,000 Transactions</option>
                             </select>
                         </div>
 
@@ -510,12 +512,13 @@ export default function TrafficSimulator() {
                                 <div class="space-y-6">
                                     <div class="flex justify-between items-center px-1">
                                         <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest italic">Manual Override</span>
-                                        <span class="text-sm font-black text-blue-400 font-mono">{tpsTarget()} <span class="text-[9px] text-gray-600 uppercase">TPS</span></span>
+                                        <span class="text-sm font-black text-blue-400 font-mono">{tpsTarget().toLocaleString()} <span class="text-[9px] text-gray-600 uppercase">TPS</span></span>
                                     </div>
                                     <input
                                         type="range"
                                         min="1"
-                                        max="100"
+                                        max="100000"
+                                        step="1"
                                         value={tpsTarget()}
                                         onInput={(e) => handleTpsChange(parseInt(e.currentTarget.value))}
                                         class="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
@@ -596,12 +599,12 @@ export default function TrafficSimulator() {
                                 <div>
                                     <div class="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">
                                         <span>Cluster Load Factor</span>
-                                        <span class="text-white">{(isRunning() ? (tpsTarget() * 0.84) : 0).toFixed(1)}%</span>
+                                        <span class="text-white">{Math.min(100, (isRunning() ? (tpsTarget() / 1000) : 0)).toFixed(1)}%</span>
                                     </div>
                                     <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
                                         <Motion.div
                                             class="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                                            animate={{ width: `${isRunning() ? (tpsTarget() * 0.84) : 0}%` }}
+                                            animate={{ width: `${Math.min(100, (isRunning() ? (tpsTarget() / 1000) : 0))}%` }}
                                         />
                                     </div>
                                 </div>
