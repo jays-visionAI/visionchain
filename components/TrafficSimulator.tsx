@@ -96,6 +96,7 @@ export default function TrafficSimulator() {
     const [useAccounting, setUseAccounting] = createSignal(true);
     const [useCrossChain, setUseCrossChain] = createSignal(false);
     const [useZkProof, setUseZkProof] = createSignal(false);
+    const [showWarning, setShowWarning] = createSignal(false);
 
     // Wallet
     let simWallet: any = null;
@@ -104,9 +105,9 @@ export default function TrafficSimulator() {
     let simInterval: any;
     let uptimeInterval: any;
     let startTime: number | null = null;
-    let txCount = 0;
-
-    const SCAN_URL = "http://46.224.221.201:3000/scan/tx/";
+    // Local trackers to avoid per-TX RPC calls
+    let currentNonce: number | null = null;
+    let cachedGasPrice: bigint | null = null;
 
     const injectTransaction = async () => {
         if (txCount >= sessionLimit()) {
@@ -114,75 +115,92 @@ export default function TrafficSimulator() {
             return;
         }
 
-        try {
-            const type = metadataType().split(' ')[0];
-            const metadata: any = {
-                timestamp: Date.now(),
-                method: customMethod() || 'SimulatedAction',
-                simulator: true
+        const type = metadataType().split(' ')[0];
+        const metadata: any = {
+            timestamp: Date.now(),
+            method: customMethod() || 'SimulatedAction',
+            simulator: true
+        };
+
+        if (useAccounting()) {
+            metadata.accounting = {
+                basis: "Accrual",
+                taxCategory: "Standard",
+                journalEntries: [
+                    { account: "VCN-Asset", dr: 100, cr: 0 },
+                    { account: "Revenue", dr: 0, cr: 100 }
+                ]
             };
+        }
 
-            if (useAccounting()) {
-                metadata.accounting = {
-                    basis: "Accrual",
-                    taxCategory: "Standard",
-                    journalEntries: [
-                        { account: "VCN-Asset", dr: 100, cr: 0 },
-                        { account: "Revenue", dr: 0, cr: 100 }
-                    ]
-                };
-            }
+        if (useCrossChain()) {
+            metadata.bridgeContext = {
+                sourceChain: "Vision Testnet v2",
+                destinationChain: "Ethereum Sepolia",
+                isCrossChain: true
+            };
+        }
 
-            if (useCrossChain()) {
-                metadata.bridgeContext = {
-                    sourceChain: "Vision Testnet v2",
-                    destinationChain: "Ethereum Sepolia",
-                    isCrossChain: true
-                };
-            }
+        if (useZkProof()) {
+            metadata.zkProof = "0x" + Math.random().toString(16).slice(2, 66);
+        }
 
-            if (useZkProof()) {
-                metadata.zkProof = "0x" + Math.random().toString(16).slice(2, 66);
-            }
+        let txResult: any;
+        let isMock = false;
 
-            // Real Injection if wallet is ready, otherwise fallback to mock
-            let txResult;
+        try {
+            // Real Injection if wallet is ready
             if (simWallet) {
+                // Initialize Nonce and GasPrice if needed (only once or periodically)
+                if (currentNonce === null) {
+                    currentNonce = await simWallet.getNonce();
+                }
+                if (cachedGasPrice === null || txCount % 10 === 0) {
+                    const feeData = await simWallet.provider!.getFeeData();
+                    cachedGasPrice = feeData.gasPrice;
+                }
+
                 txResult = await contractService.injectSimulatorTransaction(simWallet, {
                     type,
                     to: targetContract() || "0x0000000000000000000000000000000000000000",
                     value: (Math.random() * 0.1).toFixed(4),
-                    metadata
+                    metadata,
+                    nonce: currentNonce,
+                    gasPrice: cachedGasPrice || undefined
                 });
+
+                currentNonce++; // Increment locally
             } else {
-                txResult = await contractService.generateMockTransaction(tpsTarget());
+                throw new Error("No sim wallet");
             }
-
-            const newLog: SimLog = {
-                id: txResult.hash.slice(0, 10) + '...',
-                hash: txResult.hash,
-                type: type,
-                from: simWallet ? await simWallet.getAddress() : '0xMock...',
-                to: targetContract() || (txResult.to || '0x...'),
-                value: (txResult.value || (Math.random() * 5).toFixed(4)) + ' VCN',
-                status: 'success',
-                timestamp: Date.now()
-            };
-
-            setSimLogs(prev => [newLog, ...prev].slice(0, 50));
-            txCount++;
-
-            setStats(prev => ({
-                ...prev,
-                totalTx: prev.totalTx + 1,
-                sessionProgress: (txCount / sessionLimit()) * 100,
-                tps: tpsTarget() + (Math.random() * 0.5 - 0.25),
-                gasUsed: (parseFloat(prev.gasUsed) + 0.0001).toFixed(4)
-            }));
-
         } catch (error) {
-            console.error("Injection failed:", error);
+            console.warn("Real injection failed, falling back to mock:", error);
+            txResult = await contractService.generateMockTransaction(tpsTarget());
+            isMock = true;
+            setShowWarning(true); // Show help if real injection fails
         }
+
+        const newLog: SimLog = {
+            id: txResult.hash.slice(0, 10) + '...',
+            hash: txResult.hash,
+            type: type,
+            from: isMock ? '0xMock...' : (await simWallet?.getAddress() || '0x...'),
+            to: targetContract() || (txResult.to || '0x...'),
+            value: (txResult.value || (Math.random() * 5).toFixed(4)) + ' VCN',
+            status: 'success',
+            timestamp: Date.now()
+        };
+
+        setSimLogs(prev => [newLog, ...prev].slice(0, 50));
+        txCount++;
+
+        setStats(prev => ({
+            ...prev,
+            totalTx: prev.totalTx + 1,
+            sessionProgress: (txCount / sessionLimit()) * 100,
+            tps: tpsTarget() + (Math.random() * 0.5 - 0.25),
+            gasUsed: (parseFloat(prev.gasUsed) + 0.0001).toFixed(4)
+        }));
     };
 
     const startSimulation = async () => {
@@ -198,6 +216,8 @@ export default function TrafficSimulator() {
 
         setIsRunning(true);
         txCount = 0;
+        currentNonce = null; // Reset tracker
+        cachedGasPrice = null; // Reset tracker
         startTime = Date.now();
         setSimLogs([]);
         setStats(prev => ({ ...prev, sessionProgress: 0, uptime: '00:00:00' }));
@@ -224,6 +244,8 @@ export default function TrafficSimulator() {
         clearInterval(uptimeInterval);
         setStats(prev => ({ ...prev, tps: 0 }));
         simWallet = null;
+        currentNonce = null;
+        cachedGasPrice = null;
     };
 
     const handleTpsChange = (val: number) => {
@@ -301,6 +323,23 @@ export default function TrafficSimulator() {
                         </button>
                     </div>
                 </div>
+
+                {/* Mixed Content Warning */}
+                <Show when={showWarning()}>
+                    <div class="mb-10 p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl flex items-start gap-4 animate-in fade-in slide-in-from-top duration-500">
+                        <AlertCircle class="w-5 h-5 text-orange-400 mt-0.5 shrink-0" />
+                        <div class="space-y-1">
+                            <p class="text-xs font-black text-orange-400 uppercase tracking-widest leading-relaxed">Security Intercept Active</p>
+                            <p class="text-[10px] text-orange-400/70 font-bold uppercase leading-relaxed">
+                                Browser security is blocking HTTP API calls. Using <span class="text-white">Mock Mode</span> as fallback.
+                                To enable real traffic, click the <span class="text-white">Lock icon</span> → <span class="text-white">Site Settings</span> → <span class="text-white">Allow Insecure Content</span>.
+                            </p>
+                        </div>
+                        <button onClick={() => setShowWarning(false)} class="ml-auto text-orange-400/50 hover:text-white transition-colors">
+                            <Square class="w-4 h-4 fill-current" />
+                        </button>
+                    </div>
+                </Show>
 
                 {/* Session Progress Bar */}
                 <Show when={isRunning()}>

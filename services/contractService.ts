@@ -260,19 +260,26 @@ export class ContractService {
         return wallet.connect(tempProvider);
     }
 
-    async injectSimulatorTransaction(wallet: ethers.Wallet, options: { type: string, to: string, value: string, metadata?: any }) {
+    async injectSimulatorTransaction(wallet: ethers.Wallet, options: { type: string, to: string, value: string, metadata?: any, nonce?: number, gasPrice?: bigint }) {
         try {
-            const { type, to, value, metadata } = options;
+            const { type, to, value, metadata, nonce, gasPrice: providedGasPrice } = options;
 
             // Populate transaction
-            const txRequest = {
+            const txRequest: any = {
                 to: to || "0x0000000000000000000000000000000000000000",
                 value: ethers.parseEther(value || "0"),
-                nonce: await wallet.getNonce(),
+                nonce: nonce !== undefined ? nonce : await wallet.getNonce(),
                 gasLimit: 21000,
-                gasPrice: await (await wallet.provider!.getFeeData()).gasPrice,
                 chainId: 3151909
             };
+
+            // Use provided gas price or fetch if missing
+            if (providedGasPrice) {
+                txRequest.gasPrice = providedGasPrice;
+            } else {
+                const feeData = await wallet.provider!.getFeeData();
+                txRequest.gasPrice = feeData.gasPrice;
+            }
 
             // Sign transaction
             const signedTx = await wallet.signTransaction(txRequest);
