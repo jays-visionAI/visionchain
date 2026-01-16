@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 
 async function main() {
-    const SEQUENCER_URL = 'http://46.224.221.201:3000/rpc/submit';
+    const SEQUENCER_URL = 'https://api.visionchain.co/rpc/submit';
     console.log(`🚀 Testing Vision Shared Sequencer at ${SEQUENCER_URL}`);
 
     // 1. Create a random wallet (Simulator)

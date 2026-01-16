@@ -88,8 +88,8 @@ export default function VisionScan() {
     // API Data (Live Sequencer)
     const [transactions, setTransactions] = createSignal<any[]>([]);
     const [isLoading, setIsLoading] = createSignal(false);
-    const API_URL = "http://46.224.221.201:3000/api/transactions";
-    const RPC_URL = "http://46.224.221.201:8545";
+    const API_URL = "https://api.visionchain.co/api/transactions";
+    const RPC_URL = "https://rpc.visionchain.co";
 
     // Functions
     const handleExport = () => setIsExportModalOpen(true);
@@ -201,7 +201,7 @@ export default function VisionScan() {
                                 </div>
                                 <div class="px-3 py-1 bg-white/5 border border-white/10 rounded-full flex items-center gap-2">
                                     <Globe class="w-3 h-3 text-gray-500" />
-                                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Network: 46.224.221.201</span>
+                                    <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Network: rpc.visionchain.co</span>
                                 </div>
                             </div>
                         </div>

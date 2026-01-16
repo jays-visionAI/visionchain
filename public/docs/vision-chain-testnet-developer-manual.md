@@ -20,7 +20,7 @@ You must manually add the network to see your VCN balance.
 1.  Open MetaMask -> Click Network Selection -> **Add network** -> **Add a network manually**.
 2.  Enter the following details:
     -   **Network Name**: Vision Testnet v2
-    -   **RPC URL**: `http://46.224.221.201:8545`
+    -   **RPC URL**: `https://rpc.visionchain.co`
     -   **Chain ID**: `3151909`
     -   **Currency Symbol**: `VCN`
     -   **Explorer**: `https://www.visionchain.co/visionscan`
@@ -42,7 +42,7 @@ For engineers building on Vision Chain, proceed with the technical steps below.
 To interact with the testnet, add the following network settings to your wallet (MetaMask) or development environment (Hardhat/Foundry):
 
 -   **Network Name**: Vision Testnet v2
--   **New RPC URL**: `http://46.224.221.201:8545` (Cluster Gateway)
+-   **New RPC URL**: `https://rpc.visionchain.co` (Cluster Gateway)
 -   **Chain ID**: `3151909`
 -   **Currency Symbol**: `VCN`
 -   **Block Explorer**: `https://www.visionchain.co/visionscan`
@@ -66,7 +66,7 @@ Use `ethers.js` or `web3.js` to build and sign a standard EVM transaction.
 
 ### 2. Submit via RPC Gateway
 Instead of broadcast, send the signed transaction to our Gateway:
--   **Endpoint**: `POST http://46.224.221.201:3000/rpc/submit`
+-   **Endpoint**: `POST https://api.visionchain.co/rpc/submit`
 -   **Request Body**:
     ```json
     {
@@ -102,7 +102,7 @@ Deploying smart contracts to Vision Chain is identical to any EVM chain.
     module.exports = {
       networks: {
         vision: {
-          url: "http://46.224.221.201:8545",
+          url: "https://rpc.visionchain.co",
           accounts: [YOUR_PRIVATE_KEY]
         }
       }

@@ -4,11 +4,11 @@ const axios = require('axios');
 
 // Configuration
 // In production, these come from .env
-const RPC_URL = "http://46.224.221.201:8545";
+const RPC_URL = "https://rpc.visionchain.co";
 const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "YOUR_PRIVATE_KEY"; // Must be the 'oracleAddress' in MiningPool
 const MINING_POOL_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"; // From previous deploy log
 const NODE_LICENSE_ADDRESS = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
-const SEQUENCER_API = "http://46.224.221.201:3000/health"; // To check network load
+const SEQUENCER_API = "https://api.visionchain.co/health"; // To check network load
 
 // ABIs
 const MiningPoolABI = [

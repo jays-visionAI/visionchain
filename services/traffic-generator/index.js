@@ -3,8 +3,8 @@ const { ethers } = require('ethers');
 const axios = require('axios');
 
 // Configuration
-const RPC_URL = process.env.RPC_URL || "http://46.224.221.201:8545";
-const SEQUENCER_URL = process.env.SEQUENCER_URL || "http://46.224.221.201:3000/rpc/submit";
+const RPC_URL = process.env.RPC_URL || "https://rpc.visionchain.co";
+const SEQUENCER_URL = process.env.SEQUENCER_URL || "https://api.visionchain.co/rpc/submit";
 const CHAIN_ID = parseInt(process.env.CHAIN_ID || "3151909"); // Vision Testnet ID
 
 // Private key of the Master Faucet (In a real scenario, use environment variables)

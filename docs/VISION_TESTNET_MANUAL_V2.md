@@ -24,7 +24,7 @@ To interact with the testnet, add the following custom network to your wallet (e
 | Parameter | Value |
 | :--- | :--- |
 | **Network Name** | `Vision Testnet v2` |
-| **RPC URL** | `http://46.224.221.201:8545` |
+| **RPC URL** | `https://rpc.visionchain.co` |
 | **Chain ID** | `3151909` |
 | **Currency Symbol** | `VCN` |
 | **Block Explorer** | *(Coming Soon)* |
@@ -73,7 +73,7 @@ module.exports = {
   solidity: "0.8.28",
   networks: {
     vision_v1: {
-      url: "http://46.224.221.201:8545",
+      url: "https://rpc.visionchain.co",
       chainId: 3151909,
       accounts: ["YOUR_PRIVATE_KEY"] // Do not share this key!
     }
@@ -99,7 +99,7 @@ Vision Chain allows you to "teleport" assets from other chains without wrapping/
 
 ### High-Speed Sequencer
 For automated agents requiring sub-second latency, submit signed transactions directly to the Sequencer API instead of the standard RPC.
-*   **Endpoint:** `POST http://46.224.221.201:3000/rpc/submit`
+*   **Endpoint:** `POST https://api.visionchain.co/rpc/submit`
 *   **Payload:** `{ "verified": true, "signedTx": "0x...", "chainId": 3151909 }`
 
 ---

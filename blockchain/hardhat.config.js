@@ -30,7 +30,7 @@ module.exports = {
         },
         // Vision Chain Custom Testnet v2 (New)
         vision_v2: {
-            url: "http://46.224.221.201:8545",
+            url: "https://rpc.visionchain.co",
             chainId: 3151909,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
         }

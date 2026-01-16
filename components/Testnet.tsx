@@ -28,7 +28,7 @@ const Testnet: Component = () => {
 
     const checkRpc = async () => {
         try {
-            const response = await fetch('http://46.224.221.201:8545', {
+            const response = await fetch('https://rpc.visionchain.co', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 })
@@ -63,7 +63,7 @@ const Testnet: Component = () => {
                             symbol: 'VCN',
                             decimals: 18,
                         },
-                        rpcUrls: ['http://46.224.221.201:8545'],
+                        rpcUrls: ['https://rpc.visionchain.co'],
                         blockExplorerUrls: ['https://www.visionchain.co/visionscan'],
                     },
                 ],
@@ -81,8 +81,8 @@ const Testnet: Component = () => {
 
     const networkInfo = [
         { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
-        { label: 'RPC URL', value: 'http://46.224.221.201:8545', id: 'rpc' },
-        { label: 'Sequencer API', value: 'http://46.224.221.201:3000/rpc/submit', id: 'seq' },
+        { label: 'RPC URL', value: 'https://rpc.visionchain.co', id: 'rpc' },
+        { label: 'Sequencer API', value: 'https://api.visionchain.co/rpc/submit', id: 'seq' },
         { label: 'Chain ID', value: '3151909', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
     ];

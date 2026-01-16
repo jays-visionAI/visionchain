@@ -105,7 +105,7 @@ export default function TrafficSimulator() {
     let uptimeInterval: any;
     let startTime: number | null = null;
     let txCount = 0;
-    const SCAN_URL = "http://46.224.221.201:3000/scan/tx/";
+    const SCAN_URL = "https://api.visionchain.co/scan/tx/";
 
     // Local trackers to avoid per-TX RPC calls
     let currentNonce: number | null = null;

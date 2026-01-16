@@ -42,7 +42,7 @@ export const AdminDashboard: Component = () => {
     });
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
 
-    const API_URL = "http://46.224.221.201:3000/api/transactions";
+    const API_URL = "https://api.visionchain.co/api/transactions";
 
     const fetchRecentTransactions = async () => {
         try {

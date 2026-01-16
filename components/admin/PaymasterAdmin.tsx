@@ -31,7 +31,7 @@ const PaymasterAdmin: Component = () => {
                     chainId: 3151909,
                     name: 'Vision Testnet v2',
                     rpcConfig: {
-                        primary: 'http://46.224.221.201:8545',
+                        primary: 'https://rpc.visionchain.co',
                         nodeType: 'MANAGED'
                     },
                     explorerUrl: 'http://46.224.221.201:8080',
@@ -79,7 +79,7 @@ const PaymasterAdmin: Component = () => {
             const VISION_TESTNET_ID = 3151909;
             agent = new PaymasterAgent({
                 chainId: VISION_TESTNET_ID,
-                rpcUrl: 'http://46.224.221.201:8545', // Testnet v2 RPC
+                rpcUrl: 'https://rpc.visionchain.co', // Testnet v2 RPC
                 gasPriceSources: [],
                 minBalance: BigInt(1000000000000000000) // 1 ETH
             });

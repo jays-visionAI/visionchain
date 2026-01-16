@@ -15,7 +15,7 @@ const ADDRESSES = {
 
     // Vision Chain RPC Resource Pool (Added for high-availability)
     RPC_NODES: [
-        "http://46.224.221.201:8545",  // Primary Node
+        "https://rpc.visionchain.co",  // Primary Node
         "http://46.224.221.201:8546"   // Backup Node (Simulated for failover)
     ],
     RPC_URL: "https://rpc.visionchain.co",

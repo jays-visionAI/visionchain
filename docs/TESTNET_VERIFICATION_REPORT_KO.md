@@ -6,7 +6,7 @@
 
 ## 1. 테스트 개요
 - **테스트 환경**: Vision Chain Testnet v2 (Public Beta)
-- **RPC URL**: `http://46.224.221.201:8545`
+- **RPC URL**: `https://rpc.visionchain.co`
 - **테스터**: ____________________ (서명/성명)
 - **테스트 일시**: 2026. 01. 15
 
