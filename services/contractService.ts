@@ -291,21 +291,6 @@ export class ContractService {
             throw error;
         }
     }
-
-    async generateMockTransaction(targetTps: number) {
-        // ... (Keep this for UI fallbacks if needed, but we'll use actual injection mostly)
-        const types = ['A110', 'S200', 'B410', 'R500', 'D600'];
-        const type = types[Math.floor(Math.random() * types.length)];
-
-        return {
-            hash: '0x' + Math.random().toString(16).slice(2, 66).padEnd(64, '0'),
-            type,
-            from: '0x' + Math.random().toString(16).slice(2, 10) + '...',
-            to: '0x' + Math.random().toString(16).slice(2, 10) + '...',
-            value: (Math.random() * 5).toFixed(4),
-            timestamp: Date.now()
-        };
-    }
 }
 
 export const contractService = new ContractService();
