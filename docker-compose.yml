@@ -5,16 +5,16 @@ services:
   node-1:
     image: ethereum/client-go:latest
     container_name: vision-node-1
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.11
     ports:
-      - "8545:8545"   # RPC
+      - "8545:8545" # RPC
       - "30303:30303" # P2P
     volumes:
       - ./deploy/v2-testnet/node1:/root/.ethereum
     command: >
-      --networkid 3151909
-      --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,clique"
-      --nodiscover
-      --allow-insecure-unlock
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug" --allow-insecure-unlock --nat extip:172.20.0.11
     deploy:
       resources:
         limits:
@@ -25,15 +25,16 @@ services:
   node-2:
     image: ethereum/client-go:latest
     container_name: vision-node-2
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.12
     ports:
-      - "8546:8545"   # RPC mapped to 8546
+      - "8546:8545" # RPC mapped to 8546
       - "30304:30303" # P2P mapped to 30304
     volumes:
       - ./deploy/v2-testnet/node2:/root/.ethereum
     command: >
-      --networkid 3151909
-      --http --http.addr "0.0.0.0" --http.port 8545
-      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.12
     deploy:
       resources:
         limits:
@@ -44,14 +45,16 @@ services:
   node-3:
     image: ethereum/client-go:latest
     container_name: vision-node-3
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.13
     ports:
       - "8547:8545"
       - "30305:30303"
     volumes:
       - ./deploy/v2-testnet/node3:/root/.ethereum
     command: >
-      --networkid 3151909
-      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+      --networkid 3151909 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.13
     deploy:
       resources:
         limits:
@@ -62,14 +65,16 @@ services:
   node-4:
     image: ethereum/client-go:latest
     container_name: vision-node-4
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.14
     ports:
       - "8548:8545"
       - "30306:30303"
     volumes:
       - ./deploy/v2-testnet/node4:/root/.ethereum
     command: >
-      --networkid 3151909
-      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+      --networkid 3151909 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.14
     deploy:
       resources:
         limits:
@@ -80,16 +85,56 @@ services:
   node-5:
     image: ethereum/client-go:latest
     container_name: vision-node-5
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.15
     ports:
       - "8549:8545"
       - "30307:30303"
     volumes:
       - ./deploy/v2-testnet/node5:/root/.ethereum
     command: >
-      --networkid 3151909
-      --bootnodes "enode://BOOTNODE_ENODE_HERE@node-1:30303"
+      --networkid 3151909 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.15
     deploy:
       resources:
         limits:
           memory: 1G
           cpus: '0.25'
+
+  # Kafka & Zookeeper for Shared Sequencer
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: vision-zookeeper
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.21
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: vision-kafka
+    networks:
+      vision-net:
+        ipv4_address: 172.20.0.22
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://46.224.221.201:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+networks:
+  vision-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

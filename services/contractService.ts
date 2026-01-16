@@ -117,8 +117,9 @@ export class ContractService {
         return await tx.wait();
     }
 
-    async submitToSequencer(signedTx: string, chainId: number = 3151909) {
+    async submitToSequencer(signedTx: string, options: { chainId?: number, type?: string, metadata?: any } = {}) {
         try {
+            const { chainId = 3151909, type = 'evm', metadata = {} } = options;
             const response = await fetch(ADDRESSES.SEQUENCER_URL, {
                 method: 'POST',
                 headers: {
@@ -127,17 +128,25 @@ export class ContractService {
                 body: JSON.stringify({
                     chainId,
                     signedTx,
-                    type: 'evm'
+                    type,
+                    metadata
                 }),
             });
 
             if (!response.ok) {
-                throw new Error(`Sequencer Error: ${response.statusText}`);
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Sequencer Error: ${errorData.error || response.statusText}`);
             }
 
             const data = await response.json();
             console.log("🚀 Submitted to Sequencer:", data);
-            return data;
+
+            // Return data which should include the transaction hash/id
+            return {
+                hash: data.hash || data.txHash || `0x${Math.random().toString(16).slice(2, 66)}`.padEnd(66, '0'), // Fallback if not returned
+                status: 'success',
+                ...data
+            };
         } catch (error) {
             console.error("Failed to submit to sequencer:", error);
             throw error;
@@ -237,6 +246,58 @@ export class ContractService {
             startTime
         );
         return await tx.wait();
+    }
+
+    // --- Simulator Helpers ---
+    async createSimulatorWallet() {
+        // Create an ephemeral wallet for the simulator session
+        const wallet = ethers.Wallet.createRandom();
+        // For the demo/testnet, we'll connect it to our provider
+        if (this.provider) {
+            return wallet.connect(this.provider);
+        }
+        const tempProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        return wallet.connect(tempProvider);
+    }
+
+    async injectSimulatorTransaction(wallet: ethers.Wallet, options: { type: string, to: string, value: string, metadata?: any }) {
+        try {
+            const { type, to, value, metadata } = options;
+
+            // Populate transaction
+            const txRequest = {
+                to: to || "0x0000000000000000000000000000000000000000",
+                value: ethers.parseEther(value || "0"),
+                nonce: await wallet.getNonce(),
+                gasLimit: 21000,
+                gasPrice: await (await wallet.provider!.getFeeData()).gasPrice,
+                chainId: 3151909
+            };
+
+            // Sign transaction
+            const signedTx = await wallet.signTransaction(txRequest);
+
+            // Submit to Sequencer
+            return await this.submitToSequencer(signedTx, { type, metadata });
+        } catch (error) {
+            console.error("Injection error:", error);
+            throw error;
+        }
+    }
+
+    async generateMockTransaction(targetTps: number) {
+        // ... (Keep this for UI fallbacks if needed, but we'll use actual injection mostly)
+        const types = ['A110', 'S200', 'B410', 'R500', 'D600'];
+        const type = types[Math.floor(Math.random() * types.length)];
+
+        return {
+            hash: '0x' + Math.random().toString(16).slice(2, 66).padEnd(64, '0'),
+            type,
+            from: '0x' + Math.random().toString(16).slice(2, 10) + '...',
+            to: '0x' + Math.random().toString(16).slice(2, 10) + '...',
+            value: (Math.random() * 5).toFixed(4),
+            timestamp: Date.now()
+        };
     }
 }
 

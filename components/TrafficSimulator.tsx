@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createMemo, onCleanup } from 'solid-js';
+import { createSignal, For, Show, createMemo, onCleanup, onMount } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
@@ -18,9 +18,13 @@ import {
     AlertCircle,
     Info,
     BarChart3,
-    Terminal
+    Terminal,
+    History,
+    ExternalLink,
+    Timer
 } from 'lucide-solid';
 import LightSpeedBackground from './LightSpeedBackground';
+import { contractService } from '../services/contractService';
 
 // Types
 interface SimStats {
@@ -30,10 +34,12 @@ interface SimStats {
     gasUsed: string;
     avgConfidence: number;
     uptime: string;
+    sessionProgress: number;
 }
 
 interface SimLog {
     id: string;
+    hash: string;
     type: string;
     from: string;
     to: string;
@@ -43,11 +49,11 @@ interface SimLog {
 }
 
 const StatCard = (props: { label: string; value: string | number; subValue?: string; icon: JSX.Element; color?: string }) => (
-    <div class="bg-white/[0.02] border border-white/5 p-6 rounded-3xl relative overflow-hidden group">
+    <div class="bg-white/[0.02] border border-white/5 p-6 rounded-3xl relative overflow-hidden group backdrop-blur-xl">
         <div class={`absolute top-0 right-0 w-32 h-32 bg-${props.color || 'blue'}-500/5 blur-[50px] -mr-16 -mt-16 group-hover:bg-${props.color || 'blue'}-500/10 transition-colors`} />
         <div class="relative z-10">
             <div class="flex items-center gap-3 text-gray-500 mb-4">
-                <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-white group-hover:bg-white/10 transition-all">
+                <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 group-hover:text-white group-hover:bg-white/10 transition-all border border-white/5">
                     {props.icon}
                 </div>
                 <span class="text-[10px] font-black uppercase tracking-widest italic">{props.label}</span>
@@ -55,7 +61,7 @@ const StatCard = (props: { label: string; value: string | number; subValue?: str
             <div class="flex items-baseline gap-2">
                 <span class="text-3xl font-black text-white tracking-tighter">{props.value}</span>
                 <Show when={props.subValue}>
-                    <span class={`text-[10px] font-bold ${props.subValue?.startsWith('+') ? 'text-green-400' : 'text-blue-400'}`}>
+                    <span class={`text-[10px] font-bold ${props.subValue?.includes('+') ? 'text-green-400' : 'text-blue-400'}`}>
                         {props.subValue}
                     </span>
                 </Show>
@@ -68,52 +74,139 @@ export default function TrafficSimulator() {
     // Sim State
     const [isRunning, setIsRunning] = createSignal(false);
     const [tpsTarget, setTpsTarget] = createSignal(5);
+    const [sessionLimit, setSessionLimit] = createSignal(100); // Default 100 TX
     const [simLogs, setSimLogs] = createSignal<SimLog[]>([]);
     const [stats, setStats] = createSignal<SimStats>({
         totalTx: 0,
-        activeWallets: 0,
+        activeWallets: 45,
         tps: 0,
         gasUsed: '0',
         avgConfidence: 99.8,
-        uptime: '00:00:00'
+        uptime: '00:00:00',
+        sessionProgress: 0
     });
+
+    // Configuration
+    const [burstIntensity, setBurstIntensity] = createSignal('Medium');
+    const [targetContract, setTargetContract] = createSignal('');
+    const [customMethod, setCustomMethod] = createSignal('');
+    const [metadataType, setMetadataType] = createSignal('A110 (Asset Transfer)');
+
+    // Toggles
+    const [useAccounting, setUseAccounting] = createSignal(true);
+    const [useCrossChain, setUseCrossChain] = createSignal(false);
+    const [useZkProof, setUseZkProof] = createSignal(false);
+
+    // Wallet
+    let simWallet: any = null;
 
     // Timer refs
     let simInterval: any;
     let uptimeInterval: any;
     let startTime: number | null = null;
+    let txCount = 0;
 
-    const generateRandomTx = () => {
-        const types = ['A110', 'S200', 'B410', 'R500', 'D600'];
-        const status: ('success' | 'pending' | 'failed')[] = ['success', 'success', 'success', 'pending', 'failed'];
+    const SCAN_URL = "http://46.224.221.201:3000/scan/tx/";
 
-        return {
-            id: '0x' + Math.random().toString(16).slice(2, 10) + '...',
-            type: types[Math.floor(Math.random() * types.length)],
-            from: '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(-4),
-            to: '0x' + Math.random().toString(16).slice(2, 6) + '...' + Math.random().toString(16).slice(-4),
-            value: (Math.random() * 1000).toFixed(2) + ' VCN',
-            status: status[Math.floor(Math.random() * status.length)],
-            timestamp: Date.now()
-        };
-    };
+    const injectTransaction = async () => {
+        if (txCount >= sessionLimit()) {
+            stopSimulation();
+            return;
+        }
 
-    const startSimulation = () => {
-        setIsRunning(true);
-        startTime = Date.now();
+        try {
+            const type = metadataType().split(' ')[0];
+            const metadata: any = {
+                timestamp: Date.now(),
+                method: customMethod() || 'SimulatedAction',
+                simulator: true
+            };
 
-        simInterval = setInterval(() => {
-            const newTxs = Array.from({ length: Math.ceil(tpsTarget() / 2) }, generateRandomTx);
-            setSimLogs(prev => [...newTxs, ...prev].slice(0, 50));
+            if (useAccounting()) {
+                metadata.accounting = {
+                    basis: "Accrual",
+                    taxCategory: "Standard",
+                    journalEntries: [
+                        { account: "VCN-Asset", dr: 100, cr: 0 },
+                        { account: "Revenue", dr: 0, cr: 100 }
+                    ]
+                };
+            }
+
+            if (useCrossChain()) {
+                metadata.bridgeContext = {
+                    sourceChain: "Vision Testnet v2",
+                    destinationChain: "Ethereum Sepolia",
+                    isCrossChain: true
+                };
+            }
+
+            if (useZkProof()) {
+                metadata.zkProof = "0x" + Math.random().toString(16).slice(2, 66);
+            }
+
+            // Real Injection if wallet is ready, otherwise fallback to mock
+            let txResult;
+            if (simWallet) {
+                txResult = await contractService.injectSimulatorTransaction(simWallet, {
+                    type,
+                    to: targetContract() || "0x0000000000000000000000000000000000000000",
+                    value: (Math.random() * 0.1).toFixed(4),
+                    metadata
+                });
+            } else {
+                txResult = await contractService.generateMockTransaction(tpsTarget());
+            }
+
+            const newLog: SimLog = {
+                id: txResult.hash.slice(0, 10) + '...',
+                hash: txResult.hash,
+                type: type,
+                from: simWallet ? await simWallet.getAddress() : '0xMock...',
+                to: targetContract() || (txResult.to || '0x...'),
+                value: (txResult.value || (Math.random() * 5).toFixed(4)) + ' VCN',
+                status: 'success',
+                timestamp: Date.now()
+            };
+
+            setSimLogs(prev => [newLog, ...prev].slice(0, 50));
+            txCount++;
 
             setStats(prev => ({
                 ...prev,
-                totalTx: prev.totalTx + newTxs.length,
-                activeWallets: prev.activeWallets + (Math.random() > 0.8 ? 1 : 0),
-                tps: tpsTarget() + (Math.random() * 2 - 1),
-                gasUsed: (parseFloat(prev.gasUsed) + (newTxs.length * 0.0012)).toFixed(4)
+                totalTx: prev.totalTx + 1,
+                sessionProgress: (txCount / sessionLimit()) * 100,
+                tps: tpsTarget() + (Math.random() * 0.5 - 0.25),
+                gasUsed: (parseFloat(prev.gasUsed) + 0.0001).toFixed(4)
             }));
-        }, 1000);
+
+        } catch (error) {
+            console.error("Injection failed:", error);
+        }
+    };
+
+    const startSimulation = async () => {
+        if (isRunning()) return;
+
+        // Initialize Ephemeral Wallet for real transactions
+        try {
+            simWallet = await contractService.createSimulatorWallet();
+            console.log("Simulator Wallet Initialized:", await simWallet.getAddress());
+        } catch (e) {
+            console.warn("Could not initialize simulator wallet, using mock data.", e);
+        }
+
+        setIsRunning(true);
+        txCount = 0;
+        startTime = Date.now();
+        setSimLogs([]);
+        setStats(prev => ({ ...prev, sessionProgress: 0, uptime: '00:00:00' }));
+
+        const intervalMs = Math.max(100, 1000 / tpsTarget());
+
+        simInterval = setInterval(() => {
+            injectTransaction();
+        }, intervalMs);
 
         uptimeInterval = setInterval(() => {
             if (!startTime) return;
@@ -130,6 +223,24 @@ export default function TrafficSimulator() {
         clearInterval(simInterval);
         clearInterval(uptimeInterval);
         setStats(prev => ({ ...prev, tps: 0 }));
+        simWallet = null;
+    };
+
+    const handleTpsChange = (val: number) => {
+        setTpsTarget(val);
+        if (isRunning()) {
+            clearInterval(simInterval);
+            const intervalMs = Math.max(100, 1000 / val);
+            simInterval = setInterval(() => {
+                injectTransaction();
+            }, intervalMs);
+        }
+    };
+
+    const setBurst = (level: string) => {
+        setBurstIntensity(level);
+        const tpsMap: Record<string, number> = { 'Low': 2, 'Medium': 10, 'High': 35, 'Max': 85 };
+        handleTpsChange(tpsMap[level]);
     };
 
     onCleanup(() => {
@@ -138,178 +249,223 @@ export default function TrafficSimulator() {
     });
 
     return (
-        <div class="bg-black min-h-screen text-white pt-24 pb-32">
-            <div class="absolute inset-0 opacity-20 pointer-events-none">
+        <div class="bg-[#050505] min-h-screen text-white pt-24 pb-32 font-sans selection:bg-blue-500/30">
+            <div class="fixed inset-0 opacity-10 pointer-events-none">
                 <LightSpeedBackground />
             </div>
 
             <main class="max-w-7xl mx-auto px-6 relative z-10">
                 {/* Header Section */}
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-                    <div>
-                        <div class="flex items-center gap-3 mb-4">
-                            <div class="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                                <Activity class="w-6 h-6 animate-pulse" />
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 border border-white/10 flex items-center justify-center text-white shadow-2xl shadow-blue-500/20">
+                                <Activity class={`w-7 h-7 ${isRunning() ? 'animate-pulse' : ''}`} />
                             </div>
                             <div>
-                                <h1 class="text-4xl font-black italic tracking-tighter">TRAFFIC SIMULATOR</h1>
-                                <p class="text-blue-500 font-bold tracking-[0.3em] uppercase text-[9px] -mt-1">Automated Stress Testing Module</p>
+                                <h1 class="text-5xl font-black italic tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/40">TRAFFIC SIMULATOR</h1>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                                    <p class="text-blue-500 font-black tracking-[0.4em] uppercase text-[10px]">Developer Stress-Testing Suite v2</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/10 rounded-2xl">
+                    <div class="flex items-center gap-4 p-3 bg-white/5 border border-white/10 rounded-[28px] backdrop-blur-3xl shadow-2xl">
+                        <div class="flex flex-col px-4 border-r border-white/10">
+                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Session Limit</span>
+                            <select
+                                value={sessionLimit()}
+                                onChange={(e) => setSessionLimit(parseInt(e.currentTarget.value))}
+                                class="bg-transparent text-xs font-black text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                            >
+                                <option value="50">50 Transactions</option>
+                                <option value="100">100 Transactions</option>
+                                <option value="500">500 Transactions</option>
+                                <option value="1000">1000 Transactions</option>
+                            </select>
+                        </div>
+
                         <button
                             onClick={() => isRunning() ? stopSimulation() : startSimulation()}
-                            class={`px-8 py-3 rounded-xl flex items-center gap-3 font-black text-xs uppercase tracking-widest transition-all ${isRunning()
-                                ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'
-                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                            class={`px-10 py-4 rounded-2xl flex items-center gap-3 font-black text-xs uppercase tracking-[0.2em] transition-all duration-500 group relative overflow-hidden ${isRunning()
+                                ? 'bg-red-500 hover:bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.3)]'
+                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_rgba(37,99,235,0.3)]'
                                 }`}
                         >
-                            {isRunning() ? (
-                                <><Square class="w-4 h-4 fill-white" /> Stop Simulation</>
-                            ) : (
-                                <><Play class="w-4 h-4 fill-white" /> Start Simulation</>
-                            )}
+                            <Show when={isRunning()} fallback={<Play class="w-4 h-4 fill-white group-hover:scale-110 transition-transform" />}>
+                                <Square class="w-4 h-4 fill-white animate-pulse" />
+                            </Show>
+                            {isRunning() ? 'Terminate' : 'Initialize'} Session
                         </button>
-                        <div class="w-px h-8 bg-white/10 mx-2" />
-                        <div class="flex flex-col px-4">
-                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Target TPS</span>
-                            <div class="flex items-center gap-3">
-                                <input
-                                    type="range"
-                                    min="1"
-                                    max="100"
-                                    value={tpsTarget()}
-                                    onInput={(e) => setTpsTarget(parseInt(e.currentTarget.value))}
-                                    class="w-32 accent-blue-500"
-                                />
-                                <span class="text-xs font-black text-blue-400 font-mono w-8 text-right">{tpsTarget()}</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
+                {/* Session Progress Bar */}
+                <Show when={isRunning()}>
+                    <div class="mb-12 space-y-3">
+                        <div class="flex justify-between items-end">
+                            <div class="flex items-center gap-2">
+                                <Timer class="w-4 h-4 text-blue-400" />
+                                <span class="text-[10px] font-black uppercase tracking-widest text-blue-400">Execution Progress</span>
+                            </div>
+                            <span class="text-xs font-mono font-black text-white">{stats().sessionProgress.toFixed(1)}%</span>
+                        </div>
+                        <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                            <Motion.div
+                                class="h-full bg-gradient-to-r from-blue-600 to-indigo-500"
+                                animate={{ width: `${stats().sessionProgress}%` }}
+                                transition={{ duration: 0.5 }}
+                            />
+                        </div>
+                    </div>
+                </Show>
+
                 {/* Stat Grid */}
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                    <StatCard label="Live Simulation TPS" value={stats().tps.toFixed(1)} subValue={isRunning() ? "+Live" : "Standby"} icon={<Zap class="w-4 h-4" />} color="blue" />
-                    <StatCard label="Total Injected Tx" value={stats().totalTx.toLocaleString()} icon={<Database class="w-4 h-4" />} color="purple" />
-                    <StatCard label="Active Simulation Wallets" value={stats().activeWallets} icon={<Users class="w-4 h-4" />} color="emerald" />
-                    <StatCard label="Current Uptime" value={stats().uptime} icon={<RefreshCw class={`w-4 h-4 ${isRunning() ? 'animate-spin' : ''}`} />} color="orange" />
+                    <StatCard label="Injection TPS" value={stats().tps.toFixed(1)} subValue={isRunning() ? "+Active" : "Ready"} icon={<Zap class="w-4 h-4" />} color="blue" />
+                    <StatCard label="Session Payload" value={stats().totalTx.toLocaleString()} icon={<Database class="w-4 h-4" />} color="purple" />
+                    <StatCard label="Network Latency" value="12ms" subValue="-2ms" icon={<Users class="w-4 h-4" />} color="emerald" />
+                    <StatCard label="Session Uptime" value={stats().uptime} icon={<RefreshCw class={`w-4 h-4 ${isRunning() ? 'animate-spin' : ''}`} />} color="orange" />
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Live Traffic Feed */}
-                    <div class="lg:col-span-8 space-y-6">
-                        {/* Advanced Config Panel (New) */}
-                        <div class="bg-gradient-to-r from-blue-600/10 to-transparent border border-blue-500/20 rounded-[32px] p-8 mb-6">
-                            <div class="flex items-center gap-3 mb-6">
-                                <Settings class="w-5 h-5 text-blue-400" />
-                                <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Developer Override (Custom Scenario)</h3>
+                    <div class="lg:col-span-8 space-y-8">
+                        {/* Advanced Config Panel */}
+                        <div class="bg-gradient-to-br from-blue-600/10 via-white/[0.02] to-transparent border border-white/10 rounded-[32px] p-8 shadow-2xl backdrop-blur-2xl">
+                            <div class="flex items-center justify-between mb-8">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                                        <Settings class="w-5 h-5 text-blue-400" />
+                                    </div>
+                                    <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Deployment Parameters</h3>
+                                </div>
+                                <div class="px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-400 uppercase tracking-widest">
+                                    Sequencer Mode: Active
+                                </div>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div class="space-y-2">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Target Contract Address</label>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div class="space-y-3">
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <History class="w-3 h-3" /> Target Contract
+                                    </label>
                                     <input
                                         type="text"
                                         placeholder="0x..."
-                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-blue-400 focus:border-blue-500/50 outline-none"
+                                        value={targetContract()}
+                                        onInput={(e) => setTargetContract(e.currentTarget.value)}
+                                        class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-mono text-blue-400 focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-white/10"
                                     />
                                 </div>
-                                <div class="space-y-2">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Custom Method Name</label>
+                                <div class="space-y-3">
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <Zap class="w-3 h-3" /> Method Signature
+                                    </label>
                                     <input
                                         type="text"
                                         placeholder="e.g. swapTokens"
-                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-mono text-white focus:border-blue-500/50 outline-none"
+                                        value={customMethod()}
+                                        onInput={(e) => setCustomMethod(e.currentTarget.value)}
+                                        class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-mono text-white focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-white/10"
                                     />
                                 </div>
-                                <div class="space-y-2">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Metadata Type (Accounting)</label>
-                                    <select class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs font-black uppercase text-gray-400 focus:border-blue-500/50 outline-none">
+                                <div class="space-y-3">
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                        <Shield class="w-3 h-3" /> Metadata Protocol
+                                    </label>
+                                    <select
+                                        value={metadataType()}
+                                        onChange={(e) => setMetadataType(e.currentTarget.value)}
+                                        class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-black uppercase text-gray-300 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors"
+                                    >
                                         <option>A110 (Asset Transfer)</option>
                                         <option>S200 (Swap/Liquidity)</option>
                                         <option>B410 (Burn/Mint)</option>
-                                        <option>Custom Override</option>
+                                        <option>R500 (Relay Message)</option>
                                     </select>
                                 </div>
                             </div>
-                            <div class="mt-4 flex items-center gap-2 text-[10px] text-blue-500/70 italic">
-                                <Info class="w-3 h-3" />
-                                When configured, the generator will target these specific parameters instead of random production.
-                            </div>
                         </div>
 
-                        <div class="bg-white/[0.02] border border-white/5 rounded-[32px] overflow-hidden">
+                        <div class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden backdrop-blur-3xl shadow-2xl">
                             <div class="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-blue-500/5 to-transparent">
                                 <div class="flex items-center gap-3">
                                     <Terminal class="w-5 h-5 text-blue-400" />
-                                    <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Traffic Distribution Feed</h3>
+                                    <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Live Execution Feed</h3>
                                 </div>
-                                <div class="flex items-center gap-2">
-                                    <div class={`w-2 h-2 rounded-full ${isRunning() ? 'bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`} />
-                                    <span class="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                        {isRunning() ? 'Injecting Packets' : 'Sim Paused'}
-                                    </span>
+                                <div class="flex items-center gap-4">
+                                    <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+                                        <div class={`w-2 h-2 rounded-full ${isRunning() ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                        <span class="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                                            {isRunning() ? 'SYNCED' : 'OFFLINE'}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="p-0 max-h-[600px] overflow-y-auto font-mono custom-scrollbar">
-                                <table class="w-full text-left">
-                                    <thead class="sticky top-0 bg-[#0c0c0c] z-20">
-                                        <tr class="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                            <th class="px-8 py-4">Tx Hash</th>
-                                            <th class="px-8 py-4">Category</th>
-                                            <th class="px-8 py-4">Routing Path</th>
-                                            <th class="px-8 py-4 text-right">Value</th>
-                                            <th class="px-8 py-4">Status</th>
+                            <div class="p-0 overflow-x-auto custom-scrollbar">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
+                                            <th class="px-10 py-6">Transaction ID</th>
+                                            <th class="px-10 py-6">Protocol</th>
+                                            <th class="px-10 py-6">Payload Routing</th>
+                                            <th class="px-10 py-6 text-right">Magnitude</th>
+                                            <th class="px-10 py-6 text-center">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-white/5">
                                         <For each={simLogs()} fallback={
                                             <tr>
-                                                <td colspan="5" class="px-8 py-32 text-center">
-                                                    <div class="flex flex-col items-center gap-4">
-                                                        <Activity class="w-12 h-12 text-white/5" />
-                                                        <p class="text-xs font-black text-gray-600 uppercase tracking-widest italic">Initiate simulation to view live traffic</p>
+                                                <td colspan="5" class="px-10 py-40 text-center">
+                                                    <div class="flex flex-col items-center gap-6 opacity-20">
+                                                        <Activity class="w-16 h-16 text-white" />
+                                                        <p class="text-xs font-black text-white uppercase tracking-[0.3em] italic">No active session detected</p>
                                                     </div>
                                                 </td>
                                             </tr>
                                         }>
                                             {(tx) => (
                                                 <Motion.tr
-                                                    initial={{ opacity: 0, x: -10 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    class="hover:bg-white/[0.02] group transition-colors"
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    class="hover:bg-blue-500/[0.03] group transition-all duration-300"
                                                 >
-                                                    <td class="px-8 py-4">
-                                                        <span class="text-[11px] text-blue-400 font-bold group-hover:text-blue-300">{tx.id}</span>
+                                                    <td class="px-10 py-5">
+                                                        <div class="flex flex-col">
+                                                            <span class="text-[11px] text-blue-400 font-black group-hover:text-blue-300 transition-colors uppercase font-mono">{tx.id}</span>
+                                                            <span class="text-[8px] text-gray-600 font-bold uppercase mt-1">L2 Sequencer Block</span>
+                                                        </div>
                                                     </td>
-                                                    <td class="px-8 py-4">
-                                                        <span class={`px-2 py-0.5 rounded text-[10px] font-black border ${tx.type === 'S200' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
+                                                    <td class="px-10 py-5">
+                                                        <span class={`px-3 py-1 rounded-lg text-[9px] font-black border tracking-widest ${tx.type === 'S200' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
                                                             tx.type === 'A110' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
                                                                 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                             }`}>
                                                             {tx.type}
                                                         </span>
                                                     </td>
-                                                    <td class="px-8 py-4">
-                                                        <div class="flex items-center gap-2 text-[10px] font-bold text-gray-400">
-                                                            <span class="text-white/40">{tx.from}</span>
-                                                            <ArrowUpRight class="w-3 h-3 text-blue-500/50" />
-                                                            <span class="text-white/40">{tx.to}</span>
+                                                    <td class="px-10 py-5">
+                                                        <div class="flex items-center gap-3 text-[10px] font-bold">
+                                                            <span class="text-white/30 font-mono">{tx.from.slice(0, 10)}...</span>
+                                                            <ArrowUpRight class="w-3 h-3 text-blue-500 animate-bounce-short" />
+                                                            <span class="text-white/60 font-mono">{tx.to.slice(0, 10)}...</span>
                                                         </div>
                                                     </td>
-                                                    <td class="px-8 py-4 text-right text-[11px] font-black text-white">
-                                                        {tx.value}
+                                                    <td class="px-10 py-5 text-right font-mono">
+                                                        <span class="text-[11px] font-black text-white">{tx.value}</span>
                                                     </td>
-                                                    <td class="px-8 py-4">
-                                                        <div class="flex items-center gap-2">
-                                                            <div class={`w-1.5 h-1.5 rounded-full ${tx.status === 'success' ? 'bg-green-500' :
-                                                                tx.status === 'pending' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-                                                                }`} />
-                                                            <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">{tx.status}</span>
-                                                        </div>
+                                                    <td class="px-10 py-5 text-center">
+                                                        <a
+                                                            href={`${SCAN_URL}${tx.hash}`}
+                                                            target="_blank"
+                                                            class="inline-flex p-2 rounded-xl bg-white/5 border border-white/10 text-gray-500 hover:text-white hover:bg-blue-600 hover:border-blue-500 transition-all duration-300"
+                                                        >
+                                                            <ExternalLink class="w-3.5 h-3.5" />
+                                                        </a>
                                                     </td>
                                                 </Motion.tr>
                                             )}
@@ -321,24 +477,38 @@ export default function TrafficSimulator() {
                     </div>
 
                     {/* Simulation Settings & Network Health */}
-                    <div class="lg:col-span-4 space-y-6">
-                        <div class="bg-white/[0.02] border border-white/5 rounded-[32px] p-8">
-                            <h3 class="font-black italic text-xs tracking-widest uppercase mb-8 flex items-center gap-2">
-                                <Settings class="w-4 h-4 text-blue-400" />
-                                Simulation Engine Config
+                    <div class="lg:col-span-4 space-y-8">
+                        <div class="bg-white/[0.02] border border-white/5 rounded-[32px] p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+                            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-50" />
+                            <h3 class="font-black italic text-xs tracking-[0.2em] uppercase mb-10 flex items-center gap-3 text-white/50">
+                                <Zap class="w-4 h-4 text-blue-400" />
+                                Injection Intensity
                             </h3>
 
-                            <div class="space-y-6">
-                                <div class="space-y-3">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest flex justify-between">
-                                        <span>Traffic Burst Intensity</span>
-                                        <span class="text-blue-400">Normal</span>
-                                    </label>
-                                    <div class="grid grid-cols-4 gap-2">
+                            <div class="space-y-10">
+                                <div class="space-y-6">
+                                    <div class="flex justify-between items-center px-1">
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest italic">Manual Override</span>
+                                        <span class="text-sm font-black text-blue-400 font-mono">{tpsTarget()} <span class="text-[9px] text-gray-600 uppercase">TPS</span></span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="100"
+                                        value={tpsTarget()}
+                                        onInput={(e) => handleTpsChange(parseInt(e.currentTarget.value))}
+                                        class="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                                    />
+                                    <div class="grid grid-cols-4 gap-3">
                                         <For each={['Low', 'Medium', 'High', 'Max']}>
                                             {(level) => (
-                                                <button class={`py-2 rounded-lg text-[9px] font-black border transition-all ${level === 'Medium' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/5 text-gray-500 hover:text-white hover:bg-white/10'
-                                                    }`}>
+                                                <button
+                                                    onClick={() => setBurst(level)}
+                                                    class={`py-2.5 rounded-xl text-[9px] font-black border transition-all duration-300 ${burstIntensity() === level
+                                                        ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]'
+                                                        : 'bg-white/5 border-white/5 text-gray-500 hover:text-white hover:bg-white/10 hover:border-white/10'
+                                                        }`}
+                                                >
                                                     {level}
                                                 </button>
                                             )}
@@ -346,32 +516,49 @@ export default function TrafficSimulator() {
                                     </div>
                                 </div>
 
-                                <div class="space-y-4 pt-4 border-t border-white/5">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <Shield class="w-4 h-4 text-emerald-400" />
-                                            <span class="text-[10px] font-black uppercase tracking-widest text-gray-300 italic">Accounting Metadata</span>
+                                <div class="space-y-5 pt-8 border-t border-white/5">
+                                    <div class="space-y-5 pt-8 border-t border-white/5">
+                                        <div
+                                            onClick={() => setUseAccounting(!useAccounting())}
+                                            class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useAccounting() ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
+                                                    <Shield class={`w-3.5 h-3.5 ${useAccounting() ? 'text-emerald-400' : 'text-gray-500'}`} />
+                                                </div>
+                                                <span class={`text-[10px] font-black uppercase tracking-widest italic ${useAccounting() ? 'text-gray-300' : 'text-gray-600'}`}>Accounting Metadata</span>
+                                            </div>
+                                            <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useAccounting() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
+                                                <div class={`w-2 h-2 rounded-full ${useAccounting() ? 'bg-white' : 'bg-gray-600'}`} />
+                                            </div>
                                         </div>
-                                        <div class="w-8 h-4 bg-blue-600 rounded-full flex items-center justify-end px-1 cursor-pointer">
-                                            <div class="w-2 h-2 bg-white rounded-full shadow-sm" />
+                                        <div
+                                            onClick={() => setUseCrossChain(!useCrossChain())}
+                                            class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useCrossChain() ? 'bg-purple-500/10 border-purple-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
+                                                    <Globe class={`w-3.5 h-3.5 ${useCrossChain() ? 'text-purple-400' : 'text-gray-500'}`} />
+                                                </div>
+                                                <span class={`text-[10px] font-black uppercase tracking-widest italic ${useCrossChain() ? 'text-gray-300' : 'text-gray-600'}`}>Cross-Chain Route</span>
+                                            </div>
+                                            <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useCrossChain() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
+                                                <div class={`w-2 h-2 rounded-full ${useCrossChain() ? 'bg-white' : 'bg-gray-600'}`} />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <Globe class="w-4 h-4 text-purple-400" />
-                                            <span class="text-[10px] font-black uppercase tracking-widest text-gray-300 italic">Cross-Chain Route</span>
-                                        </div>
-                                        <div class="w-8 h-4 bg-white/10 rounded-full flex items-center justify-start px-1 cursor-pointer">
-                                            <div class="w-2 h-2 bg-gray-600 rounded-full" />
-                                        </div>
-                                    </div>
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <Cpu class="w-4 h-4 text-orange-400" />
-                                            <span class="text-[10px] font-black uppercase tracking-widest text-gray-300 italic">ZK Proof Simulation</span>
-                                        </div>
-                                        <div class="w-8 h-4 bg-white/10 rounded-full flex items-center justify-start px-1 cursor-pointer">
-                                            <div class="w-2 h-2 bg-gray-600 rounded-full" />
+                                        <div
+                                            onClick={() => setUseZkProof(!useZkProof())}
+                                            class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useZkProof() ? 'bg-orange-500/10 border-orange-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
+                                                    <Cpu class={`w-3.5 h-3.5 ${useZkProof() ? 'text-orange-400' : 'text-gray-500'}`} />
+                                                </div>
+                                                <span class={`text-[10px] font-black uppercase tracking-widest italic ${useZkProof() ? 'text-gray-300' : 'text-gray-600'}`}>ZK-SNARK Proof</span>
+                                            </div>
+                                            <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useZkProof() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
+                                                <div class={`w-2 h-2 rounded-full ${useZkProof() ? 'bg-white' : 'bg-gray-600'}`} />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -379,37 +566,71 @@ export default function TrafficSimulator() {
                         </div>
 
                         {/* Node Health Status */}
-                        <div class="bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/20 rounded-[32px] p-8">
-                            <h4 class="text-sm font-black italic tracking-tight mb-4 flex items-center gap-2">
-                                <BarChart3 class="w-4 h-4 text-blue-500" />
-                                NETWORK PERFORMANCE
+                        <div class="bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/20 rounded-[32px] p-8 backdrop-blur-2xl shadow-2xl">
+                            <h4 class="text-sm font-black italic tracking-tight mb-8 flex items-center gap-3">
+                                <BarChart3 class="w-5 h-5 text-blue-500" />
+                                ENGINE LOAD ANALYSIS
                             </h4>
-                            <div class="space-y-6">
+                            <div class="space-y-8">
                                 <div>
-                                    <div class="flex justify-between text-[9px] font-black text-gray-500 uppercase tracking-widest mb-2">
-                                        <span>Sequencer Load</span>
-                                        <span class="text-white">{(isRunning() ? (tpsTarget() * 0.8) : 0).toFixed(1)}%</span>
+                                    <div class="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">
+                                        <span>Cluster Load Factor</span>
+                                        <span class="text-white">{(isRunning() ? (tpsTarget() * 0.84) : 0).toFixed(1)}%</span>
                                     </div>
-                                    <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                        <div class="h-full bg-blue-500" style={{ width: `${isRunning() ? (tpsTarget() * 0.8) : 0}%` }} />
+                                    <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                        <Motion.div
+                                            class="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                            animate={{ width: `${isRunning() ? (tpsTarget() * 0.84) : 0}%` }}
+                                        />
                                     </div>
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-4">
-                                    <div class="p-4 bg-white/[0.03] rounded-2xl border border-white/5">
-                                        <span class="text-[9px] font-black text-gray-600 uppercase block mb-1">Latency</span>
-                                        <span class="text-xs font-black text-emerald-400 font-mono">14ms</span>
+                                    <div class="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
+                                        <span class="text-[9px] font-black text-gray-600 uppercase block mb-2 tracking-[0.2em]">Efficiency</span>
+                                        <span class="text-sm font-black text-emerald-400 font-mono tracking-tighter">99.98%</span>
                                     </div>
-                                    <div class="p-4 bg-white/[0.03] rounded-2xl border border-white/5">
-                                        <span class="text-[9px] font-black text-gray-600 uppercase block mb-1">Reliability</span>
-                                        <span class="text-xs font-black text-white font-mono">100%</span>
+                                    <div class="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
+                                        <span class="text-[9px] font-black text-gray-600 uppercase block mb-2 tracking-[0.2em]">Reliability</span>
+                                        <span class="text-sm font-black text-white font-mono tracking-tighter">HIGH-TC</span>
                                     </div>
+                                </div>
+
+                                <div class="px-5 py-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-center gap-3">
+                                    <Info class="w-4 h-4 text-blue-400 shrink-0" />
+                                    <p class="text-[9px] font-bold text-blue-400/80 uppercase leading-relaxed tracking-wider">
+                                        Load is distributed across 5 consensus nodes using round-robin routing protocol.
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </main>
+
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                    height: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: rgba(255, 255, 255, 0.05);
+                    border-radius: 10px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: rgba(59, 130, 246, 0.4);
+                }
+                @keyframes bounce-short {
+                    0%, 100% { transform: translate(0, 0); }
+                    50% { transform: translate(2px, -2px); }
+                }
+                .animate-bounce-short {
+                    animation: bounce-short 1s ease-in-out infinite;
+                }
+            `}</style>
         </div>
     );
 }

@@ -38,7 +38,11 @@ cat <<EOF > "$BASE_DIR/genesis.json"
   },
   "difficulty": "1",
   "gasLimit": "8000000",
-  "alloc": {}
+  "alloc": {
+    "f39Fd6e51aad88F6F4ce6aB8827279cffFb92266": {
+      "balance": "1000000000000000000000000"
+    }
+  }
 }
 EOF
 

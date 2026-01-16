@@ -65,7 +65,11 @@ else
   },
   "difficulty": "1",
   "gasLimit": "8000000",
-  "alloc": {}
+  "alloc": {
+    "f39Fd6e51aad88F6F4ce6aB8827279cffFb92266": {
+      "balance": "1000000000000000000000000"
+    }
+  }
 }
 EOF
     for i in {1..5}; do cp "$DEPLOY_ROOT/genesis.json" "$DEPLOY_ROOT/node$i/"; done
@@ -73,7 +77,8 @@ fi
 
 # 4. Start the Cluster
 echo "⚡ Starting 5-Node Cluster via Docker Compose..."
-sudo docker-compose up -d
+docker-compose down || true
+docker-compose up -d
 
 echo "📊 Waiting for Node-1 to initialize..."
 sleep 5

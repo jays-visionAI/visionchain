@@ -42,10 +42,11 @@ For engineers building on Vision Chain, proceed with the technical steps below.
 To interact with the testnet, add the following network settings to your wallet (MetaMask) or development environment (Hardhat/Foundry):
 
 -   **Network Name**: Vision Testnet v2
--   **New RPC URL**: `http://46.224.221.201:8545`
+-   **New RPC URL**: `http://46.224.221.201:8545` (Cluster Gateway)
 -   **Chain ID**: `3151909`
 -   **Currency Symbol**: `VCN`
 -   **Block Explorer**: `https://www.visionchain.co/visionscan`
+-   **Cluster Status**: 5 Nodes Active (1 RPC + 4 Validators)
 
 ---
 
@@ -53,7 +54,7 @@ To interact with the testnet, add the following network settings to your wallet 
 You need VCN to pay for gas fees.
 1.  Navigate to the **Testnet Hub**: `https://www.visionchain.co/testnet`
 2.  Click on **Request Faucet**.
-3.  Your balance will be updated instantly through the Shared Sequencer.
+3.  Your balance will be updated instantly through the Shared Sequencer and synchronized across the 5-node consensus.
 
 ---
 
@@ -114,19 +115,33 @@ Deploying smart contracts to Vision Chain is identical to any EVM chain.
 
 ---
 
-## Step 6: Stress Testing & Custom Scenarios
-Unlike static simulators, Vision Chain allows you to build and push **Custom Traffic Scenarios** to test your specific contracts.
+## Step 6: Interactive Traffic Simulator & Stress Testing
+The **Vision Traffic Simulator v2** is a live interactive environment for stress-testing your applications.
 
-### 1. Configure via Dashboard (UI)
+### 1. Interactive Simulation Sessions
 1.  Access **Simulator**: `https://www.visionchain.co/trafficsim`
-2.  Input your **Target Contract Address** and **Method Name** in the *Developer Override* panel.
-3.  Set your target **TPS**. The simulator will now prioritize transactions that interact with your contract.
+2.  **Initialize Session**: Click **Initialize Session** to start generating traffic. You can set a **Session Limit** (e.g., 500 TX) to automatically stop the simulation.
+3.  **Real-Time Injection**: Unlike simple UI mocks, the simulator creates **ephemeral wallets** and submits real, signed transactions to the Sequencer.
+4.  **TPS Control**: Use the **Manual Override** slider or presets (**Low, Medium, High, Max**) to adjust the injection frequency (up to 100+ TPS).
 
-### 2. Build Your Own Environment (CLI)
-You can connect your local test suite (Hardhat/Foundry) to the simulator to visualize your own traffic:
-1.  Initialize a traffic loop in your script using the Sequencer API.
-2.  Tag your transactions with a specific `appId` or `metadata.context`.
-3.  The **Live Feed** in TrafficSim will automatically pick up and label your environment's traffic based on the metadata.
+### 2. Advanced Metadata Toggles
+Test how the AI engine processes complex accounting data by enabling toggles:
+-   **Accounting Metadata**: Attaches detailed journal entries and tax classifications to the transaction.
+-   **Cross-Chain Route**: Simulates inter-chain asset routing contexts.
+-   **ZK-SNARK Proof**: Appends synthetic zero-knowledge proof data for privacy-preserving verification testing.
+
+### 3. Developer Overrides
+Use the **Deployment Parameters** panel to focus traffic on your specific stack:
+-   **Target Contract**: Set your deployed contract address.
+-   **Custom Method**: Define the method signature the simulator should call.
+-   **Protocol Choice**: Select between `A110`, `S200`, `B410`, or `R500` to simulate different transaction types.
+
+---
+
+## Step 7: Verification & Dashboard Monitoring
+-   **Live Feed**: Monitor the **Live Execution Feed** in the simulator for instant feedback.
+-   **VisionScan**: Click the **External Link** icon on any transaction in the feed to verify it on **VisionScan**.
+-   **Admin Dashboard**: View cluster-wide performance, including **Cluster Load Factor** and **Consensus Efficiency** at `https://www.visionchain.co/adminsystem`.
 
 ---
 

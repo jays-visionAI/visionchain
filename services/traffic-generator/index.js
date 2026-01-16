@@ -85,8 +85,8 @@ const startTrafficLoop = async () => {
 
     while (true) {
         try {
-            // 1. Random Interval (1 to 5 minutes)
-            const waitTime = getRandomInt(1 * 60 * 1000, 5 * 60 * 1000);
+            // 1. Random Interval (10 to 25 seconds)
+            const waitTime = getRandomInt(10 * 1000, 25 * 1000);
             console.log(`\n🕒 Next action in ${waitTime / 1000}s...`);
             await sleep(waitTime);
 

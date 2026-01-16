@@ -41,9 +41,10 @@
 ## Step 1: 네트워크 설정
 테스트넷과 상호작용하려면 지갑이나 개발 환경(Hardhat/Foundry)에 다음 설정을 추가하세요.
 
--   **RPC URL**: `http://46.224.221.201:8545`
+-   **RPC URL**: `http://46.224.221.201:8545` (Cluster Gateway)
 -   **Chain ID**: `3151909`
 -   **Currency Symbol**: `VCN`
+-   **Cluster Status**: 5 Nodes Active (1 RPC + 4 Validators)
 
 ---
 
@@ -51,7 +52,7 @@
 가스비 지불을 위해 VCN이 필요합니다.
 1.  **테스트넷 허브**: `https://www.visionchain.co/testnet`에 접속합니다.
 2.  **Request Faucet**을 클릭하세요.
-3.  공유 시퀀서를 통해 즉시 잔액이 업데이트됩니다.
+3.  공유 시퀀서를 통해 즉시 잔액이 업데이트되며, 5개 노드 합의 레이어에 동기화됩니다.
 
 ---
 

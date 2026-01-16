@@ -35,18 +35,41 @@ export const AdminDashboard: Component = () => {
     const [vcnBurned, setVcnBurned] = createSignal(42500);
     const [apr, setApr] = createSignal(12.5);
     const [nodeData, setNodeData] = createSignal({
-        authority: 4,
-        consensus: 124,
-        agent: 45,
-        edge: 890
+        authority: 1, // Updated to match 5-node cluster (1 boot/RPC, 4 validators)
+        consensus: 4,
+        agent: 12,
+        edge: 45
     });
+    const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
+
+    const API_URL = "http://46.224.221.201:3000/api/transactions";
+
+    const fetchRecentTransactions = async () => {
+        try {
+            const response = await fetch(`${API_URL}?limit=10`);
+            const data = await response.json();
+            const formatted = data.map((tx: any) => ({
+                hash: tx.hash,
+                type: tx.type,
+                from: tx.from_addr.slice(0, 6) + '...' + tx.from_addr.slice(-4),
+                to: tx.to_addr.slice(0, 6) + '...' + tx.to_addr.slice(-4),
+                amount: tx.value,
+                time: Math.floor((Date.now() - tx.timestamp) / 60000)
+            }));
+            setRecentTransactions(formatted);
+        } catch (error) {
+            console.error("Failed to fetch dashboard transactions:", error);
+        }
+    };
 
     const timer = setInterval(() => {
-        // TPS Simulation
+        // TPS Simulation (Base for the gauge)
         setTps(prev => {
             const fluctuation = (Math.random() - 0.5) * 200;
             return Math.floor(Math.max(96000, Math.min(99500, prev + fluctuation)));
         });
+
+        fetchRecentTransactions();
 
         // Resource Simulation
         setGpuTflops(prev => {
@@ -273,14 +296,14 @@ export const AdminDashboard: Component = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/5">
-                            <Show when={false} fallback={
+                            <Show when={recentTransactions().length > 0} fallback={
                                 <tr>
                                     <td colspan="7" class="p-20 text-center text-slate-500 text-sm">
                                         No recent transactions found
                                     </td>
                                 </tr>
                             }>
-                                <For each={[]}>
+                                <For each={recentTransactions()}>
                                     {(tx: any) => (
                                         <tr class="hover:bg-white/[0.02] transition-colors group">
                                             <td class="p-4 pl-6 font-mono text-xs text-blue-400 group-hover:text-cyan-400 cursor-pointer">{tx.hash}</td>
