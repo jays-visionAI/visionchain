@@ -18,8 +18,8 @@ const ADDRESSES = {
         "http://46.224.221.201:8545",  // Primary Node
         "http://46.224.221.201:8546"   // Backup Node (Simulated for failover)
     ],
-    RPC_URL: "http://46.224.221.201:8545",
-    SEQUENCER_URL: "http://46.224.221.201:3000/rpc/submit",
+    RPC_URL: "https://rpc.visionchain.co",
+    SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
 
     // Interoperability (Equalizer Model)
     VISION_EQUALIZER: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
