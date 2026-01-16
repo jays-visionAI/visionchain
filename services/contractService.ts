@@ -261,6 +261,7 @@ export class ContractService {
     }
 
     async injectSimulatorTransaction(wallet: any, options: { type: string, to: string, value: string, metadata?: any, nonce?: number, gasPrice?: bigint }) {
+        if (!wallet) throw new Error("Wallet instance is required for injection");
         try {
             const { type, to, value, metadata, nonce, gasPrice: providedGasPrice } = options;
 

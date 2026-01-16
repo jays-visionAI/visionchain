@@ -112,6 +112,9 @@ export default function TrafficSimulator() {
     let cachedGasPrice: bigint | null = null;
 
     const injectTransaction = async () => {
+        const currentWallet = simWallet; // Capture instance to prevent race conditions during stop
+        if (!currentWallet || !isRunning()) return;
+
         if (txCount >= sessionLimit()) {
             stopSimulation();
             return;
@@ -150,18 +153,18 @@ export default function TrafficSimulator() {
         let txResult: any;
 
         try {
-            // Real Injection if wallet is ready
-            if (simWallet) {
-                // Initialize Nonce and GasPrice if needed (only once or periodically)
+            // Real Injection
+            if (currentWallet) {
+                // Initialize Nonce and GasPrice if needed
                 if (currentNonce === null) {
-                    currentNonce = await simWallet.getNonce();
+                    currentNonce = await currentWallet.getNonce();
                 }
                 if (cachedGasPrice === null || txCount % 10 === 0) {
-                    const feeData = await simWallet.provider!.getFeeData();
+                    const feeData = await currentWallet.provider!.getFeeData();
                     cachedGasPrice = feeData.gasPrice;
                 }
 
-                txResult = await contractService.injectSimulatorTransaction(simWallet, {
+                txResult = await contractService.injectSimulatorTransaction(currentWallet, {
                     type,
                     to: targetContract() || "0x0000000000000000000000000000000000000000",
                     value: (Math.random() * 0.1).toFixed(4),
@@ -171,13 +174,13 @@ export default function TrafficSimulator() {
                 });
 
                 currentNonce++; // Increment locally
-            } else {
-                throw new Error("No sim wallet");
             }
         } catch (error) {
-            console.error("Injection failed:", error);
+            console.warn("Injection failed or interrupted:", error);
             return;
         }
+
+        if (!txResult) return;
 
         const newLog: SimLog = {
             id: txResult.hash.slice(0, 10) + '...',
@@ -221,10 +224,14 @@ export default function TrafficSimulator() {
         setSimLogs([]);
         setStats(prev => ({ ...prev, sessionProgress: 0, uptime: '00:00:00' }));
 
-        const intervalMs = Math.max(100, 1000 / tpsTarget());
+        const target = tpsTarget();
+        const intervalMs = Math.max(10, 1000 / target);
+        const txPerInterval = target > 100 ? Math.ceil(target / (1000 / intervalMs)) : 1;
 
         simInterval = setInterval(() => {
-            injectTransaction();
+            for (let i = 0; i < txPerInterval; i++) {
+                if (isRunning()) injectTransaction();
+            }
         }, intervalMs);
 
         uptimeInterval = setInterval(() => {
@@ -251,9 +258,13 @@ export default function TrafficSimulator() {
         setTpsTarget(val);
         if (isRunning()) {
             clearInterval(simInterval);
-            const intervalMs = Math.max(100, 1000 / val);
+            const intervalMs = Math.max(10, 1000 / val);
+            const txPerInterval = val > 100 ? Math.ceil(val / (1000 / intervalMs)) : 1;
+
             simInterval = setInterval(() => {
-                injectTransaction();
+                for (let i = 0; i < txPerInterval; i++) {
+                    if (isRunning()) injectTransaction();
+                }
             }, intervalMs);
         }
     };
