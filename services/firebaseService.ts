@@ -288,9 +288,6 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
         // Parallel Fetching
         const usersQ = query(collection(currentDb, 'users'), limit(limitCount));
         const salesQ = query(collection(currentDb, 'token_sales'), limit(limitCount));
-        // ... (rest of function is fine, just changing the signature default)
-        // Actually better to just change the signature line and keep body.
-
 
         const [usersResult, salesResult] = await Promise.race([
             Promise.allSettled([
@@ -596,7 +593,6 @@ export const deployVestingStatus = async (email: string, txHash: string) => {
     }, { merge: true });
 };
 
-// ... (previous code)
 
 export const getTokenSaleParticipants = async (limitCount = 500): Promise<TokenSaleEntry[]> => {
     const db = getFirebaseDb();

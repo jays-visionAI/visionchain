@@ -139,18 +139,24 @@ export class ContractService {
             }
 
             const data = await response.json();
-            console.log("🚀 Submitted to Sequencer:", data);
-
-            // Return data which should include the transaction hash/id
-            return {
-                hash: data.hash || data.txHash || `0x${Math.random().toString(16).slice(2, 66)}`.padEnd(66, '0'), // Fallback if not returned
-                status: 'success',
-                ...data
-            };
+            return data;
         } catch (error) {
             console.error("Failed to submit to sequencer:", error);
             throw error;
         }
+    }
+
+    // Lazy contract getters to avoid "not initialized" errors
+    private getVcnTokenContract() {
+        if (this.vcnToken) return this.vcnToken;
+        const provider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        return new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, provider);
+    }
+
+    private getVcnVestingContract() {
+        if (this.vcnVesting) return this.vcnVesting;
+        const provider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        return new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, provider);
     }
 
     async purchaseLicense(uuid: string, tier: 'Validator' | 'Enterprise') {
@@ -187,9 +193,9 @@ export class ContractService {
     }
 
     async sendTokens(to: string, amount: string, tokenSymbol: string = 'VCN') {
-        if (!this.signer) throw new Error("Signer not initialized");
+        if (!this.signer) throw new Error("Signer not initialized. Please connect wallet.");
 
-        const amountWei = ethers.parseUnits(amount, 18); // Default to 18 decimals
+        const amountWei = ethers.parseUnits(amount, 18);
 
         if (tokenSymbol === 'ETH') {
             const tx = await this.signer.sendTransaction({
@@ -198,8 +204,8 @@ export class ContractService {
             });
             return await tx.wait();
         } else if (tokenSymbol === 'VCN') {
-            if (!this.vcnToken) throw new Error("VCN Token contract not initialized");
-            const tx = await this.vcnToken.transfer(to, amountWei);
+            const vcnContract = this.getVcnTokenContract().connect(this.signer);
+            const tx = await (vcnContract as any).transfer(to, amountWei);
             return await tx.wait();
         } else {
             throw new Error(`Token ${tokenSymbol} transfer not implemented in this demo.`);
@@ -225,18 +231,33 @@ export class ContractService {
     }
 
     /**
+     * Standard VCN transfer using Admin Private Key.
+     * Guaranteed to work regardless of current service initialization state.
+     */
+    async adminSendVCN(to: string, amount: string) {
+        const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const wallet = new ethers.Wallet(adminPK, rpcProvider);
+        const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, wallet);
+
+        const amountWei = ethers.parseEther(amount);
+        const tx = await vcnContract.transfer(to, amountWei);
+        return await tx.wait();
+    }
+
+    /**
      * Sends VCN tokens without the user having ETH/POL (Gasless).
      * Fee: 1 VCN (deducted from user).
      * Requires the user's private key (Internal Wallet) to sign the permit.
      */
     async sendGaslessTokens(to: string, amount: string, privateKey: string) {
-        if (!this.vcnToken) throw new Error("VCN Token contract not initialized");
-
-        // 1. Setup Wallet & Provider
-        // We need a provider to read the nonce from the contract
+        // Ensure contract is ready locally if not already set
         const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const vcnContract = this.vcnToken || new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, rpcProvider);
+
+        // 1. Setup Wallet
         const wallet = new ethers.Wallet(privateKey, rpcProvider);
-        const contract = this.vcnToken.connect(wallet);
+        const contract = vcnContract.connect(wallet);
 
         // 2. Prepare Permit Constants
         const tokenAddress = ADDRESSES.VCN_TOKEN;
@@ -322,11 +343,15 @@ export class ContractService {
         vestingMonths: number,
         startTime: number
     ) {
-        if (!this.vcnVesting) throw new Error("Contracts not initialized");
+        // Ensure contract is ready locally
+        const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const wallet = new ethers.Wallet(adminPK, rpcProvider);
+        const vestingContract = this.vcnVesting || new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, wallet);
 
         const amountWei = ethers.parseEther(totalAmount.toString());
 
-        const tx = await this.vcnVesting.createVestingSchedule(
+        const tx = await vestingContract.createVestingSchedule(
             beneficiary,
             amountWei,
             initialUnlockRatio,

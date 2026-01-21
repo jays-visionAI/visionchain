@@ -1,5 +1,6 @@
 import { Component, createSignal, onCleanup, For, Show, onMount } from 'solid-js';
 import { ethers } from 'ethers';
+import { getAllUsers } from '../../services/firebaseService';
 import {
     Activity,
     Server,
@@ -54,7 +55,7 @@ export const AdminDashboard: Component = () => {
 
     const fetchRecentTransactions = async () => {
         try {
-            const response = await fetch(`${API_URL}?limit=10`);
+            const response = await fetch(`${API_URL}?limit = 10`);
             const data = await response.json();
             const formatted = data.map((tx: any) => ({
                 hash: tx.hash,
@@ -88,15 +89,26 @@ export const AdminDashboard: Component = () => {
     // const timer = setInterval(() => { ... }, 2000);
     // onCleanup(() => clearInterval(timer));
 
+    const fetchUserStats = async () => {
+        try {
+            const users = await getAllUsers(500);
+            setWallets(users.length);
+        } catch (e) {
+            console.error("Failed to fetch user stats for dashboard:", e);
+        }
+    };
+
     // Fetch real data on mount & Simulate TPS
     onMount(() => {
         fetchRecentTransactions();
         fetchPaymasterStats();
+        fetchUserStats();
 
         // Refresh Data every 5s
         const dataInterval = setInterval(() => {
             fetchRecentTransactions();
             fetchPaymasterStats();
+            fetchUserStats();
         }, 5000);
 
         // Mock TPS Simulation (Fast update)
@@ -172,7 +184,7 @@ export const AdminDashboard: Component = () => {
                     {/* Economy & Staking */}
                     <MetricCard
                         title="Economy & Staking"
-                        value={`${apr().toFixed(1)}%`}
+                        value={`${apr().toFixed(1)}% `}
                         subValue="Est. APR"
                         trend={0.5}
                         icon={Coins}
@@ -187,7 +199,7 @@ export const AdminDashboard: Component = () => {
                     {/* Block Time */}
                     <MetricCard
                         title="Avg Block Time"
-                        value={`${blockTime().toFixed(2)}s`}
+                        value={`${blockTime().toFixed(2)} s`}
                         icon={Layers}
                         color="amber"
                         class="border-amber-500/10"
@@ -271,7 +283,7 @@ export const AdminDashboard: Component = () => {
                     {/* TVL Hero */}
                     <MetricCard
                         title="Total Value Locked"
-                        value={`$${tvl().toFixed(1)}M`}
+                        value={`$${tvl().toFixed(1)} M`}
                         trend={1.2}
                         icon={Activity}
                         color="purple"

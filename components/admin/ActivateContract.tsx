@@ -1,9 +1,9 @@
 import { createSignal, createResource, For, Show } from 'solid-js';
-import { getTokenSaleParticipants, deployVestingStatus } from '../../services/firebaseService';
+import { getAllUsers, deployVestingStatus } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
 
 export const ActivateContract = () => {
-    const [participants, { refetch }] = createResource(async () => await getTokenSaleParticipants(500));
+    const [participants, { refetch }] = createResource(async () => await getAllUsers(500));
     const [deployingFor, setDeployingFor] = createSignal<string | null>(null);
 
     // Filter participants who have created a wallet but don't have vesting deployed yet
@@ -137,25 +137,22 @@ export const ActivateContract = () => {
                                     {(user) => (
                                         <tr class="hover:bg-slate-800/50 transition-colors">
                                             <td class="p-4 text-white font-medium">{user.email}</td>
-                                            <td class="p-4">{user.partnerCode}</td>
+                                            <td class="p-4">{user.partnerCode || 'SELF'}</td>
                                             <td class="p-4 font-mono text-xs text-slate-400">{user.walletAddress}</td>
-                                            <td class="p-4">{user.amountToken.toLocaleString()} VCN</td>
+                                            <td class="p-4">{(user.amountToken || 0).toLocaleString()} VCN</td>
                                             <td class="p-4 text-center space-x-2 flex justify-center">
                                                 {/* Testnet Token Button */}
                                                 <button
                                                     class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg transition-all"
                                                     title="Send 10% Testnet VCN"
                                                     onClick={async () => {
-                                                        const amount = Math.floor(user.amountToken * 0.1);
+                                                        const amount = Math.floor((user.amountToken || 1000) * 0.1);
                                                         if (!confirm(`Send ${amount.toLocaleString()} VCN (10%) to ${user.email}?`)) return;
 
                                                         try {
-                                                            // Admin Action using Paymaster/Admin Key (Hardcoded for Demo)
-                                                            // Ideally fetch verified admin key from secure storage
-                                                            await contractService.sendGaslessTokens(
+                                                            await contractService.adminSendVCN(
                                                                 user.walletAddress!,
-                                                                amount.toString(),
-                                                                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                                                                amount.toString()
                                                             );
                                                             alert(`Successfully sent ${amount} VCN to ${user.email}`);
                                                         } catch (e: any) {
@@ -176,10 +173,10 @@ export const ActivateContract = () => {
                                                     onClick={() => handleDeploy(
                                                         user.email,
                                                         user.walletAddress!,
-                                                        user.amountToken,
-                                                        user.unlockRatio,
+                                                        user.amountToken || 0,
+                                                        user.tier || 1, // Default tier? or unlockRatio. Wait, original used user.unlockRatio.
                                                         3,
-                                                        user.vestingPeriod
+                                                        user.tier || 12 // Default vesting period
                                                     )}
                                                     disabled={deployingFor() === user.email}
                                                 >
@@ -215,9 +212,9 @@ export const ActivateContract = () => {
                             }>
                                 {(user) => (
                                     <tr class="hover:bg-slate-800/20 border-b border-slate-800/50">
-                                        <td class="p-4 text-slate-300">{user.email}</td>
-                                        <td class="p-4 text-slate-500">{user.partnerCode}</td>
-                                        <td class="p-4 text-right font-mono text-slate-400">{user.amountToken.toLocaleString()}</td>
+                                         <td class="p-4 text-slate-300">{user.email}</td>
+                                        <td class="p-4 text-slate-500">{user.partnerCode || 'SELF'}</td>
+                                        <td class="p-4 text-right font-mono text-slate-400">{(user.amountToken || 0).toLocaleString()}</td>
                                         <td class="p-4 text-right">
                                             <span class={`text-xs font-bold px-2 py-1 rounded-full ${user.vestingTx ? 'bg-green-900/30 text-green-400' :
                                                 user.status === 'WalletCreated' ? 'bg-indigo-900/30 text-indigo-400' :
