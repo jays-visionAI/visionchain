@@ -9,7 +9,8 @@ import {
     ShieldCheck,
     Cpu,
     Database,
-    Clock
+    Clock,
+    Zap
 } from 'lucide-solid';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { MetricCard } from './dashboard/MetricCard';
@@ -42,6 +43,9 @@ export const AdminDashboard: Component = () => {
         edge: 45
     });
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
+    const [paymasterBal, setPaymasterBal] = createSignal(0);
+    const [gaslessCount, setGaslessCount] = createSignal(12); // Mock initial count
+
 
     const API_URL = "https://api.visionchain.co/api/transactions";
 
@@ -63,6 +67,34 @@ export const AdminDashboard: Component = () => {
         }
     };
 
+    const fetchPaymasterStats = async () => {
+        try {
+            // Fetch Paymaster Balance (0x7099... - Account #2)
+            const response = await fetch("https://rpc.visionchain.co", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "eth_getBalance",
+                    params: ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8", "latest"],
+                    id: 1
+                })
+            });
+            const data = await response.json();
+            if (data.result) {
+                const wei = BigInt(data.result);
+                const bal = Number(wei) / 1e18;
+                setPaymasterBal(bal);
+            }
+
+            // Mock incrementing gasless count based on activity
+            if (Math.random() > 0.8) setGaslessCount(p => p + 1);
+
+        } catch (error) {
+            console.error("Failed to fetch paymaster stats:", error);
+        }
+    };
+
     const timer = setInterval(() => {
         // TPS Simulation (Base for the gauge)
         setTps(prev => {
@@ -71,6 +103,7 @@ export const AdminDashboard: Component = () => {
         });
 
         fetchRecentTransactions();
+        fetchPaymasterStats();
 
         // Resource Simulation
         setGpuTflops(prev => {
@@ -244,6 +277,30 @@ export const AdminDashboard: Component = () => {
 
                 {/* RIGHT COLUMN: TVL & DeFi */}
                 <div class="xl:col-span-1 space-y-6">
+                    {/* Paymaster / Gasless Relayer Monitor */}
+                    <MetricCard
+                        title="Gasless Paymaster"
+                        value={`${paymasterBal().toFixed(1)} POL`}
+                        subValue="Relayer Pool"
+                        trend={0.0}
+                        icon={Zap} // Need to import Zap
+                        color="amber"
+                        class="border-amber-500/10"
+                    >
+                        <div class="mt-4 space-y-3">
+                            <div class="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                <span>Relayed Txs (24h)</span>
+                                <span class="text-white">{gaslessCount()}</span>
+                            </div>
+                            <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-amber-500 h-full w-[45%]" />
+                            </div>
+                            <p class="text-[9px] text-amber-500/80 font-mono mt-1">
+                                Target: 0x7099...79C8
+                            </p>
+                        </div>
+                    </MetricCard>
+
                     {/* TVL Hero */}
                     <MetricCard
                         title="Total Value Locked"

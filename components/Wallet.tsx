@@ -337,8 +337,15 @@ const Wallet = (): JSX.Element => {
                 await contractService.connectInternalWallet(privateKey);
 
                 // 3. Execute Send
-                const receipt = await contractService.sendTokens(recipient, amount, symbol);
-                console.log("Send Transaction Successful:", receipt.hash);
+                if (symbol === 'VCN') {
+                    // Use Paymaster (Gasless) Logic for VCN
+                    const result = await contractService.sendGaslessTokens(recipient, amount, privateKey);
+                    console.log("✅ Gasless Send Successful (Fee 1 VCN):", result);
+                } else {
+                    // Standard Send for ETH/Other
+                    const receipt = await contractService.sendTokens(recipient, amount, symbol);
+                    console.log("Send Transaction Successful:", receipt.hash);
+                }
 
                 setFlowSuccess(true);
                 setFlowStep(3);
@@ -630,9 +637,12 @@ const Wallet = (): JSX.Element => {
     const tokens = createMemo(() => {
         const list: Token[] = [];
         const vcnAsset = getAssetData('VCN');
+        const isTestnet = true; // Flag for future toggling
+
+        // TODO: Hide 'VCN (Testnet)' when Mainnet launches if needed
         list.push({
             symbol: 'VCN',
-            name: 'Vision Chain',
+            name: isTestnet ? 'Vision Chain (Testnet)' : 'Vision Chain',
             balance: vcnAsset.balance.toLocaleString(),
             value: (vcnAsset.balance * vcnAsset.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
             change: 0,

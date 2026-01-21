@@ -61,6 +61,39 @@ export const ActivateContract = () => {
                 </button>
             </div>
 
+            {/* Testnet Distribution Banner */}
+            <div class="mb-8 p-6 bg-gradient-to-r from-blue-900/20 to-indigo-900/20 border border-blue-500/20 rounded-2xl relative overflow-hidden">
+                <div class="absolute inset-0 bg-blue-500/5 pattern-grid-lg animate-pulse-slow pointer-events-none" />
+                <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div>
+                        <h2 class="text-lg font-black text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+                            Testnet VCN Distribution
+                        </h2>
+                        <p class="text-xs text-slate-400 font-medium">Automatic 10% allocation for testnet participation</p>
+                    </div>
+
+                    <div class="flex items-center gap-8 text-right">
+                        <div>
+                            <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Max Supply (Testnet)</div>
+                            <div class="text-xl font-mono text-slate-300">
+                                4,000,000,000 <span class="text-xs text-slate-500">VCN</span>
+                            </div>
+                        </div>
+                        <div class="h-8 w-px bg-white/10" />
+                        <div>
+                            <div class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Committed / Distributed</div>
+                            <div class="text-xl font-mono text-white">
+                                {(participants()?.reduce((sum, p) => sum + p.amountToken, 0) || 0).toLocaleString()} <span class="text-xs text-slate-500 font-normal">/</span> <span class="text-blue-400">{(participants()?.reduce((sum, p) => {
+                                    if (p.status === 'WalletCreated' || p.vestingTx) return sum + (p.amountToken * 0.1);
+                                    return sum;
+                                }, 0) || 0).toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Stats */}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                 <div class="bg-indigo-900/20 border border-indigo-800 p-4 rounded-xl">
@@ -107,7 +140,34 @@ export const ActivateContract = () => {
                                             <td class="p-4">{user.partnerCode}</td>
                                             <td class="p-4 font-mono text-xs text-slate-400">{user.walletAddress}</td>
                                             <td class="p-4">{user.amountToken.toLocaleString()} VCN</td>
-                                            <td class="p-4 text-center">
+                                            <td class="p-4 text-center space-x-2 flex justify-center">
+                                                {/* Testnet Token Button */}
+                                                <button
+                                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg transition-all"
+                                                    title="Send 10% Testnet VCN"
+                                                    onClick={async () => {
+                                                        const amount = Math.floor(user.amountToken * 0.1);
+                                                        if (!confirm(`Send ${amount.toLocaleString()} VCN (10%) to ${user.email}?`)) return;
+
+                                                        try {
+                                                            // Admin Action using Paymaster/Admin Key (Hardcoded for Demo)
+                                                            // Ideally fetch verified admin key from secure storage
+                                                            await contractService.sendGaslessTokens(
+                                                                user.walletAddress!,
+                                                                amount.toString(),
+                                                                "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                                                            );
+                                                            alert(`Successfully sent ${amount} VCN to ${user.email}`);
+                                                        } catch (e: any) {
+                                                            console.error(e);
+                                                            alert(`Failed: ${e.message}`);
+                                                        }
+                                                    }}
+                                                >
+                                                    Send Token
+                                                </button>
+
+                                                {/* Deploy Vesting Button */}
                                                 <button
                                                     class={`px-4 py-2 rounded-lg text-xs font-bold shadow-lg transition-all ${deployingFor() === user.email
                                                         ? 'bg-slate-600 text-slate-400 cursor-not-allowed'

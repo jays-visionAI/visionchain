@@ -224,6 +224,95 @@ export class ContractService {
         return mysubmission;
     }
 
+    /**
+     * Sends VCN tokens without the user having ETH/POL (Gasless).
+     * Fee: 1 VCN (deducted from user).
+     * Requires the user's private key (Internal Wallet) to sign the permit.
+     */
+    async sendGaslessTokens(to: string, amount: string, privateKey: string) {
+        if (!this.vcnToken) throw new Error("VCN Token contract not initialized");
+
+        // 1. Setup Wallet & Provider
+        // We need a provider to read the nonce from the contract
+        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const wallet = new ethers.Wallet(privateKey, rpcProvider);
+        const contract = this.vcnToken.connect(wallet);
+
+        // 2. Prepare Permit Constants
+        const tokenAddress = ADDRESSES.VCN_TOKEN;
+        const spender = await this.getPaymasterAddress(); // The Paymaster's address (Spender)
+        const fee = ethers.parseUnits("1.0", 18); // 1 VCN Fee
+        const transferAmount = ethers.parseUnits(amount, 18);
+        const totalAmount = transferAmount + fee;
+        const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+        // 3. Get Nonce
+        const nonce = await (contract as any).nonces(wallet.address);
+        const chainId = 3151909;
+
+        // 4. Sign EIP-712 Permit
+        const domain = {
+            name: "Vision Chain Token",
+            version: "1",
+            chainId: chainId,
+            verifyingContract: tokenAddress
+        };
+
+        const types = {
+            Permit: [
+                { name: "owner", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "value", type: "uint256" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" }
+            ]
+        };
+
+        const values = {
+            owner: wallet.address,
+            spender: spender,
+            value: totalAmount,
+            nonce: nonce,
+            deadline: deadline
+        };
+
+        const signature = await wallet.signTypedData(domain, types, values);
+
+        // 5. Submit to Paymaster API
+        const response = await fetch(`${ADDRESSES.SEQUENCER_URL.replace('/submit', '')}/paymaster/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: wallet.address,
+                token: tokenAddress,
+                recipient: to,
+                amount: transferAmount.toString(),
+                fee: fee.toString(),
+                deadline: deadline,
+                signature: signature
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(`Paymaster Failed: ${error.error || response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log("🚀 Gasless Transfer Successful:", result);
+        return result;
+    }
+
+    // Helper: Get Paymaster Address (Ideally fetched from config/API)
+    // For demo, we match the server's hardcoded Paymaster (Account #2)
+    private async getPaymasterAddress() {
+        return "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Mock logic: actually we used Account #2 PK in server, which is 0x7099...
+        // Wait, 0xac09... is Account #0 (Hardhat). 0x59c6... is Account #1.
+        // Account #0: f39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+        // Account #1: 70997970C51812dc3A010C7d01b50e0d17dc79C8 (Usually)
+        // Correct.
+    }
+
     // --- Admin Functions ---
     async createVestingSchedule(
         beneficiary: string,

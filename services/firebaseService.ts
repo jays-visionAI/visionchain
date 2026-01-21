@@ -437,18 +437,31 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     for (const entry of entries) {
         const emailLower = entry.email.toLowerCase().trim();
 
+        // 0. Check for existing User Wallet Status (Prevention of Overwriting Status)
+        const userRef = doc(db, 'users', emailLower);
+        const userSnap = await getDoc(userRef);
+        let derivedStatus = entry.status || 'Pending';
+        let derivedWallet = entry.walletAddress;
+
+        if (userSnap.exists()) {
+            const userData = userSnap.data();
+            if (userData.walletAddress) {
+                derivedStatus = 'WalletCreated';
+                derivedWallet = userData.walletAddress;
+            }
+        }
+
         // 1. Update token_sales
         const saleRef = doc(db, 'token_sales', emailLower);
         await setDoc(saleRef, {
             ...entry,
             email: emailLower,
-            status: entry.status || 'Pending'
+            status: derivedStatus,
+            walletAddress: derivedWallet || null
         }, { merge: true });
 
         // 2. Check users collection
-        const userRef = doc(db, 'users', emailLower);
-        const userSnap = await getDoc(userRef);
-
+        // Reuse userRef and userSnap from above
         if (!userSnap.exists()) {
             // New committed user - Pre-register
             await setDoc(userRef, {
@@ -506,6 +519,43 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
     }, { merge: true });
 
     console.log(`[Firebase] Saved wallet address ${walletAddress} to users/${emailLower}`);
+
+    // 4. Auto-Distribute Testnet VCN (10% Rule)
+    try {
+        const tokenSaleRef = doc(db, 'token_sales', emailLower);
+        const saleSnap = await getDoc(tokenSaleRef);
+
+        if (saleSnap.exists()) {
+            const data = saleSnap.data();
+            // Check if already distributed
+            if (!data.testnetDistributed && data.amountToken > 0) {
+                const distributionAmount = Math.floor(data.amountToken * 0.1); // 10%
+                console.log(`[Distribution] Sending ${distributionAmount} VCN (10%) to ${emailLower}...`);
+
+                // Dynamic Import to avoid cycle
+                const { contractService } = await import('../../services/contractService');
+
+                // Admin Action: Send from Company Treasury/Admin Wallet
+                // NOTE: This usually requires a secure signer. 
+                // We will use a dedicated endpoint or the Relayer.
+                // For MVP: We call a new helper 'adminDistribute'
+
+                await contractService.sendGaslessTokens(walletAddress, distributionAmount.toString(),
+                    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"); // Using Admin Key for Distribution
+
+                // Update Flag
+                await setDoc(tokenSaleRef, {
+                    testnetDistributed: true,
+                    distributedAmount: distributionAmount,
+                    distributedAt: new Date().toISOString()
+                }, { merge: true });
+
+                console.log(`[Distribution] Success!`);
+            }
+        }
+    } catch (err) {
+        console.error("[Distribution] Failed to auto-distribute:", err);
+    }
 
     // 3. Update Purchases (Legacy)
     // Optional: Only if you still use 'purchases' collection

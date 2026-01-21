@@ -79,6 +79,100 @@ app.post('/rpc/submit', async (req, res) => {
 });
 
 /**
+ * Endpoint: Paymaster Gasless Transfer (Relayer)
+ */
+app.post('/rpc/paymaster/transfer', async (req, res) => {
+    const { user, token, recipient, amount, fee, deadline, signature } = req.body;
+
+    // Minimal validation
+    if (!user || !token || !recipient || !amount || !signature) {
+        return res.status(400).json({ error: 'Missing parameters' });
+    }
+
+    /* 
+       Paymaster Configuration 
+       In a real scenario, these would be loaded from secure vaults.
+       WE USE HARDCODED KEYS FOR DEMO PURPOSES ONLY.
+    */
+    const PAYMASTER_PK = process.env.PAYMASTER_PK || "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"; // Account #2
+    const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Account #3
+
+    try {
+        const { ethers } = require('ethers');
+        // Setup Provider
+        const provider = new ethers.JsonRpcProvider(KAFKA_BROKERS[0] ? 'https://rpc.visionchain.co' : 'http://localhost:8545'); // Fallback to local
+        // Note: For this specific user environment, we use the known RPC from contractService
+        const rpcProvider = new ethers.JsonRpcProvider("https://rpc.visionchain.co");
+
+        const paymasterWallet = new ethers.Wallet(PAYMASTER_PK, rpcProvider);
+
+        // Minimal ABI for Permit + TransferFrom
+        const abi = [
+            "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
+            "function transferFrom(address from, address to, uint256 value) external returns (bool)",
+            "function nonces(address owner) external view returns (uint256)"
+        ];
+
+        const tokenContract = new ethers.Contract(token, abi, paymasterWallet);
+
+        // Parse Signature
+        const sig = ethers.Signature.from(signature);
+
+        console.log(`⚡️ Paymaster Processing: User ${user} -> Recipient ${recipient} (${amount})`);
+        console.log(`   Fee: ${fee} -> Treasury ${TREASURY_ADDRESS}`);
+
+        // 1. Submit Permit (Gas paid by Paymaster)
+        // Note: value for permit should be amount + fee
+        const totalValue = BigInt(amount) + BigInt(fee);
+
+        console.log("   Step 1: Executing Permit...");
+        // We need to be careful with Nonces if sending multiple txs rapidly.
+        // Ideally we used a Multicall, but we will chain transactions here.
+
+        const txPermit = await tokenContract.permit(
+            user,
+            paymasterWallet.address,
+            totalValue,
+            deadline,
+            sig.v,
+            sig.r,
+            sig.s
+        );
+        await txPermit.wait();
+        console.log("   ✅ Permit Successful:", txPermit.hash);
+
+        // 2. Transfer to Recipient
+        console.log("   Step 2: Transferring to Recipient...");
+        const txTransfer1 = await tokenContract.transferFrom(user, recipient, amount);
+        await txTransfer1.wait();
+        console.log("   ✅ Transfer 1 Successful:", txTransfer1.hash);
+
+        // 3. Transfer Fee to Treasury
+        console.log("   Step 3: Transferring Fee to Treasury...");
+        const txTransfer2 = await tokenContract.transferFrom(user, TREASURY_ADDRESS, fee);
+        await txTransfer2.wait();
+        console.log("   ✅ Transfer 2 Successful:", txTransfer2.hash);
+
+        res.json({
+            status: 'success',
+            txHashes: {
+                permit: txPermit.hash,
+                transfer: txTransfer1.hash,
+                fee: txTransfer2.hash
+            },
+            message: 'Gasless transfer completed successfully'
+        });
+
+    } catch (error) {
+        console.error("❌ Paymaster Error:", error);
+        res.status(500).json({
+            error: 'Paymaster execution failed',
+            details: error.message
+        });
+    }
+});
+
+/**
  * Endpoint: Get Transactions (VisionScan Explorer)
  */
 app.get('/api/transactions', (req, res) => {
