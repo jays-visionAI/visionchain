@@ -546,7 +546,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
                 console.log(`[Distribution] Sending ${distributionAmount} VCN (10%) to ${emailLower}...`);
 
                 // Dynamic Import to avoid cycle
-                const { contractService } = await import('../../services/contractService');
+                const { contractService } = await import('./contractService');
 
                 // Admin Action: Send from Company Treasury/Admin Wallet
                 // NOTE: This usually requires a secure signer. 
