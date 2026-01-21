@@ -181,12 +181,19 @@ export default function TrafficSimulator() {
         }
 
         if (!txResult) return;
+        if (!txResult || !txResult.hash) {
+            console.warn("Sequencer did not return a hash for the transaction. Creating mock hash for log.");
+            txResult = {
+                ...txResult,
+                hash: txResult?.hash || `0xmock${Math.random().toString(16).slice(2, 34)}`
+            };
+        }
 
         const newLog: SimLog = {
             id: txResult.hash.slice(0, 10) + '...',
             hash: txResult.hash,
             type: type,
-            from: (await simWallet?.getAddress() || '0x...'),
+            from: (await simWallet?.getAddress() || (txResult.from || '0x...')),
             to: targetContract() || (txResult.to || '0x...'),
             value: (txResult.value || (Math.random() * 5).toFixed(4)) + ' VCN',
             status: 'success',
@@ -484,9 +491,9 @@ export default function TrafficSimulator() {
                                                     </td>
                                                     <td class="px-10 py-5">
                                                         <div class="flex items-center gap-3 text-[10px] font-bold">
-                                                            <span class="text-white/30 font-mono">{tx.from.slice(0, 10)}...</span>
+                                                            <span class="text-white/30 font-mono">{(tx.from || '0x...').slice(0, 10)}...</span>
                                                             <ArrowUpRight class="w-3 h-3 text-blue-500 animate-bounce-short" />
-                                                            <span class="text-white/60 font-mono">{tx.to.slice(0, 10)}...</span>
+                                                            <span class="text-white/60 font-mono">{(tx.to || '0x...').slice(0, 10)}...</span>
                                                         </div>
                                                     </td>
                                                     <td class="px-10 py-5 text-right font-mono">
