@@ -181,17 +181,10 @@ export default function TrafficSimulator() {
         }
 
         if (!txResult) return;
-        if (!txResult || !txResult.hash) {
-            console.warn("Sequencer did not return a hash for the transaction. Creating mock hash for log.");
-            txResult = {
-                ...txResult,
-                hash: txResult?.hash || `0xmock${Math.random().toString(16).slice(2, 34)}`
-            };
-        }
 
         const newLog: SimLog = {
-            id: txResult.hash.slice(0, 10) + '...',
-            hash: txResult.hash,
+            id: (txResult.hash || '0x...').slice(0, 10) + '...',
+            hash: txResult.hash || '',
             type: type,
             from: (await simWallet?.getAddress() || (txResult.from || '0x...')),
             to: targetContract() || (txResult.to || '0x...'),
@@ -470,10 +463,8 @@ export default function TrafficSimulator() {
                                             </tr>
                                         }>
                                             {(tx) => (
-                                                <Motion.tr
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    class="hover:bg-blue-500/[0.03] group transition-all duration-300"
+                                                <tr
+                                                    class="hover:bg-blue-500/[0.03] group transition-all duration-300 border-b border-white/5 last:border-0"
                                                 >
                                                     <td class="px-10 py-5">
                                                         <div class="flex flex-col">
@@ -508,7 +499,7 @@ export default function TrafficSimulator() {
                                                             <ExternalLink class="w-3.5 h-3.5" />
                                                         </a>
                                                     </td>
-                                                </Motion.tr>
+                                                </tr>
                                             )}
                                         </For>
                                     </tbody>
