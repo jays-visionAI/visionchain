@@ -343,11 +343,19 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
                 status = 'WalletCreated';
             }
 
+            // Ensure we pick the valid 0x address if one is invalid
+            let finalWallet = 'Not Created';
+            if (userDoc?.walletAddress && userDoc.walletAddress.startsWith('0x')) {
+                finalWallet = userDoc.walletAddress;
+            } else if (saleDoc?.walletAddress && saleDoc.walletAddress.startsWith('0x')) {
+                finalWallet = saleDoc.walletAddress;
+            }
+
             mergedUsers.push({
                 email: email,
                 role: userDoc?.role || 'user',
                 name: userDoc?.name || email.split('@')[0],
-                walletAddress: validWallet ? (userDoc?.walletAddress || saleDoc?.walletAddress) : 'Not Created',
+                walletAddress: finalWallet,
                 status: status,
                 joinDate: userDoc?.createdAt ? new Date(userDoc.createdAt.seconds * 1000).toLocaleDateString() : (saleDoc?.date || '2024-01-01'),
                 isVerified: !!saleDoc,

@@ -234,14 +234,17 @@ export class ContractService {
      * Standard VCN transfer using Admin Private Key.
      * Guaranteed to work regardless of current service initialization state.
      */
-    async adminSendVCN(to: string, amount: string) {
+    async adminSendVCN(toAddress: string, amountStr: string) {
+        if (!toAddress || !toAddress.startsWith('0x')) {
+            throw new Error(`Invalid recipient address: "${toAddress}". The user has not connected their wallet properly.`);
+        }
         const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
         const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
         const wallet = new ethers.Wallet(adminPK, rpcProvider);
         const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, wallet);
 
-        const amountWei = ethers.parseEther(amount);
-        const tx = await vcnContract.transfer(to, amountWei);
+        const amountWei = ethers.parseEther(amountStr);
+        const tx = await vcnContract.transfer(toAddress, amountWei);
         return await tx.wait();
     }
 

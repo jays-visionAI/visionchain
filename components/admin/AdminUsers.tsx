@@ -377,9 +377,10 @@ export default function AdminUsers() {
                                                     alert(`전송 실패: ${e.message}`);
                                                 }
                                             }}
+                                            disabled={!hasWallet}
                                             class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${hasWallet
-                                                ? 'bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 shadow-lg shadow-blue-500/10'
-                                                : 'bg-gray-500/5 text-gray-600 border-gray-500/10 cursor-not-allowed opacity-50'
+                                                    ? 'bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 shadow-lg shadow-blue-500/10'
+                                                    : 'bg-gray-500/5 text-gray-600 border-gray-500/10 cursor-not-allowed opacity-50'
                                                 }`}
                                         >
                                             <Send class="w-3 h-3" />
