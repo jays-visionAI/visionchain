@@ -244,8 +244,8 @@ export default function AdminUsers() {
                     <div class="col-span-2">Registration</div>
                     <div class="col-span-2">Wallet Status</div>
                     <div class="col-span-2">Vesting</div>
-                    <div class="col-span-2">Join Date</div>
-                    <div class="col-span-1">Action</div>
+                    <div class="col-span-1">Join Date</div>
+                    <div class="col-span-2 text-right pr-6">Action</div>
                 </div>
 
                 {/* Table Body */}
@@ -341,23 +341,23 @@ export default function AdminUsers() {
                                     </div>
 
                                     {/* Join Date */}
-                                    <div class="md:col-span-2 flex items-center text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+                                    <div class="md:col-span-1 flex items-center text-[11px] font-bold text-gray-500 uppercase tracking-widest">
                                         {user.joinDate || '-'}
                                     </div>
 
                                     {/* Actions */}
-                                    <div class="md:col-span-1 flex items-center justify-end gap-2">
+                                    <div class="md:col-span-2 flex items-center justify-end gap-2 pr-2">
                                         <button
                                             onClick={async () => {
                                                 if (!hasWallet) {
-                                                    alert("이 사용자는 아직 지갑을 생성하지 않았습니다.");
+                                                    alert("이 사용자는 아직 지갑을 생성하지 않았습니다. 사용자가 지갑을 연결한 후에 토큰 전송이 가능합니다.");
                                                     return;
                                                 }
 
                                                 const defaultAmount = Math.floor((user.amountToken || 1000) * 0.1);
                                                 const input = prompt(`[${user.email}] 에게 보낼 VCN 수량을 입력하세요:`, defaultAmount.toString());
 
-                                                if (input === null) return; // Cancelled
+                                                if (input === null) return;
                                                 const amountStr = input.trim();
                                                 const amount = parseFloat(amountStr);
 
@@ -367,7 +367,6 @@ export default function AdminUsers() {
                                                 }
 
                                                 try {
-                                                    // Use hardcoded admin key for demo/MVP
                                                     await contractService.sendGaslessTokens(
                                                         user.walletAddress!,
                                                         amountStr,
@@ -379,13 +378,14 @@ export default function AdminUsers() {
                                                     alert(`전송 실패: ${e.message}`);
                                                 }
                                             }}
-                                            class={`p-2 rounded-lg transition-colors ${hasWallet
-                                                    ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'
-                                                    : 'bg-gray-500/10 text-gray-600 cursor-not-allowed'
+                                            class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${hasWallet
+                                                    ? 'bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 shadow-lg shadow-blue-500/10'
+                                                    : 'bg-gray-500/5 text-gray-600 border-gray-500/10 cursor-not-allowed opacity-50'
                                                 }`}
-                                            title={hasWallet ? "Testnet VCN 전송" : "지갑 미생성"}
+                                            title={hasWallet ? "Testnet VCN 전송" : "지갑 미생성 (토큰 전송 불가)"}
                                         >
-                                            <Send class="w-4 h-4" />
+                                            <Send class="w-3 h-3" />
+                                            VCN 전송
                                         </button>
 
                                         <Show when={!isRegistered}>
