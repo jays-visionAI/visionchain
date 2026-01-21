@@ -1,4 +1,5 @@
 import { Component, createSignal, onCleanup, For, Show } from 'solid-js';
+import { ethers } from 'ethers';
 import {
     Activity,
     Server,
@@ -26,6 +27,9 @@ import {
 import { MaxTPSSection } from './dashboard/MaxTPSSection';
 import { Coins } from 'lucide-solid';
 
+// Re-use provider instance outside component to avoid re-creation and memory leaks
+const provider = new ethers.JsonRpcProvider("https://vision-testnet-rpc.vision-chain.io");
+
 export const AdminDashboard: Component = () => {
     const [tps, setTps] = createSignal(97500);
     const [gpuTflops, setGpuTflops] = createSignal(8420);
@@ -37,15 +41,14 @@ export const AdminDashboard: Component = () => {
     const [vcnBurned, setVcnBurned] = createSignal(42500);
     const [apr, setApr] = createSignal(12.5);
     const [nodeData, setNodeData] = createSignal({
-        authority: 1, // Updated to match 5-node cluster (1 boot/RPC, 4 validators)
+        authority: 1,
         consensus: 4,
         agent: 12,
         edge: 45
     });
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
-    const [paymasterBal, setPaymasterBal] = createSignal(0);
-    const [gaslessCount, setGaslessCount] = createSignal(12); // Mock initial count
-
+    const [paymasterBal, setPaymasterBal] = createSignal("0");
+    const [gaslessCount, setGaslessCount] = createSignal(12);
 
     const API_URL = "https://api.visionchain.co/api/transactions";
 
@@ -69,29 +72,16 @@ export const AdminDashboard: Component = () => {
 
     const fetchPaymasterStats = async () => {
         try {
-            // Fetch Paymaster Balance (0x7099... - Account #2)
-            const response = await fetch("https://rpc.visionchain.co", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    method: "eth_getBalance",
-                    params: ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8", "latest"],
-                    id: 1
-                })
-            });
-            const data = await response.json();
-            if (data.result) {
-                const wei = BigInt(data.result);
-                const bal = Number(wei) / 1e18;
-                setPaymasterBal(bal);
-            }
+            // Check if provider is ready
+            if (!provider) return;
+
+            const balance = await provider.getBalance("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+            setPaymasterBal(ethers.formatEther(balance));
 
             // Mock incrementing gasless count based on activity
-            if (Math.random() > 0.8) setGaslessCount(p => p + 1);
-
-        } catch (error) {
-            console.error("Failed to fetch paymaster stats:", error);
+            setGaslessCount(prev => prev + (Math.random() > 0.8 ? 1 : 0));
+        } catch (e) {
+            console.log("Failed to fetch paymaster stats (RPC might be down, using cached/mock)");
         }
     };
 
@@ -280,7 +270,7 @@ export const AdminDashboard: Component = () => {
                     {/* Paymaster / Gasless Relayer Monitor */}
                     <MetricCard
                         title="Gasless Paymaster"
-                        value={`${paymasterBal().toFixed(1)} POL`}
+                        value={`${Number(paymasterBal()).toFixed(1)} POL`}
                         subValue="Relayer Pool"
                         trend={0.0}
                         icon={Zap} // Need to import Zap
