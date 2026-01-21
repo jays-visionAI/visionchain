@@ -258,6 +258,7 @@ export interface UserData {
     joinDate?: string;
     isVerified?: boolean;
     tier?: number;
+    amountToken?: number; // Added
     name?: string;
     phone?: string;
     bio?: string;
@@ -266,7 +267,7 @@ export interface UserData {
     walletReady?: boolean;
 }
 
-export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
+export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
     const startTime = Date.now();
     console.log('[Performance] getAllUsers started');
 
@@ -278,7 +279,7 @@ export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
         currentDb = getFirebaseDb();
     }
 
-    // 30 second timeout for initial fetch - 10s was too short for some network conditions
+    // 30 second timeout for initial fetch
     const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Firestore fetch timeout')), 30000)
     );
@@ -287,26 +288,37 @@ export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
         // Parallel Fetching
         const usersQ = query(collection(currentDb, 'users'), limit(limitCount));
         const salesQ = query(collection(currentDb, 'token_sales'), limit(limitCount));
+        // ... (rest of function is fine, just changing the signature default)
+        // Actually better to just change the signature line and keep body.
 
-        const [usersSnap, salesSnap] = await Promise.race([
-            Promise.all([
+
+        const [usersResult, salesResult] = await Promise.race([
+            Promise.allSettled([
                 getDocs(usersQ),
                 getDocs(salesQ)
             ]),
-            timeout
-        ]) as [any, any];
+            timeout.then(() => Promise.reject(new Error('Timeout')))
+        ]) as [PromiseSettledResult<any>, PromiseSettledResult<any>];
 
         console.log(`[Performance] Firestore fetch completed in ${Date.now() - startTime}ms`);
 
         const usersMap = new Map<string, any>();
-        usersSnap.forEach((doc: any) => {
-            usersMap.set(doc.id, doc.data());
-        });
+        if (usersResult.status === 'fulfilled') {
+            usersResult.value.forEach((doc: any) => {
+                usersMap.set(doc.id, doc.data());
+            });
+        } else {
+            console.error('[getAllUsers] Failed to fetch users collection:', usersResult.reason);
+        }
 
         const salesMap = new Map<string, any>();
-        salesSnap.forEach((doc: any) => {
-            salesMap.set(doc.id, doc.data()); // doc.id is usually email
-        });
+        if (salesResult.status === 'fulfilled') {
+            salesResult.value.forEach((doc: any) => {
+                salesMap.set(doc.id, doc.data());
+            });
+        } else {
+            console.error('[getAllUsers] Failed to fetch token_sales collection:', salesResult.reason);
+        }
 
         // 3. Merge Data
         const mergedUsers: UserData[] = [];
@@ -342,7 +354,8 @@ export const getAllUsers = async (limitCount = 50): Promise<UserData[]> => {
                 status: status,
                 joinDate: userDoc?.createdAt ? new Date(userDoc.createdAt.seconds * 1000).toLocaleDateString() : (saleDoc?.date || '2024-01-01'),
                 isVerified: !!saleDoc,
-                tier: saleDoc?.tier || 0
+                tier: saleDoc?.tier || 0,
+                amountToken: saleDoc?.amountToken || saleDoc?.amount || 0
             });
         });
 
@@ -585,7 +598,7 @@ export const deployVestingStatus = async (email: string, txHash: string) => {
 
 // ... (previous code)
 
-export const getTokenSaleParticipants = async (limitCount = 100): Promise<TokenSaleEntry[]> => {
+export const getTokenSaleParticipants = async (limitCount = 500): Promise<TokenSaleEntry[]> => {
     const db = getFirebaseDb();
     const q = query(collection(db, 'token_sales'), limit(limitCount));
     const snapshot = await getDocs(q);

@@ -3,7 +3,7 @@ import { getTokenSaleParticipants, deployVestingStatus } from '../../services/fi
 import { contractService } from '../../services/contractService';
 
 export const ActivateContract = () => {
-    const [participants, { refetch }] = createResource(async () => await getTokenSaleParticipants(100));
+    const [participants, { refetch }] = createResource(async () => await getTokenSaleParticipants(500));
     const [deployingFor, setDeployingFor] = createSignal<string | null>(null);
 
     // Filter participants who have created a wallet but don't have vesting deployed yet

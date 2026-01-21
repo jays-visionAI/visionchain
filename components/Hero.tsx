@@ -5,12 +5,18 @@ import LogoCarousel from './LogoCarousel';
 import ParticleNetwork3D from './ParticleNetwork3D';
 import CursorLightTrace from './CursorLightTrace';
 
+import { useNavigate } from '@solidjs/router';
+import { useAuth } from './auth/authContext';
+
 const Hero = (): JSX.Element => {
   let sectionRef: HTMLElement | undefined;
   const [scrollProgress, setScrollProgress] = createSignal(0);
   const [isReady, setIsReady] = createSignal(false);
+  const navigate = useNavigate();
+  const auth = useAuth(); // Assuming useAuth provides auth.user()
 
   onMount(() => {
+    // ... existing onMount logic ...
     // Use requestAnimationFrame to ensure DOM is painted before triggering animations
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -42,12 +48,21 @@ const Hero = (): JSX.Element => {
   const opacity = () => 1 - scrollProgress() * 0.8;
   const textScale = () => 1 + scrollProgress() * 0.15;
 
+  const handleConnect = (e: Event) => {
+    e.preventDefault();
+    if (auth.user()) {
+      navigate('/wallet');
+    } else {
+      navigate('/login');
+    }
+  };
+
   return (
     <section
       ref={sectionRef}
       class="relative min-h-[100vh] flex flex-col pt-32 overflow-hidden bg-transparent selection:bg-blue-500/30"
     >
-      {/* CSS Keyframe Animations */}
+      {/* ... styles ... */}
       <style>{`
         @keyframes fadeInUp {
           from {
@@ -151,15 +166,13 @@ const Hero = (): JSX.Element => {
           <div
             class={`flex flex-col sm:flex-row items-center gap-6 sm:gap-10 text-[15px] md:text-[17px] justify-center ${isReady() ? 'hero-animate-4' : 'opacity-0'}`}
           >
-            <a
-              href="https://wallet.visionchain.co/login"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={handleConnect}
               class="px-8 py-3 bg-[#f5f5f7] text-black rounded-full font-medium hover:bg-white transition-all hover:scale-105 flex items-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.3)] hover:shadow-[0_0_40px_rgba(255,255,255,0.6)] cursor-pointer"
             >
               <Wallet class="w-4 h-4" />
               Connect
-            </a>
+            </button>
           </div>
         </div>
 

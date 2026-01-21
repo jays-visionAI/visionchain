@@ -17,6 +17,7 @@ import {
     Send
 } from 'lucide-solid';
 import { getAllUsers, resendActivationEmail, manualInviteUser } from '../../services/firebaseService';
+import { contractService } from '../../services/contractService';
 
 const statusStyles = {
     active: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle },
@@ -346,6 +347,47 @@ export default function AdminUsers() {
 
                                     {/* Actions */}
                                     <div class="md:col-span-1 flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={async () => {
+                                                if (!hasWallet) {
+                                                    alert("이 사용자는 아직 지갑을 생성하지 않았습니다.");
+                                                    return;
+                                                }
+
+                                                const defaultAmount = Math.floor((user.amountToken || 1000) * 0.1);
+                                                const input = prompt(`[${user.email}] 에게 보낼 VCN 수량을 입력하세요:`, defaultAmount.toString());
+
+                                                if (input === null) return; // Cancelled
+                                                const amountStr = input.trim();
+                                                const amount = parseFloat(amountStr);
+
+                                                if (isNaN(amount) || amount <= 0) {
+                                                    alert("유효한 수량을 입력해주세요.");
+                                                    return;
+                                                }
+
+                                                try {
+                                                    // Use hardcoded admin key for demo/MVP
+                                                    await contractService.sendGaslessTokens(
+                                                        user.walletAddress!,
+                                                        amountStr,
+                                                        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                                                    );
+                                                    alert(`성공: ${user.email} 님에게 ${amount.toLocaleString()} VCN을 전송했습니다.`);
+                                                } catch (e: any) {
+                                                    console.error(e);
+                                                    alert(`전송 실패: ${e.message}`);
+                                                }
+                                            }}
+                                            class={`p-2 rounded-lg transition-colors ${hasWallet
+                                                    ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400'
+                                                    : 'bg-gray-500/10 text-gray-600 cursor-not-allowed'
+                                                }`}
+                                            title={hasWallet ? "Testnet VCN 전송" : "지갑 미생성"}
+                                        >
+                                            <Send class="w-4 h-4" />
+                                        </button>
+
                                         <Show when={!isRegistered}>
                                             <button
                                                 onClick={() => handleResendEmail(user.email)}

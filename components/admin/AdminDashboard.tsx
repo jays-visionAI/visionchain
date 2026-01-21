@@ -1,4 +1,4 @@
-import { Component, createSignal, onCleanup, For, Show } from 'solid-js';
+import { Component, createSignal, onCleanup, For, Show, onMount } from 'solid-js';
 import { ethers } from 'ethers';
 import {
     Activity,
@@ -31,24 +31,24 @@ import { Coins } from 'lucide-solid';
 const provider = new ethers.JsonRpcProvider("https://vision-testnet-rpc.vision-chain.io");
 
 export const AdminDashboard: Component = () => {
-    const [tps, setTps] = createSignal(97500);
-    const [gpuTflops, setGpuTflops] = createSignal(8420);
-    const [storageTb, setStorageTb] = createSignal(1240);
-    const [wallets, setWallets] = createSignal(142080);
-    const [blockTime, setBlockTime] = createSignal(1.2);
-    const [tvl, setTvl] = createSignal(125.4);
-    const [vcnDistributed, setVcnDistributed] = createSignal(1250000);
-    const [vcnBurned, setVcnBurned] = createSignal(42500);
-    const [apr, setApr] = createSignal(12.5);
+    const [tps, setTps] = createSignal(4850); // Mock initial TPS
+    const [gpuTflops, setGpuTflops] = createSignal(0);
+    const [storageTb, setStorageTb] = createSignal(0);
+    const [wallets, setWallets] = createSignal(0);
+    const [blockTime, setBlockTime] = createSignal(1.2); // Static realistic block time
+    const [tvl, setTvl] = createSignal(0);
+    const [vcnDistributed, setVcnDistributed] = createSignal(0);
+    const [vcnBurned, setVcnBurned] = createSignal(0);
+    const [apr, setApr] = createSignal(0);
     const [nodeData, setNodeData] = createSignal({
-        authority: 1,
-        consensus: 4,
-        agent: 12,
-        edge: 45
+        authority: 5, // 5 Nodes in cluster
+        consensus: 0,
+        agent: 0,
+        edge: 0
     });
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
     const [paymasterBal, setPaymasterBal] = createSignal("0");
-    const [gaslessCount, setGaslessCount] = createSignal(12);
+    const [gaslessCount, setGaslessCount] = createSignal(0);
 
     const API_URL = "https://api.visionchain.co/api/transactions";
 
@@ -78,63 +78,40 @@ export const AdminDashboard: Component = () => {
             const balance = await provider.getBalance("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
             setPaymasterBal(ethers.formatEther(balance));
 
-            // Mock incrementing gasless count based on activity
-            setGaslessCount(prev => prev + (Math.random() > 0.8 ? 1 : 0));
+            // Real gasless count would need an event listener or API. Keeping 0 for now.
         } catch (e) {
             console.log("Failed to fetch paymaster stats (RPC might be down, using cached/mock)");
         }
     };
 
-    const timer = setInterval(() => {
-        // TPS Simulation (Base for the gauge)
-        setTps(prev => {
-            const fluctuation = (Math.random() - 0.5) * 200;
-            return Math.floor(Math.max(96000, Math.min(99500, prev + fluctuation)));
-        });
+    // Remove simulation timer
+    // const timer = setInterval(() => { ... }, 2000);
+    // onCleanup(() => clearInterval(timer));
 
+    // Fetch real data on mount & Simulate TPS
+    onMount(() => {
         fetchRecentTransactions();
         fetchPaymasterStats();
 
-        // Resource Simulation
-        setGpuTflops(prev => {
-            const change = (Math.random() - 0.5) * 50;
-            return Math.floor(Math.max(8000, Math.min(9000, prev + change)));
+        // Refresh Data every 5s
+        const dataInterval = setInterval(() => {
+            fetchRecentTransactions();
+            fetchPaymasterStats();
+        }, 5000);
+
+        // Mock TPS Simulation (Fast update)
+        const tpsInterval = setInterval(() => {
+            setTps(prev => {
+                const fluctuation = (Math.random() - 0.5) * 150;
+                return Math.floor(Math.max(4500, Math.min(5200, prev + fluctuation)));
+            });
+        }, 2000);
+
+        onCleanup(() => {
+            clearInterval(dataInterval);
+            clearInterval(tpsInterval);
         });
-
-        setStorageTb(prev => {
-            const change = Math.random() > 0.8 ? 1 : 0;
-            return prev + change;
-        });
-
-        // Wallets Simulation
-        setWallets(prev => prev + Math.floor(Math.random() * 5));
-
-        // Block Time Simulation
-        setBlockTime(prev => {
-            const target = 1.2;
-            const diff = (Math.random() - 0.5) * 0.1;
-            return Math.max(1.1, Math.min(1.4, prev + diff));
-        });
-
-        // TVL Simulation
-        setTvl(prev => prev + (Math.random() - 0.45) * 0.5);
-
-        // VCN Economy Simulation
-        setVcnDistributed(prev => prev + (Math.random() * 2));
-        setVcnBurned(prev => prev + (Math.random() * 0.5));
-        setApr(prev => {
-            const fluctuation = (Math.random() - 0.5) * 0.05;
-            return Math.max(10, Math.min(15, prev + fluctuation));
-        });
-
-        // Node Count Simulation
-        setNodeData(prev => ({
-            ...prev,
-            edge: Math.max(850, Math.min(950, prev.edge + Math.floor((Math.random() - 0.5) * 10)))
-        }));
-    }, 2000);
-
-    onCleanup(() => clearInterval(timer));
+    });
 
     return (
         <div class="min-h-screen bg-[#0a0a0f] text-white p-6 md:p-10 font-sans">
