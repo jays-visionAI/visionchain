@@ -302,7 +302,7 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
         const usersMap = new Map<string, any>();
         if (usersResult.status === 'fulfilled') {
             usersResult.value.forEach((doc: any) => {
-                usersMap.set(doc.id, doc.data());
+                usersMap.set(doc.id.toLowerCase(), doc.data());
             });
         } else {
             console.error('[getAllUsers] Failed to fetch users collection:', usersResult.reason);
@@ -311,7 +311,7 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
         const salesMap = new Map<string, any>();
         if (salesResult.status === 'fulfilled') {
             salesResult.value.forEach((doc: any) => {
-                salesMap.set(doc.id, doc.data());
+                salesMap.set(doc.id.toLowerCase(), doc.data());
             });
         } else {
             console.error('[getAllUsers] Failed to fetch token_sales collection:', salesResult.reason);
@@ -320,6 +320,23 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
         // 3. Merge Data
         const mergedUsers: UserData[] = [];
         const allEmails = new Set([...usersMap.keys(), ...salesMap.keys()]);
+
+        const formatJoinDate = (dateField: any) => {
+            if (!dateField) return '2024-01-01';
+            try {
+                // If it's a Firestore Timestamp
+                if (dateField && typeof dateField === 'object' && 'seconds' in dateField) {
+                    return new Date(dateField.seconds * 1000).toISOString().split('T')[0];
+                }
+
+                // If it's already a string or ISO date
+                const d = new Date(dateField);
+                if (isNaN(d.getTime())) return '2024-01-01';
+                return d.toISOString().split('T')[0];
+            } catch (e) {
+                return '2024-01-01';
+            }
+        };
 
         allEmails.forEach(email => {
             const userDoc = usersMap.get(email);
@@ -351,13 +368,15 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
                 finalWallet = saleDoc.walletAddress;
             }
 
+            const joinDateStr = formatJoinDate(userDoc?.createdAt || saleDoc?.date || saleDoc?.createdAt);
+
             mergedUsers.push({
                 email: email,
                 role: userDoc?.role || 'user',
-                name: userDoc?.name || email.split('@')[0],
+                name: userDoc?.name || userDoc?.displayName || email.split('@')[0],
                 walletAddress: finalWallet,
                 status: status,
-                joinDate: userDoc?.createdAt ? new Date(userDoc.createdAt.seconds * 1000).toLocaleDateString() : (saleDoc?.date || '2024-01-01'),
+                joinDate: joinDateStr,
                 isVerified: !!saleDoc,
                 tier: saleDoc?.tier || 0,
                 amountToken: saleDoc?.amountToken || saleDoc?.amount || 0

@@ -85,6 +85,8 @@ export default function TrafficSimulator() {
         uptime: '00:00:00',
         sessionProgress: 0
     });
+    const [networkError, setNetworkError] = createSignal<string | null>(null);
+    let consecutiveErrors = 0;
 
     // Configuration
     const [burstIntensity, setBurstIntensity] = createSignal('Medium');
@@ -174,9 +176,17 @@ export default function TrafficSimulator() {
                 });
 
                 currentNonce++; // Increment locally
+                consecutiveErrors = 0;
+                setNetworkError(null);
             }
-        } catch (error) {
-            console.warn("Injection failed or interrupted:", error);
+        } catch (error: any) {
+            consecutiveErrors++;
+            console.warn(`Injection attempt ${consecutiveErrors} failed:`, error.message || error);
+
+            if (consecutiveErrors > 5) {
+                setNetworkError("RPC Unreachable - Session Paused");
+                stopSimulation();
+            }
             return;
         }
 
@@ -210,10 +220,14 @@ export default function TrafficSimulator() {
 
         // Initialize Ephemeral Wallet for real transactions
         try {
+            setNetworkError(null);
+            consecutiveErrors = 0;
             simWallet = await contractService.createSimulatorWallet();
             console.log("Simulator Wallet Initialized:", await simWallet.getAddress());
-        } catch (e) {
-            console.warn("Could not initialize simulator wallet, using mock data.", e);
+        } catch (e: any) {
+            console.error("Network Error:", e);
+            setNetworkError("Critical: Cluster connection failed. Check RPC status.");
+            return; // Don't start if we can't get a wallet
         }
 
         setIsRunning(true);
@@ -297,8 +311,15 @@ export default function TrafficSimulator() {
                             <div>
                                 <h1 class="text-5xl font-black italic tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/40">TRAFFIC SIMULATOR</h1>
                                 <div class="flex items-center gap-2 mt-1">
-                                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-                                    <p class="text-blue-500 font-black tracking-[0.4em] uppercase text-[10px]">Developer Stress-Testing Suite v2</p>
+                                    <Show when={!networkError()} fallback={
+                                        <>
+                                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                                            <p class="text-red-500 font-black tracking-widest uppercase text-[10px]">{networkError()}</p>
+                                        </>
+                                    }>
+                                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                                        <p class="text-blue-500 font-black tracking-[0.4em] uppercase text-[10px]">Developer Stress-Testing Suite v2</p>
+                                    </Show>
                                 </div>
                             </div>
                         </div>
@@ -431,10 +452,10 @@ export default function TrafficSimulator() {
                                     <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Live Execution Feed</h3>
                                 </div>
                                 <div class="flex items-center gap-4">
-                                    <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
-                                        <div class={`w-2 h-2 rounded-full ${isRunning() ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                        <span class="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                            {isRunning() ? 'SYNCED' : 'OFFLINE'}
+                                    <div class={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${networkError() ? 'bg-red-500/10 border-red-500/20' : 'bg-white/5 border-white/10'}`}>
+                                        <div class={`w-2 h-2 rounded-full ${isRunning() && !networkError() ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                        <span class={`text-[9px] font-black uppercase tracking-widest ${networkError() ? 'text-red-400' : 'text-gray-400'}`}>
+                                            {networkError() ? 'DISCONNECTED' : (isRunning() ? 'SYNCED' : 'OFFLINE')}
                                         </span>
                                     </div>
                                 </div>

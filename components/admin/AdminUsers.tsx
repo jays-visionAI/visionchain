@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createResource } from 'solid-js';
+import { createSignal, createResource, Show, For, onMount } from 'solid-js';
 import {
     Search,
     Filter,
@@ -14,64 +14,62 @@ import {
     RefreshCw,
     UserPlus,
     X,
-    Send
+    Send,
+    Copy,
+    ExternalLink
 } from 'lucide-solid';
 import { getAllUsers, resendActivationEmail, manualInviteUser } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
 
 const statusStyles = {
-    active: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle },
-    pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: Clock },
-    inactive: { bg: 'bg-red-500/20', text: 'text-red-400', icon: XCircle },
-    WalletCreated: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: Shield },
-    Registered: { bg: 'bg-indigo-500/20', text: 'text-indigo-400', icon: CheckCircle },
-    VestingDeployed: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: Star },
+    Pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+    Registered: 'bg-green-500/10 text-green-500 border-green-500/20',
+    WalletCreated: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    VestingDeployed: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    pending: 'bg-gray-500/10 text-gray-500 border-gray-500/20'
 };
 
-const roleStyles = {
-    admin: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: ShieldCheck },
-    partner: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: Shield },
-    user: { bg: 'bg-gray-500/20', text: 'text-gray-400', icon: Shield },
-};
-
-export default function AdminUsers() {
+const AdminUsers = () => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [statusFilter, setStatusFilter] = createSignal('all');
-    const [resendingEmail, setResendingEmail] = createSignal<string | null>(null);
-
-    // Manual Invite Modal State
-    const [showInviteModal, setShowInviteModal] = createSignal(false);
-    const [inviteForm, setInviteForm] = createSignal({
-        email: '',
-        partnerCode: 'ANTIG',
-        amount: 0,
-        tier: 0
-    });
+    const [users, { mutate, refetch }] = createResource(() => getAllUsers());
+    const [isInviteModalOpen, setIsInviteModalOpen] = createSignal(false);
+    const [inviteEmail, setInviteEmail] = createSignal('');
+    const [invitePartnerCode, setInvitePartnerCode] = createSignal('');
+    const [inviteTier, setInviteTier] = createSignal(1);
+    const [inviteAmount, setInviteAmount] = createSignal(1000);
     const [isInviting, setIsInviting] = createSignal(false);
-
-    // Fetch users
-    const [users, { refetch }] = createResource(() => getAllUsers());
+    const [resendingEmail, setResendingEmail] = createSignal<string | null>(null);
 
     const filteredUsers = () => {
         if (!users()) return [];
         return users()!.filter(user => {
-            const matchesSearch =
-                (user.name?.toLowerCase() || '').includes(searchQuery().toLowerCase()) ||
-                user.email.toLowerCase().includes(searchQuery().toLowerCase());
+            const nameMatch = (user.name?.toLowerCase() || '').includes(searchQuery().toLowerCase());
+            const emailMatch = user.email.toLowerCase().includes(searchQuery().toLowerCase());
+            const addrMatch = (user.walletAddress?.toLowerCase() || '').includes(searchQuery().toLowerCase());
+            const matchesSearch = nameMatch || emailMatch || addrMatch;
             const matchesStatus = statusFilter() === 'all' || user.status === statusFilter();
             return matchesSearch && matchesStatus;
         });
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
+    const shortAddress = (addr?: string) => {
+        if (!addr || addr === 'Not Created' || !addr.startsWith('0x')) return 'Not Created';
+        return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
     };
 
     const handleResendEmail = async (email: string) => {
         if (resendingEmail()) return;
         setResendingEmail(email);
         try {
-            await resendActivationEmail(email, window.location.origin);
-            alert(`${email}님께 초대 메일을 다시 보냈습니다.`);
-        } catch (err) {
-            console.error('Failed to resend email:', err);
-            alert('이메일 재전송에 실패했습니다.');
+            await resendActivationEmail(email);
+            alert('인증 이메일이 재전송되었습니다.');
+        } catch (e) {
+            alert('이메일 재전송 실패');
         } finally {
             setResendingEmail(null);
         }
@@ -79,153 +77,72 @@ export default function AdminUsers() {
 
     const handleManualInvite = async (e: Event) => {
         e.preventDefault();
+        if (isInviting()) return;
         setIsInviting(true);
         try {
             await manualInviteUser({
-                email: inviteForm().email,
-                partnerCode: inviteForm().partnerCode,
-                amountToken: inviteForm().amount,
-                tier: inviteForm().tier
+                email: inviteEmail(),
+                partnerCode: invitePartnerCode() || 'DIRECT',
+                tier: inviteTier(),
+                amountToken: inviteAmount()
             });
-            alert('초대 메일이 전송되었습니다.');
-            setShowInviteModal(false);
-            setInviteForm({ email: '', partnerCode: 'ANTIG', amount: 0, tier: 0 });
+            alert('초대 메일이 발송되었습니다.');
+            setIsInviteModalOpen(false);
             refetch();
-        } catch (err) {
-            console.error('Invite error:', err);
-            alert('초대 중 오류가 발생했습니다.');
+        } catch (e) {
+            alert('초대 실패');
         } finally {
             setIsInviting(false);
         }
     };
 
     return (
-        <div class="space-y-8">
-            {/* Header */}
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="p-6 max-w-7xl mx-auto text-white">
+            <header class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
                 <div>
-                    <h1 class="text-3xl font-bold text-white">Users</h1>
-                    <p class="text-gray-400 mt-1">사용자 계정 및 권한을 관리합니다.</p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <button
-                        onClick={() => setShowInviteModal(true)}
-                        class="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all flex items-center gap-2"
-                    >
-                        <UserPlus class="w-4 h-4" />
-                        Invite User
-                    </button>
-                    <button
-                        onClick={() => refetch()}
-                        class="px-5 py-2.5 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 transition-all flex items-center gap-2"
-                    >
-                        <RefreshCw class="w-4 h-4" />
-                        Refresh
-                    </button>
-                </div>
-            </div>
-
-            {/* Invite Modal */}
-            <Show when={showInviteModal()}>
-                <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowInviteModal(false)} />
-                    <div class="relative w-full max-w-md bg-[#0F1218] border border-white/10 rounded-3xl p-8 shadow-2xl">
-                        <div class="flex items-center justify-between mb-6">
-                            <h2 class="text-xl font-bold text-white">Invite New User</h2>
-                            <button onClick={() => setShowInviteModal(false)} class="text-gray-500 hover:text-white transition-colors">
-                                <X class="w-6 h-6" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleManualInvite} class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={inviteForm().email}
-                                    onInput={(e) => setInviteForm({ ...inviteForm(), email: e.currentTarget.value })}
-                                    class="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50 transition-all"
-                                    placeholder="user@example.com"
-                                />
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Partner Code</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={inviteForm().partnerCode}
-                                        onInput={(e) => setInviteForm({ ...inviteForm(), partnerCode: e.currentTarget.value })}
-                                        class="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50 transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Tier</label>
-                                    <select
-                                        value={inviteForm().tier}
-                                        onChange={(e) => setInviteForm({ ...inviteForm(), tier: parseInt(e.currentTarget.value) })}
-                                        class="w-full bg-[#1A1D24] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
-                                    >
-                                        <option value="0">Tier 0</option>
-                                        <option value="1">Tier 1</option>
-                                        <option value="2">Tier 2</option>
-                                        <option value="3">Tier 3</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Amount (VCN)</label>
-                                <input
-                                    type="number"
-                                    required
-                                    value={inviteForm().amount}
-                                    onInput={(e) => setInviteForm({ ...inviteForm(), amount: parseFloat(e.currentTarget.value) || 0 })}
-                                    class="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-cyan-500/50 transition-all"
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={isInviting()}
-                                class="w-full mt-4 py-4 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-black rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                                <Show when={isInviting()}>
-                                    <RefreshCw class="w-5 h-5 animate-spin" />
-                                </Show>
-                                <Show when={!isInviting()}>
-                                    <Send class="w-5 h-5" />
-                                    Send Invitation Email
-                                </Show>
-                            </button>
-                        </form>
+                    <h1 class="text-4xl font-black italic tracking-tighter mb-2">USER MANAGEMENT</h1>
+                    <div class="flex items-center gap-2 text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                        <ShieldCheck class="w-3 h-3 text-cyan-500" />
+                        <span>Admin Access Controlled Ledger</span>
                     </div>
                 </div>
-            </Show>
+
+                <div class="flex items-center gap-3">
+                    <button
+                        onClick={() => refetch()}
+                        class="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-gray-400 hover:text-white transition-all"
+                        title="새로고침"
+                    >
+                        <RefreshCw class={`w-5 h-5 ${users.loading ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                        onClick={() => setIsInviteModalOpen(true)}
+                        class="flex items-center gap-2 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-cyan-600/20"
+                    >
+                        <UserPlus class="w-4 h-4" />
+                        Manual Invite
+                    </button>
+                </div>
+            </header>
 
             {/* Filters */}
-            <div class="flex flex-col sm:flex-row gap-4">
-                {/* Search */}
-                <div class="relative flex-1">
-                    <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8">
+                <div class="md:col-span-8 relative group">
+                    <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
                     <input
                         type="text"
-                        placeholder="이름 또는 이메일로 검색..."
+                        placeholder="이름, 이메일 또는 지갑 주소검색"
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-12 pr-4 py-3 bg-white/[0.03] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/50 transition-all"
+                        class="w-full pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
                     />
                 </div>
-
-                {/* Status Filter */}
-                <div class="relative">
-                    <Filter class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div class="md:col-span-4 relative group">
+                    <Filter class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
                     <select
                         value={statusFilter()}
                         onChange={(e) => setStatusFilter(e.currentTarget.value)}
-                        class="appearance-none pl-12 pr-10 py-3 bg-[#0B0E14] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 cursor-pointer"
+                        class="w-full appearance-none pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
                     >
                         <option value="all">모든 상태</option>
                         <option value="Registered">가입 완료</option>
@@ -239,13 +156,14 @@ export default function AdminUsers() {
             {/* Users Table */}
             <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
                 {/* Table Header */}
-                <div class="hidden md:grid grid-cols-12 gap-4 p-4 bg-white/[0.02] border-b border-white/5 text-sm text-gray-400 font-medium">
-                    <div class="col-span-3">User</div>
-                    <div class="col-span-2">Registration</div>
-                    <div class="col-span-2">Wallet Status</div>
-                    <div class="col-span-2">Vesting</div>
-                    <div class="col-span-1">Join Date</div>
-                    <div class="col-span-2 text-right pr-6">Action</div>
+                <div class="hidden md:grid grid-cols-12 gap-4 p-4 bg-white/[0.02] border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-gray-500">
+                    <div class="col-span-2">User Info</div>
+                    <div class="col-span-2">Reg Status</div>
+                    <div class="col-span-1">Wallet</div>
+                    <div class="col-span-3">Wallet Address</div>
+                    <div class="col-span-1">Vesting</div>
+                    <div class="col-span-1">Joined</div>
+                    <div class="col-span-2 text-right pr-4">Action</div>
                 </div>
 
                 {/* Table Body */}
@@ -257,42 +175,21 @@ export default function AdminUsers() {
                         </div>
                     </Show>
 
-                    <Show when={users.error}>
-                        <div class="p-12 text-center border-t border-white/5 bg-red-500/5">
-                            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
-                                <AlertCircle class="w-8 h-8 text-red-500" />
-                            </div>
-                            <h3 class="text-white font-bold mb-2">데이터를 불러올 수 없습니다.</h3>
-                            <p class="text-gray-400 text-sm mb-4">
-                                {users.error.message.includes('permission')
-                                    ? '관리자 권한이 없거나 로그인 세션이 만료되었습니다.'
-                                    : '오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'}
-                            </p>
-                            <button
-                                onClick={() => window.location.reload()}
-                                class="px-4 py-2 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-all"
-                            >
-                                다시 시도
-                            </button>
-                        </div>
-                    </Show>
-
                     <For each={filteredUsers()}>
                         {(user) => {
-                            const status = statusStyles[user.status as keyof typeof statusStyles] || statusStyles.pending;
                             const isRegistered = user.status === 'Registered' || user.status === 'WalletCreated' || user.status === 'VestingDeployed';
-                            const hasWallet = (user.walletAddress && user.walletAddress.length > 10) || user.status === 'WalletCreated' || user.status === 'VestingDeployed';
+                            const hasWallet = (user.walletAddress && user.walletAddress.length > 20) || user.status === 'WalletCreated' || user.status === 'VestingDeployed';
 
                             return (
-                                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 hover:bg-white/[0.02] transition-colors items-center">
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 hover:bg-white/[0.03] transition-colors items-center">
                                     {/* User Info */}
-                                    <div class="md:col-span-3 flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center text-cyan-400 font-black border border-cyan-500/20">
+                                    <div class="md:col-span-2 flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center text-cyan-400 font-black border border-cyan-500/10 text-xs">
                                             {user.name ? user.name.charAt(0) : '?'}
                                         </div>
                                         <div class="min-w-0">
-                                            <p class="text-white font-black text-sm truncate uppercase tracking-tight">{user.name || 'Unknown'}</p>
-                                            <p class="text-gray-500 text-[10px] truncate font-bold uppercase tracking-widest flex items-center gap-1">
+                                            <p class="text-white font-black text-xs truncate uppercase tracking-tight leading-none mb-1">{user.name || 'Unknown'}</p>
+                                            <p class="text-gray-500 text-[9px] truncate font-bold uppercase tracking-widest leading-none">
                                                 {user.email}
                                             </p>
                                         </div>
@@ -301,12 +198,12 @@ export default function AdminUsers() {
                                     {/* Registration Status */}
                                     <div class="md:col-span-2 flex items-center">
                                         <Show when={isRegistered} fallback={
-                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-500/10 text-[10px] font-black text-yellow-500 uppercase tracking-widest border border-yellow-500/20">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-500/10 text-[9px] font-black text-yellow-500 uppercase tracking-widest border border-yellow-500/20 whitespace-nowrap">
                                                 <Clock class="w-3 h-3" />
                                                 Pending
                                             </span>
                                         }>
-                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/10 text-[10px] font-black text-green-500 uppercase tracking-widest border border-green-500/20">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-[9px] font-black text-green-500 uppercase tracking-widest border border-green-500/20 whitespace-nowrap">
                                                 <CheckCircle class="w-3 h-3" />
                                                 Registered
                                             </span>
@@ -314,26 +211,56 @@ export default function AdminUsers() {
                                     </div>
 
                                     {/* Wallet Status */}
-                                    <div class="md:col-span-2 flex items-center">
+                                    <div class="md:col-span-1 flex items-center">
                                         <Show when={hasWallet} fallback={
-                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-500/10 text-[10px] font-black text-gray-500 uppercase tracking-widest border border-gray-500/20">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-500/10 text-[9px] font-black text-gray-500 uppercase tracking-widest border border-gray-500/20">
                                                 <XCircle class="w-3 h-3" />
-                                                No Wallet
+                                                None
                                             </span>
                                         }>
-                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 text-[10px] font-black text-blue-500 uppercase tracking-widest border border-blue-500/20">
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-500/10 text-[9px] font-black text-blue-500 uppercase tracking-widest border border-blue-500/20">
                                                 <Shield class="w-3 h-3" />
-                                                Created
+                                                Active
                                             </span>
                                         </Show>
                                     </div>
 
-                                    {/* Vesting Status */}
-                                    <div class="md:col-span-2 flex items-center">
-                                        <Show when={user.status === 'VestingDeployed'} fallback={
-                                            <span class="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Not Deployed</span>
+                                    {/* Wallet Address */}
+                                    <div class="md:col-span-3 flex items-center">
+                                        <Show when={hasWallet && user.walletAddress && user.walletAddress !== 'Not Created'} fallback={
+                                            <span class="text-[9px] font-bold text-gray-700 uppercase tracking-widest italic">Address Missing</span>
                                         }>
-                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 text-[10px] font-black text-purple-400 uppercase tracking-widest border border-purple-500/20">
+                                            <div class="flex items-center gap-2 group/addr">
+                                                <span class="text-[11px] font-mono text-cyan-400 group-hover:text-cyan-300 transition-colors">
+                                                    {shortAddress(user.walletAddress)}
+                                                </span>
+                                                <div class="flex items-center gap-1 opacity-0 group-hover/addr:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => copyToClipboard(user.walletAddress!)}
+                                                        class="p-1 hover:bg-white/10 rounded-md text-gray-500 hover:text-white transition-colors"
+                                                        title="Copy Address"
+                                                    >
+                                                        <Copy class="w-3 h-3" />
+                                                    </button>
+                                                    <a
+                                                        href={`https://visionscan.org/address/${user.walletAddress}`}
+                                                        target="_blank"
+                                                        class="p-1 hover:bg-white/10 rounded-md text-gray-500 hover:text-white transition-colors"
+                                                        title="View on Explorer"
+                                                    >
+                                                        <ExternalLink class="w-3 h-3" />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </Show>
+                                    </div>
+
+                                    {/* Vesting Status */}
+                                    <div class="md:col-span-1 flex items-center">
+                                        <Show when={user.status === 'VestingDeployed'} fallback={
+                                            <span class="text-[9px] font-bold text-gray-600 uppercase tracking-widest">N/A</span>
+                                        }>
+                                            <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-purple-500/10 text-[9px] font-black text-purple-400 uppercase tracking-widest border border-purple-500/20">
                                                 <Star class="w-3 h-3" />
                                                 Deployed
                                             </span>
@@ -341,57 +268,50 @@ export default function AdminUsers() {
                                     </div>
 
                                     {/* Join Date */}
-                                    <div class="md:col-span-1 flex items-center text-[11px] font-bold text-gray-500 uppercase tracking-widest">
+                                    <div class="md:col-span-1 flex items-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                                         {user.joinDate || '-'}
                                     </div>
 
                                     {/* Actions */}
-                                    <div class="md:col-span-2 flex items-center justify-end gap-2 pr-2">
-                                        <button
-                                            onClick={async () => {
-                                                if (!hasWallet) {
-                                                    alert("이 사용자는 아직 지갑을 생성하지 않았습니다. 사용자가 지갑을 연결한 후에 토큰 전송이 가능합니다.");
-                                                    return;
-                                                }
+                                    <div class="md:col-span-2 flex items-center justify-end gap-1.5">
+                                        <Show when={hasWallet && user.walletAddress && user.walletAddress !== 'Not Created'}>
+                                            <button
+                                                onClick={async () => {
+                                                    const defaultAmount = Math.floor((user.amountToken || 1000) * 0.1);
+                                                    const input = prompt(`[${user.email}] 에게 보낼 VCN 수량을 입력하세요:`, defaultAmount.toString());
 
-                                                const defaultAmount = Math.floor((user.amountToken || 1000) * 0.1);
-                                                const input = prompt(`[${user.email}] 에게 보낼 VCN 수량을 입력하세요:`, defaultAmount.toString());
+                                                    if (input === null) return;
+                                                    const amountStr = input.trim();
+                                                    const amount = parseFloat(amountStr);
 
-                                                if (input === null) return;
-                                                const amountStr = input.trim();
-                                                const amount = parseFloat(amountStr);
+                                                    if (isNaN(amount) || amount <= 0) {
+                                                        alert("유효한 수량을 입력해주세요.");
+                                                        return;
+                                                    }
 
-                                                if (isNaN(amount) || amount <= 0) {
-                                                    alert("유효한 수량을 입력해주세요.");
-                                                    return;
-                                                }
-
-                                                try {
-                                                    await contractService.adminSendVCN(
-                                                        user.walletAddress!,
-                                                        amountStr
-                                                    );
-                                                    alert(`성공: ${user.email} 님에게 ${amount.toLocaleString()} VCN을 전송했습니다.`);
-                                                } catch (e: any) {
-                                                    console.error(e);
-                                                    alert(`전송 실패: ${e.message}`);
-                                                }
-                                            }}
-                                            disabled={!hasWallet}
-                                            class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${hasWallet
-                                                    ? 'bg-blue-500/10 hover:bg-blue-600 text-blue-400 hover:text-white border-blue-500/20 shadow-lg shadow-blue-500/10'
-                                                    : 'bg-gray-500/5 text-gray-600 border-gray-500/10 cursor-not-allowed opacity-50'
-                                                }`}
-                                        >
-                                            <Send class="w-3 h-3" />
-                                            VCN 전송
-                                        </button>
+                                                    try {
+                                                        await contractService.adminSendVCN(
+                                                            user.walletAddress!,
+                                                            amountStr
+                                                        );
+                                                        alert(`성공: ${user.email} 님에게 ${amount.toLocaleString()} VCN을 전송했습니다.`);
+                                                    } catch (e: any) {
+                                                        console.error(e);
+                                                        alert(`전송 실패: ${e.message}`);
+                                                    }
+                                                }}
+                                                class="px-2 py-1 bg-cyan-600/10 hover:bg-cyan-600 text-cyan-400 hover:text-white rounded-lg transition-all border border-cyan-500/20 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest"
+                                            >
+                                                <Send class="w-2.5 h-2.5" />
+                                                Send VCN
+                                            </button>
+                                        </Show>
 
                                         <Show when={!isRegistered}>
                                             <button
                                                 onClick={() => handleResendEmail(user.email)}
                                                 disabled={resendingEmail() === user.email}
-                                                class="p-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 transition-colors group relative"
+                                                class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 transition-colors"
                                                 title="Resend Invitation"
                                             >
                                                 <Show when={resendingEmail() === user.email} fallback={<Mail class="w-4 h-4" />}>
@@ -399,7 +319,7 @@ export default function AdminUsers() {
                                                 </Show>
                                             </button>
                                         </Show>
-                                        <button class="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-500 hover:text-white">
+                                        <button class="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-gray-600 hover:text-white">
                                             <MoreVertical class="w-4 h-4" />
                                         </button>
                                     </div>
@@ -408,17 +328,82 @@ export default function AdminUsers() {
                         }}
                     </For>
                 </div>
-
-                {/* Empty State */}
-                <Show when={!users.loading && filteredUsers().length === 0}>
-                    <div class="p-12 text-center border-t border-white/5 bg-white/[0.01]">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-white/5 flex items-center justify-center">
-                            <Search class="w-8 h-8 text-gray-600" />
-                        </div>
-                        <p class="text-gray-500 font-medium">검색 결과가 없습니다.</p>
-                    </div>
-                </Show>
             </div>
+
+            {/* Manual Invite Modal */}
+            <Show when={isInviteModalOpen()}>
+                <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div class="w-full max-w-md bg-[#0c0c0c] border border-white/10 rounded-3xl p-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <h2 class="text-2xl font-black italic">INVITE USER</h2>
+                            <button onClick={() => setIsInviteModalOpen(false)} class="text-gray-500 hover:text-white">
+                                <X class="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleManualInvite} class="space-y-6">
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Email Address</label>
+                                <input
+                                    type="email"
+                                    required
+                                    value={inviteEmail()}
+                                    onInput={(e) => setInviteEmail(e.currentTarget.value)}
+                                    class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                />
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Partner Code</label>
+                                <input
+                                    type="text"
+                                    placeholder="DIRECT"
+                                    value={invitePartnerCode()}
+                                    onInput={(e) => setInvitePartnerCode(e.currentTarget.value)}
+                                    class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                />
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Tier</label>
+                                    <select
+                                        value={inviteTier()}
+                                        onChange={(e) => setInviteTier(Number(e.currentTarget.value))}
+                                        class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                    >
+                                        <option value={1}>Tier 1</option>
+                                        <option value={2}>Tier 2</option>
+                                        <option value={3}>Tier 3</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest">VCN Amount</label>
+                                    <input
+                                        type="number"
+                                        value={inviteAmount()}
+                                        onInput={(e) => setInviteAmount(Number(e.currentTarget.value))}
+                                        class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isInviting()}
+                                class="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black uppercase tracking-widest transition-all shadow-lg shadow-cyan-600/20 disabled:opacity-50"
+                            >
+                                <Show when={isInviting()}>
+                                    <RefreshCw class="w-4 h-4 animate-spin mx-auto" />
+                                </Show>
+                                <Show when={!isInviting()}>Send Invitation</Show>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </Show>
         </div>
     );
-}
+};
+
+export default AdminUsers;

@@ -65,6 +65,7 @@ else
   },
   "difficulty": "1",
   "gasLimit": "8000000",
+  "extraData": "0x0000000000000000000000000000000000000000000000000000000000000000f39Fd6e51aad88F6F4ce6aB8827279cffFb922660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "alloc": {
     "f39Fd6e51aad88F6F4ce6aB8827279cffFb92266": {
       "balance": "1000000000000000000000000"
@@ -75,9 +76,19 @@ EOF
     for i in {1..5}; do cp "$DEPLOY_ROOT/genesis.json" "$DEPLOY_ROOT/node$i/"; done
 fi
 
-# 4. Start the Cluster
-echo "⚡ Starting 5-Node Cluster via Docker Compose..."
+# 4. Initialize and Start the Cluster
+echo "⚡ Initializing and Starting 5-Node Cluster..."
 docker-compose down || true
+
+for i in {1..5}; do
+    echo "Initializing Node $i..."
+    # Wipe old data to avoid incompatible genesis error
+    rm -rf deploy/v2-testnet/node$i/geth
+    docker run --rm \
+        -v $(pwd)/deploy/v2-testnet/node$i:/root/.ethereum \
+        ethereum/client-go:latest init /root/.ethereum/genesis.json
+done
+
 docker-compose up -d
 
 echo "📊 Waiting for Node-1 to initialize..."

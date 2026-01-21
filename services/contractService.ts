@@ -16,7 +16,8 @@ const ADDRESSES = {
     // Vision Chain RPC Resource Pool (Added for high-availability)
     RPC_NODES: [
         "https://rpc.visionchain.co",  // Primary Node
-        "http://46.224.221.201:8546"   // Backup Node (Simulated for failover)
+        "https://api.visionchain.co/rpc", // Secondary/Proxy Node (Added for resilience)
+        "http://46.224.221.201:8545"   // Direct Node (Emergency Backup)
     ],
     RPC_URL: "https://rpc.visionchain.co",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
@@ -58,26 +59,8 @@ export class ContractService {
 
     async connectInternalWallet(privateKey: string): Promise<string> {
         try {
-            let successfulProvider = null;
-
-            // RPC Failover Loop
-            for (const rpcUrl of ADDRESSES.RPC_NODES) {
-                try {
-                    const provider = new ethers.JsonRpcProvider(rpcUrl);
-                    await provider.getNetwork();
-                    successfulProvider = provider;
-                    console.log(`✅ Connected to RPC: ${rpcUrl}`);
-                    break;
-                } catch (e) {
-                    console.warn(`❌ RPC Node Failed: ${rpcUrl}. Trying next...`);
-                }
-            }
-
-            if (!successfulProvider) {
-                throw new Error("Critical: All RPC nodes are currently unreachable. Check network status.");
-            }
-
-            this.provider = successfulProvider;
+            const provider = await this.getRobustProvider();
+            this.provider = provider;
             this.signer = new ethers.Wallet(privateKey, this.provider);
             const address = await this.signer.getAddress();
 
@@ -88,6 +71,36 @@ export class ContractService {
             console.error("Failed to connect internal wallet:", error);
             throw error;
         }
+    }
+
+    /**
+     * Attempts to connect to the best available RPC node.
+     */
+    async getRobustProvider(): Promise<ethers.JsonRpcProvider> {
+        for (const rpcUrl of ADDRESSES.RPC_NODES) {
+            try {
+                // Skip HTTP if we are on HTTPS to avoid Mixed Content errors
+                if (window.location.protocol === 'https:' && rpcUrl.startsWith('http:')) {
+                    continue;
+                }
+
+                const provider = new ethers.JsonRpcProvider(rpcUrl, undefined, {
+                    staticNetwork: true // Speed up by skipping detectNetwork if we know the chain
+                });
+
+                // Quick health check
+                await Promise.race([
+                    provider.getBlockNumber(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+                ]);
+
+                console.log(`✅ Connected to RPC: ${rpcUrl}`);
+                return provider;
+            } catch (e) {
+                console.warn(`❌ RPC Node Failed: ${rpcUrl}. Trying next...`);
+            }
+        }
+        throw new Error("Critical: All RPC nodes are currently unreachable or blocked by CORS.");
     }
 
     private initializeContracts(signerOrProvider: any) {
@@ -375,12 +388,19 @@ export class ContractService {
     async createSimulatorWallet() {
         // Create an ephemeral wallet for the simulator session
         const wallet = ethers.Wallet.createRandom();
-        // For the demo/testnet, we'll connect it to our provider
+
+        // Use existing provider if healthy, otherwise get a robust one
         if (this.provider) {
-            return wallet.connect(this.provider);
+            try {
+                await (this.provider as any).getBlockNumber();
+                return wallet.connect(this.provider);
+            } catch (e) {
+                console.warn("Existing provider failed health check, reconnecting...");
+            }
         }
-        const tempProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
-        return wallet.connect(tempProvider);
+
+        const robustProvider = await this.getRobustProvider();
+        return wallet.connect(robustProvider);
     }
 
     async injectSimulatorTransaction(wallet: any, options: { type: string, to: string, value: string, metadata?: any, nonce?: number, gasPrice?: bigint }) {
