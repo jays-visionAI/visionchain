@@ -29,6 +29,7 @@ const Testnet: Component = () => {
 
     const checkRpc = async () => {
         const endpoints = [
+            'https://api.visionchain.co/rpc-proxy',
             'https://rpc.visionchain.co',
             'https://api.visionchain.co',
             'https://api.visionchain.co/rpc'

@@ -10,6 +10,16 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// RPC Proxy for Geth Node (Avoids CORS and 502 issues from frontend)
+const { createProxyMiddleware } = require('http-proxy-middleware');
+app.use('/rpc-proxy', createProxyMiddleware({
+    target: 'http://localhost:8545', // Local Geth Node
+    changeOrigin: true,
+    pathRewrite: {
+        '^/rpc-proxy': '', // remove /rpc-proxy from path
+    },
+}));
+
 const PORT = process.env.PORT || 3000;
 const KAFKA_BROKERS = [process.env.KAFKA_BROKER || '46.224.221.201:9092'];
 
