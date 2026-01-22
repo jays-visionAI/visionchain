@@ -28,7 +28,8 @@ const Testnet: Component = () => {
 
     const checkRpc = async () => {
         try {
-            const response = await fetch('https://rpc.visionchain.co', {
+            // Check api.visionchain.co/rpc as the primary endpoint
+            const response = await fetch('https://api.visionchain.co/rpc', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 })
@@ -63,7 +64,7 @@ const Testnet: Component = () => {
                             symbol: 'VCN',
                             decimals: 18,
                         },
-                        rpcUrls: ['https://rpc.visionchain.co'],
+                        rpcUrls: ['https://api.visionchain.co/rpc'],
                         blockExplorerUrls: ['https://www.visionchain.co/visionscan'],
                     },
                 ],
@@ -81,7 +82,7 @@ const Testnet: Component = () => {
 
     const networkInfo = [
         { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
-        { label: 'RPC URL', value: 'https://rpc.visionchain.co', id: 'rpc' },
+        { label: 'RPC URL', value: 'https://api.visionchain.co/rpc', id: 'rpc' },
         { label: 'Sequencer API', value: 'https://api.visionchain.co/rpc/submit', id: 'seq' },
         { label: 'Chain ID', value: '3151909', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
@@ -277,7 +278,7 @@ const Testnet: Component = () => {
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">1</div>
                                     <h4 class="text-sm font-bold mb-1 uppercase tracking-tight">MetaMask Setup (v2)</h4>
-                                    <p class="text-xs text-slate-500 leading-relaxed">Add Vision Testnet v2 manually. **Chain ID: 3151909**, RPC: `46.224.221.201:8545`. Use VCN for gas.</p>
+                                    <p class="text-xs text-slate-500 leading-relaxed">Add Vision Testnet v2 manually. **Chain ID: 3151909**, RPC: `https://api.visionchain.co/rpc`. Use VCN for gas.</p>
                                 </li>
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">2</div>
