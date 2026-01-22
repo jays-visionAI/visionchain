@@ -28,8 +28,17 @@ import {
 import { MaxTPSSection } from './dashboard/MaxTPSSection';
 import { Coins } from 'lucide-solid';
 
-// Re-use provider instance outside component to avoid re-creation and memory leaks
-const provider = new ethers.JsonRpcProvider("https://vision-testnet-rpc.vision-chain.io");
+// Use a mock provider or dynamic provider to avoid blocking on load
+let dashboardProvider: ethers.JsonRpcProvider | null = null;
+const getDashboardProvider = () => {
+    if (dashboardProvider) return dashboardProvider;
+    try {
+        dashboardProvider = new ethers.JsonRpcProvider("https://rpc.visionchain.co", undefined, { staticNetwork: true });
+        return dashboardProvider;
+    } catch (e) {
+        return null;
+    }
+};
 
 export const AdminDashboard: Component = () => {
     const [tps, setTps] = createSignal(4850); // Mock initial TPS
@@ -73,15 +82,13 @@ export const AdminDashboard: Component = () => {
 
     const fetchPaymasterStats = async () => {
         try {
-            // Check if provider is ready
-            if (!provider) return;
+            const p = getDashboardProvider();
+            if (!p) return;
 
-            const balance = await provider.getBalance("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
+            const balance = await p.getBalance("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
             setPaymasterBal(ethers.formatEther(balance));
-
-            // Real gasless count would need an event listener or API. Keeping 0 for now.
         } catch (e) {
-            console.log("Failed to fetch paymaster stats (RPC might be down, using cached/mock)");
+            console.log("Failed to fetch paymaster stats (RPC might be down)");
         }
     };
 

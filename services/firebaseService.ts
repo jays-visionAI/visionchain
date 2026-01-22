@@ -279,9 +279,9 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
         currentDb = getFirebaseDb();
     }
 
-    // 30 second timeout for initial fetch
+    // 10 second timeout for initial fetch in Admin Panel
     const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firestore fetch timeout')), 30000)
+        setTimeout(() => reject(new Error('Firestore fetch timeout')), 10000)
     );
 
     try {

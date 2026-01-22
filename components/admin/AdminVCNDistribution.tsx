@@ -20,7 +20,7 @@ const TabLoading = () => (
 );
 
 export default function AdminVCNDistribution() {
-    const [activeTab, setActiveTab] = createSignal<'upload' | 'contract' | 'partners' | 'announcement'>('partners'); // Default to partners as per user focus, or maybe Upload? Screenshot 1 is Partners.
+    const [activeTab, setActiveTab] = createSignal<'upload' | 'contract' | 'partners' | 'announcement'>('upload');
 
     const TabButton = (props: { id: string, label: string, icon: any, active: boolean, onClick: () => void }) => (
         <button
@@ -42,7 +42,7 @@ export default function AdminVCNDistribution() {
         <div class="space-y-8">
             {/* Header */}
             <div>
-                <h1 class="text-2xl font-bold text-white mb-2">Admin Dashboard</h1>
+                <h1 class="text-2xl font-bold text-white mb-2">VCN Distribution</h1>
                 <p class="text-slate-400 text-sm">Manage privileged tasks on VisionChain Vesting service</p>
             </div>
 
