@@ -25,20 +25,33 @@ import {
 const Testnet: Component = () => {
     const [copied, setCopied] = createSignal<string | null>(null);
     const [rpcStatus, setRpcStatus] = createSignal<'Checking' | 'Online' | 'Offline'>('Checking');
+    const [activeRpc, setActiveRpc] = createSignal('https://rpc.visionchain.co');
 
     const checkRpc = async () => {
-        try {
-            // Check api.visionchain.co root as the primary endpoint
-            const response = await fetch('https://api.visionchain.co', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 })
-            });
-            if (response.ok) setRpcStatus('Online');
-            else setRpcStatus('Offline');
-        } catch (e) {
-            setRpcStatus('Offline');
+        const endpoints = [
+            'https://rpc.visionchain.co',
+            'https://api.visionchain.co',
+            'https://api.visionchain.co/rpc'
+        ];
+
+        for (const url of endpoints) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_chainId', params: [], id: 1 })
+                });
+
+                if (response.ok) {
+                    setRpcStatus('Online');
+                    setActiveRpc(url);
+                    return;
+                }
+            } catch (e) {
+                console.warn(`RPC check failed for ${url}`);
+            }
         }
+        setRpcStatus('Offline');
     };
 
     onMount(() => {
@@ -64,7 +77,7 @@ const Testnet: Component = () => {
                             symbol: 'VCN',
                             decimals: 18,
                         },
-                        rpcUrls: ['https://api.visionchain.co'],
+                        rpcUrls: [activeRpc()],
                         blockExplorerUrls: ['https://www.visionchain.co/visionscan'],
                     },
                 ],
@@ -80,9 +93,9 @@ const Testnet: Component = () => {
         setTimeout(() => setCopied(null), 2000);
     };
 
-    const networkInfo = [
+    const networkInfo = () => [
         { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
-        { label: 'RPC URL', value: 'https://api.visionchain.co', id: 'rpc' },
+        { label: 'RPC URL', value: activeRpc(), id: 'rpc' },
         { label: 'Sequencer API', value: 'https://api.visionchain.co/submit', id: 'seq' },
         { label: 'Chain ID', value: '3151909', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
@@ -167,7 +180,7 @@ const Testnet: Component = () => {
                                 </div>
                             </Show>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {networkInfo.map((item) => (
+                                {networkInfo().map((item) => (
                                     <div class="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/[0.07] transition-all group">
                                         <div class="flex justify-between items-start mb-2">
                                             <span class="text-xs font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
