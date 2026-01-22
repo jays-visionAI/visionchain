@@ -15,12 +15,12 @@ const ADDRESSES = {
 
     // Vision Chain RPC Resource Pool (Added for high-availability)
     RPC_NODES: [
-        "https://api.visionchain.co/rpc", // Secondary/Proxy Node (Preferred for CORS)
-        "https://rpc.visionchain.co",     // Primary Node
-        "http://46.224.221.201:8545"      // Direct Node (Emergency Backup)
+        "https://api.visionchain.co",  // Root API (Preferred)
+        "https://rpc.visionchain.co",  // Primary Domain
+        "http://46.224.221.201:8545"   // Direct Node (Emergency Backup)
     ],
-    RPC_URL: "https://api.visionchain.co/rpc",
-    SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
+    RPC_URL: "https://api.visionchain.co",
+    SEQUENCER_URL: "https://api.visionchain.co/submit",
 
     // Interoperability (Equalizer Model)
     VISION_EQUALIZER: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
