@@ -428,11 +428,8 @@ const Wallet = (): JSX.Element => {
 
     // Fetch data on mount
     onMount(async () => {
+        // Initial fetch
         fetchMarketData();
-        // Auto-open sidebar only on desktop
-        if (window.innerWidth >= 1024) {
-            setSidebarOpen(true);
-        }
         // Refresh every 60 seconds
         const interval = setInterval(fetchMarketData, 60000);
         return () => clearInterval(interval);
@@ -955,7 +952,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                 />
 
                 {/* Main Content Area */}
-                <main class={`flex-1 flex flex-col h-[calc(100vh-56px)] transition-all duration-300 relative ${sidebarOpen() ? 'lg:ml-[280px]' : 'ml-0'}`}>
+                <main class="flex-1 flex flex-col h-[calc(100vh-56px)] transition-all duration-300 relative ml-0 lg:ml-[280px]">
 
                     {/* Top Bar */}
                     <div class="flex items-center gap-4 px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-14 z-20">
@@ -964,7 +961,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                 if (onboardingStep() === 0) setSidebarOpen(!sidebarOpen());
                             }}
                             disabled={onboardingStep() > 0}
-                            class="p-2.5 hover:bg-white/[0.06] rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                            class="lg:hidden p-2.5 hover:bg-white/[0.06] rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                             <Menu class="w-5 h-5 text-gray-400" />
                         </button>
