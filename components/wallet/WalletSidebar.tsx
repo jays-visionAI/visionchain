@@ -71,7 +71,8 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
     return (
         <>
             {/* Header */}
-            <div class="h-[72px] shrink-0 flex items-center px-6 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]">
+            <div class="h-[72px] shrink-0 flex items-center px-6 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl">
+                <div class="absolute top-0 left-6 w-20 h-20 bg-blue-500/20 rounded-full blur-2xl -translate-y-1/2 pointer-events-none" />
                 <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mr-3">
                     <Sparkles class="w-4 h-4 text-white" />
                 </div>
