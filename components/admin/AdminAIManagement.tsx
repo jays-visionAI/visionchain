@@ -112,7 +112,7 @@ interface ApiKey {
     id: string;
     name: string;
     key: string;
-    provider: 'gemini' | 'openai' | 'anthropic';
+    provider: 'gemini' | 'openai' | 'anthropic' | 'deepseek';
     isActive: boolean;
     isValid: boolean | null;
     lastTested: string | null;
@@ -134,7 +134,7 @@ export default function AdminAIManagement() {
     const [apiKeys, setApiKeys] = createSignal<ApiKey[]>([]);
     const [newKeyName, setNewKeyName] = createSignal('');
     const [newKeyValue, setNewKeyValue] = createSignal('');
-    const [newKeyProvider, setNewKeyProvider] = createSignal<'gemini' | 'openai' | 'anthropic'>('gemini');
+    const [newKeyProvider, setNewKeyProvider] = createSignal<'gemini' | 'openai' | 'anthropic' | 'deepseek'>('gemini');
     const [showNewKeyValue, setShowNewKeyValue] = createSignal(false);
     const [isTesting, setIsTesting] = createSignal(false);
     const [testResult, setTestResult] = createSignal<{ success: boolean; message: string } | null>(null);
@@ -181,6 +181,32 @@ export default function AdminAIManagement() {
                     return false;
                 }
             }
+
+
+            if (provider === 'deepseek') {
+                const response = await fetch('https://api.deepseek.com/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${key}`
+                    },
+                    body: JSON.stringify({
+                        model: 'deepseek-chat',
+                        messages: [{ role: 'user', content: 'Test' }],
+                        max_tokens: 1
+                    })
+                });
+
+                if (response.ok) {
+                    setTestResult({ success: true, message: 'DeepSeek API success!' });
+                    return true;
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    setTestResult({ success: false, message: error.error?.message || 'Invalid API Key' });
+                    return false;
+                }
+            }
+
             // Add other providers later
             setTestResult({ success: false, message: 'Provider not supported yet' });
             return false;
@@ -359,6 +385,9 @@ export default function AdminAIManagement() {
                                     >
                                         <option value="gemini">Google Gemini</option>
                                         <option value="openai">OpenAI</option>
+                                        <option value="gemini">Google Gemini</option>
+                                        <option value="deepseek">DeepSeek</option>
+                                        <option value="openai">OpenAI</option>
                                         <option value="anthropic">Anthropic</option>
                                     </select>
                                 </div>
@@ -388,8 +417,8 @@ export default function AdminAIManagement() {
                             {/* Test Result */}
                             <Show when={testResult()}>
                                 <div class={`flex items-center gap-2 text-sm px-4 py-2 rounded-xl ${testResult()?.success
-                                        ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                    ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                    : 'bg-red-500/10 border border-red-500/20 text-red-400'
                                     }`}>
                                     <Show when={testResult()?.success} fallback={<X class="w-4 h-4" />}>
                                         <Check class="w-4 h-4" />
@@ -449,9 +478,12 @@ export default function AdminAIManagement() {
                                                             <span class="text-white font-medium">{key.name}</span>
                                                             <span class={`text-xs px-2 py-0.5 rounded ${key.provider === 'gemini' ? 'bg-blue-500/20 text-blue-400' :
                                                                     key.provider === 'openai' ? 'bg-green-500/20 text-green-400' :
-                                                                        'bg-purple-500/20 text-purple-400'
+                                                                        key.provider === 'deepseek' ? 'bg-blue-600/20 text-blue-300' :
+                                                                            'bg-purple-500/20 text-purple-400'
                                                                 }`}>
-                                                                {key.provider === 'gemini' ? 'Gemini' : key.provider === 'openai' ? 'OpenAI' : 'Anthropic'}
+                                                                {key.provider === 'gemini' ? 'Gemini' :
+                                                                    key.provider === 'deepseek' ? 'DeepSeek' :
+                                                                        key.provider === 'openai' ? 'OpenAI' : 'Anthropic'}
                                                             </span>
                                                             <Show when={key.isActive}>
                                                                 <span class="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 flex items-center gap-1">
@@ -490,8 +522,8 @@ export default function AdminAIManagement() {
                                                     <button
                                                         onClick={() => toggleKeyActive(key.id)}
                                                         class={`p-2 rounded-lg transition-colors ${key.isActive
-                                                                ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                                                                : 'hover:bg-white/10 text-gray-400 hover:text-green-400'
+                                                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                                                            : 'hover:bg-white/10 text-gray-400 hover:text-green-400'
                                                             }`}
                                                         title={key.isActive ? 'Deactivate' : 'Activate'}
                                                     >
@@ -667,6 +699,11 @@ export default function AdminAIManagement() {
                                     <option value="gemini-3-pro-preview">Gemini 3.0 Pro (Reasoning)</option>
                                     <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fast)</option>
                                     <option value="gemini-2.5-flash">Gemini 2.5 Flash (Balanced)</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Reasoning)</option>
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
+                                    <option disabled>--- DeepSeek ---</option>
+                                    <option value="deepseek-chat">DeepSeek Chat</option>
+                                    <option value="deepseek-v3">DeepSeek V3.2</option>
                                 </select>
                             </div>
 

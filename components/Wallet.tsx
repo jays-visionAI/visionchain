@@ -986,17 +986,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                 </button>
                             </div>
 
-                            {/* New Chat Button */}
-                            <div class="p-4">
-                                <button
-                                    onClick={startNewChat}
-                                    disabled={onboardingStep() > 0}
-                                    class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 rounded-xl text-white font-medium transition-all shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
-                                >
-                                    <Plus class="w-4 h-4" />
-                                    New Conversation
-                                </button>
-                            </div>
+
 
                             {/* AI Architect Button (Global) */}
                             <div class="px-4 pb-2">
