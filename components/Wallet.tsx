@@ -60,6 +60,7 @@ import { WalletAssets } from './wallet/WalletAssets';
 import { WalletCampaign } from './wallet/WalletCampaign';
 import { WalletMint } from './wallet/WalletMint';
 import { WalletNodes } from './wallet/WalletNodes';
+import { WalletSettings } from './wallet/WalletSettings';
 
 type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes';
 
@@ -1610,101 +1611,8 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
                     <Show when={activeView() === 'settings'}>
                         <div class="flex-1 overflow-y-auto p-4 lg:p-8">
-                            <div class="max-w-4xl mx-auto space-y-6">
-                                <Show when={settingsSubView() === 'main'}>
-                                    <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                                        <h2 class="text-3xl font-semibold text-white mb-8">Settings</h2>
-
-                                        <div class="space-y-4">
-                                            {/* AI Management Card */}
-                                            <div
-                                                onClick={() => setSettingsSubView('ai')}
-                                                class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.02] transition-all cursor-pointer group"
-                                            >
-                                                <div class="flex items-center justify-between">
-                                                    <div class="flex items-center gap-4">
-                                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center border border-indigo-500/20">
-                                                            <Sparkles class="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
-                                                        </div>
-                                                        <div>
-                                                            <div class="font-medium text-white group-hover:text-indigo-300 transition-colors">AI Management</div>
-                                                            <div class="text-sm text-gray-500">Configure API keys, models, and knowledge base</div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                                                        <ChevronRight class="w-4 h-4 text-gray-400" />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5">
-                                                <div class="flex items-center justify-between">
-                                                    <div class="flex items-center gap-4">
-                                                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                                            <Zap class="w-5 h-5 text-purple-400" />
-                                                        </div>
-                                                        <div>
-                                                            <div class="font-medium text-white">Dark Mode</div>
-                                                            <div class="text-sm text-gray-500">Always enabled for best experience</div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="w-14 h-8 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full flex items-center px-1 shadow-lg shadow-blue-500/20">
-                                                        <div class="w-6 h-6 bg-white rounded-full ml-auto shadow-md" />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5">
-                                                <div class="flex items-center justify-between">
-                                                    <div class="flex items-center gap-4">
-                                                        <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                                                            <MessageSquare class="w-5 h-5 text-green-400" />
-                                                        </div>
-                                                        <div>
-                                                            <div class="font-medium text-white">Notifications</div>
-                                                            <div class="text-sm text-gray-500">Get alerts for all transactions</div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="w-14 h-8 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full flex items-center px-1 shadow-lg shadow-blue-500/20">
-                                                        <div class="w-6 h-6 bg-white rounded-full ml-auto shadow-md" />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5">
-                                                <div class="flex items-center justify-between">
-                                                    <div class="flex items-center gap-4">
-                                                        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center">
-                                                            <Globe class="w-5 h-5 text-cyan-400" />
-                                                        </div>
-                                                        <div>
-                                                            <div class="font-medium text-white">Currency</div>
-                                                            <div class="text-sm text-gray-500">Display values in preferred currency</div>
-                                                        </div>
-                                                    </div>
-                                                    <select class="bg-white/[0.05] border border-white/[0.1] text-white px-4 py-2 rounded-xl text-sm outline-none focus:border-cyan-500/50 transition-colors">
-                                                        <option value="usd">USD</option>
-                                                        <option value="eur">EUR</option>
-                                                        <option value="gbp">GBP</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Motion.div>
-                                </Show>
-
-                                <Show when={settingsSubView() === 'ai'}>
-                                    <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                                        <button
-                                            onClick={() => setSettingsSubView('main')}
-                                            class="mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-                                        >
-                                            <ChevronRight class="w-4 h-4 rotate-180" />
-                                            <span class="font-medium">Back to Settings</span>
-                                        </button>
-                                        <AdminAIManagement />
-                                    </Motion.div>
-                                </Show>
+                            <div class="max-w-4xl mx-auto">
+                                <WalletSettings />
                             </div>
                         </div>
                     </Show>

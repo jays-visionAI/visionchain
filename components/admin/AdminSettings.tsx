@@ -1,373 +1,98 @@
-import { createSignal, For, Show, onMount } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
+import { Motion } from 'solid-motionone';
 import {
-    Settings,
-    Bell,
-    Shield,
+    Sparkles,
+    Zap,
+    MessageSquare,
     Globe,
-    Moon,
-    Mail,
-    Smartphone,
-    Key,
-    Save,
-    Lock,
-    Eye,
-    EyeOff,
-    Check
+    ChevronRight,
 } from 'lucide-solid';
-
-// Storage key for admin password
-const PASSWORD_STORAGE_KEY = 'visionchain_admin_password';
-const DEFAULT_PASSWORD = 'visionchain2024';
-
-interface ToggleProps {
-    checked: boolean;
-    onChange: (checked: boolean) => void;
-}
-
-function Toggle(props: ToggleProps) {
-    return (
-        <button
-            onClick={() => props.onChange(!props.checked)}
-            class={`relative w-12 h-6 rounded-full transition-colors duration-300 ${props.checked ? 'bg-cyan-500' : 'bg-white/10'
-                }`}
-        >
-            <div
-                class={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-lg transition-transform duration-300 ${props.checked ? 'translate-x-7' : 'translate-x-1'
-                    }`}
-            />
-        </button>
-    );
-}
+import AdminAIManagement from './AdminAIManagement';
 
 export default function AdminSettings() {
-    const [activeTab, setActiveTab] = createSignal('general');
-    const [emailNotifications, setEmailNotifications] = createSignal(true);
-    const [pushNotifications, setPushNotifications] = createSignal(false);
-    const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
-    const [darkMode, setDarkMode] = createSignal(true);
-
-    // Password state
-    const [currentPassword, setCurrentPassword] = createSignal('');
-    const [newPassword, setNewPassword] = createSignal('');
-    const [confirmPassword, setConfirmPassword] = createSignal('');
-    const [showCurrentPassword, setShowCurrentPassword] = createSignal(false);
-    const [showNewPassword, setShowNewPassword] = createSignal(false);
-    const [showConfirmPassword, setShowConfirmPassword] = createSignal(false);
-    const [passwordError, setPasswordError] = createSignal('');
-    const [passwordSuccess, setPasswordSuccess] = createSignal(false);
-    const [savedPassword, setSavedPassword] = createSignal(DEFAULT_PASSWORD);
-
-    // Load saved password on mount
-    onMount(() => {
-        const saved = localStorage.getItem(PASSWORD_STORAGE_KEY);
-        if (saved) {
-            setSavedPassword(saved);
-        }
-    });
-
-    const handleChangePassword = (e: Event) => {
-        e.preventDefault();
-        setPasswordError('');
-        setPasswordSuccess(false);
-
-        // Validate current password
-        if (currentPassword() !== savedPassword()) {
-            setPasswordError('Current password is incorrect');
-            return;
-        }
-
-        // Validate new password
-        if (newPassword().length < 8) {
-            setPasswordError('New password must be at least 8 characters');
-            return;
-        }
-
-        // Validate confirmation
-        if (newPassword() !== confirmPassword()) {
-            setPasswordError('Passwords do not match');
-            return;
-        }
-
-        // Save new password
-        localStorage.setItem(PASSWORD_STORAGE_KEY, newPassword());
-        setSavedPassword(newPassword());
-        setPasswordSuccess(true);
-
-        // Reset form
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-
-        // Hide success after 3 seconds
-        setTimeout(() => setPasswordSuccess(false), 3000);
-    };
-
-    const tabs = [
-        { id: 'general', label: 'General', icon: Settings },
-        { id: 'notifications', label: 'Notifications', icon: Bell },
-        { id: 'security', label: 'Security', icon: Shield },
-        { id: 'password', label: 'Password', icon: Lock },
-    ];
+    const [settingsSubView, setSettingsSubView] = createSignal<'main' | 'ai'>('main');
 
     return (
-        <div class="space-y-8">
-            {/* Header */}
-            <div>
-                <h1 class="text-3xl font-bold text-white">Settings</h1>
-                <p class="text-gray-400 mt-1">Manage your admin preferences.</p>
-            </div>
+        <div class="max-w-4xl mx-auto">
+            <Show when={settingsSubView() === 'main'}>
+                <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                    <div class="mb-8">
+                        <h1 class="text-3xl font-bold text-white">Admin Settings</h1>
+                        <p class="text-gray-400 mt-1">Configure system-wide settings and AI integrations.</p>
+                    </div>
 
-            {/* Tabs */}
-            <div class="flex flex-wrap gap-2 border-b border-white/10 pb-4">
-                <For each={tabs}>
-                    {(tab) => (
-                        <button
-                            onClick={() => setActiveTab(tab.id)}
-                            class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${activeTab() === tab.id
-                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                }`}
+                    <div class="grid gap-4">
+                        {/* AI Management Card */}
+                        <div
+                            onClick={() => setSettingsSubView('ai')}
+                            class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.02] transition-all cursor-pointer group"
                         >
-                            <tab.icon class="w-4 h-4" />
-                            {tab.label}
-                        </button>
-                    )}
-                </For>
-            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center border border-indigo-500/20">
+                                        <Sparkles class="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-white group-hover:text-indigo-300 transition-colors">AI Management</div>
+                                        <div class="text-sm text-gray-500">Configure API keys, models, and knowledge base</div>
+                                    </div>
+                                </div>
+                                <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                                    <ChevronRight class="w-4 h-4 text-gray-400" />
+                                </div>
+                            </div>
+                        </div>
 
-            {/* General Tab */}
-            <Show when={activeTab() === 'general'}>
-                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                        <div class="p-2 rounded-xl bg-cyan-500/20">
-                            <Settings class="w-5 h-5 text-cyan-400" />
-                        </div>
-                        <h2 class="text-lg font-semibold text-white">General Settings</h2>
-                    </div>
-                    <div class="divide-y divide-white/5">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Moon class="w-5 h-5 text-gray-400" />
+                        {/* Other Admin Settings Placeholders */}
+                        <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                        <Zap class="w-5 h-5 text-purple-400" />
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-white">System Performance</div>
+                                        <div class="text-sm text-gray-500">Optimized for high throughput</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-white font-medium">Dark Mode</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Enable dark theme across the admin panel</p>
+                                <div class="w-14 h-8 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full flex items-center px-1 shadow-lg shadow-blue-500/20">
+                                    <div class="w-6 h-6 bg-white rounded-full ml-auto shadow-md" />
                                 </div>
                             </div>
-                            <Toggle checked={darkMode()} onChange={setDarkMode} />
                         </div>
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Globe class="w-5 h-5 text-gray-400" />
+
+                        <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                                        <MessageSquare class="w-5 h-5 text-green-400" />
+                                    </div>
+                                    <div>
+                                        <div class="font-medium text-white">System Notifications</div>
+                                        <div class="text-sm text-gray-500">Global alerts for all users</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-white font-medium">Language</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Choose your preferred language</p>
+                                <div class="w-14 h-8 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full flex items-center px-1 shadow-lg shadow-blue-500/20">
+                                    <div class="w-6 h-6 bg-white rounded-full ml-auto shadow-md" />
                                 </div>
                             </div>
-                            <select class="appearance-none px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 cursor-pointer">
-                                <option value="en">English</option>
-                                <option value="ko">Korean</option>
-                                <option value="ja">Japanese</option>
-                                <option value="zh">Chinese</option>
-                            </select>
                         </div>
                     </div>
-                </div>
+                </Motion.div>
             </Show>
 
-            {/* Notifications Tab */}
-            <Show when={activeTab() === 'notifications'}>
-                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                        <div class="p-2 rounded-xl bg-cyan-500/20">
-                            <Bell class="w-5 h-5 text-cyan-400" />
-                        </div>
-                        <h2 class="text-lg font-semibold text-white">Notification Settings</h2>
-                    </div>
-                    <div class="divide-y divide-white/5">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Mail class="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">Email Notifications</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Receive important updates via email</p>
-                                </div>
-                            </div>
-                            <Toggle checked={emailNotifications()} onChange={setEmailNotifications} />
-                        </div>
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Smartphone class="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">Push Notifications</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Get instant notifications on your device</p>
-                                </div>
-                            </div>
-                            <Toggle checked={pushNotifications()} onChange={setPushNotifications} />
-                        </div>
-                    </div>
-                </div>
+            <Show when={settingsSubView() === 'ai'}>
+                <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+                    <button
+                        onClick={() => setSettingsSubView('main')}
+                        class="mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                    >
+                        <ChevronRight class="w-4 h-4 rotate-180" />
+                        <span class="font-medium">Back to Settings</span>
+                    </button>
+                    <AdminAIManagement />
+                </Motion.div>
             </Show>
-
-            {/* Security Tab */}
-            <Show when={activeTab() === 'security'}>
-                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                        <div class="p-2 rounded-xl bg-cyan-500/20">
-                            <Shield class="w-5 h-5 text-cyan-400" />
-                        </div>
-                        <h2 class="text-lg font-semibold text-white">Security Settings</h2>
-                    </div>
-                    <div class="divide-y divide-white/5">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Key class="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">Two-Factor Authentication</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Add an extra layer of security to your account</p>
-                                </div>
-                            </div>
-                            <Toggle checked={twoFactorAuth()} onChange={setTwoFactorAuth} />
-                        </div>
-                    </div>
-                </div>
-            </Show>
-
-            {/* Password Tab */}
-            <Show when={activeTab() === 'password'}>
-                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                        <div class="p-2 rounded-xl bg-cyan-500/20">
-                            <Lock class="w-5 h-5 text-cyan-400" />
-                        </div>
-                        <h2 class="text-lg font-semibold text-white">Change Admin Password</h2>
-                    </div>
-                    <form onSubmit={handleChangePassword} class="p-6 space-y-6">
-                        {/* Current Password */}
-                        <div>
-                            <label class="text-gray-400 text-sm mb-2 block">Current Password</label>
-                            <div class="relative">
-                                <input
-                                    type={showCurrentPassword() ? 'text' : 'password'}
-                                    value={currentPassword()}
-                                    onInput={(e) => setCurrentPassword(e.currentTarget.value)}
-                                    placeholder="Enter current password"
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCurrentPassword(!showCurrentPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showCurrentPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* New Password */}
-                        <div>
-                            <label class="text-gray-400 text-sm mb-2 block">New Password</label>
-                            <div class="relative">
-                                <input
-                                    type={showNewPassword() ? 'text' : 'password'}
-                                    value={newPassword()}
-                                    onInput={(e) => setNewPassword(e.currentTarget.value)}
-                                    placeholder="Enter new password (min. 8 characters)"
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNewPassword(!showNewPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showNewPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Confirm Password */}
-                        <div>
-                            <label class="text-gray-400 text-sm mb-2 block">Confirm New Password</label>
-                            <div class="relative">
-                                <input
-                                    type={showConfirmPassword() ? 'text' : 'password'}
-                                    value={confirmPassword()}
-                                    onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                                    placeholder="Confirm new password"
-                                    class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword())}
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                                >
-                                    <Show when={showConfirmPassword()} fallback={<Eye class="w-4 h-4" />}>
-                                        <EyeOff class="w-4 h-4" />
-                                    </Show>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Error Message */}
-                        <Show when={passwordError()}>
-                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-                                {passwordError()}
-                            </div>
-                        </Show>
-
-                        {/* Success Message */}
-                        <Show when={passwordSuccess()}>
-                            <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
-                                <Check class="w-4 h-4" />
-                                Password changed successfully!
-                            </div>
-                        </Show>
-
-                        <button
-                            type="submit"
-                            class="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
-                        >
-                            <Save class="w-4 h-4" />
-                            Update Password
-                        </button>
-                    </form>
-                </div>
-            </Show>
-
-            {/* Danger Zone */}
-            <div class="rounded-2xl bg-red-500/5 border border-red-500/20 overflow-hidden">
-                <div class="flex items-center gap-3 p-6 border-b border-red-500/20">
-                    <div class="p-2 rounded-xl bg-red-500/20">
-                        <Shield class="w-5 h-5 text-red-400" />
-                    </div>
-                    <h2 class="text-lg font-semibold text-white">Danger Zone</h2>
-                </div>
-
-                <div class="p-6">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <p class="text-white font-medium">Delete Account</p>
-                            <p class="text-gray-400 text-sm mt-0.5">Permanently delete your admin account and all data</p>
-                        </div>
-                        <button class="px-5 py-2.5 bg-red-500/20 text-red-400 font-medium rounded-xl border border-red-500/30 hover:bg-red-500/30 transition-colors">
-                            Delete Account
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
