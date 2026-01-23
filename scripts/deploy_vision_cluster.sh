@@ -86,7 +86,7 @@ for i in {1..5}; do
     rm -rf deploy/v2-testnet/node$i/geth
     docker run --rm \
         -v $(pwd)/deploy/v2-testnet/node$i:/root/.ethereum \
-        ethereum/client-go:latest init /root/.ethereum/genesis.json
+        ethereum/client-go:v1.13.15 init /root/.ethereum/genesis.json
 done
 
 docker-compose up -d

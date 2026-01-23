@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # Node 1: Bootnode & Primary RPC
   node-1:
-    image: ethereum/client-go:latest
+    image: ethereum/client-go:v1.13.15
     container_name: vision-node-1
     networks:
       vision-net:
@@ -14,7 +14,7 @@ services:
     volumes:
       - ./deploy/v2-testnet/node1:/root/.ethereum
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug" --mine --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --allow-insecure-unlock --nat extip:172.20.0.11
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug" --allow-insecure-unlock --nat extip:172.20.0.11
     deploy:
       resources:
         limits:
@@ -23,7 +23,7 @@ services:
 
   # Node 2: Validator 1
   node-2:
-    image: ethereum/client-go:latest
+    image: ethereum/client-go:v1.13.15
     container_name: vision-node-2
     networks:
       vision-net:
@@ -43,7 +43,7 @@ services:
 
   # Node 3: Validator 2
   node-3:
-    image: ethereum/client-go:latest
+    image: ethereum/client-go:v1.13.15
     container_name: vision-node-3
     networks:
       vision-net:
@@ -63,7 +63,7 @@ services:
 
   # Node 4: Validator 3
   node-4:
-    image: ethereum/client-go:latest
+    image: ethereum/client-go:v1.13.15
     container_name: vision-node-4
     networks:
       vision-net:
@@ -83,7 +83,7 @@ services:
 
   # Node 5: Validator 4
   node-5:
-    image: ethereum/client-go:latest
+    image: ethereum/client-go:v1.13.15
     container_name: vision-node-5
     networks:
       vision-net:

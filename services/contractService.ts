@@ -21,7 +21,7 @@ const ADDRESSES = {
         "http://46.224.221.201:8545"            // Direct Node
     ],
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
-    SEQUENCER_URL: "https://api.visionchain.co/submit",
+    SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
 
     // Interoperability (Equalizer Model)
     VISION_EQUALIZER: "0x5FbDB2315678afecb367f032d93F642f64180aa3",

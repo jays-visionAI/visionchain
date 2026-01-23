@@ -10,15 +10,76 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// RPC Proxy for Geth Node (Avoids CORS and 502 issues from frontend)
-const { createProxyMiddleware } = require('http-proxy-middleware');
-app.use('/rpc-proxy', createProxyMiddleware({
-    target: 'http://localhost:8545', // Local Geth Node
-    changeOrigin: true,
-    pathRewrite: {
-        '^/rpc-proxy': '', // remove /rpc-proxy from path
-    },
-}));
+// Manual RPC Proxy to handle Geth connectivity and CORS
+app.post('/rpc-proxy', async (req, res) => {
+    // Explicitly set CORS for preflight and actual requests
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    const http = require('http');
+    const postData = JSON.stringify(req.body);
+
+    const options = {
+        hostname: '127.0.0.1',
+        port: 8545,
+        path: '/',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData)
+        },
+        timeout: 10000
+    };
+
+    const proxyReq = http.request(options, (proxyRes) => {
+        let data = '';
+        proxyRes.on('data', (chunk) => { data += chunk; });
+        proxyRes.on('end', () => {
+            try {
+                res.json(JSON.parse(data));
+            } catch (e) {
+                res.status(500).json({ error: 'Invalid JSON from node', raw: data });
+            }
+        });
+    });
+
+    proxyReq.on('error', (err) => {
+        console.error('RPC Proxy Error:', err.message);
+        res.status(504).json({
+            error: 'Gateway Timeout',
+            details: err.message,
+            node: '127.0.0.1:8545'
+        });
+    });
+
+    proxyReq.on('timeout', () => {
+        proxyReq.destroy();
+        res.status(504).json({ error: 'Request Timeout', node: '127.0.0.1:8545' });
+    });
+
+    proxyReq.write(postData);
+    proxyReq.end();
+});
+
+// Diagnostic endpoint
+app.get('/debug-rpc', async (req, res) => {
+    try {
+        const { ethers } = require('ethers');
+        const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
+            chainId: 3151909,
+            name: 'vision_testnet_v2'
+        }, { staticNetwork: true });
+        const block = await provider.getBlockNumber();
+        res.json({ status: 'online', blockNumber: block, chainId: 3151909 });
+    } catch (e) {
+        res.status(500).json({ status: 'offline', error: e.message });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 const KAFKA_BROKERS = [process.env.KAFKA_BROKER || '46.224.221.201:9092'];
@@ -110,9 +171,11 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
     try {
         const { ethers } = require('ethers');
         // Setup Provider
-        const provider = new ethers.JsonRpcProvider(KAFKA_BROKERS[0] ? 'https://rpc.visionchain.co' : 'http://localhost:8545'); // Fallback to local
-        // Note: For this specific user environment, we use the known RPC from contractService
-        const rpcProvider = new ethers.JsonRpcProvider("https://rpc.visionchain.co");
+        // Use Internal RPC with Static Network to prevent detection failures under load
+        const rpcProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
+            chainId: 3151909,
+            name: 'vision_testnet_v2'
+        }, { staticNetwork: true });
 
         const paymasterWallet = new ethers.Wallet(PAYMASTER_PK, rpcProvider);
 
