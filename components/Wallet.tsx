@@ -161,7 +161,8 @@ const Wallet = (): JSX.Element => {
         phone: '',
         isVerified: false,
         tier: 0,
-        address: ''
+        address: '',
+        role: 'user'
     });
     const [walletAddressSignal, setWalletAddressSignal] = createSignal('');
     const walletAddress = createMemo(() => userProfile().address || walletAddressSignal() || '');
@@ -455,7 +456,8 @@ const Wallet = (): JSX.Element => {
                     phone: data.phone || '',
                     isVerified: data.isVerified || false,
                     tier: data.tier || 0,
-                    address: data.walletAddress || ''
+                    address: data.walletAddress || '',
+                    role: data.role || 'user'
                 });
 
                 // Check if wallet exists in backend OR locally

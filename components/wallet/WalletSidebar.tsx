@@ -29,10 +29,11 @@ interface WalletSidebarProps {
     copyAddress: () => void;
     copied: boolean;
     onLogout: () => void;
+    isAdmin?: boolean;
 }
 
 export const WalletSidebar = (props: WalletSidebarProps) => {
-    const menuItems = [
+    const allMenuItems = [
         { id: 'chat' as ViewType, label: 'Chat', icon: Sparkles },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
@@ -42,6 +43,10 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'profile' as ViewType, label: 'Profile', icon: User },
         { id: 'settings' as ViewType, label: 'Settings', icon: Settings },
     ];
+
+    const menuItems = () => allMenuItems.filter(item =>
+        item.id !== 'settings' || props.isAdmin
+    );
 
     return (
         <Presence>
@@ -54,13 +59,13 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
                     class="fixed lg:hidden inset-y-0 left-0 z-40 w-[280px] bg-[#0c0c0e] border-r border-white/10 shadow-2xl safe-area-left flex flex-col"
                 >
                     {/* Reuse content for mobile sidebar */}
-                    <SidebarContent {...props} menuItems={menuItems} />
+                    <SidebarContent {...props} menuItems={menuItems()} />
                 </Motion.aside>
             </Show>
 
             {/* Desktop Sidebar - Always Visible */}
             <div class="hidden lg:flex fixed inset-y-0 left-0 z-30 w-[280px] bg-[#0c0c0e] border-r border-white/10 flex-col">
-                <SidebarContent {...props} menuItems={menuItems} isDesktop />
+                <SidebarContent {...props} menuItems={menuItems()} isDesktop />
             </div>
         </Presence>
     );
