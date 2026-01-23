@@ -30,6 +30,8 @@ interface WalletSidebarProps {
     copied: boolean;
     onLogout: () => void;
     isAdmin?: boolean;
+    networkMode: 'mainnet' | 'testnet';
+    setNetworkMode: (mode: 'mainnet' | 'testnet') => void;
 }
 
 export const WalletSidebar = (props: WalletSidebarProps) => {
@@ -44,9 +46,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'settings' as ViewType, label: 'Settings', icon: Settings },
     ];
 
-    const menuItems = () => allMenuItems.filter(item =>
-        item.id !== 'settings' || props.isAdmin
-    );
+    const menuItems = () => allMenuItems;
 
     return (
         <Presence>
@@ -76,14 +76,22 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
     return (
         <>
             {/* Header */}
-            <div class="h-[88px] pt-4 shrink-0 flex items-center px-6 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl">
-                <div class="absolute top-0 left-6 w-20 h-20 bg-blue-500/20 rounded-full blur-2xl -translate-y-1/2 pointer-events-none" />
-                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mr-3">
-                    <Sparkles class="w-4 h-4 text-white" />
+            <div class="h-[88px] pt-4 shrink-0 flex items-center px-8 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl">
+                <div class="flex flex-col">
+                    <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+                        Vision Chain
+                    </span>
+                    <button
+                        onClick={() => props.setNetworkMode(props.networkMode === 'mainnet' ? 'testnet' : 'mainnet')}
+                        class={`mt-0.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wider transition-all self-start ${props.networkMode === 'testnet'
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                            : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
+                            }`}
+                    >
+                        <div class={`w-1 h-1 rounded-full animate-pulse ${props.networkMode === 'testnet' ? 'bg-amber-400' : 'bg-green-400'}`} />
+                        {props.networkMode === 'testnet' ? 'Testnet 전환됨' : 'Mainnet'}
+                    </button>
                 </div>
-                <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                    Vision Chain
-                </span>
                 <Show when={!props.isDesktop}>
                     <button
                         onClick={() => props.setSidebarOpen(false)}

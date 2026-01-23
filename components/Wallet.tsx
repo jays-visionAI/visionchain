@@ -142,6 +142,7 @@ const Wallet = (): JSX.Element => {
     // State Declarations
     const [settingsSubView, setSettingsSubView] = createSignal<'main' | 'ai'>('main');
     const [activeView, setActiveView] = createSignal('assets');
+    const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('mainnet');
     const [showChat, setShowChat] = createSignal(false);
     const [assetsTab, setAssetsTab] = createSignal('portfolio');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
@@ -604,7 +605,12 @@ const Wallet = (): JSX.Element => {
     });
 
     const getAssetData = (symbol: string): AssetData => {
-        const balance = (userHoldings() as any)[symbol] || 0;
+        let balance = (userHoldings() as any)[symbol] || 0;
+
+        // Testnet logic: Show 10% of purchased VCN
+        if (networkMode() === 'testnet' && symbol === 'VCN') {
+            balance = balance * 0.1;
+        }
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
@@ -859,11 +865,14 @@ const Wallet = (): JSX.Element => {
             // Construct context from wallet state
             const context = `
 Current Portfolio Summary:
+Network: ${networkMode().toUpperCase()}
 Total Value: ${totalValueStr()}
 Holdings:
 ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
+
+(Important: You are currently on the ${networkMode()}. ${networkMode() === 'testnet' ? 'Testnet VCN is distributed at 10% of the purchased amount for testing node purchases and transactions.' : 'Mainnet shows actual purchased assets.'})
 `;
-            const fullPrompt = `${context}\n\nUser Question: ${userMessage}\n\nPlease answer the user's question based on their portfolio context if relevant. keep it concise.`;
+            const fullPrompt = `${context}\n\nUser Question: ${userMessage}\n\nPlease answer the user's question based on their portfolio context and current network (${networkMode()}) if relevant. keep it concise.`;
 
             const response = await generateText(fullPrompt, undefined, false, 'intent');
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
@@ -954,6 +963,8 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                     copyAddress={copyAddress}
                     copied={copied()}
                     onLogout={() => auth.logout()}
+                    networkMode={networkMode()}
+                    setNetworkMode={setNetworkMode}
                 />
 
                 {/* Main Content Area */}
@@ -993,6 +1004,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             getAssetData={getAssetData}
                             userProfile={userProfile}
                             onboardingStep={onboardingStep}
+                            networkMode={networkMode()}
                         />
                     </Show>
 
@@ -1044,6 +1056,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             setActiveView={setActiveView}
                             vcnPurchases={vcnPurchases}
                             totalValue={totalValue}
+                            networkMode={networkMode()}
                         />
                     </Show>
 
@@ -1804,6 +1817,9 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <Show when={activeFlow() === 'receive'}><div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center"><ArrowDownLeft class="w-5 h-5 text-green-400" /></div>Receive Tokens</Show>
                                                 <Show when={activeFlow() === 'swap'}><div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><RefreshCw class="w-5 h-5 text-purple-400" /></div>Swap Assets</Show>
                                                 <Show when={activeFlow() === 'stake'}><div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center"><TrendingUp class="w-5 h-5 text-indigo-400" /></div>Stake VCN</Show>
+                                                <Show when={networkMode() === 'testnet'}>
+                                                    <span class="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] rounded-md font-black uppercase tracking-widest">Testnet</span>
+                                                </Show>
                                             </h3>
                                             <button onClick={() => setActiveFlow(null)} class="p-2 hover:bg-white/10 rounded-full transition-colors"><Plus class="w-6 h-6 text-gray-500 rotate-45" /></button>
                                         </div>

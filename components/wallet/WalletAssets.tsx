@@ -24,6 +24,7 @@ interface WalletAssetsProps {
     setActiveView: (view: string) => void;
     vcnPurchases: () => any[];
     totalValue: () => number;
+    networkMode: 'mainnet' | 'testnet';
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
@@ -98,9 +99,19 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         <Info class="w-4 h-4 text-blue-400" />
                     </div>
                     <div>
-                        <p class="text-xs text-blue-200/80 leading-relaxed">
-                            The <span class="text-white font-bold">'Purchased (VCN)'</span> balance reflects your total token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details will be calculated after the vesting contract is officially executed.
-                        </p>
+                        <Show
+                            when={props.networkMode === 'testnet'}
+                            fallback={
+                                <p class="text-xs text-blue-200/80 leading-relaxed">
+                                    The <span class="text-white font-bold">'Purchased (VCN)'</span> balance reflects your total token purchase history updated via CSV. <span class="text-white font-bold">'Locked'</span>, <span class="text-white font-bold">'Vesting'</span>, and <span class="text-white font-bold">'Next Unlock'</span> details will be calculated after the vesting contract is officially executed.
+                                </p>
+                            }
+                        >
+                            <p class="text-xs text-amber-200/80 leading-relaxed">
+                                <span class="text-amber-400 font-bold uppercase tracking-widest mr-2">Testnet Mode Active:</span>
+                                You have been allocated <span class="text-white font-bold">10% of your purchased VCN</span> as Testnet Tokens for network validation and node testing. These tokens have no real-world value.
+                            </p>
+                        </Show>
                     </div>
                 </div>
 

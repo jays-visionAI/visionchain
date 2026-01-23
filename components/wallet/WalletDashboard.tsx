@@ -25,6 +25,7 @@ interface WalletDashboardProps {
     getAssetData: (symbol: string) => any;
     userProfile: () => any;
     onboardingStep: () => number;
+    networkMode: 'mainnet' | 'testnet';
 }
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
