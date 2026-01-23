@@ -71,7 +71,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
     return (
         <>
             {/* Header */}
-            <div class="h-[72px] flex items-center px-6 border-b border-white/[0.06]">
+            <div class="h-[72px] shrink-0 flex items-center px-6 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]">
                 <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 mr-3">
                     <Sparkles class="w-4 h-4 text-white" />
                 </div>
@@ -122,7 +122,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
             </nav>
 
             {/* Wallet Card / User Info */}
-            <div class="p-4 border-t border-white/[0.06] mt-auto">
+            <div class="p-4 border-t border-white/[0.06] mt-auto shrink-0 bg-[#0c0c0e] relative z-20">
                 <div class="relative overflow-hidden p-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-2xl border border-white/[0.06]">
                     <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl" />
                     <div class="relative flex items-center gap-3">
