@@ -49,7 +49,7 @@ import {
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import AIChat from './AIChat';
-import { generateText } from '../services/geminiService';
+import { generateText } from '../services/aiService';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
 import { useNavigate } from '@solidjs/router';
@@ -978,72 +978,72 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                     </div>
 
                     {/* Chat View */}
-<Show when={activeView() === 'chat'}>
-    <WalletDashboard
-        messages={messages}
-        isLoading={isLoading}
-        input={input}
-        setInput={setInput}
-        handleSend={handleSend}
-        setActiveView={setActiveView}
-        setActiveFlow={setActiveFlow}
-        totalValueStr={totalValueStr}
-        getAssetData={getAssetData}
-        userProfile={userProfile}
-        onboardingStep={onboardingStep}
-    />
-</Show>
+                    <Show when={activeView() === 'chat'}>
+                        <WalletDashboard
+                            messages={messages}
+                            isLoading={isLoading}
+                            input={input}
+                            setInput={setInput}
+                            handleSend={handleSend}
+                            setActiveView={setActiveView}
+                            setActiveFlow={setActiveFlow}
+                            totalValueStr={totalValueStr}
+                            getAssetData={getAssetData}
+                            userProfile={userProfile}
+                            onboardingStep={onboardingStep}
+                        />
+                    </Show>
 
                     {/* Campaign View */}
-<Show when={activeView() === 'campaign'}>
-    <WalletCampaign />
-</Show>
+                    <Show when={activeView() === 'campaign'}>
+                        <WalletCampaign />
+                    </Show>
 
                     {/* Mint View */}
-<Show when={activeView() === 'mint'}>
-    <WalletMint
-        mintStep={mintStep}
-        setMintStep={setMintStep}
-        tokenName={tokenName}
-        setTokenName={setTokenName}
-        tokenSymbol={tokenSymbol}
-        setTokenSymbol={setTokenSymbol}
-        tokenType={tokenType}
-        setTokenType={setTokenType}
-        tokenSupply={tokenSupply}
-        setTokenSupply={setTokenSupply}
-        mintingNetworks={mintingNetworks}
-        setMintingNetworks={setMintingNetworks}
-        handleMint={handleMint}
-        isMinting={isMinting}
-        mintedSuccess={mintedSuccess}
-        setMintedSuccess={setMintedSuccess}
-        mintProgress={mintProgress}
-    />
-</Show>
+                    <Show when={activeView() === 'mint'}>
+                        <WalletMint
+                            mintStep={mintStep}
+                            setMintStep={setMintStep}
+                            tokenName={tokenName}
+                            setTokenName={setTokenName}
+                            tokenSymbol={tokenSymbol}
+                            setTokenSymbol={setTokenSymbol}
+                            tokenType={tokenType}
+                            setTokenType={setTokenType}
+                            tokenSupply={tokenSupply}
+                            setTokenSupply={setTokenSupply}
+                            mintingNetworks={mintingNetworks}
+                            setMintingNetworks={setMintingNetworks}
+                            handleMint={handleMint}
+                            isMinting={isMinting}
+                            mintedSuccess={mintedSuccess}
+                            setMintedSuccess={setMintedSuccess}
+                            mintProgress={mintProgress}
+                        />
+                    </Show>
 
                     {/* Nodes View (New Implementation) */}
-<Show when={activeView() === 'nodes'}>
-    <WalletNodes
-        userNodes={userNodes}
-        claimNodeRewards={claimNodeRewards}
-        purchaseNode={purchaseNode}
-    />
-</Show>
+                    <Show when={activeView() === 'nodes'}>
+                        <WalletNodes
+                            userNodes={ownedNodes()}
+                            claimNodeRewards={claimNodeRewards}
+                            purchaseNode={purchaseNode}
+                        />
+                    </Show>
 
-<Show when={activeView() === 'assets'}>
-    <WalletAssets
-        totalValueStr={totalValueStr}
-        portfolioStats={portfolioStats}
-        assetsTab={assetsTab}
-        setAssetsTab={setAssetsTab}
-        getAssetData={getAssetData}
-        startFlow={setActiveFlow}
-        setActiveView={setActiveView}
-        vcnPurchases={vcnPurchases}
-        totalValue={totalValue}
-    />
-</Show>
+                    <Show when={activeView() === 'assets'}>
+                        <WalletAssets
+                            totalValueStr={totalValueStr}
+                            portfolioStats={portfolioStats}
+                            assetsTab={assetsTab}
+                            setAssetsTab={setAssetsTab}
+                            getAssetData={getAssetData}
+                            startFlow={setActiveFlow}
+                            setActiveView={setActiveView}
+                            vcnPurchases={vcnPurchases}
+                            totalValue={totalValue}
+                        />
+                    </Show>
 
                     <Show when={activeView() === 'profile'}>
                         <div class="flex-1 overflow-y-auto p-4 lg:p-8">

@@ -74,8 +74,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [loadingType, setLoadingType] = createSignal<'text' | 'image'>('text');
   const [useFastModel, setUseFastModel] = createSignal(false);
   const [aspectRatio, setAspectRatio] = createSignal<AspectRatio>(AspectRatio.Square);
-  const [activeProvider, setActiveProvider] = createSignal<string>('gemini');
-  const [modelLabel, setModelLabel] = createSignal<string>('Pro 1.5');
+  const [activeProvider, setActiveProvider] = createSignal<string>('deepseek');
+  const [modelLabel, setModelLabel] = createSignal<string>('DeepSeek Chat');
 
   createEffect(() => {
     // Check local storage for active provider
@@ -403,9 +403,9 @@ const AIChat = (props: AIChatProps): JSX.Element => {
             </div>
             {/* Dynamic Model Badge */}
             <div class={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all ${activeProvider() === 'deepseek' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20' :
-                activeProvider() === 'openai' ? 'bg-green-600/20 text-green-400 border border-green-500/20' :
-                  !useFastModel() ? 'bg-purple-600/20 text-purple-400 border border-purple-500/20' :
-                    'bg-amber-600/20 text-amber-400 border border-amber-500/20'
+              activeProvider() === 'openai' ? 'bg-green-600/20 text-green-400 border border-green-500/20' :
+                !useFastModel() ? 'bg-purple-600/20 text-purple-400 border border-purple-500/20' :
+                  'bg-amber-600/20 text-amber-400 border border-amber-500/20'
               }`}>
               <Show when={activeProvider() === 'deepseek'} fallback={
                 <Show when={!useFastModel()} fallback={<Bolt class="w-3 h-3" />}>

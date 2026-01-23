@@ -28,7 +28,7 @@ const getActiveKey = (): ApiKey | null => {
 };
 
 const getSelectedModel = (): string => {
-    return localStorage.getItem(STORAGE_KEYS.model) || 'gemini-1.5-pro';
+    return localStorage.getItem(STORAGE_KEYS.model) || 'deepseek-chat';
 };
 
 // Unified Text Generation
