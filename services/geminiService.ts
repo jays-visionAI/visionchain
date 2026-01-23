@@ -1,54 +1,66 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio } from '../types';
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
+import { getActiveGlobalApiKey, getChatbotSettings } from './firebaseService';
 
-// Get API key: prioritize environment variable (shared for all users), then localStorage
-const getApiKey = (): string => {
-  // 1. First check environment variable (set at build time, shared for all users)
-  const envKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-  if (envKey) {
-    return envKey;
+// Get API key: priority 1: global admin key from Firebase, 2: environment variable, 3: localStorage
+const getApiKey = async (): Promise<string> => {
+  // 1. Check Global Admin API Key from Firebase (The source of truth)
+  try {
+    const globalKey = await getActiveGlobalApiKey('gemini');
+    if (globalKey) return globalKey;
+  } catch (e) {
+    console.error('Failed to get global API key from Firebase:', e);
   }
 
-  // 2. Fall back to localStorage (admin-set key for development)
+  // 2. Check environment variable
+  const envKey = (process.env.API_KEY || process.env.GEMINI_API_KEY) as string;
+  if (envKey) return envKey;
+
+  // 3. Last fallback (legacy)
   try {
     const savedKeys = localStorage.getItem('visionchain_api_keys');
     if (savedKeys) {
       const keys = JSON.parse(savedKeys);
       const activeKey = keys.find((k: any) => k.isActive && k.isValid);
-      if (activeKey) {
-        return activeKey.key;
-      }
+      if (activeKey) return activeKey.key;
     }
-  } catch (e) {
-    console.error('Failed to get API key from localStorage:', e);
-  }
+  } catch (e) { }
 
   return '';
 };
 
-// Create AI instance with dynamic API key
-const createAiInstance = () => new GoogleGenAI({ apiKey: getApiKey() });
-
-// Export ai instance getter for components
-export const getAi = () => createAiInstance();
-export const ai = createAiInstance();
+// Instance factory to ensure fresh key
+export const getAiInstance = async () => {
+  const apiKey = await getApiKey();
+  return new GoogleGenAI({ apiKey });
+};
 
 // Helper to decode base64 audio (for the frontend to play)
 export const getAudioContext = () => new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
 
-export const generateText = async (prompt: string, imageBase64?: string, useFastModel: boolean = false): Promise<string> => {
+export const generateText = async (
+  prompt: string,
+  imageBase64?: string,
+  botType: 'intent' | 'helpdesk' = 'intent'
+): Promise<string> => {
   try {
-    const apiKey = getApiKey();
+    const apiKey = await getApiKey();
     if (!apiKey) {
-      return "⚠️ API key is not configured. Please go to Admin > AI Management > API Keys to add your Gemini API key.";
+      return "API key is not configured. Please contact the administrator.";
     }
 
-    let modelName = useFastModel ? 'gemini-1.5-flash' : 'gemini-1.5-flash';
+    const ai = await getAiInstance();
+    const settings = await getChatbotSettings();
 
-    // Switch to Flash for multimodal vision tasks as it has excellent vision capabilities
+    // Choose config based on bot type
+    const botConfig = botType === 'helpdesk' ? settings?.helpdeskBot : settings?.intentBot;
+    const systemInstruction = botConfig?.systemPrompt || VISION_CHAIN_KNOWLEDGE;
+    const modelName = botConfig?.model || 'gemini-1.5-flash';
+
+    let finalModel = modelName;
     if (imageBase64) {
-      modelName = 'gemini-1.5-flash';
+      finalModel = 'gemini-1.5-flash'; // Optimized for vision
     }
 
     let contents: any = prompt;
@@ -59,7 +71,7 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
           { text: prompt },
           {
             inlineData: {
-              mimeType: "image/jpeg", // Assuming JPEG/PNG conversion on frontend
+              mimeType: "image/jpeg",
               data: imageBase64
             }
           }
@@ -67,11 +79,13 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
       };
     }
 
-    const response = await getAi().models.generateContent({
-      model: modelName,
+    const response = await ai.models.generateContent({
+      model: finalModel,
       contents: contents,
       config: {
-        systemInstruction: VISION_CHAIN_KNOWLEDGE,
+        systemInstruction: systemInstruction,
+        temperature: botConfig?.temperature || 0.7,
+        maxOutputTokens: botConfig?.maxTokens || 2048,
       }
     });
     return response.text || "No response generated.";
@@ -83,15 +97,20 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
 
 export const generateImage = async (prompt: string, aspectRatio: AspectRatio): Promise<string | null> => {
   try {
-    const response = await getAi().models.generateContent({
-      model: 'gemini-1.5-pro',
+    const ai = await getAiInstance();
+    const settings = await getChatbotSettings();
+    const imageModel = settings?.imageSettings?.model || 'gemini-1.5-pro';
+    const imageSize = settings?.imageSettings?.size || '1k';
+
+    const response = await ai.models.generateContent({
+      model: imageModel,
       contents: {
         parts: [{ text: prompt }],
       },
       config: {
         imageConfig: {
           aspectRatio: aspectRatio,
-          imageSize: "1K"
+          imageSize: imageSize as any
         },
       },
     });
@@ -110,14 +129,19 @@ export const generateImage = async (prompt: string, aspectRatio: AspectRatio): P
 
 export const generateSpeech = async (text: string): Promise<string | null> => {
   try {
-    const response = await getAi().models.generateContent({
-      model: 'gemini-1.5-flash',
+    const ai = await getAiInstance();
+    const settings = await getChatbotSettings();
+    const voiceModel = settings?.voiceSettings?.model || 'gemini-1.5-flash';
+    const ttsVoice = settings?.voiceSettings?.ttsVoice || 'Kore';
+
+    const response = await ai.models.generateContent({
+      model: voiceModel,
       contents: [{ parts: [{ text }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
+            prebuiltVoiceConfig: { voiceName: ttsVoice },
           },
         },
       },

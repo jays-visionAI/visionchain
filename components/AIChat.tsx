@@ -2,7 +2,8 @@ import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown } from 'lucide-solid';
-import { getAudioContext, ai, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/geminiService';
+import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/geminiService';
+import { getChatbotSettings } from '../services/firebaseService';
 import { generateText, generateImage, generateSpeech } from '../services/aiService';
 import { Message, AspectRatio } from '../types';
 import { Modality, LiveServerMessage } from "@google/genai";
@@ -77,24 +78,31 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [activeProvider, setActiveProvider] = createSignal<string>('deepseek');
   const [modelLabel, setModelLabel] = createSignal<string>('DeepSeek Chat');
 
-  createEffect(() => {
-    // Check local storage for active provider
+  createEffect(async () => {
+    // Check Firebase for active provider and model settings
     try {
-      const savedKeys = localStorage.getItem('visionchain_api_keys');
-      if (savedKeys) {
-        const keys = JSON.parse(savedKeys);
-        const active = keys.find((k: any) => k.isActive);
-        if (active) {
-          setActiveProvider(active.provider);
-          if (active.provider === 'deepseek') {
-            setModelLabel('DeepSeek Chat');
-          } else if (active.provider === 'openai') {
-            setModelLabel('GPT-4o');
-          }
-        }
+      const settings = await getChatbotSettings();
+      const botConfig = settings?.helpdeskBot;
+      const modelName = botConfig?.model || 'gemini-1.5-flash';
+
+      let provider = 'gemini';
+      let label = 'Gemini 1.5 Flash';
+
+      if (modelName.includes('deepseek')) {
+        provider = 'deepseek';
+        label = 'DeepSeek Chat';
+      } else if (modelName.includes('gpt')) {
+        provider = 'openai';
+        label = 'GPT-4o';
+      } else if (modelName.includes('claude')) {
+        provider = 'anthropic';
+        label = 'Claude 3.5 Sonnet';
       }
+
+      setActiveProvider(provider);
+      setModelLabel(label);
     } catch (e) {
-      console.error("Error reading provider settings", e);
+      console.error("Error reading Firebase AI settings", e);
     }
   });
 
@@ -207,7 +215,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         if (currentAttachment) {
           rawBase64 = currentAttachment.split(',')[1];
         }
-        const text = await generateText(userMsg.text, rawBase64, useFastModel());
+        const text = await generateText(userMsg.text, rawBase64, useFastModel(), 'helpdesk');
         setMessages(prev => [...prev, { role: 'model', text }]);
       }
     } catch (e) {
@@ -238,7 +246,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const handleTxComplete = (hash: string) => {
     setMessages(prev => [...prev, {
       role: 'model',
-      text: `✅ Transaction Broadcasted! \nHash: ${hash.slice(0, 10)}...${hash.slice(-6)}`
+      text: `Transaction Broadcasted Successfully!\nHash: ${hash.slice(0, 10)}...${hash.slice(-6)}`
     }]);
   };
 
@@ -265,6 +273,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         }
       });
 
+      const ai = await getAiInstance();
       const sessionPromise = ai.live.connect({
         model: 'gemini-1.5-flash',
         config: {

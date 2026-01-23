@@ -29,6 +29,18 @@ import {
     Shield,
     Loader2
 } from 'lucide-solid';
+import {
+    getChatbotSettings,
+    saveChatbotSettings,
+    getApiKeys,
+    saveApiKey,
+    deleteApiKey as deleteFireKey,
+    updateApiKey,
+    ApiKeyData,
+    BotConfig,
+    AiConversation,
+    getRecentConversations
+} from '../../services/firebaseService';
 
 // Tabs configuration
 const tabs = [
@@ -121,17 +133,20 @@ interface ApiKey {
 
 export default function AdminAIManagement() {
     const [activeTab, setActiveTab] = createSignal('apikeys');
-    const [knowledgeContent, setKnowledgeContent] = createSignal(defaultKnowledge);
-    const [systemPrompt, setSystemPrompt] = createSignal(defaultSystemPrompt);
-    const [selectedModel, setSelectedModel] = createSignal('gemini-3-pro-preview');
-    const [selectedVoice, setSelectedVoice] = createSignal('Kore');
-    const [selectedTtsVoice, setSelectedTtsVoice] = createSignal('Kore');
+    const [knowledgeContent, setKnowledgeContent] = createSignal('');
+
+    // Split into two bots
+    const [intentBot, setIntentBot] = createSignal<BotConfig>({ systemPrompt: '', model: 'gemini-1.5-flash', temperature: 0.7, maxTokens: 2048 });
+    const [helpdeskBot, setHelpdeskBot] = createSignal<BotConfig>({ systemPrompt: '', model: 'gemini-1.5-flash', temperature: 0.7, maxTokens: 2048 });
+    const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-1.5-pro', quality: 'standard', size: '1k' });
+    const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'gemini-1.5-flash' });
+
     const [isSaving, setIsSaving] = createSignal(false);
     const [saveSuccess, setSaveSuccess] = createSignal(false);
     const [lastSaved, setLastSaved] = createSignal<string | null>(null);
 
-    // API Keys state
-    const [apiKeys, setApiKeys] = createSignal<ApiKey[]>([]);
+    // API Keys state (fetched from Firebase)
+    const [apiKeys, setApiKeys] = createSignal<ApiKeyData[]>([]);
     const [newKeyName, setNewKeyName] = createSignal('');
     const [newKeyValue, setNewKeyValue] = createSignal('');
     const [newKeyProvider, setNewKeyProvider] = createSignal<'gemini' | 'openai' | 'anthropic' | 'deepseek'>('gemini');
@@ -139,26 +154,30 @@ export default function AdminAIManagement() {
     const [isTesting, setIsTesting] = createSignal(false);
     const [testResult, setTestResult] = createSignal<{ success: boolean; message: string } | null>(null);
 
-    // Load saved settings on mount
-    onMount(() => {
-        const savedKnowledge = localStorage.getItem(STORAGE_KEYS.knowledge);
-        const savedPrompt = localStorage.getItem(STORAGE_KEYS.prompt);
-        const savedModel = localStorage.getItem(STORAGE_KEYS.model);
-        const savedVoice = localStorage.getItem(STORAGE_KEYS.voice);
-        const savedTtsVoice = localStorage.getItem(STORAGE_KEYS.ttsVoice);
-        const savedApiKeys = localStorage.getItem(STORAGE_KEYS.apiKeys);
+    // Monitoring
+    const [realConversations, setRealConversations] = createSignal<AiConversation[]>([]);
+    const [isFetchingConvs, setIsFetchingConvs] = createSignal(false);
 
-        if (savedKnowledge) setKnowledgeContent(savedKnowledge);
-        if (savedPrompt) setSystemPrompt(savedPrompt);
-        if (savedModel) setSelectedModel(savedModel);
-        if (savedVoice) setSelectedVoice(savedVoice);
-        if (savedTtsVoice) setSelectedTtsVoice(savedTtsVoice);
-        if (savedApiKeys) {
-            try {
-                setApiKeys(JSON.parse(savedApiKeys));
-            } catch (e) {
-                console.error('Failed to parse saved API keys:', e);
+    // Load saved settings on mount from Firebase
+    onMount(async () => {
+        try {
+            const settings = await getChatbotSettings();
+            if (settings) {
+                setKnowledgeContent(settings.knowledgeBase);
+                setIntentBot(settings.intentBot);
+                setHelpdeskBot(settings.helpdeskBot);
+                if (settings.imageSettings) setImageSettings(settings.imageSettings);
+                if (settings.voiceSettings) setVoiceSettings(settings.voiceSettings);
             }
+
+            const keys = await getApiKeys();
+            setApiKeys(keys);
+
+            // Fetch recent conversations
+            const convs = await getRecentConversations();
+            setRealConversations(convs);
+        } catch (error) {
+            console.error('Failed to load initial AI settings:', error);
         }
     });
 
@@ -218,26 +237,22 @@ export default function AdminAIManagement() {
         }
     };
 
-    // Add new API key
+    // Add new API key to Firebase
     const addApiKey = async () => {
         if (!newKeyName() || !newKeyValue()) return;
 
         const isValid = await testApiKey(newKeyValue(), newKeyProvider());
 
-        const newKey: ApiKey = {
-            id: Date.now().toString(),
+        await saveApiKey({
             name: newKeyName(),
             key: newKeyValue(),
             provider: newKeyProvider(),
             isActive: isValid && apiKeys().filter(k => k.isActive).length === 0,
-            isValid: isValid,
-            lastTested: new Date().toISOString(),
-            createdAt: new Date().toISOString()
-        };
+            isValid: isValid || false,
+        });
 
-        const updatedKeys = [...apiKeys(), newKey];
+        const updatedKeys = await getApiKeys();
         setApiKeys(updatedKeys);
-        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
 
         // Reset form
         setNewKeyName('');
@@ -245,21 +260,28 @@ export default function AdminAIManagement() {
         setTestResult(null);
     };
 
-    // Toggle API key active status
-    const toggleKeyActive = (id: string) => {
-        const updatedKeys = apiKeys().map(key => ({
-            ...key,
-            isActive: key.id === id ? !key.isActive : false // Only one active at a time
-        }));
+    // Toggle API key active status in Firebase
+    const toggleActiveKey = async (id: string) => {
+        const keyToActivate = apiKeys().find(k => k.id === id);
+        if (!keyToActivate) return;
+
+        // Deactivate all others, activate this one
+        const promises = apiKeys().map(k =>
+            updateApiKey(k.id, { isActive: k.id === id })
+        );
+        await Promise.all(promises);
+
+        const updatedKeys = await getApiKeys();
         setApiKeys(updatedKeys);
-        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
     };
 
-    // Delete API key
-    const deleteApiKey = (id: string) => {
-        const updatedKeys = apiKeys().filter(key => key.id !== id);
-        setApiKeys(updatedKeys);
-        localStorage.setItem(STORAGE_KEYS.apiKeys, JSON.stringify(updatedKeys));
+    // Delete API key from Firebase
+    const deleteApiKeyLocal = async (id: string) => {
+        if (confirm('Are you sure you want to delete this key?')) {
+            await deleteFireKey(id);
+            const updatedKeys = await getApiKeys();
+            setApiKeys(updatedKeys);
+        }
     };
 
     // Retest API key
@@ -280,27 +302,20 @@ export default function AdminAIManagement() {
         setSaveSuccess(false);
 
         try {
-            // Save to localStorage based on active tab
-            if (activeTab() === 'knowledge') {
-                localStorage.setItem(STORAGE_KEYS.knowledge, knowledgeContent());
-            } else if (activeTab() === 'prompts') {
-                localStorage.setItem(STORAGE_KEYS.prompt, systemPrompt());
-            } else if (activeTab() === 'models') {
-                localStorage.setItem(STORAGE_KEYS.model, selectedModel());
-                localStorage.setItem(STORAGE_KEYS.voice, selectedVoice());
-                localStorage.setItem(STORAGE_KEYS.ttsVoice, selectedTtsVoice());
-            }
-
-            // Simulate network delay for UX
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await saveChatbotSettings({
+                knowledgeBase: knowledgeContent(),
+                intentBot: intentBot(),
+                helpdeskBot: helpdeskBot(),
+                imageSettings: imageSettings(),
+                voiceSettings: voiceSettings()
+            });
 
             setLastSaved(new Date().toLocaleTimeString());
             setSaveSuccess(true);
-
-            // Hide success message after 3 seconds
             setTimeout(() => setSaveSuccess(false), 3000);
         } catch (error) {
             console.error('Failed to save settings:', error);
+            alert('Error saving settings to Firebase.');
         } finally {
             setIsSaving(false);
         }
@@ -380,15 +395,13 @@ export default function AdminAIManagement() {
                                     <label class="text-gray-400 text-sm mb-1 block">Provider</label>
                                     <select
                                         value={newKeyProvider()}
-                                        onChange={(e) => setNewKeyProvider(e.currentTarget.value as 'gemini' | 'openai' | 'anthropic')}
+                                        onChange={(e) => setNewKeyProvider(e.currentTarget.value as 'gemini' | 'openai' | 'anthropic' | 'deepseek')}
                                         class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                                     >
                                         <option value="gemini">Google Gemini</option>
-                                        <option value="openai">OpenAI</option>
-                                        <option value="gemini">Google Gemini</option>
-                                        <option value="deepseek">DeepSeek</option>
-                                        <option value="openai">OpenAI</option>
-                                        <option value="anthropic">Anthropic</option>
+                                        <option value="deepseek">DeepSeek AI</option>
+                                        <option value="openai">OpenAI (GPT)</option>
+                                        <option value="anthropic">Anthropic (Claude)</option>
                                     </select>
                                 </div>
 
@@ -477,9 +490,9 @@ export default function AdminAIManagement() {
                                                         <div class="flex items-center gap-2">
                                                             <span class="text-white font-medium">{key.name}</span>
                                                             <span class={`text-xs px-2 py-0.5 rounded ${key.provider === 'gemini' ? 'bg-blue-500/20 text-blue-400' :
-                                                                    key.provider === 'openai' ? 'bg-green-500/20 text-green-400' :
-                                                                        key.provider === 'deepseek' ? 'bg-blue-600/20 text-blue-300' :
-                                                                            'bg-purple-500/20 text-purple-400'
+                                                                key.provider === 'openai' ? 'bg-green-500/20 text-green-400' :
+                                                                    key.provider === 'deepseek' ? 'bg-blue-600/20 text-blue-300' :
+                                                                        'bg-purple-500/20 text-purple-400'
                                                                 }`}>
                                                                 {key.provider === 'gemini' ? 'Gemini' :
                                                                     key.provider === 'deepseek' ? 'DeepSeek' :
@@ -520,7 +533,7 @@ export default function AdminAIManagement() {
                                                         <RotateCcw class="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => toggleKeyActive(key.id)}
+                                                        onClick={() => toggleActiveKey(key.id)}
                                                         class={`p-2 rounded-lg transition-colors ${key.isActive
                                                             ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
                                                             : 'hover:bg-white/10 text-gray-400 hover:text-green-400'
@@ -530,7 +543,7 @@ export default function AdminAIManagement() {
                                                         <Power class="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => deleteApiKey(key.id)}
+                                                        onClick={() => deleteApiKeyLocal(key.id)}
                                                         class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-red-400 transition-colors"
                                                         title="Delete key"
                                                     >
@@ -559,6 +572,71 @@ export default function AdminAIManagement() {
                     </div>
                 </Show>
 
+                {/* Prompt Tuning Tab */}
+                <Show when={activeTab() === 'prompts'}>
+                    <div class="space-y-6">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-xl font-semibold text-white flex items-center gap-2">
+                                <Wand2 class="w-5 h-5 text-cyan-400" />
+                                AI System Prompts
+                            </h2>
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving()}
+                                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
+                            >
+                                <Save class="w-4 h-4" />
+                                {isSaving() ? 'Saving...' : 'Save All Prompts'}
+                            </button>
+                        </div>
+
+                        {/* Intent Engine Bot */}
+                        <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                    <Bot class="w-5 h-5 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 class="text-white font-medium">Intent Navigation Engine (Main Wallet Chat)</h3>
+                                    <p class="text-gray-500 text-xs text-sm">Analyzes intent for swaps, transfers, and wallet operations.</p>
+                                </div>
+                            </div>
+                            <textarea
+                                value={intentBot().systemPrompt}
+                                onInput={(e) => setIntentBot({ ...intentBot(), systemPrompt: e.currentTarget.value })}
+                                class="w-full h-[200px] bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-gray-300 font-mono resize-none focus:outline-none focus:border-cyan-500/50"
+                                placeholder="Enter Intent Engine System Prompt..."
+                            />
+                        </div>
+
+                        {/* Helpdesk Bot */}
+                        <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                                    <MessageSquare class="w-5 h-5 text-green-400" />
+                                </div>
+                                <div>
+                                    <h3 class="text-white font-medium">Helpdesk Support Bot (Floating Chat)</h3>
+                                    <p class="text-gray-500 text-xs text-sm">Provides general information and support for the landing page.</p>
+                                </div>
+                            </div>
+                            <textarea
+                                value={helpdeskBot().systemPrompt}
+                                onInput={(e) => setHelpdeskBot({ ...helpdeskBot(), systemPrompt: e.currentTarget.value })}
+                                class="w-full h-[200px] bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-gray-300 font-mono resize-none focus:outline-none focus:border-green-500/50"
+                                placeholder="Enter Helpdesk System Prompt..."
+                            />
+                        </div>
+
+                        <Show when={saveSuccess()}>
+                            <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
+                                <Check class="w-4 h-4" />
+                                <span>Prompts synced to all users!</span>
+                            </div>
+                        </Show>
+                    </div>
+                </Show>
+
                 {/* Knowledge Base Tab */}
                 <Show when={activeTab() === 'knowledge'}>
                     <div class="space-y-4">
@@ -568,13 +646,6 @@ export default function AdminAIManagement() {
                                 Knowledge Base Editor
                             </h2>
                             <div class="flex gap-2">
-                                <button
-                                    onClick={() => setKnowledgeContent(defaultKnowledge)}
-                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                >
-                                    <RotateCcw class="w-4 h-4" />
-                                    Reset
-                                </button>
                                 <button
                                     onClick={handleSave}
                                     disabled={isSaving()}
@@ -587,32 +658,18 @@ export default function AdminAIManagement() {
                         </div>
 
                         <div class="rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden">
-                            <div class="p-3 bg-white/[0.02] border-b border-white/5 flex items-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-red-500/50" />
-                                <div class="w-3 h-3 rounded-full bg-yellow-500/50" />
-                                <div class="w-3 h-3 rounded-full bg-green-500/50" />
-                                <span class="text-xs text-gray-500 ml-2">knowledge.ts</span>
-                            </div>
                             <textarea
                                 value={knowledgeContent()}
                                 onInput={(e) => setKnowledgeContent(e.currentTarget.value)}
                                 class="w-full h-[400px] bg-transparent p-4 text-sm text-gray-300 font-mono resize-none focus:outline-none"
-                                placeholder="Enter knowledge base content..."
+                                placeholder="Enter global knowledge base content..."
                             />
                         </div>
 
                         <Show when={saveSuccess()}>
                             <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span>Saved successfully! Last saved: {lastSaved()}</span>
-                            </div>
-                        </Show>
-                        <Show when={!saveSuccess()}>
-                            <div class="flex items-center gap-2 text-sm text-gray-500">
-                                <AlertCircle class="w-4 h-4" />
-                                <span>Changes will be applied to the AI after saving.</span>
+                                <Check class="w-4 h-4" />
+                                <span>Knowledge base updated globally!</span>
                             </div>
                         </Show>
                     </div>
@@ -637,36 +694,42 @@ export default function AdminAIManagement() {
                         </div>
 
                         <div class="rounded-2xl bg-white/[0.02] border border-white/5 divide-y divide-white/5">
-                            <For each={mockConversations}>
+                            <For each={realConversations()}>
                                 {(conv) => (
                                     <div class="p-4 hover:bg-white/[0.02] transition-colors flex items-center justify-between">
                                         <div class="flex items-center gap-4">
-                                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
-                                                <User class="w-5 h-5 text-cyan-400" />
+                                            <div class={`w-10 h-10 rounded-full flex items-center justify-center ${conv.botType === 'intent' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
+                                                <Bot class="w-5 h-5" />
                                             </div>
                                             <div>
                                                 <div class="flex items-center gap-2">
-                                                    <span class="text-white font-medium">{conv.user}</span>
-                                                    <span class="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded">{conv.messages} messages</span>
+                                                    <span class="text-white font-medium">{conv.userId}</span>
+                                                    <span class={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${conv.botType === 'intent' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
+                                                        {conv.botType}
+                                                    </span>
+                                                    <span class="text-xs text-gray-500 bg-white/5 px-2 py-0.5 rounded">{conv.messages.length} messages</span>
                                                 </div>
                                                 <p class="text-gray-400 text-sm truncate max-w-md">{conv.lastMessage}</p>
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-4">
-                                            <span class="text-gray-500 text-sm flex items-center gap-1">
+                                            <span class="text-gray-500 text-[11px] font-mono flex items-center gap-1">
                                                 <Clock class="w-3 h-3" />
-                                                {conv.time}
+                                                {new Date(conv.createdAt).toLocaleString()}
                                             </span>
                                             <button class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-cyan-400 transition-colors">
                                                 <Eye class="w-4 h-4" />
-                                            </button>
-                                            <button class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-red-400 transition-colors">
-                                                <Trash2 class="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
                                 )}
                             </For>
+
+                            <Show when={realConversations().length === 0}>
+                                <div class="p-10 text-center text-gray-500 italic">
+                                    No monitored conversations found yet.
+                                </div>
+                            </Show>
                         </div>
                     </div>
                 </Show>
@@ -680,92 +743,112 @@ export default function AdminAIManagement() {
                         </h2>
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Text Model */}
-                            <div class="rounded-2xl bg-white/[0.02] border border-white/5 p-6 space-y-4">
+                            {/* Intent Bot Model */}
+                            <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
                                 <div class="flex items-center gap-3">
                                     <div class="p-2 rounded-xl bg-blue-500/20">
                                         <Bot class="w-5 h-5 text-blue-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-white font-medium">Text Generation Model</h3>
-                                        <p class="text-gray-500 text-sm">Default model for text conversations</p>
+                                        <h3 class="text-white font-medium">Intent Engine Model</h3>
+                                        <p class="text-gray-500 text-sm">Used for complex logic and transactions</p>
                                     </div>
                                 </div>
                                 <select
-                                    value={selectedModel()}
-                                    onChange={(e) => setSelectedModel(e.currentTarget.value)}
+                                    value={intentBot().model}
+                                    onChange={(e) => setIntentBot({ ...intentBot(), model: e.currentTarget.value })}
                                     class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                                 >
-                                    <option value="gemini-3-pro-preview">Gemini 3.0 Pro (Reasoning)</option>
-                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fast)</option>
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Balanced)</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Reasoning)</option>
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
-                                    <option disabled>--- DeepSeek ---</option>
+                                    <option value="gemini-3-pro-preview">Gemini 3.0 Pro</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
                                     <option value="deepseek-chat">DeepSeek Chat</option>
-                                    <option value="deepseek-v3">DeepSeek V3.2</option>
+                                </select>
+                            </div>
+
+                            {/* Helpdesk Bot Model */}
+                            <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 rounded-xl bg-green-500/20">
+                                        <MessageSquare class="w-5 h-5 text-green-400" />
+                                    </div>
+                                    <div>
+                                        <h3 class="text-white font-medium">Helpdesk Bot Model</h3>
+                                        <p class="text-gray-500 text-sm">Used for support and landing page chat</p>
+                                    </div>
+                                </div>
+                                <select
+                                    value={helpdeskBot().model}
+                                    onChange={(e) => setHelpdeskBot({ ...helpdeskBot(), model: e.currentTarget.value })}
+                                    class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-green-500/50"
+                                >
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                                    <option value="deepseek-chat">DeepSeek Chat</option>
                                 </select>
                             </div>
 
                             {/* Image Model */}
-                            <div class="rounded-2xl bg-white/[0.02] border border-white/5 p-6 space-y-4">
+                            <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
                                 <div class="flex items-center gap-3">
                                     <div class="p-2 rounded-xl bg-purple-500/20">
                                         <Image class="w-5 h-5 text-purple-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-white font-medium">Image Generation Model</h3>
-                                        <p class="text-gray-500 text-sm">Model for image creation</p>
+                                        <h3 class="text-white font-medium">Image Generation</h3>
+                                        <p class="text-gray-500 text-sm">Target model for Vision Creator</p>
                                     </div>
                                 </div>
-                                <select class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50">
-                                    <option value="gemini-3-pro-image-preview">Gemini 3.0 Pro Image</option>
-                                </select>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <select
+                                        value={imageSettings().model}
+                                        onChange={(e) => setImageSettings({ ...imageSettings(), model: e.currentTarget.value })}
+                                        class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                                    >
+                                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                        <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                    </select>
+                                    <select
+                                        value={imageSettings().size}
+                                        onChange={(e) => setImageSettings({ ...imageSettings(), size: e.currentTarget.value })}
+                                        class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
+                                    >
+                                        <option value="1k">Standard (1K)</option>
+                                        <option value="2k">High (2K)</option>
+                                    </select>
+                                </div>
                             </div>
 
-                            {/* Voice Settings */}
-                            <div class="rounded-2xl bg-white/[0.02] border border-white/5 p-6 space-y-4">
+                            {/* Voice Model */}
+                            <div class="rounded-2xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
                                 <div class="flex items-center gap-3">
-                                    <div class="p-2 rounded-xl bg-green-500/20">
-                                        <Mic class="w-5 h-5 text-green-400" />
+                                    <div class="p-2 rounded-xl bg-amber-500/20">
+                                        <Mic class="w-5 h-5 text-amber-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-white font-medium">Voice Chat Settings</h3>
-                                        <p class="text-gray-500 text-sm">Live voice conversation config</p>
+                                        <h3 class="text-white font-medium">Voice & TTS</h3>
+                                        <p class="text-gray-500 text-sm">Settings for AI speech synthesis</p>
                                     </div>
                                 </div>
-                                <select
-                                    value={selectedVoice()}
-                                    onChange={(e) => setSelectedVoice(e.currentTarget.value)}
-                                    class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
-                                >
-                                    <option value="Kore">Kore (Default)</option>
-                                    <option value="Puck">Puck</option>
-                                    <option value="Charon">Charon</option>
-                                    <option value="Aoede">Aoede</option>
-                                </select>
-                            </div>
-
-                            {/* TTS Settings */}
-                            <div class="rounded-2xl bg-white/[0.02] border border-white/5 p-6 space-y-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="p-2 rounded-xl bg-orange-500/20">
-                                        <Volume2 class="w-5 h-5 text-orange-400" />
-                                    </div>
-                                    <div>
-                                        <h3 class="text-white font-medium">Text-to-Speech</h3>
-                                        <p class="text-gray-500 text-sm">TTS voice configuration</p>
-                                    </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <select
+                                        value={voiceSettings().model}
+                                        onChange={(e) => setVoiceSettings({ ...voiceSettings(), model: e.currentTarget.value })}
+                                        class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-amber-500/50"
+                                    >
+                                        <option value="gemini-1.5-flash">Gemini Flash</option>
+                                        <option value="gemini-1.5-pro">Gemini Pro</option>
+                                    </select>
+                                    <select
+                                        value={voiceSettings().ttsVoice}
+                                        onChange={(e) => setVoiceSettings({ ...voiceSettings(), ttsVoice: e.currentTarget.value })}
+                                        class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-amber-500/50"
+                                    >
+                                        <option value="Kore">Kore (Balanced)</option>
+                                        <option value="Fenrir">Fenrir (Professional)</option>
+                                        <option value="Aoide">Aoide (Natural)</option>
+                                    </select>
                                 </div>
-                                <select
-                                    value={selectedTtsVoice()}
-                                    onChange={(e) => setSelectedTtsVoice(e.currentTarget.value)}
-                                    class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
-                                >
-                                    <option value="Kore">Kore (Default)</option>
-                                    <option value="Puck">Puck</option>
-                                    <option value="Charon">Charon</option>
-                                </select>
                             </div>
                         </div>
 
@@ -777,15 +860,6 @@ export default function AdminAIManagement() {
                             <Save class="w-4 h-4" />
                             {isSaving() ? 'Saving...' : 'Save Settings'}
                         </button>
-
-                        <Show when={saveSuccess()}>
-                            <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span>Settings saved! Last saved: {lastSaved()}</span>
-                            </div>
-                        </Show>
                     </div>
                 </Show>
 
@@ -879,70 +953,7 @@ export default function AdminAIManagement() {
                     </div>
                 </Show>
 
-                {/* Prompt Tuning Tab */}
-                <Show when={activeTab() === 'prompts'}>
-                    <div class="space-y-4">
-                        <div class="flex items-center justify-between">
-                            <h2 class="text-xl font-semibold text-white flex items-center gap-2">
-                                <Wand2 class="w-5 h-5 text-cyan-400" />
-                                System Prompt Editor
-                            </h2>
-                            <div class="flex gap-2">
-                                <button
-                                    onClick={() => setSystemPrompt(defaultSystemPrompt)}
-                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
-                                >
-                                    <RotateCcw class="w-4 h-4" />
-                                    Reset
-                                </button>
-                                <button
-                                    onClick={handleSave}
-                                    disabled={isSaving()}
-                                    class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
-                                >
-                                    <Save class="w-4 h-4" />
-                                    {isSaving() ? 'Saving...' : 'Save Changes'}
-                                </button>
-                            </div>
-                        </div>
 
-                        <div class="rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden">
-                            <div class="p-3 bg-white/[0.02] border-b border-white/5 flex items-center gap-2">
-                                <div class="w-3 h-3 rounded-full bg-red-500/50" />
-                                <div class="w-3 h-3 rounded-full bg-yellow-500/50" />
-                                <div class="w-3 h-3 rounded-full bg-green-500/50" />
-                                <span class="text-xs text-gray-500 ml-2">systemPrompt.txt</span>
-                            </div>
-                            <textarea
-                                value={systemPrompt()}
-                                onInput={(e) => setSystemPrompt(e.currentTarget.value)}
-                                class="w-full h-[300px] bg-transparent p-4 text-sm text-gray-300 font-mono resize-none focus:outline-none"
-                                placeholder="Enter system prompt..."
-                            />
-                        </div>
-
-                        <Show when={saveSuccess()}>
-                            <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                <span>Prompt saved! Last saved: {lastSaved()}</span>
-                            </div>
-                        </Show>
-
-                        <div class="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 flex items-start gap-3">
-                            <AlertCircle class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <p class="text-amber-400 font-medium">Tips for better prompts:</p>
-                                <ul class="text-amber-400/70 text-sm mt-1 space-y-1">
-                                    <li>• Define the AI's persona clearly</li>
-                                    <li>• Specify response format guidelines</li>
-                                    <li>• Include tone and style preferences</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </Show>
             </div>
         </div>
     );

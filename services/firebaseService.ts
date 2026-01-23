@@ -15,6 +15,7 @@ import {
     orderBy,
     where,
     updateDoc,
+    addDoc,
     initializeFirestore
 } from 'firebase/firestore';
 import { firebaseConfig } from '../config/firebase.config';
@@ -577,8 +578,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
                 // We will use a dedicated endpoint or the Relayer.
                 // For MVP: We call a new helper 'adminDistribute'
 
-                await contractService.sendGaslessTokens(walletAddress, distributionAmount.toString(),
-                    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"); // Using Admin Key for Distribution
+                await contractService.adminSendVCN(walletAddress, distributionAmount.toString());
 
                 // Update Flag
                 await setDoc(tokenSaleRef, {
@@ -634,7 +634,7 @@ export const getTokenSaleParticipants = async (limitCount = 500): Promise<TokenS
 export interface ApiKeyData {
     id: string;
     name: string;
-    provider: 'gemini' | 'openai' | 'anthropic';
+    provider: 'gemini' | 'openai' | 'anthropic' | 'deepseek';
     key: string;
     isActive: boolean;
     isValid: boolean;
@@ -679,13 +679,26 @@ export const getActiveApiKey = async (provider: string = 'gemini'): Promise<stri
 };
 
 // Chatbot Settings
+export interface BotConfig {
+    systemPrompt: string;
+    model: string;
+    temperature: number;
+    maxTokens: number;
+}
+
 export interface ChatbotSettings {
     knowledgeBase: string;
-    systemPrompt: string;
-    modelSettings: {
-        temperature: number;
-        maxTokens: number;
-        topP: number;
+    intentBot: BotConfig;
+    helpdeskBot: BotConfig;
+    imageSettings: {
+        model: string;
+        quality: string;
+        size: string;
+    };
+    voiceSettings: {
+        model: string;
+        ttsVoice: string;
+        sttModel: string;
     };
 }
 
@@ -693,16 +706,59 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'chatbot');
     const snapshot = await getDoc(docRef);
-    return snapshot.exists() ? snapshot.data() as ChatbotSettings : null;
+    if (!snapshot.exists()) return null;
+
+    const data = snapshot.data();
+    return {
+        knowledgeBase: data.knowledgeBase || '',
+        intentBot: data.intentBot || { systemPrompt: '', model: 'gemini-1.5-flash', temperature: 0.7, maxTokens: 2048 },
+        helpdeskBot: data.helpdeskBot || { systemPrompt: '', model: 'gemini-1.5-flash', temperature: 0.7, maxTokens: 2048 },
+        imageSettings: data.imageSettings || { model: 'gemini-1.5-pro', quality: 'standard', size: '1k' },
+        voiceSettings: data.voiceSettings || { model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'gemini-1.5-flash' }
+    } as ChatbotSettings;
 };
 
 export const saveChatbotSettings = async (settings: ChatbotSettings): Promise<void> => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'chatbot');
-    await setDoc(docRef, settings);
+    await setDoc(docRef, settings, { merge: true });
 };
 
-// ==================== VCN Distribution Functions ====================
+export const getActiveGlobalApiKey = async (provider: string = 'gemini'): Promise<string | null> => {
+    const db = getFirebaseDb();
+    const keysCollection = collection(db, 'settings', 'api_keys', 'keys');
+    const snapshot = await getDocs(keysCollection);
+    const keys = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ApiKeyData));
+    const activeKey = keys.find(k => k.isActive && k.isValid && k.provider === provider && !((k as any).deleted));
+    return activeKey?.key || null;
+};
+
+export interface AiConversation {
+    id: string;
+    userId: string;
+    botType: 'intent' | 'helpdesk';
+    messages: { role: 'user' | 'assistant'; text: string; timestamp: string }[];
+    lastMessage: string;
+    createdAt: string;
+    status: 'completed' | 'ongoing' | 'error';
+}
+
+export const saveConversation = async (conversation: Omit<AiConversation, 'id'>): Promise<string> => {
+    const db = getFirebaseDb();
+    const docRef = await addDoc(collection(db, 'conversations'), {
+        ...conversation,
+        createdAt: new Date().toISOString()
+    });
+    return docRef.id;
+};
+
+export const getRecentConversations = async (limitCount: number = 20): Promise<AiConversation[]> => {
+    const db = getFirebaseDb();
+    const conversationsCollection = collection(db, 'conversations');
+    const q = query(conversationsCollection, orderBy('createdAt', 'desc'), limit(limitCount));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AiConversation));
+};
 
 export interface VcnPurchase {
     id?: string;

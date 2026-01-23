@@ -1,16 +1,26 @@
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
+import { getChatbotSettings } from './firebaseService';
 
 interface DeepSeekMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
 }
 
-export const generateTextDeepSeek = async (prompt: string, apiKey: string, model: string = 'deepseek-chat'): Promise<string> => {
+export const generateTextDeepSeek = async (
+    prompt: string,
+    apiKey: string,
+    model: string = 'deepseek-chat',
+    botType: 'intent' | 'helpdesk' = 'intent'
+): Promise<string> => {
     try {
         if (!apiKey) throw new Error("API Key is missing for DeepSeek.");
 
+        const settings = await getChatbotSettings();
+        const botConfig = botType === 'helpdesk' ? settings?.helpdeskBot : settings?.intentBot;
+        const systemInstruction = botConfig?.systemPrompt || VISION_CHAIN_KNOWLEDGE;
+
         const messages: DeepSeekMessage[] = [
-            { role: 'system', content: VISION_CHAIN_KNOWLEDGE },
+            { role: 'system', content: systemInstruction },
             { role: 'user', content: prompt }
         ];
 
@@ -21,10 +31,11 @@ export const generateTextDeepSeek = async (prompt: string, apiKey: string, model
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: model,
+                model: botConfig?.model || model,
                 messages: messages,
                 stream: false,
-                temperature: 0.7
+                temperature: botConfig?.temperature || 0.7,
+                max_tokens: botConfig?.maxTokens || 2048
             })
         });
 
@@ -40,3 +51,4 @@ export const generateTextDeepSeek = async (prompt: string, apiKey: string, model
         throw error;
     }
 };
+

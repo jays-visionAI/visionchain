@@ -100,10 +100,10 @@ export class ContractService {
                     new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
                 ]);
 
-                console.log(`✅ Connected to RPC: ${rpcUrl}`);
+                console.log(`[Success] Connected to RPC: ${rpcUrl}`);
                 return provider;
             } catch (e) {
-                console.warn(`❌ RPC Node Failed: ${rpcUrl}. Trying next...`);
+                console.warn(`[Failed] RPC Node Failed: ${rpcUrl}. Trying next...`);
             }
         }
         throw new Error("Critical: All RPC nodes are currently unreachable or blocked by CORS.");
@@ -362,7 +362,7 @@ export class ContractService {
         }
 
         const result = await response.json();
-        console.log("🚀 Gasless Transfer Successful:", result);
+        console.log("Gasless Transfer Successful:", result);
         return result;
     }
 

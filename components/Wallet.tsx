@@ -352,7 +352,7 @@ const Wallet = (): JSX.Element => {
                 if (symbol === 'VCN') {
                     // Use Paymaster (Gasless) Logic for VCN
                     const result = await contractService.sendGaslessTokens(recipient, amount);
-                    console.log("✅ Gasless Send Successful (Fee 1 VCN):", result);
+                    console.log("Gasless Send Successful (Fee 1 VCN):", result);
                 } else {
                     // Standard Send for ETH/Other
                     const receipt = await contractService.sendTokens(recipient, amount, symbol);
@@ -865,7 +865,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 `;
             const fullPrompt = `${context}\n\nUser Question: ${userMessage}\n\nPlease answer the user's question based on their portfolio context if relevant. keep it concise.`;
 
-            const response = await generateText(fullPrompt);
+            const response = await generateText(fullPrompt, undefined, false, 'intent');
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
         } catch (error) {
             console.error('AI Error:', error);
