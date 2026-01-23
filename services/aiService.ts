@@ -41,9 +41,18 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
         model = 'gemini-1.5-flash';
     }
 
-    // 1. If Image is present, FORCE Gemini (DeepSeek is text-only for now in this context)
-    // Or if active provider is Gemini
-    if (imageBase64 || !activeKey || activeKey.provider === 'gemini') {
+    // 1. If Image is present, FORCE Gemini (DeepSeek is text-only for now)
+    if (imageBase64) {
+        return generateTextGemini(prompt, imageBase64, useFastModel);
+    }
+
+    // 2. No Active Key - Prompt User
+    if (!activeKey) {
+        return "⚠️ Vision Chain AI requires an API Key. Please contact the administrator or add your own key in Settings > AI Management.";
+    }
+
+    // 3. Fallback to Gemini if explicitly selected
+    if (activeKey.provider === 'gemini') {
         return generateTextGemini(prompt, imageBase64, useFastModel);
     }
 
