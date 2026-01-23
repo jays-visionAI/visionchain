@@ -44,7 +44,7 @@ export const generateText = async (prompt: string, imageBase64?: string, useFast
       return "⚠️ API key is not configured. Please go to Admin > AI Management > API Keys to add your Gemini API key.";
     }
 
-    let modelName = useFastModel ? 'gemini-1.5-flash' : 'gemini-1.5-pro';
+    let modelName = useFastModel ? 'gemini-1.5-flash' : 'gemini-1.5-flash';
 
     // Switch to Flash for multimodal vision tasks as it has excellent vision capabilities
     if (imageBase64) {
