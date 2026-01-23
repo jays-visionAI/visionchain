@@ -4,6 +4,7 @@ export interface Message {
   type?: 'text' | 'image';
   imageUrl?: string;
   audioData?: string; // Base64 audio data
+  action?: any; // ProposedAction (avoiding import cycle)
 }
 
 export enum AspectRatio {

@@ -6,6 +6,10 @@ import { generateText, generateImage, generateSpeech, getAudioContext, ai, creat
 import { Message, AspectRatio } from '../types';
 import { Modality, LiveServerMessage } from "@google/genai";
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
+import { intentParser } from '../services/intentParserService';
+import { actionResolver } from '../services/actionResolver';
+import TransactionCard from './TransactionCard';
+import { contractService } from '../services/contractService';
 
 interface AIChatProps {
   isOpen: boolean;
@@ -62,7 +66,7 @@ const ImageSkeleton = (): JSX.Element => (
 
 const AIChat = (props: AIChatProps): JSX.Element => {
   const [messages, setMessages] = createSignal<Message[]>([
-    { role: 'model', text: 'Hello. I am the Vision Chain AI Architect. I can analyze images, generate visuals, and answer technical questions.' }
+    { role: 'model', text: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }
   ]);
   const [input, setInput] = createSignal('');
   const [isLoading, setIsLoading] = createSignal(false);
@@ -147,6 +151,34 @@ const AIChat = (props: AIChatProps): JSX.Element => {
           setMessages(prev => [...prev, { role: 'model', text: 'Failed to generate visual. Please try again with a different prompt.' }]);
         }
       } else {
+        // --- VISION CHAIN INTENT PARSER LOGIC ---
+        // 1. Try to parse intent first (unless there is an image attachment, which usually implies question about image)
+        if (!currentAttachment) {
+          const intent = await intentParser.parseIntent(userMsg.text);
+
+          // If we are confident (~80%+), we check if it requires a transaction
+          if (intent.confidence > 0.6 && intent.action !== 'UNKNOWN') {
+            try {
+              // Resolve the action into concrete TX data
+              // Use mock address for now or try to get real one
+              const userAddress = localStorage.getItem('vcn_wallet_address') || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+              const action = await actionResolver.resolve(intent, userAddress);
+
+              setMessages(prev => [...prev, {
+                role: 'model',
+                text: intent.explanation || action.summary,
+                action: action // Pass the proposed action to UI
+              }]);
+              setIsLoading(false);
+              return; // EXIT EARLY to skip Gemini for this turn
+            } catch (err) {
+              console.error("Action Resolution Failed:", err);
+              // Fallthrough to Gemini if resolution fails
+            }
+          }
+        }
+
+        // 2. Fallback to General AI (Gemini)
         let rawBase64 = undefined;
         if (currentAttachment) {
           rawBase64 = currentAttachment.split(',')[1];
@@ -177,6 +209,13 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         srcNode.start();
       } catch (err) { console.error("Audio playback failed", err); }
     }
+  };
+
+  const handleTxComplete = (hash: string) => {
+    setMessages(prev => [...prev, {
+      role: 'model',
+      text: `✅ Transaction Broadcasted! \nHash: ${hash.slice(0, 10)}...${hash.slice(-6)}`
+    }]);
   };
 
   // --- Live API Logic ---
@@ -440,10 +479,21 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                         </div>
                       </Show>
                       <div class="whitespace-pre-wrap">{msg.text}</div>
+
+                      {/* RENDER TRANSACTION CARD IF ACTION EXISTS */}
+                      <Show when={msg.action}>
+                        <div class="mt-4">
+                          <TransactionCard
+                            action={msg.action}
+                            onComplete={handleTxComplete}
+                            onCancel={() => { }}
+                          />
+                        </div>
+                      </Show>
                     </div>
 
                     {/* Message Actions (Model Only) */}
-                    <Show when={msg.role === 'model' && msg.type !== 'image'}>
+                    <Show when={msg.role === 'model' && msg.type !== 'image' && !msg.action}>
                       <div class="flex items-center gap-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => playTTS(msg.text)} class="text-gray-500 hover:text-blue-400 flex items-center gap-1 text-[10px] transition-colors">
                           <Volume2 class="w-3 h-3" /> Read Aloud

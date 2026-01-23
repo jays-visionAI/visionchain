@@ -31,7 +31,7 @@ module.exports = {
         // Vision Chain Custom Testnet v2 (New)
         vision_v2: {
             url: "https://rpc.visionchain.co",
-            chainId: 3151909,
+            chainId: 1337,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
         },
         // Ethereum Sepolia Testnet

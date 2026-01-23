@@ -1,59 +1,43 @@
-# Vision Chain Testnet Upgrade Roadmap
+# Vision Chain Hybrid Interop & Secure Infrastructure Roadmap
 
-This document outlines the strategic development plan to upgrade the current **Vision Chain Testnet v2 (Prototype)** to a fully interoperable and robust **Sovereign Layer 1**.
+This document outlines the strategic implementation of the **Vision Hybrid Interop Model**, combining **MPC/TSS (Threshold Signature Schemes)** for ultimate security and **LayerZero** for omnichain connectivity.
 
-## Current Status (v2)
-- **Strengths**: Validated Business Logic (Node Licenses, Mining Pool, Vesting), Fast Iteration.
-- **Weaknesses**: Simulated Infrastructure (Hardhat), No Cross-Chain Capability (Isolated).
-
----
-
-## Phase 1: Interoperability Upgrade (LayerZero Integration)
-**Goal**: Enable VCN tokens to move between Vision Chain and other networks (e.g., Ethereum Sepolia, Polygon Amoy) to fulfill the promise of "Interoperability".
-
-### 1.1 Smart Contract Development
-- [ ] **Deploy LayerZero Endpoint Mock**: For local/testnet testing without relying on external relayers initially.
-- [ ] **Upgrade VCNToken to OFT (Omnichain Fungible Token)**:
-    - Retain current logic but inherit from `OFTV2` (LayerZero standard).
-    - Allow burning VCN on Source Chain -> Minting on Destination Chain.
-- [ ] **Deploy Bridge Contract**: A user interface contract to handle the `send()` function easily.
-
-### 1.2 Frontend Integration
-- [ ] **Bridge UI**: Add a "Bridge" tab in the Wallet.
-- [ ] **Cross-Chain Transaction Handling**: Update `contractService.ts` to estimate cross-chain gas fees (payable in native ETH/MATIC).
-
-**Timeline**: 3-5 Days
-**Outcome**: "Vision Chain is now connected to the world."
+## 🛡️ The Architecture: Vision Hybrid Interop
+Vision Chain does not rely on a single trusted relayer. It uses a three-tier security model:
+1.  **Connectivity Layer**: LayerZero OFT/ONFT for reliable cross-chain messaging.
+2.  **Intelligence Layer**: Vision Equalizer (Global Liquidity Ledger).
+3.  **Security Layer**: MPC/TSS (Threshold Signatures) for Paymaster and Vault controls.
 
 ---
 
-## Phase 2: Infrastructure Hardening (Engine Swap)
-**Goal**: Replace the simulation engine (Hardhat) with a production-grade blockchain client (Geth or Polygon CDK) to match or exceed SimplyFi's infrastructure level.
+## Phase 1: Hybrid Interop Framework (Current)
+**Goal**: Integrate LayerZero with the Vision Equalizer to create a "Message-Driven Ledger".
 
-### 2.1 Server Migration
-- [ ] **Upgrade Server**: Scale vertically (Hetzner CPX41 or dedicated) to support heavy cryptography.
-- [ ] **Deploy Geth / Polygon CDK Node**:
-    - Move away from `hardhat node`.
-    - Run a real EVM client with a genesis block containing our pre-deployed contracts.
-    - Setup a persistent database (LevelDB/RocksDB) so data survives restarts.
+- [ ] **VisionEqualizerV2 Implementation**:
+    - Inherit from LayerZero's `ILayerZeroReceiver`.
+    - Implement virtual credit accounting based on cryptographically verified messages.
+    - Path: `blockchain/contracts/interop/VisionEqualizerV2.sol`
+- [ ] **LayerZero Mock Environment**: Setup local endpoint simulators for rapid testing without external fees.
 
-### 2.2 Explorer Upgrade
-- [ ] **Deploy Blockscout**: Replace manual console logs with a real Block Explorer UI (view transactions, blocks, internal calls).
+## Phase 2: MPC & TSS Security Layer
+**Goal**: Eliminate the "Single Point of Failure" in the Bridge and Paymaster.
 
-**Timeline**: 1-2 Weeks
-**Outcome**: "Vision Chain is now a real, persistent blockchain network."
+- [ ] **TSS-Enabled Vision Vault**:
+    - Re-engineer `VisionVault` to require Threshold Signatures (m-of-n).
+    - Support for off-chain TSS compute nodes (simulated by Validator cluster).
+- [ ] **MPC-Powered Paymaster**:
+    - Integrate TSS for gasless transaction signing.
+    - Paymaster funds are only accessible when the Validator consensus (TSS) is met.
+
+## Phase 3: Omnichain VCN (OFT Standard)
+**Goal**: Launch VCN as a native omnichain asset.
+
+- [ ] **VCN-OFT Deployment**: Move VCN to the OFT (Omnichain Fungible Token) standard.
+- [ ] **Cross-Chain Mining**: Allow Node License holders to mine VCN credit on any chain, materialized via the Equalizer.
 
 ---
 
-## Phase 3: Sovereign L1 Maturity (Decentralization)
-**Goal**: Move from a "Single Node" to a "Network".
-
-### 3.1 Validator Expansion
-- [ ] **Onboard Key Partners as Validators**: Allow external entities to run nodes and validate blocks.
-- [ ] **Implement PoA/PoS Consensus**: Move from "Auto-Mine" to real consensus (e.g., IBFT 2.0).
-
-### 3.2 Data Availability layer
-- [ ] **Integrate DA Layer**: For high throughput (optional, depending on load).
-
-**Timeline**: 1 Month+
-**Outcome**: "Vision Chain is a decentralized Sovereign Layer 1."
+## Technical Targets
+- **Consensus**: PoA transitioning to PoV (Proof of Visibility).
+- **Security**: Zero single-key dependence for $1M+ TVL.
+- **Performance**: 2,000+ Sustainable TPS with asynchronus TSS signing.

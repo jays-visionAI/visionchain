@@ -48,6 +48,7 @@ import {
     VcnPurchase
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
+import AIChat from './AIChat';
 import { generateText } from '../services/geminiService';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
@@ -132,6 +133,7 @@ const Wallet = (): JSX.Element => {
     const auth = useAuth();
     // State Declarations
     const [activeView, setActiveView] = createSignal('assets');
+    const [showChat, setShowChat] = createSignal(false);
     const [assetsTab, setAssetsTab] = createSignal('portfolio');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
@@ -339,7 +341,7 @@ const Wallet = (): JSX.Element => {
                 // 3. Execute Send
                 if (symbol === 'VCN') {
                     // Use Paymaster (Gasless) Logic for VCN
-                    const result = await contractService.sendGaslessTokens(recipient, amount, privateKey);
+                    const result = await contractService.sendGaslessTokens(recipient, amount);
                     console.log("✅ Gasless Send Successful (Fee 1 VCN):", result);
                 } else {
                     // Standard Send for ETH/Other
@@ -996,6 +998,18 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                 </button>
                             </div>
 
+                            {/* AI Architect Button (Global) */}
+                            <div class="px-4 pb-2">
+                                <button
+                                    onClick={() => setShowChat(true)}
+                                    disabled={onboardingStep() > 0}
+                                    class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 rounded-xl text-white font-medium transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    <Sparkles class="w-4 h-4 text-purple-200" />
+                                    AI Architect
+                                </button>
+                            </div>
+
                             {/* Navigation */}
                             <nav class="flex-1 px-3 py-2 space-y-1">
                                 <For each={menuItems}>
@@ -1510,6 +1524,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <span class="text-[12px] font-bold text-white">0.002 VCN</span>
                                             </div>
                                         </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -4040,6 +4055,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             </div>
                         </Show>
                     </Presence>
+                    <AIChat isOpen={showChat()} onClose={() => setShowChat(false)} />
                 </main>
             </section >
         </Show>
