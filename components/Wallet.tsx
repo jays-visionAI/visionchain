@@ -236,12 +236,7 @@ const Wallet = (): JSX.Element => {
             alert('Failed to copy to clipboard. Please try selecting the words manually.');
         }
     };
-    const [contacts, setContacts] = createSignal([
-        { id: 1, name: 'Alex Rivers', address: '0x742d...44e', avatar: 'AR', isUser: true, isFavorite: true },
-        { id: 2, name: 'Sarah Chen', address: '0x123c...89a', avatar: 'SC', isUser: true, isFavorite: true },
-        { id: 3, name: 'Jordan Smith', address: '0x987b...55d', avatar: 'JS', isUser: false, isFavorite: false },
-        { id: 4, name: 'Elena Vance', address: '0x456e...22b', avatar: 'EV', isUser: true, isFavorite: false },
-    ]);
+    const [contacts, setContacts] = createSignal([]);
     const [sidebarOpen, setSidebarOpen] = createSignal(false);
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
@@ -453,8 +448,7 @@ const Wallet = (): JSX.Element => {
     // User's actual holdings (will be updated via fetchPortfolioData)
     const [userHoldings, setUserHoldings] = createSignal({
         VCN: 0,
-        ETH: 0,
-        USDC: 0
+        ETH: 0
     });
 
     const shortAddress = () => {
@@ -692,8 +686,7 @@ const Wallet = (): JSX.Element => {
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
             'VCN': { name: 'Vision Chain', price: 0.375 },
-            'ETH': { name: 'Ethereum', price: 3200.00 },
-            'USDC': { name: 'USDC', price: 1.00 }
+            'ETH': { name: 'Ethereum', price: 3200.00 }
         };
 
         const config = staticPrices[symbol] || { name: symbol, price: 0 };
@@ -713,7 +706,7 @@ const Wallet = (): JSX.Element => {
 
     const totalValue = () => {
         let total = 0;
-        ['VCN', 'ETH', 'USDC'].forEach(symbol => {
+        ['VCN'].forEach(symbol => {
             const asset = getAssetData(symbol);
             total += asset.balance * asset.price;
         });
@@ -813,11 +806,7 @@ const Wallet = (): JSX.Element => {
         setTimeout(() => {
             setIsImporting(false);
             setImportStep(0);
-            const newContacts = [
-                { id: Date.now(), name: 'Sam Taylor', address: '0x321a...88b', avatar: 'ST', isUser: false, isFavorite: false },
-                { id: Date.now() + 1, name: 'Lisa Ray', address: '0x654f...11c', avatar: 'LR', isUser: true, isFavorite: false },
-            ];
-            setContacts([...contacts(), ...newContacts]);
+            setContacts([...contacts()]);
         }, 4500);
     };
 
@@ -1161,6 +1150,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                 setActiveView('profile');
                                 setOnboardingStep(2);
                             }}
+                            walletAddress={walletAddress}
                         />
                     </Show>
 
@@ -2090,7 +2080,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             <div>
                                                                 <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
                                                                 <div class="grid grid-cols-3 gap-2">
-                                                                    <For each={['VCN', 'ETH', 'USDC']}>
+                                                                    <For each={['VCN']}>
                                                                         {(symbol) => (
                                                                             <button
                                                                                 onClick={() => setSelectedToken(symbol)}

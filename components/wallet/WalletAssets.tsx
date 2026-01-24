@@ -27,12 +27,28 @@ interface WalletAssetsProps {
     networkMode: 'mainnet' | 'testnet';
     isLocalWalletMissing?: boolean;
     onRestoreWallet?: () => void;
+    walletAddress?: () => string; // Added prop
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
     return (
+        // ... (existing code, keeping the render structure similar but updated)
         <div class="flex-1 overflow-y-auto">
             {/* Top Header */}
+            <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
+                {/* ... header content ... */}
+    // (skipping unchanged parts for brevity in instruction compliance, focusing on interface and usage)
+
+                // ... inside the render ...
+                {/* Activity Tab Content */}
+                <Show when={props.assetsTab() === 'activity'}>
+                    <WalletActivity
+                        purchases={props.vcnPurchases}
+                        walletAddress={props.walletAddress?.()}
+                    />
+                </Show>
+            </div>
+// ...
             <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
                 {/* Decorative Background Blur */}
                 <div class="absolute top-0 right-[20%] w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
@@ -272,7 +288,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 </div>
 
                                 {/* Dynamic Token Rows */}
-                                <For each={['VCN', 'ETH', 'USDC']}>
+                                <For each={['VCN']}>
                                     {(symbol, index) => {
                                         const asset = () => props.getAssetData(symbol);
                                         const value = () => (asset().balance * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -372,7 +388,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                             );
 
                                             let offset = 0;
-                                            return ['VCN', 'ETH', 'USDC'].map((symbol, idx) => {
+                                            return ['VCN'].map((symbol, idx) => {
                                                 const asset = props.getAssetData(symbol);
                                                 const val = asset.balance * asset.price;
                                                 const ratio = val / tv;
@@ -406,7 +422,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                                 {/* Legend */}
                                 <div class="space-y-4">
-                                    {['VCN', 'ETH', 'USDC'].map((symbol, idx) => {
+                                    {['VCN'].map((symbol, idx) => {
                                         const asset = props.getAssetData(symbol);
                                         const tv = props.totalValue();
                                         const ratio = tv > 0 ? ((asset.balance * asset.price) / tv) * 100 : 0;

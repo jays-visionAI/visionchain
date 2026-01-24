@@ -18,16 +18,15 @@ const ADDRESSES = {
     VCN_PAYMASTER: "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",    // PaymasterV2 (Diagnostic Smart Relayer)
     VISION_PROFILE_REGISTRY: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c", // AI Registry
 
-    // Vision Chain RPC Resource Pool (Added for high-availability)
+    // Vision Chain RPC Resource Pool (High Availability)
     RPC_NODES: [
-        "https://api.visionchain.co/rpc-proxy", // Resilient Proxy (Express-based)
-        "https://api.visionchain.co",           // Root API
-        "https://rpc.visionchain.co",           // Primary Domain
-        "http://46.224.221.201:8545",           // Direct Node #1
-        "https://api.visionchain.co/rpc"        // Direct Node #2 (Load Balanced)
+        "http://46.224.221.201:3000/rpc-proxy", // Shared Sequencer Proxy (CORS Enabled)
+        "http://46.224.221.201:8545",           // Direct Node Fallback
+        "https://api.visionchain.co/rpc-proxy",
+        "https://rpc.visionchain.co"
     ],
-    RPC_URL: "https://api.visionchain.co/rpc-proxy",
-    SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
+    RPC_URL: "http://46.224.221.201:3000/rpc-proxy",
+    SEQUENCER_URL: "http://46.224.221.201:3000/rpc/submit",
 
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
