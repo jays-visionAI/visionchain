@@ -95,6 +95,7 @@ interface AssetData {
     symbol: string;
     name: string;
     balance: number;
+    liquidBalance: number; // Added to distinguish transferable tokens
     image: string | null;
     price: number;
     change24h: number;
@@ -196,6 +197,7 @@ const Wallet = (): JSX.Element => {
     const [isRestoring, setIsRestoring] = createSignal(false);
     const [lastTxHash, setLastTxHash] = createSignal('');
     const [loadingMessage, setLoadingMessage] = createSignal('LOADING WALLET');
+    const [purchasedVcn, setPurchasedVcn] = createSignal(0);
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -642,6 +644,9 @@ const Wallet = (): JSX.Element => {
                 progress
             });
 
+            // Update purchased amount (Exception to Zero Mock rule as it's contractual)
+            setPurchasedVcn(total);
+
             // CRITICAL: We NO LONGER set userHoldings from Firebase 'total'.
             // Liquid wallet balance must be strictly from the blockchain.
 
@@ -679,8 +684,10 @@ const Wallet = (): JSX.Element => {
     const getAssetData = (symbol: string): AssetData => {
         let balance = (userHoldings() as any)[symbol] || 0;
 
-        // Note: Real balances are fetched in fetchPortfolioData from on-chain RPC.
-        // We do NOT use any mock multipliers or Firebase fallbacks for liquid balance display.
+        // VCN Exception: Total balance includes purchased (vesting) tokens as per user requirement.
+        if (symbol === 'VCN') {
+            balance += purchasedVcn();
+        }
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
@@ -695,6 +702,7 @@ const Wallet = (): JSX.Element => {
             symbol,
             name: config.name,
             balance,
+            liquidBalance: (userHoldings() as any)[symbol] || 0, // Keep track of liquid for Send modal
             image: null,
             price: config.price,
             change24h: 0,
@@ -2108,10 +2116,10 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <div class="flex items-center justify-between mb-2 px-1">
                                                                     <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Amount</label>
                                                                     <span
-                                                                        onClick={() => setSendAmount(getAssetData(selectedToken()).balance.toString())}
+                                                                        onClick={() => setSendAmount(getAssetData(selectedToken()).liquidBalance.toString())}
                                                                         class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors"
                                                                     >
-                                                                        Max: {getAssetData(selectedToken()).balance.toLocaleString()}
+                                                                        Available: {getAssetData(selectedToken()).liquidBalance.toLocaleString()} {selectedToken()}
                                                                     </span>
                                                                 </div>
                                                                 <div class="relative">
