@@ -37,7 +37,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                 {/* Decorative Background Blur */}
                 <div class="absolute top-0 right-[20%] w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
 
-                <div class="max-w-[1440px] mx-auto px-8 py-10 pt-20">
+                <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-8 md:py-10 pt-16 md:pt-20">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                         <div class="relative group">
                             <div class="text-[11px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-2">Total Portfolio Value</div>
@@ -94,7 +94,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
 
             {/* Main Content */}
-            <div class="max-w-[1440px] mx-auto px-8 py-10">
+            <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-6 md:py-10">
                 {/* Wallet Out-of-Sync / Missing Local Data Warning */}
                 <Show when={props.isLocalWalletMissing}>
                     <div class="mb-8 p-6 bg-amber-500/10 border border-amber-500/30 rounded-[24px] flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-md shadow-2xl">
@@ -153,9 +153,9 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shadow-inner">
                                     <WalletIcon class="w-5 h-5" />
                                 </div>
-                                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Purchased (VCN)</span>
+                                <span class="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest">Purchased (VCN)</span>
                             </div>
-                            <div class="text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-blue-400 transition-colors">
+                            <div class="text-2xl md:text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-blue-400 transition-colors">
                                 {props.portfolioStats().total.toLocaleString()}
                             </div>
                         </div>
@@ -263,12 +263,12 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         <Show when={props.assetsTab() === 'tokens'}>
                             <div class="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/[0.06] rounded-[24px] overflow-hidden shadow-2xl backdrop-blur-sm">
                                 {/* Table Header */}
-                                <div class="flex items-center px-8 py-4 border-b border-white/[0.04] text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] min-w-[600px] bg-white/[0.01]">
-                                    <div class="flex-1 min-w-[200px]">Asset</div>
-                                    <div class="w-24 text-right hidden sm:block">Market Price</div>
-                                    <div class="w-24 text-right hidden sm:block">24h Change</div>
-                                    <div class="w-32 text-right">User Holdings</div>
-                                    <div class="w-32 text-right">Total Value</div>
+                                <div class="flex items-center px-4 sm:px-8 py-4 border-b border-white/[0.04] text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest md:tracking-[0.2em] min-w-[500px] md:min-w-[600px] bg-white/[0.01]">
+                                    <div class="flex-1 min-w-[150px] md:min-w-[200px]">Asset</div>
+                                    <div class="w-20 md:w-24 text-right hidden sm:block">Market Price</div>
+                                    <div class="w-20 md:w-24 text-right hidden lg:block">24h Change</div>
+                                    <div class="w-28 md:w-32 text-right">User Holdings</div>
+                                    <div class="w-28 md:w-32 text-right">Total Value</div>
                                 </div>
 
                                 {/* Dynamic Token Rows */}
@@ -279,62 +279,60 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         const isLast = () => index() === 2;
 
                                         return (
-                                            <div class={`flex items-center px-8 py-6 ${!isLast() ? 'border-b border-white/[0.03]' : ''} hover:bg-white/[0.03] transition-all duration-300 cursor-pointer min-w-[600px] group/row`}>
+                                            <div class={`flex items-center px-4 sm:px-8 py-4 md:py-6 ${!isLast() ? 'border-b border-white/[0.03]' : ''} hover:bg-white/[0.03] transition-all duration-300 cursor-pointer min-w-[500px] md:min-w-[600px] group/row`}>
                                                 {/* Token Info */}
-                                                <div class="flex-1 min-w-[200px] flex items-center gap-4">
+                                                <div class="flex-1 min-w-[150px] md:min-w-[200px] flex items-center gap-3 md:gap-4">
                                                     <div class="relative">
                                                         <Show when={asset().image} fallback={
-                                                            <div class={`w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-lg ${symbol === 'VCN' ? 'bg-gradient-to-br from-blue-500 to-cyan-400' :
+                                                            <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0 shadow-lg ${symbol === 'VCN' ? 'bg-gradient-to-br from-blue-500 to-cyan-400' :
                                                                 symbol === 'ETH' ? 'bg-gradient-to-br from-purple-500 to-indigo-400' :
                                                                     'bg-gradient-to-br from-green-500 to-emerald-400'
                                                                 }`}>
                                                                 {symbol.charAt(0)}
                                                             </div>
                                                         }>
-                                                            <img src={asset().image!} alt={symbol} class="w-12 h-12 rounded-2xl flex-shrink-0 shadow-lg group-hover/row:scale-105 transition-transform" />
+                                                            <img src={asset().image!} alt={symbol} class="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex-shrink-0 shadow-lg group-hover/row:scale-105 transition-transform" />
                                                         </Show>
-                                                        <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] border-2 border-[#0a0a0b] overflow-hidden">
+                                                        <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-[#0a0a0b] border-2 border-[#0a0a0b] overflow-hidden">
                                                             <div class={`w-full h-full ${asset().change24h > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
                                                         </div>
                                                     </div>
                                                     <div class="min-w-0">
-                                                        <div class="text-[17px] font-bold text-white group-hover/row:text-blue-400 transition-colors uppercase tracking-wide">{symbol}</div>
-                                                        <div class="text-[12px] text-gray-500 font-medium truncate tracking-tight">{asset().name}</div>
+                                                        <div class="text-[15px] md:text-[17px] font-bold text-white group-hover/row:text-blue-400 transition-colors uppercase tracking-wide">{symbol}</div>
+                                                        <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{asset().name}</div>
                                                     </div>
                                                 </div>
                                                 {/* Price */}
-                                                <div class="w-24 text-right hidden sm:block">
+                                                <div class="w-20 md:w-24 text-right hidden sm:block">
                                                     <Show when={!asset().isLoading} fallback={
-                                                        <div class="h-5 w-16 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
+                                                        <div class="h-4 md:h-5 w-14 md:w-16 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
                                                     }>
-                                                        <span class="text-base font-medium text-white group-hover/row:text-white transition-colors">
+                                                        <span class="text-sm md:text-base font-medium text-white group-hover/row:text-white transition-colors">
                                                             ${asset().price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                            {symbol === 'VCN' && <span class="text-[11px] text-gray-500 ml-1">/ VCN</span>}
                                                         </span>
                                                     </Show>
                                                 </div>
                                                 {/* 24h Change */}
-                                                <div class="w-24 text-right hidden sm:block text-right">
+                                                <div class="w-20 md:w-24 text-right hidden lg:block">
                                                     <Show when={!asset().isLoading} fallback={
-                                                        <div class="h-5 w-12 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
+                                                        <div class="h-4 md:h-5 w-10 md:w-12 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
                                                     }>
-                                                        <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[13px] ${asset().change24h > 0 ? 'text-green-400 bg-green-500/5' : asset().change24h < 0 ? 'text-red-400 bg-red-500/5' : 'text-gray-400 bg-gray-500/5'}`}>
-                                                            {asset().change24h > 0 ? <TrendingUp class="w-3 h-3" /> : ''}
+                                                        <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[12px] md:text-[13px] ${asset().change24h > 0 ? 'text-green-400 bg-green-500/5' : asset().change24h < 0 ? 'text-red-400 bg-red-500/5' : 'text-gray-400 bg-gray-500/5'}`}>
                                                             {asset().change24h.toFixed(1)}%
                                                         </div>
                                                     </Show>
                                                 </div>
                                                 {/* Holdings */}
-                                                <div class="w-32 text-right">
-                                                    <div class="text-[16px] font-bold text-white tabular-nums tracking-wide">{asset().balance.toLocaleString()}</div>
-                                                    <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest">{symbol}</div>
+                                                <div class="w-28 md:w-32 text-right">
+                                                    <div class="text-[14px] md:text-[16px] font-bold text-white tabular-nums tracking-wide">{asset().balance.toLocaleString()}</div>
+                                                    <div class="text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{symbol}</div>
                                                 </div>
                                                 {/* Value */}
-                                                <div class="w-32 text-right">
+                                                <div class="w-28 md:w-32 text-right">
                                                     <Show when={!asset().isLoading} fallback={
-                                                        <div class="h-5 w-20 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
+                                                        <div class="h-4 md:h-5 w-16 md:w-20 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
                                                     }>
-                                                        <span class="text-[18px] font-bold text-white tabular-nums drop-shadow-sm">{value()}</span>
+                                                        <span class="text-[15px] md:text-[18px] font-bold text-white tabular-nums drop-shadow-sm">{value()}</span>
                                                     </Show>
                                                 </div>
                                             </div>

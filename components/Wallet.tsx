@@ -1008,10 +1008,10 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                 />
 
                 {/* Main Content Area */}
-                <main class="flex-1 flex flex-col h-[calc(100vh-56px)] transition-all duration-300 relative ml-0 lg:ml-[280px]">
+                <main class="flex-1 flex flex-col h-[calc(100vh-56px)] transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden">
 
                     {/* Top Bar */}
-                    <div class="flex items-center gap-4 px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-14 z-20">
+                    <div class="flex items-center gap-4 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-14 z-20">
                         <button
                             onClick={() => {
                                 if (onboardingStep() === 0) setSidebarOpen(!sidebarOpen());
@@ -1686,43 +1686,43 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
                                     {/* Step 4: Success/Done - Match image 3 */}
                                     <Match when={onboardingStep() === 4}>
-                                        <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto">
+                                        <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="w-full max-w-xl mx-auto px-4 md:px-0">
                                             <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
-                                                <div class="bg-gradient-to-b from-green-900/20 to-transparent p-12 flex flex-col items-center text-center">
+                                                <div class="bg-gradient-to-b from-green-900/20 to-transparent p-6 md:p-12 flex flex-col items-center text-center">
                                                     <div class="w-14 h-14 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
                                                         <Check class="w-8 h-8 text-green-400" />
                                                     </div>
-                                                    <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Account Created</h2>
-                                                    <p class="text-gray-400 font-medium">Your Vision Chain Account has been successfully created</p>
+                                                    <h2 class="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">Account Created</h2>
+                                                    <p class="text-gray-400 font-medium text-sm md:text-base">Your Vision Chain Account has been successfully created</p>
                                                 </div>
 
-                                                <div class="p-8 space-y-6">
-                                                    <div class="p-6 bg-white/[0.02] border border-white/[0.05] rounded-3xl space-y-4">
+                                                <div class="p-6 md:p-8 space-y-6">
+                                                    <div class="p-5 md:p-6 bg-white/[0.02] border border-white/[0.05] rounded-3xl space-y-4">
                                                         <div class="space-y-2">
-                                                            <label class="text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Your Wallet Address</label>
-                                                            <div class="flex items-center gap-3 p-4 bg-black/40 rounded-2xl border border-white/[0.05] group">
-                                                                <code class="flex-1 font-mono text-xs text-green-400 truncate">{walletAddress()}</code>
-                                                                <button onClick={copyAddress} class="p-2 hover:bg-white/5 rounded-lg transition-all">
+                                                            <label class="text-[10px] md:text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Your Wallet Address</label>
+                                                            <div class="flex items-center gap-2 md:gap-3 p-3 md:p-4 bg-black/40 rounded-2xl border border-white/[0.05] group overflow-hidden">
+                                                                <code class="flex-1 font-mono text-[10px] md:text-xs text-green-400 break-all">{walletAddress()}</code>
+                                                                <button onClick={copyAddress} class="p-2 hover:bg-white/5 rounded-lg transition-all shrink-0">
                                                                     <Copy class="w-3.5 h-3.5 text-gray-500 group-hover:text-white" />
                                                                 </button>
                                                             </div>
                                                         </div>
 
                                                         <div class="pt-4 border-t border-white/[0.05] space-y-3">
-                                                            <div class="flex items-center justify-between text-[13px]">
+                                                            <div class="flex items-center justify-between text-[11px] md:text-[13px]">
                                                                 <span class="font-bold text-gray-500">Wallet Details</span>
                                                             </div>
-                                                            <div class="flex items-center justify-between">
-                                                                <span class="text-xs text-gray-400">Network:</span>
-                                                                <span class="text-xs font-bold text-white">VisionChain Mainnet</span>
+                                                            <div class="flex items-center justify-between gap-4">
+                                                                <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Network:</span>
+                                                                <span class="text-[10px] md:text-xs font-bold text-white text-right break-words max-w-[150px] md:max-w-none">VisionChain Mainnet</span>
                                                             </div>
-                                                            <div class="flex items-center justify-between">
-                                                                <span class="text-xs text-gray-400">Type:</span>
-                                                                <span class="text-xs font-bold text-white">HD Wallet</span>
+                                                            <div class="flex items-center justify-between gap-4">
+                                                                <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Type:</span>
+                                                                <span class="text-[10px] md:text-xs font-bold text-white text-right">HD Wallet</span>
                                                             </div>
-                                                            <div class="flex items-center justify-between">
-                                                                <span class="text-xs text-gray-400">Created:</span>
-                                                                <span class="text-xs font-bold text-white">{new Date().toLocaleDateString()}</span>
+                                                            <div class="flex items-center justify-between gap-4">
+                                                                <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Created:</span>
+                                                                <span class="text-[10px] md:text-xs font-bold text-white text-right">{new Date().toLocaleDateString()}</span>
                                                             </div>
                                                         </div>
                                                     </div>
