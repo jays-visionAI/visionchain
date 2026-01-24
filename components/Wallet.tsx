@@ -2170,7 +2170,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             </p>
                                                             <div class="w-full space-y-3">
                                                                 <a
-                                                                    href={`https://visionscan.org/tx/${lastTxHash()}`}
+                                                                    href={`/visionscan?tx=${lastTxHash()}`}
                                                                     target="_blank"
                                                                     class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none"
                                                                 >
