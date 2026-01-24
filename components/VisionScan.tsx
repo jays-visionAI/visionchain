@@ -181,8 +181,8 @@ export default function VisionScan() {
                         const tx = data[0];
                         const formatted = {
                             hash: tx.hash,
-                            type: tx.type,
-                            method: tx.metadata?.method || 'Unknown',
+                            type: tx.type || 'S200',
+                            method: tx.metadata?.method || (tx.type === 'Transfer' ? 'Transfer (A110)' : 'Smart Contract Execution'),
                             from: tx.from_addr,
                             to: tx.to_addr,
                             value: tx.value,
@@ -193,13 +193,13 @@ export default function VisionScan() {
                             counterparty: tx.metadata?.counterparty || (tx.to_addr?.slice(0, 10) + '...'),
                             timestamp: tx.timestamp,
                             confidence: tx.metadata?.confidence || 100,
-                            trustStatus: tx.metadata?.trustStatus || 'inferred',
+                            trustStatus: tx.metadata?.trustStatus || 'tagged',
                             path: ['Vision Chain'],
-                            accountingBasis: tx.metadata?.accountingBasis || 'Cash',
+                            accountingBasis: tx.metadata?.accountingBasis || 'Accrual',
                             taxCategory: tx.metadata?.taxCategory || 'N/A',
                             netEffect: tx.metadata?.netEffect || [],
                             journalEntries: tx.metadata?.journalEntries || [],
-                            fees: { gas: 0.0001, protocol: 0 }
+                            fees: tx.metadata?.fees || { gas: 0.0001, protocol: 0 }
                         };
                         setSelectedTx(formatted);
                     }

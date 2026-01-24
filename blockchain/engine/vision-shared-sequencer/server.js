@@ -244,6 +244,39 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
             throw new Error(`Fee Transfer Failed: ${e.message}`);
         }
 
+        // 4. Persist to SQLite (VisionScan Indexing)
+        const vcnAmount = ethers.formatUnits(amount, 18);
+        const metadata = {
+            method: 'Transfer (A110)',
+            counterparty: recipient.slice(0, 10) + '...',
+            confidence: 99,
+            trustStatus: 'tagged',
+            accountingBasis: 'Accrual',
+            taxCategory: 'Transfer',
+            netEffect: [
+                { type: 'debit', amount: vcnAmount, asset: 'VCN' },
+                { type: 'credit', amount: vcnAmount, asset: 'VCN' }
+            ],
+            journalEntries: [
+                { account: 'Asset:VCN:Wallet', type: 'Cr', amount: vcnAmount },
+                { account: 'Asset:VCN:Recipient', type: 'Dr', amount: vcnAmount }
+            ]
+        };
+
+        const stmt = db.prepare(`INSERT OR REPLACE INTO transactions (hash, chainId, type, from_addr, to_addr, value, timestamp, metadata_json, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        stmt.run(
+            txTransfer1.hash,
+            1337,
+            'Transfer',
+            user,
+            recipient,
+            vcnAmount,
+            Date.now(),
+            JSON.stringify(metadata),
+            'sequenced'
+        );
+        stmt.finalize();
+
         res.json({
             status: 'success',
             txHashes: {
