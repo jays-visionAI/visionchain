@@ -190,6 +190,8 @@ const Wallet = (): JSX.Element => {
     const [showWalletPassword, setShowWalletPassword] = createSignal(false);
     const [onboardingSuccess, setOnboardingSuccess] = createSignal(false);
     const [referralBonus, setReferralBonus] = createSignal('0');
+    const [isLocalWalletMissing, setIsLocalWalletMissing] = createSignal(false);
+    const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -274,7 +276,7 @@ const Wallet = (): JSX.Element => {
 
     const purchaseNode = async (type: 'Validator' | 'Enterprise') => {
         // Direct to setup if no wallet exists
-        if (!WalletService.hasWallet()) {
+        if (!WalletService.hasWallet(userProfile().email)) {
             alert('Please create or import a wallet first to purchase nodes.');
             setActiveView('profile');
             return;
@@ -301,8 +303,10 @@ const Wallet = (): JSX.Element => {
                 console.log(`Executing internal purchase for ${nodeType}...`);
 
                 // 1. Decrypt Mnemonic
-                const encrypted = WalletService.getEncryptedWallet();
-                if (!encrypted) throw new Error("No encrypted wallet found locally.");
+                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                if (!encrypted) {
+                    throw new Error("Local wallet key not found. You are in view-only mode on this browser. Please restore your wallet using your 15-word recovery phrase to enable spending.");
+                }
 
                 const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
                 if (!WalletService.validateMnemonic(mnemonic)) {
@@ -342,8 +346,11 @@ const Wallet = (): JSX.Element => {
                 setFlowLoading(true);
 
                 // 1. Decrypt Mnemonic
-                const encrypted = WalletService.getEncryptedWallet();
-                const mnemonic = await WalletService.decrypt(encrypted!, walletPassword());
+                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                if (!encrypted) {
+                    throw new Error("Local wallet key not found. You are in view-only mode on this browser. Please restore your wallet using your 15-word recovery phrase to authorize transactions.");
+                }
+                const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
                 const { privateKey } = WalletService.deriveEOA(mnemonic);
 
                 // 2. Connect Internal Wallet
@@ -364,7 +371,10 @@ const Wallet = (): JSX.Element => {
                 setFlowStep(3);
             } else if (action.type === 'claim_rewards') {
                 // 1. Decrypt Mnemonic
-                const encrypted = WalletService.getEncryptedWallet();
+                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                if (!encrypted) {
+                    throw new Error("Local wallet key not found. Please restore your wallet using your recovery phrase to claim rewards.");
+                }
                 const mnemonic = await WalletService.decrypt(encrypted!, walletPassword());
                 const { privateKey } = WalletService.deriveEOA(mnemonic);
 
@@ -392,7 +402,7 @@ const Wallet = (): JSX.Element => {
     };
 
     const claimNodeRewards = async () => {
-        if (!WalletService.hasWallet()) return;
+        if (!WalletService.hasWallet(userProfile().email)) return;
 
         setPasswordMode('verify');
         setPendingAction({ type: 'claim_rewards' });
@@ -473,7 +483,8 @@ const Wallet = (): JSX.Element => {
                 const hasBackendWallet = !!data.walletAddress;
                 // Try to get address from local storage if not in profile
                 const localAddress = localStorage.getItem('vcn_wallet_address');
-                const hasLocalWallet = WalletService.hasWallet();
+                const hasLocalWallet = WalletService.hasWallet(user.email);
+                setIsLocalWalletMissing(hasBackendWallet && !hasLocalWallet);
 
                 if (hasBackendWallet || hasLocalWallet) {
                     const finalAddress = data.walletAddress || localAddress || '';
@@ -496,7 +507,7 @@ const Wallet = (): JSX.Element => {
             } else {
                 // No profile data found in database, but maybe user exists in Auth
                 const localAddress = localStorage.getItem('vcn_wallet_address');
-                if (WalletService.hasWallet()) {
+                if (WalletService.hasWallet(user.email)) {
                     setWalletAddressSignal(localAddress || '');
                     setOnboardingStep(0);
                     setUserProfile(prev => ({ ...prev, isVerified: true, address: localAddress || '' }));
@@ -806,7 +817,7 @@ const Wallet = (): JSX.Element => {
 
             // 2. Encrypt and Save 
             const encrypted = await WalletService.encrypt(mnemonic, walletPassword());
-            WalletService.saveEncryptedWallet(encrypted);
+            WalletService.saveEncryptedWallet(encrypted, userProfile().email);
             // Save address unencrypted for UI consistency
             localStorage.setItem('vcn_wallet_address', address);
 
@@ -898,6 +909,20 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
     const startNewChat = () => {
         setMessages([]);
         setActiveView('chat');
+    };
+
+    const handleRestoreWallet = async () => {
+        const mnemonic = restoringMnemonic().trim().toLowerCase();
+        if (!mnemonic) return;
+
+        if (!WalletService.validateMnemonic(mnemonic)) {
+            alert("Invalid recovery phrase. Please check the words and try again.");
+            return;
+        }
+
+        setSeedPhrase(mnemonic.split(' '));
+        setPasswordMode('setup');
+        setShowPasswordModal(true);
     };
 
     const handleMint = async () => {
@@ -1064,6 +1089,11 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                             vcnPurchases={vcnPurchases}
                             totalValue={totalValue}
                             networkMode={networkMode()}
+                            isLocalWalletMissing={isLocalWalletMissing()}
+                            onRestoreWallet={() => {
+                                setActiveView('profile');
+                                setOnboardingStep(2);
+                            }}
                         />
                     </Show>
 
@@ -1139,10 +1169,10 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     </div>
                                                     <Show when={!userProfile().isVerified}>
                                                         <button
-                                                            onClick={() => setOnboardingStep(1)}
+                                                            onClick={() => setOnboardingStep(0.5)}
                                                             class="px-6 py-3 bg-white text-black rounded-2xl font-bold text-sm hover:bg-white/90 transition-all flex items-center gap-2"
                                                         >
-                                                            Create Wallet
+                                                            Setup Wallet
                                                             <ArrowRight class="w-4 h-4" />
                                                         </button>
                                                         <button onClick={() => setOnboardingStep(3)} class="ml-4 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs rounded-2xl hover:bg-red-500/20 transition-all">
@@ -1222,6 +1252,100 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             <div class="text-2xl font-black">0d</div>
                                                             <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Age</div>
                                                         </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </Motion.div>
+                                    </Match>
+
+                                    {/* Step 0.5: Choice Screen */}
+                                    <Match when={onboardingStep() === 0.5}>
+                                        <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto py-12">
+                                            <div class="text-center mb-10">
+                                                <h2 class="text-3xl font-black text-white mb-2">Wallet Setup</h2>
+                                                <p class="text-gray-400 font-medium">Choose how you want to set up your Vision ID</p>
+                                            </div>
+
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <button
+                                                    onClick={() => { generateSeedPhrase(); setOnboardingStep(1); }}
+                                                    class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-blue-500/50 transition-all group relative overflow-hidden"
+                                                >
+                                                    <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                                                        <Plus class="w-20 h-20 text-blue-400" />
+                                                    </div>
+                                                    <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                                        <Plus class="w-6 h-6 text-blue-400" />
+                                                    </div>
+                                                    <div class="text-xl font-bold text-white mb-2">Create New</div>
+                                                    <p class="text-sm text-gray-500 leading-relaxed">Generate a new 15-word recovery phrase for your account.</p>
+                                                </button>
+
+                                                <button
+                                                    onClick={() => setOnboardingStep(2)}
+                                                    class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-cyan-500/50 transition-all group relative overflow-hidden"
+                                                >
+                                                    <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                                                        <Download class="w-20 h-20 text-cyan-400" />
+                                                    </div>
+                                                    <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                                        <RefreshCw class="w-6 h-6 text-cyan-400" />
+                                                    </div>
+                                                    <div class="text-xl font-bold text-white mb-2">Restore Wallet</div>
+                                                    <p class="text-sm text-gray-500 leading-relaxed">Import an existing wallet using your 15-word phrase.</p>
+                                                </button>
+                                            </div>
+
+                                            <div class="text-center mt-8">
+                                                <button onClick={() => setOnboardingStep(0)} class="text-gray-500 font-bold hover:text-white transition-colors text-sm uppercase tracking-widest">Cancel</button>
+                                            </div>
+                                        </Motion.div>
+                                    </Match>
+
+                                    {/* Step 2: Restore Input */}
+                                    <Match when={onboardingStep() === 2}>
+                                        <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto py-12">
+                                            <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[32px] overflow-hidden shadow-2xl">
+                                                <div class="bg-gradient-to-b from-cyan-900/10 to-transparent p-10 flex flex-col items-center text-center">
+                                                    <div class="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                                                        <RefreshCw class="w-8 h-8 text-cyan-400" />
+                                                    </div>
+                                                    <h2 class="text-3xl font-black text-white mb-2">Restore Wallet</h2>
+                                                    <p class="text-gray-400 font-medium">Enter your 15-word recovery phrase</p>
+                                                </div>
+
+                                                <div class="p-8 space-y-6">
+                                                    <div>
+                                                        <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Recovery Phrase</label>
+                                                        <textarea
+                                                            spellcheck={false}
+                                                            rows="4"
+                                                            placeholder="Enter 15 words separated by spaces..."
+                                                            value={restoringMnemonic()}
+                                                            onInput={(e) => setRestoringMnemonic(e.currentTarget.value)}
+                                                            class="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed"
+                                                        />
+                                                    </div>
+
+                                                    <div class="flex items-center gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
+                                                        <Info class="w-4 h-4 text-blue-400 shrink-0" />
+                                                        <p class="text-[12px] text-blue-300 font-medium">Ensure you have no extra spaces and all words are spelled correctly.</p>
+                                                    </div>
+
+                                                    <div class="flex gap-4">
+                                                        <button
+                                                            onClick={() => setOnboardingStep(0.5)}
+                                                            class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+                                                        >
+                                                            Back
+                                                        </button>
+                                                        <button
+                                                            onClick={handleRestoreWallet}
+                                                            disabled={!restoringMnemonic().trim() || restoringMnemonic().trim().split(/\s+/).length < 15}
+                                                            class="flex-[2] py-4 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        >
+                                                            Verify Phrase
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>

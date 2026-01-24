@@ -72,7 +72,7 @@ export class WalletService {
      */
     static async decrypt(encryptedBase64: string, password: string): Promise<string> {
         if (!encryptedBase64 || encryptedBase64.length < 32) {
-            throw new Error("Invalid or corrupted wallet data.");
+            throw new Error("Local wallet data not found on this device. Please restore your wallet using your 15-word recovery phrase.");
         }
 
         let combined: Uint8Array;
@@ -139,23 +139,27 @@ export class WalletService {
     }
 
     /**
-     * Stores encrypted seed in Local Storage
+     * Stores encrypted seed in Local Storage linked to a specific user account
      */
-    static saveEncryptedWallet(encryptedWallet: string) {
-        localStorage.setItem('vcn_encrypted_wallet', encryptedWallet);
+    static saveEncryptedWallet(encryptedWallet: string, identifier: string) {
+        const key = `vcn_wallet_${btoa(identifier).substring(0, 16)}`;
+        localStorage.setItem(key, encryptedWallet);
+        // Also store the address mapping for quick UI checks
+        localStorage.setItem(`${key}_address_hint`, 'active');
     }
 
     /**
-     * Retrieves encrypted seed from Local Storage
+     * Retrieves encrypted seed from Local Storage for a specific account
      */
-    static getEncryptedWallet(): string | null {
-        return localStorage.getItem('vcn_encrypted_wallet');
+    static getEncryptedWallet(identifier: string): string | null {
+        const key = `vcn_wallet_${btoa(identifier).substring(0, 16)}`;
+        return localStorage.getItem(key);
     }
 
     /**
-     * Checks if a wallet already exists
+     * Checks if a wallet already exists for a specific account
      */
-    static hasWallet(): boolean {
-        return !!this.getEncryptedWallet();
+    static hasWallet(identifier: string): boolean {
+        return !!this.getEncryptedWallet(identifier);
     }
 }

@@ -25,6 +25,8 @@ interface WalletAssetsProps {
     vcnPurchases: () => any[];
     totalValue: () => number;
     networkMode: 'mainnet' | 'testnet';
+    isLocalWalletMissing?: boolean;
+    onRestoreWallet?: () => void;
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
@@ -93,6 +95,31 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
             {/* Main Content */}
             <div class="max-w-[1440px] mx-auto px-8 py-10">
+                {/* Wallet Out-of-Sync / Missing Local Data Warning */}
+                <Show when={props.isLocalWalletMissing}>
+                    <div class="mb-8 p-6 bg-amber-500/10 border border-amber-500/30 rounded-[24px] flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-md shadow-2xl">
+                        <div class="flex items-start gap-4">
+                            <div class="p-3 bg-amber-500/20 rounded-2xl shadow-inner">
+                                <Shield class="w-6 h-6 text-amber-400" />
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white mb-1">Local Wallet Data Missing</h3>
+                                <p class="text-sm text-amber-200/70 leading-relaxed max-w-xl">
+                                    Your account address is recognized, but the encrypted key is not found on this device.
+                                    You are in <span class="text-white font-bold">view-only mode</span>. To send tokens or stake,
+                                    you must restore your wallet using your recovery phrase.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => props.onRestoreWallet?.()}
+                            class="px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 whitespace-nowrap text-sm"
+                        >
+                            Restore Wallet
+                        </button>
+                    </div>
+                </Show>
+
                 {/* Token Info Banner */}
                 <div class="mb-8 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-start gap-3 backdrop-blur-sm">
                     <div class="mt-0.5 p-1.5 bg-blue-500/20 rounded-lg shrink-0">
