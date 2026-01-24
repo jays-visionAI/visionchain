@@ -2066,7 +2066,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Recipient Address</label>
                                                                 <input
                                                                     type="text"
-                                                                    placeholder="0x... or ENS"
+                                                                    placeholder="0x..."
                                                                     value={recipientAddress()}
                                                                     onInput={(e) => setRecipientAddress(e.currentTarget.value)}
                                                                     class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all font-mono text-sm"
