@@ -888,82 +888,85 @@ export default function VisionScan() {
                             </Motion.div>
                         </Show>
                     </div>
-                    {/* Enterprise Export Modal */}
-                    <Show when={isExportModalOpen()}>
-                        <div class="fixed inset-0 z-[200] flex items-center justify-center p-6">
-                            <Motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                onClick={() => setIsExportModalOpen(false)}
-                                class="absolute inset-0 bg-black/90 backdrop-blur-md"
-                            />
-                            <Motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                class="relative w-full max-w-2xl bg-[#0c0c0c] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl shadow-blue-600/10"
-                            >
-                                <div class="p-10">
-                                    <div class="flex items-center justify-between mb-10">
-                                        <div class="flex items-center gap-4">
-                                            <div class="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
-                                                <Download class="w-6 h-6 text-blue-500" />
-                                            </div>
-                                            <div>
-                                                <h2 class="text-2xl font-black italic tracking-tight">EXPORT JOURNAL</h2>
-                                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">GAAP / IFRS-Ready Enterprise Exports</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setIsExportModalOpen(false)}
-                                            class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-                                        >
-                                            <X class="w-5 h-5 text-gray-400" />
-                                        </button>
-                                    </div>
-
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                                        {[
-                                            { title: 'CSV General Ledger', desc: 'Standard spreadsheet format for general accounting.', icon: <FileText class="w-5 h-5 text-gray-400" /> },
-                                            { title: 'XBRL-GL', desc: 'Interactive financial reporting format (XML).', icon: <Database class="w-5 h-5 text-blue-500" /> },
-                                            { title: 'JSON-LD', desc: 'Semantic-web ready auditable records.', icon: <Layers class="w-5 h-5 text-purple-500" /> },
-                                            { title: 'ERP Direct Sync', desc: 'Secure API bridge to NetSuite, SAP, or QuickBooks.', icon: <RefreshCw class="w-5 h-5 text-green-500" /> }
-                                        ].map((opt) => (
-                                            <button class="flex items-start gap-4 p-5 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/5 hover:border-blue-500/30 transition-all group">
-                                                <div class="mt-1">{opt.icon}</div>
-                                                <div>
-                                                    <h4 class="text-sm font-black italic uppercase mb-1 group-hover:text-blue-400 transition-colors">{opt.title}</h4>
-                                                    <p class="text-[10px] text-gray-500 leading-normal">{opt.desc}</p>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6 mb-10">
-                                        <div class="flex items-center gap-3 mb-3">
-                                            <Shield class="w-4 h-4 text-blue-500" />
-                                            <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Audit Evidence Included</span>
-                                        </div>
-                                        <p class="text-[10px] text-gray-400 leading-normal">
-                                            All exports include cryptographically signed evidence hashes, schema versions, and trust provenance metadata for regulators and independent auditors.
-                                        </p>
-                                    </div>
-
-                                    <button
-                                        onClick={runExport}
-                                        disabled={isExporting()}
-                                        class="w-full py-5 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-3"
-                                    >
-                                        <Show when={isExporting()} fallback={<Download class="w-4 h-4" />}>
-                                            <RefreshCw class="w-4 h-4 animate-spin" />
-                                        </Show>
-                                        {isExporting() ? 'Generating Audit Package...' : 'Generate & Download Audit Package'}
-                                    </button>
-                                </div>
-                            </Motion.div>
-                        </div>
-                    </Show>
                 </div>
-                );
+            </main>
+
+            {/* Enterprise Export Modal */}
+            <Show when={isExportModalOpen()}>
+                <div class="fixed inset-0 z-[200] flex items-center justify-center p-6">
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsExportModalOpen(false)}
+                        class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                    />
+                    <Motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                        class="relative w-full max-w-2xl bg-[#0c0c0c] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl shadow-blue-600/10"
+                    >
+                        <div class="p-10">
+                            <div class="flex items-center justify-between mb-10">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
+                                        <Download class="w-6 h-6 text-blue-500" />
+                                    </div>
+                                    <div>
+                                        <h2 class="text-2xl font-black italic tracking-tight">EXPORT JOURNAL</h2>
+                                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">GAAP / IFRS-Ready Enterprise Exports</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setIsExportModalOpen(false)}
+                                    class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                                >
+                                    <X class="w-5 h-5 text-gray-400" />
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                                {[
+                                    { title: 'CSV General Ledger', desc: 'Standard spreadsheet format for general accounting.', icon: <FileText class="w-5 h-5 text-gray-400" /> },
+                                    { title: 'XBRL-GL', desc: 'Interactive financial reporting format (XML).', icon: <Database class="w-5 h-5 text-blue-500" /> },
+                                    { title: 'JSON-LD', desc: 'Semantic-web ready auditable records.', icon: <Layers class="w-5 h-5 text-purple-500" /> },
+                                    { title: 'ERP Direct Sync', desc: 'Secure API bridge to NetSuite, SAP, or QuickBooks.', icon: <RefreshCw class="w-5 h-5 text-green-500" /> }
+                                ].map((opt) => (
+                                    <button class="flex items-start gap-4 p-5 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/5 hover:border-blue-500/30 transition-all group">
+                                        <div class="mt-1">{opt.icon}</div>
+                                        <div>
+                                            <h4 class="text-sm font-black italic uppercase mb-1 group-hover:text-blue-400 transition-colors">{opt.title}</h4>
+                                            <p class="text-[10px] text-gray-500 leading-normal">{opt.desc}</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6 mb-10">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <Shield class="w-4 h-4 text-blue-500" />
+                                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Audit Evidence Included</span>
+                                </div>
+                                <p class="text-[10px] text-gray-400 leading-normal">
+                                    All exports include cryptographically signed evidence hashes, schema versions, and trust provenance metadata for regulators and independent auditors.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={runExport}
+                                disabled={isExporting()}
+                                class="w-full py-5 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-3"
+                            >
+                                <Show when={isExporting()} fallback={<Download class="w-4 h-4" />}>
+                                    <RefreshCw class="w-4 h-4 animate-spin" />
+                                </Show>
+                                {isExporting() ? 'Generating Audit Package...' : 'Generate & Download Audit Package'}
+                            </button>
+                        </div>
+                    </Motion.div>
+                </div>
+            </Show>
+        </div>
+    );
 }
