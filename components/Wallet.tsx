@@ -2419,7 +2419,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                        class="relative w-full max-w-md bg-[#0e0e12] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                                        class="relative w-[90vw] max-w-[360px] bg-[#0e0e12] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl mx-auto"
                                     >
                                         <div class="p-8 space-y-6">
                                             <div class="text-center">
