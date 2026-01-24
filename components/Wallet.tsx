@@ -195,6 +195,7 @@ const Wallet = (): JSX.Element => {
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
     const [isRestoring, setIsRestoring] = createSignal(false);
     const [lastTxHash, setLastTxHash] = createSignal('');
+    const [loadingMessage, setLoadingMessage] = createSignal('LOADING WALLET');
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -298,6 +299,7 @@ const Wallet = (): JSX.Element => {
         if (!action) return;
 
         try {
+            setLoadingMessage('PROCESSING TRANSACTION...');
             setIsLoading(true);
             setShowPasswordModal(false);
 
@@ -399,6 +401,10 @@ const Wallet = (): JSX.Element => {
 
                 setFlowSuccess(true);
                 setFlowStep(3);
+
+                // Refresh balances immediately
+                setTimeout(fetchPortfolioData, 1000);
+                setTimeout(fetchPortfolioData, 5000); // Second check as nodes might take a moment
             } else if (action.type === 'claim_rewards') {
                 // 1. Decrypt Mnemonic
                 const encrypted = WalletService.getEncryptedWallet(userProfile().email);
@@ -426,6 +432,7 @@ const Wallet = (): JSX.Element => {
             alert(`Execution failed: ${error.message || error}`);
         } finally {
             setIsLoading(false);
+            setLoadingMessage('LOADING WALLET');
             setPendingAction(null);
             setWalletPassword('');
         }
@@ -637,6 +644,23 @@ const Wallet = (): JSX.Element => {
 
             // Update userHoldings with total VCN for portfolio value calculation
             setUserHoldings(prev => ({ ...prev, VCN: total }));
+
+            // FETCH ON-CHAIN BALANCES (Testnet v2)
+            if (walletAddress()) {
+                console.log("🔄 Fetching On-Chain Balances for:", walletAddress());
+                const [vcnBalance, ethBalance] = await Promise.all([
+                    contractService.getTokenBalance(walletAddress()),
+                    contractService.getNativeBalance(walletAddress())
+                ]);
+
+                console.log(`📊 On-Chain: VCN=${vcnBalance}, ETH=${ethBalance}`);
+
+                setUserHoldings(prev => ({
+                    ...prev,
+                    VCN: Number(vcnBalance),
+                    ETH: Number(ethBalance)
+                }));
+            }
         } catch (error) {
             console.error('Failed to fetch portfolio data:', error);
         }
@@ -655,10 +679,13 @@ const Wallet = (): JSX.Element => {
     const getAssetData = (symbol: string): AssetData => {
         let balance = (userHoldings() as any)[symbol] || 0;
 
-        // Testnet logic: Show 10% of purchased VCN
+        // Note: Real balances are now fetched in fetchPortfolioData and stored in userHoldings directly.
+        // We no longer need to multiply by 0.1 as the on-chain balance is the source of truth.
+        /*
         if (networkMode() === 'testnet' && symbol === 'VCN') {
             balance = balance * 0.1;
         }
+        */
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
@@ -1007,7 +1034,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
             <div class="fixed inset-0 bg-[#0a0a0b] flex items-center justify-center z-[100]">
                 <div class="flex flex-col items-center gap-4">
                     <div class="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
-                    <div class="text-white text-sm font-bold tracking-widest animate-pulse">LOADING WALLET</div>
+                    <div class="text-white text-sm font-bold tracking-widest animate-pulse">{loadingMessage()}</div>
                 </div>
             </div>
         }>
@@ -2165,7 +2192,14 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <Check class="w-10 h-10 text-white" />
                                                             </div>
                                                             <h4 class="text-2xl font-bold text-white mb-2">Transaction Sent!</h4>
-                                                            <p class="text-gray-500 mb-8 max-w-xs leading-relaxed">
+                                                            <div class="mb-6 px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-2xl w-full">
+                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                                                                    <div class="w-1 h-1 rounded-full bg-blue-500"></div>
+                                                                    Transaction ID
+                                                                </div>
+                                                                <div class="text-[11px] font-mono text-blue-400 break-all leading-relaxed">{lastTxHash()}</div>
+                                                            </div>
+                                                            <p class="text-gray-500 mb-8 max-w-xs leading-relaxed text-sm">
                                                                 Your transaction has been submitted to the Vision Chain network.
                                                             </p>
                                                             <div class="w-full space-y-3">

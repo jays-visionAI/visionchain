@@ -140,6 +140,32 @@ export class ContractService {
         };
     }
 
+    async getNativeBalance(address: string): Promise<string> {
+        const provider = await this.getRobustProvider();
+        const balance = await provider.getBalance(address);
+        return ethers.formatEther(balance);
+    }
+
+    async getTokenBalance(address: string, tokenAddress: string = ADDRESSES.VCN_TOKEN): Promise<string> {
+        const provider = await this.getRobustProvider();
+        const abi = ["function balance(address account) view returns (uint256)", "function balanceOf(address account) view returns (uint256)"];
+        const contract = new ethers.Contract(tokenAddress, abi, provider);
+        try {
+            // Try balanceOf first
+            const balance = await contract.balanceOf(address);
+            return ethers.formatUnits(balance, 18);
+        } catch (e) {
+            try {
+                // Fallback to balance()
+                const balance = await contract.balance(address);
+                return ethers.formatUnits(balance, 18);
+            } catch (e2) {
+                console.error("Failed to fetch token balance:", e2);
+                return "0";
+            }
+        }
+    }
+
     private initializeContracts(signerOrProvider: any) {
         this.nodeLicense = new ethers.Contract(ADDRESSES.NODE_LICENSE, NodeLicenseABI.abi, signerOrProvider);
         this.miningPool = new ethers.Contract(ADDRESSES.MINING_POOL, MiningPoolABI.abi, signerOrProvider);

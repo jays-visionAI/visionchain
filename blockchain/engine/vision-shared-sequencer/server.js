@@ -283,6 +283,10 @@ app.get('/api/transactions', (req, res) => {
         query += ` AND to_addr LIKE ?`;
         params.push(`%${to}%`);
     }
+    if (req.query.hash) {
+        query += ` AND hash = ?`;
+        params.push(req.query.hash);
+    }
 
     query += ` ORDER BY timestamp DESC LIMIT ?`;
     params.push(limit || 50);

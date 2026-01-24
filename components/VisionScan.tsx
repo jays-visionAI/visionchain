@@ -168,6 +168,44 @@ export default function VisionScan() {
     });
 
     const startPolling = () => {
+        // Check for deep link on mount
+        const urlParams = new URLSearchParams(window.location.search);
+        const txHash = urlParams.get('tx');
+        if (txHash) {
+            console.log(`🔍 VisionScan: Deep linking to transaction ${txHash}`);
+            // Fetch this specific tx and select it
+            fetch(`${API_URL}?hash=${txHash}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const tx = data[0];
+                        const formatted = {
+                            hash: tx.hash,
+                            type: tx.type,
+                            method: tx.metadata?.method || 'Unknown',
+                            from: tx.from_addr,
+                            to: tx.to_addr,
+                            value: tx.value,
+                            time: new Date(tx.timestamp).toLocaleTimeString(),
+                            status: 'completed',
+                            asset: 'VCN',
+                            direction: tx.type === 'Transfer' ? 'out' : 'in',
+                            counterparty: tx.metadata?.counterparty || (tx.to_addr?.slice(0, 10) + '...'),
+                            timestamp: tx.timestamp,
+                            confidence: tx.metadata?.confidence || 100,
+                            trustStatus: tx.metadata?.trustStatus || 'inferred',
+                            path: ['Vision Chain'],
+                            accountingBasis: tx.metadata?.accountingBasis || 'Cash',
+                            taxCategory: tx.metadata?.taxCategory || 'N/A',
+                            netEffect: tx.metadata?.netEffect || [],
+                            journalEntries: tx.metadata?.journalEntries || [],
+                            fees: { gas: 0.0001, protocol: 0 }
+                        };
+                        setSelectedTx(formatted);
+                    }
+                });
+        }
+
         fetchLiveStats();
         setInterval(() => {
             fetchTransactions();
