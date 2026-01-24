@@ -370,13 +370,13 @@ const Wallet = (): JSX.Element => {
                             // Fallback to Standard Send
                             const receipt = await contractService.sendTokens(recipient, amount, symbol);
                             console.log("Standard Send Successful (Fallback):", receipt.hash);
-                            alert(`전송 성공 (Fallback 사용): ${receipt.hash}`);
+                            alert(`Transfer Successful (Fallback): ${receipt.hash}`);
                         } catch (fallbackError: any) {
                             console.error("Fallback Failed:", fallbackError);
                             if (fallbackError.code === 'INSUFFICIENT_FUNDS' || fallbackError.message?.includes('insufficient funds')) {
-                                alert("오류: 가스비 부족 (Paymaster 실패 후 본인 ETH 사용 시도했으나 잔고 부족)");
+                                alert("Error: Insufficient Gas (Paymaster failed, and fallback to your ETH failed due to low balance)");
                             } else {
-                                alert(`전송 실패: ${fallbackError.message || "알 수 없는 오류"}`);
+                                alert(`Transfer Failed: ${fallbackError.message || "Unknown Error"}`);
                             }
                             throw fallbackError; // Stop flow
                         }
