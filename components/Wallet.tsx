@@ -672,7 +672,7 @@ const Wallet = (): JSX.Element => {
     });
 
     createEffect(() => {
-        if (auth.user()) {
+        if (auth.user() && walletAddress()) {
             fetchPortfolioData();
         }
     });
@@ -2108,10 +2108,14 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <div class="flex items-center justify-between mb-2 px-1">
                                                                     <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Amount</label>
                                                                     <span
-                                                                        onClick={() => setSendAmount(getAssetData(selectedToken()).liquidBalance.toString())}
-                                                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors"
+                                                                        onClick={() => {
+                                                                            setSendAmount(getAssetData(selectedToken()).liquidBalance.toString());
+                                                                            fetchPortfolioData(); // Allow manual refresh
+                                                                        }}
+                                                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors flex items-center gap-1"
                                                                     >
                                                                         Available: {getAssetData(selectedToken()).liquidBalance.toLocaleString()} {selectedToken()}
+                                                                        <RefreshCw class="w-3 h-3 hover:rotate-180 transition-transform" />
                                                                     </span>
                                                                 </div>
                                                                 <div class="relative">
