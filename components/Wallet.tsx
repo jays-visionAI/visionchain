@@ -2102,7 +2102,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                     placeholder="0x..."
                                                                     value={recipientAddress()}
                                                                     onInput={(e) => setRecipientAddress(e.currentTarget.value)}
-                                                                    class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all font-mono text-sm"
+                                                                    class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all font-mono text-sm"
                                                                 />
                                                             </div>
                                                             <div>
@@ -2196,9 +2196,24 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 {sendAmount()} {selectedToken()}
                                                             </div>
                                                             <div class="mb-6 px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-2xl w-full">
-                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 flex items-center gap-2">
-                                                                    <div class="w-1 h-1 rounded-full bg-blue-500"></div>
-                                                                    Transaction ID
+                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                                                                    <div class="flex items-center gap-2">
+                                                                        <div class="w-1 h-1 rounded-full bg-blue-500"></div>
+                                                                        Transaction ID
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            const success = await copyToClipboard(lastTxHash());
+                                                                            if (success) {
+                                                                                setCopied(true);
+                                                                                setTimeout(() => setCopied(false), 2000);
+                                                                            }
+                                                                        }}
+                                                                        class="hover:text-white transition-colors flex items-center gap-1 group"
+                                                                    >
+                                                                        {copied() ? 'Copied!' : 'Copy'}
+                                                                        <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
+                                                                    </button>
                                                                 </div>
                                                                 <div class="text-[11px] font-mono text-blue-400 break-all leading-relaxed">{lastTxHash()}</div>
                                                             </div>
@@ -2230,7 +2245,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     <div>
                                                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-4 text-center">Select Network</label>
                                                         <div class="flex flex-wrap justify-center gap-2">
-                                                            <For each={['Vision Chain', 'Ethereum', 'Base', 'Solana']}>
+                                                            <For each={['Vision Chain', 'Ethereum', 'Base']}>
                                                                 {(net) => (
                                                                     <button
                                                                         onClick={() => setReceiveNetwork(net)}
