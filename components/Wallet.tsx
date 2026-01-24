@@ -194,6 +194,7 @@ const Wallet = (): JSX.Element => {
     const [isLocalWalletMissing, setIsLocalWalletMissing] = createSignal(false);
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
     const [isRestoring, setIsRestoring] = createSignal(false);
+    const [lastTxHash, setLastTxHash] = createSignal('');
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -342,6 +343,7 @@ const Wallet = (): JSX.Element => {
                     totalNodes: prev.totalNodes + 1
                 }));
 
+                setLastTxHash(receipt.hash);
                 alert(`Successfully deployed ${nodeType} Node! Tx: ${receipt.hash}`);
             } else if (action.type === 'send_tokens') {
                 const { amount, recipient, symbol } = action.data;
@@ -364,12 +366,19 @@ const Wallet = (): JSX.Element => {
                         // Use Paymaster (Gasless) Logic for VCN
                         const result = await contractService.sendGaslessTokens(recipient, amount);
                         console.log("Gasless Send Successful (Fee 1 VCN):", result);
+
+                        // Extract hash from backend response if available, or just mark success
+                        // The Smart Relayer returns status: 'success'
+                        if (result.txHashes) {
+                            setLastTxHash(result.txHashes.transfer || result.txHashes.permit);
+                        }
                     } catch (error) {
                         console.warn("Paymaster failed, attempting standard transfer...", error);
                         try {
                             // Fallback to Standard Send
                             const receipt = await contractService.sendTokens(recipient, amount, symbol);
                             console.log("Standard Send Successful (Fallback):", receipt.hash);
+                            setLastTxHash(receipt.hash);
                             alert(`Transfer Successful (Fallback): ${receipt.hash}`);
                         } catch (fallbackError: any) {
                             console.error("Fallback Failed:", fallbackError);
@@ -385,6 +394,7 @@ const Wallet = (): JSX.Element => {
                     // Standard Send for ETH/Other
                     const receipt = await contractService.sendTokens(recipient, amount, symbol);
                     console.log("Send Transaction Successful:", receipt.hash);
+                    setLastTxHash(receipt.hash);
                 }
 
                 setFlowSuccess(true);
@@ -2159,9 +2169,13 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 Your transaction has been submitted to the Vision Chain network.
                                                             </p>
                                                             <div class="w-full space-y-3">
-                                                                <button class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5">
+                                                                <a
+                                                                    href={`https://visionscan.org/tx/${lastTxHash()}`}
+                                                                    target="_blank"
+                                                                    class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none"
+                                                                >
                                                                     View on Explorer
-                                                                </button>
+                                                                </a>
                                                                 <button
                                                                     onClick={resetFlow}
                                                                     class="w-full py-4 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90"

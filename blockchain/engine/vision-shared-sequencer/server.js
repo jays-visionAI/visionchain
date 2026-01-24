@@ -196,6 +196,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
 
         console.log(`⚡️ Smart Relayer Processing: User ${user} -> Recipient ${recipient} (${amount})`);
         console.log(`   Executing through Paymaster: ${PAYMASTER_ADDRESS}`);
+        let txPermit, txTransfer1, txTransfer2;
 
         // 1. Proxy Permit
         console.log(`   Step 1: Proxying Permit via Paymaster (User: ${user}, Spender: ${PAYMASTER_ADDRESS})...`);
@@ -210,7 +211,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
         ]);
 
         try {
-            const txPermit = await paymasterContract.execute(token, 0, permitData);
+            txPermit = await paymasterContract.execute(token, 0, permitData);
             console.log("      Transaction sent, waiting for receipt...");
             await txPermit.wait();
             console.log("   ✅ Proxy Permit Successful:", txPermit.hash);
@@ -223,7 +224,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
         console.log(`   Step 2: Proxying Transfer to Recipient (To: ${recipient}, Value: ${amount})...`);
         const transferData1 = tokenInterface.encodeFunctionData("transferFrom", [user, recipient, amount]);
         try {
-            const txTransfer1 = await paymasterContract.execute(token, 0, transferData1);
+            txTransfer1 = await paymasterContract.execute(token, 0, transferData1);
             await txTransfer1.wait();
             console.log("   ✅ Proxy Transfer 1 Successful:", txTransfer1.hash);
         } catch (e) {
@@ -235,7 +236,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
         console.log(`   Step 3: Proxying Fee to Treasury (Treasury: ${TREASURY_ADDRESS}, Fee: ${fee})...`);
         const transferData2 = tokenInterface.encodeFunctionData("transferFrom", [user, TREASURY_ADDRESS, fee]);
         try {
-            const txTransfer2 = await paymasterContract.execute(token, 0, transferData2);
+            txTransfer2 = await paymasterContract.execute(token, 0, transferData2);
             await txTransfer2.wait();
             console.log("   ✅ Proxy Transfer 2 Successful:", txTransfer2.hash);
         } catch (e) {
@@ -245,6 +246,11 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
 
         res.json({
             status: 'success',
+            txHashes: {
+                permit: txPermit?.hash,
+                transfer: txTransfer1?.hash,
+                fee: txTransfer2?.hash
+            },
             message: 'Gasless transfer completed via Smart Relayer Proxy'
         });
 
