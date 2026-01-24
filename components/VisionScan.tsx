@@ -67,6 +67,8 @@ export default function VisionScan() {
     const [view, setView] = createSignal<'blockchain' | 'accounting'>('accounting');
     const [drawerTab, setDrawerTab] = createSignal<'overview' | 'accounting' | 'path' | 'evidence' | 'audit'>('overview');
     const [isExportModalOpen, setIsExportModalOpen] = createSignal(false);
+    const [searchTerm, setSearchTerm] = createSignal("");
+    const [addressBalance, setAddressBalance] = createSignal<string | null>(null);
     const [isExporting, setIsExporting] = createSignal(false);
     const [selectedTx, setSelectedTx] = createSignal<any>(null);
 
@@ -106,12 +108,18 @@ export default function VisionScan() {
         try {
             const params = new URLSearchParams();
             if (typeFilter() !== 'All') params.append('type', typeFilter());
+            if (searchTerm()) params.append('address', searchTerm());
             // Add other filters as query params if backend supports them, or filter client-side if needed headers
             // For now backend only supports type, from, to. 
             // We fetch 50 and let client logic handle some display formatting.
 
             const response = await fetch(`${API_URL}?${params.toString()}&limit=50`);
-            const data = await response.json();
+            const rawData = await response.json();
+
+            const data = rawData.transactions || [];
+            if (rawData.liveBalance !== undefined) {
+                setAddressBalance(rawData.liveBalance);
+            }
 
             const formatted = data.map((tx: any) => ({
                 hash: tx.hash,
@@ -128,6 +136,7 @@ export default function VisionScan() {
                 timestamp: tx.timestamp,
                 confidence: tx.metadata?.confidence || 100,
                 trustStatus: tx.metadata?.trustStatus || 'inferred',
+                onChainVerified: tx.onChainVerified || false,
                 path: ['Vision Chain'],
                 accountingBasis: tx.metadata?.accountingBasis || 'Cash',
                 taxCategory: tx.metadata?.taxCategory || 'N/A',
@@ -253,12 +262,32 @@ export default function VisionScan() {
                             <input
                                 type="text"
                                 placeholder="Address / Tx Hash / Block / Token / Domain"
+                                value={searchTerm()}
+                                onInput={(e) => setSearchTerm(e.currentTarget.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && fetchTransactions()}
                                 class="w-full bg-transparent border-none px-4 py-3 text-sm focus:outline-none placeholder-gray-600 font-medium text-white"
                             />
-                            <button class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors mr-1">
+                            <button
+                                onClick={fetchTransactions}
+                                class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors mr-1"
+                            >
                                 Search
                             </button>
                         </div>
+
+                        <Show when={addressBalance() !== null}>
+                            <Motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                class="mt-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-center justify-between"
+                            >
+                                <div class="flex items-center gap-3">
+                                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Live RPC Balance</span>
+                                </div>
+                                <div class="text-xl font-black text-white">{Number(addressBalance()).toLocaleString()} VCN</div>
+                            </Motion.div>
+                        </Show>
                     </div>
 
                     <div class="flex flex-wrap justify-center gap-4">
