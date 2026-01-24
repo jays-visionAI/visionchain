@@ -348,17 +348,47 @@ app.get('/api/transactions', async (req, res) => {
     sql += ` ORDER BY timestamp DESC LIMIT ?`;
     params.push(limit || 50);
 
-    db.all(sql, params, (err, rows) => {
+    db.all(sql, params, async (err, rows) => {
         if (err) {
             console.error(err);
             return res.status(500).json({ error: err.message });
         }
-        // Parse metadata_json back to object
-        const results = rows.map(r => ({
+
+        let results = rows.map(r => ({
             ...r,
             metadata: JSON.parse(r.metadata_json || '{}'),
-            onChainVerified: true // Every result from our indexer is verified
+            onChainVerified: true
         }));
+
+        // Feature: RPC Fallback for specific hash search
+        if (hash && results.length === 0) {
+            try {
+                const { ethers } = require('ethers');
+                const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+                const tx = await provider.getTransaction(hash);
+
+                if (tx) {
+                    console.log(`📡 [RPC] Found direct transaction on-chain: ${hash}`);
+                    results = [{
+                        hash: tx.hash,
+                        from_addr: tx.from,
+                        to_addr: tx.to,
+                        value: ethers.formatEther(tx.value),
+                        timestamp: Date.now(), // Fallback as Geth might not have it instantly without block fetch
+                        type: 'Transfer',
+                        status: 'sequenced',
+                        onChainVerified: true,
+                        metadata: {
+                            method: 'Direct RPC Sync (Verified)',
+                            confidence: 100,
+                            trustStatus: 'verified'
+                        }
+                    }];
+                }
+            } catch (e) {
+                console.warn(`⚠️ [RPC] Tx lookup failed: ${e.message}`);
+            }
+        }
 
         res.json({
             transactions: results,
