@@ -366,9 +366,20 @@ const Wallet = (): JSX.Element => {
                         console.log("Gasless Send Successful (Fee 1 VCN):", result);
                     } catch (error) {
                         console.warn("Paymaster failed, attempting standard transfer...", error);
-                        // Fallback to Standard Send
-                        const receipt = await contractService.sendTokens(recipient, amount, symbol);
-                        console.log("Standard Send Successful (Fallback):", receipt.hash);
+                        try {
+                            // Fallback to Standard Send
+                            const receipt = await contractService.sendTokens(recipient, amount, symbol);
+                            console.log("Standard Send Successful (Fallback):", receipt.hash);
+                            alert(`전송 성공 (Fallback 사용): ${receipt.hash}`);
+                        } catch (fallbackError: any) {
+                            console.error("Fallback Failed:", fallbackError);
+                            if (fallbackError.code === 'INSUFFICIENT_FUNDS' || fallbackError.message?.includes('insufficient funds')) {
+                                alert("오류: 가스비 부족 (Paymaster 실패 후 본인 ETH 사용 시도했으나 잔고 부족)");
+                            } else {
+                                alert(`전송 실패: ${fallbackError.message || "알 수 없는 오류"}`);
+                            }
+                            throw fallbackError; // Stop flow
+                        }
                     }
                 } else {
                     // Standard Send for ETH/Other

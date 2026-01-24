@@ -15,7 +15,7 @@ const ADDRESSES = {
 
     // V2 Security Core (Hardened)
     VISION_EQUALIZER: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788", // EqualizerV2
-    VCN_PAYMASTER: "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",    // PaymasterV2 (Hardened)
+    VCN_PAYMASTER: "0xE6E340D132b5f46d1e472DebcD681B2aBc16e57E",    // PaymasterV2 (Standard)
     VISION_PROFILE_REGISTRY: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c", // AI Registry
 
     // Vision Chain RPC Resource Pool (Added for high-availability)

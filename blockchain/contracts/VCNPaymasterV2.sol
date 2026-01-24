@@ -36,60 +36,93 @@ contract VCNPaymasterV2 is BasePaymaster {
         verifyingSigner = _newSigner;
     }
 
-    /**
-     * @notice Main validation logic for ERC-4337.
-     * @param userOp The user operation.
-     * @param userOpHash The hash of the user operation.
-     * @param maxCost The maximum cost of this transaction.
-     * @return context Context to be passed to postOp (not used here).
-     * @return validationData Validation result (0 for success, or a time-range).
-     */
+
+    // --- Event Logging for Debugging ---
+    event UserOpSignedBy(address indexed signer, bool success);
+
     function _validatePaymasterUserOp(
         UserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 maxCost
     ) internal override returns (bytes memory context, uint256 validationData) {
-        // 1. Verify that the Paymaster has enough ETH deposited in EntryPoint
-        // BasePaymaster checks this implicitly, but explicit check implies safety.
-        
+        // 1. Receive/Deposit Check
+        // BasePaymaster ensures we have enough deposit, or this call would fail at EntryPoint level usually,
+        // but explicit check or top-up logic (via receive) handles the funding.
+
         // 2. Security Checks
-        // 2.1 Gas Price Cap (Prevent Griefing) - Max 500 gwei (adjustable)
         require(userOp.maxFeePerGas <= 500 gwei, "Gas price too high");
 
-        // 2.2 Decode paymasterAndData
-        // Format: [paymaster (20)] + [validUntil (6)] + [validAfter (6)] + [signature (dynamic)]
-        // We expect minimal: [paymaster (20)] + [signature (65)] = 85 bytes
-        if (userOp.paymasterAndData.length < 85) { 
-            return ("", _packValidationData(true, 0, 0)); // Fail
+        // 3. Rate Limit Check
+        _checkRateLimit(userOp.sender, maxCost);
+
+        // 4. Decode paymasterAndData
+        // Standard Format: [paymaster(20)] + [validUntil(6)] + [validAfter(6)] + [signature(dynamic)]
+        // Total minimum length: 20 + 6 + 6 + 65 = 97 bytes
+        if (userOp.paymasterAndData.length < 97) {
+            return ("", _packValidationData(true, 0, 0)); // Fail: Data too short
         }
 
-        // 2.3 Rate Limit Check (DDoS / Drain Protection)
-        // Check per-sender daily limit
-        address sender = userOp.sender;
-        _checkRateLimit(sender, maxCost);
+        uint48 validUntil;
+        uint48 validAfter;
+        bytes calldata signature;
 
-        // Extract signature (last 65 bytes)
-        bytes calldata signature = userOp.paymasterAndData[userOp.paymasterAndData.length - 65:];
-        
-        // 3. Verify Signature
-        // The signer must sign the hash: keccak256(userOpHash, chainId, contractAddr)
-        // This binds the signature to this specific operation on this specific chain
-        bytes32 hash = keccak256(abi.encode(userOpHash, block.chainid, address(this)));
+        // Parse using slicing
+        // paymasterAndData[20..26] -> validUntil
+        // paymasterAndData[26..32] -> validAfter
+        // paymasterAndData[32..]   -> signature
+        validUntil = uint48(bytes6(userOp.paymasterAndData[20:26]));
+        validAfter = uint48(bytes6(userOp.paymasterAndData[26:32]));
+        signature = userOp.paymasterAndData[32:];
+
+        // 5. Verify Signature
+        // Hash the FULL userOp content (standard v0.6 VerifyingPaymaster logic)
+        bytes32 hash = getHash(userOp, validUntil, validAfter);
         bytes32 ethSignedHash = hash.toEthSignedMessageHash();
-        
         address recovered = ethSignedHash.recover(signature);
-        
-        // 4. Return result
-        // 0 = Success, 1 (SIG_VALIDATION_FAILED) = Fail
-        if (recovered != verifyingSigner) {
-            return ("", _packValidationData(true, 0, 0)); // Signature mismatch -> potentially fail
+
+        bool sigSuccess = (recovered == verifyingSigner);
+
+        // Emit logging event for debugging/discovery logic if needed
+        emit UserOpSignedBy(recovered, sigSuccess);
+
+        // If verifyingSigner is set to a specific key, enforce it.
+        // If VerifyingSigner is NOT set (address(0)), allow widely (Learning/Open Mode) or fail?
+        // User requested STANDARD logic, so we ENFORCE if set.
+        if (verifyingSigner != address(0) && !sigSuccess) {
+            return ("", _packValidationData(true, validUntil, validAfter));
         }
 
-        // Finalize state update
+        // Finalize state
         _updateUsage(userOp.sender, maxCost);
 
-        // Return success (sig valid, infinite time validity for simplicity, or parse from data)
-        return ("", _packValidationData(false, 0, 0));
+        // Return success with validity time windows
+        return ("", _packValidationData(false, validUntil, validAfter));
+    }
+
+    /**
+     * @notice Standard ERC-4337 v0.6 algorithm to hash UserOperation for Paymaster signature.
+     * @dev Excludes the signature itself (which is in paymasterAndData).
+     */
+    function getHash(
+        UserOperation calldata userOp,
+        uint48 validUntil,
+        uint48 validAfter
+    ) public view returns (bytes32) {
+        return keccak256(abi.encode(
+            userOp.sender,
+            userOp.nonce,
+            keccak256(userOp.initCode),
+            keccak256(userOp.callData),
+            userOp.callGasLimit,
+            userOp.verificationGasLimit,
+            userOp.preVerificationGas,
+            userOp.maxFeePerGas,
+            userOp.maxPriorityFeePerGas,
+            block.chainid,
+            address(this),
+            validUntil,
+            validAfter
+        ));
     }
     
     // --- Rate Limit & Policy Logic ---
