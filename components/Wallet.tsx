@@ -192,6 +192,7 @@ const Wallet = (): JSX.Element => {
     const [referralBonus, setReferralBonus] = createSignal('0');
     const [isLocalWalletMissing, setIsLocalWalletMissing] = createSignal(false);
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
+    const [isRestoring, setIsRestoring] = createSignal(false);
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -804,6 +805,11 @@ const Wallet = (): JSX.Element => {
             return;
         }
 
+        if (!isRestoring() && walletPassword() !== confirmWalletPassword()) {
+            alert("Passwords do not match. Please try again.");
+            return;
+        }
+
         try {
             setIsLoading(true);
             console.log("Finalizing wallet creation...");
@@ -837,6 +843,7 @@ const Wallet = (): JSX.Element => {
 
             // 5. Success state
             setShowPasswordModal(false);
+            setIsRestoring(false); // Reset restore state
             setOnboardingStep(4); // Move to Success Screen AFTER password is set
 
         } catch (error) {
@@ -921,6 +928,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
         }
 
         setSeedPhrase(mnemonic.split(' '));
+        setIsRestoring(true);
         setPasswordMode('setup');
         setShowPasswordModal(true);
     };
@@ -1268,7 +1276,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
                                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <button
-                                                    onClick={() => { generateSeedPhrase(); setOnboardingStep(1); }}
+                                                    onClick={() => { generateSeedPhrase(); setIsRestoring(false); setOnboardingStep(1); }}
                                                     class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-blue-500/50 transition-all group relative overflow-hidden"
                                                 >
                                                     <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -2399,12 +2407,14 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 <Lock class="w-8 h-8 text-blue-400" />
                                             </div>
                                             <h3 class="text-2xl font-bold text-white mb-2">
-                                                {passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password'}
+                                                {isRestoring() ? 'Finalize Restoration' : (passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password')}
                                             </h3>
                                             <p class="text-sm text-gray-400">
-                                                {passwordMode() === 'setup'
-                                                    ? 'This password encrypts your private key locally and is required for transactions.'
-                                                    : 'Please enter your spending password to authorize this transaction.'}
+                                                {isRestoring()
+                                                    ? 'Set a spending password to protect your wallet on this browser. This can be different from your old password.'
+                                                    : (passwordMode() === 'setup'
+                                                        ? 'This password encrypts your private key locally and is required for transactions.'
+                                                        : 'Please enter your spending password to authorize this transaction.')}
                                                 <br />
                                                 <span class="text-blue-400 font-bold">It is different from your login password.</span>
                                             </p>
@@ -2428,7 +2438,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 </button>
                                             </div>
 
-                                            <Show when={passwordMode() === 'setup'}>
+                                            <Show when={passwordMode() === 'setup' && !isRestoring()}>
                                                 <div class="relative w-full">
                                                     <input
                                                         type={showWalletPassword() ? "text" : "password"}
@@ -2458,12 +2468,12 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                             </button>
                                             <button
                                                 onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
-                                                disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !confirmWalletPassword())}
+                                                disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword())}
                                                 class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
                                             >
-                                                <Show when={isLoading()} fallback={passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment"}>
+                                                <Show when={isLoading()} fallback={isRestoring() ? "Restore Wallet" : (passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment")}>
                                                     <RefreshCw class="w-4 h-4 animate-spin" />
-                                                    {passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...'}
+                                                    {isRestoring() ? 'Restoring...' : (passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...')}
                                                 </Show>
                                             </button>
                                         </div>
