@@ -642,8 +642,8 @@ const Wallet = (): JSX.Element => {
                 progress
             });
 
-            // Update userHoldings with total VCN for portfolio value calculation
-            setUserHoldings(prev => ({ ...prev, VCN: total }));
+            // CRITICAL: We NO LONGER set userHoldings from Firebase 'total'.
+            // Liquid wallet balance must be strictly from the blockchain.
 
             // FETCH ON-CHAIN BALANCES (Testnet v2)
             if (walletAddress()) {
@@ -679,13 +679,8 @@ const Wallet = (): JSX.Element => {
     const getAssetData = (symbol: string): AssetData => {
         let balance = (userHoldings() as any)[symbol] || 0;
 
-        // Note: Real balances are now fetched in fetchPortfolioData and stored in userHoldings directly.
-        // We no longer need to multiply by 0.1 as the on-chain balance is the source of truth.
-        /*
-        if (networkMode() === 'testnet' && symbol === 'VCN') {
-            balance = balance * 0.1;
-        }
-        */
+        // Note: Real balances are fetched in fetchPortfolioData from on-chain RPC.
+        // We do NOT use any mock multipliers or Firebase fallbacks for liquid balance display.
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
