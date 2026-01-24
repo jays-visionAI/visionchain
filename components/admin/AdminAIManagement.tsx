@@ -27,7 +27,9 @@ import {
     X,
     Power,
     Shield,
-    Loader2
+    Loader2,
+    Coins,
+    Send
 } from 'lucide-solid';
 import {
     getChatbotSettings,
@@ -39,8 +41,11 @@ import {
     ApiKeyData,
     BotConfig,
     AiConversation,
-    getRecentConversations
+    getRecentConversations,
+    getVcnPurchases,
+    VcnPurchase
 } from '../../services/firebaseService';
+import { contractService } from '../../services/contractService';
 
 // Tabs configuration
 const tabs = [
@@ -50,6 +55,7 @@ const tabs = [
     { id: 'models', label: 'Model Settings', icon: Settings2 },
     { id: 'stats', label: 'Usage Stats', icon: BarChart3 },
     { id: 'prompts', label: 'Prompt Tuning', icon: Wand2 },
+    { id: 'eco', label: 'Ecosystem', icon: Coins },
 ];
 
 // Mock data for conversations
@@ -158,6 +164,10 @@ export default function AdminAIManagement() {
     const [realConversations, setRealConversations] = createSignal<AiConversation[]>([]);
     const [isFetchingConvs, setIsFetchingConvs] = createSignal(false);
 
+    // Distribution state
+    const [allPurchases, setAllPurchases] = createSignal<VcnPurchase[]>([]);
+    const [isDistributing, setIsDistributing] = createSignal(false);
+
     // Load saved settings on mount from Firebase
     onMount(async () => {
         try {
@@ -176,6 +186,10 @@ export default function AdminAIManagement() {
             // Fetch recent conversations
             const convs = await getRecentConversations();
             setRealConversations(convs);
+
+            // Fetch all purchases for distribution
+            const purchases = await getVcnPurchases();
+            setAllPurchases(purchases);
         } catch (error) {
             console.error('Failed to load initial AI settings:', error);
         }
@@ -234,6 +248,32 @@ export default function AdminAIManagement() {
             return false;
         } finally {
             setIsTesting(false);
+        }
+    };
+
+    const handleDistributeTestnet = async () => {
+        const targets = allPurchases().filter(p => p.walletAddress && p.walletAddress.startsWith('0x'));
+        if (targets.length === 0) {
+            alert("No ready wallets found for distribution.");
+            return;
+        }
+
+        if (!confirm(`Distribute testnet tokens to ${targets.length} users? (10% of purchased amount)`)) return;
+
+        setIsDistributing(true);
+        try {
+            for (const target of targets) {
+                const amount = (target.amount * 0.1).toFixed(2);
+                console.log(`Distributing ${amount} VCN to ${target.walletAddress}...`);
+                await contractService.adminSendVCN(target.walletAddress!, amount);
+                // Optional: Update Firebase status if needed
+            }
+            alert("Testnet distribution complete!");
+        } catch (err) {
+            console.error("Distribution failed:", err);
+            alert("Distribution failed. Check console.");
+        } finally {
+            setIsDistributing(false);
         }
     };
 
@@ -948,6 +988,80 @@ export default function AdminAIManagement() {
                                 <div class="mt-3 h-2 bg-white/5 rounded-full overflow-hidden">
                                     <div class="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full" style={{ width: `${mockStats.successRate}%` }} />
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </Show>
+
+                {/* Ecosystem & Distribution Tab */}
+                <Show when={activeTab() === 'eco'}>
+                    <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-xl font-semibold text-white flex items-center gap-2">
+                                <Coins class="w-5 h-5 text-amber-400" />
+                                Ecosystem Distribution
+                            </h2>
+                            <button
+                                onClick={handleDistributeTestnet}
+                                disabled={isDistributing() || allPurchases().length === 0}
+                                class="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold hover:shadow-lg hover:shadow-amber-500/25 transition-all disabled:opacity-50"
+                            >
+                                <Send class={`w-4 h-4 ${isDistributing() ? 'animate-pulse' : ''}`} />
+                                {isDistributing() ? 'Distributing...' : 'Distribute Testnet VCN (10%)'}
+                            </button>
+                        </div>
+
+                        <div class="rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden">
+                            <table class="w-full text-left text-sm border-collapse">
+                                <thead>
+                                    <tr class="border-b border-white/10 bg-white/5">
+                                        <th class="p-4 text-gray-400 font-medium">User Email</th>
+                                        <th class="p-4 text-gray-400 font-medium">Wallet Address</th>
+                                        <th class="p-4 text-gray-400 font-medium">Mainnet VCN</th>
+                                        <th class="p-4 text-gray-400 font-medium">Testnet Allocation (10%)</th>
+                                        <th class="p-4 text-gray-400 font-medium">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <For each={allPurchases()}>
+                                        {(p) => (
+                                            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                                                <td class="p-4 text-white font-medium">{p.email}</td>
+                                                <td class="p-4 tabular-nums">
+                                                    <Show when={p.walletAddress} fallback={
+                                                        <span class="text-red-500/50 italic text-xs">Not Linked</span>
+                                                    }>
+                                                        <code class="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded">
+                                                            {p.walletAddress!.slice(0, 10)}...{p.walletAddress!.slice(-8)}
+                                                        </code>
+                                                    </Show>
+                                                </td>
+                                                <td class="p-4 text-white font-bold">{p.amount.toLocaleString()}</td>
+                                                <td class="p-4 text-amber-400 font-black tabular-nums">{(p.amount * 0.1).toLocaleString()}</td>
+                                                <td class="p-4">
+                                                    <Show when={p.walletAddress} fallback={
+                                                        <span class="px-2 py-0.5 rounded text-[10px] bg-red-500/10 text-red-500 font-black uppercase tracking-widest">Wait Wallet</span>
+                                                    }>
+                                                        <span class="px-2 py-0.5 rounded text-[10px] bg-green-500/10 text-green-500 font-black uppercase tracking-widest">Ready</span>
+                                                    </Show>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </For>
+                                </tbody>
+                            </table>
+                            <Show when={allPurchases().length === 0}>
+                                <div class="p-20 text-center text-gray-500 italic">No purchase records found in database.</div>
+                            </Show>
+                        </div>
+
+                        <div class="p-5 bg-amber-500/5 border border-amber-500/10 rounded-[24px] flex gap-4 items-start">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
+                                <AlertCircle class="w-6 h-6 text-amber-400" />
+                            </div>
+                            <div class="text-[13px] text-amber-400/80 leading-relaxed">
+                                <p class="font-black text-amber-500 mb-1 uppercase tracking-widest text-[11px]">Admin Compliance Notice</p>
+                                Distribution is strictly for **Testnet VCN** as part of the PoV validation phase. Tokens are sent directly from the locked Admin Treasury. Please ensure the target users have at least one valid VCN purchase linked to their account.
                             </div>
                         </div>
                     </div>
