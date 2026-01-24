@@ -22,7 +22,7 @@ done
 cat <<EOF > "$BASE_DIR/genesis.json"
 {
   "config": {
-    "chainId": 3151909,
+    "chainId": 1337,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,

@@ -14,7 +14,7 @@ module.exports = {
     },
     networks: {
         hardhat: {
-            chainId: 3151909
+            chainId: 1337
         },
         // Polygon Amoy Testnet
         amoy: {
