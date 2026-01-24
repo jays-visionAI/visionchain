@@ -32,14 +32,14 @@ interface WalletAssetsProps {
 
 export const WalletAssets = (props: WalletAssetsProps) => {
     return (
-        // ... (existing code, keeping the render structure similar but updated)
+
         <div class="flex-1 overflow-y-auto">
             {/* Top Header */}
             <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
                 {/* ... header content ... */}
-    // (skipping unchanged parts for brevity in instruction compliance, focusing on interface and usage)
 
-                // ... inside the render ...
+
+
                 {/* Activity Tab Content */}
                 <Show when={props.assetsTab() === 'activity'}>
                     <WalletActivity
@@ -48,7 +48,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                     />
                 </Show>
             </div>
-// ...
+
             <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
                 {/* Decorative Background Blur */}
                 <div class="absolute top-0 right-[20%] w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
