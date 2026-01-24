@@ -33,7 +33,8 @@ import {
     ArrowRight,
     X,
     Maximize2,
-    BarChart3
+    BarChart3,
+    Copy
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import LightSpeedBackground from './LightSpeedBackground';
@@ -528,8 +529,11 @@ export default function VisionScan() {
                                         <For each={filteredTransactions()}>
                                             {(tx) => (
                                                 <tr
-                                                    onClick={() => setSelectedTx(tx)}
-                                                    class="hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                                                    onClick={() => {
+                                                        setSelectedTx(tx);
+                                                        window.history.pushState({}, '', `?tx=${tx.hash}`);
+                                                    }}
+                                                    class={`transition-colors group cursor-pointer ${selectedTx()?.hash === tx.hash ? 'bg-blue-500/10 hover:bg-blue-500/15' : 'hover:bg-white/[0.02]'}`}
                                                 >
                                                     <td class="px-6 py-4">
                                                         <div class="flex items-center gap-3">
@@ -651,433 +655,315 @@ export default function VisionScan() {
                         </div>
                     </div>
 
-                    {/* Stats/Blocks Sidebar */}
+                    {/* Right Column: Sidebar or Transaction Details */}
                     <div class="lg:col-span-4 space-y-6">
-                        {/* Latest Blocks */}
-                        <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                            <div class="p-6 border-b border-white/5">
-                                <h3 class="font-bold flex items-center gap-3 italic text-xs">
-                                    <Database class="w-4 h-4 text-purple-500" />
-                                    LATEST BLOCKS
-                                </h3>
-                            </div>
-                            <div class="divide-y divide-white/5">
-                                <For each={blocks().length > 0 ? blocks() : latestBlocks}>
-                                    {(block) => (
-                                        <div class="p-4 hover:bg-white/[0.02] transition-colors">
-                                            <div class="flex justify-between items-center mb-1">
-                                                <span class="text-xs font-mono text-blue-400 font-bold">#{block.number}</span>
-                                                <span class="text-[9px] text-gray-500 font-bold uppercase">{block.time}</span>
-                                            </div>
-                                            <div class="flex justify-between items-center">
-                                                <div class="flex flex-col">
-                                                    <span class="text-[10px] text-gray-400 font-bold italic">By {block.miner}</span>
-                                                    <span class="text-[9px] text-blue-500/70">{block.txs} txn in 1s</span>
-                                                </div>
-                                                <div class="px-2 py-1 bg-white/5 rounded text-[9px] font-black text-white">{block.reward}</div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </For>
-                            </div>
-                            <div class="p-4 bg-white/[0.01] text-center border-t border-white/5">
-                                <button class="text-[10px] font-black text-gray-500 hover:text-purple-500 uppercase tracking-widest transition-colors">View All Blocks</button>
-                            </div>
-                        </div>
-
-                        {/* Accounting Features Promo */}
-                        <div class="p-6 rounded-2xl bg-gradient-to-br from-blue-600/10 to-indigo-600/10 border border-blue-500/20 relative overflow-hidden group">
-                            <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <ShieldCheck class="w-16 h-16 text-blue-400" />
-                            </div>
-                            <h4 class="text-sm font-black uppercase tracking-widest mb-3 italic">Enterprise Ready</h4>
-                            <p class="text-xs text-gray-400 leading-relaxed mb-6">
-                                Vision Scan turns high-speed blockchain activity into accounting-grade journal entries.
-                            </p>
-                            <ul class="space-y-3 mb-6">
-                                <li class="flex items-center gap-3 text-[10px] font-bold text-gray-300">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                    GAAP/IFRS Compliant Exports
-                                </li>
-                                <li class="flex items-center gap-3 text-[10px] font-bold text-gray-300">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                    Taxonomy Coding (A100-G700)
-                                </li>
-                                <li class="flex items-center gap-3 text-[10px] font-bold text-gray-300">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                    Cross-Chain Normalization
-                                </li>
-                            </ul>
-                            <button class="w-full py-3 bg-blue-600/20 border border-blue-600/30 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">
-                                Request ERP Key
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </main>
-
-            {/* Transaction Classification & Accounting Drawer */}
-            <Show when={selectedTx()}>
-                <div class="fixed inset-0 z-[100] flex justify-end">
-                    <Motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setSelectedTx(null)}
-                        class="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                    />
-                    <Motion.div
-                        initial={{ x: '100%' }}
-                        animate={{ x: 0 }}
-                        exit={{ x: '100%' }}
-                        transition={{ duration: 0.4, easing: [0.22, 1, 0.36, 1] }}
-                        class="relative w-full max-w-xl bg-[#0c0c0c] border-l border-white/10 h-full overflow-y-auto"
-                    >
-                        <div class="p-8">
-                            <div class="flex items-center justify-between mb-8 border-b border-white/5 pb-6">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-                                        <ShieldCheck class="w-6 h-6 text-white" />
+                        <Show when={selectedTx()} fallback={
+                            <>
+                                {/* Latest Blocks (Default View) */}
+                                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                                    <div class="p-6 border-b border-white/5">
+                                        <h3 class="font-bold flex items-center gap-3 italic text-xs">
+                                            <Database class="w-4 h-4 text-purple-500" />
+                                            LATEST BLOCKS
+                                        </h3>
                                     </div>
-                                    <div>
-                                        <h2 class="text-xl font-black italic tracking-tight">AUDIT CONSOLE</h2>
-                                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Transaction Classification & Journal</p>
+                                    <div class="divide-y divide-white/5">
+                                        <For each={blocks().length > 0 ? blocks() : latestBlocks}>
+                                            {(block) => (
+                                                <div class="p-4 hover:bg-white/[0.02] transition-colors">
+                                                    <div class="flex justify-between items-center mb-1">
+                                                        <span class="text-xs font-mono text-blue-400 font-bold">#{block.number}</span>
+                                                        <span class="text-[9px] text-gray-500 font-bold uppercase">{block.time}</span>
+                                                    </div>
+                                                    <div class="flex justify-between items-center">
+                                                        <div class="flex flex-col">
+                                                            <span class="text-[10px] text-gray-400 font-bold italic">By {block.miner}</span>
+                                                            <span class="text-[9px] text-blue-500/70">{block.txs} txn in 1s</span>
+                                                        </div>
+                                                        <div class="px-2 py-1 bg-white/5 rounded text-[9px] font-black text-white">{block.reward}</div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </For>
+                                    </div>
+                                    <div class="p-4 bg-white/[0.01] text-center border-t border-white/5">
+                                        <button class="text-[10px] font-black text-gray-500 hover:text-purple-500 uppercase tracking-widest transition-colors">View All Blocks</button>
                                     </div>
                                 </div>
-                                <button
-                                    onClick={() => setSelectedTx(null)}
-                                    class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-                                >
-                                    <X class="w-5 h-5 text-gray-400" />
-                                </button>
-                            </div>
 
-                            <div class="flex items-center gap-6 mb-8 border-b border-white/5">
-                                {['overview', 'accounting', 'path', 'evidence', 'audit'].map((t: any) => (
-                                    <button
-                                        onClick={() => setDrawerTab(t)}
-                                        class={`pb-4 text-[9px] font-black uppercase tracking-widest transition-colors relative ${drawerTab() === t ? 'text-blue-500' : 'text-gray-500 hover:text-white'}`}
-                                    >
-                                        {t.replace('-', ' ')}
-                                        {drawerTab() === t && <Motion.div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />}
+                                {/* Accounting Features Promo */}
+                                <div class="p-6 rounded-2xl bg-gradient-to-br from-blue-600/10 to-indigo-600/10 border border-blue-500/20 relative overflow-hidden group">
+                                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                        <ShieldCheck class="w-16 h-16 text-blue-400" />
+                                    </div>
+                                    <h4 class="text-sm font-black uppercase tracking-widest mb-3 italic">Enterprise Ready</h4>
+                                    <p class="text-xs text-gray-400 leading-relaxed mb-6">
+                                        Vision Scan turns high-speed blockchain activity into accounting-grade journal entries.
+                                    </p>
+                                    <ul class="space-y-3 mb-6">
+                                        <li class="flex items-center gap-3 text-[10px] font-bold text-gray-300">
+                                            <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            GAAP/IFRS Compliant Exports
+                                        </li>
+                                        <li class="flex items-center gap-3 text-[10px] font-bold text-gray-300">
+                                            <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            Taxonomy Coding (A100-G700)
+                                        </li>
+                                        <li class="flex items-center gap-3 text-[10px] font-bold text-gray-300">
+                                            <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                            Cross-Chain Normalization
+                                        </li>
+                                    </ul>
+                                    <button class="w-full py-3 bg-blue-600/20 border border-blue-600/30 text-blue-400 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">
+                                        Request ERP Key
                                     </button>
-                                ))}
-                            </div>
-
-                            <div class="space-y-8">
-                                <Show when={drawerTab() === 'overview'}>
-                                    {/* TX Header */}
-                                    <div class="space-y-4">
-                                        <div class="bg-white/[0.02] border border-white/5 rounded-2xl p-6">
-                                            <div class="flex justify-between items-start mb-4">
-                                                <div class="flex flex-col gap-1">
-                                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Transaction Hash</span>
-                                                    <span class="text-xs font-mono text-blue-400">{selectedTx().hash}</span>
-                                                </div>
-                                                <button class="text-gray-500 hover:text-white transition-colors">
-                                                    <ExternalLink class="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div class="flex flex-col gap-1">
-                                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</span>
-                                                    <span class="text-[10px] font-black text-green-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                        <CheckCircle2 class="w-3.5 h-3.5" />
-                                                        {selectedTx().trustStatus === 'tagged' ? 'On-chain Tagged' : 'Verified'}
-                                                    </span>
-                                                </div>
-                                                <div class="flex flex-col gap-1">
-                                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Timestamp</span>
-                                                    <span class="text-[10px] font-black text-white uppercase tracking-widest">{selectedTx().time}</span>
-                                                </div>
-                                            </div>
+                                </div>
+                            </>
+                        }>
+                            {/* Transaction Details Panel (Replaces Sidebar) */}
+                            <Motion.div
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                class="bg-[#0c0c0c] border border-white/10 rounded-2xl overflow-hidden sticky top-24"
+                            >
+                                <div class="p-6 border-b border-white/5 flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                                            <ShieldCheck class="w-4 h-4 text-white" />
                                         </div>
-
-                                        {/* Real-time Proof Header (Highlights Amount) */}
-                                        <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]">
-                                            <div class="flex flex-col gap-4">
-                                                <div class="flex justify-between items-center">
-                                                    <div class="flex flex-col gap-0.5">
-                                                        <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest">Transaction Value</span>
-                                                        <span class="text-[9px] font-bold text-blue-500/50 uppercase tracking-widest">Verified On-Chain Proof</span>
-                                                    </div>
-                                                    <div class="text-right">
-                                                        <span class="text-3xl font-black text-white tracking-tighter">{Number(selectedTx().value).toLocaleString()}</span>
-                                                        <span class="ml-2 text-sm font-black text-blue-500">VCN</span>
-                                                    </div>
-                                                </div>
-                                                <div class="h-px bg-white/5 w-full" />
-                                                <div class="grid grid-cols-2 gap-6">
-                                                    <div class="flex flex-col gap-1">
-                                                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">From (Origin)</span>
-                                                        <span class="text-[10px] font-mono text-gray-300 break-all leading-relaxed">{selectedTx().from}</span>
-                                                    </div>
-                                                    <div class="flex flex-col gap-1 text-right">
-                                                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">To (Recipient)</span>
-                                                        <span class="text-[10px] font-mono text-gray-300 break-all leading-relaxed">{selectedTx().to}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                        <div>
+                                            <h2 class="text-lg font-black italic tracking-tight">TRANSACTION</h2>
+                                            <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Details & Audit</p>
                                         </div>
                                     </div>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedTx(null);
+                                            window.history.pushState({}, '', window.location.pathname); // Clear URL param
+                                        }}
+                                        class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                                    >
+                                        <X class="w-4 h-4 text-gray-400" />
+                                    </button>
+                                </div>
 
-                                    {/* Section A: Classification */}
-                                    <div>
-                                        <div class="flex items-center gap-2 mb-4">
-                                            <Layers class="w-4 h-4 text-purple-500" />
-                                            <h3 class="text-[11px] font-black uppercase tracking-widest italic">A. Transaction Classification</h3>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div class="bg-white/5 border border-white/5 p-4 rounded-xl">
-                                                <span class="text-[9px] text-gray-500 font-black uppercase mb-1 block">Method / Type</span>
-                                                <span class="text-xs font-black text-white">{selectedTx().method} ({selectedTx().type})</span>
-                                            </div>
-                                            <div class="bg-white/5 border border-white/5 p-4 rounded-xl">
-                                                <span class="text-[9px] text-gray-500 font-black uppercase mb-1 block">Classification Source</span>
-                                                <span class="text-xs font-black text-white uppercase italic">{selectedTx().trustStatus}</span>
-                                            </div>
-                                        </div>
-                                        <div class="mt-4 bg-white/5 border border-white/5 p-4 rounded-xl">
-                                            <div class="flex justify-between items-center mb-2">
-                                                <span class="text-[9px] text-gray-500 font-black uppercase">Confidence Score</span>
-                                                <span class="text-xs font-black text-blue-400">{selectedTx().confidence}%</span>
-                                            </div>
-                                            <div class="w-full h-1.5 bg-black/40 rounded-full overflow-hidden">
-                                                <div
-                                                    class="h-full bg-blue-600 transition-all duration-1000"
-                                                    style={{ width: `${selectedTx().confidence}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Show>
+                                {/* Tabs */}
+                                <div class="px-6 border-b border-white/5 flex gap-4 overflow-x-auto no-scrollbar">
+                                    {['overview', 'accounting', 'path', 'evidence', 'audit'].map((t: any) => (
+                                        <button
+                                            onClick={() => setDrawerTab(t)}
+                                            class={`py-4 text-[9px] font-black uppercase tracking-widest transition-colors relative whitespace-nowrap ${drawerTab() === t ? 'text-blue-500' : 'text-gray-500 hover:text-white'}`}
+                                        >
+                                            {t.replace('-', ' ')}
+                                            {drawerTab() === t && <Motion.div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />}
+                                        </button>
+                                    ))}
+                                </div>
 
-                                <Show when={drawerTab() === 'accounting'}>
-                                    {/* Section B: Journal Preview */}
-                                    <div>
-                                        <div class="flex items-center gap-2 mb-4">
-                                            <FileText class="w-4 h-4 text-green-500" />
-                                            <h3 class="text-[11px] font-black uppercase tracking-widest italic">B. Accounting Journal Preview</h3>
-                                        </div>
-                                        <div class="bg-black/40 border border-white/10 rounded-2xl overflow-hidden font-mono text-[10px]">
-                                            <table class="w-full text-left">
-                                                <thead>
-                                                    <tr class="bg-white/5 border-b border-white/10 text-gray-500 font-black uppercase tracking-widest">
-                                                        <th class="px-4 py-3">Account Header</th>
-                                                        <th class="px-4 py-3 text-right">Debit</th>
-                                                        <th class="px-4 py-3 text-right">Credit</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody class="divide-y divide-white/5">
-                                                    <For each={selectedTx().journalEntries}>
-                                                        {(entry: any) => (
-                                                            <tr>
-                                                                <td class="px-4 py-3 text-white">{entry.account}</td>
-                                                                <td class="px-4 py-3 text-right text-green-400">{entry.type === 'Dr' ? entry.amount : '-'}</td>
-                                                                <td class="px-4 py-3 text-right text-orange-400">{entry.type === 'Cr' ? entry.amount : '-'}</td>
-                                                            </tr>
-                                                        )}
-                                                    </For>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* Section C: Fees & Costs */}
-                                    <div class="mt-8">
-                                        <div class="flex items-center gap-2 mb-4">
-                                            <Activity class="w-4 h-4 text-orange-500" />
-                                            <h3 class="text-[11px] font-black uppercase tracking-widest italic">C. Fees & Costs</h3>
-                                        </div>
-                                        <div class="space-y-3">
-                                            <div class="flex justify-between items-center px-4 py-3 bg-white/5 border border-white/5 rounded-xl">
-                                                <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Gas (Network) Fee</span>
-                                                <span class="text-xs font-black text-white">{selectedTx().fees.gas} ETH</span>
+                                <div class="p-6 max-h-[calc(100vh-250px)] overflow-y-auto">
+                                    <Show when={drawerTab() === 'overview'}>
+                                        <div class="space-y-6">
+                                            <div class="bg-white/[0.02] border border-white/5 rounded-xl p-4">
+                                                <div class="flex flex-col gap-1 mb-4">
+                                                    <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Hash</span>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-[10px] font-mono text-blue-400 break-all">{selectedTx().hash}</span>
+                                                        <button class="text-gray-500 hover:text-white"><Copy class="w-3 h-3" /></button>
+                                                    </div>
+                                                </div>
+                                                <div class="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Status</span>
+                                                        <span class="text-[9px] font-black text-green-400 uppercase flex items-center gap-1">
+                                                            <CheckCircle2 class="w-3 h-3" /> {selectedTx().trustStatus === 'tagged' ? 'Success' : 'Verified'}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Time</span>
+                                                        <span class="text-[9px] font-bold text-white">{selectedTx().time}</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="flex justify-between items-center px-4 py-3 bg-white/5 border border-white/5 rounded-xl">
-                                                <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocol Service Fee</span>
-                                                <span class="text-xs font-black text-white">{selectedTx().fees.protocol} ETH</span>
+
+                                            <div class="bg-blue-600/5 border border-blue-600/10 rounded-xl p-5">
+                                                <div class="flex justify-between items-center mb-4">
+                                                    <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Value</span>
+                                                    <span class="text-xl font-black text-white">{Number(selectedTx().value).toLocaleString()} VCN</span>
+                                                </div>
+                                                <div class="space-y-3">
+                                                    <div>
+                                                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">From</span>
+                                                        <span class="text-[10px] font-mono text-gray-300 break-all block">{selectedTx().from}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">To</span>
+                                                        <span class="text-[10px] font-mono text-gray-300 break-all block">{selectedTx().to}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <h4 class="text-[10px] font-black uppercase tracking-widest italic mb-3 flex items-center gap-1.5"><Layers class="w-3 h-3 text-purple-500" /> Classification</h4>
+                                                <div class="grid grid-cols-2 gap-3">
+                                                    <div class="bg-white/5 p-3 rounded-lg border border-white/5">
+                                                        <span class="text-[8px] text-gray-500 font-bold uppercase block mb-1">Type</span>
+                                                        <span class="text-[10px] font-bold text-white block">{selectedTx().type}</span>
+                                                    </div>
+                                                    <div class="bg-white/5 p-3 rounded-lg border border-white/5">
+                                                        <span class="text-[8px] text-gray-500 font-bold uppercase block mb-1">Method</span>
+                                                        <span class="text-[10px] font-bold text-white block truncate">{selectedTx().method}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </Show>
+                                    </Show>
 
-                                <Show when={drawerTab() === 'path'}>
-                                    <div>
-                                        <div class="flex items-center gap-2 mb-6">
-                                            <Globe class="w-4 h-4 text-blue-500" />
-                                            <h3 class="text-[11px] font-black uppercase tracking-widest italic">Cross-Chain Route</h3>
+                                    <Show when={drawerTab() === 'accounting'}>
+                                        <div class="space-y-6">
+                                            <div>
+                                                <h4 class="text-[10px] font-black uppercase tracking-widest italic mb-3 flex items-center gap-1.5"><FileText class="w-3 h-3 text-green-500" /> Journal Entries</h4>
+                                                <div class="bg-black/40 border border-white/10 rounded-xl overflow-hidden">
+                                                    <table class="w-full text-left">
+                                                        <thead class="bg-white/5 border-b border-white/10 text-[8px] font-black uppercase text-gray-500">
+                                                            <tr><th class="px-3 py-2">Account</th><th class="px-3 py-2 text-right">Dr/Cr</th></tr>
+                                                        </thead>
+                                                        <tbody class="divide-y divide-white/5 text-[9px] font-mono">
+                                                            <For each={selectedTx().journalEntries}>
+                                                                {(entry: any) => (
+                                                                    <tr>
+                                                                        <td class="px-3 py-2 text-white">{entry.account}</td>
+                                                                        <td class={`px-3 py-2 text-right ${entry.type === 'Dr' ? 'text-green-400' : 'text-orange-400'}`}>
+                                                                            {entry.type} {entry.amount}
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </For>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            <div class="p-3 bg-white/5 border border-white/10 rounded-xl flex justify-between items-center">
+                                                <span class="text-[9px] font-bold text-gray-400 uppercase">Gas Fee</span>
+                                                <span class="text-[10px] font-bold text-white">{selectedTx().fees.gas} ETH</span>
+                                            </div>
                                         </div>
-                                        <div class="relative pl-8 space-y-12">
-                                            <div class="absolute left-3.5 top-2 bottom-2 w-px bg-gradient-to-b from-blue-600 via-purple-600 to-indigo-600 opacity-30" />
+                                    </Show>
 
+                                    <Show when={drawerTab() === 'path'}>
+                                        <div class="relative pl-6 space-y-8 ">
+                                            <div class="absolute left-2.5 top-2 bottom-2 w-px bg-gradient-to-b from-blue-600 via-purple-600 to-indigo-600 opacity-30" />
                                             {selectedTx().path.map((chain: string, i: number) => (
                                                 <div class="relative">
-                                                    <div class="absolute -left-6 top-1.5 w-4 h-4 rounded-full bg-black border-2 border-blue-500 z-10" />
-                                                    <div class="bg-white/5 border border-white/5 p-4 rounded-2xl">
-                                                        <div class="flex justify-between items-center mb-1">
-                                                            <span class="text-[10px] font-black text-blue-400 uppercase">{chain}</span>
-                                                            <span class="text-[8px] text-gray-500 font-bold uppercase">{i === 0 ? 'Origin' : i === selectedTx().path.length - 1 ? 'Settlement' : 'Relay'}</span>
-                                                        </div>
-                                                        <span class="text-[11px] font-black text-white italic">{i === 0 ? 'Transaction Initiation' : i === selectedTx().path.length - 1 ? 'Final State Updates' : 'Cross-Chain Message'}</span>
+                                                    <div class="absolute -left-5 top-1.5 w-3 h-3 rounded-full bg-black border-2 border-blue-500 z-10" />
+                                                    <div class="bg-white/5 border border-white/5 p-3 rounded-xl">
+                                                        <span class="text-[9px] font-black text-blue-400 uppercase block mb-0.5">{chain}</span>
+                                                        <span class="text-[8px] text-gray-500 font-bold uppercase">{i === 0 ? 'Origin' : 'Hop ' + i}</span>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-                                </Show>
+                                    </Show>
 
-                                <Show when={drawerTab() === 'evidence'}>
-                                    <div class="space-y-6">
-                                        <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <Shield class="w-5 h-5 text-blue-500" />
-                                                <span class="text-xs font-black text-white uppercase tracking-widest italic">Cryptographic Proof</span>
+                                    <Show when={drawerTab() === 'evidence'}>
+                                        <div class="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4">
+                                            <div class="flex items-center gap-2 mb-2">
+                                                <Shield class="w-3 h-3 text-blue-500" />
+                                                <span class="text-[10px] font-black text-white uppercase italic">Zero-Knowledge Proof</span>
                                             </div>
-                                            <div class="space-y-4">
-                                                <div class="flex flex-col gap-1.5">
-                                                    <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Evidence Hash (CID)</span>
-                                                    <span class="text-[10px] font-mono text-gray-400 break-all bg-black/40 p-3 rounded-lg border border-white/5">
-                                                        QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco
-                                                    </span>
-                                                </div>
-                                                <div class="flex flex-col gap-1.5">
-                                                    <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Signers</span>
-                                                    <div class="flex flex-wrap gap-2">
-                                                        <span class="px-2 py-1 bg-white/5 rounded text-[8px] font-mono text-gray-400">0x71...29</span>
-                                                        <span class="px-2 py-1 bg-white/5 rounded text-[8px] font-mono text-gray-400">0x42...f0</span>
-                                                        <span class="px-2 py-1 bg-white/5 rounded text-[8px] font-mono text-gray-400">0xEE...11</span>
-                                                    </div>
-                                                </div>
+                                            <div class="bg-black/40 p-3 rounded-lg border border-white/5">
+                                                <span class="text-[8px] font-mono text-gray-400 break-all">0x7f83...9a12</span>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <span class="px-2 py-1 bg-green-500/10 text-green-400 text-[8px] font-bold rounded uppercase border border-green-500/20">Verified</span>
+                                                <span class="px-2 py-1 bg-blue-500/10 text-blue-400 text-[8px] font-bold rounded uppercase border border-blue-500/20">ZK-SNARK</span>
                                             </div>
                                         </div>
-                                    </div>
-                                </Show>
-
-                                <Show when={drawerTab() === 'audit'}>
-                                    <div class="space-y-6">
-                                        <div class="p-6 bg-blue-600/5 border border-blue-600/10 rounded-2xl">
-                                            <div class="flex items-center gap-3 mb-4">
-                                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                                                <span class="text-[10px] font-black text-white uppercase tracking-widest italic">Raw RPC Proof (JSON-RPC 2.0)</span>
-                                            </div>
-                                            <pre class="bg-black/60 p-4 rounded-xl border border-white/5 font-mono text-[9px] text-blue-300 overflow-x-auto leading-relaxed shadow-inner max-h-[400px]">
-                                                {JSON.stringify(selectedTx().raw, null, 2)}
-                                            </pre>
-                                        </div>
-
-                                        <div class="space-y-4">
-                                            {[
-                                                { action: 'RPC Fetch Successful', time: 'Just now', user: 'Vision Node RPC' },
-                                                { action: 'Audit Attestation', time: 'Just now', user: 'Sequencer Engine' },
-                                                { action: 'Verified On-Chain', time: 'Real-time', user: 'Geth Node v1.13' }
-                                            ].map((log) => (
-                                                <div class="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-xl">
-                                                    <div class="flex flex-col">
-                                                        <span class="text-xs font-black text-white italic">{log.action}</span>
-                                                        <span class="text-[9px] text-gray-500 font-bold uppercase">{log.user}</span>
-                                                    </div>
-                                                    <span class="text-[9px] text-gray-500 font-bold uppercase">{log.time}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </Show>
-
-                                <div class="pt-8 grid grid-cols-2 gap-4">
-                                    <button class="py-4 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2">
-                                        <Info class="w-3.5 h-3.5" />
-                                        Full Report
-                                    </button>
-                                    <button
-                                        onClick={handleExport}
-                                        class="py-4 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2"
-                                    >
-                                        <Download class="w-3.5 h-3.5" />
-                                        Export
-                                    </button>
+                                    </Show>
+                                    <Show when={drawerTab() === 'audit'}>
+                                        <pre class="bg-black/60 p-3 rounded-xl border border-white/5 font-mono text-[8px] text-blue-300 overflow-x-auto shadow-inner max-h-[300px]">
+                                            {JSON.stringify(selectedTx().raw, null, 2)}
+                                        </pre>
+                                    </Show>
                                 </div>
-                            </div>
-                        </div>
-                    </Motion.div>
-                </div>
-            </Show>
-            {/* Enterprise Export Modal */}
-            <Show when={isExportModalOpen()}>
-                <div class="fixed inset-0 z-[200] flex items-center justify-center p-6">
-                    <Motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setIsExportModalOpen(false)}
-                        class="absolute inset-0 bg-black/90 backdrop-blur-md"
-                    />
-                    <Motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        class="relative w-full max-w-2xl bg-[#0c0c0c] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl shadow-blue-600/10"
-                    >
-                        <div class="p-10">
-                            <div class="flex items-center justify-between mb-10">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
-                                        <Download class="w-6 h-6 text-blue-500" />
-                                    </div>
-                                    <div>
-                                        <h2 class="text-2xl font-black italic tracking-tight">EXPORT JOURNAL</h2>
-                                        <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">GAAP / IFRS-Ready Enterprise Exports</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setIsExportModalOpen(false)}
-                                    class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-                                >
-                                    <X class="w-5 h-5 text-gray-400" />
-                                </button>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                                {[
-                                    { title: 'CSV General Ledger', desc: 'Standard spreadsheet format for general accounting.', icon: <FileText class="w-5 h-5 text-gray-400" /> },
-                                    { title: 'XBRL-GL', desc: 'Interactive financial reporting format (XML).', icon: <Database class="w-5 h-5 text-blue-500" /> },
-                                    { title: 'JSON-LD', desc: 'Semantic-web ready auditable records.', icon: <Layers class="w-5 h-5 text-purple-500" /> },
-                                    { title: 'ERP Direct Sync', desc: 'Secure API bridge to NetSuite, SAP, or QuickBooks.', icon: <RefreshCw class="w-5 h-5 text-green-500" /> }
-                                ].map((opt) => (
-                                    <button class="flex items-start gap-4 p-5 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/5 hover:border-blue-500/30 transition-all group">
-                                        <div class="mt-1">{opt.icon}</div>
-                                        <div>
-                                            <h4 class="text-sm font-black italic uppercase mb-1 group-hover:text-blue-400 transition-colors">{opt.title}</h4>
-                                            <p class="text-[10px] text-gray-500 leading-normal">{opt.desc}</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6 mb-10">
-                                <div class="flex items-center gap-3 mb-3">
-                                    <Shield class="w-4 h-4 text-blue-500" />
-                                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Audit Evidence Included</span>
-                                </div>
-                                <p class="text-[10px] text-gray-400 leading-normal">
-                                    All exports include cryptographically signed evidence hashes, schema versions, and trust provenance metadata for regulators and independent auditors.
-                                </p>
-                            </div>
-
-                            <button
-                                onClick={runExport}
-                                disabled={isExporting()}
-                                class="w-full py-5 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-3"
+                            </Motion.div>
+                        </Show>
+                    </div>
+                    {/* Enterprise Export Modal */}
+                    <Show when={isExportModalOpen()}>
+                        <div class="fixed inset-0 z-[200] flex items-center justify-center p-6">
+                            <Motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsExportModalOpen(false)}
+                                class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                            />
+                            <Motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                class="relative w-full max-w-2xl bg-[#0c0c0c] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl shadow-blue-600/10"
                             >
-                                <Show when={isExporting()} fallback={<Download class="w-4 h-4" />}>
-                                    <RefreshCw class="w-4 h-4 animate-spin" />
-                                </Show>
-                                {isExporting() ? 'Generating Audit Package...' : 'Generate & Download Audit Package'}
-                            </button>
+                                <div class="p-10">
+                                    <div class="flex items-center justify-between mb-10">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-600/20 flex items-center justify-center">
+                                                <Download class="w-6 h-6 text-blue-500" />
+                                            </div>
+                                            <div>
+                                                <h2 class="text-2xl font-black italic tracking-tight">EXPORT JOURNAL</h2>
+                                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">GAAP / IFRS-Ready Enterprise Exports</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setIsExportModalOpen(false)}
+                                            class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+                                        >
+                                            <X class="w-5 h-5 text-gray-400" />
+                                        </button>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                                        {[
+                                            { title: 'CSV General Ledger', desc: 'Standard spreadsheet format for general accounting.', icon: <FileText class="w-5 h-5 text-gray-400" /> },
+                                            { title: 'XBRL-GL', desc: 'Interactive financial reporting format (XML).', icon: <Database class="w-5 h-5 text-blue-500" /> },
+                                            { title: 'JSON-LD', desc: 'Semantic-web ready auditable records.', icon: <Layers class="w-5 h-5 text-purple-500" /> },
+                                            { title: 'ERP Direct Sync', desc: 'Secure API bridge to NetSuite, SAP, or QuickBooks.', icon: <RefreshCw class="w-5 h-5 text-green-500" /> }
+                                        ].map((opt) => (
+                                            <button class="flex items-start gap-4 p-5 bg-white/[0.02] border border-white/5 rounded-2xl text-left hover:bg-white/5 hover:border-blue-500/30 transition-all group">
+                                                <div class="mt-1">{opt.icon}</div>
+                                                <div>
+                                                    <h4 class="text-sm font-black italic uppercase mb-1 group-hover:text-blue-400 transition-colors">{opt.title}</h4>
+                                                    <p class="text-[10px] text-gray-500 leading-normal">{opt.desc}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6 mb-10">
+                                        <div class="flex items-center gap-3 mb-3">
+                                            <Shield class="w-4 h-4 text-blue-500" />
+                                            <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Audit Evidence Included</span>
+                                        </div>
+                                        <p class="text-[10px] text-gray-400 leading-normal">
+                                            All exports include cryptographically signed evidence hashes, schema versions, and trust provenance metadata for regulators and independent auditors.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={runExport}
+                                        disabled={isExporting()}
+                                        class="w-full py-5 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-500 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-3"
+                                    >
+                                        <Show when={isExporting()} fallback={<Download class="w-4 h-4" />}>
+                                            <RefreshCw class="w-4 h-4 animate-spin" />
+                                        </Show>
+                                        {isExporting() ? 'Generating Audit Package...' : 'Generate & Download Audit Package'}
+                                    </button>
+                                </div>
+                            </Motion.div>
                         </div>
-                    </Motion.div>
+                    </Show>
                 </div>
-            </Show>
-        </div>
-    );
+                );
 }
