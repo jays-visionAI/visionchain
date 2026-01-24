@@ -1382,7 +1382,8 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             placeholder="Enter 15 words separated by spaces..."
                                                             value={restoringMnemonic()}
                                                             onInput={(e) => setRestoringMnemonic(e.currentTarget.value)}
-                                                            class="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed"
+                                                            autofocus
+                                                            class="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed relative z-20"
                                                         />
                                                     </div>
 
@@ -2191,6 +2192,9 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <Check class="w-10 h-10 text-white" />
                                                             </div>
                                                             <h4 class="text-2xl font-bold text-white mb-2">Transaction Sent!</h4>
+                                                            <div class="mb-4 text-3xl font-black text-blue-400">
+                                                                {sendAmount()} {selectedToken()}
+                                                            </div>
                                                             <div class="mb-6 px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-2xl w-full">
                                                                 <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 flex items-center gap-2">
                                                                     <div class="w-1 h-1 rounded-full bg-blue-500"></div>
