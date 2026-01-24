@@ -102,6 +102,38 @@ export default function TrafficSimulator() {
     // Wallet
     let simWallet: any = null;
 
+    // Password Protection
+    const [isVerified, setIsVerified] = createSignal(false);
+    const [inputPassword, setInputPassword] = createSignal('');
+    const [serverPassword, setServerPassword] = createSignal<string | null>(null);
+    const [authError, setAuthError] = createSignal(false);
+
+    onMount(async () => {
+        try {
+            const { getSystemSettings } = await import('../services/firebaseService');
+            const settings = await getSystemSettings();
+            if (settings?.simulatorPassword) {
+                setServerPassword(settings.simulatorPassword);
+                setIsVerified(false);
+            } else {
+                setIsVerified(true); // Open if no password set
+            }
+        } catch (e) {
+            console.error("Auth check failed:", e);
+            setIsVerified(true); // Fallback to open
+        }
+    });
+
+    const handleVerify = () => {
+        if (inputPassword() === serverPassword()) {
+            setIsVerified(true);
+            setAuthError(false);
+        } else {
+            setAuthError(true);
+            setTimeout(() => setAuthError(false), 2000);
+        }
+    };
+
     // Timer refs
     let simInterval: any;
     let uptimeInterval: any;
@@ -295,374 +327,418 @@ export default function TrafficSimulator() {
     });
 
     return (
-        <div class="bg-[#050505] min-h-screen text-white pt-24 pb-32 font-sans selection:bg-blue-500/30">
+        <div class="bg-[#050505] min-h-screen text-white pt-24 pb-32 font-sans selection:bg-blue-500/30 relative">
             <div class="fixed inset-0 opacity-10 pointer-events-none">
                 <LightSpeedBackground />
             </div>
 
-            <main class="max-w-7xl mx-auto px-6 relative z-10">
-                {/* Header Section */}
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
-                    <div class="space-y-2">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 border border-white/10 flex items-center justify-center text-white shadow-2xl shadow-blue-500/20">
-                                <Activity class={`w-7 h-7 ${isRunning() ? 'animate-pulse' : ''}`} />
-                            </div>
-                            <div>
-                                <h1 class="text-5xl font-black italic tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/40">TRAFFIC SIMULATOR</h1>
-                                <div class="flex items-center gap-2 mt-1">
-                                    <Show when={!networkError()} fallback={
-                                        <>
-                                            <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                            <p class="text-red-500 font-black tracking-widest uppercase text-[10px]">{networkError()}</p>
-                                        </>
-                                    }>
-                                        <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-                                        <p class="text-blue-500 font-black tracking-[0.4em] uppercase text-[10px]">Developer Stress-Testing Suite v2</p>
-                                    </Show>
-                                </div>
-                            </div>
+            <Show when={isVerified()} fallback={
+                <div class="relative z-[100] flex items-center justify-center min-h-[80vh] px-6">
+                    <Motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        class="max-w-md w-full p-10 rounded-[40px] bg-white/[0.03] border border-white/10 backdrop-blur-3xl shadow-2xl text-center"
+                    >
+                        <div class="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-blue-500/20">
+                            <Lock class="w-10 h-10 text-white" />
                         </div>
-                    </div>
+                        <h2 class="text-3xl font-black italic tracking-tighter mb-2 italic">RESTRICTED ACCESS</h2>
+                        <p class="text-xs text-gray-500 uppercase tracking-widest font-bold mb-10 leading-relaxed">
+                            Cluster stress-testing is limited to authorized network architects. Enter security key to initialize.
+                        </p>
 
-                    <div class="flex items-center gap-4 p-3 bg-white/5 border border-white/10 rounded-[28px] backdrop-blur-3xl shadow-2xl">
-                        <div class="flex flex-col px-4 border-r border-white/10">
-                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Session Limit</span>
-                            <select
-                                value={sessionLimit()}
-                                onChange={(e) => setSessionLimit(parseInt(e.currentTarget.value))}
-                                class="bg-transparent text-xs font-black text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
-                            >
-                                <option value="50">50 Transactions</option>
-                                <option value="100">100 Transactions</option>
-                                <option value="1000">1,000 Transactions</option>
-                                <option value="10000">10,000 Transactions</option>
-                                <option value="100000">100,000 Transactions</option>
-                                <option value="1000000">1,000,000 Transactions</option>
-                            </select>
-                        </div>
-
-                        <button
-                            onClick={() => isRunning() ? stopSimulation() : startSimulation()}
-                            class={`px-10 py-4 rounded-2xl flex items-center gap-3 font-black text-xs uppercase tracking-[0.2em] transition-all duration-500 group relative overflow-hidden ${isRunning()
-                                ? 'bg-red-500 hover:bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.3)]'
-                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_rgba(37,99,235,0.3)]'
-                                }`}
-                        >
-                            <Show when={isRunning()} fallback={<Play class="w-4 h-4 fill-white group-hover:scale-110 transition-transform" />}>
-                                <Square class="w-4 h-4 fill-white animate-pulse" />
-                            </Show>
-                            {isRunning() ? 'Terminate' : 'Initialize'} Session
-                        </button>
-                    </div>
-                </div>
-
-                {/* Session Progress Bar */}
-                <Show when={isRunning()}>
-                    <div class="mb-12 space-y-3">
-                        <div class="flex justify-between items-end">
-                            <div class="flex items-center gap-2">
-                                <Timer class="w-4 h-4 text-blue-400" />
-                                <span class="text-[10px] font-black uppercase tracking-widest text-blue-400">Execution Progress</span>
-                            </div>
-                            <span class="text-xs font-mono font-black text-white">{stats().sessionProgress.toFixed(1)}%</span>
-                        </div>
-                        <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                            <Motion.div
-                                class="h-full bg-gradient-to-r from-blue-600 to-indigo-500"
-                                animate={{ width: `${stats().sessionProgress}%` }}
-                                transition={{ duration: 0.5 }}
-                            />
-                        </div>
-                    </div>
-                </Show>
-
-                {/* Stat Grid */}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                    <StatCard label="Injection TPS" value={stats().tps.toFixed(1)} subValue={isRunning() ? "+Active" : "Ready"} icon={<Zap class="w-4 h-4" />} color="blue" />
-                    <StatCard label="Session Payload" value={stats().totalTx.toLocaleString()} icon={<Database class="w-4 h-4" />} color="purple" />
-                    <StatCard label="Network Latency" value="12ms" subValue="-2ms" icon={<Users class="w-4 h-4" />} color="emerald" />
-                    <StatCard label="Session Uptime" value={stats().uptime} icon={<RefreshCw class={`w-4 h-4 ${isRunning() ? 'animate-spin' : ''}`} />} color="orange" />
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    {/* Live Traffic Feed */}
-                    <div class="lg:col-span-8 space-y-8">
-                        {/* Advanced Config Panel */}
-                        <div class="bg-gradient-to-br from-blue-600/10 via-white/[0.02] to-transparent border border-white/10 rounded-[32px] p-8 shadow-2xl backdrop-blur-2xl">
-                            <div class="flex items-center justify-between mb-8">
-                                <div class="flex items-center gap-3">
-                                    <div class="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                                        <Settings class="w-5 h-5 text-blue-400" />
-                                    </div>
-                                    <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Deployment Parameters</h3>
-                                </div>
-                                <div class="px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-400 uppercase tracking-widest">
-                                    Sequencer Mode: Active
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div class="space-y-3">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                        <History class="w-3 h-3" /> Target Contract
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="0x..."
-                                        value={targetContract()}
-                                        onInput={(e) => setTargetContract(e.currentTarget.value)}
-                                        class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-mono text-blue-400 focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-white/10"
-                                    />
-                                </div>
-                                <div class="space-y-3">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                        <Zap class="w-3 h-3" /> Method Signature
-                                    </label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. swapTokens"
-                                        value={customMethod()}
-                                        onInput={(e) => setCustomMethod(e.currentTarget.value)}
-                                        class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-mono text-white focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-white/10"
-                                    />
-                                </div>
-                                <div class="space-y-3">
-                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
-                                        <Shield class="w-3 h-3" /> Metadata Protocol
-                                    </label>
-                                    <select
-                                        value={metadataType()}
-                                        onChange={(e) => setMetadataType(e.currentTarget.value)}
-                                        class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-black uppercase text-gray-300 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors"
+                        <div class="space-y-4">
+                            <div class="relative">
+                                <input
+                                    type="password"
+                                    placeholder="••••••••"
+                                    value={inputPassword()}
+                                    onInput={(e) => setInputPassword(e.currentTarget.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+                                    class={`w-full bg-black/40 border ${authError() ? 'border-red-500/50' : 'border-white/10'} rounded-2xl px-6 py-5 text-lg text-center font-mono focus:outline-none focus:border-blue-500/50 transition-all`}
+                                />
+                                <Show when={authError()}>
+                                    <Motion.p
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        class="absolute -bottom-6 left-0 right-0 text-[10px] text-red-400 font-bold uppercase tracking-wider"
                                     >
-                                        <option>A110 (Asset Transfer)</option>
-                                        <option>S200 (Swap/Liquidity)</option>
-                                        <option>B410 (Burn/Mint)</option>
-                                        <option>R500 (Relay Message)</option>
-                                    </select>
+                                        Invalid Security Token
+                                    </Motion.p>
+                                </Show>
+                            </div>
+                            <button
+                                onClick={handleVerify}
+                                class="w-full py-5 bg-white text-black rounded-2xl font-black text-xs uppercase tracking-[0.3em] hover:bg-blue-600 hover:text-white transition-all shadow-xl active:scale-[0.98]"
+                            >
+                                Authenticate Session
+                            </button>
+                        </div>
+                    </Motion.div>
+                </div>
+            }>
+                <main class="max-w-7xl mx-auto px-6 relative z-10">
+                    {/* Header Section */}
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-16">
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 border border-white/10 flex items-center justify-center text-white shadow-2xl shadow-blue-500/20">
+                                    <Activity class={`w-7 h-7 ${isRunning() ? 'animate-pulse' : ''}`} />
+                                </div>
+                                <div>
+                                    <h1 class="text-5xl font-black italic tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/40">TRAFFIC SIMULATOR</h1>
+                                    <div class="flex items-center gap-2 mt-1">
+                                        <Show when={!networkError()} fallback={
+                                            <>
+                                                <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                                                <p class="text-red-500 font-black tracking-widest uppercase text-[10px]">{networkError()}</p>
+                                            </>
+                                        }>
+                                            <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                                            <p class="text-blue-500 font-black tracking-[0.4em] uppercase text-[10px]">Developer Stress-Testing Suite v2</p>
+                                        </Show>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden backdrop-blur-3xl shadow-2xl">
-                            <div class="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-blue-500/5 to-transparent">
-                                <div class="flex items-center gap-3">
-                                    <Terminal class="w-5 h-5 text-blue-400" />
-                                    <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Live Execution Feed</h3>
-                                </div>
-                                <div class="flex items-center gap-4">
-                                    <div class={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${networkError() ? 'bg-red-500/10 border-red-500/20' : 'bg-white/5 border-white/10'}`}>
-                                        <div class={`w-2 h-2 rounded-full ${isRunning() && !networkError() ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                        <span class={`text-[9px] font-black uppercase tracking-widest ${networkError() ? 'text-red-400' : 'text-gray-400'}`}>
-                                            {networkError() ? 'DISCONNECTED' : (isRunning() ? 'SYNCED' : 'OFFLINE')}
-                                        </span>
-                                    </div>
-                                </div>
+                        <div class="flex items-center gap-4 p-3 bg-white/5 border border-white/10 rounded-[28px] backdrop-blur-3xl shadow-2xl">
+                            <div class="flex flex-col px-4 border-r border-white/10">
+                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Session Limit</span>
+                                <select
+                                    value={sessionLimit()}
+                                    onChange={(e) => setSessionLimit(parseInt(e.currentTarget.value))}
+                                    class="bg-transparent text-xs font-black text-white outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                                >
+                                    <option value="50">50 Transactions</option>
+                                    <option value="100">100 Transactions</option>
+                                    <option value="1000">1,000 Transactions</option>
+                                    <option value="10000">10,000 Transactions</option>
+                                    <option value="100000">100,000 Transactions</option>
+                                    <option value="1000000">1,000,000 Transactions</option>
+                                </select>
                             </div>
 
-                            <div class="p-0 overflow-x-auto custom-scrollbar">
-                                <table class="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
-                                            <th class="px-10 py-6">Transaction ID</th>
-                                            <th class="px-10 py-6">Protocol</th>
-                                            <th class="px-10 py-6">Payload Routing</th>
-                                            <th class="px-10 py-6 text-right">Magnitude</th>
-                                            <th class="px-10 py-6 text-center">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-white/5">
-                                        <For each={simLogs()} fallback={
-                                            <tr>
-                                                <td colspan="5" class="px-10 py-40 text-center">
-                                                    <div class="flex flex-col items-center gap-6 opacity-20">
-                                                        <Activity class="w-16 h-16 text-white" />
-                                                        <p class="text-xs font-black text-white uppercase tracking-[0.3em] italic">No active session detected</p>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        }>
-                                            {(tx) => (
-                                                <tr
-                                                    class="hover:bg-blue-500/[0.03] group transition-all duration-300 border-b border-white/5 last:border-0"
-                                                >
-                                                    <td class="px-10 py-5">
-                                                        <div class="flex flex-col">
-                                                            <span class="text-[11px] text-blue-400 font-black group-hover:text-blue-300 transition-colors uppercase font-mono">{tx.id}</span>
-                                                            <span class="text-[8px] text-gray-600 font-bold uppercase mt-1">L2 Sequencer Block</span>
-                                                        </div>
-                                                    </td>
-                                                    <td class="px-10 py-5">
-                                                        <span class={`px-3 py-1 rounded-lg text-[9px] font-black border tracking-widest ${tx.type === 'S200' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
-                                                            tx.type === 'A110' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-                                                                'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                                            }`}>
-                                                            {tx.type}
-                                                        </span>
-                                                    </td>
-                                                    <td class="px-10 py-5">
-                                                        <div class="flex items-center gap-3 text-[10px] font-bold">
-                                                            <span class="text-white/30 font-mono">{(tx.from || '0x...').slice(0, 10)}...</span>
-                                                            <ArrowUpRight class="w-3 h-3 text-blue-500 animate-bounce-short" />
-                                                            <span class="text-white/60 font-mono">{(tx.to || '0x...').slice(0, 10)}...</span>
-                                                        </div>
-                                                    </td>
-                                                    <td class="px-10 py-5 text-right font-mono">
-                                                        <span class="text-[11px] font-black text-white">{tx.value}</span>
-                                                    </td>
-                                                    <td class="px-10 py-5 text-center">
-                                                        <a
-                                                            href={`${SCAN_URL}${tx.hash}`}
-                                                            target="_blank"
-                                                            class="inline-flex p-2 rounded-xl bg-white/5 border border-white/10 text-gray-500 hover:text-white hover:bg-blue-600 hover:border-blue-500 transition-all duration-300"
-                                                        >
-                                                            <ExternalLink class="w-3.5 h-3.5" />
-                                                        </a>
-                                                    </td>
-                                                </tr>
-                                            )}
-                                        </For>
-                                    </tbody>
-                                </table>
-                            </div>
+                            <button
+                                onClick={() => isRunning() ? stopSimulation() : startSimulation()}
+                                class={`px-10 py-4 rounded-2xl flex items-center gap-3 font-black text-xs uppercase tracking-[0.2em] transition-all duration-500 group relative overflow-hidden ${isRunning()
+                                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.3)]'
+                                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_30px_rgba(37,99,235,0.3)]'
+                                    }`}
+                            >
+                                <Show when={isRunning()} fallback={<Play class="w-4 h-4 fill-white group-hover:scale-110 transition-transform" />}>
+                                    <Square class="w-4 h-4 fill-white animate-pulse" />
+                                </Show>
+                                {isRunning() ? 'Terminate' : 'Initialize'} Session
+                            </button>
                         </div>
                     </div>
 
-                    {/* Simulation Settings & Network Health */}
-                    <div class="lg:col-span-4 space-y-8">
-                        <div class="bg-white/[0.02] border border-white/5 rounded-[32px] p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
-                            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-50" />
-                            <h3 class="font-black italic text-xs tracking-[0.2em] uppercase mb-10 flex items-center gap-3 text-white/50">
-                                <Zap class="w-4 h-4 text-blue-400" />
-                                Injection Intensity
-                            </h3>
-
-                            <div class="space-y-10">
-                                <div class="space-y-6">
-                                    <div class="flex justify-between items-center px-1">
-                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest italic">Manual Override</span>
-                                        <span class="text-sm font-black text-blue-400 font-mono">{tpsTarget().toLocaleString()} <span class="text-[9px] text-gray-600 uppercase">TPS</span></span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="100000"
-                                        step="1"
-                                        value={tpsTarget()}
-                                        onInput={(e) => handleTpsChange(parseInt(e.currentTarget.value))}
-                                        class="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
-                                    />
-                                    <div class="grid grid-cols-4 gap-3">
-                                        <For each={['Low', 'Medium', 'High', 'Max']}>
-                                            {(level) => (
-                                                <button
-                                                    onClick={() => setBurst(level)}
-                                                    class={`py-2.5 rounded-xl text-[9px] font-black border transition-all duration-300 ${burstIntensity() === level
-                                                        ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]'
-                                                        : 'bg-white/5 border-white/5 text-gray-500 hover:text-white hover:bg-white/10 hover:border-white/10'
-                                                        }`}
-                                                >
-                                                    {level}
-                                                </button>
-                                            )}
-                                        </For>
-                                    </div>
+                    {/* Session Progress Bar */}
+                    <Show when={isRunning()}>
+                        <div class="mb-12 space-y-3">
+                            <div class="flex justify-between items-end">
+                                <div class="flex items-center gap-2">
+                                    <Timer class="w-4 h-4 text-blue-400" />
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-blue-400">Execution Progress</span>
                                 </div>
-
-                                <div class="space-y-5 pt-8 border-t border-white/5">
-                                    <div class="space-y-5 pt-8 border-t border-white/5">
-                                        <div
-                                            onClick={() => setUseAccounting(!useAccounting())}
-                                            class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
-                                        >
-                                            <div class="flex items-center gap-3">
-                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useAccounting() ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
-                                                    <Shield class={`w-3.5 h-3.5 ${useAccounting() ? 'text-emerald-400' : 'text-gray-500'}`} />
-                                                </div>
-                                                <span class={`text-[10px] font-black uppercase tracking-widest italic ${useAccounting() ? 'text-gray-300' : 'text-gray-600'}`}>Accounting Metadata</span>
-                                            </div>
-                                            <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useAccounting() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
-                                                <div class={`w-2 h-2 rounded-full ${useAccounting() ? 'bg-white' : 'bg-gray-600'}`} />
-                                            </div>
-                                        </div>
-                                        <div
-                                            onClick={() => setUseCrossChain(!useCrossChain())}
-                                            class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
-                                        >
-                                            <div class="flex items-center gap-3">
-                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useCrossChain() ? 'bg-purple-500/10 border-purple-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
-                                                    <Globe class={`w-3.5 h-3.5 ${useCrossChain() ? 'text-purple-400' : 'text-gray-500'}`} />
-                                                </div>
-                                                <span class={`text-[10px] font-black uppercase tracking-widest italic ${useCrossChain() ? 'text-gray-300' : 'text-gray-600'}`}>Cross-Chain Route</span>
-                                            </div>
-                                            <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useCrossChain() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
-                                                <div class={`w-2 h-2 rounded-full ${useCrossChain() ? 'bg-white' : 'bg-gray-600'}`} />
-                                            </div>
-                                        </div>
-                                        <div
-                                            onClick={() => setUseZkProof(!useZkProof())}
-                                            class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
-                                        >
-                                            <div class="flex items-center gap-3">
-                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useZkProof() ? 'bg-orange-500/10 border-orange-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
-                                                    <Cpu class={`w-3.5 h-3.5 ${useZkProof() ? 'text-orange-400' : 'text-gray-500'}`} />
-                                                </div>
-                                                <span class={`text-[10px] font-black uppercase tracking-widest italic ${useZkProof() ? 'text-gray-300' : 'text-gray-600'}`}>ZK-SNARK Proof</span>
-                                            </div>
-                                            <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useZkProof() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
-                                                <div class={`w-2 h-2 rounded-full ${useZkProof() ? 'bg-white' : 'bg-gray-600'}`} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <span class="text-xs font-mono font-black text-white">{stats().sessionProgress.toFixed(1)}%</span>
+                            </div>
+                            <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                <Motion.div
+                                    class="h-full bg-gradient-to-r from-blue-600 to-indigo-500"
+                                    animate={{ width: `${stats().sessionProgress}%` }}
+                                    transition={{ duration: 0.5 }}
+                                />
                             </div>
                         </div>
+                    </Show>
 
-                        {/* Node Health Status */}
-                        <div class="bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/20 rounded-[32px] p-8 backdrop-blur-2xl shadow-2xl">
-                            <h4 class="text-sm font-black italic tracking-tight mb-8 flex items-center gap-3">
-                                <BarChart3 class="w-5 h-5 text-blue-500" />
-                                ENGINE LOAD ANALYSIS
-                            </h4>
-                            <div class="space-y-8">
-                                <div>
-                                    <div class="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">
-                                        <span>Cluster Load Factor</span>
-                                        <span class="text-white">{Math.min(100, (isRunning() ? (tpsTarget() / 1000) : 0)).toFixed(1)}%</span>
+                    {/* Stat Grid */}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                        <StatCard label="Injection TPS" value={stats().tps.toFixed(1)} subValue={isRunning() ? "+Active" : "Ready"} icon={<Zap class="w-4 h-4" />} color="blue" />
+                        <StatCard label="Session Payload" value={stats().totalTx.toLocaleString()} icon={<Database class="w-4 h-4" />} color="purple" />
+                        <StatCard label="Network Latency" value="12ms" subValue="-2ms" icon={<Users class="w-4 h-4" />} color="emerald" />
+                        <StatCard label="Session Uptime" value={stats().uptime} icon={<RefreshCw class={`w-4 h-4 ${isRunning() ? 'animate-spin' : ''}`} />} color="orange" />
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* Live Traffic Feed */}
+                        <div class="lg:col-span-8 space-y-8">
+                            {/* Advanced Config Panel */}
+                            <div class="bg-gradient-to-br from-blue-600/10 via-white/[0.02] to-transparent border border-white/10 rounded-[32px] p-8 shadow-2xl backdrop-blur-2xl">
+                                <div class="flex items-center justify-between mb-8">
+                                    <div class="flex items-center gap-3">
+                                        <div class="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                                            <Settings class="w-5 h-5 text-blue-400" />
+                                        </div>
+                                        <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Deployment Parameters</h3>
                                     </div>
-                                    <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                                        <Motion.div
-                                            class="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
-                                            animate={{ width: `${Math.min(100, (isRunning() ? (tpsTarget() / 1000) : 0))}%` }}
+                                    <div class="px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-400 uppercase tracking-widest">
+                                        Sequencer Mode: Active
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    <div class="space-y-3">
+                                        <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <History class="w-3 h-3" /> Target Contract
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="0x..."
+                                            value={targetContract()}
+                                            onInput={(e) => setTargetContract(e.currentTarget.value)}
+                                            class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-mono text-blue-400 focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-white/10"
                                         />
                                     </div>
+                                    <div class="space-y-3">
+                                        <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <Zap class="w-3 h-3" /> Method Signature
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. swapTokens"
+                                            value={customMethod()}
+                                            onInput={(e) => setCustomMethod(e.currentTarget.value)}
+                                            class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-mono text-white focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/5 outline-none transition-all placeholder:text-white/10"
+                                        />
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <Shield class="w-3 h-3" /> Metadata Protocol
+                                        </label>
+                                        <select
+                                            value={metadataType()}
+                                            onChange={(e) => setMetadataType(e.currentTarget.value)}
+                                            class="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3.5 text-xs font-black uppercase text-gray-300 focus:border-blue-500/50 outline-none appearance-none cursor-pointer hover:bg-black/60 transition-colors"
+                                        >
+                                            <option>A110 (Asset Transfer)</option>
+                                            <option>S200 (Swap/Liquidity)</option>
+                                            <option>B410 (Burn/Mint)</option>
+                                            <option>R500 (Relay Message)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white/[0.02] border border-white/5 rounded-[40px] overflow-hidden backdrop-blur-3xl shadow-2xl">
+                                <div class="p-8 border-b border-white/5 flex justify-between items-center bg-gradient-to-r from-blue-500/5 to-transparent">
+                                    <div class="flex items-center gap-3">
+                                        <Terminal class="w-5 h-5 text-blue-400" />
+                                        <h3 class="font-black italic text-sm tracking-tight text-white/90 uppercase">Live Execution Feed</h3>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <div class={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors ${networkError() ? 'bg-red-500/10 border-red-500/20' : 'bg-white/5 border-white/10'}`}>
+                                            <div class={`w-2 h-2 rounded-full ${isRunning() && !networkError() ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                            <span class={`text-[9px] font-black uppercase tracking-widest ${networkError() ? 'text-red-400' : 'text-gray-400'}`}>
+                                                {networkError() ? 'DISCONNECTED' : (isRunning() ? 'SYNCED' : 'OFFLINE')}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div class="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
-                                        <span class="text-[9px] font-black text-gray-600 uppercase block mb-2 tracking-[0.2em]">Efficiency</span>
-                                        <span class="text-sm font-black text-emerald-400 font-mono tracking-tighter">99.98%</span>
+                                <div class="p-0 overflow-x-auto custom-scrollbar">
+                                    <table class="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] border-b border-white/5">
+                                                <th class="px-10 py-6">Transaction ID</th>
+                                                <th class="px-10 py-6">Protocol</th>
+                                                <th class="px-10 py-6">Payload Routing</th>
+                                                <th class="px-10 py-6 text-right">Magnitude</th>
+                                                <th class="px-10 py-6 text-center">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-white/5">
+                                            <For each={simLogs()} fallback={
+                                                <tr>
+                                                    <td colspan="5" class="px-10 py-40 text-center">
+                                                        <div class="flex flex-col items-center gap-6 opacity-20">
+                                                            <Activity class="w-16 h-16 text-white" />
+                                                            <p class="text-xs font-black text-white uppercase tracking-[0.3em] italic">No active session detected</p>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }>
+                                                {(tx) => (
+                                                    <tr
+                                                        class="hover:bg-blue-500/[0.03] group transition-all duration-300 border-b border-white/5 last:border-0"
+                                                    >
+                                                        <td class="px-10 py-5">
+                                                            <div class="flex flex-col">
+                                                                <span class="text-[11px] text-blue-400 font-black group-hover:text-blue-300 transition-colors uppercase font-mono">{tx.id}</span>
+                                                                <span class="text-[8px] text-gray-600 font-bold uppercase mt-1">L2 Sequencer Block</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-10 py-5">
+                                                            <span class={`px-3 py-1 rounded-lg text-[9px] font-black border tracking-widest ${tx.type === 'S200' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
+                                                                tx.type === 'A110' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
+                                                                    'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                                }`}>
+                                                                {tx.type}
+                                                            </span>
+                                                        </td>
+                                                        <td class="px-10 py-5">
+                                                            <div class="flex items-center gap-3 text-[10px] font-bold">
+                                                                <span class="text-white/30 font-mono">{(tx.from || '0x...').slice(0, 10)}...</span>
+                                                                <ArrowUpRight class="w-3 h-3 text-blue-500 animate-bounce-short" />
+                                                                <span class="text-white/60 font-mono">{(tx.to || '0x...').slice(0, 10)}...</span>
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-10 py-5 text-right font-mono">
+                                                            <span class="text-[11px] font-black text-white">{tx.value}</span>
+                                                        </td>
+                                                        <td class="px-10 py-5 text-center">
+                                                            <a
+                                                                href={`${SCAN_URL}${tx.hash}`}
+                                                                target="_blank"
+                                                                class="inline-flex p-2 rounded-xl bg-white/5 border border-white/10 text-gray-500 hover:text-white hover:bg-blue-600 hover:border-blue-500 transition-all duration-300"
+                                                            >
+                                                                <ExternalLink class="w-3.5 h-3.5" />
+                                                            </a>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </For>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Simulation Settings & Network Health */}
+                        <div class="lg:col-span-4 space-y-8">
+                            <div class="bg-white/[0.02] border border-white/5 rounded-[32px] p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+                                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-50" />
+                                <h3 class="font-black italic text-xs tracking-[0.2em] uppercase mb-10 flex items-center gap-3 text-white/50">
+                                    <Zap class="w-4 h-4 text-blue-400" />
+                                    Injection Intensity
+                                </h3>
+
+                                <div class="space-y-10">
+                                    <div class="space-y-6">
+                                        <div class="flex justify-between items-center px-1">
+                                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest italic">Manual Override</span>
+                                            <span class="text-sm font-black text-blue-400 font-mono">{tpsTarget().toLocaleString()} <span class="text-[9px] text-gray-600 uppercase">TPS</span></span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="100000"
+                                            step="1"
+                                            value={tpsTarget()}
+                                            onInput={(e) => handleTpsChange(parseInt(e.currentTarget.value))}
+                                            class="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                                        />
+                                        <div class="grid grid-cols-4 gap-3">
+                                            <For each={['Low', 'Medium', 'High', 'Max']}>
+                                                {(level) => (
+                                                    <button
+                                                        onClick={() => setBurst(level)}
+                                                        class={`py-2.5 rounded-xl text-[9px] font-black border transition-all duration-300 ${burstIntensity() === level
+                                                            ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]'
+                                                            : 'bg-white/5 border-white/5 text-gray-500 hover:text-white hover:bg-white/10 hover:border-white/10'
+                                                            }`}
+                                                    >
+                                                        {level}
+                                                    </button>
+                                                )}
+                                            </For>
+                                        </div>
                                     </div>
-                                    <div class="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
-                                        <span class="text-[9px] font-black text-gray-600 uppercase block mb-2 tracking-[0.2em]">Reliability</span>
-                                        <span class="text-sm font-black text-white font-mono tracking-tighter">HIGH-TC</span>
+
+                                    <div class="space-y-5 pt-8 border-t border-white/5">
+                                        <div class="space-y-5 pt-8 border-t border-white/5">
+                                            <div
+                                                onClick={() => setUseAccounting(!useAccounting())}
+                                                class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
+                                            >
+                                                <div class="flex items-center gap-3">
+                                                    <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useAccounting() ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
+                                                        <Shield class={`w-3.5 h-3.5 ${useAccounting() ? 'text-emerald-400' : 'text-gray-500'}`} />
+                                                    </div>
+                                                    <span class={`text-[10px] font-black uppercase tracking-widest italic ${useAccounting() ? 'text-gray-300' : 'text-gray-600'}`}>Accounting Metadata</span>
+                                                </div>
+                                                <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useAccounting() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
+                                                    <div class={`w-2 h-2 rounded-full ${useAccounting() ? 'bg-white' : 'bg-gray-600'}`} />
+                                                </div>
+                                            </div>
+                                            <div
+                                                onClick={() => setUseCrossChain(!useCrossChain())}
+                                                class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
+                                            >
+                                                <div class="flex items-center gap-3">
+                                                    <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useCrossChain() ? 'bg-purple-500/10 border-purple-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
+                                                        <Globe class={`w-3.5 h-3.5 ${useCrossChain() ? 'text-purple-400' : 'text-gray-500'}`} />
+                                                    </div>
+                                                    <span class={`text-[10px] font-black uppercase tracking-widest italic ${useCrossChain() ? 'text-gray-300' : 'text-gray-600'}`}>Cross-Chain Route</span>
+                                                </div>
+                                                <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useCrossChain() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
+                                                    <div class={`w-2 h-2 rounded-full ${useCrossChain() ? 'bg-white' : 'bg-gray-600'}`} />
+                                                </div>
+                                            </div>
+                                            <div
+                                                onClick={() => setUseZkProof(!useZkProof())}
+                                                class="flex items-center justify-between group cursor-pointer hover:bg-white/[0.02] p-2 -m-2 rounded-xl transition-colors"
+                                            >
+                                                <div class="flex items-center gap-3">
+                                                    <div class={`w-8 h-8 rounded-lg flex items-center justify-center border transition-all ${useZkProof() ? 'bg-orange-500/10 border-orange-500/20' : 'bg-white/5 border-white/5 opacity-50'}`}>
+                                                        <Cpu class={`w-3.5 h-3.5 ${useZkProof() ? 'text-orange-400' : 'text-gray-500'}`} />
+                                                    </div>
+                                                    <span class={`text-[10px] font-black uppercase tracking-widest italic ${useZkProof() ? 'text-gray-300' : 'text-gray-600'}`}>ZK-SNARK Proof</span>
+                                                </div>
+                                                <div class={`w-8 h-4 rounded-full flex items-center transition-all px-1 ${useZkProof() ? 'bg-blue-600 justify-end' : 'bg-white/10 justify-start'}`}>
+                                                    <div class={`w-2 h-2 rounded-full ${useZkProof() ? 'bg-white' : 'bg-gray-600'}`} />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <div class="px-5 py-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-center gap-3">
-                                    <Info class="w-4 h-4 text-blue-400 shrink-0" />
-                                    <p class="text-[9px] font-bold text-blue-400/80 uppercase leading-relaxed tracking-wider">
-                                        Load is distributed across 5 consensus nodes using round-robin routing protocol.
-                                    </p>
+                            {/* Node Health Status */}
+                            <div class="bg-gradient-to-br from-blue-600/10 to-transparent border border-blue-500/20 rounded-[32px] p-8 backdrop-blur-2xl shadow-2xl">
+                                <h4 class="text-sm font-black italic tracking-tight mb-8 flex items-center gap-3">
+                                    <BarChart3 class="w-5 h-5 text-blue-500" />
+                                    ENGINE LOAD ANALYSIS
+                                </h4>
+                                <div class="space-y-8">
+                                    <div>
+                                        <div class="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">
+                                            <span>Cluster Load Factor</span>
+                                            <span class="text-white">{Math.min(100, (isRunning() ? (tpsTarget() / 1000) : 0)).toFixed(1)}%</span>
+                                        </div>
+                                        <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                                            <Motion.div
+                                                class="h-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                                                animate={{ width: `${Math.min(100, (isRunning() ? (tpsTarget() / 1000) : 0))}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
+                                            <span class="text-[9px] font-black text-gray-600 uppercase block mb-2 tracking-[0.2em]">Efficiency</span>
+                                            <span class="text-sm font-black text-emerald-400 font-mono tracking-tighter">99.98%</span>
+                                        </div>
+                                        <div class="p-5 bg-white/[0.03] rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-colors">
+                                            <span class="text-[9px] font-black text-gray-600 uppercase block mb-2 tracking-[0.2em]">Reliability</span>
+                                            <span class="text-sm font-black text-white font-mono tracking-tighter">HIGH-TC</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="px-5 py-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-center gap-3">
+                                        <Info class="w-4 h-4 text-blue-400 shrink-0" />
+                                        <p class="text-[9px] font-bold text-blue-400/80 uppercase leading-relaxed tracking-wider">
+                                            Load is distributed across 5 consensus nodes using round-robin routing protocol.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </main>
-
-            <style>{`
+                </main>
+            </Show> <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
                     width: 4px;
                     height: 4px;

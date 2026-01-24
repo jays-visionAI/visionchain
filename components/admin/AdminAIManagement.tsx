@@ -8,6 +8,7 @@ import {
     RotateCcw,
     Key,
     Coins,
+    Activity,
 } from 'lucide-solid';
 import {
     getChatbotSettings,
@@ -32,6 +33,7 @@ import { ConversationsTab } from './tabs/ConversationsTab';
 import { ModelSettingsTab } from './tabs/ModelSettingsTab';
 import { UsageStatsTab } from './tabs/UsageStatsTab';
 import { EcosystemTab } from './tabs/EcosystemTab';
+import { SimulatorTab } from './tabs/SimulatorTab';
 
 // Tabs configuration
 const tabs = [
@@ -42,6 +44,7 @@ const tabs = [
     { id: 'stats', label: 'Usage Stats', icon: BarChart3 },
     { id: 'prompts', label: 'Prompt Tuning', icon: Wand2 },
     { id: 'eco', label: 'Ecosystem', icon: Coins },
+    { id: 'simulator', label: 'Simulator', icon: Activity },
 ];
 
 const mockStats = {
@@ -265,6 +268,10 @@ export default function AdminAIManagement() {
                         onDistribute={handleDistributeTestnet}
                         txHashes={distTxHashes}
                     />
+                </Show>
+
+                <Show when={activeTab() === 'simulator'}>
+                    <SimulatorTab />
                 </Show>
 
                 <Show when={activeTab() === 'prompts'}>

@@ -702,6 +702,12 @@ export interface ChatbotSettings {
     };
 }
 
+export interface SystemSettings {
+    simulatorPassword?: string;
+    maintenanceMode?: boolean;
+    activeChainsCount?: number;
+}
+
 export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'chatbot');
@@ -721,6 +727,21 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
 export const saveChatbotSettings = async (settings: ChatbotSettings): Promise<void> => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'chatbot');
+    await setDoc(docRef, settings, { merge: true });
+};
+
+// Global System Settings
+export const getSystemSettings = async (): Promise<SystemSettings | null> => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'settings', 'system');
+    const snapshot = await getDoc(docRef);
+    if (!snapshot.exists()) return null;
+    return snapshot.data() as SystemSettings;
+};
+
+export const saveSystemSettings = async (settings: Partial<SystemSettings>): Promise<void> => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'settings', 'system');
     await setDoc(docRef, settings, { merge: true });
 };
 
