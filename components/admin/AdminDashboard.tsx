@@ -29,13 +29,22 @@ import { MaxTPSSection } from './dashboard/MaxTPSSection';
 import { Coins } from 'lucide-solid';
 
 // Use a mock provider or dynamic provider to avoid blocking on load
+const RPC_NODES = [
+    "https://api.visionchain.co/rpc-proxy",
+    "https://rpc.visionchain.co",
+    "https://api.visionchain.co"
+];
+
 let dashboardProvider: ethers.JsonRpcProvider | null = null;
 const getDashboardProvider = () => {
     if (dashboardProvider) return dashboardProvider;
+
+    // Try primary rpc-proxy first (normalized CORS)
     try {
-        dashboardProvider = new ethers.JsonRpcProvider("https://rpc.visionchain.co", undefined, { staticNetwork: true });
+        dashboardProvider = new ethers.JsonRpcProvider(RPC_NODES[0], undefined, { staticNetwork: true });
         return dashboardProvider;
     } catch (e) {
+        console.warn("Primary RPC failed:", e);
         return null;
     }
 };

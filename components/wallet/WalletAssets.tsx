@@ -129,7 +129,9 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Purchased (VCN)</span>
                             </div>
                             <div class="text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-blue-400 transition-colors">
-                                {props.portfolioStats().total.toLocaleString()}
+                                {props.networkMode === 'testnet'
+                                    ? (props.portfolioStats().total * 0.1).toLocaleString()
+                                    : props.portfolioStats().total.toLocaleString()}
                             </div>
                         </div>
                     </div>

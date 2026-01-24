@@ -31,7 +31,7 @@ const PaymasterAdmin: Component = () => {
                     chainId: 3151909,
                     name: 'Vision Testnet v2',
                     rpcConfig: {
-                        primary: 'https://rpc.visionchain.co',
+                        primary: 'https://api.visionchain.co/rpc-proxy',
                         nodeType: 'MANAGED'
                     },
                     explorerUrl: 'http://46.224.221.201:8080',
@@ -79,7 +79,7 @@ const PaymasterAdmin: Component = () => {
             const VISION_TESTNET_ID = 3151909;
             agent = new PaymasterAgent({
                 chainId: VISION_TESTNET_ID,
-                rpcUrl: 'https://rpc.visionchain.co', // Testnet v2 RPC
+                rpcUrl: 'https://api.visionchain.co/rpc-proxy', // Testnet v2 RPC Proxy
                 gasPriceSources: [],
                 minBalance: BigInt(1000000000000000000) // 1 ETH
             });
@@ -179,7 +179,7 @@ const PaymasterAdmin: Component = () => {
                                                     {chain.name}
                                                     <span class="text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-300">ID: {chain.chainId}</span>
                                                 </h3>
-                                                <p class="text-sm text-gray-400">{chain.rpcUrl}</p>
+                                                <p class="text-sm text-gray-400">{chain.rpcConfig?.primary}</p>
                                             </div>
                                             <StatusBadge status={pool?.mode || 'INIT'} />
                                         </div>

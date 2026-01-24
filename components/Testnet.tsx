@@ -25,7 +25,7 @@ import {
 const Testnet: Component = () => {
     const [copied, setCopied] = createSignal<string | null>(null);
     const [rpcStatus, setRpcStatus] = createSignal<'Checking' | 'Online' | 'Offline'>('Checking');
-    const [activeRpc, setActiveRpc] = createSignal('https://rpc.visionchain.co');
+    const [activeRpc, setActiveRpc] = createSignal('https://api.visionchain.co/rpc-proxy');
 
     const checkRpc = async () => {
         const endpoints = [

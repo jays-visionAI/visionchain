@@ -63,29 +63,49 @@ export class WalletService {
         combined.set(iv);
         combined.set(new Uint8Array(encrypted), iv.length);
 
-        return btoa(String.fromCharCode(...combined));
+        // Robust Base64 conversion
+        return btoa(Array.from(combined).map(b => String.fromCharCode(b)).join(''));
     }
 
     /**
      * Decrypts AES-GCM encrypted data
      */
     static async decrypt(encryptedBase64: string, password: string): Promise<string> {
-        const combined = new Uint8Array(
-            atob(encryptedBase64).split('').map(char => char.charCodeAt(0))
-        );
+        if (!encryptedBase64 || encryptedBase64.length < 32) {
+            throw new Error("Invalid or corrupted wallet data.");
+        }
+
+        let combined: Uint8Array;
+        try {
+            const binaryString = atob(encryptedBase64);
+            combined = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                combined[i] = binaryString.charCodeAt(i);
+            }
+        } catch (e) {
+            throw new Error("Corrupted wallet format. Access denied.");
+        }
+
+        // AES-GCM tags are 16 bytes. IV is 12 bytes. Total min = 28.
+        if (combined.length < 28) {
+            throw new Error("Incomplete wallet payload.");
+        }
 
         const iv = combined.slice(0, 12);
         const dataUint8 = combined.slice(12);
 
         const key = await this.deriveKey(password);
 
-        const decrypted = await window.crypto.subtle.decrypt(
-            { name: "AES-GCM", iv },
-            key,
-            dataUint8
-        );
-
-        return new TextDecoder().decode(decrypted);
+        try {
+            const decrypted = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                key,
+                dataUint8
+            );
+            return new TextDecoder().decode(decrypted);
+        } catch (e) {
+            throw new Error("Decryption failed. Incorrect password or corrupted data.");
+        }
     }
 
     /**

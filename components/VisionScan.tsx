@@ -89,7 +89,7 @@ export default function VisionScan() {
     const [transactions, setTransactions] = createSignal<any[]>([]);
     const [isLoading, setIsLoading] = createSignal(false);
     const API_URL = "https://api.visionchain.co/api/transactions";
-    const RPC_URL = "https://rpc.visionchain.co";
+    const RPC_URL = "https://api.visionchain.co/rpc-proxy";
 
     // Functions
     const handleExport = () => setIsExportModalOpen(true);

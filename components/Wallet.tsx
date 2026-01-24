@@ -433,6 +433,13 @@ const Wallet = (): JSX.Element => {
 
     // Fetch data on mount
     onMount(async () => {
+        // Sanitize corrupted local storage keys
+        const encrypted = localStorage.getItem('vcn_encrypted_wallet');
+        if (encrypted === 'null' || encrypted === 'undefined' || (encrypted && encrypted.length < 20)) {
+            console.warn("Cleaning corrupted wallet storage");
+            localStorage.removeItem('vcn_encrypted_wallet');
+        }
+
         // Initial fetch
         fetchMarketData();
         // Refresh every 60 seconds
