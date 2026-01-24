@@ -105,13 +105,21 @@ export default function VisionScan() {
 
     const fetchTransactions = async () => {
         setIsLoading(true);
+        setAddressBalance(null); // Reset balance on new search
+        console.log(`🌐 VisionScan: Fetching transactions for term: "${searchTerm()}"`);
         try {
             const params = new URLSearchParams();
             if (typeFilter() !== 'All') params.append('type', typeFilter());
-            if (searchTerm()) params.append('address', searchTerm());
-            // Add other filters as query params if backend supports them, or filter client-side if needed headers
-            // For now backend only supports type, from, to. 
-            // We fetch 50 and let client logic handle some display formatting.
+
+            const term = searchTerm().trim();
+            if (term) {
+                // Heuristic: TXID is 66 chars (0x...) or 64 chars, Address is 42 or 40 chars.
+                if (term.length > 50) {
+                    params.append('hash', term);
+                } else {
+                    params.append('address', term);
+                }
+            }
 
             const response = await fetch(`${API_URL}?${params.toString()}&limit=50`);
             const rawData = await response.json();
@@ -185,8 +193,9 @@ export default function VisionScan() {
             // Fetch this specific tx and select it
             fetch(`${API_URL}?hash=${txHash}`)
                 .then(r => r.json())
-                .then(data => {
-                    if (data && data.length > 0) {
+                .then(rawData => {
+                    const data = rawData.transactions || [];
+                    if (data.length > 0) {
                         const tx = data[0];
                         const formatted = {
                             hash: tx.hash,
@@ -203,6 +212,7 @@ export default function VisionScan() {
                             timestamp: tx.timestamp,
                             confidence: tx.metadata?.confidence || 100,
                             trustStatus: tx.metadata?.trustStatus || 'tagged',
+                            onChainVerified: tx.onChainVerified || false,
                             path: ['Vision Chain'],
                             accountingBasis: tx.metadata?.accountingBasis || 'Accrual',
                             taxCategory: tx.metadata?.taxCategory || 'N/A',
