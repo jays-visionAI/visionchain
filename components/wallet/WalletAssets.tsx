@@ -108,8 +108,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             }
                         >
                             <p class="text-xs text-amber-200/80 leading-relaxed">
-                                <span class="text-amber-400 font-bold uppercase tracking-widest mr-2">Testnet Mode Active:</span>
-                                You have been allocated <span class="text-white font-bold">10% of your purchased VCN</span> as Testnet Tokens for network validation and node testing. These tokens have no real-world value.
+                                <span class="text-amber-400 font-bold uppercase tracking-widest mr-2">Testnet Validation:</span>
+                                Based on the ecosystem policy, <span class="text-white font-bold">10% of purchased VCN</span> will be distributed as Testnet Tokens for node validation. Updates will be visible in your local wallet once sent by the administrator.
                             </p>
                         </Show>
                     </div>
@@ -129,9 +129,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Purchased (VCN)</span>
                             </div>
                             <div class="text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-blue-400 transition-colors">
-                                {props.networkMode === 'testnet'
-                                    ? (props.portfolioStats().total * 0.1).toLocaleString()
-                                    : props.portfolioStats().total.toLocaleString()}
+                                {props.portfolioStats().total.toLocaleString()}
                             </div>
                         </div>
                     </div>
