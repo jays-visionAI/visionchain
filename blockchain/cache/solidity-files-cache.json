@@ -2184,8 +2184,8 @@
       ]
     },
     "/Users/sangjaeseo/Antigravity/Vision-Chain/blockchain/contracts/VCNPaymasterV2.sol": {
-      "lastModificationDate": 1769173347110,
-      "contentHash": "28d9fd285895d88a06b77cb75d3bd8c1",
+      "lastModificationDate": 1769223718127,
+      "contentHash": "4e8de52007b64dbaf5d4828aabde306a",
       "sourceName": "contracts/VCNPaymasterV2.sol",
       "solcConfig": {
         "version": "0.8.20",
@@ -2212,8 +2212,7 @@
         }
       },
       "imports": [
-        "@openzeppelin/contracts/access/Ownable.sol",
-        "@openzeppelin/contracts/security/Pausable.sol",
+        "@account-abstraction/contracts/core/BasePaymaster.sol",
         "@openzeppelin/contracts/utils/cryptography/ECDSA.sol"
       ],
       "versionPragmas": [

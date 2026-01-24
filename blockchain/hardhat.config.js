@@ -28,11 +28,12 @@ module.exports = {
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
             gasPrice: "auto"
         },
-        // Vision Chain Custom Testnet v2 (New)
+        // Vision Chain Custom Testnet v2 (Correct)
         vision_v2: {
-            url: "https://rpc.visionchain.co",
+            url: "https://api.visionchain.co/rpc-proxy",
             chainId: 1337,
-            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            accounts: ["0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"], // Admin Key
+            gasPrice: "auto"
         },
         // Ethereum Sepolia Testnet
         sepolia: {

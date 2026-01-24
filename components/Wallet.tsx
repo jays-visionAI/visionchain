@@ -1,5 +1,6 @@
 import { createSignal, Show, For, onMount, createEffect, Switch, Match, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import AdminAIManagement from './admin/AdminAIManagement';
 import { Motion, Presence } from 'solid-motionone';
 import {
@@ -359,9 +360,16 @@ const Wallet = (): JSX.Element => {
 
                 // 3. Execute Send
                 if (symbol === 'VCN') {
-                    // Use Paymaster (Gasless) Logic for VCN
-                    const result = await contractService.sendGaslessTokens(recipient, amount);
-                    console.log("Gasless Send Successful (Fee 1 VCN):", result);
+                    try {
+                        // Use Paymaster (Gasless) Logic for VCN
+                        const result = await contractService.sendGaslessTokens(recipient, amount);
+                        console.log("Gasless Send Successful (Fee 1 VCN):", result);
+                    } catch (error) {
+                        console.warn("Paymaster failed, attempting standard transfer...", error);
+                        // Fallback to Standard Send
+                        const receipt = await contractService.sendTokens(recipient, amount, symbol);
+                        console.log("Standard Send Successful (Fallback):", receipt.hash);
+                    }
                 } else {
                     // Standard Send for ETH/Other
                     const receipt = await contractService.sendTokens(recipient, amount, symbol);
@@ -2385,164 +2393,166 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                         </Show>
                     </Presence>
                     {/* Password Modal */}
-                    <Presence>
-                        <Show when={showPasswordModal()}>
-                            <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                                <Motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    class="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                                    onClick={() => setShowPasswordModal(false)}
-                                />
-                                <Motion.div
-                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                    class="relative w-full max-w-md bg-[#0e0e12] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
-                                >
-                                    <div class="p-8 space-y-6">
-                                        <div class="text-center">
-                                            <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
-                                                <Lock class="w-8 h-8 text-blue-400" />
-                                            </div>
-                                            <h3 class="text-2xl font-bold text-white mb-2">
-                                                {isRestoring() ? 'Finalize Restoration' : (passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password')}
-                                            </h3>
-                                            <p class="text-sm text-gray-400">
-                                                {isRestoring()
-                                                    ? 'Set a spending password to protect your wallet on this browser. This can be different from your old password.'
-                                                    : (passwordMode() === 'setup'
-                                                        ? 'This password encrypts your private key locally and is required for transactions.'
-                                                        : 'Please enter your spending password to authorize this transaction.')}
-                                                <br />
-                                                <span class="text-blue-400 font-bold">It is different from your login password.</span>
-                                            </p>
-                                        </div>
-
-                                        <div class="px-2 space-y-4">
-                                            <div class="relative w-full">
-                                                <input
-                                                    type={showWalletPassword() ? "text" : "password"}
-                                                    placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
-                                                    class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
-                                                    value={walletPassword()}
-                                                    onInput={(e) => setWalletPassword(e.currentTarget.value)}
-                                                    onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
-                                                />
-                                                <button
-                                                    onClick={() => setShowWalletPassword(!showWalletPassword())}
-                                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
-                                                >
-                                                    {showWalletPassword() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
-                                                </button>
+                    <Portal>
+                        <Presence>
+                            <Show when={showPasswordModal()}>
+                                <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                                    <Motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                                        onClick={() => setShowPasswordModal(false)}
+                                    />
+                                    <Motion.div
+                                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                        class="relative w-full max-w-md bg-[#0e0e12] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                                    >
+                                        <div class="p-8 space-y-6">
+                                            <div class="text-center">
+                                                <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                                                    <Lock class="w-8 h-8 text-blue-400" />
+                                                </div>
+                                                <h3 class="text-2xl font-bold text-white mb-2">
+                                                    {isRestoring() ? 'Finalize Restoration' : (passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password')}
+                                                </h3>
+                                                <p class="text-sm text-gray-400">
+                                                    {isRestoring()
+                                                        ? 'Set a spending password to protect your wallet on this browser. This can be different from your old password.'
+                                                        : (passwordMode() === 'setup'
+                                                            ? 'This password encrypts your private key locally and is required for transactions.'
+                                                            : 'Please enter your spending password to authorize this transaction.')}
+                                                    <br />
+                                                    <span class="text-blue-400 font-bold">It is different from your login password.</span>
+                                                </p>
                                             </div>
 
-                                            <Show when={passwordMode() === 'setup' && !isRestoring()}>
+                                            <div class="px-2 space-y-4">
                                                 <div class="relative w-full">
                                                     <input
                                                         type={showWalletPassword() ? "text" : "password"}
-                                                        placeholder="Confirm spending password"
+                                                        placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
                                                         class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
-                                                        value={confirmWalletPassword()}
-                                                        onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
-                                                        onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                                        value={walletPassword()}
+                                                        onInput={(e) => setWalletPassword(e.currentTarget.value)}
+                                                        onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
                                                     />
+                                                    <button
+                                                        onClick={() => setShowWalletPassword(!showWalletPassword())}
+                                                        class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
+                                                    >
+                                                        {showWalletPassword() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
+                                                    </button>
                                                 </div>
-                                            </Show>
 
-                                            <div class="flex items-center justify-center gap-2">
-                                                <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
-                                                <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                                                    Encrypted Locally. AES-256 GCM.
+                                                <Show when={passwordMode() === 'setup' && !isRestoring()}>
+                                                    <div class="relative w-full">
+                                                        <input
+                                                            type={showWalletPassword() ? "text" : "password"}
+                                                            placeholder="Confirm spending password"
+                                                            class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
+                                                            value={confirmWalletPassword()}
+                                                            onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
+                                                            onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                                        />
+                                                    </div>
+                                                </Show>
+
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
+                                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                                                        Encrypted Locally. AES-256 GCM.
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex gap-3">
+                                                <button
+                                                    onClick={() => setShowPasswordModal(false)}
+                                                    class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
+                                                    disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword())}
+                                                    class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <Show when={isLoading()} fallback={isRestoring() ? "Restore Wallet" : (passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment")}>
+                                                        <RefreshCw class="w-4 h-4 animate-spin" />
+                                                        {isRestoring() ? 'Restoring...' : (passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...')}
+                                                    </Show>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </Motion.div>
+                                </div>
+                            </Show>
+
+                            {/* Onboarding Success Modal */}
+                            <Show when={onboardingSuccess()}>
+                                <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                                    <Motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                                    />
+                                    <Motion.div
+                                        initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        class="relative w-full max-w-lg bg-gradient-to-b from-[#111116] to-[#0a0a0b] border border-white/10 rounded-[40px] p-10 text-center shadow-[0_0_50px_rgba(34,197,94,0.1)] overflow-hidden"
+                                    >
+                                        {/* Success Confetti Effect (simulated with glow) */}
+                                        <div class="absolute -top-20 -left-20 w-64 h-64 bg-green-500/10 rounded-full blur-[100px]" />
+                                        <div class="absolute -bottom-20 -right-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]" />
+
+                                        <div class="relative z-10 space-y-8">
+                                            <div class="w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto rotate-12 shadow-2xl shadow-green-500/30">
+                                                <Check class="w-12 h-12 text-white -rotate-12" />
+                                            </div>
+
+                                            <div class="space-y-3">
+                                                <h3 class="text-4xl font-black text-white tracking-tight">Welcome to Vision Chain</h3>
+                                                <p class="text-gray-400 font-medium text-lg leading-relaxed">
+                                                    Your decentralized identity is ready. Your assets and nodes are now under your full control.
                                                 </p>
                                             </div>
-                                        </div>
 
-                                        <div class="flex gap-3">
-                                            <button
-                                                onClick={() => setShowPasswordModal(false)}
-                                                class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
-                                                disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword())}
-                                                class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
-                                            >
-                                                <Show when={isLoading()} fallback={isRestoring() ? "Restore Wallet" : (passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment")}>
-                                                    <RefreshCw class="w-4 h-4 animate-spin" />
-                                                    {isRestoring() ? 'Restoring...' : (passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...')}
-                                                </Show>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </Motion.div>
-                            </div>
-                        </Show>
-
-                        {/* Onboarding Success Modal */}
-                        <Show when={onboardingSuccess()}>
-                            <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                                <Motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    class="absolute inset-0 bg-black/90 backdrop-blur-md"
-                                />
-                                <Motion.div
-                                    initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    class="relative w-full max-w-lg bg-gradient-to-b from-[#111116] to-[#0a0a0b] border border-white/10 rounded-[40px] p-10 text-center shadow-[0_0_50px_rgba(34,197,94,0.1)] overflow-hidden"
-                                >
-                                    {/* Success Confetti Effect (simulated with glow) */}
-                                    <div class="absolute -top-20 -left-20 w-64 h-64 bg-green-500/10 rounded-full blur-[100px]" />
-                                    <div class="absolute -bottom-20 -right-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]" />
-
-                                    <div class="relative z-10 space-y-8">
-                                        <div class="w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto rotate-12 shadow-2xl shadow-green-500/30">
-                                            <Check class="w-12 h-12 text-white -rotate-12" />
-                                        </div>
-
-                                        <div class="space-y-3">
-                                            <h3 class="text-4xl font-black text-white tracking-tight">Welcome to Vision Chain</h3>
-                                            <p class="text-gray-400 font-medium text-lg leading-relaxed">
-                                                Your decentralized identity is ready. Your assets and nodes are now under your full control.
-                                            </p>
-                                        </div>
-
-                                        <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-3xl space-y-4 text-left">
-                                            <div class="flex items-center gap-4">
-                                                <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                                                    <Shield class="w-5 h-5 text-blue-400" />
+                                            <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-3xl space-y-4 text-left">
+                                                <div class="flex items-center gap-4">
+                                                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                                        <Shield class="w-5 h-5 text-blue-400" />
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-sm font-bold text-white">Encrypted & Secure</div>
+                                                        <div class="text-xs text-gray-500">Your seed phrase is locked with your password.</div>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <div class="text-sm font-bold text-white">Encrypted & Secure</div>
-                                                    <div class="text-xs text-gray-500">Your seed phrase is locked with your password.</div>
+                                                <div class="flex items-center gap-4">
+                                                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                        <Zap class="w-5 h-5 text-purple-400" />
+                                                    </div>
+                                                    <div>
+                                                        <div class="text-sm font-bold text-white">Asset Ready</div>
+                                                        <div class="text-xs text-gray-500">Your purchases have been detected and linked.</div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div class="flex items-center gap-4">
-                                                <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                                    <Zap class="w-5 h-5 text-purple-400" />
-                                                </div>
-                                                <div>
-                                                    <div class="text-sm font-bold text-white">Asset Ready</div>
-                                                    <div class="text-xs text-gray-500">Your purchases have been detected and linked.</div>
-                                                </div>
-                                            </div>
-                                        </div>
 
-                                        <button
-                                            onClick={finishOnboarding}
-                                            class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
-                                        >
-                                            Go to Wallet
-                                        </button>
-                                    </div>
-                                </Motion.div>
-                            </div>
-                        </Show>
-                    </Presence>
+                                            <button
+                                                onClick={finishOnboarding}
+                                                class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
+                                            >
+                                                Go to Wallet
+                                            </button>
+                                        </div>
+                                    </Motion.div>
+                                </div>
+                            </Show>
+                        </Presence>
+                    </Portal>
                     <AIChat isOpen={showChat()} onClose={() => setShowChat(false)} />
                 </main>
             </section >

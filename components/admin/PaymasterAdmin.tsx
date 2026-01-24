@@ -5,12 +5,14 @@ import { PaymasterAgent } from '../../services/paymaster/PaymasterAgent';
 import { GrandOrchestrator } from '../../services/paymaster/GrandOrchestrator';
 import { getFirebaseDb } from '../../services/firebaseService';
 import { doc, updateDoc } from 'firebase/firestore';
+import { contractService } from '../../services/contractService';
 import ChainRegistrationWizard from './ChainRegistrationWizard';
 
 const PaymasterAdmin: Component = () => {
     const [stats, setStats] = createSignal<any>(null);
     const [chains, setChains] = createSignal<ChainConfig[]>([]);
     const [pools, setPools] = createSignal<Record<number, PaymasterPool>>({});
+    const [realTimeBalances, setRealTimeBalances] = createSignal<Record<number, string>>({});
     const [loading, setLoading] = createSignal(true);
     const [isWizardOpen, setIsWizardOpen] = createSignal(false);
 
@@ -50,11 +52,25 @@ const PaymasterAdmin: Component = () => {
             } else {
                 setChains(chainList);
                 const poolMap: Record<number, PaymasterPool> = {};
+                const balanceMap: Record<number, string> = {};
+
                 await Promise.all(chainList.map(async (c) => {
                     const pool = await AdminService.getPool(c.chainId);
                     if (pool) poolMap[c.chainId] = pool;
+
+                    // Fetch On-Chain Balance
+                    if (c.chainId === 3151909) { // Targeting Testnet v2
+                        try {
+                            const onChainBal = await contractService.getPaymasterBalance();
+                            balanceMap[c.chainId] = onChainBal;
+                        } catch (e) {
+                            console.warn("Failed to fetch on-chain balance for Paymaster", e);
+                            balanceMap[c.chainId] = "Error";
+                        }
+                    }
                 }));
                 setPools(poolMap);
+                setRealTimeBalances(prev => ({ ...prev, ...balanceMap }));
             }
         } catch (error) {
             console.error("Failed to load Paymaster Admin data", error);
@@ -184,13 +200,24 @@ const PaymasterAdmin: Component = () => {
                                             <StatusBadge status={pool?.mode || 'INIT'} />
                                         </div>
 
-                                        {/* Pool Metrics */}
                                         <div class="space-y-3 mb-6">
                                             <div class="flex justify-between text-sm">
-                                                <span class="text-gray-400">Gas Balance</span>
+                                                <span class="text-gray-400">Gas Balance (DB)</span>
                                                 <span class={`font-mono ${formatBalance(pool?.balance) < formatBalance(pool?.minBalance) ? 'text-red-400 font-bold' : 'text-green-400'}`}>
                                                     {formatBalance(pool?.balance)} ETH
                                                 </span>
+                                            </div>
+                                            {/* Real-time On-Chain Balance */}
+                                            <div class="flex justify-between text-sm">
+                                                <span class="text-gray-400 flex items-center gap-1">
+                                                    <div class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+                                                    On-Chain Balance
+                                                </span>
+                                                <Show when={realTimeBalances()[chain.chainId]} fallback={<span class="text-gray-600">Loading...</span>}>
+                                                    <span class="font-mono text-cyan-400 font-bold">
+                                                        {realTimeBalances()[chain.chainId]} ETH
+                                                    </span>
+                                                </Show>
                                             </div>
                                             <div class="flex justify-between text-sm">
                                                 <span class="text-gray-400">Spend Rate (24h)</span>

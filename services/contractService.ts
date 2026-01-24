@@ -15,7 +15,7 @@ const ADDRESSES = {
 
     // V2 Security Core (Hardened)
     VISION_EQUALIZER: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788", // EqualizerV2
-    VCN_PAYMASTER: "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",    // PaymasterV2 (MPC)
+    VCN_PAYMASTER: "0x7a2088a1bFc9d81c55368AE168C2C02570cB814F",    // PaymasterV2 (Hardened)
     VISION_PROFILE_REGISTRY: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c", // AI Registry
 
     // Vision Chain RPC Resource Pool (Added for high-availability)
@@ -345,8 +345,11 @@ export class ContractService {
         const chainId = 3151909;
 
         // 4. Sign EIP-712 Permit
+        // Dynamic name fetching to match on-chain value exactly
+        const tokenName = await (contract as any).name();
+
         const domain = {
-            name: "Vision Chain Token",
+            name: tokenName,
             version: "1",
             chainId: chainId,
             verifyingContract: tokenAddress
