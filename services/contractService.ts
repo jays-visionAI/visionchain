@@ -15,7 +15,7 @@ const ADDRESSES = {
 
     // V2 Security Core (Hardened)
     VISION_EQUALIZER: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788", // EqualizerV2
-    VCN_PAYMASTER: "0x851356ae760d987E095750cCeb3bC6014560891C",    // PaymasterV2 (Smart Relayer Mode)
+    VCN_PAYMASTER: "0x998abeb3E57409262aE5b751f60747921B33613E",    // PaymasterV2 (Verified Smart Relayer)
     VISION_PROFILE_REGISTRY: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c", // AI Registry
 
     // Vision Chain RPC Resource Pool (Added for high-availability)
@@ -342,7 +342,7 @@ export class ContractService {
 
         // 3. Get Nonce
         const nonce = await (contract as any).nonces(userAddress);
-        const chainId = 3151909;
+        const chainId = 1337;
 
         // 4. Sign EIP-712 Permit
         // Dynamic name fetching to match on-chain value exactly

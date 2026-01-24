@@ -71,11 +71,11 @@ app.get('/debug-rpc', async (req, res) => {
     try {
         const { ethers } = require('ethers');
         const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
-            chainId: 3151909,
+            chainId: 1337,
             name: 'vision_testnet_v2'
         }, { staticNetwork: true });
         const block = await provider.getBlockNumber();
-        res.json({ status: 'online', blockNumber: block, chainId: 3151909 });
+        res.json({ status: 'online', blockNumber: block, chainId: 1337 });
     } catch (e) {
         res.status(500).json({ status: 'offline', error: e.message });
     }
@@ -165,14 +165,14 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
        In a real scenario, these would be loaded from secure vaults.
        WE USE HARDCODED KEYS FOR DEMO PURPOSES ONLY.
     */
-    const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS || "0x851356ae760d987E095750cCeb3bC6014560891C";
+    const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS || "0x998abeb3E57409262aE5b751f60747921B33613E";
     const PAYMASTER_PK = process.env.PAYMASTER_PK || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Account #0 (Owner)
     const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"; // Account #2
 
     try {
         const { ethers } = require('ethers');
         const rpcProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
-            chainId: 3151909,
+            chainId: 1337,
             name: 'vision_testnet_v2'
         }, { staticNetwork: true });
 
