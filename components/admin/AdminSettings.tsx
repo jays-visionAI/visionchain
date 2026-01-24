@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, onMount } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
     Sparkles,
@@ -9,11 +9,32 @@ import {
     Shield,
     Cpu,
     Coins,
+    RefreshCw,
 } from 'lucide-solid';
 import AdminAIManagement from './AdminAIManagement';
+import { contractService } from '../../services/contractService';
 
 export default function AdminSettings() {
     const [settingsSubView, setSettingsSubView] = createSignal<'main' | 'ai' | 'infra' | 'gov'>('main');
+    const [nodeStats, setNodeStats] = createSignal({ active: 0, total: 5, loading: true });
+
+    const refreshNodeStats = async () => {
+        setNodeStats(prev => ({ ...prev, loading: true }));
+        try {
+            const stats = await contractService.getNodeStatus();
+            setNodeStats({ active: stats.active, total: stats.total, loading: false });
+        } catch (e) {
+            console.error("Failed to refresh nodes:", e);
+            setNodeStats(prev => ({ ...prev, loading: false }));
+        }
+    };
+
+    onMount(() => {
+        refreshNodeStats();
+        // Polling nodes every 30s
+        const interval = setInterval(refreshNodeStats, 30000);
+        return () => clearInterval(interval);
+    });
 
     return (
         <div class="max-w-4xl mx-auto pb-20">
@@ -56,27 +77,42 @@ export default function AdminSettings() {
                             <h2 class="text-xs font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Infrastructure & Network</h2>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.04] transition-all cursor-not-allowed group opacity-80">
-                                    <div class="flex items-center gap-4 mb-4">
+                                    <div class="flex items-center justify-between mb-4">
                                         <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
-                                            <Cpu class="w-5 h-5" />
+                                            <Cpu class={`w-5 h-5 ${nodeStats().loading ? 'animate-pulse' : ''}`} />
                                         </div>
-                                        <div class="font-bold text-white">RPC Node Pool</div>
+                                        <div class="font-bold text-white flex items-center gap-2">
+                                            RPC Node Pool
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); refreshNodeStats(); }}
+                                                class="p-1 hover:bg-white/10 rounded-md transition-colors"
+                                            >
+                                                <RefreshCw class={`w-3 h-3 text-gray-500 ${nodeStats().loading ? 'animate-spin' : ''}`} />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="flex items-center justify-between">
-                                        <span class="text-xs text-gray-500">4 Active Nodes</span>
-                                        <span class="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full font-bold">Healthy</span>
+                                        <span class="text-xs text-gray-500">
+                                            {nodeStats().loading ? 'Checking nodes...' : `${nodeStats().active} of ${nodeStats().total} Active Nodes`}
+                                        </span>
+                                        <span class={`text-[10px] px-2 py-0.5 rounded-full font-bold ${nodeStats().active === nodeStats().total ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                            {nodeStats().active === nodeStats().total ? 'Optimal' : (nodeStats().active > 0 ? 'Degraded' : 'Offline')}
+                                        </span>
                                     </div>
                                 </div>
 
-                                <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.04] transition-all cursor-not-allowed group opacity-80">
+                                <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.04] transition-all cursor-not-allowed group opacity-80 relative">
                                     <div class="flex items-center gap-4 mb-4">
                                         <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
                                             <Globe class="w-5 h-5" />
                                         </div>
-                                        <div class="font-bold text-white">Relayer Config</div>
+                                        <div>
+                                            <div class="font-bold text-white">Relayer Config</div>
+                                            <div class="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">Gasless Sponsorship</div>
+                                        </div>
                                     </div>
                                     <div class="flex items-center justify-between">
-                                        <span class="text-xs text-gray-500">Fast Gasless Tx</span>
+                                        <span class="text-xs text-slate-500 italic">Facilitates Tx without User Gas</span>
                                         <div class="w-10 h-5 bg-blue-500/20 rounded-full flex items-center px-1">
                                             <div class="w-3 h-3 bg-blue-400 rounded-full ml-auto" />
                                         </div>

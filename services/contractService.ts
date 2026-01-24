@@ -23,7 +23,8 @@ const ADDRESSES = {
         "https://api.visionchain.co/rpc-proxy", // Resilient Proxy (Express-based)
         "https://api.visionchain.co",           // Root API
         "https://rpc.visionchain.co",           // Primary Domain
-        "http://46.224.221.201:8545"            // Direct Node
+        "http://46.224.221.201:8545",           // Direct Node #1
+        "https://api.visionchain.co/rpc"        // Direct Node #2 (Load Balanced)
     ],
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
@@ -107,6 +108,36 @@ export class ContractService {
             }
         }
         throw new Error("Critical: All RPC nodes are currently unreachable or blocked by CORS.");
+    }
+
+    /**
+     * Checks all configured nodes and returns health statistics.
+     */
+    async getNodeStatus() {
+        const results = await Promise.all(ADDRESSES.RPC_NODES.map(async (url) => {
+            try {
+                // Skip HTTP if on HTTPS
+                if (window.location.protocol === 'https:' && url.startsWith('http:')) {
+                    return { url, active: false, status: 'BLOCKED_BY_CORS' };
+                }
+
+                const provider = new ethers.JsonRpcProvider(url, undefined, { staticNetwork: true });
+                const block = await Promise.race([
+                    provider.getBlockNumber(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+                ]) as number;
+
+                return { url, active: true, block, status: 'HEALTHY' };
+            } catch (e) {
+                return { url, active: false, status: 'DOWN' };
+            }
+        }));
+
+        return {
+            total: ADDRESSES.RPC_NODES.length,
+            active: results.filter(r => r.active).length,
+            nodes: results
+        };
     }
 
     private initializeContracts(signerOrProvider: any) {
