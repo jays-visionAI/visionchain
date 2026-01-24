@@ -37,16 +37,6 @@ export const WalletAssets = (props: WalletAssetsProps) => {
             {/* Top Header */}
             <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
                 {/* ... header content ... */}
-
-
-
-                {/* Activity Tab Content */}
-                <Show when={props.assetsTab() === 'activity'}>
-                    <WalletActivity
-                        purchases={props.vcnPurchases}
-                        walletAddress={props.walletAddress?.()}
-                    />
-                </Show>
             </div>
 
             <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
