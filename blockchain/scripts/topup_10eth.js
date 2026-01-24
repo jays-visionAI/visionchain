@@ -2,7 +2,7 @@
 const { ethers } = require('hardhat');
 
 // Configuration
-const PAYMASTER_ADDRESS = "0x998abeb3E57409262aE5b751f60747921B33613E";
+const PAYMASTER_ADDRESS = "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf";
 const AMOUNT = "10.0";
 
 async function main() {

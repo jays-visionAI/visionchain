@@ -165,7 +165,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
        In a real scenario, these would be loaded from secure vaults.
        WE USE HARDCODED KEYS FOR DEMO PURPOSES ONLY.
     */
-    const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS || "0x998abeb3E57409262aE5b751f60747921B33613E";
+    const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS || "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf";
     const PAYMASTER_PK = process.env.PAYMASTER_PK || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Account #0 (Owner)
     const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"; // Account #2
 
@@ -198,7 +198,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
         console.log(`   Executing through Paymaster: ${PAYMASTER_ADDRESS}`);
 
         // 1. Proxy Permit
-        console.log("   Step 1: Proxying Permit via Paymaster...");
+        console.log(`   Step 1: Proxying Permit via Paymaster (User: ${user}, Spender: ${PAYMASTER_ADDRESS})...`);
         const permitData = tokenInterface.encodeFunctionData("permit", [
             user,
             PAYMASTER_ADDRESS, // Spender is the Paymaster contract
@@ -208,31 +208,43 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
             sig.r,
             sig.s
         ]);
-        const txPermit = await paymasterContract.execute(token, 0, permitData);
-        await txPermit.wait();
-        console.log("   ✅ Proxy Permit Successful:", txPermit.hash);
+
+        try {
+            const txPermit = await paymasterContract.execute(token, 0, permitData);
+            console.log("      Transaction sent, waiting for receipt...");
+            await txPermit.wait();
+            console.log("   ✅ Proxy Permit Successful:", txPermit.hash);
+        } catch (e) {
+            console.error("   ❌ Step 1 (Permit) FAILED:", e.message);
+            throw new Error(`Permit Failed: ${e.message}`);
+        }
 
         // 2. Proxy Transfer to Recipient
-        console.log("   Step 2: Proxying Transfer to Recipient...");
+        console.log(`   Step 2: Proxying Transfer to Recipient (To: ${recipient}, Value: ${amount})...`);
         const transferData1 = tokenInterface.encodeFunctionData("transferFrom", [user, recipient, amount]);
-        const txTransfer1 = await paymasterContract.execute(token, 0, transferData1);
-        await txTransfer1.wait();
-        console.log("   ✅ Proxy Transfer 1 Successful:", txTransfer1.hash);
+        try {
+            const txTransfer1 = await paymasterContract.execute(token, 0, transferData1);
+            await txTransfer1.wait();
+            console.log("   ✅ Proxy Transfer 1 Successful:", txTransfer1.hash);
+        } catch (e) {
+            console.error("   ❌ Step 2 (Transfer) FAILED:", e.message);
+            throw new Error(`Transfer 1 Failed: ${e.message}`);
+        }
 
         // 3. Proxy Transfer Fee to Treasury
-        console.log("   Step 3: Proxying Fee to Treasury...");
+        console.log(`   Step 3: Proxying Fee to Treasury (Treasury: ${TREASURY_ADDRESS}, Fee: ${fee})...`);
         const transferData2 = tokenInterface.encodeFunctionData("transferFrom", [user, TREASURY_ADDRESS, fee]);
-        const txTransfer2 = await paymasterContract.execute(token, 0, transferData2);
-        await txTransfer2.wait();
-        console.log("   ✅ Proxy Transfer 2 Successful:", txTransfer2.hash);
+        try {
+            const txTransfer2 = await paymasterContract.execute(token, 0, transferData2);
+            await txTransfer2.wait();
+            console.log("   ✅ Proxy Transfer 2 Successful:", txTransfer2.hash);
+        } catch (e) {
+            console.error("   ❌ Step 3 (Fee) FAILED:", e.message);
+            throw new Error(`Fee Transfer Failed: ${e.message}`);
+        }
 
         res.json({
             status: 'success',
-            txHashes: {
-                permit: txPermit.hash,
-                transfer: txTransfer1.hash,
-                fee: txTransfer2.hash
-            },
             message: 'Gasless transfer completed via Smart Relayer Proxy'
         });
 

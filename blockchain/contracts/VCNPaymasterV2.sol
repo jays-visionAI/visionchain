@@ -188,7 +188,18 @@ contract VCNPaymasterV2 is BasePaymaster {
      */
     function execute(address target, uint256 value, bytes calldata data) external onlyOwner returns (bytes memory) {
         (bool success, bytes memory result) = target.call{value: value}(data);
-        require(success, "SmartRelayer: call failed");
+        if (!success) {
+            // Bubble up the revert reason
+            if (result.length > 0) {
+                // The easiest way to bubble the revert reason is using assembly
+                assembly {
+                    let returndata_size := mload(result)
+                    revert(add(32, result), returndata_size)
+                }
+            } else {
+                revert("SmartRelayer: call reverted without reason");
+            }
+        }
         return result;
     }
 }
