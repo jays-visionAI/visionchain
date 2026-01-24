@@ -5,7 +5,7 @@ const axios = require('axios');
 // Configuration
 const RPC_URL = process.env.RPC_URL || "https://rpc.visionchain.co";
 const SEQUENCER_URL = process.env.SEQUENCER_URL || "https://api.visionchain.co/rpc/submit";
-const CHAIN_ID = parseInt(process.env.CHAIN_ID || "3151909"); // Vision Testnet ID
+const CHAIN_ID = parseInt(process.env.CHAIN_ID || "1337"); // Vision Testnet ID
 
 // Private key of the Master Faucet (In a real scenario, use environment variables)
 // Using a placeholder for now - User should provide this or we use a known testnet faucet

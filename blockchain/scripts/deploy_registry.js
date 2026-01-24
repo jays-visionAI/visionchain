@@ -16,9 +16,9 @@ async function main() {
     // --- Seed Initial Data (Mock) ---
     console.log("\n🌱 Seeding Mock Profiles...");
 
-    // Register 'jays' (Deployer) -> Prefers Vision Chain (3151909) + VCN Token
+    // Register 'jays' (Deployer) -> Prefers Vision Chain (1337) + VCN Token
     const VCN_TOKEN = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-    await registry.registerProfile("jays", 3151909, VCN_TOKEN);
+    await registry.registerProfile("jays", 1337, VCN_TOKEN);
     console.log("   - Registered '@jays' -> Vision / VCN");
 
     console.log("\n🎉 Registry Ready!");

@@ -22,7 +22,7 @@ const AdminExplorerMonitor: Component = () => {
             { eventType: 'FeeDeducted', quoteId: 'q_abc123', chainId: 1, blockNumber: 19234567, txHash: '0xabc...def', indexed: true, latencyMs: 312, timestamp: '2026-01-15 19:45:32' },
             { eventType: 'SponsoredExecutionSubmitted', quoteId: 'q_abc123', chainId: 137, blockNumber: 52345678, txHash: '0x123...456', indexed: true, latencyMs: 520, timestamp: '2026-01-15 19:45:35' },
             { eventType: 'FeeSettled', quoteId: 'q_abc123', chainId: 137, blockNumber: 52345680, txHash: '0x789...abc', indexed: false, latencyMs: 0, timestamp: '2026-01-15 19:46:00' },
-            { eventType: 'PaymasterRebalanced', chainId: 3151909, blockNumber: 1234567, txHash: '0xdef...123', indexed: true, latencyMs: 180, timestamp: '2026-01-15 19:40:00' },
+            { eventType: 'PaymasterRebalanced', chainId: 1337, blockNumber: 1234567, txHash: '0xdef...123', indexed: true, latencyMs: 180, timestamp: '2026-01-15 19:40:00' },
         ]);
         setStats({ total: 1250, indexed: 1247, pending: 3, avgLatency: 315 });
     });

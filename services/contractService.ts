@@ -7,7 +7,7 @@ import VisionEqualizerABI from './abi/VisionEqualizer.json';
 import VisionVaultABI from './abi/VisionVault.json';
 
 const ADDRESSES = {
-    // Vision Chain Custom Testnet v2 (Chain ID: 3151909)
+    // Vision Chain Custom Testnet v2 (Chain ID: 1337)
     VCN_TOKEN: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
     NODE_LICENSE: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
     MINING_POOL: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
@@ -176,7 +176,7 @@ export class ContractService {
 
     async submitToSequencer(signedTx: string, options: { chainId?: number, type?: string, metadata?: any } = {}) {
         try {
-            const { chainId = 3151909, type = 'evm', metadata = {} } = options;
+            const { chainId = 1337, type = 'evm', metadata = {} } = options;
             const response = await fetch(ADDRESSES.SEQUENCER_URL, {
                 method: 'POST',
                 headers: {
@@ -469,7 +469,7 @@ export class ContractService {
                 value: ethers.parseEther(value || "0"),
                 nonce: nonce !== undefined ? nonce : await wallet.getNonce(),
                 gasLimit: 21000,
-                chainId: 3151909
+                chainId: 1337
             };
 
             // Use provided gas price or fetch if missing

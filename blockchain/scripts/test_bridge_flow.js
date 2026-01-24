@@ -15,7 +15,7 @@ async function main() {
 
     const [user] = await hre.ethers.getSigners();
     const amount = hre.ethers.parseEther("10");
-    const destChainId = 3151909; // Target: VCN
+    const destChainId = 1337; // Target: VCN
 
     const token = await hre.ethers.getContractAt("VCNToken", SPOKE_TOKEN);
     const vault = await hre.ethers.getContractAt("VisionVault", SPOKE_VAULT);

@@ -21,7 +21,7 @@
 2.  아래 정보를 그대로 복사해서 넣으세요:
     -   **네트워크 이름**: Vision Testnet v2
     -   **새 RPC URL**: `https://rpc.visionchain.co`
-    -   **체인 ID**: `3151909`
+    -   **체인 ID**: `1337`
     -   **통화 기호**: `VCN`
     -   **블록 탐색기 URL**: `https://www.visionchain.co/visionscan`
 3.  **[저장]** 버튼을 누르면 메타마스크에 VCN 아이콘과 잔액이 표시됩니다.
@@ -42,7 +42,7 @@
 테스트넷과 상호작용하려면 지갑이나 개발 환경(Hardhat/Foundry)에 다음 설정을 추가하세요.
 
 -   **RPC URL**: `https://rpc.visionchain.co` (Cluster Gateway)
--   **Chain ID**: `3151909`
+-   **Chain ID**: `1337`
 -   **Currency Symbol**: `VCN`
 -   **Cluster Status**: 5 Nodes Active (1 RPC + 4 Validators)
 
@@ -68,7 +68,7 @@ v2 아키텍처는 마이크로초 단위의 처리를 위해 전통적인 멤�
 -   **요청 바디**:
     ```json
     {
-      "chainId": 3151909,
+      "chainId": 1337,
       "signedTx": "0xSIGNED_DATA",
       "type": "A110",
       "metadata": {

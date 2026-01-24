@@ -22,7 +22,7 @@ const DevPaymasterInstances: Component = () => {
         setInstances([
             { instanceId: 'inst_001', chainId: 1, chainName: 'Ethereum', sponsorMode: true, perTxCap: '0.05 ETH', perUserCap: '0.5 ETH', dailyCap: '10 ETH', allowedTokens: ['USDT', 'USDC', 'VCN'], status: 'NORMAL' },
             { instanceId: 'inst_002', chainId: 137, chainName: 'Polygon', sponsorMode: true, perTxCap: '5 MATIC', perUserCap: '50 MATIC', dailyCap: '500 MATIC', allowedTokens: ['USDT', 'USDC'], status: 'NORMAL' },
-            { instanceId: 'inst_003', chainId: 3151909, chainName: 'Vision Chain', sponsorMode: true, perTxCap: '100 VCN', perUserCap: '1000 VCN', dailyCap: '10000 VCN', allowedTokens: ['VCN'], status: 'NORMAL' },
+            { instanceId: 'inst_003', chainId: 1337, chainName: 'Vision Chain', sponsorMode: true, perTxCap: '100 VCN', perUserCap: '1000 VCN', dailyCap: '10000 VCN', allowedTokens: ['VCN'], status: 'NORMAL' },
             { instanceId: 'inst_004', chainId: 42161, chainName: 'Arbitrum', sponsorMode: false, perTxCap: '-', perUserCap: '-', dailyCap: '-', allowedTokens: [], status: 'PAUSED', statusReason: 'CAP_EXCEEDED' },
         ]);
     });

@@ -16,9 +16,9 @@ async function main() {
     console.log(`🔸 Mock Token deployed at: ${tokenAddress}`);
 
     // 2. Deploy Vault
-    // Note: '3151909' is the Chain ID of the HOME network (Vision Chain)
+    // Note: '1337' is the Chain ID of the HOME network (Vision Chain)
     const VisionVault = await hre.ethers.getContractFactory("VisionVault");
-    const vault = await VisionVault.deploy(tokenAddress, 3151909);
+    const vault = await VisionVault.deploy(tokenAddress, 1337);
     await vault.waitForDeployment();
     const vaultAddress = await vault.getAddress();
     console.log(`✅ VisionVault deployed at: ${vaultAddress}`);

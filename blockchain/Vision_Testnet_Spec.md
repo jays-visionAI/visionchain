@@ -7,7 +7,7 @@ This document defines the technical parameters for the custom Vision Chain Testn
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
 | **Network Name** | Vision Chain Testnet v2 | The official name of the network. |
-| **Chain ID** | `3151909` | Unique identifier (one higher than SimplyFi for distinction). |
+| **Chain ID** | `1337` | Unique identifier (one higher than SimplyFi for distinction). |
 | **Currency Symbol** | `VCN` | The native gas token of the network. |
 | **RPC URL** | `http://localhost:8545` | (Prototype) Local endpoint for development. |
 | **Block Explorer** | `Blockscout` (Planned) | Real-time transaction monitoring. |

@@ -15,7 +15,7 @@ async function main() {
         gasLimit: 21000,
         gasPrice: ethers.parseUnits("1", "gwei"),
         nonce: 0,
-        chainId: 3151909 // Vision Testnet ChainID
+        chainId: 1337 // Vision Testnet ChainID
     };
 
     // 3. Sign it
@@ -28,7 +28,7 @@ async function main() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                chainId: 3151909,
+                chainId: 1337,
                 signedTx: signedTx,
                 type: 'evm'
             })

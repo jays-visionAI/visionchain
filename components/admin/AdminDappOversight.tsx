@@ -20,7 +20,7 @@ const AdminDappOversight: Component = () => {
     onMount(async () => {
         // Mock data
         setDapps([
-            { dappId: 'dapp_001', name: 'Vision Swap', status: 'ACTIVE', totalSponsored24h: '45.2 ETH', totalSponsored7d: '312.5 ETH', txCount: 12450, userCount: 3200, chainStatus: { 1: true, 137: true, 3151909: true }, capUsage: 35 },
+            { dappId: 'dapp_001', name: 'Vision Swap', status: 'ACTIVE', totalSponsored24h: '45.2 ETH', totalSponsored7d: '312.5 ETH', txCount: 12450, userCount: 3200, chainStatus: { 1: true, 137: true, 1337: true }, capUsage: 35 },
             { dappId: 'dapp_002', name: 'NFT Marketplace', status: 'ACTIVE', totalSponsored24h: '12.8 ETH', totalSponsored7d: '89.3 ETH', txCount: 5600, userCount: 1100, chainStatus: { 1: true, 137: false }, capUsage: 78 },
             { dappId: 'dapp_003', name: 'DeFi Lender', status: 'SUSPENDED', totalSponsored24h: '0 ETH', totalSponsored7d: '156.7 ETH', txCount: 0, userCount: 2800, chainStatus: { 1: false }, capUsage: 0 }
         ]);

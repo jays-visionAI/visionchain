@@ -23,7 +23,7 @@ const TEST_CONFIG = {
     chains: {
         BASE: { chainId: 8453, name: 'Base' },
         POL: { chainId: 137, name: 'Polygon' },
-        VCN: { chainId: 3151909, name: 'Vision Chain' }
+        VCN: { chainId: 1337, name: 'Vision Chain' }
     },
     dapps: {
         NORMAL: { id: 'dapp_test_normal', name: 'Test dApp (Normal)' },

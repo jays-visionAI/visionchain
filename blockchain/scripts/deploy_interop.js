@@ -7,7 +7,7 @@ async function main() {
     console.log("Deploying contracts with the account:", deployer.address);
 
     // 1. Deploy Vision Equalizer (Center of the Universe) on Vision Chain
-    // Note: This script assumes it's running against the Vision Testnet (3151909)
+    // Note: This script assumes it's running against the Vision Testnet (1337)
     const VisionEqualizer = await hre.ethers.getContractFactory("VisionEqualizer");
     const equalizer = await VisionEqualizer.deploy();
     await equalizer.waitForDeployment();

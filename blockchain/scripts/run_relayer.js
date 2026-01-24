@@ -83,7 +83,7 @@ async function main() {
                 // Note: The logic in Vault requires signature verification.
                 // WE ARE THE VALIDATOR. We sign the "Mint" authority.
 
-                const fromChainId = 3151909; // VCN ID
+                const fromChainId = 1337; // VCN ID
                 const targetChainIdVal = await targetWallet.provider.getNetwork().then(n => n.chainId);
 
                 const messageHash = ethers.solidityPackedKeccak256(

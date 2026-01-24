@@ -23,7 +23,7 @@ const DevTransactions: Component = () => {
         setTransactions([
             { quoteId: 'q_001', stage: 'Settle', chainId: 1, chainName: 'Ethereum', baseCost: '0.0045 ETH', actualCost: '0.0042 ETH', surcharge: '0.00126 ETH', refund: '0.0003 ETH', destTxHash: '0xabc...123', explorerUrl: 'https://etherscan.io/tx/0xabc', timestamp: '2026-01-15 19:50:00' },
             { quoteId: 'q_002', stage: 'Execute', chainId: 137, chainName: 'Polygon', baseCost: '0.15 MATIC', actualCost: '-', surcharge: '-', refund: '-', destTxHash: '0xdef...456', explorerUrl: 'https://polygonscan.com/tx/0xdef', timestamp: '2026-01-15 19:52:00' },
-            { quoteId: 'q_003', stage: 'Settle', chainId: 3151909, chainName: 'Vision', baseCost: '5 VCN', actualCost: '4.8 VCN', surcharge: '1.44 VCN', refund: '0.2 VCN', destTxHash: '0x789...abc', explorerUrl: 'http://visionscan.io/tx/0x789', timestamp: '2026-01-15 19:48:00' },
+            { quoteId: 'q_003', stage: 'Settle', chainId: 1337, chainName: 'Vision', baseCost: '5 VCN', actualCost: '4.8 VCN', surcharge: '1.44 VCN', refund: '0.2 VCN', destTxHash: '0x789...abc', explorerUrl: 'http://visionscan.io/tx/0x789', timestamp: '2026-01-15 19:48:00' },
             { quoteId: 'q_004', stage: 'Deduct', chainId: 1, chainName: 'Ethereum', baseCost: '0.008 ETH', actualCost: '-', surcharge: '-', refund: '-', timestamp: '2026-01-15 19:55:00' },
         ]);
     });

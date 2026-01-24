@@ -25,7 +25,7 @@
 | :--- | :--- |
 | **네트워크 이름** | `Vision Testnet v2` |
 | **RPC URL** | `https://rpc.visionchain.co` |
-| **체인 ID** | `3151909` |
+| **체인 ID** | `1337` |
 | **통화 기호** | `VCN` |
 | **블록 탐색기** | *(준비 중)* |
 
@@ -74,7 +74,7 @@ module.exports = {
   networks: {
     vision_v1: {
       url: "https://rpc.visionchain.co",
-      chainId: 3151909,
+      chainId: 1337,
       accounts: ["YOUR_PRIVATE_KEY"] // 이 키를 절대 공유하지 마세요!
     }
   }
@@ -100,7 +100,7 @@ Vision Chain은 자산을 래핑(Wrapping)하거나 소각(Burning)하지 않고
 ### 고속 시퀀서 (High-Speed Sequencer)
 1초 미만의 지연 시간이 필요한 자동화된 에이전트의 경우, 표준 RPC 대신 Sequencer API로 서명된 트랜잭션을 직접 전송하세요.
 *   **엔드포인트:** `POST https://api.visionchain.co/rpc/submit`
-*   **페이로드:** `{ "verified": true, "signedTx": "0x...", "chainId": 3151909 }`
+*   **페이로드:** `{ "verified": true, "signedTx": "0x...", "chainId": 1337 }`
 
 ---
 

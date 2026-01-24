@@ -12,7 +12,7 @@ contract VisionProfileRegistry is Ownable {
     
     struct Profile {
         address walletAddress;
-        uint256 preferredChainId; // e.g. 1 (ETH), 137 (Polygon), 3151909 (Vision)
+        uint256 preferredChainId; // e.g. 1 (ETH), 137 (Polygon), 1337 (Vision)
         address preferredToken;   // e.g. 0x... (USDC)
         bool exists;
     }

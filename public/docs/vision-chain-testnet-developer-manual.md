@@ -21,7 +21,7 @@ You must manually add the network to see your VCN balance.
 2.  Enter the following details:
     -   **Network Name**: Vision Testnet v2
     -   **RPC URL**: `https://rpc.visionchain.co`
-    -   **Chain ID**: `3151909`
+    -   **Chain ID**: `1337`
     -   **Currency Symbol**: `VCN`
     -   **Explorer**: `https://www.visionchain.co/visionscan`
 3.  Click **Save** to complete the registration.
@@ -43,7 +43,7 @@ To interact with the testnet, add the following network settings to your wallet 
 
 -   **Network Name**: Vision Testnet v2
 -   **New RPC URL**: `https://rpc.visionchain.co` (Cluster Gateway)
--   **Chain ID**: `3151909`
+-   **Chain ID**: `1337`
 -   **Currency Symbol**: `VCN`
 -   **Block Explorer**: `https://www.visionchain.co/visionscan`
 -   **Cluster Status**: 5 Nodes Active (1 RPC + 4 Validators)
@@ -70,7 +70,7 @@ Instead of broadcast, send the signed transaction to our Gateway:
 -   **Request Body**:
     ```json
     {
-      "chainId": 3151909,
+      "chainId": 1337,
       "signedTx": "0xSIGNED_DATA",
       "type": "A110",
       "metadata": {

@@ -20,7 +20,7 @@ const DevConsoleOverview: Component = () => {
         setChains([
             { chainId: 1, name: 'Ethereum', status: 'ON', avgGasCost: '0.0045 ETH', sponsored24h: 1250 },
             { chainId: 137, name: 'Polygon', status: 'ON', avgGasCost: '0.02 MATIC', sponsored24h: 8500 },
-            { chainId: 3151909, name: 'Vision Chain', status: 'ON', avgGasCost: '0.001 VCN', sponsored24h: 3200 },
+            { chainId: 1337, name: 'Vision Chain', status: 'ON', avgGasCost: '0.001 VCN', sponsored24h: 3200 },
             { chainId: 42161, name: 'Arbitrum', status: 'OFF', avgGasCost: '-', sponsored24h: 0 },
         ]);
     });

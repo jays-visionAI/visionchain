@@ -71,7 +71,7 @@ const Testnet: Component = () => {
                 method: 'wallet_addEthereumChain',
                 params: [
                     {
-                        chainId: '0x' + (3151909).toString(16),
+                        chainId: '0x' + (1337).toString(16),
                         chainName: 'Vision Testnet v2',
                         nativeCurrency: {
                             name: 'VCN',
@@ -98,7 +98,7 @@ const Testnet: Component = () => {
         { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
         { label: 'RPC URL', value: activeRpc(), id: 'rpc' },
         { label: 'Sequencer API', value: 'https://api.visionchain.co/submit', id: 'seq' },
-        { label: 'Chain ID', value: '3151909', id: 'chainid' },
+        { label: 'Chain ID', value: '1337', id: 'chainid' },
         { label: 'Currency Symbol', value: 'VCN', id: 'symbol' },
     ];
 
@@ -292,7 +292,7 @@ const Testnet: Component = () => {
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">1</div>
                                     <h4 class="text-sm font-bold mb-1 uppercase tracking-tight">MetaMask Setup (v2)</h4>
-                                    <p class="text-xs text-slate-500 leading-relaxed">Add Vision Testnet v2 manually. **Chain ID: 3151909**, RPC: `https://api.visionchain.co`. Use VCN for gas.</p>
+                                    <p class="text-xs text-slate-500 leading-relaxed">Add Vision Testnet v2 manually. **Chain ID: 1337**, RPC: `https://api.visionchain.co`. Use VCN for gas.</p>
                                 </li>
                                 <li class="relative pl-8">
                                     <div class="absolute left-0 top-1 w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400">2</div>

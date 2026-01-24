@@ -107,7 +107,7 @@ export class ActionResolverService {
         if (!equalizer) throw new Error("Equalizer contract not initialized");
 
         const txData = await equalizer.requestTSSMigration.populateTransaction(
-            3151909, // Source: Vision
+            1337, // Source: Vision
             targetChainId,
             token || 'VCN',
             ethers.parseEther(amount)
