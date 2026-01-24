@@ -179,50 +179,6 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     </div>
                                 </div>
 
-                                <h4 class="text-2xl font-bold text-white mb-4">Validator Node</h4>
-                                <p class="text-gray-400 text-sm mb-8 leading-relaxed">
-                                    Standard participation node. Validates transactions and earns VCN rewards with a 1x multiplier. Ideal for individual operators.
-                                </p>
-
-                                <div class="space-y-3 mb-8 flex-1">
-                                    <div class="flex items-center gap-3 text-sm text-gray-300">
-                                        <Check class="w-4 h-4 text-emerald-500" />
-                                        <span>1x Mining Multiplier</span>
-                                    </div>
-                                    <div class="flex items-center gap-3 text-sm text-gray-300">
-                                        <Check class="w-4 h-4 text-emerald-500" />
-                                        <span>Eligible for Halving Trigger</span>
-                                    </div>
-                                    <div class="flex items-center gap-3 text-sm text-gray-300">
-                                        <Check class="w-4 h-4 text-emerald-500" />
-                                        <span>Standard Hardware Req.</span>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => props.purchaseNode('Validator')}
-                                    class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/10 transition-all hover:border-emerald-500/50">
-                                    Purchase License
-                                </button>
-                            </div>
-
-                            {/* Enterprise Tier */}
-                            <div class="bg-[#111113] border border-white/[0.06] rounded-3xl p-8 hover:border-purple-500/30 transition-all flex flex-col relative overflow-hidden">
-                                {/* Badge */}
-                                <div class="absolute -right-12 top-6 bg-purple-600 w-40 h-8 flex items-center justify-center rotate-45 text-[10px] font-bold text-white uppercase tracking-widest shadow-lg">
-                                    High Perf.
-                                </div>
-
-                                <div class="flex justify-between items-start mb-6">
-                                    <div class="px-3 py-1 bg-purple-500/10 rounded-lg text-[10px] font-bold text-purple-400 uppercase tracking-widest">
-                                        Enterprise
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="text-2xl font-bold text-white">500,000 VCN</div>
-                                        <div class="text-xs text-gray-500">approx. $62,000</div>
-                                    </div>
-                                </div>
-
                                 <h4 class="text-2xl font-bold text-white mb-4">Enterprise Node</h4>
                                 <p class="text-gray-400 text-sm mb-8 leading-relaxed">
                                     High-performance institutional node handling data availability and AI compute tasks. 12x multiplier reward.
