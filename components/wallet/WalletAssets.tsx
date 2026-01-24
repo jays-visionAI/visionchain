@@ -31,6 +31,8 @@ interface WalletAssetsProps {
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
+    const [networkFilter, setNetworkFilter] = createSignal<'mainnet' | 'testnet'>('mainnet');
+
     return (
 
         <div class="flex-1 overflow-y-auto">
@@ -49,7 +51,10 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             <div class="text-[11px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-2">Total Portfolio Value</div>
                             <div class="flex items-baseline gap-4">
                                 <span class="text-4xl sm:text-5xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                                    {props.totalValueStr()}
+                                    {networkFilter() === 'mainnet'
+                                        ? props.totalValueStr()
+                                        : (props.totalValue() * 0.1).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                                    }
                                 </span>
                                 <div class="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full border border-white/10">
                                     <TrendingUp class="w-3.5 h-3.5 text-gray-500" />
@@ -237,27 +242,50 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                 </div>
 
                 {/* Tab Navigation */}
-                <div class="flex items-center gap-1 mb-8 p-1.5 bg-white/[0.03] backdrop-blur-md rounded-2xl w-fit border border-white/[0.06] shadow-2xl">
-                    <button
-                        onClick={() => props.setAssetsTab('tokens')}
-                        class={`px-8 py-3 rounded-[14px] text-sm font-bold transition-all ${props.assetsTab() === 'tokens'
-                            ? 'bg-white/[0.08] text-white shadow-lg shadow-black/20'
-                            : 'text-gray-500 hover:text-white hover:bg-white/[0.04]'
-                            }`}
-                        style={{ background: props.assetsTab() === 'tokens' ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-                    >
-                        Assets
-                    </button>
-                    <button
-                        onClick={() => props.setAssetsTab('activity')}
-                        class={`px-8 py-3 rounded-[14px] text-sm font-bold transition-all ${props.assetsTab() === 'activity'
-                            ? 'bg-white/[0.08] text-white shadow-lg shadow-black/20'
-                            : 'text-gray-500 hover:text-white hover:bg-white/[0.04]'
-                            }`}
-                        style={{ background: props.assetsTab() === 'activity' ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-                    >
-                        Activity
-                    </button>
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center gap-1 p-1.5 bg-white/[0.03] backdrop-blur-md rounded-2xl w-fit border border-white/[0.06] shadow-2xl">
+                        <button
+                            onClick={() => props.setAssetsTab('tokens')}
+                            class={`px-8 py-3 rounded-[14px] text-sm font-bold transition-all ${props.assetsTab() === 'tokens'
+                                ? 'bg-white/[0.08] text-white shadow-lg shadow-black/20'
+                                : 'text-gray-500 hover:text-white hover:bg-white/[0.04]'
+                                }`}
+                            style={{ background: props.assetsTab() === 'tokens' ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+                        >
+                            Assets
+                        </button>
+                        <button
+                            onClick={() => props.setAssetsTab('activity')}
+                            class={`px-8 py-3 rounded-[14px] text-sm font-bold transition-all ${props.assetsTab() === 'activity'
+                                ? 'bg-white/[0.08] text-white shadow-lg shadow-black/20'
+                                : 'text-gray-500 hover:text-white hover:bg-white/[0.04]'
+                                }`}
+                            style={{ background: props.assetsTab() === 'activity' ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+                        >
+                            Activity
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10">
+                        <button
+                            onClick={() => setNetworkFilter('mainnet')}
+                            class={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${networkFilter() === 'mainnet'
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                                : 'text-gray-500 hover:text-white'
+                                }`}
+                        >
+                            Mainnet
+                        </button>
+                        <button
+                            onClick={() => setNetworkFilter('testnet')}
+                            class={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${networkFilter() === 'testnet'
+                                ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20'
+                                : 'text-gray-500 hover:text-white'
+                                }`}
+                        >
+                            Testnet
+                        </button>
+                    </div>
                 </div>
 
                 {/* Two Column Layout */}
@@ -281,7 +309,17 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <For each={['VCN']}>
                                     {(symbol, index) => {
                                         const asset = () => props.getAssetData(symbol);
-                                        const value = () => (asset().balance * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                                        const isMainnet = () => networkFilter() === 'mainnet';
+
+                                        // Filtered Logic:
+                                        // Mainnet -> Show normal balance, label "Purchased (VCN)"
+                                        // Testnet -> Show 10% balance, label "VCN (Testnet)"
+
+                                        const displayBalance = () => isMainnet() ? asset().balance : (asset().balance * 0.1);
+                                        const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                                        const displayName = () => isMainnet() ? 'Purchased (VCN)' : 'VCN (Testnet)';
+                                        const displaySymbol = () => isMainnet() ? 'VCN' : 'TVCN';
+
                                         const isLast = () => index() === 2;
 
                                         return (
@@ -294,7 +332,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                                 symbol === 'ETH' ? 'bg-gradient-to-br from-purple-500 to-indigo-400' :
                                                                     'bg-gradient-to-br from-green-500 to-emerald-400'
                                                                 }`}>
-                                                                {symbol.charAt(0)}
+                                                                {displaySymbol().charAt(0)}
                                                             </div>
                                                         }>
                                                             <img src={asset().image!} alt={symbol} class="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex-shrink-0 shadow-lg group-hover/row:scale-105 transition-transform" />
@@ -304,8 +342,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                         </div>
                                                     </div>
                                                     <div class="min-w-0">
-                                                        <div class="text-[15px] md:text-[17px] font-bold text-white group-hover/row:text-blue-400 transition-colors uppercase tracking-wide">{symbol}</div>
-                                                        <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{asset().name}</div>
+                                                        <div class="text-[15px] md:text-[17px] font-bold text-white group-hover/row:text-blue-400 transition-colors uppercase tracking-wide">{displaySymbol()}</div>
+                                                        <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{displayName()}</div>
                                                     </div>
                                                 </div>
                                                 {/* Price */}
@@ -330,15 +368,15 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                 </div>
                                                 {/* Holdings */}
                                                 <div class="w-28 md:w-32 text-right">
-                                                    <div class="text-[14px] md:text-[16px] font-bold text-white tabular-nums tracking-wide">{asset().balance.toLocaleString()}</div>
-                                                    <div class="text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{symbol}</div>
+                                                    <div class="text-[14px] md:text-[16px] font-bold text-white tabular-nums tracking-wide">{displayBalance().toLocaleString()}</div>
+                                                    <div class="text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{displaySymbol()}</div>
                                                 </div>
                                                 {/* Value */}
                                                 <div class="w-28 md:w-32 text-right">
                                                     <Show when={!asset().isLoading} fallback={
                                                         <div class="h-4 md:h-5 w-16 md:w-20 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
                                                     }>
-                                                        <span class="text-[15px] md:text-[18px] font-bold text-white tabular-nums drop-shadow-sm">{value()}</span>
+                                                        <span class="text-[15px] md:text-[18px] font-bold text-white tabular-nums drop-shadow-sm">{displayValue()}</span>
                                                     </Show>
                                                 </div>
                                             </div>
