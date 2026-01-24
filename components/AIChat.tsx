@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown } from 'lucide-solid';
+import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal } from 'lucide-solid';
 import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/geminiService';
 import { getChatbotSettings } from '../services/firebaseService';
 import { generateText, generateImage, generateSpeech } from '../services/aiService';
@@ -25,6 +25,22 @@ Your goal is to have a natural, spoken conversation.
 3. Do not use markdown formatting or code blocks in your speech unless explicitly asked to dictate code.
 4. Use the following knowledge base for facts, but adapt the tone for voice (friendly, professional): ${VISION_CHAIN_KNOWLEDGE}`;
 
+// --- Types & Constants ---
+type FileType = 'image' | 'pdf' | 'excel' | 'unknown';
+
+interface Attachment {
+  file: File;
+  preview: string; // Data URL
+  type: FileType;
+}
+
+const LANGUAGES = [
+  { code: 'en-US', label: 'English (US)' },
+  { code: 'ko-KR', label: '한국어' },
+  { code: 'ja-JP', label: '日本語' },
+  { code: 'es-ES', label: 'Español' },
+];
+
 const TypingIndicator = (): JSX.Element => (
   <Motion.div
     initial={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -32,7 +48,7 @@ const TypingIndicator = (): JSX.Element => (
     class="flex gap-3"
   >
     <div class="w-8 h-8 rounded-full bg-[#1d1d1f] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-      <Bot class="w-4 h-4 text-blue-400" />
+      <Bot class="w-4 h-4 text-emerald-400" />
     </div>
     <div class="bg-[#1d1d1f] px-4 py-3 rounded-2xl rounded-tl-sm border border-white/10 flex items-center gap-1.5 shadow-sm">
       <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
@@ -49,7 +65,7 @@ const ImageSkeleton = (): JSX.Element => (
     class="flex gap-3"
   >
     <div class="w-8 h-8 rounded-full bg-[#1d1d1f] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-      <Bot class="w-4 h-4 text-blue-400" />
+      <Bot class="w-4 h-4 text-emerald-400" />
     </div>
     <div class="space-y-2">
       <div class="bg-[#1d1d1f] border border-white/10 p-2 rounded-2xl rounded-tl-sm shadow-sm">
@@ -59,7 +75,7 @@ const ImageSkeleton = (): JSX.Element => (
         </div>
       </div>
       <div class="flex items-center gap-2 ml-1">
-        <div class="h-1.5 w-1.5 bg-blue-500 rounded-full animate-pulse" />
+        <div class="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
         <span class="text-[10px] text-gray-500 font-medium animate-pulse">Generating visual...</span>
       </div>
     </div>
@@ -75,9 +91,41 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [loadingType, setLoadingType] = createSignal<'text' | 'image'>('text');
   const [useFastModel, setUseFastModel] = createSignal(false);
   const [aspectRatio, setAspectRatio] = createSignal<AspectRatio>(AspectRatio.Square);
-  const [activeProvider, setActiveProvider] = createSignal<string>('deepseek');
-  const [modelLabel, setModelLabel] = createSignal<string>('DeepSeek Chat');
 
+  // --- Admin Configured Settings ---
+  const [activeProvider, setActiveProvider] = createSignal<string>('gemini');
+  const [modelLabel, setModelLabel] = createSignal<string>('Gemini 1.5 Flash');
+
+  // --- New Features State ---
+  const [dragActive, setDragActive] = createSignal(false);
+  const [attachments, setAttachments] = createSignal<Attachment[]>([]);
+  const [voiceLang, setVoiceLang] = createSignal('en-US');
+  const [isRecording, setIsRecording] = createSignal(false); // For simple STT
+  const [recognition, setRecognition] = createSignal<any>(null); // Web Speech API
+
+  const [isImageGenMode, setIsImageGenMode] = createSignal(false);
+
+  // --- Refs ---
+  let scrollRef: HTMLDivElement | undefined;
+  let fileInputRef: HTMLInputElement | undefined;
+
+  // --- Live Voice Mode (Advanced) State - Keeping for backward compatibility if user wants full Live API ---
+  const [isLiveMode, setIsLiveMode] = createSignal(false);
+  const [isVoiceConnected, setIsVoiceConnected] = createSignal(false);
+  const [voiceError, setVoiceError] = createSignal<string | null>(null);
+  const [volumeLevel, setVolumeLevel] = createSignal(0);
+
+  // Audio Refs for Live API
+  let audioContexts: { input?: AudioContext, output?: AudioContext } = {};
+  let session: any = null;
+  let stream: MediaStream | null = null;
+  let processor: ScriptProcessorNode | null = null;
+  let source: MediaStreamAudioSourceNode | null = null;
+  let nextStartTime = 0;
+  let audioSources: Set<AudioBufferSourceNode> = new Set();
+
+
+  // --- Initialization ---
   createEffect(async () => {
     // Check Firebase for active provider and model settings
     try {
@@ -106,70 +154,156 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     }
   });
 
-  // Unified Chat Mode States
-  const [isImageGenMode, setIsImageGenMode] = createSignal(false);
-  const [attachment, setAttachment] = createSignal<string | null>(null);
-
-  let scrollRef: HTMLDivElement | undefined;
-  let fileInputRef: HTMLInputElement | undefined;
-
-  // Live Voice Mode State
-  const [isVoiceMode, setIsVoiceMode] = createSignal(false);
-  const [isVoiceConnected, setIsVoiceConnected] = createSignal(false);
-  const [voiceError, setVoiceError] = createSignal<string | null>(null);
-  const [volumeLevel, setVolumeLevel] = createSignal(0);
-
-  // Audio Refs for Live API
-  let audioContexts: { input?: AudioContext, output?: AudioContext } = {};
-  let session: any = null;
-  let stream: MediaStream | null = null;
-  let processor: ScriptProcessorNode | null = null;
-  let source: MediaStreamAudioSourceNode | null = null;
-  let nextStartTime = 0;
-  let audioSources: Set<AudioBufferSourceNode> = new Set();
-
+  // Scroll to bottom
   createEffect(() => {
     if (scrollRef && (messages() || isLoading())) {
       scrollRef.scrollTo({ top: scrollRef.scrollHeight, behavior: 'smooth' });
     }
   });
 
+  // Cleanup
   onCleanup(() => {
-    stopVoiceSession();
+    stopVoiceSession(); // Live API
+    if (recognition()) {
+      recognition().stop();
+    }
   });
 
-  const handleFileSelect = (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const file = target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAttachment(reader.result as string);
-        setIsImageGenMode(false);
-      };
-      reader.readAsDataURL(file);
+  // --- File Handling Functions ---
+  const determineFileType = (file: File): FileType => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type === 'application/pdf') return 'pdf';
+    if (file.type.includes('spreadsheet') || file.type.includes('excel') || file.type.includes('csv')) return 'excel';
+    return 'unknown';
+  };
+
+  const processFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const type = determineFileType(file);
+      setAttachments(prev => [...prev, {
+        file,
+        preview: e.target?.result as string,
+        type
+      }]);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrag = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
     }
   };
 
-  const clearAttachment = () => {
-    setAttachment(null);
-    if (fileInputRef) fileInputRef.value = '';
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
+      const files = Array.from(e.dataTransfer.files);
+      files.forEach(processFile);
+    }
   };
 
+  const handleFileSelect = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target.files) {
+      const files = Array.from(target.files);
+      files.forEach(processFile);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+    if (attachments().length === 0 && fileInputRef) {
+      fileInputRef.value = '';
+    }
+  };
+
+
+  // --- STT (Simple Voice Input) ---
+  const toggleRecording = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Your browser does not support Speech Recognition.");
+      return;
+    }
+
+    if (isRecording()) {
+      recognition()?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const recognitionInstance = new SpeechRecognition();
+    recognitionInstance.lang = voiceLang();
+    recognitionInstance.interimResults = true;
+    recognitionInstance.maxAlternatives = 1;
+
+    recognitionInstance.onstart = () => setIsRecording(true);
+
+    recognitionInstance.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join('');
+
+      // For interim results, we might want to just update the input temporarily or append
+      // But for simplicity, let's just set input
+      setInput(prev => {
+        // If we want to append: return prev + ' ' + transcript;
+        // But interim fires multiple times, so better to handle final
+        return transcript;
+      });
+      // If we want to support long dictation, logic gets more complex.
+      // Simple implementation replaces input for now or handles 'isFinal'.
+      if (event.results[0].isFinal) {
+        setInput(transcript);
+      }
+    };
+
+    recognitionInstance.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsRecording(false);
+    };
+
+    recognitionInstance.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionInstance.start();
+    setRecognition(recognitionInstance);
+  };
+
+
+  // --- Chat Logic ---
   const handleSend = async () => {
-    if ((!input().trim() && !attachment()) || isLoading()) return;
+    if ((!input().trim() && attachments().length === 0) || isLoading()) return;
+
+    // Convert attachments to format message expects (taking first image if any for legacy compatibility)
+    // Multimodal support in generating text needs updates if we send multiple images.
+    // For now, let's grab the first image attachment if exists.
+    const imageAttachment = attachments().find(a => a.type === 'image');
 
     const userMsg: Message = {
       role: 'user',
       text: input(),
-      imageUrl: attachment() || undefined,
-      type: attachment() ? 'image' : 'text'
+      imageUrl: imageAttachment?.preview || undefined,
+      type: imageAttachment ? 'image' : 'text'
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
-    const currentAttachment = attachment();
-    clearAttachment();
+    // Clear attachments after send
+    const currentAttachments = [...attachments()];
+    setAttachments([]);
+    if (fileInputRef) fileInputRef.value = '';
 
     setLoadingType(isImageGenMode() ? 'image' : 'text');
     setIsLoading(true);
@@ -185,7 +319,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
       } else {
         // --- VISION CHAIN INTENT PARSER LOGIC ---
         // 1. Try to parse intent first (unless there is an image attachment, which usually implies question about image)
-        if (!currentAttachment) {
+        if (!imageAttachment) {
           const intent = await intentParser.parseIntent(userMsg.text);
 
           // If we are confident (~80%+), we check if it requires a transaction
@@ -211,10 +345,14 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         }
 
         // 2. Fallback to General AI (Gemini)
+        // Note: Currently generateText only supports one image. 
+        // We might need to extend this service for PDFs if Gemini supports it via API, but for now assuming image only for vision.
         let rawBase64 = undefined;
-        if (currentAttachment) {
-          rawBase64 = currentAttachment.split(',')[1];
+        if (imageAttachment) {
+          rawBase64 = imageAttachment.preview.split(',')[1];
         }
+
+        // Strict Admin Control: Use the settings fetched in createEffect
         const text = await generateText(userMsg.text, rawBase64, useFastModel(), 'helpdesk');
         setMessages(prev => [...prev, { role: 'model', text }]);
       }
@@ -250,7 +388,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     }]);
   };
 
-  // --- Live API Logic ---
+  // --- Live API Logic (Legacy/Advanced Voice) ---
   const startVoiceSession = async () => {
     setVoiceError(null);
     try {
@@ -342,7 +480,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     } catch (err) {
       console.error("Failed to start voice session", err);
       setVoiceError("Failed to access microphone or connect.");
-      setIsVoiceMode(false);
+      setIsLiveMode(false);
     }
   };
 
@@ -360,15 +498,16 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     audioSources.clear();
   };
 
-  const toggleVoiceMode = () => {
-    if (isVoiceMode()) {
-      setIsVoiceMode(false);
+  const toggleLiveMode = () => {
+    if (isLiveMode()) {
+      setIsLiveMode(false);
       stopVoiceSession();
     } else {
-      setIsVoiceMode(true);
+      setIsLiveMode(true);
       startVoiceSession();
     }
   };
+
 
   return (
     <Presence>
@@ -378,25 +517,50 @@ const AIChat = (props: AIChatProps): JSX.Element => {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 50, scale: 0.9 }}
           transition={{ duration: 0.3, easing: [0.32, 0.72, 0, 1] }}
-          class="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[650px] bg-[#161617]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden font-sans"
+          class="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[700px] bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden font-sans"
+          onDragEnter={handleDrag}
         >
+          {/* Drag Overlay */}
+          <Presence>
+            <Show when={dragActive()}>
+              <Motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                class="absolute inset-0 z-50 bg-blue-600/20 backdrop-blur-sm border-2 border-dashed border-blue-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none"
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+              >
+                <div class="bg-blue-500 rounded-full p-4 mb-3 shadow-lg">
+                  <GripHorizontal class="w-8 h-8 text-white" />
+                </div>
+                <p class="text-white font-bold text-lg">Drop files here</p>
+                <p class="text-blue-200 text-sm">Images, PDFs, Spreadsheets</p>
+              </Motion.div>
+            </Show>
+          </Presence>
+
           {/* Header */}
-          <div class="flex items-center justify-between px-4 py-3 bg-white/5 border-b border-white/5 z-20">
-            <div class="flex items-center gap-2">
-              <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                <Sparkles class="w-4 h-4 text-blue-400" />
+          <div class="flex items-center justify-between px-4 py-3 bg-[#242424] border-b border-white/5 z-20">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                <Bot class="w-5 h-5 text-emerald-400" />
               </div>
               <div>
                 <h2 class="text-sm font-semibold text-white">Vision AI</h2>
                 <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                  <span class="text-[10px] text-gray-400">Online</span>
+                  <span class={`w-1.5 h-1.5 rounded-full ${activeProvider() === 'gemini' ? 'bg-sky-500' : activeProvider() === 'deepseek' ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`} />
+                  <span class="text-[10px] text-gray-400">{modelLabel()}</span>
                 </div>
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <button onClick={toggleLiveMode} class={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${isLiveMode() ? 'bg-red-500/20 text-red-400 animate-pulse' : 'hover:bg-white/10 text-gray-400 hover:text-white'}`} title="Live Voice Mode">
+                <Activity class="w-4 h-4" />
+              </button>
               <button
-                onClick={() => { props.onClose(); stopVoiceSession(); setIsVoiceMode(false); }}
+                onClick={() => { props.onClose(); stopVoiceSession(); setIsLiveMode(false); }}
                 class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
               >
                 <X class="w-4 h-4" />
@@ -404,113 +568,43 @@ const AIChat = (props: AIChatProps): JSX.Element => {
             </div>
           </div>
 
-          {/* Control Bar */}
-          <div class="bg-[#0a0a0a]/50 px-4 py-2 flex items-center justify-between border-b border-white/5 z-20 text-[11px]">
-            <div class="flex items-center gap-2 text-gray-400">
-              <BookOpen class="w-3 h-3 text-blue-400" />
-              <span>Knowledge Base Active</span>
-            </div>
-            {/* Dynamic Model Badge */}
-            <div class={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all ${activeProvider() === 'deepseek' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/20' :
-              activeProvider() === 'openai' ? 'bg-green-600/20 text-green-400 border border-green-500/20' :
-                !useFastModel() ? 'bg-purple-600/20 text-purple-400 border border-purple-500/20' :
-                  'bg-amber-600/20 text-amber-400 border border-amber-500/20'
-              }`}>
-              <Show when={activeProvider() === 'deepseek'} fallback={
-                <Show when={!useFastModel()} fallback={<Bolt class="w-3 h-3" />}>
-                  <Sparkles class="w-3 h-3" />
-                </Show>
-              }>
-                <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              </Show>
-              {modelLabel()}
-            </div>
-          </div>
-
-          {/* VOICE MODE OVERLAY */}
-          <Show when={isVoiceMode()}>
-            <Motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              class="absolute inset-0 z-30 bg-[#050505]/95 backdrop-blur-md flex flex-col items-center justify-center top-[105px] bottom-0"
-            >
-              <div class="flex-1 flex flex-col items-center justify-center w-full relative">
-                <Show when={voiceError()} fallback={
-                  <>
-                    {/* Dynamic Voice Visualizer */}
-                    <div class="relative w-32 h-32 flex items-center justify-center">
-                      {/* Outer Ripple */}
-                      <div
-                        class="absolute inset-0 bg-blue-500 rounded-full blur-2xl transition-all duration-100"
-                        style={{
-                          transform: `scale(${isVoiceConnected() ? 1.2 + (volumeLevel() * 1) : 1})`,
-                          opacity: isVoiceConnected() ? 0.2 + (volumeLevel() * 0.3) : 0
-                        }}
-                      />
-                      {/* Inner Ring */}
-                      <div
-                        class={`w-24 h-24 rounded-full flex items-center justify-center border transition-all duration-300 relative z-10 ${isVoiceConnected() ? 'border-blue-500/50 bg-blue-500/10 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-white/10 bg-white/5'}`}
-                        style={{ transform: `scale(${isVoiceConnected() ? 1 + (volumeLevel() * 0.4) : 1})` }}
-                      >
-                        <Show when={isVoiceConnected()} fallback={
-                          <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        }>
-                          <Activity class="w-8 h-8 text-blue-400" />
-                        </Show>
-                      </div>
-                    </div>
-
-                    <div class="mt-8 text-center space-y-2">
-                      <h3 class="text-white font-medium text-lg tracking-tight">
-                        {isVoiceConnected() ? "Vision AI Live" : "Connecting..."}
-                      </h3>
-                      <p class="text-gray-500 text-sm font-medium">
-                        {isVoiceConnected()
-                          ? (volumeLevel() > 0.05 ? "Listening..." : "Speak now")
-                          : "Establishing secure link"}
-                      </p>
-                    </div>
-                  </>
-                }>
-                  <div class="text-red-400 text-center px-8">
-                    <p class="mb-4 bg-red-500/10 p-4 rounded-xl border border-red-500/20">{voiceError()}</p>
-                    <button onClick={toggleVoiceMode} class="text-sm text-gray-400 hover:text-white transition-colors">Return to Chat</button>
-                  </div>
-                </Show>
+          {/* Live Mode Overlay */}
+          <Show when={isLiveMode()}>
+            {/* ... reuse existing live mode display or simplified ... */}
+            <div class="absolute inset-0 bg-black/90 z-40 flex flex-col items-center justify-center text-center p-6">
+              <Activity class="w-16 h-16 text-blue-500 mb-4 animate-pulse" />
+              <h3 class="text-white text-xl font-bold mb-2">Live Voice Connected</h3>
+              <p class="text-gray-400 text-sm mb-6">Speaking with {modelLabel()}</p>
+              <div class="w-full max-w-xs h-1 rounded-full bg-gray-800 overflow-hidden">
+                <div class="h-full bg-blue-500 transition-all duration-75" style={{ width: `${volumeLevel() * 100}%` }}></div>
               </div>
-              <div class="w-full p-8 flex justify-center pb-12">
-                <button
-                  onClick={toggleVoiceMode}
-                  class="p-4 rounded-full bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-500/20 hover:border-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.4)]"
-                >
-                  <MicOff class="w-6 h-6" />
-                </button>
-              </div>
-            </Motion.div>
+              <button onClick={toggleLiveMode} class="mt-8 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-medium">End Session</button>
+            </div>
           </Show>
 
-          {/* Messages Area */}
-          <div class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth" ref={scrollRef}>
+
+          {/* Messages Area (ChatGPT Style Bubble) */}
+          <div class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth bg-[#1a1a1a]" ref={scrollRef}>
             <For each={messages()}>
               {(msg, idx) => (
-                <Motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.3, easing: "ease-out" }}
-                  class={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-                >
-                  {/* Avatar */}
-                  <div class={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-1 shadow-sm ${msg.role === 'user' ? 'bg-blue-600' : 'bg-[#1d1d1f] border border-white/10'}`}>
-                    <Show when={msg.role === 'user'} fallback={<Bot class="w-4 h-4 text-blue-400" />}>
-                      <User class="w-4 h-4 text-white" />
-                    </Show>
-                  </div>
+                <div class={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  {/* Avatar for Model */}
+                  <Show when={msg.role === 'model'}>
+                    <div class="w-8 h-8 rounded-full bg-[#242424] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1">
+                      <Bot class="w-4 h-4 text-emerald-400" />
+                    </div>
+                  </Show>
 
-                  <div class="max-w-[80%] space-y-1">
-                    <div class={`p-3.5 rounded-2xl text-[13.5px] leading-relaxed shadow-sm backdrop-blur-sm ${msg.role === 'user'
-                      ? 'bg-blue-600 text-white rounded-tr-sm'
-                      : 'bg-[#1d1d1f] text-gray-200 border border-white/10 rounded-tl-sm'
+                  <div class={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    {/* Name */}
+                    <span class="text-[10px] text-gray-500 mb-1 px-1">
+                      {msg.role === 'user' ? 'You' : 'Vision Guide'}
+                    </span>
+
+                    {/* Bubble */}
+                    <div class={`px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm backdrop-blur-sm ${msg.role === 'user'
+                      ? 'bg-[#3b82f6] text-white rounded-tr-sm'
+                      : 'bg-[#242424] text-gray-200 border border-white/5 rounded-tl-sm'
                       }`}>
                       <Show when={msg.imageUrl}>
                         <div class="mb-3 rounded-xl overflow-hidden border border-white/10 shadow-md">
@@ -531,16 +625,23 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                       </Show>
                     </div>
 
-                    {/* Message Actions (Model Only) */}
-                    <Show when={msg.role === 'model' && msg.type !== 'image' && !msg.action}>
-                      <div class="flex items-center gap-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => playTTS(msg.text)} class="text-gray-500 hover:text-blue-400 flex items-center gap-1 text-[10px] transition-colors">
-                          <Volume2 class="w-3 h-3" /> Read Aloud
+                    {/* Actions */}
+                    <Show when={msg.role === 'model' && !msg.action}>
+                      <div class="flex items-center gap-2 mt-1 px-1">
+                        <button onClick={() => playTTS(msg.text)} class="text-gray-500 hover:text-white transition-colors">
+                          <Volume2 class="w-3 h-3" />
                         </button>
                       </div>
                     </Show>
                   </div>
-                </Motion.div>
+
+                  {/* Avatar for User */}
+                  <Show when={msg.role === 'user'}>
+                    <div class="w-8 h-8 rounded-full bg-[#3b82f6] flex items-center justify-center flex-shrink-0 mt-1">
+                      <User class="w-4 h-4 text-white" />
+                    </div>
+                  </Show>
+                </div>
               )}
             </For>
 
@@ -552,103 +653,136 @@ const AIChat = (props: AIChatProps): JSX.Element => {
             </Show>
           </div>
 
-          {/* Input Area - Sticky Bottom */}
-          <div class="p-4 bg-[#0a0a0a]/80 backdrop-blur-xl border-t border-white/10">
-            {/* Attachment Preview */}
+          {/* Footer Area (ChatGPT Style Input) */}
+          <div class="p-4 bg-[#1a1a1a] border-t border-white/5 relative z-30">
+
+            {/* Attachments Preview Row */}
             <Presence>
-              <Show when={attachment()}>
-                <Motion.div
-                  initial={{ opacity: 0, y: 10, height: 0 }}
-                  animate={{ opacity: 1, y: 0, height: 'auto' }}
-                  exit={{ opacity: 0, y: 10, height: 0 }}
-                  class="mb-3 flex items-center gap-2 overflow-hidden"
-                >
-                  <div class="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 group shadow-lg">
-                    <img src={attachment()!} alt="Preview" class="w-full h-full object-cover" />
-                    <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button onClick={clearAttachment} class="text-white p-1 hover:text-red-400 transition-colors">
-                        <Trash2 class="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                  <span class="text-xs text-blue-400 font-medium bg-blue-500/10 px-2 py-1 rounded-md border border-blue-500/20">Image attached</span>
-                </Motion.div>
-              </Show>
-            </Presence>
-
-            {/* Input Bar */}
-            <div class="relative flex gap-2 items-end">
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                onChange={handleFileSelect}
-                class="hidden"
-              />
-
-              {/* Tools Group */}
-              <div class="flex gap-1 pb-1.5">
-                <button
-                  onClick={() => fileInputRef?.click()}
-                  disabled={isImageGenMode()}
-                  class={`p-2 rounded-xl transition-all ${isImageGenMode() ? 'opacity-30 cursor-not-allowed text-gray-600' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-                  title="Attach Image"
-                >
-                  <Paperclip class="w-4.5 h-4.5" />
-                </button>
-                <button
-                  onClick={() => {
-                    setIsImageGenMode(!isImageGenMode());
-                    if (!isImageGenMode()) clearAttachment();
-                  }}
-                  class={`p-2 rounded-xl transition-all ${isImageGenMode() ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/50' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-                  title="Image Generation Mode"
-                >
-                  <Palette class="w-4.5 h-4.5" />
-                </button>
-              </div>
-
-              <div class="relative flex-1">
-                <input
-                  class={`w-full bg-[#1c1c1e] text-white text-sm rounded-xl py-3 pl-4 pr-10 outline-none border transition-all placeholder:text-gray-600 ${isImageGenMode() ? 'border-purple-500/50 focus:border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.15)]' : 'border-white/10 focus:border-blue-500/50 focus:shadow-[0_0_15px_rgba(59,130,246,0.15)]'}`}
-                  placeholder={isImageGenMode() ? "Describe the image to generate..." : "Ask anything..."}
-                  value={input()}
-                  onInput={(e) => setInput(e.currentTarget.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !(e as any).isComposing && handleSend()}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={isLoading() || (!input().trim() && !attachment())}
-                  class={`absolute right-1.5 top-1.5 p-1.5 rounded-lg text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed ${isImageGenMode() ? 'bg-purple-600 hover:bg-purple-500' : 'bg-blue-600 hover:bg-blue-500'}`}
-                >
-                  <Send class="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Voice Button */}
-              <button
-                onClick={toggleVoiceMode}
-                class="p-3 bg-[#1c1c1e] hover:bg-[#2c2c2e] rounded-xl text-gray-400 hover:text-white transition-all border border-white/10 hover:border-white/20 hover:shadow-lg mb-[1px]"
-                title="Voice Chat"
-              >
-                <Mic class="w-4.5 h-4.5" />
-              </button>
-            </div>
-
-            {/* Mode Indicator */}
-            <Presence>
-              <Show when={isImageGenMode()}>
+              <Show when={attachments().length > 0}>
                 <Motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  class="mt-2 text-[10px] text-purple-400 flex items-center gap-1.5 px-1 font-medium"
+                  class="flex gap-2 overflow-x-auto pb-3 scrollbar-hide"
                 >
-                  <Sparkles class="w-3 h-3" />
-                  <span>Image Generation Mode Active</span>
+                  <For each={attachments()}>
+                    {(att, i) => (
+                      <div class="relative w-16 h-16 rounded-xl border border-white/10 bg-[#242424] flex-shrink-0 group overflow-hidden">
+                        <Show when={att.type === 'image'} fallback={
+                          <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-400">
+                            <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-6 h-6 text-green-500" />}>
+                              <FileText class="w-6 h-6 text-red-500" />
+                            </Show>
+                            <span class="text-[8px] uppercase">{att.type}</span>
+                          </div>
+                        }>
+                          <img src={att.preview} class="w-full h-full object-cover" />
+                        </Show>
+                        <button
+                          onClick={() => removeAttachment(i())}
+                          class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </For>
                 </Motion.div>
               </Show>
             </Presence>
+
+            <div class="relative bg-[#242424] rounded-2xl border border-white/10 focus-within:border-white/20 transition-all shadow-sm">
+              {/* Input TextField */}
+              <textarea
+                rows={1}
+                class="w-[85%] bg-transparent text-white text-[14px] px-4 py-3 sm:py-4 outline-none resize-none placeholder:text-gray-500 max-h-32"
+                placeholder={isRecording() ? "Listening..." : "Message Vision AI..."}
+                value={input()}
+                onInput={(e) => {
+                  setInput(e.currentTarget.value);
+                  e.currentTarget.style.height = 'auto';
+                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+              />
+
+              {/* Bottom Toolbar inside Input Box */}
+              <div class="flex items-center justify-between px-2 pb-2">
+                <div class="flex items-center gap-1">
+                  {/* Attachment Trigger */}
+                  <button
+                    onClick={() => fileInputRef?.click()}
+                    class="p-2 rounded-lg text-gray-400 hover:bg-white/5 hover:text-white transition-colors"
+                    title="Attach files"
+                  >
+                    <Paperclip class="w-4.5 h-4.5" />
+                  </button>
+                  <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    class="hidden"
+                    accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={handleFileSelect}
+                  />
+
+                  {/* Image Gen Mode Toggle */}
+                  <button
+                    onClick={() => setIsImageGenMode(!isImageGenMode())}
+                    class={`p-2 rounded-lg transition-colors ${isImageGenMode() ? 'text-purple-400 bg-purple-500/10' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+                    title="Toggle Image Generation"
+                  >
+                    <Palette class="w-4.5 h-4.5" />
+                  </button>
+
+                  {/* Language Selector (Popup) or Dropdown Logic for STT */}
+                  <div class="relative group">
+                    <button class="p-2 rounded-lg text-gray-400 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-1" title="Voice Language">
+                      <Globe class="w-4 h-4" />
+                      <span class="text-[10px]">{LANGUAGES.find(l => l.code === voiceLang())?.code.split('-')[0]}</span>
+                    </button>
+                    <div class="absolute bottom-full left-0 mb-2 w-32 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-50">
+                      <For each={LANGUAGES}>
+                        {(lang) => (
+                          <button
+                            class={`w-full text-left px-3 py-2 text-xs hover:bg-white/5 ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}
+                            onClick={() => setVoiceLang(lang.code)}
+                          >
+                            {lang.label}
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  {/* Voice Input Button */}
+                  <button
+                    onClick={toggleRecording}
+                    class={`p-2 rounded-full transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'bg-[#1a1a1a] text-gray-400 hover:text-white'}`}
+                    title="Dictate"
+                  >
+                    <Mic class="w-4 h-4" />
+                  </button>
+
+                  {/* Send Button */}
+                  <button
+                    onClick={handleSend}
+                    disabled={(!input().trim() && attachments().length === 0) || isLoading()}
+                    class={`p-2 rounded-lg transition-all ${(!input().trim() && attachments().length === 0) ? 'bg-[#333] text-gray-500 cursor-not-allowed' : 'bg-white text-black hover:bg-gray-200'}`}
+                  >
+                    <Send class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-center mt-2">
+              <p class="text-[10px] text-gray-500">
+                Powering {modelLabel()} • Vision Chain
+              </p>
+            </div>
           </div>
 
         </Motion.div>

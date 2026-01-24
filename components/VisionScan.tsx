@@ -155,6 +155,13 @@ export default function VisionScan() {
             }));
 
             setTransactions(formatted);
+
+            // Auto-open transaction detail if searching for specific hash
+            if (termToSearch.length > 50 && formatted.length === 1) {
+                console.log("🔍 VisionScan: Hash Match Found, opening details...");
+                setSelectedTx(formatted[0]);
+                window.history.pushState({}, '', `?tx=${formatted[0].hash}`);
+            }
         } catch (error) {
             console.error("Failed to fetch transactions:", error);
         } finally {
