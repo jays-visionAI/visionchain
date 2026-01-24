@@ -181,4 +181,14 @@ contract VCNPaymasterV2 is BasePaymaster {
     }
 
 
+    /**
+     * @notice Execute a transaction on behalf of the Paymaster.
+     * @dev Used by the backend relayer to execute 'permit' and 'transferFrom' calls
+     *      so that msg.sender matches the 'spender' (this contract) expected by the Permit.
+     */
+    function execute(address target, uint256 value, bytes calldata data) external onlyOwner returns (bytes memory) {
+        (bool success, bytes memory result) = target.call{value: value}(data);
+        require(success, "SmartRelayer: call failed");
+        return result;
+    }
 }

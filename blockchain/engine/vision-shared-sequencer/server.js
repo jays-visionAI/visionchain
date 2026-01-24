@@ -165,66 +165,66 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
        In a real scenario, these would be loaded from secure vaults.
        WE USE HARDCODED KEYS FOR DEMO PURPOSES ONLY.
     */
-    const PAYMASTER_PK = process.env.PAYMASTER_PK || "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"; // Account #2
-    const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Account #3
+    const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS || "0x851356ae760d987E095750cCeb3bC6014560891C";
+    const PAYMASTER_PK = process.env.PAYMASTER_PK || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Account #0 (Owner)
+    const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"; // Account #2
 
     try {
         const { ethers } = require('ethers');
-        // Setup Provider
-        // Use Internal RPC with Static Network to prevent detection failures under load
         const rpcProvider = new ethers.JsonRpcProvider("http://127.0.0.1:8545", {
             chainId: 3151909,
             name: 'vision_testnet_v2'
         }, { staticNetwork: true });
 
-        const paymasterWallet = new ethers.Wallet(PAYMASTER_PK, rpcProvider);
+        const relayerWallet = new ethers.Wallet(PAYMASTER_PK, rpcProvider);
 
-        // Minimal ABI for Permit + TransferFrom
-        const abi = [
+        // ABIs
+        const tokenAbi = [
             "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
             "function transferFrom(address from, address to, uint256 value) external returns (bool)",
-            "function nonces(address owner) external view returns (uint256)"
+            "function interfaceId() view returns (bytes4)" // helper
+        ];
+        const paymasterAbi = [
+            "function execute(address target, uint256 value, bytes calldata data) external returns (bytes memory)"
         ];
 
-        const tokenContract = new ethers.Contract(token, abi, paymasterWallet);
+        const tokenInterface = new ethers.Interface(tokenAbi);
+        const paymasterContract = new ethers.Contract(PAYMASTER_ADDRESS, paymasterAbi, relayerWallet);
 
-        // Parse Signature
         const sig = ethers.Signature.from(signature);
-
-        console.log(`⚡️ Paymaster Processing: User ${user} -> Recipient ${recipient} (${amount})`);
-        console.log(`   Fee: ${fee} -> Treasury ${TREASURY_ADDRESS}`);
-
-        // 1. Submit Permit (Gas paid by Paymaster)
-        // Note: value for permit should be amount + fee
         const totalValue = BigInt(amount) + BigInt(fee);
 
-        console.log("   Step 1: Executing Permit...");
-        // We need to be careful with Nonces if sending multiple txs rapidly.
-        // Ideally we used a Multicall, but we will chain transactions here.
+        console.log(`⚡️ Smart Relayer Processing: User ${user} -> Recipient ${recipient} (${amount})`);
+        console.log(`   Executing through Paymaster: ${PAYMASTER_ADDRESS}`);
 
-        const txPermit = await tokenContract.permit(
+        // 1. Proxy Permit
+        console.log("   Step 1: Proxying Permit via Paymaster...");
+        const permitData = tokenInterface.encodeFunctionData("permit", [
             user,
-            paymasterWallet.address,
+            PAYMASTER_ADDRESS, // Spender is the Paymaster contract
             totalValue,
             deadline,
             sig.v,
             sig.r,
             sig.s
-        );
+        ]);
+        const txPermit = await paymasterContract.execute(token, 0, permitData);
         await txPermit.wait();
-        console.log("   ✅ Permit Successful:", txPermit.hash);
+        console.log("   ✅ Proxy Permit Successful:", txPermit.hash);
 
-        // 2. Transfer to Recipient
-        console.log("   Step 2: Transferring to Recipient...");
-        const txTransfer1 = await tokenContract.transferFrom(user, recipient, amount);
+        // 2. Proxy Transfer to Recipient
+        console.log("   Step 2: Proxying Transfer to Recipient...");
+        const transferData1 = tokenInterface.encodeFunctionData("transferFrom", [user, recipient, amount]);
+        const txTransfer1 = await paymasterContract.execute(token, 0, transferData1);
         await txTransfer1.wait();
-        console.log("   ✅ Transfer 1 Successful:", txTransfer1.hash);
+        console.log("   ✅ Proxy Transfer 1 Successful:", txTransfer1.hash);
 
-        // 3. Transfer Fee to Treasury
-        console.log("   Step 3: Transferring Fee to Treasury...");
-        const txTransfer2 = await tokenContract.transferFrom(user, TREASURY_ADDRESS, fee);
+        // 3. Proxy Transfer Fee to Treasury
+        console.log("   Step 3: Proxying Fee to Treasury...");
+        const transferData2 = tokenInterface.encodeFunctionData("transferFrom", [user, TREASURY_ADDRESS, fee]);
+        const txTransfer2 = await paymasterContract.execute(token, 0, transferData2);
         await txTransfer2.wait();
-        console.log("   ✅ Transfer 2 Successful:", txTransfer2.hash);
+        console.log("   ✅ Proxy Transfer 2 Successful:", txTransfer2.hash);
 
         res.json({
             status: 'success',
@@ -233,7 +233,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
                 transfer: txTransfer1.hash,
                 fee: txTransfer2.hash
             },
-            message: 'Gasless transfer completed successfully'
+            message: 'Gasless transfer completed via Smart Relayer Proxy'
         });
 
     } catch (error) {
