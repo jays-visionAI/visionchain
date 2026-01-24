@@ -371,6 +371,12 @@ export class ContractService {
         return ADDRESSES.VCN_PAYMASTER;
     }
 
+    async getPaymasterBalance(): Promise<string> {
+        const provider = await this.getRobustProvider();
+        const balance = await provider.getBalance(ADDRESSES.VCN_PAYMASTER);
+        return ethers.formatEther(balance);
+    }
+
     // --- Admin Functions ---
     async createVestingSchedule(
         beneficiary: string,

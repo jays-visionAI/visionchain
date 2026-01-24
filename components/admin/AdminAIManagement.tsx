@@ -77,15 +77,16 @@ export default function AdminAIManagement() {
     // Global Data States
     const [apiKeys, setApiKeys] = createSignal<ApiKeyData[]>([]);
     const [knowledgeContent, setKnowledgeContent] = createSignal(defaultKnowledge);
-    const [intentBot, setIntentBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', version: '1.5', isActive: true });
-    const [helpdeskBot, setHelpdeskBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', version: '1.5', isActive: true });
-    const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-1.5-pro', size: '1k' });
-    const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-1.5-flash', ttsVoice: 'Kore' });
+    const [intentBot, setIntentBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
+    const [helpdeskBot, setHelpdeskBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
+    const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-1.5-pro', size: '1k', quality: 'standard' });
+    const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'whisper-1' });
 
     // Monitoring & Ecosystem
     const [realConversations, setRealConversations] = createSignal<AiConversation[]>([]);
     const [allPurchases, setAllPurchases] = createSignal<VcnPurchase[]>([]);
     const [isDistributing, setIsDistributing] = createSignal(false);
+    const [distTxHashes, setDistTxHashes] = createSignal<Record<string, string>>({});
 
     // parallel data fetching for speed
     onMount(async () => {
@@ -136,7 +137,7 @@ export default function AdminAIManagement() {
 
     const handleAddKey = async (name: string, value: string, provider: any) => {
         try {
-            await saveApiKey({ name, key: value, provider, isActive: true });
+            await saveApiKey({ name, key: value, provider, isActive: true, isValid: true });
             const keys = await getApiKeys();
             setApiKeys(keys);
         } catch (error) {
@@ -144,19 +145,19 @@ export default function AdminAIManagement() {
         }
     };
 
-    const handleDeleteKey = async (id: string, provider: string) => {
+    const handleDeleteKey = async (id: string) => {
         if (!confirm('Are you sure you want to remove this API key?')) return;
         try {
-            await deleteFireKey(id, provider);
+            await deleteFireKey(id);
             setApiKeys(apiKeys().filter(k => k.id !== id));
         } catch (error) {
             alert("Failed to delete key");
         }
     };
 
-    const handleToggleKey = async (id: string, provider: string, active: boolean) => {
+    const handleToggleKey = async (id: string, active: boolean) => {
         try {
-            await updateApiKey(id, provider, { isActive: active });
+            await updateApiKey(id, { isActive: active });
             setApiKeys(apiKeys().map(k => k.id === id ? { ...k, isActive: active } : k));
         } catch (error) {
             alert("Failed to toggle key status");
@@ -176,7 +177,13 @@ export default function AdminAIManagement() {
         try {
             for (const target of targets) {
                 const amount = (target.amount * 0.1).toFixed(2);
-                await contractService.adminSendVCN(target.walletAddress!, amount);
+                console.log(`Distributing ${amount} VCN to ${target.walletAddress}...`);
+                const receipt = await contractService.adminSendVCN(target.walletAddress!, amount);
+
+                // Track TxID
+                if (receipt && receipt.hash) {
+                    setDistTxHashes(prev => ({ ...prev, [target.email]: receipt.hash }));
+                }
             }
             alert("Testnet distribution complete!");
         } catch (err) {
@@ -196,8 +203,8 @@ export default function AdminAIManagement() {
                         <button
                             onClick={() => setActiveTab(tab.id)}
                             class={`flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold transition-all whitespace-nowrap ${activeTab() === tab.id
-                                    ? 'bg-white/10 text-cyan-400 shadow-lg'
-                                    : 'text-gray-500 hover:text-white hover:bg-white/5'
+                                ? 'bg-white/10 text-cyan-400 shadow-lg'
+                                : 'text-gray-500 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             <tab.icon class="w-4 h-4" />
@@ -218,8 +225,8 @@ export default function AdminAIManagement() {
                     <ApiKeysTab
                         apiKeys={apiKeys}
                         onAddKey={handleAddKey}
-                        onDeleteKey={handleDeleteKey}
-                        onToggleActive={handleToggleKey}
+                        onDeleteKey={(id) => handleDeleteKey(id)}
+                        onToggleActive={(id, _, active) => handleToggleKey(id, active)}
                     />
                 </Show>
 
@@ -256,6 +263,7 @@ export default function AdminAIManagement() {
                         purchases={allPurchases}
                         isDistributing={isDistributing}
                         onDistribute={handleDistributeTestnet}
+                        txHashes={distTxHashes}
                     />
                 </Show>
 
