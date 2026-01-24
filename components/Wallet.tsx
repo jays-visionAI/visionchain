@@ -382,7 +382,9 @@ const Wallet = (): JSX.Element => {
                         } catch (fallbackError: any) {
                             console.error("Fallback Failed:", fallbackError);
                             if (fallbackError.code === 'INSUFFICIENT_FUNDS' || fallbackError.message?.includes('insufficient funds')) {
-                                alert("Error: Insufficient Gas (Paymaster failed, and fallback to your ETH failed due to low balance)");
+                                // Show detailed Paymaster error if available
+                                const paymasterError = (error as any).message || "Unknown Paymaster Error";
+                                alert(`Transaction Failed. \n\nPaymaster Error: ${paymasterError}\n\nFallback Error: Insufficient ETH for gas.`);
                             } else {
                                 alert(`Transfer Failed: ${fallbackError.message || "Unknown Error"}`);
                             }
