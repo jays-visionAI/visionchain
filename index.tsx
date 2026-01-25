@@ -1,7 +1,7 @@
 import { render } from 'solid-js/web';
 import { Router, Route, useLocation } from '@solidjs/router';
 import { createSignal, Show, lazy, Suspense } from 'solid-js';
-import { AuthProvider } from './components/auth/authContext';
+import { AuthProvider, useAuth } from './components/auth/authContext';
 
 // Core components (loaded immediately for homepage)
 import Navbar from './components/Navbar';
@@ -64,6 +64,7 @@ function PageLoader() {
 // Layout wrapper for all pages
 function Layout(props: { children?: any }) {
   const [isAIModalOpen, setIsAIModalOpen] = createSignal(false);
+  const auth = useAuth();
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
@@ -85,8 +86,8 @@ function Layout(props: { children?: any }) {
         </Show>
       </div>
 
-      {/* Floating Action Button for AI - hide for Admin */}
-      <Show when={!isAIModalOpen() && !isAdminRoute()}>
+      {/* Floating Action Button for AI - hide for Admin or if Logged In */}
+      <Show when={!isAIModalOpen() && !isAdminRoute() && !auth.user()}>
         <button
           onClick={() => setIsAIModalOpen(true)}
           class="fixed bottom-8 right-8 p-4 bg-blue-600 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 transition-transform z-40 group"
