@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount } from 'solid-js';
+import { createSignal, Show, For, onMount, Index } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import {
     X,
@@ -178,8 +178,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: 'auto' }}
                                     class={`p-4 rounded-2xl border flex items-center gap-3 ${uploadStatus()?.type === 'success'
-                                            ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                                            : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                        ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                                        : 'bg-red-500/10 border-red-500/20 text-red-400'
                                         }`}
                                 >
                                     <Show when={uploadStatus()?.type === 'success'} fallback={<AlertCircle class="w-5 h-5" />}>
@@ -198,16 +198,16 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     <div class="col-span-1"></div>
                                 </div>
 
-                                <div class="space-y-3">
-                                    <For each={entries()}>
+                                <div class="space-y-1">
+                                    <Index each={entries()}>
                                         {(entry, index) => (
-                                            <div class="grid grid-cols-12 gap-3 items-center group/row">
+                                            <div class="grid grid-cols-12 gap-3 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
                                                 <div class="col-span-4">
                                                     <input
                                                         type="text"
                                                         placeholder="e.g. 홍길동 사장님"
-                                                        value={entry.internalName}
-                                                        onInput={(e) => updateEntry(index(), 'internalName', e.currentTarget.value)}
+                                                        value={entry().internalName}
+                                                        onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
                                                         class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none transition-all"
                                                     />
                                                 </div>
@@ -215,8 +215,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                     <input
                                                         type="tel"
                                                         placeholder="010-1234-5678"
-                                                        value={entry.phone}
-                                                        onInput={(e) => updateEntry(index(), 'phone', e.currentTarget.value)}
+                                                        value={entry().phone}
+                                                        onInput={(e) => updateEntry(index, 'phone', e.currentTarget.value)}
                                                         class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm font-mono outline-none transition-all"
                                                     />
                                                 </div>
@@ -224,22 +224,22 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                     <input
                                                         type="email"
                                                         placeholder="user@example.com"
-                                                        value={entry.email}
-                                                        onInput={(e) => updateEntry(index(), 'email', e.currentTarget.value)}
+                                                        value={entry().email}
+                                                        onInput={(e) => updateEntry(index, 'email', e.currentTarget.value)}
                                                         class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none transition-all"
                                                     />
                                                 </div>
                                                 <div class="col-span-1 flex justify-end">
                                                     <button
-                                                        onClick={() => removeRow(index())}
-                                                        class="p-3 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all opacity-0 group-hover/row:opacity-100"
+                                                        onClick={() => removeRow(index)}
+                                                        class="p-2 text-gray-700 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover/row:opacity-100"
                                                     >
                                                         <Trash2 class="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             </div>
                                         )}
-                                    </For>
+                                    </Index>
                                 </div>
 
                                 <button
@@ -269,8 +269,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     onClick={handleSave}
                                     disabled={isSaving() || entries().filter(e => e.internalName || e.phone).length === 0}
                                     class={`px-8 py-3 rounded-xl font-bold text-sm flex items-center gap-3 shadow-xl transition-all ${isSaving() || entries().filter(e => e.internalName || e.phone).length === 0
-                                            ? 'bg-white/5 text-gray-600 cursor-not-allowed'
-                                            : 'bg-white text-black hover:scale-105 active:scale-95'
+                                        ? 'bg-white/5 text-gray-600 cursor-not-allowed'
+                                        : 'bg-white text-black hover:scale-105 active:scale-95'
                                         }`}
                                 >
                                     <Show when={isSaving()} fallback={<CheckCircle class="w-4 h-4" />}>
