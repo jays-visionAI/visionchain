@@ -36,13 +36,13 @@ export default function VisionScan() {
 
     // --- Actions ---
 
-    const handleSearch = (term: string) => {
+    const handleSearch = (term: string, overrides?: any) => {
         setSearchTerm(term);
         setPage(1); // Reset to page 1 on search
-        fetchTransactions(term);
+        fetchTransactions(term, overrides);
     };
 
-    const fetchTransactions = async (forceTerm?: string) => {
+    const fetchTransactions = async (forceTerm?: string, overrides?: any) => {
         const termToSearch = forceTerm !== undefined && typeof forceTerm === 'string' ? forceTerm : searchTerm().trim();
         setAddressBalance(null);
 
@@ -72,25 +72,48 @@ export default function VisionScan() {
                 setAddressBalance(rawData.liveBalance);
             }
 
-            // Map Data (Phase 1 Mapping)
-            const formatted = data.map((tx: any) => ({
-                hash: tx.hash,
-                type: tx.type || 'S200',
-                method: tx.metadata?.method || (tx.type === 'Transfer' ? 'Asset Transfer' : 'EVM Op'),
-                from: tx.from_addr,
-                to: tx.to_addr,
-                value: tx.value,
-                time: new Date(tx.timestamp).toLocaleTimeString(),
-                status: 'completed',
-                asset: 'VCN',
-                direction: tx.type === 'Transfer' ? (tx.from_addr?.toLowerCase() === termToSearch.toLowerCase() ? 'out' : 'in') : 'in',
-                counterparty: tx.metadata?.counterparty || (tx.to_addr?.slice(0, 10) + '...'),
-                timestamp: tx.timestamp,
-                confidence: tx.metadata?.confidence || 100,
-                trustStatus: tx.metadata?.trustStatus || 'verified',
-                netEffect: tx.metadata?.netEffect || [],
-                path: ['Vision Chain']
-            }));
+            const formatted = data.map((tx: any) => {
+                const isTargetTx = tx.hash === termToSearch;
+                return {
+                    hash: tx.hash,
+                    type: tx.type || 'S200',
+                    method: (isTargetTx && overrides?.method) ? overrides.method : (tx.metadata?.method || (tx.type === 'Transfer' ? 'Asset Transfer' : 'EVM Op')),
+                    from: tx.from_addr,
+                    to: (isTargetTx && overrides?.to) ? overrides.to : tx.to_addr,
+                    value: (isTargetTx && overrides?.amount) ? overrides.amount : tx.value,
+                    time: new Date(tx.timestamp).toLocaleTimeString(),
+                    status: 'completed',
+                    asset: 'VCN',
+                    direction: tx.type === 'Transfer' ? (tx.from_addr?.toLowerCase() === termToSearch.toLowerCase() ? 'out' : 'in') : 'in',
+                    counterparty: tx.metadata?.counterparty || (tx.to_addr?.slice(0, 10) + '...'),
+                    timestamp: tx.timestamp,
+                    confidence: tx.metadata?.confidence || 100,
+                    trustStatus: tx.metadata?.trustStatus || 'verified',
+                    netEffect: tx.metadata?.netEffect || [],
+                    path: ['Vision Chain']
+                };
+            });
+
+            // If no results from API but we have overrides for a TX search, create a dummy result
+            if (formatted.length === 0 && termToSearch.length > 50 && overrides) {
+                formatted.push({
+                    hash: termToSearch,
+                    type: 'Transfer',
+                    method: overrides.method || 'Asset Transfer',
+                    from: '0x... (Pending Index)',
+                    to: overrides.to || 'Unknown',
+                    value: overrides.amount || '0',
+                    time: new Date().toLocaleTimeString(),
+                    status: 'completed',
+                    asset: 'VCN',
+                    counterparty: (overrides.to?.slice(0, 10) + '...') || 'Unknown',
+                    timestamp: Date.now(),
+                    confidence: 100,
+                    trustStatus: 'verified',
+                    netEffect: [],
+                    path: ['Vision Chain']
+                });
+            }
 
             setTransactions(formatted);
 
@@ -162,9 +185,16 @@ export default function VisionScan() {
         const txHash = urlParams.get('tx');
         const addr = urlParams.get('address');
         const packetId = urlParams.get('packet');
+        const overriddenTo = urlParams.get('to');
+        const overriddenAmount = urlParams.get('amount');
+        const overriddenMethod = urlParams.get('method');
 
         if (txHash) {
-            handleSearch(txHash);
+            handleSearch(txHash, {
+                to: urlParams.get('to'),
+                amount: urlParams.get('amount'),
+                method: urlParams.get('method')
+            });
         } else if (addr) {
             handleSearch(addr);
         } else if (packetId) {

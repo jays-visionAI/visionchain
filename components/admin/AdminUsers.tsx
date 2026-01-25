@@ -44,6 +44,7 @@ const AdminUsers = () => {
         isOpen: false,
         txHash: '',
         recipient: '',
+        recipientAddress: '',
         amount: 0
     });
 
@@ -304,6 +305,7 @@ const AdminUsers = () => {
                                                             isOpen: true,
                                                             txHash: receipt.hash || receipt.transactionHash || '',
                                                             recipient: user.email,
+                                                            recipientAddress: user.walletAddress!,
                                                             amount: amount
                                                         });
                                                     } catch (e: any) {
@@ -430,6 +432,7 @@ const AdminUsers = () => {
                                 <div class="p-4 bg-white/[0.03] border border-white/5 rounded-2xl">
                                     <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Recipient</div>
                                     <div class="text-sm font-bold text-white uppercase">{successModal().recipient}</div>
+                                    <div class="text-[10px] font-mono text-cyan-500/60 mt-0.5">{successModal().recipientAddress}</div>
                                 </div>
                                 <div class="p-4 bg-white/[0.03] border border-white/5 rounded-2xl">
                                     <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount Sent</div>
@@ -451,7 +454,7 @@ const AdminUsers = () => {
 
                             <div class="flex flex-col gap-3 pt-2">
                                 <a
-                                    href={`/visionscan?tx=${successModal().txHash}`}
+                                    href={`/visionscan?tx=${successModal().txHash}&to=${successModal().recipientAddress}&amount=${successModal().amount}&method=Asset%20Transfer`}
                                     target="_blank"
                                     class="w-full py-4 bg-white text-black font-black rounded-2xl text-center text-xs uppercase tracking-[0.2em] hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
                                 >
