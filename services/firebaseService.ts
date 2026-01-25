@@ -825,10 +825,10 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
     const data = snapshot.data();
     return {
         knowledgeBase: data.knowledgeBase || '',
-        intentBot: data.intentBot || { systemPrompt: '', model: 'gemini-1.5-flash', temperature: 0.7, maxTokens: 2048 },
-        helpdeskBot: data.helpdeskBot || { systemPrompt: '', model: 'gemini-1.5-flash', temperature: 0.7, maxTokens: 2048 },
-        imageSettings: data.imageSettings || { model: 'gemini-1.5-pro', quality: 'standard', size: '1k' },
-        voiceSettings: data.voiceSettings || { model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'gemini-1.5-flash' }
+        intentBot: data.intentBot || { systemPrompt: '', model: '', temperature: 0.7, maxTokens: 2048 },
+        helpdeskBot: data.helpdeskBot || { systemPrompt: '', model: '', temperature: 0.7, maxTokens: 2048 },
+        imageSettings: data.imageSettings || { model: '', quality: 'standard', size: '1k' },
+        voiceSettings: data.voiceSettings || { model: '', ttsVoice: 'Kore', sttModel: '' }
     } as ChatbotSettings;
 };
 
