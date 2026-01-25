@@ -31,7 +31,7 @@ interface WalletAssetsProps {
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
-    const [networkFilter, setNetworkFilter] = createSignal<'mainnet' | 'testnet'>('mainnet');
+    const [networkFilter, setNetworkFilter] = createSignal<'all' | 'mainnet' | 'testnet'>('all');
 
     return (
 
@@ -268,6 +268,15 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                     <div class="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10">
                         <button
+                            onClick={() => setNetworkFilter('all')}
+                            class={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${networkFilter() === 'all'
+                                ? 'bg-white/10 text-white shadow-lg'
+                                : 'text-gray-500 hover:text-white'
+                                }`}
+                        >
+                            All
+                        </button>
+                        <button
                             onClick={() => setNetworkFilter('mainnet')}
                             class={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${networkFilter() === 'mainnet'
                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
@@ -306,78 +315,70 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 </div>
 
                                 {/* Dynamic Token Rows */}
-                                <For each={['VCN']}>
-                                    {(symbol, index) => {
-                                        const asset = () => props.getAssetData(symbol);
-                                        const isMainnet = () => networkFilter() === 'mainnet';
+                                <For each={[
+                                    { id: 'vcn_main', symbol: 'VCN', name: 'Purchased (VCN)', network: 'mainnet' },
+                                    { id: 'vcn_test', symbol: 'VCN', name: 'VCN (Testnet)', network: 'testnet' }
+                                ]}>
+                                    {(item, index) => {
+                                        // Visibility Filter
+                                        if (networkFilter() !== 'all' && networkFilter() !== item.network) return null;
 
-                                        // Filtered Logic:
-                                        // Mainnet -> Show normal balance, label "Purchased (VCN)"
-                                        // Testnet -> Show 10% balance, label "VCN (Testnet)"
+                                        const asset = () => props.getAssetData(item.symbol);
+                                        const isMainnetItem = item.network === 'mainnet';
 
-                                        const displayBalance = () => isMainnet() ? asset().balance : (asset().balance * 0.1);
+                                        const displayBalance = () => isMainnetItem ? asset().balance : (asset().balance * 0.1);
                                         const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-                                        const displayName = () => isMainnet() ? 'Purchased (VCN)' : 'VCN (Testnet)';
-                                        const displaySymbol = () => 'VCN';
 
-                                        const isLast = () => index() === 2;
+                                        // Styling distinction
+                                        const isTestnetStyle = item.network === 'testnet';
 
                                         return (
-                                            <div class={`flex items-center px-4 sm:px-8 py-4 md:py-6 ${!isLast() ? 'border-b border-white/[0.03]' : ''} hover:bg-white/[0.03] transition-all duration-300 cursor-pointer min-w-[500px] md:min-w-[600px] group/row`}>
+                                            <div class={`flex items-center px-4 sm:px-8 py-4 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer min-w-[500px] md:min-w-[600px] group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''}`}>
                                                 {/* Token Info */}
                                                 <div class="flex-1 min-w-[150px] md:min-w-[200px] flex items-center gap-3 md:gap-4">
                                                     <div class="relative">
-                                                        <Show when={asset().image} fallback={
-                                                            <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0 shadow-lg ${symbol === 'VCN' ? 'bg-gradient-to-br from-blue-500 to-cyan-400' :
-                                                                symbol === 'ETH' ? 'bg-gradient-to-br from-purple-500 to-indigo-400' :
-                                                                    'bg-gradient-to-br from-green-500 to-emerald-400'
-                                                                }`}>
-                                                                {displaySymbol().charAt(0)}
-                                                            </div>
-                                                        }>
-                                                            <img src={asset().image!} alt={symbol} class="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex-shrink-0 shadow-lg group-hover/row:scale-105 transition-transform" />
-                                                        </Show>
-                                                        <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 md:w-4 md:h-4 rounded-full bg-[#0a0a0b] border-2 border-[#0a0a0b] overflow-hidden">
-                                                            <div class={`w-full h-full ${asset().change24h > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+                                                        <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0 shadow-lg ${isTestnetStyle
+                                                            ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-500 border border-amber-500/30'
+                                                            : 'bg-gradient-to-br from-blue-600 to-cyan-500'
+                                                            }`}>
+                                                            V
                                                         </div>
+                                                        <Show when={isTestnetStyle}>
+                                                            <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] flex items-center justify-center">
+                                                                <div class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                                                            </div>
+                                                        </Show>
                                                     </div>
                                                     <div class="min-w-0">
-                                                        <div class="text-[15px] md:text-[17px] font-bold text-white group-hover/row:text-blue-400 transition-colors uppercase tracking-wide">{displaySymbol()}</div>
-                                                        <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{displayName()}</div>
+                                                        <div class="text-[15px] md:text-[17px] font-bold text-white group-hover/row:text-blue-400 transition-colors uppercase tracking-wide flex items-center gap-2">
+                                                            {item.symbol}
+                                                            <Show when={isTestnetStyle}>
+                                                                <span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-500 border border-amber-500/30">TEST</span>
+                                                            </Show>
+                                                        </div>
+                                                        <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{item.name}</div>
                                                     </div>
                                                 </div>
                                                 {/* Price */}
                                                 <div class="w-20 md:w-24 text-right hidden sm:block">
-                                                    <Show when={!asset().isLoading} fallback={
-                                                        <div class="h-4 md:h-5 w-14 md:w-16 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
-                                                    }>
-                                                        <span class="text-sm md:text-base font-medium text-white group-hover/row:text-white transition-colors">
-                                                            ${asset().price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        </span>
-                                                    </Show>
+                                                    <span class="text-sm md:text-base font-medium text-white">
+                                                        ${asset().price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
                                                 </div>
                                                 {/* 24h Change */}
                                                 <div class="w-20 md:w-24 text-right hidden lg:block">
-                                                    <Show when={!asset().isLoading} fallback={
-                                                        <div class="h-4 md:h-5 w-10 md:w-12 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
-                                                    }>
-                                                        <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[12px] md:text-[13px] ${asset().change24h > 0 ? 'text-green-400 bg-green-500/5' : asset().change24h < 0 ? 'text-red-400 bg-red-500/5' : 'text-gray-400 bg-gray-500/5'}`}>
-                                                            {asset().change24h.toFixed(1)}%
-                                                        </div>
-                                                    </Show>
+                                                    <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[12px] md:text-[13px] ${asset().change24h > 0 ? 'text-green-400 bg-green-500/5' : 'text-red-400 bg-red-500/5'}`}>
+                                                        {asset().change24h.toFixed(1)}%
+                                                    </div>
                                                 </div>
                                                 {/* Holdings */}
                                                 <div class="w-28 md:w-32 text-right">
                                                     <div class="text-[14px] md:text-[16px] font-bold text-white tabular-nums tracking-wide">{displayBalance().toLocaleString()}</div>
-                                                    <div class="text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{displaySymbol()}</div>
+                                                    <div class="text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{item.symbol}</div>
                                                 </div>
                                                 {/* Value */}
                                                 <div class="w-28 md:w-32 text-right">
-                                                    <Show when={!asset().isLoading} fallback={
-                                                        <div class="h-4 md:h-5 w-16 md:w-20 bg-white/[0.06] rounded-lg animate-pulse ml-auto" />
-                                                    }>
-                                                        <span class="text-[15px] md:text-[18px] font-bold text-white tabular-nums drop-shadow-sm">{displayValue()}</span>
-                                                    </Show>
+                                                    <span class={`text-[15px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : 'text-white'}`}>{displayValue()}</span>
                                                 </div>
                                             </div>
                                         );

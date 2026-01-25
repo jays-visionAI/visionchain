@@ -1,5 +1,7 @@
 import { Show, For, createSignal, onMount, createEffect } from 'solid-js';
 import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink } from 'lucide-solid';
+import { ethers } from 'ethers';
+import { contractService } from '../../services/contractService';
 
 interface WalletActivityProps {
     purchases: () => any[];
@@ -15,7 +17,11 @@ interface Transaction {
     type: string;
     status: string;
     metadata?: any;
+    blockNumber: number;
 }
+
+const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 export const WalletActivity = (props: WalletActivityProps) => {
     const [transactions, setTransactions] = createSignal<Transaction[]>([]);
@@ -26,13 +32,62 @@ export const WalletActivity = (props: WalletActivityProps) => {
 
         try {
             setLoading(true);
-            const response = await fetch(`http://46.224.221.201:3000/api/transactions?address=${props.walletAddress}&limit=20`);
-            if (response.ok) {
-                const data = await response.json();
-                setTransactions(data.transactions || []);
-            }
+            const provider = await contractService.getRobustProvider();
+            const paddedAddress = ethers.zeroPadValue(props.walletAddress, 32);
+
+            // Fetch Sent: Topic1 = from
+            const sentFilter = {
+                address: VCN_TOKEN_ADDRESS,
+                fromBlock: 0,
+                toBlock: 'latest',
+                topics: [TRANSFER_TOPIC, paddedAddress]
+            };
+
+            // Fetch Received: Topic2 = to
+            const receivedFilter = {
+                address: VCN_TOKEN_ADDRESS,
+                fromBlock: 0,
+                toBlock: 'latest',
+                topics: [TRANSFER_TOPIC, null, paddedAddress]
+            };
+
+            const [sentLogs, receivedLogs] = await Promise.all([
+                provider.getLogs(sentFilter),
+                provider.getLogs(receivedFilter)
+            ]);
+
+            const allLogs = [...sentLogs, ...receivedLogs];
+
+            // Remove duplicates if any (self-transfer?)
+            const uniqueLogs = Array.from(new Map(allLogs.map(log => [log.transactionHash + log.index, log])).values());
+
+            const txPromises = uniqueLogs.map(async (log) => {
+                const block = await provider.getBlock(log.blockNumber);
+                const iface = new ethers.Interface(["event Transfer(address indexed from, address indexed to, uint256 value)"]);
+                const parsed = iface.parseLog({ topics: Array.from(log.topics), data: log.data });
+
+                return {
+                    hash: log.transactionHash,
+                    from_addr: parsed?.args[0] || "",
+                    to_addr: parsed?.args[1] || "",
+                    value: ethers.formatUnits(parsed?.args[2] || 0, 18),
+                    timestamp: (block?.timestamp || 0) * 1000,
+                    type: 'transfer',
+                    status: 'success',
+                    blockNumber: log.blockNumber
+                } as Transaction;
+            });
+
+            const resolvedTxs = await Promise.all(txPromises);
+
+            // Sort by block number descending (newest first)
+            resolvedTxs.sort((a, b) => b.blockNumber - a.blockNumber);
+
+            // Limit to 50
+            setTransactions(resolvedTxs.slice(0, 50));
+
         } catch (error) {
-            console.error("Failed to fetch transaction history:", error);
+            console.error("Failed to fetch transaction history from RPC:", error);
         } finally {
             setLoading(false);
         }
@@ -46,15 +101,24 @@ export const WalletActivity = (props: WalletActivityProps) => {
 
     return (
         <div class="space-y-3">
-            <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 mb-2">Recent Transactions</h3>
+            <div class="flex items-center justify-between mb-2 px-1">
+                <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Recent Transactions</h3>
+                <button
+                    onClick={fetchHistory}
+                    disabled={loading()}
+                    class="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-blue-400 disabled:opacity-50"
+                >
+                    <RefreshCw class={`w-3.5 h-3.5 ${loading() ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
 
             <Show when={props.purchases().length === 0 && transactions().length === 0 && !loading}>
                 <div class="py-20 text-center bg-white/[0.02] border border-white/[0.04] rounded-2xl">
-                    <div class="text-gray-500 font-medium">No on-chain activity found</div>
+                    <div class="text-gray-500 font-medium text-sm">No on-chain activity found</div>
                 </div>
             </Show>
 
-            <Show when={loading}>
+            <Show when={loading() && transactions().length === 0}>
                 <div class="py-10 text-center">
                     <RefreshCw class="w-6 h-6 text-blue-500 animate-spin mx-auto" />
                     <div class="text-[10px] font-bold text-gray-500 mt-2 uppercase tracking-widest">Syncing Blockchain Data...</div>
@@ -85,7 +149,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                             </div>
                             <div class="text-right">
                                 <div class={`text-sm font-bold ${isIncoming ? 'text-green-400' : 'text-white'}`}>
-                                    {isIncoming ? '+' : '-'}{parseFloat(tx.value).toLocaleString()} VCN
+                                    {isIncoming ? '+' : '-'}{parseFloat(tx.value).toLocaleString(undefined, { maximumFractionDigits: 4 })} VCN
                                 </div>
                                 <a
                                     href={`/visionscan?tx=${tx.hash}`}
@@ -113,7 +177,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                 </div>
                                 <div>
                                     <div class="text-sm font-medium text-white underline-offset-4 decoration-purple-500/30 group-hover:underline">VCN Purchase</div>
-                                    <div class="text-xs text-gray-500">Seed Round • {date}</div>
+                                    <div class="text-xs text-gray-500 italic">Seed Round • {date}</div>
                                 </div>
                             </div>
                             <div class="text-right">
