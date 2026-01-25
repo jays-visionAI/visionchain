@@ -214,10 +214,11 @@ export const adminLogin = async (email: string, password: string): Promise<User>
     return userCredential.user;
 };
 
-export const adminRegister = async (email: string, password: string): Promise<User> => {
+export const adminRegister = async (email: string, password: string, phone?: string): Promise<User> => {
     const auth = getFirebaseAuth();
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase().trim();
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : '';
 
     const { createUserWithEmailAndPassword, sendEmailVerification } = await import('firebase/auth');
     const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);
@@ -240,6 +241,7 @@ export const adminRegister = async (email: string, password: string): Promise<Us
         if (userData.status === 'PendingActivation') {
             await setDoc(userRef, {
                 status: 'Registered',
+                phone: normalizedPhone || userData.phone || '', // Keep existing if not provided
                 updatedAt: new Date().toISOString()
             }, { merge: true });
 
@@ -254,6 +256,7 @@ export const adminRegister = async (email: string, password: string): Promise<Us
         // New user from scratch (not in CSV)
         await setDoc(userRef, {
             email: emailLower,
+            phone: normalizedPhone,
             role: 'user',
             status: 'PendingVerification',
             accountOrigin: 'self-signup',

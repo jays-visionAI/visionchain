@@ -250,8 +250,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 <div class="fixed bottom-0 left-[280px] right-[320px] p-8 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/98 to-transparent pt-32 z-30 pointer-events-none">
                     <div class="max-w-4xl mx-auto pointer-events-auto">
                         <div class="relative group">
-                            {/* Dynamic Border Glow */}
-                            <div class="absolute -inset-[1px] bg-gradient-to-r from-blue-600/30 via-cyan-400/30 to-blue-600/30 rounded-[26px] blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 animate-pulse" />
+                            {/* Dynamic Deep Blue Glow Effect */}
+                            <div class="absolute -inset-[2px] bg-gradient-to-r from-blue-600/40 via-blue-400/60 to-indigo-600/40 rounded-[28px] blur-xl opacity-20 group-focus-within:opacity-100 transition-all duration-700 animate-pulse" />
+                            <div class="absolute -inset-[1px] bg-gradient-to-r from-blue-500/20 via-cyan-400/20 to-blue-500/20 rounded-[26px] blur-md opacity-30 group-focus-within:opacity-100 transition-opacity duration-500" />
 
                             <div class="relative bg-[#0d0d0f] backdrop-blur-3xl border border-white/[0.05] rounded-[26px] shadow-2xl transition-all duration-500 group-focus-within:border-white/[0.08] p-2 flex items-end gap-2">
 

@@ -7,12 +7,14 @@ import {
     EyeOff,
     AlertCircle,
     UserPlus,
-    ArrowLeft
+    ArrowLeft,
+    Phone
 } from 'lucide-solid';
 import { useAuth } from './authContext';
 
 export default function Signup() {
     const [email, setEmail] = createSignal('');
+    const [phone, setPhone] = createSignal('');
     const [password, setPassword] = createSignal('');
     const [confirmPassword, setConfirmPassword] = createSignal('');
     const [showPassword, setShowPassword] = createSignal(false);
@@ -44,10 +46,16 @@ export default function Signup() {
             return;
         }
 
+        const phoneVal = phone().trim();
+        if (!phoneVal) {
+            setError('Phone number is required for user identification.');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
-            await auth.register(emailVal, pwdVal);
+            await auth.register(emailVal, pwdVal, phoneVal);
             setIsSuccess(true);
             // Optional: Auto redirect after few seconds
             setTimeout(() => {
@@ -130,10 +138,27 @@ export default function Signup() {
                                     onInput={(e) => setEmail(e.currentTarget.value)}
                                     placeholder="your@email.com"
                                     class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
-                                    required
                                 />
                             </div>
                         </div>
+
+                        {/* Phone Input */}
+                        <div>
+                            <label class="text-gray-400 text-sm mb-2 block font-medium">Phone Number</label>
+                            <div class="relative">
+                                <Phone class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <input
+                                    type="tel"
+                                    value={phone()}
+                                    onInput={(e) => setPhone(e.currentTarget.value)}
+                                    placeholder="010-1234-5678"
+                                    class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
+                                    required
+                                />
+                            </div>
+                            <p class="text-[10px] text-gray-500 mt-2 ml-1">Used to map your account with Vision ID Address Book.</p>
+                        </div>
+
 
                         {/* Password Input */}
                         <div>

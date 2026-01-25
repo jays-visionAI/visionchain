@@ -15,7 +15,7 @@ import {
     Check,
     AlertCircle
 } from 'lucide-solid';
-import { getUserPreset, saveUserPreset } from '../../services/firebaseService';
+import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
 import { useAuth } from '../auth/authContext';
 
 
@@ -48,6 +48,9 @@ export function WalletSettings() {
     const [pushNotifications, setPushNotifications] = createSignal(false);
     const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
     const [darkMode, setDarkMode] = createSignal(true);
+    const [phone, setPhone] = createSignal('');
+    const [isSavingPhone, setIsSavingPhone] = createSignal(false);
+    const [phoneSuccess, setPhoneSuccess] = createSignal(false);
 
     // Password state
     const [currentPassword, setCurrentPassword] = createSignal('');
@@ -113,8 +116,30 @@ export function WalletSettings() {
                 setSecondaryAsset(preset.secondaryAsset);
                 setPreferredChain(preset.preferredChain);
             }
+
+            // Load user profile data (like phone)
+            const userData = await getUserData(auth.user().email);
+            if (userData?.phone) {
+                setPhone(userData.phone);
+            }
         }
     });
+
+    const handleSavePhone = async () => {
+        if (!auth.user()?.email) return;
+        setIsSavingPhone(true);
+        setPhoneSuccess(false);
+        try {
+            await updateUserData(auth.user().email, { phone: phone() });
+            setPhoneSuccess(true);
+            setTimeout(() => setPhoneSuccess(false), 3000);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to save phone number.");
+        } finally {
+            setIsSavingPhone(false);
+        }
+    };
 
     const handleSavePreset = async () => {
         if (!auth.user()?.email) return;
@@ -198,6 +223,38 @@ export function WalletSettings() {
                                 <option value="ja">Japanese</option>
                                 <option value="zh">Chinese</option>
                             </select>
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors border-t border-white/5">
+                            <div class="flex items-start gap-4 flex-1">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Smartphone class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-white font-medium">Phone Number</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Used for user identification and VID mapping</p>
+                                    <div class="mt-3 flex gap-2 max-w-sm">
+                                        <input
+                                            type="tel"
+                                            value={phone()}
+                                            onInput={(e) => setPhone(e.currentTarget.value)}
+                                            placeholder="010-1234-5678"
+                                            class="flex-1 px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 text-sm"
+                                        />
+                                        <button
+                                            onClick={handleSavePhone}
+                                            disabled={isSavingPhone()}
+                                            class={`px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 ${phoneSuccess()
+                                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                : 'bg-white/10 text-white hover:bg-white/20'
+                                                }`}
+                                        >
+                                            <Show when={isSavingPhone()} fallback={phoneSuccess() ? <><Check class="w-3 h-3" /> Saved</> : 'Update'}>
+                                                <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            </Show>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
