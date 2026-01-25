@@ -16,7 +16,10 @@ const getApiKey = async (providerOverride?: string): Promise<string> => {
       const modelName = settings?.intentBot?.model;
 
       if (modelName) {
-        targetProvider = getProviderFromModel(modelName);
+        if (modelName.includes('deepseek')) targetProvider = 'deepseek';
+        else if (modelName.includes('gpt')) targetProvider = 'openai';
+        else if (modelName.includes('claude')) targetProvider = 'anthropic';
+        else targetProvider = 'gemini'; // Default only if modelName exists but is unknown (likely gemini variant)
       } else {
         // If no settings found, we cannot assume provider. 
         // However, to prevent breaking, we might need to check if we should return error.
@@ -105,7 +108,7 @@ export const generateText = async (
     // Choose config based on bot type
     const botConfig = botType === 'helpdesk' ? settings?.helpdeskBot : settings?.intentBot;
     const systemInstruction = botConfig?.systemPrompt || VISION_CHAIN_KNOWLEDGE;
-    const modelName = botConfig?.model || 'gemini-1.5-flash';
+    const modelName = botConfig?.model || '';
 
     let finalModel = modelName;
     if (imageBase64) {

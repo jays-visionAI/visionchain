@@ -22,17 +22,11 @@ export const generateText = async (
             const settings = await getChatbotSettings();
             const botConfig = botType === 'helpdesk' ? settings?.helpdeskBot : settings?.intentBot;
 
-            let provider = 'gemini';
-            const modelName = botConfig?.model || 'gemini-1.5-flash';
+            let provider = '';
+            const modelName = botConfig?.model || '';
 
             if (modelName) {
                 provider = getProviderFromModel(modelName);
-                if (!provider) provider = 'gemini'; // Fallback if unknown model string, but usually getProvider handles it.
-                // Wait, getProviderFromModel returns '' if unknown.
-                // Original logic defaulted to 'gemini' at line 25 then overrode it.
-                // Let's match original safety: always have a provider?
-                // Actually, step 1247 shows line 25: let provider = 'gemini'.
-                // Then lines 28-30 override it.
             }
 
             // 3. Get Active Global Key
