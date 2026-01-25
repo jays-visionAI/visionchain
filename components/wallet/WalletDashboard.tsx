@@ -254,31 +254,33 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             {/* Dynamic Border Glow */}
                             <div class="absolute -inset-[1px] bg-gradient-to-r from-blue-600/30 via-cyan-400/30 to-blue-600/30 rounded-[26px] blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 animate-pulse" />
 
-                            <div class="relative bg-[#121214]/90 backdrop-blur-3xl border border-white/10 rounded-[26px] shadow-2xl transition-all duration-300 group-focus-within:border-blue-500/40 group-focus-within:bg-[#151518] p-2 flex items-end gap-2">
+                            <div class="relative bg-[#0d0d0f] backdrop-blur-3xl border border-white/[0.05] rounded-[26px] shadow-2xl transition-all duration-500 group-focus-within:border-white/[0.08] p-2 flex items-end gap-2">
 
                                 {/* Left Tools (Attachments/Plus) */}
                                 <button class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 group/btn">
                                     <Plus class="w-5 h-5 group-hover/btn:rotate-90 transition-transform duration-300" />
                                 </button>
 
-                                {/* Main Textarea */}
-                                <textarea
-                                    class="flex-1 bg-transparent text-white text-[15px] py-3.5 px-2 outline-none resize-none placeholder:text-gray-500 min-h-[44px] max-h-[200px] font-medium leading-relaxed"
-                                    placeholder="Consult Vision AI Architect..."
-                                    rows={1}
-                                    value={props.input()}
-                                    onInput={(e) => {
-                                        props.setInput(e.currentTarget.value);
-                                        e.currentTarget.style.height = 'auto';
-                                        e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            props.handleSend();
-                                        }
-                                    }}
-                                />
+                                {/* Inner Textarea Container with subtle dark gray border */}
+                                <div class="flex-1 bg-[#151518]/50 border border-white/[0.03] rounded-2xl px-2 transition-all group-focus-within:border-white/[0.06] group-focus-within:bg-[#151518]">
+                                    <textarea
+                                        class="w-full bg-transparent text-white text-[15px] py-3.5 outline-none resize-none placeholder:text-gray-600 min-h-[44px] max-h-[200px] font-medium leading-relaxed"
+                                        placeholder="Consult Vision AI Architect..."
+                                        rows={1}
+                                        value={props.input()}
+                                        onInput={(e) => {
+                                            props.setInput(e.currentTarget.value);
+                                            e.currentTarget.style.height = 'auto';
+                                            e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                props.handleSend();
+                                            }
+                                        }}
+                                    />
+                                </div>
 
                                 {/* Right Tools */}
                                 <div class="flex items-center gap-1.5 pb-0.5 pr-1">
@@ -290,8 +292,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         onClick={props.handleSend}
                                         disabled={props.isLoading() || !props.input().trim()}
                                         class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${(!props.input().trim() || props.isLoading())
-                                                ? 'bg-white/5 text-white/10 grayscale cursor-not-allowed'
-                                                : 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:scale-105 active:scale-95'
+                                            ? 'bg-white/5 text-white/10 grayscale cursor-not-allowed'
+                                            : 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:scale-105 active:scale-95'
                                             }`}
                                     >
                                         <Send class={`w-5 h-5 ${props.isLoading() ? 'animate-pulse' : ''}`} />
