@@ -1074,9 +1074,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                     placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
                     value={input()}
                     onCompositionStart={() => setIsComposing(true)}
-                    onCompositionEnd={(e) => {
-                      setIsComposing(false);
-                      setInput(e.currentTarget.value);
+                    onCompositionEnd={() => {
+                      setTimeout(() => setIsComposing(false), 10);
                     }}
                     onInput={(e) => {
                       setInput(e.currentTarget.value);
@@ -1084,7 +1083,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
                     }}
                     onKeyDown={(e) => {
-                      if (isComposing()) return;
+                      // Prevent sending while composing in IME
+                      if (e.isComposing || isComposing() || e.keyCode === 229) return;
 
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();

@@ -34,6 +34,7 @@ interface WalletDashboardProps {
 }
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
+    const [isComposing, setIsComposing] = createSignal(false);
     return (
         <div class="flex-1 flex overflow-hidden relative">
             {/* Main Chat Area */}
@@ -278,15 +279,26 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         placeholder="Consult Vision AI Architect..."
                                         rows={1}
                                         value={props.input()}
+                                        onCompositionStart={() => setIsComposing(true)}
+                                        onCompositionEnd={() => {
+                                            setTimeout(() => setIsComposing(false), 10);
+                                        }}
                                         onInput={(e) => {
                                             props.setInput(e.currentTarget.value);
                                             e.currentTarget.style.height = 'auto';
                                             e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
                                         }}
                                         onKeyDown={(e) => {
+                                            if (e.isComposing || isComposing() || e.keyCode === 229) return;
+
                                             if (e.key === 'Enter' && !e.shiftKey) {
                                                 e.preventDefault();
                                                 props.handleSend();
+                                                // Reset height after sending
+                                                const target = e.currentTarget;
+                                                setTimeout(() => {
+                                                    if (target) target.style.height = 'auto';
+                                                }, 0);
                                             }
                                         }}
                                     />
