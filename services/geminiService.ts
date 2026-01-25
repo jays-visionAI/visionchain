@@ -27,7 +27,6 @@ const getApiKey = async (providerOverride?: string): Promise<string> => {
     console.error('[AI] Failed to get global API key from Firebase:', e);
   }
 
-
   // 2. Check environment variable (Safe check for browser)
   try {
     // @ts-ignore
