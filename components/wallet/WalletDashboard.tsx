@@ -261,8 +261,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <Plus class="w-5 h-5 group-hover/btn:rotate-90 transition-transform duration-300" />
                                 </button>
 
-                                {/* Inner Textarea Container with subtle dark gray border */}
-                                <div class="flex-1 bg-[#151518]/50 border border-white/[0.03] rounded-2xl px-2 transition-all group-focus-within:border-white/[0.06] group-focus-within:bg-[#151518]">
+                                {/* Inner Textarea Container with a much darker charcoal border */}
+                                <div class="flex-1 bg-[#121214]/40 border border-[#1a1a1e] rounded-2xl px-2 transition-all group-focus-within:border-[#222226] group-focus-within:bg-[#151518]/80">
                                     <textarea
                                         class="w-full bg-transparent text-white text-[15px] py-3.5 outline-none resize-none placeholder:text-gray-600 min-h-[44px] max-h-[200px] font-medium leading-relaxed"
                                         placeholder="Consult Vision AI Architect..."
