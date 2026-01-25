@@ -10,7 +10,10 @@ import {
     TrendingUp,
     ChevronRight,
     Copy,
-    Zap
+    Zap,
+    Plus,
+    Mic,
+    Paperclip
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -244,38 +247,67 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
                 </div>
 
-                {/* Input Area - Floating Style */}
-                <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/95 to-transparent pt-20">
-                    <div class="max-w-3xl mx-auto">
-                        <div class="relative bg-[#17171a] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/40 focus-within:border-cyan-500/40 focus-within:shadow-[0_0_20px_rgba(6,182,212,0.05)] transition-all duration-300">
-                            <textarea
-                                class="w-full bg-transparent text-white text-[15px] py-5 px-6 pr-16 outline-none resize-none placeholder:text-gray-500 min-h-[60px] max-h-[180px]"
-                                placeholder="Message Vision AI..."
-                                rows={1}
-                                value={props.input()}
-                                onInput={(e) => {
-                                    props.setInput(e.currentTarget.value);
-                                    e.currentTarget.style.height = 'auto';
-                                    e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 180) + 'px';
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        props.handleSend();
-                                    }
-                                }}
-                            />
-                            <button
-                                onClick={props.handleSend}
-                                disabled={props.isLoading() || !props.input().trim()}
-                                class="absolute right-3 bottom-3 p-3 bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-400 hover:to-cyan-300 rounded-xl text-white transition-all shadow-lg shadow-blue-500/25 disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none hover:scale-105 active:scale-95"
-                            >
-                                <Send class="w-4 h-4" />
-                            </button>
+                {/* Input Area - Redesigned Premium Floating Style */}
+                <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/98 to-transparent pt-32 pointer-events-none">
+                    <div class="max-w-4xl mx-auto pointer-events-auto">
+                        <div class="relative group">
+                            {/* Dynamic Border Glow */}
+                            <div class="absolute -inset-[1px] bg-gradient-to-r from-blue-600/30 via-cyan-400/30 to-blue-600/30 rounded-[26px] blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 animate-pulse" />
+
+                            <div class="relative bg-[#121214]/90 backdrop-blur-3xl border border-white/10 rounded-[26px] shadow-2xl transition-all duration-300 group-focus-within:border-blue-500/40 group-focus-within:bg-[#151518] p-2 flex items-end gap-2">
+
+                                {/* Left Tools (Attachments/Plus) */}
+                                <button class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 group/btn">
+                                    <Plus class="w-5 h-5 group-hover/btn:rotate-90 transition-transform duration-300" />
+                                </button>
+
+                                {/* Main Textarea */}
+                                <textarea
+                                    class="flex-1 bg-transparent text-white text-[15px] py-3.5 px-2 outline-none resize-none placeholder:text-gray-500 min-h-[44px] max-h-[200px] font-medium leading-relaxed"
+                                    placeholder="Consult Vision AI Architect..."
+                                    rows={1}
+                                    value={props.input()}
+                                    onInput={(e) => {
+                                        props.setInput(e.currentTarget.value);
+                                        e.currentTarget.style.height = 'auto';
+                                        e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            props.handleSend();
+                                        }
+                                    }}
+                                />
+
+                                {/* Right Tools */}
+                                <div class="flex items-center gap-1.5 pb-0.5 pr-1">
+                                    <button class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0">
+                                        <Mic class="w-4.5 h-4.5" />
+                                    </button>
+
+                                    <button
+                                        onClick={props.handleSend}
+                                        disabled={props.isLoading() || !props.input().trim()}
+                                        class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${(!props.input().trim() || props.isLoading())
+                                                ? 'bg-white/5 text-white/10 grayscale cursor-not-allowed'
+                                                : 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:scale-105 active:scale-95'
+                                            }`}
+                                    >
+                                        <Send class={`w-5 h-5 ${props.isLoading() ? 'animate-pulse' : ''}`} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <p class="text-center text-[11px] text-gray-600 mt-4">
-                            Vision AI may make mistakes. Always verify transactions before confirming.
-                        </p>
+
+                        {/* Status Footer */}
+                        <div class="flex items-center justify-between px-6 mt-4 opacity-40 group-focus-within:opacity-70 transition-opacity">
+                            <div class="flex items-center gap-2">
+                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                <span class="text-[9px] font-black text-white uppercase tracking-[0.2em]">Vision Architect v0.8</span>
+                            </div>
+                            <span class="text-[9px] font-bold text-gray-400 italic">Always verify critical transactions.</span>
+                        </div>
                     </div>
                 </div>
             </div>
