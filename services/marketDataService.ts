@@ -55,7 +55,17 @@ export class MarketDataService {
      */
     async getCurrentPrice(symbol: string): Promise<number | null> {
         try {
-            const coinId = this.symbolToId[symbol.toLowerCase()] || symbol.toLowerCase();
+            const normalizedSymbol = symbol.toLowerCase();
+
+            // Special handling for VCN (Not listed on CoinGecko yet)
+            // Simulating "Admin Configured Price" as requested by user
+            if (normalizedSymbol === 'vcn' || normalizedSymbol === 'vision-chain') {
+                // In a real scenario, this might fetch from AdminService.getTokenPrice('VCN')
+                // For now, we return the seed/presale price used across the app
+                return 0.4007;
+            }
+
+            const coinId = this.symbolToId[normalizedSymbol] || normalizedSymbol;
             const url = `${this.baseUrl}/simple/price?ids=${coinId}&vs_currencies=usd`;
 
             const response = await axios.get(url);
