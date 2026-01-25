@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onCleanup, Show, For, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages } from 'lucide-solid';
+import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages, Search, Lightbulb } from 'lucide-solid';
 import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/ai/utils';
 import { getChatbotSettings, getProviderFromModel, getUserConversations, getConversationById, saveConversation, AiConversation } from '../services/firebaseService';
 import { generateText, generateImage, generateSpeech } from '../services/ai';
@@ -83,37 +83,48 @@ const ImageSkeleton = (): JSX.Element => (
   </Motion.div>
 );
 
-const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'pending' | 'loading' | 'completed' }[] }): JSX.Element => (
+const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'pending' | 'loading' | 'completed' | 'success' }[] }): JSX.Element => (
   <Motion.div
-    initial={{ opacity: 0, scale: 0.95 }}
-    animate={{ opacity: 1, scale: 1 }}
-    class="flex gap-3 mb-6"
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    class="flex gap-3 mb-6 px-4"
   >
-    <div class="w-8 h-8 rounded-full bg-[#1d1d1f] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
-      <Bot class="w-4 h-4 text-emerald-400" />
-    </div>
-    <div class="flex-1 max-w-[80%] bg-[#1d1d1f] border border-white/10 rounded-2xl rounded-tl-sm p-4 space-y-4 shadow-xl">
-      <div class="flex items-center gap-2 mb-2">
-        <Activity class="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-        <span class="text-[11px] font-black text-blue-400 uppercase tracking-widest">Thinking Process</span>
+    <div class="w-8 h-8 rounded-full bg-[#1c1c1e] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-lg">
+      <div class="w-4 h-4 text-purple-400 animate-pulse">
+        <Bot class="w-full h-full" />
       </div>
-      <div class="space-y-3">
+    </div>
+    <div class="flex-1 max-w-[400px] bg-[#111113]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 space-y-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+      <div class="flex items-center justify-between pb-3 border-b border-white/5">
+        <div class="flex items-center gap-2">
+          <span class="text-[13px] font-bold text-gray-100">생각 중...</span>
+          <div class="flex gap-1">
+            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
+            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.1s" }} />
+            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.2s" }} />
+          </div>
+        </div>
+        <div class="w-4 h-4 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+
+      <div class="space-y-3 pt-1">
+        <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.1em] mb-2">생각 과정 (THINKING PROCESS)</div>
         <For each={props.steps}>
           {(step) => (
-            <div class={`flex items-center gap-3 transition-opacity duration-300 ${step.status === 'pending' ? 'opacity-30' : 'opacity-100'}`}>
+            <div class={`flex items-center gap-3 transition-all duration-500 ${step.status === 'pending' ? 'opacity-20 grayscale' : 'opacity-100'}`}>
               <div class="relative flex items-center justify-center">
                 <Show when={step.status === 'loading'} fallback={
-                  <div class={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${step.status === 'completed' ? 'border-emerald-500 bg-emerald-500/20' : 'border-white/10'}`}>
-                    <Show when={step.status === 'completed'}>
-                      <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                    </Show>
-                  </div>
+                  <div class={`w-2 h-2 rounded-full ${step.status === 'completed' || step.status === 'success' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-gray-700'}`} />
                 }>
-                  <div class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-ping" />
                 </Show>
               </div>
-              <span class={`text-[13px] font-medium ${step.status === 'completed' ? 'text-emerald-400/90' : step.status === 'loading' ? 'text-white' : 'text-gray-600'}`}>
-                {step.label}
+              <span class={`text-[12px] font-medium flex items-center gap-2 ${(step.status === 'completed' || step.status === 'success') ? 'text-gray-100' : 'text-gray-400'}`}>
+                {step.id === 'intent' && <Search class="w-3.5 h-3.5 text-gray-400" />}
+                {step.id === 'scan' && <FileSpreadsheet class="w-3.5 h-3.5 text-gray-400" />}
+                {step.id === 'insight' && <Lightbulb class="w-3.5 h-3.5 text-gray-400" />}
+                {step.id === 'success' && <div class="text-purple-400 font-bold flex items-center gap-1.5"><Sparkles class="w-4 h-4" /> {step.label}</div>}
+                {step.id !== 'success' && step.label}
               </span>
             </div>
           )}
@@ -147,7 +158,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [isImageGenMode, setIsImageGenMode] = createSignal(false);
 
   // --- Thinking Steps (Progress) ---
-  const [thinkingSteps, setThinkingSteps] = createSignal<{ id: string, label: string, status: 'pending' | 'loading' | 'completed' }[]>([]);
+  const [thinkingSteps, setThinkingSteps] = createSignal<{ id: string, label: string, status: 'pending' | 'loading' | 'completed' | 'success' }[]>([]);
 
   // --- History & Session State ---
   const { user } = useAuth();
@@ -389,10 +400,10 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
     setLoadingType(isImageGenMode() ? 'image' : 'text');
     setThinkingSteps([
-      { id: 'analyze', label: 'Analyzing request...', status: 'loading' },
-      { id: 'parse', label: 'Parsing intents...', status: 'pending' },
-      { id: 'resolve', label: 'Resolving actions...', status: 'pending' },
-      { id: 'generate', label: 'Generating response...', status: 'pending' }
+      { id: 'analyze', label: '요청을 분석하고 있습니다...', status: 'loading' },
+      { id: 'intent', label: '의도 및 검색 키워드 분석...', status: 'pending' },
+      { id: 'scan', label: '관련 데이터 및 온체인 기록 스캔...', status: 'pending' },
+      { id: 'insight', label: '최적의 인사이트 도출 및 요약...', status: 'pending' }
     ]);
 
     try {
@@ -407,11 +418,12 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         setThinkingSteps([]);
       } else {
         // AI Logic
-        setThinkingSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'completed' } : s.id === 'parse' ? { ...s, status: 'loading' } : s));
+        setThinkingSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'completed' as const } : s.id === 'intent' ? { ...s, status: 'loading' as const } : s));
         await new Promise(r => setTimeout(r, 600)); // Visual feel
 
         const intent = await intentParser.parseIntent(userMsg.text);
-        setThinkingSteps(prev => prev.map(s => s.id === 'parse' ? { ...s, status: 'completed' } : s.id === 'resolve' ? { ...s, status: 'loading' } : s));
+        setThinkingSteps(prev => prev.map(s => s.id === 'intent' ? { ...s, status: 'completed' as const } : s.id === 'scan' ? { ...s, status: 'loading' as const } : s));
+        await new Promise(r => setTimeout(r, 800));
 
         if (intent && user()) {
           const userAddress = (user() as any).walletAddress || '0x6872E5cda7a24Fa38d8B61Efe961fdF5E801d31d'; // Demo fallback
@@ -479,9 +491,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
               }
             }
 
-            // 2. Fallback to General AI (Gemini)
-            // Note: Currently generateText only supports one image.
-            // We might need to extend this service for PDFs if Gemini supports it via API, but for now assuming image only for vision.
+            // Fallback to General AI (Gemini)
             let rawBase64 = undefined;
             if (imageAttachment) {
               rawBase64 = imageAttachment.preview.split(',')[1];
@@ -489,7 +499,14 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
             // Strict Admin Control: Use the settings fetched in createEffect
             const text = await generateText(userMsg.text, rawBase64, 'helpdesk');
-            setThinkingSteps(prev => prev.map(s => s.id === 'resolve' ? { ...s, status: 'completed' } : s.id === 'generate' ? { ...s, status: 'loading' } : s));
+            setThinkingSteps(prev => prev.map(s => s.id === 'scan' ? { ...s, status: 'completed' as const } : s.id === 'insight' ? { ...s, status: 'loading' as const } : s));
+            await new Promise(r => setTimeout(r, 700));
+
+            setThinkingSteps(prev => [
+              ...prev.map(s => s.id === 'insight' ? { ...s, status: 'completed' as const } : s),
+              { id: 'success', label: '답변 생성 완료', status: 'success' as const }
+            ]);
+            await new Promise(r => setTimeout(r, 500));
 
             const assistantMsg: Message = { role: 'model', text };
             const updatedMsgs = [...messages(), assistantMsg];
