@@ -244,6 +244,7 @@ const Wallet = (): JSX.Element => {
     const [sidebarOpen, setSidebarOpen] = createSignal(false);
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
+    const [chatLoading, setChatLoading] = createSignal(false); // Dedicated loading for chat
     const [messages, setMessages] = createSignal<Message[]>([]);
     const [marketData, setMarketData] = createSignal<Map<string, CoinGeckoToken>>(new Map());
     const [marketLoading, setMarketLoading] = createSignal(true);
@@ -936,12 +937,12 @@ const Wallet = (): JSX.Element => {
     };
 
     const handleSend = async () => {
-        if (!input().trim() || isLoading()) return;
+        if (!input().trim() || chatLoading()) return;
 
         const userMessage = input().trim();
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setInput('');
-        setIsLoading(true);
+        setChatLoading(true);
 
         try {
             // Construct context from wallet state
@@ -962,7 +963,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
             console.error('AI Error:', error);
             setMessages(prev => [...prev, { role: 'assistant', content: "I apologize, but I'm unable to connect to the Vision network right now. Please try again later." }]);
         } finally {
-            setIsLoading(false);
+            setChatLoading(false);
         }
     };
 
@@ -1091,7 +1092,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                     <Show when={activeView() === 'chat'}>
                         <WalletDashboard
                             messages={messages}
-                            isLoading={isLoading}
+                            isLoading={chatLoading} // Use chat-specific loading
                             input={input}
                             setInput={setInput}
                             handleSend={handleSend}
