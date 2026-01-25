@@ -119,9 +119,10 @@ const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'p
                 </Show>
               </div>
               <span class={`text-[12px] font-medium flex items-center gap-2 ${(step.status === 'completed' || step.status === 'success') ? 'text-gray-100' : 'text-gray-400'}`}>
-                {step.id === 'intent' && <Search class="w-3.5 h-3.5 text-gray-400" />}
+                {step.id === 'analyze' && <Search class="w-3.5 h-3.5 text-gray-400" />}
                 {step.id === 'scan' && <FileSpreadsheet class="w-3.5 h-3.5 text-gray-400" />}
-                {step.id === 'insight' && <Lightbulb class="w-3.5 h-3.5 text-gray-400" />}
+                {step.id === 'strategy' && <Bolt class="w-3.5 h-3.5 text-gray-400" />}
+                {step.id === 'orchestrator' && <Bot class="w-3.5 h-3.5 text-gray-400" />}
                 {step.id === 'success' && <div class="text-purple-400 font-bold flex items-center gap-1.5"><Sparkles class="w-4 h-4" /> {step.label}</div>}
                 {step.id !== 'success' && step.label}
               </span>
@@ -448,10 +449,10 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
     setLoadingType(isImageGenMode() ? 'image' : 'text');
     setThinkingSteps([
-      { id: 'analyze', label: '요청을 분석하고 있습니다...', status: 'loading' },
-      { id: 'intent', label: '의도 및 검색 키워드 분석...', status: 'pending' },
-      { id: 'scan', label: '관련 데이터 및 온체인 기록 스캔...', status: 'pending' },
-      { id: 'insight', label: '최적의 인사이트 도출 및 요약...', status: 'pending' }
+      { id: 'analyze', label: '요청 분석 및 의도 파악 중...', status: 'loading' },
+      { id: 'scan', label: '데이터 및 자산 현황 스캔...', status: 'pending' },
+      { id: 'strategy', label: '최적의 전략 빌드 및 생성...', status: 'pending' },
+      { id: 'orchestrator', label: '오케스트레이터 AI 응답 도출...', status: 'pending' }
     ]);
 
     try {
@@ -466,11 +467,10 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         setThinkingSteps([]);
       } else {
         // AI Logic
-        setThinkingSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'completed' as const } : s.id === 'intent' ? { ...s, status: 'loading' as const } : s));
         await new Promise(r => setTimeout(r, 600)); // Visual feel
-
         const intent = await intentParser.parseIntent(userMsg.text);
-        setThinkingSteps(prev => prev.map(s => s.id === 'intent' ? { ...s, status: 'completed' as const } : s.id === 'scan' ? { ...s, status: 'loading' as const } : s));
+
+        setThinkingSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'completed' as const } : s.id === 'scan' ? { ...s, status: 'loading' as const } : s));
         await new Promise(r => setTimeout(r, 800));
 
         if (intent && user()) {
@@ -490,6 +490,9 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                 // If it's a transfer/payment, run it through the Optimizer first
                 if (intent.action === 'TRANSFER' || intent.action === 'SWAP_AND_SEND') {
                   try {
+                    setThinkingSteps(prev => prev.map(s => s.id === 'scan' ? { ...s, status: 'completed' as const } : s.id === 'strategy' ? { ...s, status: 'loading' as const } : s));
+                    await new Promise(r => setTimeout(r, 1000));
+
                     const { transactionOptimizer } = await import('../services/transactionOptimizer');
                     const plan = await transactionOptimizer.optimizeTransaction(
                       userAddress,
@@ -498,6 +501,9 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                       intent.params.token || 'VCN',
                       user()?.email || undefined
                     );
+
+                    setThinkingSteps(prev => prev.map(s => s.id === 'strategy' ? { ...s, status: 'completed' as const } : s.id === 'orchestrator' ? { ...s, status: 'loading' as const } : s));
+                    await new Promise(r => setTimeout(r, 800));
 
                     // Convert Plan to Action for UI
                     finalAction = {
@@ -523,8 +529,20 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                   }
                 } else {
                   // Standard resolver for Bridge/Other
+                  setThinkingSteps(prev => prev.map(s => s.id === 'scan' ? { ...s, status: 'completed' as const } : s.id === 'strategy' ? { ...s, status: 'loading' as const } : s));
+                  await new Promise(r => setTimeout(r, 600));
+
                   finalAction = await actionResolver.resolve(intent, userAddress, user()?.email || undefined);
+
+                  setThinkingSteps(prev => prev.map(s => s.id === 'strategy' ? { ...s, status: 'completed' as const } : s.id === 'orchestrator' ? { ...s, status: 'loading' as const } : s));
+                  await new Promise(r => setTimeout(r, 800));
                 }
+
+                setThinkingSteps(prev => [
+                  ...prev.map(s => s.id === 'orchestrator' ? { ...s, status: 'completed' as const } : s),
+                  { id: 'success', label: '최적의 경로 도출 완료', status: 'success' as const }
+                ]);
+                await new Promise(r => setTimeout(r, 500));
 
                 setMessages(prev => [...prev, {
                   role: 'model',
@@ -546,13 +564,16 @@ const AIChat = (props: AIChatProps): JSX.Element => {
               rawBase64 = imageAttachment.preview.split(',')[1];
             }
 
+            setThinkingSteps(prev => prev.map(s => s.id === 'scan' ? { ...s, status: 'completed' as const } : s.id === 'strategy' ? { ...s, status: 'loading' as const } : s));
+            await new Promise(r => setTimeout(r, 600));
+
             // Strict Admin Control: Use the settings fetched in createEffect
             const text = await generateText(userMsg.text, rawBase64, 'helpdesk', user()?.email || 'anonymous');
-            setThinkingSteps(prev => prev.map(s => s.id === 'scan' ? { ...s, status: 'completed' as const } : s.id === 'insight' ? { ...s, status: 'loading' as const } : s));
+            setThinkingSteps(prev => prev.map(s => s.id === 'strategy' ? { ...s, status: 'completed' as const } : s.id === 'orchestrator' ? { ...s, status: 'loading' as const } : s));
             await new Promise(r => setTimeout(r, 700));
 
             setThinkingSteps(prev => [
-              ...prev.map(s => s.id === 'insight' ? { ...s, status: 'completed' as const } : s),
+              ...prev.map(s => s.id === 'orchestrator' ? { ...s, status: 'completed' as const } : s),
               { id: 'success', label: '답변 생성 완료', status: 'success' as const }
             ]);
             await new Promise(r => setTimeout(r, 500));

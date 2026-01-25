@@ -271,7 +271,7 @@ let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 
-export const initializeFirebase = (useLongPolling = true) => {
+export const initializeFirebase = (useLongPolling = false) => {
     if (!app) {
         const apps = getApps();
         app = apps.length ? apps[0] : initializeApp(firebaseConfig);
@@ -284,10 +284,12 @@ export const initializeFirebase = (useLongPolling = true) => {
     // Only initialize Firestore if not already set
     if (!db) {
         if (useLongPolling) {
-            console.log('[Firebase] Initializing Firestore with Long Polling...');
+            console.info('[Firebase] Firestore: Using Long Polling fallback.');
             db = initializeFirestore(app, { experimentalForceLongPolling: true });
         } else {
+            // Standard Cloud Firestore initialization (Websockets/GRPC)
             db = getFirestore(app);
+            console.log('[Firebase] Infrastructure initialized successfully.');
         }
     }
 
@@ -1215,7 +1217,14 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
         };
 
         if (!snapshot.exists()) {
-            console.warn('[Firebase] Chatbot settings not found, using defaults.');
+            console.info('[Firebase] Chatbot settings not found. Seeding default configuration...');
+            try {
+                // Self-healing: Create the default doc so the warning doesn't repeat
+                await setDoc(docRef, defaultSettings);
+                console.log('[Firebase] Successfully seeded default chatbot settings.');
+            } catch (seedErr) {
+                console.warn('[Firebase] Failed to seed default settings (check permissions):', seedErr);
+            }
             return defaultSettings;
         }
 
