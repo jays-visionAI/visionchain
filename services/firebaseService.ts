@@ -691,6 +691,44 @@ export const getUserContacts = async (userEmail: string): Promise<Contact[]> => 
     }
 };
 
+export const syncUserContacts = async (userEmail: string): Promise<number> => {
+    try {
+        const db = getFirebaseDb();
+        const userEmailLower = userEmail.toLowerCase().trim();
+        const contactsRef = collection(db, 'users', userEmailLower, 'contacts');
+        const snapshot = await getDocs(contactsRef);
+
+        let updateCount = 0;
+        const batch = writeBatch(db);
+
+        for (const docSnap of snapshot.docs) {
+            const data = docSnap.data() as Contact;
+            // Only sync those without vchainUserUid or address
+            if (!data.vchainUserUid || !data.address) {
+                const normalizedPhone = normalizePhoneNumber(data.phone);
+                const resolved = await searchUserByPhone(normalizedPhone);
+
+                if (resolved && (resolved.vid !== data.vchainUserUid || resolved.address !== data.address)) {
+                    batch.update(docSnap.ref, {
+                        vchainUserUid: resolved.vid,
+                        address: resolved.address,
+                        updatedAt: new Date().toISOString()
+                    });
+                    updateCount++;
+                }
+            }
+        }
+
+        if (updateCount > 0) {
+            await batch.commit();
+        }
+        return updateCount;
+    } catch (e) {
+        console.error("Error syncing contacts:", e);
+        throw e;
+    }
+};
+
 // ==================== Token Sale & Vesting ====================
 
 export interface TokenSaleEntry {
