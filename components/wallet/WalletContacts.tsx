@@ -297,7 +297,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                 </div>
                                             </td>
                                         </tr>
-                                    }
+                                    ))}
                                 </For>
                             </tbody>
                         </table>
