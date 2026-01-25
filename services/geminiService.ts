@@ -23,7 +23,6 @@ export const generateTextGemini = async (
 ): Promise<string> => {
   try {
     const ai = createClient(apiKey);
-
     let contents: any = prompt;
 
     // TODO: Handle Image Model switch if needed, but caller should pass correct model
@@ -43,16 +42,34 @@ export const generateTextGemini = async (
       };
     }
 
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: contents,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.7,
-      }
-    });
+    try {
+      const response = await ai.models.generateContent({
+        model: model,
+        contents: contents,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.7,
+        }
+      });
+      return response.text || "No response generated.";
 
-    return response.text || "No response generated.";
+    } catch (e: any) {
+      // Fallback Logic for Quota Exceeded (429)
+      if (e.message && (e.message.includes('429') || e.message.includes('RESOURCE_EXHAUSTED')) && model !== 'gemini-1.5-flash') {
+        console.warn(`[Gemini] ${model} exhausted. Falling back to gemini-1.5-flash.`);
+        const fallbackResponse = await ai.models.generateContent({
+          model: 'gemini-1.5-flash',
+          contents: contents,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.7,
+          }
+        });
+        return fallbackResponse.text || "No response generated (Fallback).";
+      }
+      throw e;
+    }
+
   } catch (error) {
     console.error("Gemini Execution Error:", error);
     throw error; // Re-throw to be handled by the caller (aiService)

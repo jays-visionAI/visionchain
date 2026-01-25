@@ -826,13 +826,13 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
             knowledgeBase: '',
             intentBot: {
                 systemPrompt: 'You are Vision AI, an advanced blockchain assistant capable of executing transactions and analyzing chain data.',
-                model: 'gemini-2.0-flash-exp',
+                model: 'gemini-1.5-flash',
                 temperature: 0.7,
                 maxTokens: 2048
             },
             helpdeskBot: {
                 systemPrompt: 'You are a helpful support agent for Vision Chain.',
-                model: 'gemini-2.0-flash-exp',
+                model: 'gemini-1.5-flash',
                 temperature: 0.7,
                 maxTokens: 2048
             },
@@ -842,9 +842,9 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
                 size: '1024x1024'
             },
             voiceSettings: {
-                model: 'gemini-2.0-flash-exp',
+                model: 'gemini-1.5-flash',
                 ttsVoice: 'Kore',
-                sttModel: 'gemini-2.0-flash-exp'
+                sttModel: 'gemini-1.5-flash'
             }
         };
 
