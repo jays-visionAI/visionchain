@@ -758,7 +758,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
               {/* Input TextField */}
               <textarea
                 rows={1}
-                class="flex-1 bg-transparent text-white text-[15px] py-3 outline-none resize-none placeholder:text-gray-500 max-h-32 font-medium"
+                class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
                 placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
                 value={input()}
                 onInput={(e) => {
