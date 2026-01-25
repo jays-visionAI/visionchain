@@ -806,6 +806,16 @@ export interface SystemSettings {
     activeChainsCount?: number;
 }
 
+// Helper to standardise provider resolution from model name
+export const getProviderFromModel = (modelName: string = ''): string => {
+    const lower = modelName.toLowerCase();
+    if (lower.includes('deepseek')) return 'deepseek';
+    if (lower.includes('gpt')) return 'openai';
+    if (lower.includes('claude')) return 'anthropic';
+    if (lower.includes('gemini')) return 'gemini';
+    return ''; // Unknown or empty
+};
+
 export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'chatbot');

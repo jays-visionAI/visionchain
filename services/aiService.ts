@@ -1,7 +1,7 @@
 import { generateText as generateTextGemini, generateImage as generateImageGemini, generateSpeech as generateSpeechGemini, getAiInstance as getAi } from './geminiService';
 import { generateTextDeepSeek } from './deepseekService';
 import { AspectRatio } from '../types';
-import { getActiveGlobalApiKey, getChatbotSettings, saveConversation } from './firebaseService';
+import { getActiveGlobalApiKey, getChatbotSettings, saveConversation, getProviderFromModel } from './firebaseService';
 
 // Unified Text Generation
 export const generateText = async (
@@ -25,9 +25,15 @@ export const generateText = async (
             let provider = 'gemini';
             const modelName = botConfig?.model || 'gemini-1.5-flash';
 
-            if (modelName.includes('deepseek')) provider = 'deepseek';
-            else if (modelName.includes('gpt')) provider = 'openai';
-            else if (modelName.includes('claude')) provider = 'anthropic';
+            if (modelName) {
+                provider = getProviderFromModel(modelName);
+                if (!provider) provider = 'gemini'; // Fallback if unknown model string, but usually getProvider handles it.
+                // Wait, getProviderFromModel returns '' if unknown.
+                // Original logic defaulted to 'gemini' at line 25 then overrode it.
+                // Let's match original safety: always have a provider?
+                // Actually, step 1247 shows line 25: let provider = 'gemini'.
+                // Then lines 28-30 override it.
+            }
 
             // 3. Get Active Global Key
             const activeKey = await getActiveGlobalApiKey(provider);

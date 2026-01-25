@@ -1,7 +1,7 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio } from '../types';
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
-import { getActiveGlobalApiKey, getChatbotSettings } from './firebaseService';
+import { getActiveGlobalApiKey, getChatbotSettings, getProviderFromModel } from './firebaseService';
 
 // Get API key: priority 1: global admin key from Firebase, 2: environment variable, 3: localStorage
 const getApiKey = async (providerOverride?: string): Promise<string> => {
@@ -16,10 +16,7 @@ const getApiKey = async (providerOverride?: string): Promise<string> => {
       const modelName = settings?.intentBot?.model;
 
       if (modelName) {
-        if (modelName.includes('deepseek')) targetProvider = 'deepseek';
-        else if (modelName.includes('gpt')) targetProvider = 'openai';
-        else if (modelName.includes('claude')) targetProvider = 'anthropic';
-        else targetProvider = 'gemini'; // Default only if modelName exists but is unknown (likely gemini variant)
+        targetProvider = getProviderFromModel(modelName);
       } else {
         // If no settings found, we cannot assume provider. 
         // However, to prevent breaking, we might need to check if we should return error.

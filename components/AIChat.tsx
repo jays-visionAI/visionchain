@@ -3,7 +3,7 @@ import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages } from 'lucide-solid';
 import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/geminiService';
-import { getChatbotSettings } from '../services/firebaseService';
+import { getChatbotSettings, getProviderFromModel } from '../services/firebaseService';
 import { generateText, generateImage, generateSpeech } from '../services/aiService';
 import { Message, AspectRatio } from '../types';
 import { Modality, LiveServerMessage } from "@google/genai";
@@ -137,19 +137,14 @@ const AIChat = (props: AIChatProps): JSX.Element => {
       let label = '';
 
       if (modelName) {
-        if (modelName.includes('deepseek')) {
-          provider = 'deepseek';
-          label = 'DeepSeek Chat';
-        } else if (modelName.includes('gpt')) {
-          provider = 'openai';
-          label = 'GPT-4o';
-        } else if (modelName.includes('claude')) {
-          provider = 'anthropic';
-          label = 'Claude 3.5 Sonnet';
-        } else {
-          // Default to Gemini if model name exists but doesn't match others (or is explicitly gemini)
-          provider = 'gemini';
-          label = 'Gemini 1.5 Flash';
+        provider = getProviderFromModel(modelName);
+
+        switch (provider) {
+          case 'deepseek': label = 'DeepSeek Chat'; break;
+          case 'openai': label = 'GPT-4o'; break;
+          case 'anthropic': label = 'Claude 3.5 Sonnet'; break;
+          case 'gemini': label = 'Gemini 1.5 Flash'; break;
+          default: label = modelName;
         }
       }
 
