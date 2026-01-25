@@ -1,4 +1,4 @@
-import { createSignal, Show, onMount } from 'solid-js';
+import { createSignal, Show, onMount, createEffect } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
     Sparkles,
@@ -91,17 +91,22 @@ export default function AdminSettings() {
         initPriceService();
         refreshNodeStats();
 
+        // Polling nodes every 30s
+        const interval = setInterval(refreshNodeStats, 30000);
+        return () => clearInterval(interval);
+    });
+
+    // Automatically sync Firebase settings to input fields when they load/change
+    createEffect(() => {
         const settings = getVcnPriceSettings();
+        // We only auto-fill if the user has not interacted with the fields yet (or when Firebase updates)
+        // To keep it simple and reliable, we sync whenever the settings signal changes
         setPriceInput({
             min: settings.minPrice.toString(),
             max: settings.maxPrice.toString(),
             period: settings.volatilityPeriod?.toString() || '60',
             range: settings.volatilityRange?.toString() || '5'
         });
-
-        // Polling nodes every 30s
-        const interval = setInterval(refreshNodeStats, 30000);
-        return () => clearInterval(interval);
     });
 
     const handleUpdatePriceRange = async () => {

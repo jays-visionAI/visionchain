@@ -1,5 +1,5 @@
-import { createSignal, Show, For, onMount } from 'solid-js';
-import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory } from '../../services/vcnPriceService';
+import { createSignal, Show, For, onMount, createEffect } from 'solid-js';
+import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory, initPriceService } from '../../services/vcnPriceService';
 import { Motion } from 'solid-motionone';
 import {
     TrendingUp,
@@ -70,6 +70,11 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
     };
 
     onMount(() => {
+        initPriceService();
+    });
+
+    // Automatically sync Firebase settings to input fields when they load/change
+    createEffect(() => {
         const settings = getVcnPriceSettings();
         setPriceInput({
             min: settings.minPrice.toString(),
