@@ -495,7 +495,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                       userAddress,
                       intent.params.to || 'unknown_recipient',
                       intent.params.amount || '0',
-                      intent.params.token || 'VCN'
+                      intent.params.token || 'VCN',
+                      user()?.email || undefined
                     );
 
                     // Convert Plan to Action for UI
@@ -518,11 +519,11 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                   } catch (optErr) {
                     console.warn("Optimizer skipped or failed, falling back to basic resolution:", optErr);
                     // Fallback to basic resolver
-                    finalAction = await actionResolver.resolve(intent, userAddress);
+                    finalAction = await actionResolver.resolve(intent, userAddress, user()?.email || undefined);
                   }
                 } else {
                   // Standard resolver for Bridge/Other
-                  finalAction = await actionResolver.resolve(intent, userAddress);
+                  finalAction = await actionResolver.resolve(intent, userAddress, user()?.email || undefined);
                 }
 
                 setMessages(prev => [...prev, {

@@ -1,4 +1,4 @@
-import { PaymentPreset, getUserPreset, searchUserByPhone } from '../services/firebaseService';
+import { PaymentPreset, getUserPreset, searchUserByPhone, resolveRecipient } from '../services/firebaseService';
 import { contractService } from './contractService';
 
 export interface TransactionPlan {
@@ -26,36 +26,22 @@ export class TransactionOptimizerService {
      */
     async optimizeTransaction(
         senderAddress: string,
-        recipientIdentifier: string, // phone, email, @handle
+        recipientIdentifier: string, // phone, email, @handle, or Contact Name
         inputAmount: string,
-        inputToken: string
+        inputToken: string,
+        senderEmail?: string // Context for address book lookup
     ): Promise<TransactionPlan> {
 
         console.log(`[Optimizer] Analyzing intent: Send ${inputAmount} ${inputToken} to ${recipientIdentifier}`);
 
-        // Step 2-1: Identify Recipient & VID
-        let recipient: { vid: string, email: string, address: string } | null = null;
-
-        // Mocking resolution logic for now (would need regex or lookup service)
-        // If starts with @, remove it
-        const cleanId = recipientIdentifier.startsWith('@') ? recipientIdentifier.slice(1) : recipientIdentifier;
-
-        // Try searching by phone logic (mocked here or use searchUserByPhone)
-        // For this demo, let's assume if it is a phone-like string, we use search
-        if (cleanId.match(/^\+?[0-9]{10,15}$/)) {
-            recipient = await searchUserByPhone(cleanId);
-        } else {
-            // Assume it's a VID or Email directly for MVP
-            // Or try to fetch preset directly
-            recipient = { vid: cleanId, email: cleanId, address: "0xMockAddress..." };
-            // In real app, we must resolve address here!
-        }
+        // Step 2-1: Identify Recipient & VID (Use new robust resolver)
+        const recipient = await resolveRecipient(recipientIdentifier, senderEmail);
 
         if (!recipient) {
-            throw new Error(`Recipient ${recipientIdentifier} not found in Vision Chain.`);
+            throw new Error(`Recipient "${recipientIdentifier}" not found. Please check their name or address and try again.`);
         }
 
-        console.log(`[Optimizer] Found recipient: ${recipient.vid} (${recipient.address})`);
+        console.log(`[Optimizer] Resolved Recipient: ${recipient.vid} (${recipient.address})`);
 
         // Step 2-2: Get Recipient's Preset Information
         const preset = await getUserPreset(recipient.email);

@@ -1,6 +1,7 @@
 import { contractService } from './contractService';
 import { UserIntent } from './intentParserService';
 import { ethers } from 'ethers';
+import { resolveRecipient } from './firebaseService';
 
 export interface ProposedAction {
     type: 'TRANSACTION' | 'MESSAGE' | 'ERROR';
@@ -29,17 +30,17 @@ export class ActionResolverService {
     /**
      * Resolves a parsed UserIntent into a concrete Action.
      */
-    async resolve(intent: UserIntent, userAddress: string): Promise<ProposedAction> {
+    async resolve(intent: UserIntent, userAddress: string, userEmail?: string): Promise<ProposedAction> {
         try {
             switch (intent.action) {
                 case 'TRANSFER':
-                    return this.resolveTransfer(intent, userAddress);
+                    return this.resolveTransfer(intent, userAddress, userEmail);
                 case 'BRIDGE':
                     return this.resolveBridge(intent, userAddress);
                 case 'SWAP_AND_SEND':
                     return this.resolveSwapAndSend(intent, userAddress);
                 case 'SCHEDULE_TRANSFER':
-                    return this.resolveScheduledTransfer(intent, userAddress);
+                    return this.resolveScheduledTransfer(intent, userAddress, userEmail);
                 case 'UNKNOWN':
                     return {
                         type: 'MESSAGE',
@@ -60,21 +61,17 @@ export class ActionResolverService {
         }
     }
 
-    private async resolveTransfer(intent: UserIntent, userAddress: string): Promise<ProposedAction> {
+    private async resolveTransfer(intent: UserIntent, userAddress: string, userEmail?: string): Promise<ProposedAction> {
         const { to, amount, token } = intent.params;
 
         if (!to || !amount || !token) throw new Error("Missing parameters for Transfer");
 
-        // 1. Resolve Recipient (Handle -> Address)
-        // In a real app, we would query VisionProfileRegistry here.
-        // Mocking resolution for demo:
-        let recipientAddr = to;
-        if (to.startsWith('@')) {
-            // Mock: @jays -> 0xf39... (Deployer)
-            if (to.toLowerCase() === '@jays') recipientAddr = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-            else if (to.toLowerCase() === '@alice') recipientAddr = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-            else recipientAddr = "0x0000000000000000000000000000000000000000"; // Unknown handle
+        // 1. Resolve Recipient (Handle -> Address, Name -> Address, or direct Address)
+        const resolved = await resolveRecipient(to, userEmail);
+        if (!resolved) {
+            throw new Error(`Recipient "${to}" not found. Please provide a valid address or contact name.`);
         }
+        const recipientAddr = resolved.address;
 
         // 2. Prepare Transaction Data (Don't sign yet)
         // We use VCN Token contract
@@ -100,7 +97,7 @@ export class ActionResolverService {
         };
     }
 
-    private async resolveScheduledTransfer(intent: UserIntent, userAddress: string): Promise<ProposedAction> {
+    private async resolveScheduledTransfer(intent: UserIntent, userAddress: string, userEmail?: string): Promise<ProposedAction> {
         const { to, amount, token, scheduleTime } = intent.params;
         if (!to || !amount || !scheduleTime) throw new Error("Missing params for Scheduled Transfer");
 
@@ -160,11 +157,11 @@ export class ActionResolverService {
         const unlockTime = now + durationSeconds;
 
         // 4. Resolve Recipient
-        let recipientAddr = to;
-        if (to.startsWith('@')) {
-            if (to.toLowerCase() === '@jays') recipientAddr = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-            else recipientAddr = "0x0000000000000000000000000000000000000000";
+        const resolved = await resolveRecipient(to, userEmail);
+        if (!resolved) {
+            throw new Error(`Recipient "${to}" not found. Please provide a valid address or contact name.`);
         }
+        const recipientAddr = resolved.address;
 
         // 5. Prepare TimeLock Contract Call
         // This is a Native Transfer schedule, so we send Value with the call

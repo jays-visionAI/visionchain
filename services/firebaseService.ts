@@ -214,6 +214,57 @@ export const searchUserByEmail = async (email: string): Promise<{ vid: string, e
     }
 };
 
+/**
+ * Resolves a recipient identifier (phone, email, name, handle) to a VID and Address.
+ */
+export const resolveRecipient = async (identifier: string, currentUserEmail?: string): Promise<{ vid: string, email: string, address: string } | null> => {
+    if (!identifier) return null;
+
+    // 1. If it's already a valid address
+    if (identifier.startsWith('0x') && identifier.length === 42) {
+        return { vid: 'Address', email: '', address: identifier };
+    }
+
+    const cleanId = identifier.startsWith('@') ? identifier.slice(1) : identifier;
+
+    // 2. Search by Phone
+    const phoneClean = cleanId.replace(/\D/g, '');
+    if (phoneClean.length >= 8) {
+        const result = await searchUserByPhone(cleanId);
+        if (result) return result;
+    }
+
+    // 3. Search by Email
+    if (cleanId.includes('@')) {
+        const result = await searchUserByEmail(cleanId);
+        if (result) return result;
+    }
+
+    // 4. Search in User's Address Book (Contacts) - Crucial for Names like "노장협"
+    if (currentUserEmail) {
+        try {
+            const contacts = await getUserContacts(currentUserEmail);
+            const contact = contacts.find(c =>
+                c.internalName.toLowerCase() === cleanId.toLowerCase() ||
+                c.vchainUserUid?.toLowerCase() === cleanId.toLowerCase()
+            );
+
+            if (contact && contact.address) {
+                return {
+                    vid: contact.vchainUserUid || contact.internalName,
+                    email: contact.email,
+                    address: contact.address
+                };
+            }
+        } catch (e) {
+            console.warn("[Firebase] Address book search failed:", e);
+        }
+    }
+
+    // 5. Try direct VID lookup
+    return await searchUserByEmail(cleanId);
+};
+
 // Initialize Firebase (singleton pattern)
 
 let app: FirebaseApp;
