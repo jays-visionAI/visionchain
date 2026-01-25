@@ -49,7 +49,8 @@ import {
     getUserPurchases,
     getUserData,
     VcnPurchase,
-    updateUserData
+    updateUserData,
+    resolveRecipient
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
@@ -1011,11 +1012,11 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
 User Input: "${userMessage}"
 
-You are the Vision AI Architect. If the user wants to perform an action (Send, Swap, Bridge, Stake), identify it.
+You are the Vision AI Architect. If the user wants to perform an action (Send, Swap, Bridge, Stake, Schedule), identify it.
 Output Format:
-1. Friendly explanation of what you are doing.
+1. Friendly explanation of what you are doing (Keep it brief, in the user's language).
 2. If an action is detected, append THIS EXACT JSON BLOCK at the end:
-{"intent": "send" | "swap" | "bridge" | "stake", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN"}
+{"intent": "send" | "swap" | "bridge" | "stake" | "schedule", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN", "time": "time_string if schedule"}
 
 Final network context: ${networkMode()}.
 `;
@@ -1037,13 +1038,21 @@ Final network context: ${networkMode()}.
 
             // 2. Trigger Wallet Flow if intent detected
             if (intentData) {
+                // Name Resolution Step (VNS)
+                if (intentData.recipient && !intentData.recipient.startsWith('0x')) {
+                    const resolved = await resolveRecipient(intentData.recipient, userProfile().email);
+                    if (resolved && resolved.address) {
+                        intentData.recipient = resolved.address;
+                    }
+                }
+
                 if (intentData.intent === 'send') {
                     setRecipientAddress(intentData.recipient || '');
                     setSendAmount(intentData.amount || '');
                     setSelectedToken(intentData.symbol || 'VCN');
                     startFlow('send');
                     // If we have both amount and recipient, skip to confirmation
-                    if (intentData.amount && intentData.recipient) {
+                    if (intentData.amount && ethers.isAddress(intentData.recipient)) {
                         setFlowStep(2);
                     }
                 } else if (intentData.intent === 'swap') {
@@ -1054,6 +1063,11 @@ Final network context: ${networkMode()}.
                     startFlow('stake');
                 } else if (intentData.intent === 'bridge') {
                     startFlow('bridge');
+                } else if (intentData.intent === 'schedule') {
+                    // Wallet dashboard doesn't have native schedule UI yet, direct to AIChat
+                    setMessages(prev => [...prev, { role: 'assistant', content: "I've detected your request for a Scheduled Transfer. To proceed with time-locked scheduling and multisig orchestration, please use the Main Vision AI Architect (the Sparkle icon on the right menu)." }]);
+                    setChatLoading(false);
+                    return;
                 }
             }
 

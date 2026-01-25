@@ -48,6 +48,8 @@ interface VisionScanHomeProps {
     setLimit: (l: number) => void;
     page: number;
     setPage: (p: number) => void;
+    notFoundTerm: string | null;
+    setNotFoundTerm: (val: string | null) => void;
 }
 
 export default function VisionScanHome(props: VisionScanHomeProps) {
@@ -198,6 +200,31 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                 Search
                             </button>
                         </div>
+
+                        {/* Error Message: Address Not Found */}
+                        <Show when={props.notFoundTerm}>
+                            <Motion.div
+                                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                class="mt-4 p-5 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-between text-left"
+                            >
+                                <div class="flex items-center gap-4">
+                                    <div class="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                                        <XCircle class="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-black text-white italic uppercase tracking-tight">Address Not Found</h4>
+                                        <p class="text-xs text-gray-500 font-medium">The address <span class="text-red-400 font-mono">{props.notFoundTerm?.slice(0, 10)}...</span> has no recorded transactions on Vision Chain.</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => props.setNotFoundTerm(null)}
+                                    class="text-[10px] font-black text-gray-500 hover:text-white uppercase tracking-widest px-3 py-1 transition-colors"
+                                >
+                                    Dismiss
+                                </button>
+                            </Motion.div>
+                        </Show>
 
                         <Show when={props.addressBalance !== null}>
                             <Motion.div

@@ -73,7 +73,12 @@ export class ActionResolverService {
         }
         const recipientAddr = resolved.address;
 
-        // 2. Prepare Transaction Data (Don't sign yet)
+        // 2. Validate Address (Prevent ENS resolution errors)
+        if (!ethers.isAddress(recipientAddr)) {
+            throw new Error(`Recipient "${to}" resolved to an invalid address: ${recipientAddr}. Please use a valid wallet address or registered contact.`);
+        }
+
+        // 3. Prepare Transaction Data (Don't sign yet)
         // We use VCN Token contract
         const vcnContract = (contractService as any).getVcnTokenContract();
         const amountWei = ethers.parseUnits(amount, 18);
@@ -163,7 +168,12 @@ export class ActionResolverService {
         }
         const recipientAddr = resolved.address;
 
-        // 5. Prepare TimeLock Contract Call
+        // 5. Validate Address (Prevent ENS resolution errors)
+        if (!ethers.isAddress(recipientAddr)) {
+            throw new Error(`Recipient "${to}" resolved to an invalid address: ${recipientAddr}. Please use a valid wallet address or registered contact.`);
+        }
+
+        // 6. Prepare TimeLock Contract Call
         // This is a Native Transfer schedule, so we send Value with the call
         const iface = new ethers.Interface(this.TIMELOCK_ABI);
         const data = iface.encodeFunctionData("scheduleTransferNative", [recipientAddr, unlockTime]);

@@ -25,6 +25,7 @@ export default function VisionScan() {
 
     const [limit, setLimit] = createSignal(20);
     const [page, setPage] = createSignal(1);
+    const [notFoundTerm, setNotFoundTerm] = createSignal<string | null>(null);
 
     // Network Stats
     const [blockHeight, setBlockHeight] = createSignal<string>('0');
@@ -38,6 +39,7 @@ export default function VisionScan() {
 
     const handleSearch = (term: string, overrides?: any) => {
         setSearchTerm(term);
+        setNotFoundTerm(null); // Reset not found state
         setPage(1); // Reset to page 1 on search
         fetchTransactions(term, overrides);
     };
@@ -127,8 +129,19 @@ export default function VisionScan() {
                 // EVM Address
                 setChainType('evm');
                 setCurrentAddress(termToSearch);
-                setCurrentScreen('address_detail');
-                window.history.pushState({}, '', `?address=${termToSearch}&chain=evm`);
+
+                // NEW: Logic to check if address exists (has balance or transactions)
+                const hasBalance = rawData.liveBalance !== undefined && parseFloat(rawData.liveBalance) > 0;
+                const hasTransactions = formatted.length > 0;
+
+                if (!hasBalance && !hasTransactions) {
+                    setNotFoundTerm(termToSearch);
+                    setCurrentScreen('home');
+                    window.history.pushState({}, '', window.location.pathname);
+                } else {
+                    setCurrentScreen('address_detail');
+                    window.history.pushState({}, '', `?address=${termToSearch}&chain=evm`);
+                }
             } else if (termToSearch.startsWith('bc1') || termToSearch.startsWith('1') || termToSearch.startsWith('3')) {
                 // Bitcoin Address (Mock Detection)
                 if (termToSearch.length > 25 && termToSearch.length < 60) {
@@ -224,6 +237,8 @@ export default function VisionScan() {
                     setLimit={(l) => { setLimit(l); setPage(1); fetchTransactions(); }}
                     page={page()}
                     setPage={(p) => { setPage(p); fetchTransactions(); }}
+                    notFoundTerm={notFoundTerm()}
+                    setNotFoundTerm={setNotFoundTerm}
                 />
             </Show>
 
