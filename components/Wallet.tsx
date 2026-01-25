@@ -96,7 +96,8 @@ interface AssetData {
     symbol: string;
     name: string;
     balance: number;
-    liquidBalance: number; // Added to distinguish transferable tokens
+    purchasedBalance: number; // Added to strictly track Firebase-sourced tokens
+    liquidBalance: number; // Added to distinguish transferable tokens (on-chain)
     image: string | null;
     price: number;
     change24h: number;
@@ -679,12 +680,8 @@ const Wallet = (): JSX.Element => {
     });
 
     const getAssetData = (symbol: string): AssetData => {
-        let balance = (userHoldings() as any)[symbol] || 0;
-
-        // VCN Exception: Total balance includes purchased (vesting) tokens as per user requirement.
-        if (symbol === 'VCN') {
-            balance += purchasedVcn();
-        }
+        const liquid = (userHoldings() as any)[symbol] || 0;
+        const purchased = (symbol === 'VCN') ? purchasedVcn() : 0;
 
         // Use static/mock prices for stability
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
@@ -697,8 +694,9 @@ const Wallet = (): JSX.Element => {
         return {
             symbol,
             name: config.name,
-            balance,
-            liquidBalance: (userHoldings() as any)[symbol] || 0, // Keep track of liquid for Send modal
+            balance: liquid + purchased, // Total combined for general stats
+            purchasedBalance: purchased,
+            liquidBalance: liquid,
             image: null,
             price: config.price,
             change24h: 0,
@@ -2021,7 +2019,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                     <Show when={flowStep() === 1}>
                                                         <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                                             <div>
-                                                                <div class="flex items-center justify-between mb-2"><label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Stake Amount</label><span class="text-[10px] font-bold text-blue-400">Balance: 2,450 VCN</span></div>
+                                                                <div class="flex items-center justify-between mb-2"><label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Stake Amount</label><span class="text-[10px] font-bold text-blue-400">Balance: {getAssetData('VCN').liquidBalance.toLocaleString()} VCN</span></div>
                                                                 <div class="relative">
                                                                     <input type="number" placeholder="0.00" value={stakeAmount()} onInput={(e) => setStakeAmount(e.currentTarget.value)} class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-2xl font-bold text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all font-mono" />
                                                                     <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">VCN</div>
@@ -2362,7 +2360,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-[24px]">
                                                                     <div class="flex justify-between mb-4">
                                                                         <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">You Pay</span>
-                                                                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Balance: {getAssetData(selectedToken()).balance.toLocaleString()}</span>
+                                                                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Balance: {getAssetData(selectedToken()).liquidBalance.toLocaleString()}</span>
                                                                     </div>
                                                                     <div class="flex items-center justify-between">
                                                                         <input
@@ -2397,7 +2395,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                 <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-[24px] mt-2">
                                                                     <div class="flex justify-between mb-4">
                                                                         <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">You Receive</span>
-                                                                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Balance: {getAssetData(toToken()).balance.toLocaleString()}</span>
+                                                                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Balance: {getAssetData(toToken()).liquidBalance.toLocaleString()}</span>
                                                                     </div>
                                                                     <div class="flex items-center justify-between">
                                                                         <div class="text-2xl font-bold text-white font-mono">

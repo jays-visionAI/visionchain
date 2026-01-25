@@ -51,10 +51,15 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             <div class="text-[11px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-2">Total Portfolio Value</div>
                             <div class="flex items-baseline gap-4">
                                 <span class="text-4xl sm:text-5xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                                    {networkFilter() === 'mainnet'
-                                        ? props.totalValueStr()
-                                        : (props.totalValue() * 0.1).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                                    }
+                                    {(() => {
+                                        const vcn = props.getAssetData('VCN');
+                                        if (networkFilter() === 'mainnet') {
+                                            return (vcn.purchasedBalance * vcn.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                                        } else if (networkFilter() === 'testnet') {
+                                            return (vcn.liquidBalance * vcn.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                                        }
+                                        return props.totalValueStr();
+                                    })()}
                                 </span>
                                 <div class="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full border border-white/10">
                                     <TrendingUp class="w-3.5 h-3.5 text-gray-500" />
@@ -326,7 +331,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         const asset = () => props.getAssetData(item.symbol);
                                         const isMainnetItem = item.network === 'mainnet';
 
-                                        const displayBalance = () => isMainnetItem ? asset().balance : (asset().balance * 0.1);
+                                        const displayBalance = () => isMainnetItem ? asset().purchasedBalance : asset().liquidBalance;
                                         const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
                                         // Styling distinction
@@ -390,7 +395,10 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                         {/* Activity Tab Content */}
                         <Show when={props.assetsTab() === 'activity'}>
-                            <WalletActivity purchases={props.vcnPurchases} />
+                            <WalletActivity
+                                purchases={props.vcnPurchases}
+                                walletAddress={props.walletAddress?.()}
+                            />
                         </Show>
                     </div>
 
