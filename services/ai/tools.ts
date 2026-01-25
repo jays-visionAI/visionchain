@@ -65,5 +65,19 @@ export const AI_TOOLS = [
             },
             required: ["projectName"]
         }
+    },
+    {
+        name: "search_user_contacts",
+        description: "Search the user's personal contact list for names, emails, VIDs, or wallet addresses.",
+        parameters: {
+            type: "object",
+            properties: {
+                name: {
+                    type: "string",
+                    description: "The name or email of the contact to search for."
+                }
+            },
+            required: ["name"]
+        }
     }
 ];

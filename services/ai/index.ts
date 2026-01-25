@@ -104,6 +104,25 @@ Locale: ${navigator.language}`;
                     } else if (name === 'analyze_protocol_risk') {
                         const { defiService } = await import('../defiService');
                         toolResult = await defiService.analyzeProtocolRisk(args.projectName);
+                    } else if (name === 'search_user_contacts') {
+                        const { getUserContacts } = await import('../firebaseService');
+                        const contacts = await getUserContacts(userId);
+                        const searchQuery = (args.name || "").toLowerCase();
+                        toolResult = contacts
+                            .filter(c =>
+                                (c.internalName || "").toLowerCase().includes(searchQuery) ||
+                                (c.email || "").toLowerCase().includes(searchQuery)
+                            )
+                            .map(c => ({
+                                name: c.internalName,
+                                vid: c.vchainUserUid || "Not linked",
+                                address: c.address || "No address",
+                                email: c.email
+                            }));
+
+                        if (toolResult.length === 0) {
+                            toolResult = "No contacts found matching that name in your address book.";
+                        }
                     }
 
                     // Feed tool result back to AI

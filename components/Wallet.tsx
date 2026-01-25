@@ -1020,7 +1020,7 @@ Output Format:
 Final network context: ${networkMode()}.
 `;
 
-            const response = await generateText(fullPrompt, undefined, 'intent');
+            const response = await generateText(fullPrompt, undefined, 'intent', userProfile().email);
 
             // 1. Check for Intent JSON
             let intentData: any = null;

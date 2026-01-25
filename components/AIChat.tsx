@@ -498,7 +498,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
             }
 
             // Strict Admin Control: Use the settings fetched in createEffect
-            const text = await generateText(userMsg.text, rawBase64, 'helpdesk');
+            const text = await generateText(userMsg.text, rawBase64, 'helpdesk', user()?.email || 'anonymous');
             setThinkingSteps(prev => prev.map(s => s.id === 'scan' ? { ...s, status: 'completed' as const } : s.id === 'insight' ? { ...s, status: 'loading' as const } : s));
             await new Promise(r => setTimeout(r, 700));
 
