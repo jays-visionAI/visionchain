@@ -15,6 +15,7 @@ import {
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import LightSpeedBackground from './LightSpeedBackground';
+import { getVcnPrice } from '../services/vcnPriceService';
 
 const StatCard = (props: { label: string; value: string; subValue?: string; icon: any }) => (
     <div class="bg-white/[0.02] border border-white/5 p-4 rounded-2xl">
@@ -235,7 +236,7 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
             {/* Network Stats */}
             <div class="max-w-7xl mx-auto px-6 -mt-10 mb-12 relative z-20">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-                    <StatCard label="TESTNET VCN INDEX" value={`$${(4.82 + (Number(props.stats.blockHeight.replace(/,/g, '')) % 100) / 1000).toFixed(4)}`} subValue="+12.42%" icon={<TrendingUp class="w-4 h-4 text-green-400" />} />
+                    <StatCard label="TESTNET VCN INDEX" value={`$${getVcnPrice().toFixed(4)}`} subValue="+12.42%" icon={<TrendingUp class="w-4 h-4 text-green-400" />} />
                     <StatCard label="TESTNET THROUGHPUT" value={`${(142.82 + (Number(props.stats.blockHeight.replace(/,/g, '')) % 50) / 10).toFixed(2)}M`} subValue="LIVE" icon={<Activity class="w-4 h-4 text-blue-400" />} />
                     <StatCard label="v2 BLOCK HEIGHT" value={props.stats.blockHeight} icon={<Database class="w-4 h-4 text-blue-500" />} />
                     <StatCard label="GAS SETTLEMENT (v2)" value={`${props.stats.gasPrice} GWEI`} icon={<Layers class="w-4 h-4 text-blue-500" />} />
@@ -280,8 +281,19 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                 <For each={props.latestTransactions}>
                                     {(tx: any) => {
                                         const amount = parseFloat(tx.value || '0');
-                                        const historicalBasis = amount * 4.25; // Simulated price at confirmation
-                                        const marketValue = amount * 4.876; // Current simulated price
+                                        const historicalBasis = amount * (4.25 + (parseInt(tx.hash.slice(-1), 16) / 50)); // Pseudo-historical
+                                        const marketValue = amount * getVcnPrice();
+
+                                        const getTransactionType = (t: string, m: string) => {
+                                            if (t === 'Transfer') return { label: 'Asset', color: 'bg-green-500/10 text-green-400 border-green-500/20' };
+                                            if (m?.toLowerCase().includes('swap')) return { label: 'Swap', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' };
+                                            if (m?.toLowerCase().includes('stake')) return { label: 'Stake', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
+                                            if (m?.toLowerCase().includes('bridge')) return { label: 'Bridge', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' };
+                                            if (m?.toLowerCase().includes('journal')) return { label: 'Accounting', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+                                            return { label: 'Protocol', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' };
+                                        };
+
+                                        const typeInfo = getTransactionType(tx.type, tx.method);
 
                                         return (
                                             <tr
@@ -289,28 +301,27 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                                 onClick={() => props.onSearch(tx.hash)}
                                             >
                                                 <td class="p-4 font-mono text-xs text-blue-400 group-hover:text-blue-300 transition-colors">
-                                                    {tx.hash.slice(0, 10)}...
+                                                    {tx.hash.slice(0, 10)}...{tx.hash.slice(-4)}
                                                 </td>
                                                 <td class="p-4">
-                                                    <span class={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${tx.type === 'Transfer' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                                        }`}>
-                                                        {tx.type === 'Transfer' ? 'Asset' : 'Protocol'}
+                                                    <span class={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${typeInfo.color}`}>
+                                                        {typeInfo.label}
                                                     </span>
                                                 </td>
                                                 <td class="p-4 hidden lg:table-cell">
                                                     <div class="flex items-center gap-2 text-[10px] font-mono text-gray-500">
-                                                        <span>{tx.from?.slice(0, 6)}...</span>
+                                                        <span>{tx.from ? tx.from.slice(0, 6) + '...' + tx.from.slice(-4) : '-'}</span>
                                                         <ArrowRight class="w-3 h-3 text-gray-700" />
-                                                        <span>{tx.to?.slice(0, 6)}...</span>
+                                                        <span>{tx.to ? tx.to.slice(0, 6) + '...' + tx.to.slice(-4) : '-'}</span>
                                                     </div>
                                                 </td>
                                                 <td class="p-4 text-right">
                                                     <div class="text-xs font-bold text-white">${historicalBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                    <div class="text-[9px] text-gray-600 uppercase font-black">At Confirmation</div>
+                                                    <div class="text-[9px] text-gray-600 uppercase font-black">Historical Basis</div>
                                                 </td>
                                                 <td class="p-4 text-right">
                                                     <div class="text-xs font-bold text-blue-400">${marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                                                    <div class="text-[9px] text-blue-900 uppercase font-black">Live Market</div>
+                                                    <div class="text-[9px] text-blue-900 uppercase font-black">Current Market</div>
                                                 </td>
                                                 <td class="p-4 text-right text-xs font-bold text-gray-400 hidden md:table-cell font-mono">
                                                     {amount.toLocaleString()} VCN

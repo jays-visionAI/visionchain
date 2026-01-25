@@ -1,4 +1,5 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, Show, For, onMount } from 'solid-js';
+import { getVcnPrice } from '../../services/vcnPriceService';
 import { Motion } from 'solid-motionone';
 import {
     Wallet,
@@ -63,7 +64,7 @@ export default function AddressDetailView(props: AddressDetailProps) {
                     <div>
                         <h1 class="text-2xl font-black italic tracking-tighter text-white">ADDRESS DETAILS</h1>
                         <div class="flex items-center gap-2 mt-1">
-                            <span class="text-sm font-mono text-gray-400">{props.address}</span>
+                            <span class="text-sm font-mono text-gray-400">{props.address.slice(0, 8)}...{props.address.slice(-6)}</span>
                             <span class={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${props.chainType === 'btc' ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' :
                                 props.chainType === 'sol' ? 'bg-purple-500/10 border-purple-500/20 text-purple-500' :
                                     'bg-blue-500/10 border-blue-500/20 text-blue-400'
@@ -88,8 +89,8 @@ export default function AddressDetailView(props: AddressDetailProps) {
                     <span class="text-2xl font-black text-white">{Number(props.balance || 0).toLocaleString()} VCN</span>
                 </div>
                 <div class="bg-white/[0.02] border border-white/5 p-6 rounded-2xl">
-                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Token Value</span>
-                    <span class="text-2xl font-black text-white">$0.00</span>
+                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Portfolio Value</span>
+                    <span class="text-2xl font-black text-white">${(Number(props.balance || 0) * getVcnPrice()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div class="bg-white/[0.02] border border-white/5 p-6 rounded-2xl">
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Transactions</span>
@@ -144,7 +145,7 @@ export default function AddressDetailView(props: AddressDetailProps) {
                             <For each={props.transactions}>
                                 {(tx) => (
                                     <tr onClick={() => props.onViewTx(tx)} class="hover:bg-white/[0.02] cursor-pointer transition-colors">
-                                        <td class="px-6 py-4 text-xs font-mono text-blue-400">{tx.hash.slice(0, 10)}...</td>
+                                        <td class="px-6 py-4 text-xs font-mono text-blue-400">{tx.hash.slice(0, 10)}...{tx.hash.slice(-4)}</td>
                                         <td class="px-6 py-4">
                                             <span class="px-2 py-1 rounded bg-white/5 border border-white/10 text-[9px] font-bold text-gray-300">{tx.method}</span>
                                         </td>

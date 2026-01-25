@@ -1,6 +1,8 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, Show, For, onMount } from 'solid-js';
+import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings } from '../../services/vcnPriceService';
 import { Motion } from 'solid-motionone';
 import {
+    TrendingUp,
     Settings2,
     Key,
     Plus,
@@ -21,6 +23,20 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
         { id: 'key_2', name: 'Internal Audit Tool', prefix: 'vk_live_...', created: '2023-11-02', lastUsed: '5 days ago' }
     ]);
     const [isGenerating, setIsGenerating] = createSignal(false);
+    const [priceInput, setPriceInput] = createSignal({ min: 0, max: 0 });
+
+    onMount(() => {
+        const settings = getVcnPriceSettings();
+        setPriceInput({ min: settings.minPrice, max: settings.maxPrice });
+    });
+
+    const handleUpdatePriceRange = async () => {
+        await updateVcnPriceSettings({
+            minPrice: Number(priceInput().min),
+            maxPrice: Number(priceInput().max)
+        });
+        alert("VCN Price Range Updated");
+    };
 
     const generateKey = () => {
         setIsGenerating(true);
@@ -59,6 +75,60 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
                 >
                     <X class="w-4 h-4" /> Close
                 </button>
+            </div>
+
+            {/* VCN Price Management Module */}
+            <div class="bg-[#0c0c0c] border border-white/10 rounded-2xl overflow-hidden mb-8">
+                <div class="p-6 border-b border-white/10">
+                    <h3 class="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                        <TrendingUp class="w-4 h-4 text-emerald-500" />
+                        VCN Price Management
+                    </h3>
+                    <p class="text-[10px] text-gray-500 mt-1">Simulate market volatility with smooth chart-like fluctuations.</p>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Min Price (USD)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={priceInput().min}
+                                    onInput={(e) => setPriceInput({ ...priceInput(), min: Number(e.currentTarget.value) })}
+                                    class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                />
+                            </div>
+                            <div>
+                                <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Price (USD)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={priceInput().max}
+                                    onInput={(e) => setPriceInput({ ...priceInput(), max: Number(e.currentTarget.value) })}
+                                    class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleUpdatePriceRange}
+                            class="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-colors"
+                        >
+                            Update Range & Bounds
+                        </button>
+                    </div>
+
+                    <div class="bg-blue-600/5 border border-blue-600/10 rounded-2xl p-6 flex flex-col items-center justify-center">
+                        <span class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Live Simulated Price</span>
+                        <div class="text-4xl font-black text-white tracking-tighter mb-1">
+                            ${getVcnPrice().toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span class="text-[9px] font-black text-green-500 uppercase tracking-widest">Active Smoothing Engine</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* API Keys Section */}

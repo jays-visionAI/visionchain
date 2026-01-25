@@ -51,6 +51,8 @@ import {
     VcnPurchase
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
+import { ethers } from 'ethers';
+import { initPriceService, getVcnPrice } from '../services/vcnPriceService';
 import AIChat from './AIChat';
 import { generateText } from '../services/aiService';
 import { useAuth } from './auth/authContext';
@@ -480,6 +482,7 @@ const Wallet = (): JSX.Element => {
 
     // Fetch data on mount
     onMount(async () => {
+        initPriceService();
         // Sanitize corrupted local storage keys
         const encrypted = localStorage.getItem('vcn_encrypted_wallet');
         if (encrypted === 'null' || encrypted === 'undefined' || (encrypted && encrypted.length < 20)) {
@@ -683,9 +686,9 @@ const Wallet = (): JSX.Element => {
         const liquid = (userHoldings() as any)[symbol] || 0;
         const purchased = (symbol === 'VCN') ? purchasedVcn() : 0;
 
-        // Use static/mock prices for stability
+        // Use live VCN price from service, static for others
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
-            'VCN': { name: 'Vision Chain', price: 0.375 },
+            'VCN': { name: 'Vision Chain', price: getVcnPrice() },
             'ETH': { name: 'Ethereum', price: 3200.00 }
         };
 

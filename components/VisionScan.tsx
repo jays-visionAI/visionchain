@@ -1,5 +1,6 @@
 import { createSignal, createMemo, onMount, Show } from 'solid-js';
 import { ethers } from 'ethers';
+import { initPriceService, getVcnPrice } from '../services/vcnPriceService';
 
 // Sub-Components (Phase 1 Refactor)
 import VisionScanHome from './VisionScanHome';
@@ -155,8 +156,8 @@ export default function VisionScan() {
         }
     };
 
-    // Deep Link Handling
     onMount(() => {
+        initPriceService();
         const urlParams = new URLSearchParams(window.location.search);
         const txHash = urlParams.get('tx');
         const addr = urlParams.get('address');
