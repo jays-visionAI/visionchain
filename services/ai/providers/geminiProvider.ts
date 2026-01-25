@@ -9,48 +9,46 @@ export class GeminiProvider implements AIProvider {
         return new GoogleGenAI({ apiKey });
     }
 
-    async generateText(prompt: string, model: string, apiKey: string, options?: TextGenerationOptions): Promise<string> {
+    async generateText(prompt: string, model: string, apiKey: string, options?: TextGenerationOptions): Promise<string | any> {
         const ai = this.createClient(apiKey);
-        let contents: any = prompt;
+        const { AI_TOOLS } = await import('../tools');
 
+        const parts: any[] = [{ text: prompt }];
         if (options?.imageBase64) {
-            contents = {
-                parts: [
-                    { text: prompt },
-                    {
-                        inlineData: {
-                            mimeType: "image/jpeg",
-                            data: options.imageBase64
-                        }
-                    }
-                ]
-            };
+            parts.push({
+                inlineData: {
+                    mimeType: "image/jpeg",
+                    data: options.imageBase64
+                }
+            });
         }
 
         const executeRequest = async (targetModel: string) => {
-            const runner = await ai.models.generateContent({
+            const response = await ai.models.generateContent({
                 model: targetModel,
-                contents: contents,
+                contents: [{ role: 'user', parts }],
                 config: {
                     systemInstruction: options?.systemPrompt || '',
+                    tools: [{ functionDeclarations: AI_TOOLS as any }],
                     temperature: options?.temperature || 0.7,
                     maxOutputTokens: options?.maxTokens || 2048
                 }
             });
-            return runner.text || "No response generated.";
+            return response;
         };
 
         try {
-            return await executeRequest(model);
+            const response = await executeRequest(model);
+            // If it's a simple text response, just return the text
+            const firstPart = response.candidates?.[0]?.content?.parts?.[0];
+            if (firstPart?.text && !firstPart?.functionCall) {
+                return firstPart.text;
+            }
+            // Otherwise return the whole response object for tool handling in the service layer
+            return response;
         } catch (e: any) {
             const errorMsg = JSON.stringify(e).toLowerCase();
-            // Catch 404 (Not Found), 400 (Bad Request - often version mismatch), 429 (Quota)
-            const isFailing = errorMsg.includes('404') || errorMsg.includes('not_found') ||
-                errorMsg.includes('429') || errorMsg.includes('resource_exhausted') ||
-                errorMsg.includes('400');
-
-            if (isFailing && model !== 'gemini-1.5-pro-latest') {
-                console.warn(`[GeminiProvider] ${model} failed. Falling back to gemini-1.5-pro-latest.`);
+            if ((errorMsg.includes('404') || errorMsg.includes('429') || errorMsg.includes('400')) && model !== 'gemini-1.5-pro-latest') {
                 return await executeRequest('gemini-1.5-pro-latest');
             }
             throw e;

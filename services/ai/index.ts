@@ -74,7 +74,7 @@ Locale: ${navigator.language}`;
             ? `${config.systemPrompt}\n\n${localeInfo}`
             : localeInfo;
 
-        const result = await provider.generateText(prompt, config.model, config.apiKey, {
+        let result = await provider.generateText(prompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
             temperature: config.temperature,
             maxTokens: config.maxTokens,
@@ -82,19 +82,66 @@ Locale: ${navigator.language}`;
             botType
         });
 
+        // --- Tool Execution Loop (Gemini specific for now) ---
+        if (typeof result !== 'string' && result.candidates?.[0]?.content?.parts) {
+            const parts = result.candidates[0].content.parts;
+            const history: any[] = [{ role: 'user', parts: [{ text: prompt }] }, result.candidates[0].content];
+
+            for (const part of parts) {
+                if (part.functionCall) {
+                    const { name, args } = part.functionCall;
+                    let toolResult: any = "Tool not found.";
+
+                    if (name === 'get_historical_price') {
+                        const { marketDataService } = await import('../marketDataService');
+                        toolResult = await marketDataService.getHistoricalPrice(args.symbol, args.date);
+                    } else if (name === 'get_current_price') {
+                        const { marketDataService } = await import('../marketDataService');
+                        toolResult = await marketDataService.getCurrentPrice(args.symbol);
+                    }
+
+                    // Feed tool result back to AI
+                    const toolResponse = {
+                        role: 'user',
+                        parts: [{
+                            functionResponse: {
+                                name,
+                                response: { result: toolResult || "Data not available" }
+                            }
+                        }]
+                    };
+                    history.push(toolResponse);
+
+                    // Final call with history
+                    const ai = new (await import('@google/genai')).GoogleGenAI({ apiKey: config.apiKey });
+                    const finalResponse = await ai.models.generateContent({
+                        model: config.model,
+                        contents: history,
+                        config: {
+                            systemInstruction: dynamicSystemPrompt
+                        }
+                    });
+
+                    result = finalResponse.candidates?.[0]?.content?.parts?.[0]?.text || "I retrieved the data but failed to format the final answer.";
+                }
+            }
+        }
+
+        const finalResult = typeof result === 'string' ? result : "I encountered an issue processing the data.";
+
         // Async log
         saveConversation({
             userId,
             botType,
             messages: [
                 { role: 'user', text: prompt, timestamp: new Date().toISOString() },
-                { role: 'assistant', text: result, timestamp: new Date().toISOString() }
+                { role: 'assistant', text: finalResult, timestamp: new Date().toISOString() }
             ],
-            lastMessage: result.substring(0, 100),
+            lastMessage: finalResult.substring(0, 100),
             status: 'completed'
         }).catch(e => console.warn("[AIService] Log failed:", e));
 
-        return result;
+        return finalResult;
     } catch (e: any) {
         console.error("[AIService] GenerateText Error:", e);
         return e.message || "An error occurred with the AI service.";
