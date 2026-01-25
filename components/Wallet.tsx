@@ -148,7 +148,7 @@ const Wallet = (): JSX.Element => {
     const [activeView, setActiveView] = createSignal('assets');
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('mainnet');
     const [showChat, setShowChat] = createSignal(false);
-    const [assetsTab, setAssetsTab] = createSignal('portfolio');
+    const [assetsTab, setAssetsTab] = createSignal('tokens');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
     const [receiveNetwork, setReceiveNetwork] = createSignal('Ethereum');
