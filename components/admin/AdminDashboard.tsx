@@ -73,19 +73,36 @@ export const AdminDashboard: Component = () => {
 
     const fetchRecentTransactions = async () => {
         try {
-            const response = await fetch(`${API_URL}?limit = 10`);
+            // Fix: remove spaces in query params
+            const response = await fetch(`${API_URL}?limit=10`);
+
+            if (!response.ok) {
+                // If 404 or other error, fallback to empty to avoid crash
+                console.warn(`[Dashboard] Transaction fetch failed: ${response.status}`);
+                setRecentTransactions([]);
+                return;
+            }
+
             const data = await response.json();
-            const formatted = data.map((tx: any) => ({
-                hash: tx.hash,
-                type: tx.type,
-                from: tx.from_addr.slice(0, 6) + '...' + tx.from_addr.slice(-4),
-                to: tx.to_addr.slice(0, 6) + '...' + tx.to_addr.slice(-4),
-                amount: tx.value,
-                time: Math.floor((Date.now() - tx.timestamp) / 60000)
-            }));
-            setRecentTransactions(formatted);
+
+            // Fix: Ensure data is an array before mapping
+            if (Array.isArray(data)) {
+                const formatted = data.map((tx: any) => ({
+                    hash: tx.hash,
+                    type: tx.type,
+                    from: tx.from_addr ? (tx.from_addr.slice(0, 6) + '...' + tx.from_addr.slice(-4)) : 'Unknown',
+                    to: tx.to_addr ? (tx.to_addr.slice(0, 6) + '...' + tx.to_addr.slice(-4)) : 'Unknown',
+                    amount: tx.value,
+                    time: Math.floor((Date.now() - (tx.timestamp || Date.now())) / 60000)
+                }));
+                setRecentTransactions(formatted);
+            } else {
+                console.warn("[Dashboard] Transaction API returned unexpected format:", data);
+                setRecentTransactions([]);
+            }
         } catch (error) {
             console.error("Failed to fetch dashboard transactions:", error);
+            setRecentTransactions([]);
         }
     };
 
