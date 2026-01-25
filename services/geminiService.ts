@@ -8,14 +8,26 @@ const getApiKey = async (): Promise<string> => {
   // 1. Check Global Admin API Key from Firebase (The source of truth)
   try {
     const globalKey = await getActiveGlobalApiKey('gemini');
-    if (globalKey) return globalKey;
+    if (globalKey) {
+      console.log('[Gemini] Using global admin API key from Firebase');
+      return globalKey;
+    }
   } catch (e) {
-    console.error('Failed to get global API key from Firebase:', e);
+    console.error('[Gemini] Failed to get global API key from Firebase:', e);
   }
 
-  // 2. Check environment variable
-  const envKey = (process.env.API_KEY || process.env.GEMINI_API_KEY) as string;
-  if (envKey) return envKey;
+  // 2. Check environment variable (Safe check for browser)
+  try {
+    // @ts-ignore
+    const envKey = (typeof process !== 'undefined' && process.env ? (process.env.API_KEY || process.env.GEMINI_API_KEY) : null);
+    if (envKey) return envKey as string;
+
+    // Vite specific check
+    // @ts-ignore
+    if (import.meta.env?.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+  } catch (e) {
+    // Ignore environment variable errors in browser
+  }
 
   // 3. Last fallback (legacy)
   try {
@@ -27,13 +39,21 @@ const getApiKey = async (): Promise<string> => {
     }
   } catch (e) { }
 
+  console.warn('[Gemini] No API key found in any source');
   return '';
 };
 
 // Instance factory to ensure fresh key
 export const getAiInstance = async () => {
   const apiKey = await getApiKey();
-  return new GoogleGenAI({ apiKey });
+  // Ensure we pass the key as intended by the specific library version
+  try {
+    return new GoogleGenAI({ apiKey });
+  } catch (e) {
+    console.error("[Gemini] Failed to initialize GoogleGenAI:", e);
+    // Fallback if the constructor expects direct string
+    return new (GoogleGenAI as any)(apiKey);
+  }
 };
 
 // Helper to decode base64 audio (for the frontend to play)
@@ -42,15 +62,20 @@ export const getAudioContext = () => new (window.AudioContext || (window as any)
 export const generateText = async (
   prompt: string,
   imageBase64?: string,
-  botType: 'intent' | 'helpdesk' = 'intent'
+  botType: 'intent' | 'helpdesk' = 'intent',
+  overrideApiKey?: string
 ): Promise<string> => {
   try {
-    const apiKey = await getApiKey();
+    const apiKey = overrideApiKey || await getApiKey();
     if (!apiKey) {
+      console.warn('[Gemini] No API key available for generateText');
       return "API key is not configured. Please contact the administrator.";
     }
 
-    const ai = await getAiInstance();
+    // Refresh context if using override or ensuring fresh instance
+    const ai = overrideApiKey
+      ? new GoogleGenAI({ apiKey: overrideApiKey })
+      : await getAiInstance();
     const settings = await getChatbotSettings();
 
     // Choose config based on bot type

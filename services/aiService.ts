@@ -32,15 +32,22 @@ export const generateText = async (
             // 3. Get Active Global Key
             const activeKey = await getActiveGlobalApiKey(provider);
 
-            // 4. No Active Key - Prompt User
-            if (!activeKey && provider !== 'gemini') {
-                result = `Vision Chain AI requires an API Key for ${provider}. Please contact the administrator.`;
-            } else if (provider === 'gemini') {
-                result = await generateTextGemini(prompt, imageBase64, botType);
+            // 4. Execution based on provider
+            if (provider === 'gemini') {
+                // Pass the active key to Gemini if we have it, otherwise let it try its own resolution
+                result = await generateTextGemini(prompt, imageBase64, botType, activeKey || undefined);
             } else if (provider === 'deepseek') {
-                result = await generateTextDeepSeek(prompt, activeKey!, modelName, botType);
+                if (!activeKey) {
+                    result = `Vision Chain AI requires an API Key for ${provider}. Please contact the administrator.`;
+                } else {
+                    result = await generateTextDeepSeek(prompt, activeKey, modelName, botType);
+                }
             } else {
-                result = `Selected provider (${provider}) not fully integrated in this router yet.`;
+                if (!activeKey) {
+                    result = `Vision Chain AI requires an API Key for ${provider}. Please contact the administrator.`;
+                } else {
+                    result = `Selected provider (${provider}) is configured but integration is pending.`;
+                }
             }
         }
 

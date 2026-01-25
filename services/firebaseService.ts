@@ -672,11 +672,47 @@ export const deleteApiKey = async (id: string): Promise<void> => {
     await setDoc(docRef, { deleted: true }, { merge: true });
 };
 
-export const getActiveApiKey = async (provider: string = 'gemini'): Promise<string | null> => {
-    const keys = await getApiKeys();
-    const activeKey = keys.find(k => k.isActive && k.isValid && k.provider === provider && !((k as any).deleted));
-    return activeKey?.key || null;
+/**
+ * Fetches the active API key for a given provider from the global settings.
+ * Priority: isActive=true, isValid=true, deleted=false
+ */
+export const getActiveGlobalApiKey = async (provider: string = 'gemini'): Promise<string | null> => {
+    try {
+        const db = getFirebaseDb();
+        const keysCollection = collection(db, 'settings', 'api_keys', 'keys');
+        const snapshot = await getDocs(keysCollection);
+
+        if (snapshot.empty) {
+            console.warn(`[Firebase] No API keys found in settings/api_keys/keys for provider: ${provider}`);
+            return null;
+        }
+
+        const keys = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ApiKeyData));
+
+        // Find the first matching active, valid, and non-deleted key
+        const activeKey = keys.find(k =>
+            k.isActive &&
+            k.isValid &&
+            k.provider === provider &&
+            !(k as any).deleted
+        );
+
+        if (activeKey) {
+            console.log(`[Firebase] Resolved active global key for ${provider}: ${activeKey.id}`);
+            return activeKey.key;
+        }
+
+        console.warn(`[Firebase] No active/valid key found for provider: ${provider}`);
+        return null;
+    } catch (error) {
+        console.error(`[Firebase] Error fetching active global key for ${provider}:`, error);
+        // If it's a permission error, we might want to return null instead of throwing
+        return null;
+    }
 };
+
+// Alias for backward compatibility if needed
+export const getActiveApiKey = getActiveGlobalApiKey;
 
 // Chatbot Settings
 export interface BotConfig {
@@ -745,14 +781,7 @@ export const saveSystemSettings = async (settings: Partial<SystemSettings>): Pro
     await setDoc(docRef, settings, { merge: true });
 };
 
-export const getActiveGlobalApiKey = async (provider: string = 'gemini'): Promise<string | null> => {
-    const db = getFirebaseDb();
-    const keysCollection = collection(db, 'settings', 'api_keys', 'keys');
-    const snapshot = await getDocs(keysCollection);
-    const keys = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ApiKeyData));
-    const activeKey = keys.find(k => k.isActive && k.isValid && k.provider === provider && !((k as any).deleted));
-    return activeKey?.key || null;
-};
+// getActiveGlobalApiKey implementation moved and consolidated above
 
 export interface AiConversation {
     id: string;
