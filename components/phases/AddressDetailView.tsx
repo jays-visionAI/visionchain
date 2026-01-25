@@ -43,9 +43,9 @@ export default function AddressDetailView(props: AddressDetailProps) {
 
     // Mock Approvals Data
     const mockApprovals = [
-        { token: 'USDT', spender: 'Uniswap V3 Router', amount: 'Unlimited', risk: 'high', time: '2d ago' },
-        { token: 'WETH', spender: '0x88...2938 (Unknown)', amount: 'Unlimited', risk: 'critical', time: '5d ago' },
-        { token: 'DAI', spender: 'Curve Pool', amount: '500.00', risk: 'low', time: '10d ago' },
+        { token: 'VCN', spender: 'Vision Paymaster (Gasless)', amount: 'Unlimited', risk: 'low', time: '2d ago' },
+        { token: 'VCN', spender: 'Vision Swap Router', amount: 'Unlimited', risk: 'low', time: '5d ago' },
+        { token: 'VCN', spender: 'Vision Staking Pool', amount: '1,000,000', risk: 'low', time: '10d ago' },
     ];
 
     return (
@@ -65,8 +65,8 @@ export default function AddressDetailView(props: AddressDetailProps) {
                         <div class="flex items-center gap-2 mt-1">
                             <span class="text-sm font-mono text-gray-400">{props.address}</span>
                             <span class={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${props.chainType === 'btc' ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' :
-                                    props.chainType === 'sol' ? 'bg-purple-500/10 border-purple-500/20 text-purple-500' :
-                                        'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                props.chainType === 'sol' ? 'bg-purple-500/10 border-purple-500/20 text-purple-500' :
+                                    'bg-blue-500/10 border-blue-500/20 text-blue-400'
                                 }`}>
                                 {props.chainType === 'btc' ? 'Bitcoin' : props.chainType === 'sol' ? 'Solana' : 'EOA'}
                             </span>
@@ -97,13 +97,13 @@ export default function AddressDetailView(props: AddressDetailProps) {
                 </div>
             </div>
 
-            {/* Usage Warning (Phase 1) */}
-            <div class="mb-8 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3">
-                <AlertTriangle class="w-5 h-5 text-orange-400 mt-0.5" />
+            {/* Usage Security Check (Phase 1) */}
+            <div class="mb-8 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
+                <CheckCircle2 class="w-5 h-5 text-blue-400 mt-0.5" />
                 <div>
-                    <h4 class="text-sm font-bold text-orange-400 mb-1">High Risk Approvals Detected</h4>
-                    <p class="text-xs text-orange-300/80">
-                        This address has unlimited token approvals for unknown contracts. Review the <strong>Approvals</strong> tab immediately.
+                    <h4 class="text-sm font-bold text-blue-400 mb-1">Trusted Contracts Active</h4>
+                    <p class="text-xs text-blue-300/80">
+                        This address has active approvals for <strong>Vision Paymaster</strong> and <strong>Vision Ecosystem</strong> contracts. All detected approvals are from verified sources.
                     </p>
                 </div>
             </div>
