@@ -2,9 +2,9 @@ import { createSignal, createEffect, onCleanup, Show, For, createMemo } from 'so
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages } from 'lucide-solid';
-import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/geminiService';
+import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/ai/utils';
 import { getChatbotSettings, getProviderFromModel } from '../services/firebaseService';
-import { generateText, generateImage, generateSpeech } from '../services/aiService';
+import { generateText, generateImage, generateSpeech } from '../services/ai';
 import { Message, AspectRatio } from '../types';
 import { Modality, LiveServerMessage } from "@google/genai";
 import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
@@ -395,7 +395,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         }
 
         // Strict Admin Control: Use the settings fetched in createEffect
-        const text = await generateText(userMsg.text, rawBase64, useFastModel(), 'helpdesk');
+        const text = await generateText(userMsg.text, rawBase64, 'helpdesk');
         setMessages(prev => [...prev, { role: 'model', text }]);
       }
     } catch (e) {
@@ -453,9 +453,9 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         }
       });
 
-      // Use AI Manager to get correct credentials for Voice/Live API
-      const { aiManager } = await import('../services/aiManager');
-      const voiceConfig = await aiManager.resolveVoiceConfig();
+      // Use new AI service to get correct credentials for Voice/Live API
+      const { resolveVoiceConfig } = await import('../services/ai');
+      const voiceConfig = await resolveVoiceConfig();
 
       const ai = await getAiInstance(voiceConfig.apiKey);
       const sessionPromise = ai.live.connect({

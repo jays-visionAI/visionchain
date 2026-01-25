@@ -54,7 +54,7 @@ import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services/vcnPriceService';
 import AIChat from './AIChat';
-import { generateText } from '../services/aiService';
+import { generateText } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
 import { useNavigate } from '@solidjs/router';
@@ -970,7 +970,7 @@ Output Format:
 Final network context: ${networkMode()}.
 `;
 
-            const response = await generateText(fullPrompt, undefined, false, 'intent');
+            const response = await generateText(fullPrompt, undefined, 'intent');
 
             // 1. Check for Intent JSON
             let intentData: any = null;
