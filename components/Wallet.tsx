@@ -98,8 +98,8 @@ interface AssetData {
     symbol: string;
     name: string;
     balance: number;
-    purchasedBalance: number; // Added to strictly track Firebase-sourced tokens
-    liquidBalance: number; // Added to distinguish transferable tokens (on-chain)
+    purchasedBalance: number;
+    liquidBalance: number;
     image: string | null;
     price: number;
     change24h: number;
@@ -202,8 +202,6 @@ const Wallet = (): JSX.Element => {
     const [lastTxHash, setLastTxHash] = createSignal('');
     const [loadingMessage, setLoadingMessage] = createSignal('LOADING WALLET');
     const [purchasedVcn, setPurchasedVcn] = createSignal(0);
-    const [snapshotVcnPrice, setSnapshotVcnPrice] = createSignal(getVcnPrice());
-    const [snapshotDailyChange, setSnapshotDailyChange] = createSignal(0);
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -485,13 +483,6 @@ const Wallet = (): JSX.Element => {
     // Fetch data on mount
     onMount(async () => {
         initPriceService();
-        // Capture a static snapshot of the price for the entire wallet session
-        const currentVcnPrice = getVcnPrice();
-        const openingPrice = getDailyOpeningPrice();
-        const dailyChange = ((currentVcnPrice - openingPrice) / openingPrice) * 100;
-
-        setSnapshotVcnPrice(currentVcnPrice);
-        setSnapshotDailyChange(dailyChange);
 
         // Sanitize corrupted local storage keys
         const encrypted = localStorage.getItem('vcn_encrypted_wallet');
@@ -696,23 +687,27 @@ const Wallet = (): JSX.Element => {
         const liquid = (userHoldings() as any)[symbol] || 0;
         const purchased = (symbol === 'VCN') ? purchasedVcn() : 0;
 
-        // Use snapshot VCN price from service (fixed at page load), static for others
+        // Use live VCN price from service, static for others
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
-            'VCN': { name: 'Vision Chain', price: snapshotVcnPrice() },
+            'VCN': { name: 'Vision Chain', price: getVcnPrice() },
             'ETH': { name: 'Ethereum', price: 3200.00 }
         };
+
+        // Live change calculation for VCN
+        const openingPrice = getDailyOpeningPrice();
+        const liveDailyChange = ((getVcnPrice() - openingPrice) / openingPrice) * 100;
 
         const config = staticPrices[symbol] || { name: symbol, price: 0 };
 
         return {
             symbol,
             name: config.name,
-            balance: liquid + purchased, // Total combined for general stats
+            balance: liquid + purchased,
             purchasedBalance: purchased,
             liquidBalance: liquid,
             image: null,
-            price: config.price,
-            change24h: symbol === 'VCN' ? snapshotDailyChange() : 0,
+            price: symbol === 'VCN' ? getVcnPrice() : config.price, // Live
+            change24h: symbol === 'VCN' ? liveDailyChange : 0, // Live
             sparkline: [config.price, config.price, config.price],
             isLoading: false
         };
@@ -1577,7 +1572,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                                     disabled={selectedWords().includes(word)}
                                                                     class={`p-4 rounded-xl border font-bold text-xs transition-all ${selectedWords().includes(word)
                                                                         ? 'bg-white/5 border-white/5 text-transparent select-none opacity-0'
-                                                                        : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:text-white hover:bg-blue-500/5 text-center active:scale-95'
+                                                                        : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 text-center active:scale-95'
                                                                         }`}
                                                                 >
                                                                     {word}
