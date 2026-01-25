@@ -778,7 +778,7 @@ const Wallet = (): JSX.Element => {
         URL.revokeObjectURL(url);
     };
 
-    const startFlow = (flow: 'send' | 'receive' | 'swap' | 'stake') => {
+    const startFlow = (flow: 'send' | 'receive' | 'swap' | 'stake' | 'bridge') => {
         setActiveFlow(flow);
         setFlowStep(1);
         setFlowSuccess(false);
@@ -949,19 +949,79 @@ const Wallet = (): JSX.Element => {
             const context = `
 Current Portfolio Summary:
 Network: ${networkMode().toUpperCase()}
+Wallet Address: ${walletAddress()}
 Total Value: ${totalValueStr()}
 Holdings:
 ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
 
 (Important: You are currently on the ${networkMode()}. ${networkMode() === 'testnet' ? 'Testnet VCN is distributed at 10% of the purchased amount for testing node purchases and transactions.' : 'Mainnet shows actual purchased assets.'})
 `;
-            const fullPrompt = `${context}\n\nUser Question: ${userMessage}\n\nPlease answer the user's question based on their portfolio context and current network (${networkMode()}) if relevant. keep it concise.`;
+
+            // Enhanced Intent-Aware Prompt
+            const fullPrompt = `${context}
+
+User Input: "${userMessage}"
+
+You are the Vision AI Architect. If the user wants to perform an action (Send, Swap, Bridge, Stake), identify it.
+Output Format:
+1. Friendly explanation of what you are doing.
+2. If an action is detected, append THIS EXACT JSON BLOCK at the end:
+{"intent": "send" | "swap" | "bridge" | "stake", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN"}
+
+Final network context: ${networkMode()}.
+`;
 
             const response = await generateText(fullPrompt, undefined, false, 'intent');
-            setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+
+            // 1. Check for Intent JSON
+            let intentData: any = null;
+            const jsonMatch = response.match(/\{"intent":\s*".*?"\}/) || response.match(/\{[\s\S]*?"intent"[\s\S]*?\}/);
+
+            if (jsonMatch) {
+                try {
+                    const jsonStr = jsonMatch[0];
+                    intentData = JSON.parse(jsonStr);
+                } catch (e) {
+                    console.warn("Intent JSON Parse Failed", e);
+                }
+            }
+
+            // 2. Trigger Wallet Flow if intent detected
+            if (intentData) {
+                if (intentData.intent === 'send') {
+                    setRecipientAddress(intentData.recipient || '');
+                    setSendAmount(intentData.amount || '');
+                    setSelectedToken(intentData.symbol || 'VCN');
+                    startFlow('send');
+                    // If we have both amount and recipient, skip to confirmation
+                    if (intentData.amount && intentData.recipient) {
+                        setFlowStep(2);
+                    }
+                } else if (intentData.intent === 'swap') {
+                    setSwapAmount(intentData.amount || '');
+                    startFlow('swap');
+                } else if (intentData.intent === 'stake') {
+                    setStakeAmount(intentData.amount || '');
+                    startFlow('stake');
+                } else if (intentData.intent === 'bridge') {
+                    startFlow('bridge');
+                }
+            }
+
+            // 3. Clean up response for display
+            let cleanResponse = response;
+            if (jsonMatch) {
+                cleanResponse = response.replace(jsonMatch[0], "").trim();
+            }
+
+            if (!cleanResponse && intentData) {
+                cleanResponse = `I've prepared the ${intentData.intent} transaction for you. Please review the details in the modal.`;
+            }
+
+            setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
         } catch (error) {
             console.error('AI Error:', error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "I apologize, but I'm unable to connect to the Vision network right now. Please try again later." }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error while processing your request. Please ensure your AI API Key is correctly configured in the Admin settings." }]);
         } finally {
             setChatLoading(false);
         }
