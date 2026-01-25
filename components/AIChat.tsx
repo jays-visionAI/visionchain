@@ -83,6 +83,46 @@ const ImageSkeleton = (): JSX.Element => (
   </Motion.div>
 );
 
+const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'pending' | 'loading' | 'completed' }[] }): JSX.Element => (
+  <Motion.div
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    class="flex gap-3 mb-6"
+  >
+    <div class="w-8 h-8 rounded-full bg-[#1d1d1f] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+      <Bot class="w-4 h-4 text-emerald-400" />
+    </div>
+    <div class="flex-1 max-w-[80%] bg-[#1d1d1f] border border-white/10 rounded-2xl rounded-tl-sm p-4 space-y-4 shadow-xl">
+      <div class="flex items-center gap-2 mb-2">
+        <Activity class="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+        <span class="text-[11px] font-black text-blue-400 uppercase tracking-widest">Thinking Process</span>
+      </div>
+      <div class="space-y-3">
+        <For each={props.steps}>
+          {(step) => (
+            <div class={`flex items-center gap-3 transition-opacity duration-300 ${step.status === 'pending' ? 'opacity-30' : 'opacity-100'}`}>
+              <div class="relative flex items-center justify-center">
+                <Show when={step.status === 'loading'} fallback={
+                  <div class={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${step.status === 'completed' ? 'border-emerald-500 bg-emerald-500/20' : 'border-white/10'}`}>
+                    <Show when={step.status === 'completed'}>
+                      <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                    </Show>
+                  </div>
+                }>
+                  <div class="w-4 h-4 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                </Show>
+              </div>
+              <span class={`text-[13px] font-medium ${step.status === 'completed' ? 'text-emerald-400/90' : step.status === 'loading' ? 'text-white' : 'text-gray-600'}`}>
+                {step.label}
+              </span>
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  </Motion.div>
+);
+
 const AIChat = (props: AIChatProps): JSX.Element => {
   const [messages, setMessages] = createSignal<Message[]>([
     { role: 'model', text: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }
@@ -105,6 +145,9 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [recognition, setRecognition] = createSignal<any>(null); // Web Speech API
 
   const [isImageGenMode, setIsImageGenMode] = createSignal(false);
+
+  // --- Thinking Steps (Progress) ---
+  const [thinkingSteps, setThinkingSteps] = createSignal<{ id: string, label: string, status: 'pending' | 'loading' | 'completed' }[]>([]);
 
   // --- History & Session State ---
   const { user } = useAuth();
@@ -341,125 +384,145 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     // Clear attachments after send
-    const currentAttachments = [...attachments()];
     setAttachments([]);
     if (fileInputRef) fileInputRef.value = '';
 
     setLoadingType(isImageGenMode() ? 'image' : 'text');
-    setIsLoading(true);
+    setThinkingSteps([
+      { id: 'analyze', label: 'Analyzing request...', status: 'loading' },
+      { id: 'parse', label: 'Parsing intents...', status: 'pending' },
+      { id: 'resolve', label: 'Resolving actions...', status: 'pending' },
+      { id: 'generate', label: 'Generating response...', status: 'pending' }
+    ]);
 
     try {
       if (isImageGenMode()) {
-        const imageUrl = await generateImage(userMsg.text, aspectRatio());
-        if (imageUrl) {
-          setMessages(prev => [...prev, { role: 'model', text: 'Visual generated successfully.', type: 'image', imageUrl }]);
-        } else {
-          setMessages(prev => [...prev, { role: 'model', text: 'Failed to generate visual. Please try again with a different prompt.' }]);
+        const url = await generateImage(userMsg.text, aspectRatio());
+        if (url) {
+          const assistantMsg: Message = { role: 'model', text: 'I have generated your visual request.', imageUrl: url, type: 'image' };
+          const updatedMsgs = [...messages(), assistantMsg];
+          setMessages(updatedMsgs);
+          // ... rest of logging ...
         }
+        setThinkingSteps([]);
       } else {
-        // --- VISION CHAIN INTENT PARSER LOGIC ---
-        // 1. Try to parse intent first (unless there is an image attachment, which usually implies question about image)
-        if (!imageAttachment) {
-          const intent = await intentParser.parseIntent(userMsg.text);
+        // AI Logic
+        setThinkingSteps(prev => prev.map(s => s.id === 'analyze' ? { ...s, status: 'completed' } : s.id === 'parse' ? { ...s, status: 'loading' } : s));
+        await new Promise(r => setTimeout(r, 600)); // Visual feel
 
-          // If we are confident (~80%+), we check if it requires a transaction
-          if (intent.confidence > 0.6 && intent.action !== 'UNKNOWN') {
-            try {
-              // Resolve the action into concrete TX data
-              // Use mock address for now or try to get real one
-              const userAddress = localStorage.getItem('vcn_wallet_address') || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+        const intent = await intentParser.parseIntent(userMsg.text);
+        setThinkingSteps(prev => prev.map(s => s.id === 'parse' ? { ...s, status: 'completed' } : s.id === 'resolve' ? { ...s, status: 'loading' } : s));
 
-              let finalAction = null;
-              let explanationText = intent.explanation;
+        if (intent && user()) {
+          const userAddress = (user() as any).walletAddress || '0x6872E5cda7a24Fa38d8B61Efe961fdF5E801d31d'; // Demo fallback
+          try {
+            // If we are confident (~80%+), we check if it requires a transaction
+            if (intent.confidence > 0.6 && intent.action !== 'UNKNOWN') {
+              try {
+                // Resolve the action into concrete TX data
+                // Use mock address for now or try to get real one
+                // const userAddress = localStorage.getItem('vcn_wallet_address') || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-              // NEW: Optimization Step (Step 3)
-              // If it's a transfer/payment, run it through the Optimizer first
-              if (intent.action === 'TRANSFER' || intent.action === 'SWAP_AND_SEND') {
-                try {
-                  const { transactionOptimizer } = await import('../services/transactionOptimizer');
-                  const plan = await transactionOptimizer.optimizeTransaction(
-                    userAddress,
-                    intent.params.to || 'unknown_recipient',
-                    intent.params.amount || '0',
-                    intent.params.token || 'VCN'
-                  );
+                let finalAction = null;
+                let explanationText = intent.explanation;
 
-                  // Convert Plan to Action for UI
-                  finalAction = {
-                    type: plan.type === 'DIRECT_TRANSFER' ? 'transfer' : 'swap',
-                    summary: plan.explanation,
-                    data: {
-                      token: plan.inputAsset,
-                      amount: plan.inputAmount,
-                      to: plan.recipient,
-                      // If swap
-                      fromToken: plan.inputAsset,
-                      toToken: plan.outputAsset,
-                      fromAmount: plan.inputAmount,
-                      toAmount: plan.outputAmount
-                    }
-                  };
-                  explanationText = plan.explanation;
+                // NEW: Optimization Step (Step 3)
+                // If it's a transfer/payment, run it through the Optimizer first
+                if (intent.action === 'TRANSFER' || intent.action === 'SWAP_AND_SEND') {
+                  try {
+                    const { transactionOptimizer } = await import('../services/transactionOptimizer');
+                    const plan = await transactionOptimizer.optimizeTransaction(
+                      userAddress,
+                      intent.params.to || 'unknown_recipient',
+                      intent.params.amount || '0',
+                      intent.params.token || 'VCN'
+                    );
 
-                } catch (optErr) {
-                  console.warn("Optimizer skipped or failed, falling back to basic resolution:", optErr);
-                  // Fallback to basic resolver
+                    // Convert Plan to Action for UI
+                    finalAction = {
+                      type: plan.type === 'DIRECT_TRANSFER' ? 'transfer' : 'swap',
+                      summary: plan.explanation,
+                      data: {
+                        token: plan.inputAsset,
+                        amount: plan.inputAmount,
+                        to: plan.recipient,
+                        // If swap
+                        fromToken: plan.inputAsset,
+                        toToken: plan.outputAsset,
+                        fromAmount: plan.inputAmount,
+                        toAmount: plan.outputAmount
+                      }
+                    };
+                    explanationText = plan.explanation;
+
+                  } catch (optErr) {
+                    console.warn("Optimizer skipped or failed, falling back to basic resolution:", optErr);
+                    // Fallback to basic resolver
+                    finalAction = await actionResolver.resolve(intent, userAddress);
+                  }
+                } else {
+                  // Standard resolver for Bridge/Other
                   finalAction = await actionResolver.resolve(intent, userAddress);
                 }
-              } else {
-                // Standard resolver for Bridge/Other
-                finalAction = await actionResolver.resolve(intent, userAddress);
+
+                setMessages(prev => [...prev, {
+                  role: 'model',
+                  text: explanationText || finalAction.summary,
+                  action: finalAction // Pass the proposed action to UI
+                }]);
+                setIsLoading(false);
+                setThinkingSteps([]);
+                return; // EXIT EARLY to skip Gemini for this turn
+              } catch (err) {
+                console.error("Action Resolution Failed:", err);
+                // Fallthrough to Gemini if resolution fails
               }
-
-              setMessages(prev => [...prev, {
-                role: 'model',
-                text: explanationText || finalAction.summary,
-                action: finalAction // Pass the proposed action to UI
-              }]);
-              setIsLoading(false);
-              return; // EXIT EARLY to skip Gemini for this turn
-            } catch (err) {
-              console.error("Action Resolution Failed:", err);
-              // Fallthrough to Gemini if resolution fails
             }
-          }
-        }
 
-        // 2. Fallback to General AI (Gemini)
-        // Note: Currently generateText only supports one image. 
-        // We might need to extend this service for PDFs if Gemini supports it via API, but for now assuming image only for vision.
-        let rawBase64 = undefined;
-        if (imageAttachment) {
-          rawBase64 = imageAttachment.preview.split(',')[1];
-        }
+            // 2. Fallback to General AI (Gemini)
+            // Note: Currently generateText only supports one image.
+            // We might need to extend this service for PDFs if Gemini supports it via API, but for now assuming image only for vision.
+            let rawBase64 = undefined;
+            if (imageAttachment) {
+              rawBase64 = imageAttachment.preview.split(',')[1];
+            }
 
-        // Strict Admin Control: Use the settings fetched in createEffect
-        const text = await generateText(userMsg.text, rawBase64, 'helpdesk');
-        const assistantMsg: Message = { role: 'model', text };
-        const updatedMsgs = [...messages(), assistantMsg];
-        setMessages(updatedMsgs);
+            // Strict Admin Control: Use the settings fetched in createEffect
+            const text = await generateText(userMsg.text, rawBase64, 'helpdesk');
+            setThinkingSteps(prev => prev.map(s => s.id === 'resolve' ? { ...s, status: 'completed' } : s.id === 'generate' ? { ...s, status: 'loading' } : s));
 
-        // Persistent Logging: Save or update thread
-        if (user()) {
-          const sessionId = await saveConversation({
-            userId: user()!.email,
-            botType: 'helpdesk',
-            messages: updatedMsgs.map(m => ({
-              role: m.role as 'user' | 'assistant',
-              text: m.text,
-              timestamp: new Date().toISOString()
-            })),
-            lastMessage: text.substring(0, 100),
-            status: 'completed'
-          }, currentSessionId() || undefined);
+            const assistantMsg: Message = { role: 'model', text };
+            const updatedMsgs = [...messages(), assistantMsg];
+            setMessages(updatedMsgs);
 
-          if (!currentSessionId()) {
-            setCurrentSessionId(sessionId);
-            loadHistory();
+            // Persistent Logging: Save or update thread
+            if (user()) {
+              const sessionId = await saveConversation({
+                userId: user()!.email,
+                botType: 'helpdesk',
+                messages: updatedMsgs.map(m => ({
+                  role: m.role as 'user' | 'assistant',
+                  text: m.text,
+                  timestamp: new Date().toISOString()
+                })),
+                lastMessage: text.substring(0, 100),
+                status: 'completed'
+              }, currentSessionId() || undefined);
+
+              if (!currentSessionId()) {
+                setCurrentSessionId(sessionId);
+                loadHistory();
+              }
+            }
+            setThinkingSteps([]);
+          } catch (err) {
+            setThinkingSteps([]);
+            setMessages(prev => [...prev, { role: 'model', text: 'An error occurred during processing.' }]);
           }
         }
       }
     } catch (e) {
+      setThinkingSteps([]);
       setMessages(prev => [...prev, { role: 'model', text: 'An error occurred during processing.' }]);
     }
 
@@ -831,134 +894,140 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                 </Show>
               </div>
 
-              {/* Footer Area (Modernized Input) */}
-              <div class="p-4 md:p-6 bg-[#161618] border-t border-white/[0.04] relative z-30">
+              {/* Thinking Steps Overlay */}
+              <Show when={thinkingSteps().length > 0}>
+                <ThinkingDisplay steps={thinkingSteps()} />
+              </Show>
+            </div>
 
-                {/* Attachments Preview Row */}
-                <Presence>
-                  <Show when={attachments().length > 0}>
-                    <Motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide"
-                    >
-                      <For each={attachments()}>
-                        {(att, i) => (
-                          <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
-                            <Show when={att.type === 'image'} fallback={
-                              <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
-                                <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
-                                  <FileText class="w-7 h-7 text-red-500" />
-                                </Show>
-                                <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
-                              </div>
-                            }>
-                              <img src={att.preview} class="w-full h-full object-cover" />
-                            </Show>
-                            <button
-                              onClick={() => removeAttachment(i())}
-                              class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                            >
-                              <Trash2 class="w-5 h-5 text-red-400" />
-                            </button>
-                          </div>
+            {/* Footer Area (Modernized Input) */}
+            <div class="p-4 md:p-6 bg-[#161618] border-t border-white/[0.04] relative z-30">
+
+              {/* Attachments Preview Row */}
+              <Presence>
+                <Show when={attachments().length > 0}>
+                  <Motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide"
+                  >
+                    <For each={attachments()}>
+                      {(att, i) => (
+                        <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
+                          <Show when={att.type === 'image'} fallback={
+                            <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
+                              <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
+                                <FileText class="w-7 h-7 text-red-500" />
+                              </Show>
+                              <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
+                            </div>
+                          }>
+                            <img src={att.preview} class="w-full h-full object-cover" />
+                          </Show>
+                          <button
+                            onClick={() => removeAttachment(i())}
+                            class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                          >
+                            <Trash2 class="w-5 h-5 text-red-400" />
+                          </button>
+                        </div>
+                      )}
+                    </For>
+                  </Motion.div>
+                </Show>
+              </Presence>
+
+              <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
+                {/* Plus Button */}
+                <button
+                  onClick={() => fileInputRef?.click()}
+                  class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                >
+                  <Plus class="w-6 h-6" />
+                </button>
+                <input
+                  type="file"
+                  multiple
+                  ref={fileInputRef}
+                  class="hidden"
+                  accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={handleFileSelect}
+                />
+
+                {/* Input TextField */}
+                <textarea
+                  rows={1}
+                  class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
+                  placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
+                  value={input()}
+                  onInput={(e) => {
+                    setInput(e.currentTarget.value);
+                    e.currentTarget.style.height = 'auto';
+                    e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                />
+
+                {/* Right Tools */}
+                <div class="flex items-center gap-1 px-1">
+                  {/* Language Dropdown */}
+                  <div class="relative group/lang">
+                    <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
+                      <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
+                      <ChevronDown class="w-3.5 h-3.5" />
+                    </button>
+                    <div class="absolute bottom-full right-0 mb-3 w-40 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <For each={LANGUAGES}>
+                        {(lang) => (
+                          <button
+                            class={`w-full text-left px-4 py-3 text-[13px] font-medium hover:bg-white/5 transition-colors ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-400'}`}
+                            onClick={() => setVoiceLang(lang.code)}
+                          >
+                            {lang.label}
+                          </button>
                         )}
                       </For>
-                    </Motion.div>
-                  </Show>
-                </Presence>
-
-                <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
-                  {/* Plus Button */}
-                  <button
-                    onClick={() => fileInputRef?.click()}
-                    class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
-                  >
-                    <Plus class="w-6 h-6" />
-                  </button>
-                  <input
-                    type="file"
-                    multiple
-                    ref={fileInputRef}
-                    class="hidden"
-                    accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    onChange={handleFileSelect}
-                  />
-
-                  {/* Input TextField */}
-                  <textarea
-                    rows={1}
-                    class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
-                    placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
-                    value={input()}
-                    onInput={(e) => {
-                      setInput(e.currentTarget.value);
-                      e.currentTarget.style.height = 'auto';
-                      e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                  />
-
-                  {/* Right Tools */}
-                  <div class="flex items-center gap-1 px-1">
-                    {/* Language Dropdown */}
-                    <div class="relative group/lang">
-                      <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
-                        <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
-                        <ChevronDown class="w-3.5 h-3.5" />
-                      </button>
-                      <div class="absolute bottom-full right-0 mb-3 w-40 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                        <For each={LANGUAGES}>
-                          {(lang) => (
-                            <button
-                              class={`w-full text-left px-4 py-3 text-[13px] font-medium hover:bg-white/5 transition-colors ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-400'}`}
-                              onClick={() => setVoiceLang(lang.code)}
-                            >
-                              {lang.label}
-                            </button>
-                          )}
-                        </For>
-                      </div>
                     </div>
-
-                    {/* Mic Button */}
-                    <button
-                      onClick={toggleRecording}
-                      class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                    >
-                      <Mic class="w-5 h-5" />
-                    </button>
-
-                    {/* Send Button */}
-                    <button
-                      onClick={handleSend}
-                      disabled={(!input().trim() && attachments().length === 0) || isLoading()}
-                      class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${(!input().trim() && attachments().length === 0)
-                        ? 'bg-blue-600/20 text-blue-400/30 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-90 font-black'}`}
-                    >
-                      <Send class="w-5 h-5" />
-                    </button>
                   </div>
-                </div>
 
-                <div class="flex items-center justify-center gap-4 mt-4">
-                  <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Vision Architect System</span>
-                  <div class="w-1 h-1 rounded-full bg-gray-700" />
+                  {/* Mic Button */}
                   <button
-                    onClick={() => setIsImageGenMode(!isImageGenMode())}
-                    class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isImageGenMode() ? 'text-purple-400' : 'text-gray-600 hover:text-gray-400'}`}
+                    onClick={toggleRecording}
+                    class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                   >
-                    {isImageGenMode() ? 'Image Mode Active' : 'Standard Mode'}
+                    <Mic class="w-5 h-5" />
+                  </button>
+
+                  {/* Send Button */}
+                  <button
+                    onClick={handleSend}
+                    disabled={(!input().trim() && attachments().length === 0) || isLoading()}
+                    class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${(!input().trim() && attachments().length === 0)
+                      ? 'bg-blue-600/20 text-blue-400/30 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-90 font-black'}`}
+                  >
+                    <Send class="w-5 h-5" />
                   </button>
                 </div>
               </div>
+
+              <div class="flex items-center justify-center gap-4 mt-4">
+                <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Vision Architect System</span>
+                <div class="w-1 h-1 rounded-full bg-gray-700" />
+                <button
+                  onClick={() => setIsImageGenMode(!isImageGenMode())}
+                  class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isImageGenMode() ? 'text-purple-400' : 'text-gray-600 hover:text-gray-400'}`}
+                >
+                  {isImageGenMode() ? 'Image Mode Active' : 'Standard Mode'}
+                </button>
+              </div>
             </div>
           </div>
-        </Motion.div>
-      </Show>
-    </Presence>
+        </div>
+      </Motion.div>
+    </Show>
+      </Presence >
   );
 };
 
