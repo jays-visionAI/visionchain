@@ -87,11 +87,7 @@ const ImageSkeleton = (): JSX.Element => (
 );
 
 const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'pending' | 'loading' | 'completed' | 'success' }[] }): JSX.Element => (
-  <Motion.div
-    initial={{ opacity: 0, y: 10 }}
-    animate={{ opacity: 1, y: 0 }}
-    class="flex gap-3 mb-6 px-4"
-  >
+  <div class="flex gap-3 mb-6 px-4 animate-in fade-in slide-in-from-bottom-2 duration-300 w-full max-w-[800px] mx-auto z-20 relative">
     <div class="w-8 h-8 rounded-full bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-[0_0_20px_rgba(0,0,0,0.4)]">
       <div class="w-4 h-4 text-purple-400 animate-pulse shadow-purple-500/50">
         <Bot class="w-full h-full" />
@@ -134,7 +130,7 @@ const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'p
         </For>
       </div>
     </div>
-  </Motion.div>
+  </div>
 );
 
 const AIChat = (props: AIChatProps): JSX.Element => {
@@ -425,6 +421,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   // --- Chat Logic ---
   const handleSend = async () => {
     if ((!input().trim() && attachments().length === 0) || isLoading()) return;
+
+    setIsLoading(true);
 
     // Convert attachments to format message expects (taking first image if any for legacy compatibility)
     // Multimodal support in generating text needs updates if we send multiple images.
