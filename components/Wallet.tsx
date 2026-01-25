@@ -260,6 +260,13 @@ const Wallet = (): JSX.Element => {
     const [chatHistory, setChatHistory] = createSignal<AiConversation[]>([]);
     const [currentSessionId, setCurrentSessionId] = createSignal<string | null>(null);
 
+    // --- Advanced AI Features (Synced with Global AI) ---
+    const [attachments, setAttachments] = createSignal<any[]>([]);
+    const [thinkingSteps, setThinkingSteps] = createSignal<any[]>([]);
+    const [voiceLang, setVoiceLang] = createSignal('ko-KR');
+    const [isRecording, setIsRecording] = createSignal(false);
+    const [loadingType, setLoadingType] = createSignal<'text' | 'image' | 'voice'>('text');
+
     const fetchHistory = async () => {
         if (!userProfile().email) return;
         const data = await getUserConversations(userProfile().email);
@@ -1055,6 +1062,63 @@ const Wallet = (): JSX.Element => {
             setVerificationStep(2); // Simulated success
         }, 2000);
     };
+    const [recognition, setRecognition] = createSignal<any>(null);
+
+    const handleFileSelect = (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        if (target.files) {
+            const files = Array.from(target.files);
+            files.forEach(processFile);
+        }
+    };
+
+    const processFile = (file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            let type: any = 'unknown';
+            if (file.type.startsWith('image/')) type = 'image';
+            else if (file.type === 'application/pdf') type = 'pdf';
+            else if (file.name.endsWith('.csv') || file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) type = 'excel';
+
+            setAttachments(prev => [...prev, {
+                file,
+                preview: e.target?.result as string,
+                type
+            }]);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeAttachment = (index: number) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const toggleRecording = () => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Your browser does not support Speech Recognition.");
+            return;
+        }
+
+        if (isRecording()) {
+            recognition()?.stop();
+            setIsRecording(false);
+            return;
+        }
+
+        const recognitionInstance = new SpeechRecognition();
+        recognitionInstance.lang = voiceLang();
+        recognitionInstance.interimResults = true;
+        recognitionInstance.onstart = () => setIsRecording(true);
+        recognitionInstance.onresult = (event: any) => {
+            const transcript = Array.from(event.results).map((result: any) => result[0].transcript).join('');
+            setInput(transcript);
+        };
+        recognitionInstance.onerror = () => setIsRecording(false);
+        recognitionInstance.onend = () => setIsRecording(false);
+        recognitionInstance.start();
+        setRecognition(recognitionInstance);
+    };
 
     const resetFlow = () => {
         setActiveFlow(null);
@@ -1074,8 +1138,15 @@ const Wallet = (): JSX.Element => {
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setInput('');
         setChatLoading(true);
+        setThinkingSteps([
+            { id: '1', label: '의도 분석 중...', status: 'loading' }
+        ]);
 
         try {
+            // Multimodal Support: Grab image if attached
+            const imageAttachment = attachments().find(a => a.type === 'image');
+            const imageBase64 = imageAttachment?.preview?.split(',')[1];
+
             // Construct context from wallet state
             const context = `
 Current Portfolio Summary:
@@ -1108,7 +1179,18 @@ Output Format:
 Final network context: ${networkMode()}.
 `;
 
-            const response = await generateText(fullPrompt, undefined, 'intent', userProfile().email);
+            setThinkingSteps(prev => [
+                ...prev.map(s => ({ ...s, status: 'completed' as const })),
+                { id: '2', label: '포트폴리오 대조 및 시뮬레이션 중...', status: 'loading' }
+            ]);
+
+            const response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
+
+            setThinkingSteps(prev => [
+                ...prev.map(s => ({ ...s, status: 'completed' as const })),
+                { id: '3', label: '응답 생성 완료', status: 'success' }
+            ]);
+            setTimeout(() => setThinkingSteps([]), 1500);
 
             // 1. Check for Intent JSON
             let intentData: any = null;
@@ -1362,6 +1444,15 @@ Final network context: ${networkMode()}.
                             onSelectConversation={selectConversation}
                             onNewChat={startNewChat}
                             onDeleteConversation={handleDeleteConversation}
+                            // Advanced Features
+                            attachments={attachments}
+                            removeAttachment={removeAttachment}
+                            handleFileSelect={handleFileSelect}
+                            thinkingSteps={thinkingSteps}
+                            voiceLang={voiceLang}
+                            setVoiceLang={setVoiceLang}
+                            toggleRecording={toggleRecording}
+                            isRecording={isRecording}
                         />
                     </Show>
 
