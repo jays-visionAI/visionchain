@@ -904,6 +904,7 @@ export interface AiConversation {
     messages: { role: 'user' | 'assistant'; text: string; timestamp: string }[];
     lastMessage: string;
     createdAt: string;
+    updatedAt?: string;
     status: 'completed' | 'ongoing' | 'error';
 }
 
@@ -927,15 +928,23 @@ export const saveConversation = async (conversation: Omit<AiConversation, 'id' |
 };
 
 export const getUserConversations = async (userId: string, limitCount: number = 30): Promise<AiConversation[]> => {
-    const db = getFirebaseDb();
-    const q = query(
-        collection(db, 'conversations'),
-        where('userId', '==', userId),
-        orderBy('updatedAt', 'desc'),
-        limit(limitCount)
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AiConversation));
+    try {
+        const db = getFirebaseDb();
+        const q = query(
+            collection(db, 'conversations'),
+            where('userId', '==', userId)
+        );
+        const snapshot = await getDocs(q);
+        const conversations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AiConversation));
+
+        // Client-side sort to avoid composite index requirement
+        return conversations
+            .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+            .slice(0, limitCount);
+    } catch (error) {
+        console.error("Error fetching user conversations:", error);
+        return [];
+    }
 };
 
 export const getConversationById = async (id: string): Promise<AiConversation | null> => {
