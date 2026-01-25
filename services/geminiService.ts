@@ -4,17 +4,29 @@ import { VISION_CHAIN_KNOWLEDGE } from '../data/knowledge';
 import { getActiveGlobalApiKey, getChatbotSettings } from './firebaseService';
 
 // Get API key: priority 1: global admin key from Firebase, 2: environment variable, 3: localStorage
-const getApiKey = async (): Promise<string> => {
+const getApiKey = async (providerOverride?: string): Promise<string> => {
   // 1. Check Global Admin API Key from Firebase (The source of truth)
   try {
-    const globalKey = await getActiveGlobalApiKey('gemini');
+    // Determine provider if not specified
+    let targetProvider = providerOverride || 'gemini';
+
+    if (!providerOverride) {
+      const settings = await getChatbotSettings();
+      const modelName = settings?.intentBot?.model || 'gemini-1.5-flash';
+      if (modelName.includes('deepseek')) targetProvider = 'deepseek';
+      else if (modelName.includes('gpt')) targetProvider = 'openai';
+      else if (modelName.includes('claude')) targetProvider = 'anthropic';
+    }
+
+    const globalKey = await getActiveGlobalApiKey(targetProvider);
     if (globalKey) {
-      console.log('[Gemini] Using global admin API key from Firebase');
+      console.log(`[AI] Using global admin API key for ${targetProvider}`);
       return globalKey;
     }
   } catch (e) {
-    console.error('[Gemini] Failed to get global API key from Firebase:', e);
+    console.error('[AI] Failed to get global API key from Firebase:', e);
   }
+
 
   // 2. Check environment variable (Safe check for browser)
   try {
