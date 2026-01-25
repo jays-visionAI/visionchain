@@ -907,13 +907,44 @@ export interface AiConversation {
     status: 'completed' | 'ongoing' | 'error';
 }
 
-export const saveConversation = async (conversation: Omit<AiConversation, 'id'>): Promise<string> => {
+export const saveConversation = async (conversation: Omit<AiConversation, 'id' | 'createdAt' | 'updatedAt'>, existingId?: string): Promise<string> => {
     const db = getFirebaseDb();
-    const docRef = await addDoc(collection(db, 'conversations'), {
-        ...conversation,
-        createdAt: new Date().toISOString()
-    });
-    return docRef.id;
+    if (existingId) {
+        const docRef = doc(db, 'conversations', existingId);
+        await setDoc(docRef, {
+            ...conversation,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        return existingId;
+    } else {
+        const docRef = await addDoc(collection(db, 'conversations'), {
+            ...conversation,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+        return docRef.id;
+    }
+};
+
+export const getUserConversations = async (userId: string, limitCount: number = 30): Promise<AiConversation[]> => {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, 'conversations'),
+        where('userId', '==', userId),
+        orderBy('updatedAt', 'desc'),
+        limit(limitCount)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AiConversation));
+};
+
+export const getConversationById = async (id: string): Promise<AiConversation | null> => {
+    const db = getFirebaseDb();
+    const docSnap = await getDoc(doc(db, 'conversations', id));
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as AiConversation;
+    }
+    return null;
 };
 
 export const getRecentConversations = async (limitCount: number = 20): Promise<AiConversation[]> => {

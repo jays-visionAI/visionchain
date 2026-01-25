@@ -3,7 +3,7 @@ import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages } from 'lucide-solid';
 import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/ai/utils';
-import { getChatbotSettings, getProviderFromModel } from '../services/firebaseService';
+import { getChatbotSettings, getProviderFromModel, getUserConversations, getConversationById, saveConversation, AiConversation } from '../services/firebaseService';
 import { generateText, generateImage, generateSpeech } from '../services/ai';
 import { Message, AspectRatio } from '../types';
 import { Modality, LiveServerMessage } from "@google/genai";
@@ -12,6 +12,7 @@ import { intentParser } from '../services/intentParserService';
 import { actionResolver } from '../services/actionResolver';
 import TransactionCard from './TransactionCard';
 import { contractService } from '../services/contractService';
+import { useAuth } from './auth/authContext';
 
 interface AIChatProps {
   isOpen: boolean;
@@ -105,6 +106,12 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
   const [isImageGenMode, setIsImageGenMode] = createSignal(false);
 
+  // --- History & Session State ---
+  const { user } = useAuth();
+  const [history, setHistory] = createSignal<AiConversation[]>([]);
+  const [currentSessionId, setCurrentSessionId] = createSignal<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = createSignal(true);
+
   // --- Refs ---
   let scrollRef: HTMLDivElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
@@ -161,6 +168,38 @@ const AIChat = (props: AIChatProps): JSX.Element => {
       scrollRef.scrollTo({ top: scrollRef.scrollHeight, behavior: 'smooth' });
     }
   });
+
+  // Load History on Mount or User Change
+  createEffect(async () => {
+    if (user()) {
+      const hist = await getUserConversations(user()!.email);
+      setHistory(hist);
+    }
+  });
+
+  const loadHistory = async () => {
+    if (!user()) return;
+    const hist = await getUserConversations(user()!.email);
+    setHistory(hist);
+  };
+
+  const startNewChat = () => {
+    setCurrentSessionId(null);
+    setMessages([
+      { role: 'model', text: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }
+    ]);
+    if (window.innerWidth < 768) setIsHistoryOpen(false);
+  };
+
+  const selectConversation = async (conv: AiConversation) => {
+    setCurrentSessionId(conv.id);
+    const formatted = conv.messages.map(m => ({
+      role: m.role,
+      text: m.text
+    } as Message));
+    setMessages(formatted);
+    if (window.innerWidth < 768) setIsHistoryOpen(false);
+  };
 
   // Cleanup
   onCleanup(() => {
@@ -396,7 +435,29 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
         // Strict Admin Control: Use the settings fetched in createEffect
         const text = await generateText(userMsg.text, rawBase64, 'helpdesk');
-        setMessages(prev => [...prev, { role: 'model', text }]);
+        const assistantMsg: Message = { role: 'model', text };
+        const updatedMsgs = [...messages(), assistantMsg];
+        setMessages(updatedMsgs);
+
+        // Persistent Logging: Save or update thread
+        if (user()) {
+          const sessionId = await saveConversation({
+            userId: user()!.email,
+            botType: 'helpdesk',
+            messages: updatedMsgs.map(m => ({
+              role: m.role as 'user' | 'assistant',
+              text: m.text,
+              timestamp: new Date().toISOString()
+            })),
+            lastMessage: text.substring(0, 100),
+            status: 'completed'
+          }, currentSessionId() || undefined);
+
+          if (!currentSessionId()) {
+            setCurrentSessionId(sessionId);
+            loadHistory();
+          }
+        }
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: 'model', text: 'An error occurred during processing.' }]);
@@ -567,263 +628,334 @@ const AIChat = (props: AIChatProps): JSX.Element => {
           style={{ "margin-bottom": "max(env(safe-area-inset-bottom), 16px)" }}
           onDragEnter={handleDrag}
         >
-          {/* Drag Overlay */}
-          <Presence>
-            <Show when={dragActive()}>
-              <Motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                class="absolute inset-0 z-50 bg-blue-600/20 backdrop-blur-sm border-2 border-dashed border-blue-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none"
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-              >
-                <div class="bg-blue-500 rounded-full p-4 mb-3 shadow-lg">
-                  <GripHorizontal class="w-8 h-8 text-white" />
-                </div>
-                <p class="text-white font-bold text-lg">Drop files here</p>
-                <p class="text-blue-200 text-sm">Images, PDFs, Spreadsheets</p>
-              </Motion.div>
-            </Show>
-          </Presence>
-
-          {/* Header */}
-          <div class="flex items-center justify-between px-4 py-3 bg-[#242424] border-b border-white/5 z-20">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <Bot class="w-5 h-5 text-emerald-400" />
-              </div>
-              <div>
-                <h2 class="text-sm font-semibold text-white">Vision AI</h2>
-                <div class="flex items-center gap-1.5">
-                  <span class={`w-1.5 h-1.5 rounded-full ${activeProvider() === 'gemini' ? 'bg-sky-500' : activeProvider() === 'deepseek' ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`} />
-                  <span class="text-[10px] text-gray-400">{modelLabel()}</span>
-                </div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <button onClick={toggleLiveMode} class={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${isLiveMode() ? 'bg-red-500/20 text-red-400 animate-pulse' : 'hover:bg-white/10 text-gray-400 hover:text-white'}`} title="Live Voice Mode">
-                <Activity class="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => { props.onClose(); stopVoiceSession(); setIsLiveMode(false); }}
-                class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-              >
-                <X class="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Live Mode Overlay */}
-          <Show when={isLiveMode()}>
-            {/* ... reuse existing live mode display or simplified ... */}
-            <div class="absolute inset-0 bg-black/90 z-40 flex flex-col items-center justify-center text-center p-6">
-              <Activity class="w-16 h-16 text-blue-500 mb-4 animate-pulse" />
-              <h3 class="text-white text-xl font-bold mb-2">Live Voice Connected</h3>
-              <p class="text-gray-400 text-sm mb-6">Speaking with {modelLabel()}</p>
-              <div class="w-full max-w-xs h-1 rounded-full bg-gray-800 overflow-hidden">
-                <div class="h-full bg-blue-500 transition-all duration-75" style={{ width: `${volumeLevel() * 100}%` }}></div>
-              </div>
-              <button onClick={toggleLiveMode} class="mt-8 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-medium">End Session</button>
-            </div>
-          </Show>
-
-
-          {/* Messages Area (ChatGPT Style Bubble) */}
-          <div class="flex-1 overflow-y-auto p-4 pb-32 space-y-6 scroll-smooth bg-[#1a1a1a]" ref={scrollRef}>
-            <For each={messages()}>
-              {(msg, idx) => (
-                <div class={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  {/* Avatar for Model */}
-                  <Show when={msg.role === 'model'}>
-                    <div class="w-8 h-8 rounded-full bg-[#242424] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1">
-                      <Bot class="w-4 h-4 text-emerald-400" />
+          <div class="flex flex-1 overflow-hidden relative">
+            {/* History Sidebar */}
+            <Presence>
+              <Show when={isHistoryOpen()}>
+                <Motion.div
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: '280px', opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  class="h-full bg-[#1c1c1e] border-r border-white/5 flex flex-col z-30 shrink-0"
+                >
+                  <div class="p-4 border-b border-white/5 flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-gray-400">
+                      <BookOpen class="w-4 h-4" />
+                      <span class="text-xs font-bold uppercase tracking-widest text-[#888]">History</span>
                     </div>
-                  </Show>
-
-                  <div class={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                    {/* Name */}
-                    <span class="text-[10px] text-gray-500 mb-1 px-1">
-                      {msg.role === 'user' ? 'You' : 'Vision Guide'}
-                    </span>
-
-                    {/* Bubble */}
-                    <div class={`px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm backdrop-blur-sm ${msg.role === 'user'
-                      ? 'bg-[#3b82f6] text-white rounded-tr-sm'
-                      : 'bg-[#242424] text-gray-200 border border-white/5 rounded-tl-sm'
-                      }`}>
-                      <Show when={msg.imageUrl}>
-                        <div class="mb-3 rounded-xl overflow-hidden border border-white/10 shadow-md">
-                          <img src={msg.imageUrl} alt="Attached" class="w-full h-auto object-cover" />
-                        </div>
-                      </Show>
-                      <div class="whitespace-pre-wrap">{msg.text}</div>
-
-                      {/* RENDER TRANSACTION CARD IF ACTION EXISTS */}
-                      <Show when={msg.action}>
-                        <div class="mt-4">
-                          <TransactionCard
-                            action={msg.action}
-                            onComplete={handleTxComplete}
-                            onCancel={() => { }}
-                          />
-                        </div>
-                      </Show>
-                    </div>
-
-                    {/* Actions */}
-                    <Show when={msg.role === 'model' && !msg.action}>
-                      <div class="flex items-center gap-2 mt-1 px-1">
-                        <button onClick={() => playTTS(msg.text)} class="text-gray-500 hover:text-white transition-colors">
-                          <Volume2 class="w-3 h-3" />
-                        </button>
-                      </div>
-                    </Show>
+                    <button
+                      onClick={startNewChat}
+                      class="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg active:scale-95"
+                      title="New Conversation"
+                    >
+                      <Plus class="w-4 h-4" />
+                    </button>
                   </div>
 
-                  {/* Avatar for User */}
-                  <Show when={msg.role === 'user'}>
-                    <div class="w-8 h-8 rounded-full bg-[#3b82f6] flex items-center justify-center flex-shrink-0 mt-1">
-                      <User class="w-4 h-4 text-white" />
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </For>
-
-            {/* Loading Indicators */}
-            <Show when={isLoading()}>
-              <Show when={loadingType() === 'image'} fallback={<TypingIndicator />}>
-                <ImageSkeleton />
-              </Show>
-            </Show>
-          </div>
-
-          {/* Footer Area (Modernized Input) */}
-          <div class="p-4 md:p-6 bg-[#161618] border-t border-white/[0.04] relative z-30">
-
-            {/* Attachments Preview Row */}
-            <Presence>
-              <Show when={attachments().length > 0}>
-                <Motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide"
-                >
-                  <For each={attachments()}>
-                    {(att, i) => (
-                      <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
-                        <Show when={att.type === 'image'} fallback={
-                          <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
-                            <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
-                              <FileText class="w-7 h-7 text-red-500" />
-                            </Show>
-                            <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
-                          </div>
-                        }>
-                          <img src={att.preview} class="w-full h-full object-cover" />
-                        </Show>
-                        <button
-                          onClick={() => removeAttachment(i())}
-                          class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                        >
-                          <Trash2 class="w-5 h-5 text-red-400" />
-                        </button>
+                  <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-none">
+                    <Show when={history().length === 0}>
+                      <div class="py-10 text-center">
+                        <p class="text-[10px] text-gray-600 font-bold uppercase tracking-widest">No history yet</p>
                       </div>
-                    )}
-                  </For>
-                </Motion.div>
-              </Show>
-            </Presence>
-
-            <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
-              {/* Plus Button */}
-              <button
-                onClick={() => fileInputRef?.click()}
-                class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
-              >
-                <Plus class="w-6 h-6" />
-              </button>
-              <input
-                type="file"
-                multiple
-                ref={fileInputRef}
-                class="hidden"
-                accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                onChange={handleFileSelect}
-              />
-
-              {/* Input TextField */}
-              <textarea
-                rows={1}
-                class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
-                placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
-                value={input()}
-                onInput={(e) => {
-                  setInput(e.currentTarget.value);
-                  e.currentTarget.style.height = 'auto';
-                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-              />
-
-              {/* Right Tools */}
-              <div class="flex items-center gap-1 px-1">
-                {/* Language Dropdown */}
-                <div class="relative group/lang">
-                  <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
-                    <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
-                    <ChevronDown class="w-3.5 h-3.5" />
-                  </button>
-                  <div class="absolute bottom-full right-0 mb-3 w-40 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                    <For each={LANGUAGES}>
-                      {(lang) => (
+                    </Show>
+                    <For each={history()}>
+                      {(conv) => (
                         <button
-                          class={`w-full text-left px-4 py-3 text-[13px] font-medium hover:bg-white/5 transition-colors ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-400'}`}
-                          onClick={() => setVoiceLang(lang.code)}
+                          onClick={() => selectConversation(conv)}
+                          class={`w-full p-3 rounded-2xl text-left transition-all border ${currentSessionId() === conv.id
+                            ? 'bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20'
+                            : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.05]'
+                            }`}
                         >
-                          {lang.label}
+                          <div class="flex flex-col gap-1">
+                            <span class={`text-[13px] font-semibold truncate ${currentSessionId() === conv.id ? 'text-blue-400' : 'text-gray-200'}`}>
+                              {conv.messages[0]?.text || 'New Session'}
+                            </span>
+                            <div class="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase">
+                              <span>{new Date(conv.createdAt).toLocaleDateString()}</span>
+                              <span>{conv.messages.length} msgs</span>
+                            </div>
+                          </div>
                         </button>
                       )}
                     </For>
                   </div>
+
+                  <div class="p-4 bg-black/10">
+                    <p class="text-[9px] text-gray-600 font-black text-center uppercase tracking-widest">Vision Architect v1.0</p>
+                  </div>
+                </Motion.div>
+              </Show>
+            </Presence>
+
+            <div class="flex-1 flex flex-col min-w-0 bg-[#161618] relative">
+              {/* Sidebar Toggle for Mobile/Tablet */}
+              <button
+                onClick={() => setIsHistoryOpen(!isHistoryOpen())}
+                class="absolute left-4 top-16 z-30 p-2 rounded-full bg-[#242424] border border-white/10 text-gray-400 hover:text-white transition-all lg:flex hidden"
+              >
+                <div class={`transition-transform duration-300 ${isHistoryOpen() ? 'rotate-180' : ''}`}>
+                  <ChevronDown class="w-4 h-4 -rotate-90" />
+                </div>
+              </button>
+              {/* Drag Overlay */}
+              <Presence>
+                <Show when={dragActive()}>
+                  <Motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    class="absolute inset-0 z-50 bg-blue-600/20 backdrop-blur-sm border-2 border-dashed border-blue-500 rounded-2xl flex flex-col items-center justify-center pointer-events-none"
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                  >
+                    <div class="bg-blue-500 rounded-full p-4 mb-3 shadow-lg">
+                      <GripHorizontal class="w-8 h-8 text-white" />
+                    </div>
+                    <p class="text-white font-bold text-lg">Drop files here</p>
+                    <p class="text-blue-200 text-sm">Images, PDFs, Spreadsheets</p>
+                  </Motion.div>
+                </Show>
+              </Presence>
+
+              {/* Header */}
+              <div class="flex items-center justify-between px-4 py-3 bg-[#242424] border-b border-white/5 z-20">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Bot class="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 class="text-sm font-semibold text-white">Vision AI</h2>
+                    <div class="flex items-center gap-1.5">
+                      <span class={`w-1.5 h-1.5 rounded-full ${activeProvider() === 'gemini' ? 'bg-sky-500' : activeProvider() === 'deepseek' ? 'bg-blue-500' : 'bg-green-500'} animate-pulse`} />
+                      <span class="text-[10px] text-gray-400">{modelLabel()}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onClick={toggleLiveMode} class={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${isLiveMode() ? 'bg-red-500/20 text-red-400 animate-pulse' : 'hover:bg-white/10 text-gray-400 hover:text-white'}`} title="Live Voice Mode">
+                    <Activity class="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => { props.onClose(); stopVoiceSession(); setIsLiveMode(false); }}
+                    class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X class="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Mode Overlay */}
+              <Show when={isLiveMode()}>
+                {/* ... reuse existing live mode display or simplified ... */}
+                <div class="absolute inset-0 bg-black/90 z-40 flex flex-col items-center justify-center text-center p-6">
+                  <Activity class="w-16 h-16 text-blue-500 mb-4 animate-pulse" />
+                  <h3 class="text-white text-xl font-bold mb-2">Live Voice Connected</h3>
+                  <p class="text-gray-400 text-sm mb-6">Speaking with {modelLabel()}</p>
+                  <div class="w-full max-w-xs h-1 rounded-full bg-gray-800 overflow-hidden">
+                    <div class="h-full bg-blue-500 transition-all duration-75" style={{ width: `${volumeLevel() * 100}%` }}></div>
+                  </div>
+                  <button onClick={toggleLiveMode} class="mt-8 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-full text-sm font-medium">End Session</button>
+                </div>
+              </Show>
+
+
+              {/* Messages Area (ChatGPT Style Bubble) */}
+              <div class="flex-1 overflow-y-auto p-4 pb-32 space-y-6 scroll-smooth bg-[#1a1a1a]" ref={scrollRef}>
+                <For each={messages()}>
+                  {(msg, idx) => (
+                    <div class={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {/* Avatar for Model */}
+                      <Show when={msg.role === 'model'}>
+                        <div class="w-8 h-8 rounded-full bg-[#242424] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1">
+                          <Bot class="w-4 h-4 text-emerald-400" />
+                        </div>
+                      </Show>
+
+                      <div class={`flex flex-col max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        {/* Name */}
+                        <span class="text-[10px] text-gray-500 mb-1 px-1">
+                          {msg.role === 'user' ? 'You' : 'Vision Guide'}
+                        </span>
+
+                        {/* Bubble */}
+                        <div class={`px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm backdrop-blur-sm ${msg.role === 'user'
+                          ? 'bg-[#3b82f6] text-white rounded-tr-sm'
+                          : 'bg-[#242424] text-gray-200 border border-white/5 rounded-tl-sm'
+                          }`}>
+                          <Show when={msg.imageUrl}>
+                            <div class="mb-3 rounded-xl overflow-hidden border border-white/10 shadow-md">
+                              <img src={msg.imageUrl} alt="Attached" class="w-full h-auto object-cover" />
+                            </div>
+                          </Show>
+                          <div class="whitespace-pre-wrap">{msg.text}</div>
+
+                          {/* RENDER TRANSACTION CARD IF ACTION EXISTS */}
+                          <Show when={msg.action}>
+                            <div class="mt-4">
+                              <TransactionCard
+                                action={msg.action}
+                                onComplete={handleTxComplete}
+                                onCancel={() => { }}
+                              />
+                            </div>
+                          </Show>
+                        </div>
+
+                        {/* Actions */}
+                        <Show when={msg.role === 'model' && !msg.action}>
+                          <div class="flex items-center gap-2 mt-1 px-1">
+                            <button onClick={() => playTTS(msg.text)} class="text-gray-500 hover:text-white transition-colors">
+                              <Volume2 class="w-3 h-3" />
+                            </button>
+                          </div>
+                        </Show>
+                      </div>
+
+                      {/* Avatar for User */}
+                      <Show when={msg.role === 'user'}>
+                        <div class="w-8 h-8 rounded-full bg-[#3b82f6] flex items-center justify-center flex-shrink-0 mt-1">
+                          <User class="w-4 h-4 text-white" />
+                        </div>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+
+                {/* Loading Indicators */}
+                <Show when={isLoading()}>
+                  <Show when={loadingType() === 'image'} fallback={<TypingIndicator />}>
+                    <ImageSkeleton />
+                  </Show>
+                </Show>
+              </div>
+
+              {/* Footer Area (Modernized Input) */}
+              <div class="p-4 md:p-6 bg-[#161618] border-t border-white/[0.04] relative z-30">
+
+                {/* Attachments Preview Row */}
+                <Presence>
+                  <Show when={attachments().length > 0}>
+                    <Motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide"
+                    >
+                      <For each={attachments()}>
+                        {(att, i) => (
+                          <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
+                            <Show when={att.type === 'image'} fallback={
+                              <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
+                                <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
+                                  <FileText class="w-7 h-7 text-red-500" />
+                                </Show>
+                                <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
+                              </div>
+                            }>
+                              <img src={att.preview} class="w-full h-full object-cover" />
+                            </Show>
+                            <button
+                              onClick={() => removeAttachment(i())}
+                              class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                            >
+                              <Trash2 class="w-5 h-5 text-red-400" />
+                            </button>
+                          </div>
+                        )}
+                      </For>
+                    </Motion.div>
+                  </Show>
+                </Presence>
+
+                <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
+                  {/* Plus Button */}
+                  <button
+                    onClick={() => fileInputRef?.click()}
+                    class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                  >
+                    <Plus class="w-6 h-6" />
+                  </button>
+                  <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    class="hidden"
+                    accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={handleFileSelect}
+                  />
+
+                  {/* Input TextField */}
+                  <textarea
+                    rows={1}
+                    class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
+                    placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
+                    value={input()}
+                    onInput={(e) => {
+                      setInput(e.currentTarget.value);
+                      e.currentTarget.style.height = 'auto';
+                      e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                  />
+
+                  {/* Right Tools */}
+                  <div class="flex items-center gap-1 px-1">
+                    {/* Language Dropdown */}
+                    <div class="relative group/lang">
+                      <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
+                        <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
+                        <ChevronDown class="w-3.5 h-3.5" />
+                      </button>
+                      <div class="absolute bottom-full right-0 mb-3 w-40 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                        <For each={LANGUAGES}>
+                          {(lang) => (
+                            <button
+                              class={`w-full text-left px-4 py-3 text-[13px] font-medium hover:bg-white/5 transition-colors ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-400'}`}
+                              onClick={() => setVoiceLang(lang.code)}
+                            >
+                              {lang.label}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+
+                    {/* Mic Button */}
+                    <button
+                      onClick={toggleRecording}
+                      class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Mic class="w-5 h-5" />
+                    </button>
+
+                    {/* Send Button */}
+                    <button
+                      onClick={handleSend}
+                      disabled={(!input().trim() && attachments().length === 0) || isLoading()}
+                      class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${(!input().trim() && attachments().length === 0)
+                        ? 'bg-blue-600/20 text-blue-400/30 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-90 font-black'}`}
+                    >
+                      <Send class="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
-                {/* Mic Button */}
-                <button
-                  onClick={toggleRecording}
-                  class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                >
-                  <Mic class="w-5 h-5" />
-                </button>
-
-                {/* Send Button */}
-                <button
-                  onClick={handleSend}
-                  disabled={(!input().trim() && attachments().length === 0) || isLoading()}
-                  class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${(!input().trim() && attachments().length === 0)
-                    ? 'bg-blue-600/20 text-blue-400/30 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-90 font-black'}`}
-                >
-                  <Send class="w-5 h-5" />
-                </button>
+                <div class="flex items-center justify-center gap-4 mt-4">
+                  <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Vision Architect System</span>
+                  <div class="w-1 h-1 rounded-full bg-gray-700" />
+                  <button
+                    onClick={() => setIsImageGenMode(!isImageGenMode())}
+                    class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isImageGenMode() ? 'text-purple-400' : 'text-gray-600 hover:text-gray-400'}`}
+                  >
+                    {isImageGenMode() ? 'Image Mode Active' : 'Standard Mode'}
+                  </button>
+                </div>
               </div>
             </div>
-
-            <div class="flex items-center justify-center gap-4 mt-4">
-              <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Vision Architect System</span>
-              <div class="w-1 h-1 rounded-full bg-gray-700" />
-              <button
-                onClick={() => setIsImageGenMode(!isImageGenMode())}
-                class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isImageGenMode() ? 'text-purple-400' : 'text-gray-600 hover:text-gray-400'}`}
-              >
-                {isImageGenMode() ? 'Image Mode Active' : 'Standard Mode'}
-              </button>
-            </div>
           </div>
-
         </Motion.div>
       </Show>
     </Presence>
