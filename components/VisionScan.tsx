@@ -22,6 +22,9 @@ export default function VisionScan() {
     const [currentAddress, setCurrentAddress] = createSignal<string>("");
     const [chainType, setChainType] = createSignal<'evm' | 'btc' | 'sol'>('evm');
 
+    const [limit, setLimit] = createSignal(20);
+    const [page, setPage] = createSignal(1);
+
     // Network Stats
     const [blockHeight, setBlockHeight] = createSignal<string>('0');
     const [gasPrice, setGasPrice] = createSignal<string>('0');
@@ -34,14 +37,15 @@ export default function VisionScan() {
 
     const handleSearch = (term: string) => {
         setSearchTerm(term);
+        setPage(1); // Reset to page 1 on search
         fetchTransactions(term);
     };
 
     const fetchTransactions = async (forceTerm?: string) => {
-        const termToSearch = forceTerm && typeof forceTerm === 'string' ? forceTerm : searchTerm().trim();
+        const termToSearch = forceTerm !== undefined && typeof forceTerm === 'string' ? forceTerm : searchTerm().trim();
         setAddressBalance(null);
 
-        console.log(`🌐 VisionScan: Fetching for "${termToSearch}"`);
+        console.log(`🌐 VisionScan: Fetching for "${termToSearch}" with limit ${limit()} and page ${page()}`);
 
         try {
             const params = new URLSearchParams();
@@ -55,7 +59,11 @@ export default function VisionScan() {
                 }
             }
 
-            const response = await fetch(`${API_URL}?${params.toString()}&limit=50`);
+            // Apply pagination and limit
+            params.append('limit', limit().toString());
+            params.append('offset', ((page() - 1) * limit()).toString());
+
+            const response = await fetch(`${API_URL}?${params.toString()}`);
             const rawData = await response.json();
             const data = rawData.transactions || [];
 
@@ -181,6 +189,10 @@ export default function VisionScan() {
                     stats={{ blockHeight: blockHeight(), gasPrice: gasPrice() }}
                     addressBalance={addressBalance()}
                     latestTransactions={transactions()}
+                    limit={limit()}
+                    setLimit={(l) => { setLimit(l); setPage(1); fetchTransactions(); }}
+                    page={page()}
+                    setPage={(p) => { setPage(p); fetchTransactions(); }}
                 />
             </Show>
 

@@ -42,6 +42,10 @@ interface VisionScanHomeProps {
     };
     addressBalance: string | null;
     latestTransactions: any[];
+    limit: number;
+    setLimit: (l: number) => void;
+    page: number;
+    setPage: (p: number) => void;
 }
 
 export default function VisionScanHome(props: VisionScanHomeProps) {
@@ -238,11 +242,28 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
 
                 {/* Latest Transactions Table */}
                 <div class="mb-12">
-                    <h3 class="text-xl font-black text-white italic mb-6 flex items-center gap-2">
-                        <Activity class="w-5 h-5 text-blue-500" />
-                        LATEST NETWORK TRANSACTIONS
-                    </h3>
-                    <div class="bg-[#0c0c0c] border border-white/10 rounded-2xl overflow-hidden">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <h3 class="text-xl font-black text-white italic flex items-center gap-2">
+                            <Activity class="w-5 h-5 text-blue-500" />
+                            LATEST NETWORK TRANSACTIONS
+                        </h3>
+
+                        {/* Transaction Limit Sorter */}
+                        <div class="flex items-center gap-2 bg-white/5 p-1 rounded-xl border border-white/5">
+                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest px-2">Show:</span>
+                            <For each={[20, 50, 100]}>
+                                {(l) => (
+                                    <button
+                                        onClick={() => props.setLimit(l)}
+                                        class={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${props.limit === l ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:text-white'}`}
+                                    >
+                                        {l}
+                                    </button>
+                                )}
+                            </For>
+                        </div>
+                    </div>
+                    <div class="bg-[#0c0c0c] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
                         <table class="w-full text-left border-collapse">
                             <thead>
                                 <tr class="border-b border-white/10 bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
@@ -290,6 +311,29 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                 </Show>
                             </tbody>
                         </table>
+
+                        {/* Pagination Footer */}
+                        <div class="px-6 py-4 bg-white/[0.01] border-t border-white/5 flex items-center justify-between">
+                            <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest">
+                                Page <span class="text-blue-500">{props.page}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    onClick={() => props.setPage(Math.max(1, props.page - 1))}
+                                    disabled={props.page === 1}
+                                    class="px-4 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-all"
+                                >
+                                    Previous
+                                </button>
+                                <button
+                                    onClick={() => props.setPage(props.page + 1)}
+                                    disabled={!props.latestTransactions || props.latestTransactions.length < props.limit}
+                                    class="px-4 py-2 bg-white/5 hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white transition-all"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
