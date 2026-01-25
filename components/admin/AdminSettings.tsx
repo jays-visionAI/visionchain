@@ -11,8 +11,9 @@ import {
     Coins,
     RefreshCw,
     TrendingUp,
+    Activity,
 } from 'lucide-solid';
-import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings } from '../../services/vcnPriceService';
+import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory } from '../../services/vcnPriceService';
 import AdminAIManagement from './AdminAIManagement';
 import { contractService } from '../../services/contractService';
 
@@ -32,6 +33,45 @@ export default function AdminSettings() {
     };
 
     const [priceInput, setPriceInput] = createSignal({ min: 0, max: 0 });
+
+    const PriceChart = () => {
+        const history = getVcnPriceHistory();
+        if (history.length < 2) return <div class="h-20 flex items-center justify-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">Collecting Data...</div>;
+
+        const min = Math.min(...history);
+        const max = Math.max(...history);
+        const range = Math.max(0.0001, max - min);
+
+        const points = history.map((p, i) => {
+            const x = (i / (history.length - 1)) * 100;
+            const y = 100 - ((p - min) / range) * 100;
+            return `${x},${y}`;
+        }).join(' ');
+
+        return (
+            <div class="h-24 w-full relative mt-4">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="w-full h-full">
+                    <defs>
+                        <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#10b981" stop-opacity="0.2" />
+                            <stop offset="100%" stop-color="#10b981" stop-opacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <path
+                        d={`M 0 100 L ${points} L 100 100 Z`}
+                        fill="url(#priceGradient)"
+                    />
+                    <polyline
+                        fill="none"
+                        stroke="#10b981"
+                        stroke-width="1.5"
+                        points={points}
+                        stroke-linejoin="round"
+                    />
+                </svg>
+            </div>
+        );
+    };
 
     onMount(() => {
         refreshNodeStats();
@@ -158,7 +198,7 @@ export default function AdminSettings() {
 
                                 {/* VCN Price Management (Admin Live) */}
                                 <div class="bg-[#15151a] border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
-                                    <div class="flex items-center justify-between mb-8">
+                                    <div class="flex items-center justify-between mb-2">
                                         <div class="flex items-center gap-4">
                                             <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
                                                 <TrendingUp class="w-5 h-5" />
@@ -170,26 +210,28 @@ export default function AdminSettings() {
                                         </div>
                                         <div class="text-right">
                                             <div class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Current Price</div>
-                                            <div class="text-2xl font-black text-white tracking-tighter tabular-nums">${getVcnPrice().toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
+                                            <div class="text-2xl font-black text-white tracking-tighter tabular-nums">${getVcnPrice().toFixed(4)}</div>
                                         </div>
                                     </div>
 
-                                    <div class="grid grid-cols-2 gap-4 mb-6">
+                                    <PriceChart />
+
+                                    <div class="grid grid-cols-2 gap-4 my-6">
                                         <div>
-                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2">Min Range (USD)</label>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Min Range (USD)</label>
                                             <input
                                                 type="number"
-                                                step="0.01"
+                                                step="0.0001"
                                                 value={priceInput().min}
                                                 onInput={(e) => setPriceInput({ ...priceInput(), min: Number(e.currentTarget.value) })}
                                                 class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
                                             />
                                         </div>
                                         <div>
-                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2">Max Range (USD)</label>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Range (USD)</label>
                                             <input
                                                 type="number"
-                                                step="0.01"
+                                                step="0.0001"
                                                 value={priceInput().max}
                                                 onInput={(e) => setPriceInput({ ...priceInput(), max: Number(e.currentTarget.value) })}
                                                 class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"

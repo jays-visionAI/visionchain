@@ -367,7 +367,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                 {/* Price */}
                                                 <div class="w-20 md:w-24 text-right hidden sm:block">
                                                     <span class="text-sm md:text-base font-medium text-white">
-                                                        ${asset().price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        ${asset().price.toFixed(4)}
                                                     </span>
                                                 </div>
                                                 {/* 24h Change */}
