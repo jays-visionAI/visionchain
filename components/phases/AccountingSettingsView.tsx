@@ -23,7 +23,12 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
         { id: 'key_2', name: 'Internal Audit Tool', prefix: 'vk_live_...', created: '2023-11-02', lastUsed: '5 days ago' }
     ]);
     const [isGenerating, setIsGenerating] = createSignal(false);
-    const [priceInput, setPriceInput] = createSignal({ min: '0', max: '0' });
+    const [priceInput, setPriceInput] = createSignal({
+        min: '0',
+        max: '0',
+        period: '60',
+        range: '5'
+    });
 
     const PriceChart = () => {
         const history = getVcnPriceHistory();
@@ -66,23 +71,32 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
 
     onMount(() => {
         const settings = getVcnPriceSettings();
-        setPriceInput({ min: settings.minPrice.toString(), max: settings.maxPrice.toString() });
+        setPriceInput({
+            min: settings.minPrice.toString(),
+            max: settings.maxPrice.toString(),
+            period: settings.volatilityPeriod?.toString() || '60',
+            range: settings.volatilityRange?.toString() || '5'
+        });
     });
 
     const handleUpdatePriceRange = async () => {
         const min = parseFloat(priceInput().min.replace(',', '.'));
         const max = parseFloat(priceInput().max.replace(',', '.'));
+        const period = parseInt(priceInput().period);
+        const rangePerc = parseFloat(priceInput().range);
 
-        if (isNaN(min) || isNaN(max)) {
+        if (isNaN(min) || isNaN(max) || isNaN(period) || isNaN(rangePerc)) {
             alert("Please enter valid numeric values");
             return;
         }
 
         await updateVcnPriceSettings({
             minPrice: min,
-            maxPrice: max
+            maxPrice: max,
+            volatilityPeriod: period,
+            volatilityRange: rangePerc
         });
-        alert("VCN Price Range Updated");
+        alert("VCN Price Strategy Updated");
     };
 
     const generateKey = () => {
@@ -160,6 +174,26 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
                                         onInput={(e) => setPriceInput({ ...priceInput(), max: e.currentTarget.value })}
                                         class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
                                         placeholder="0.0000"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Period (Sec)</label>
+                                    <input
+                                        type="number"
+                                        value={priceInput().period}
+                                        onInput={(e) => setPriceInput({ ...priceInput(), period: e.currentTarget.value })}
+                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                        placeholder="60"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Range (%)</label>
+                                    <input
+                                        type="number"
+                                        value={priceInput().range}
+                                        onInput={(e) => setPriceInput({ ...priceInput(), range: e.currentTarget.value })}
+                                        class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                        placeholder="5"
                                     />
                                 </div>
                             </div>

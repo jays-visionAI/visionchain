@@ -5,6 +5,8 @@ import { createSignal } from 'solid-js';
 export interface VcnPriceSettings {
     minPrice: number;
     maxPrice: number;
+    volatilityPeriod: number; // Cycle period in seconds
+    volatilityRange: number;  // Allowed deviation percentage (0-100)
     enabled: boolean;
     lastUpdate: number;
 }
@@ -12,6 +14,8 @@ export interface VcnPriceSettings {
 const DEFAULT_SETTINGS: VcnPriceSettings = {
     minPrice: 0.3500,
     maxPrice: 0.8500,
+    volatilityPeriod: 60, // 60 seconds for a full major cycle
+    volatilityRange: 5,   // 5% default range
     enabled: true,
     lastUpdate: Date.now()
 };
@@ -20,20 +24,35 @@ const [currentPrice, setCurrentPrice] = createSignal(0.3750);
 const [priceHistory, setPriceHistory] = createSignal<number[]>([]);
 const [priceSettings, setPriceSettings] = createSignal<VcnPriceSettings>(DEFAULT_SETTINGS);
 
-// Smooth price calculation based on time
-// We use a sine wave combined with some noise to simulate a realistic chart
-const calculateSmoothPrice = (settings: VcnPriceSettings) => {
-    const time = Date.now() / 8000; // Slightly faster oscillation for visual feedback
+// Fibonacci-inspired Price Volatility Engine
+// Uses harmonics based on the Golden Ratio (PHI) to simulate natural market cycles
+const calculateFibonacciPrice = (settings: VcnPriceSettings) => {
+    const PHI = 1.61803398875;
+    const now = Date.now() / 1000; // time in seconds
+
+    // Period adjustment: 2x slower than previous (previous was ~8s for small cycle, now user-defined)
+    // We use settings.volatilityPeriod as the base cycle
+    const period = settings.volatilityPeriod || 60;
     const range = Math.max(0.0001, settings.maxPrice - settings.minPrice);
     const mid = settings.minPrice + range / 2;
 
-    // Base oscillation
-    const base = Math.sin(time) * (range / 2);
+    // Scale the range based on user's volatility % (capped by min/max)
+    const activeRange = (mid * (settings.volatilityRange / 100)) / 2;
 
-    // Add some sub-oscillations for "texture"
-    const noise = Math.sin(time * 3.7) * (range * 0.08) + Math.sin(time * 11.2) * (range * 0.04);
+    // Fibonacci Harmonics: Summing waves at phi-scaled frequencies
+    // This creates "waves within waves" typical of Elliott Wave/Fibonacci theory
+    let wave = 0;
+    wave += Math.sin((2 * Math.PI * now) / period);             // Primary Wave (1)
+    wave += Math.sin((2 * Math.PI * now * PHI) / period) / PHI;  // Secondary Corrective (0.618)
+    wave += Math.sin((2 * Math.PI * now * PHI * PHI) / period) / (PHI * PHI); // Noise (0.382)
 
-    return mid + base + noise;
+    // Volatility reduced by 10x for the final signal as requested
+    const normalizedWave = (wave / 2) * 0.1;
+
+    let result = mid + (normalizedWave * activeRange * 20); // Scale up to meet the percentage goal
+
+    // Clamp to min/max
+    return Math.max(settings.minPrice, Math.min(settings.maxPrice, result));
 };
 
 // Initial Fetch and Subscription
@@ -48,7 +67,11 @@ export const initPriceService = () => {
     onSnapshot(docRef, (snapshot) => {
         if (snapshot.exists()) {
             const data = snapshot.data() as VcnPriceSettings;
-            setPriceSettings(data);
+            // Ensure defaults for new fields if they don't exist in DB
+            setPriceSettings({
+                ...DEFAULT_SETTINGS,
+                ...data
+            });
         } else {
             setDoc(docRef, DEFAULT_SETTINGS);
         }
@@ -57,10 +80,10 @@ export const initPriceService = () => {
     // Update the live price signal every second
     setInterval(() => {
         if (priceSettings().enabled) {
-            const newPrice = calculateSmoothPrice(priceSettings());
+            const newPrice = calculateFibonacciPrice(priceSettings());
             setCurrentPrice(newPrice);
 
-            // Maintain 60 points of history
+            // Maintain 60 points of history for the admin chart
             setPriceHistory(prev => {
                 const next = [...prev, newPrice];
                 if (next.length > 60) return next.slice(next.length - 60);

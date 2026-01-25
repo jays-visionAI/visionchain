@@ -32,11 +32,16 @@ export default function AdminSettings() {
         }
     };
 
-    const [priceInput, setPriceInput] = createSignal({ min: '0', max: '0' });
+    const [priceInput, setPriceInput] = createSignal({
+        min: '0',
+        max: '0',
+        period: '60',
+        range: '5'
+    });
 
     const PriceChart = () => {
         const history = getVcnPriceHistory();
-        if (history.length < 2) return <div class="h-20 flex items-center justify-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">Collecting Data...</div>;
+        if (history.length < 2) return <div class="h-20 flex items-center justify-center text-[10px] text-gray-500 font-bold uppercase tracking-widest">Collecting Fibonacci Data...</div>;
 
         const min = Math.min(...history);
         const max = Math.max(...history);
@@ -49,11 +54,13 @@ export default function AdminSettings() {
         }).join(' ');
 
         return (
-            <div class="h-24 w-full relative mt-4">
+            <div class="h-32 w-full relative mt-4 bg-black/20 rounded-xl overflow-hidden border border-white/5">
+                <div class="absolute inset-x-0 top-0 h-[1px] bg-white/5" />
+                <div class="absolute inset-x-0 bottom-0 h-[1px] bg-white/5" />
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" class="w-full h-full">
                     <defs>
                         <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#10b981" stop-opacity="0.2" />
+                            <stop offset="0%" stop-color="#10b981" stop-opacity="0.3" />
                             <stop offset="100%" stop-color="#10b981" stop-opacity="0" />
                         </linearGradient>
                     </defs>
@@ -64,11 +71,18 @@ export default function AdminSettings() {
                     <polyline
                         fill="none"
                         stroke="#10b981"
-                        stroke-width="1.5"
+                        stroke-width="1"
                         points={points}
                         stroke-linejoin="round"
                     />
                 </svg>
+                {/* Horizontal grid lines for aesthetics */}
+                <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+                    <div class="h-px bg-white/10 w-full" />
+                    <div class="h-px bg-white/10 w-full" />
+                    <div class="h-px bg-white/10 w-full" />
+                    <div class="h-px bg-white/10 w-full" />
+                </div>
             </div>
         );
     };
@@ -77,7 +91,12 @@ export default function AdminSettings() {
         refreshNodeStats();
 
         const settings = getVcnPriceSettings();
-        setPriceInput({ min: settings.minPrice.toString(), max: settings.maxPrice.toString() });
+        setPriceInput({
+            min: settings.minPrice.toString(),
+            max: settings.maxPrice.toString(),
+            period: settings.volatilityPeriod?.toString() || '60',
+            range: settings.volatilityRange?.toString() || '5'
+        });
 
         // Polling nodes every 30s
         const interval = setInterval(refreshNodeStats, 30000);
@@ -87,17 +106,21 @@ export default function AdminSettings() {
     const handleUpdatePriceRange = async () => {
         const min = parseFloat(priceInput().min.replace(',', '.'));
         const max = parseFloat(priceInput().max.replace(',', '.'));
+        const period = parseInt(priceInput().period);
+        const rangePerc = parseFloat(priceInput().range);
 
-        if (isNaN(min) || isNaN(max)) {
+        if (isNaN(min) || isNaN(max) || isNaN(period) || isNaN(rangePerc)) {
             alert("Please enter valid numeric values");
             return;
         }
 
         await updateVcnPriceSettings({
             minPrice: min,
-            maxPrice: max
+            maxPrice: max,
+            volatilityPeriod: period,
+            volatilityRange: rangePerc
         });
-        alert("VCN Price Range Updated Successfully");
+        alert("VCN Price Strategy Updated Successfully");
     };
 
     return (
@@ -226,7 +249,7 @@ export default function AdminSettings() {
 
                                     <div class="grid grid-cols-2 gap-4 my-6">
                                         <div>
-                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Min Range (USD)</label>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Min Price (USD)</label>
                                             <input
                                                 type="text"
                                                 inputmode="decimal"
@@ -237,7 +260,7 @@ export default function AdminSettings() {
                                             />
                                         </div>
                                         <div>
-                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Range (USD)</label>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Price (USD)</label>
                                             <input
                                                 type="text"
                                                 inputmode="decimal"
@@ -245,6 +268,26 @@ export default function AdminSettings() {
                                                 onInput={(e) => setPriceInput({ ...priceInput(), max: e.currentTarget.value })}
                                                 class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
                                                 placeholder="0.0000"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Volatility Period (Sec)</label>
+                                            <input
+                                                type="number"
+                                                value={priceInput().period}
+                                                onInput={(e) => setPriceInput({ ...priceInput(), period: e.currentTarget.value })}
+                                                class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                                placeholder="60"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Deviation Range (%)</label>
+                                            <input
+                                                type="number"
+                                                value={priceInput().range}
+                                                onInput={(e) => setPriceInput({ ...priceInput(), range: e.currentTarget.value })}
+                                                class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                                placeholder="5"
                                             />
                                         </div>
                                     </div>
