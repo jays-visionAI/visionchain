@@ -1,7 +1,7 @@
 import { createSignal, Show, For, onMount, createEffect, Switch, Match, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import AdminAIManagement from './admin/AdminAIManagement';
+
 import { Motion, Presence } from 'solid-motionone';
 import {
     Wallet as WalletIcon,
@@ -146,7 +146,6 @@ const Wallet = (): JSX.Element => {
     const navigate = useNavigate();
     const auth = useAuth();
     // State Declarations
-    const [settingsSubView, setSettingsSubView] = createSignal<'main' | 'ai'>('main');
     const [activeView, setActiveView] = createSignal('assets');
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('mainnet');
     const [showChat, setShowChat] = createSignal(false);
@@ -1021,7 +1020,7 @@ Final network context: ${networkMode()}.
             setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
         } catch (error) {
             console.error('AI Error:', error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error while processing your request. Please ensure your AI API Key is correctly configured in the Admin settings." }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error while processing your request. The system might be busy or undergoing maintenance. Please try again later." }]);
         } finally {
             setChatLoading(false);
         }
