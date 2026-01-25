@@ -760,63 +760,57 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         >
           <div class="flex flex-1 overflow-hidden relative">
             {/* History Sidebar */}
-            <Presence>
-              <Show when={isHistoryOpen()}>
-                <Motion.div
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: '280px', opacity: 1 }}
-                  exit={{ width: 0, opacity: 0 }}
-                  class="h-full bg-[#1c1c1e] border-r border-white/5 flex flex-col z-30 shrink-0"
-                >
-                  <div class="p-4 border-b border-white/5 flex items-center justify-between">
-                    <div class="flex items-center gap-2 text-gray-400">
-                      <BookOpen class="w-4 h-4" />
-                      <span class="text-xs font-bold uppercase tracking-widest text-[#888]">History</span>
+            {/* History Sidebar */}
+            <Show when={isHistoryOpen()}>
+              <div class="w-[280px] h-full bg-[#1c1c1e] border-r border-white/5 flex flex-col z-30 shrink-0 transition-all duration-300">
+                <div class="p-4 border-b border-white/5 flex items-center justify-between">
+                  <div class="flex items-center gap-2 text-gray-400">
+                    <BookOpen class="w-4 h-4" />
+                    <span class="text-xs font-bold uppercase tracking-widest text-[#888]">History</span>
+                  </div>
+                  <button
+                    onClick={startNewChat}
+                    class="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg active:scale-95"
+                    title="New Conversation"
+                  >
+                    <Plus class="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-white/10">
+                  <Show when={history().length === 0}>
+                    <div class="py-10 text-center">
+                      <p class="text-[10px] text-gray-600 font-bold uppercase tracking-widest">No history yet</p>
                     </div>
-                    <button
-                      onClick={startNewChat}
-                      class="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-lg active:scale-95"
-                      title="New Conversation"
-                    >
-                      <Plus class="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-none">
-                    <Show when={history().length === 0}>
-                      <div class="py-10 text-center">
-                        <p class="text-[10px] text-gray-600 font-bold uppercase tracking-widest">No history yet</p>
-                      </div>
-                    </Show>
-                    <For each={history()}>
-                      {(conv) => (
-                        <button
-                          onClick={() => selectConversation(conv)}
-                          class={`w-full p-3 rounded-2xl text-left transition-all border ${currentSessionId() === conv.id
-                            ? 'bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20'
-                            : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.05]'
-                            }`}
-                        >
-                          <div class="flex flex-col gap-1">
-                            <span class={`text-[13px] font-semibold truncate ${currentSessionId() === conv.id ? 'text-blue-400' : 'text-gray-200'}`}>
-                              {conv.messages[0]?.text || 'New Session'}
-                            </span>
-                            <div class="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase">
-                              <span>{new Date(conv.createdAt).toLocaleDateString()}</span>
-                              <span>{conv.messages.length} msgs</span>
-                            </div>
+                  </Show>
+                  <For each={history()}>
+                    {(conv) => (
+                      <button
+                        onClick={() => selectConversation(conv)}
+                        class={`w-full p-3 rounded-2xl text-left transition-all border ${currentSessionId() === conv.id
+                          ? 'bg-blue-600/10 border-blue-500/30 ring-1 ring-blue-500/20'
+                          : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.05]'
+                          }`}
+                      >
+                        <div class="flex flex-col gap-1">
+                          <span class={`text-[13px] font-semibold truncate ${currentSessionId() === conv.id ? 'text-blue-400' : 'text-gray-200'}`}>
+                            {conv.messages[0]?.text || 'New Session'}
+                          </span>
+                          <div class="flex items-center justify-between text-[10px] text-gray-500 font-bold uppercase">
+                            <span>{new Date(conv.createdAt).toLocaleDateString()}</span>
+                            <span>{conv.messages.length} msgs</span>
                           </div>
-                        </button>
-                      )}
-                    </For>
-                  </div>
+                        </div>
+                      </button>
+                    )}
+                  </For>
+                </div>
 
-                  <div class="p-4 bg-black/10">
-                    <p class="text-[9px] text-gray-600 font-black text-center uppercase tracking-widest">Vision Architect v1.0</p>
-                  </div>
-                </Motion.div>
-              </Show>
-            </Presence>
+                <div class="p-4 bg-black/10">
+                  <p class="text-[9px] text-gray-600 font-black text-center uppercase tracking-widest">Vision Architect v1.0</p>
+                </div>
+              </div>
+            </Show>
 
             <div class="flex-1 flex flex-col min-w-0 bg-[#161618] relative">
               {/* Sidebar Toggle for Mobile/Tablet */}
