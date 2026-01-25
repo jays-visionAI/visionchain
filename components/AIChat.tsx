@@ -1,4 +1,4 @@
-그냥 import { createSignal, createEffect, onCleanup, Show, For, createMemo } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Show, For, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages } from 'lucide-solid';
