@@ -174,67 +174,64 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                     <Show when={expandedIds().has(task.id)}>
                                         <div class="px-3 pb-3 pt-0 border-t border-white/5 mt-1">
                                             {/* Details Grid */}
+                                            {/* Details Grid */}
                                             <div class="grid grid-cols-2 gap-y-3 gap-x-2 py-3">
-
-
-                                                {/* Details Grid */}
-                                                <div class="grid grid-cols-2 gap-y-3 gap-x-2 py-3">
-                                                    <div class="col-span-2">
-                                                        <span class="text-[9px] text-gray-500 uppercase font-bold">Recipient</span>
-                                                        <div class="text-xs text-gray-300 font-mono break-all bg-black/20 p-1.5 rounded mt-0.5">
-                                                            {task.recipient || 'Unknown'}
-                                                        </div>
-                                                    </div>
-
-                                                    <div>
-                                                        <span class="text-[9px] text-gray-500 uppercase font-bold">Amount</span>
-                                                        <div class="text-xs text-white font-bold mt-0.5">{task.amount} {task.token}</div>
-                                                    </div>
-
-                                                    <div>
-                                                        <span class="text-[9px] text-gray-500 uppercase font-bold">Schedule ID</span>
-                                                        <div class="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1">
-                                                            {task.scheduleId?.slice(0, 10)}...
-                                                            <button class="hover:text-white" onClick={() => copyToClipboard(task.scheduleId || '')}><Copy class="w-2.5 h-2.5" /></button>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="col-span-2">
-                                                        <span class="text-[9px] text-gray-500 uppercase font-bold">Timeline</span>
-                                                        <div class="flex items-center gap-1 mt-1.5">
-                                                            <div class={`h-1 flex-1 rounded-full ${['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'bg-blue-500' : 'bg-gray-700'}`} />
-                                                            <div class={`h-1 flex-1 rounded-full ${['EXECUTING', 'SENT'].includes(task.status) ? 'bg-amber-500' : 'bg-gray-700'}`} />
-                                                            <div class={`h-1 flex-1 rounded-full ${task.status === 'SENT' ? 'bg-emerald-500' : 'bg-gray-700'}`} />
-                                                        </div>
-                                                        <div class="flex justify-between text-[9px] text-gray-500 mt-1 px-0.5 font-medium">
-                                                            <span>Locked</span>
-                                                            <span>Exec</span>
-                                                            <span>Done</span>
-                                                        </div>
+                                                <div class="col-span-2">
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Recipient</span>
+                                                    <div class="text-xs text-gray-300 font-mono break-all bg-black/20 p-1.5 rounded mt-0.5">
+                                                        {task.recipient || 'Unknown'}
                                                     </div>
                                                 </div>
 
-                                                {/* Action Buttons */}
-                                                <div class="flex gap-2 pt-2 border-t border-white/5">
-                                                    <Show when={task.status === 'WAITING'}>
-                                                        <button
-                                                            onClick={(e) => handleCancel(task.scheduleId, e)}
-                                                            disabled={isCancelling() === task.scheduleId}
-                                                            class="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
-                                                        >
-                                                            <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3 h-3" /> Cancel</>}>
-                                                                <div class="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                                            </Show>
-                                                        </button>
-                                                    </Show>
-                                                    <button
-                                                        onClick={() => window.open(`https://vision-scan.com/tx/${task.txHash}`, '_blank')}
-                                                        class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5"
-                                                    >
-                                                        <ExternalLink class="w-3 h-3" /> View TX
-                                                    </button>
+                                                <div>
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Amount</span>
+                                                    <div class="text-xs text-white font-bold mt-0.5">{task.amount} {task.token}</div>
+                                                </div>
+
+                                                <div>
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Schedule ID</span>
+                                                    <div class="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1">
+                                                        {task.scheduleId?.slice(0, 10)}...
+                                                        <button class="hover:text-white" onClick={() => copyToClipboard(task.scheduleId || '')}><Copy class="w-2.5 h-2.5" /></button>
+                                                    </div>
+                                                </div>
+
+                                                <div class="col-span-2">
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Timeline</span>
+                                                    <div class="flex items-center gap-1 mt-1.5">
+                                                        <div class={`h-1 flex-1 rounded-full ${['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'bg-blue-500' : 'bg-gray-700'}`} />
+                                                        <div class={`h-1 flex-1 rounded-full ${['EXECUTING', 'SENT'].includes(task.status) ? 'bg-amber-500' : 'bg-gray-700'}`} />
+                                                        <div class={`h-1 flex-1 rounded-full ${task.status === 'SENT' ? 'bg-emerald-500' : 'bg-gray-700'}`} />
+                                                    </div>
+                                                    <div class="flex justify-between text-[9px] text-gray-500 mt-1 px-0.5 font-medium">
+                                                        <span>Locked</span>
+                                                        <span>Exec</span>
+                                                        <span>Done</span>
+                                                    </div>
                                                 </div>
                                             </div>
+
+                                            {/* Action Buttons */}
+                                            <div class="flex gap-2 pt-2 border-t border-white/5">
+                                                <Show when={task.status === 'WAITING'}>
+                                                    <button
+                                                        onClick={(e) => handleCancel(task.scheduleId, e)}
+                                                        disabled={isCancelling() === task.scheduleId}
+                                                        class="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                                    >
+                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3 h-3" /> Cancel</>}>
+                                                            <div class="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                                        </Show>
+                                                    </button>
+                                                </Show>
+                                                <button
+                                                    onClick={() => window.open(`https://vision-scan.com/tx/${task.txHash}`, '_blank')}
+                                                    class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5"
+                                                >
+                                                    <ExternalLink class="w-3 h-3" /> View TX
+                                                </button>
+                                            </div>
+                                        </div>
                                     </Show>
                                 </div>
                             )}
