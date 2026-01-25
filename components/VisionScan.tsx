@@ -160,6 +160,9 @@ export default function VisionScan() {
             handleSearch(addr);
         } else if (packetId) {
             handleSearch(packetId);
+        } else {
+            // Fetch latest transactions for home feed
+            fetchTransactions("");
         }
 
         fetchLiveStats();
@@ -177,6 +180,7 @@ export default function VisionScan() {
                     currentView={viewMode()}
                     stats={{ blockHeight: blockHeight(), gasPrice: gasPrice() }}
                     addressBalance={addressBalance()}
+                    latestTransactions={transactions()}
                 />
             </Show>
 

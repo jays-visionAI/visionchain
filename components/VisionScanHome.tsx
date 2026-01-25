@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, For } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
     Search,
@@ -41,6 +41,7 @@ interface VisionScanHomeProps {
         gasPrice: string;
     };
     addressBalance: string | null;
+    latestTransactions: any[];
 }
 
 export default function VisionScanHome(props: VisionScanHomeProps) {
@@ -233,6 +234,63 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                     <StatCard label="TESTNET THROUGHPUT" value={`${(142.82 + (Number(props.stats.blockHeight.replace(/,/g, '')) % 50) / 10).toFixed(2)}M`} subValue="LIVE" icon={<Activity class="w-4 h-4 text-blue-400" />} />
                     <StatCard label="v2 BLOCK HEIGHT" value={props.stats.blockHeight} icon={<Database class="w-4 h-4 text-blue-500" />} />
                     <StatCard label="GAS SETTLEMENT (v2)" value={`${props.stats.gasPrice} GWEI`} icon={<Layers class="w-4 h-4 text-blue-500" />} />
+                </div>
+
+                {/* Latest Transactions Table */}
+                <div class="mb-12">
+                    <h3 class="text-xl font-black text-white italic mb-6 flex items-center gap-2">
+                        <Activity class="w-5 h-5 text-blue-500" />
+                        LATEST NETWORK TRANSACTIONS
+                    </h3>
+                    <div class="bg-[#0c0c0c] border border-white/10 rounded-2xl overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-white/10 bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
+                                    <th class="p-4 font-black">Tx Hash</th>
+                                    <th class="p-4 font-black">Type</th>
+                                    <th class="p-4 font-black hidden md:table-cell">Method</th>
+                                    <th class="p-4 font-black hidden sm:table-cell">From</th>
+                                    <th class="p-4 font-black hidden sm:table-cell">To</th>
+                                    <th class="p-4 font-black text-right">Value</th>
+                                    <th class="p-4 font-black text-right hidden md:table-cell">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5">
+                                <For each={props.latestTransactions}>
+                                    {(tx: any) => (
+                                        <tr
+                                            class="hover:bg-white/5 transition-colors cursor-pointer group"
+                                            onClick={() => props.onSearch(tx.hash)}
+                                        >
+                                            <td class="p-4 font-mono text-xs text-blue-400 group-hover:text-blue-300 transition-colors">
+                                                {tx.hash.slice(0, 10)}...
+                                            </td>
+                                            <td class="p-4">
+                                                <span class={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${tx.type === 'Transfer' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                                    }`}>
+                                                    {tx.type}
+                                                </span>
+                                            </td>
+                                            <td class="p-4 text-xs font-bold text-gray-400 hidden md:table-cell">{tx.method}</td>
+                                            <td class="p-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{tx.from ? tx.from.slice(0, 6) + '...' + tx.from.slice(-4) : '-'}</td>
+                                            <td class="p-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{tx.to ? tx.to.slice(0, 6) + '...' + tx.to.slice(-4) : '-'}</td>
+                                            <td class="p-4 text-right font-mono text-xs font-bold text-white">
+                                                {tx.value ? parseFloat(tx.value).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0'} VCN
+                                            </td>
+                                            <td class="p-4 text-right text-xs text-gray-500 font-mono hidden md:table-cell">{tx.time}</td>
+                                        </tr>
+                                    )}
+                                </For>
+                                <Show when={!props.latestTransactions || props.latestTransactions.length === 0}>
+                                    <tr>
+                                        <td colspan="7" class="p-8 text-center text-gray-500 italic text-sm">
+                                            Loading live network data...
+                                        </td>
+                                    </tr>
+                                </Show>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 {/* Enterprise Footer (Phase 4) */}
