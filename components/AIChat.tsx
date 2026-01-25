@@ -898,136 +898,147 @@ const AIChat = (props: AIChatProps): JSX.Element => {
               <Show when={thinkingSteps().length > 0}>
                 <ThinkingDisplay steps={thinkingSteps()} />
               </Show>
-            </div>
 
-            {/* Footer Area (Modernized Input) */}
-            <div class="p-4 md:p-6 bg-[#161618] border-t border-white/[0.04] relative z-30">
-
-              {/* Attachments Preview Row */}
-              <Presence>
-                <Show when={attachments().length > 0}>
-                  <Motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide"
-                  >
-                    <For each={attachments()}>
-                      {(att, i) => (
-                        <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
-                          <Show when={att.type === 'image'} fallback={
-                            <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
-                              <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
-                                <FileText class="w-7 h-7 text-red-500" />
-                              </Show>
-                              <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
-                            </div>
-                          }>
-                            <img src={att.preview} class="w-full h-full object-cover" />
-                          </Show>
-                          <button
-                            onClick={() => removeAttachment(i())}
-                            class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                          >
-                            <Trash2 class="w-5 h-5 text-red-400" />
-                          </button>
-                        </div>
-                      )}
-                    </For>
-                  </Motion.div>
-                </Show>
-              </Presence>
-
-              <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
-                {/* Plus Button */}
-                <button
-                  onClick={() => fileInputRef?.click()}
-                  class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
-                >
-                  <Plus class="w-6 h-6" />
-                </button>
-                <input
-                  type="file"
-                  multiple
-                  ref={fileInputRef}
-                  class="hidden"
-                  accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  onChange={handleFileSelect}
-                />
-
-                {/* Input TextField */}
-                <textarea
-                  rows={1}
-                  class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
-                  placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
-                  value={input()}
-                  onInput={(e) => {
-                    setInput(e.currentTarget.value);
-                    e.currentTarget.style.height = 'auto';
-                    e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
-                  }}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                />
-
-                {/* Right Tools */}
-                <div class="flex items-center gap-1 px-1">
-                  {/* Language Dropdown */}
-                  <div class="relative group/lang">
-                    <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
-                      <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
-                      <ChevronDown class="w-3.5 h-3.5" />
-                    </button>
-                    <div class="absolute bottom-full right-0 mb-3 w-40 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                      <For each={LANGUAGES}>
-                        {(lang) => (
-                          <button
-                            class={`w-full text-left px-4 py-3 text-[13px] font-medium hover:bg-white/5 transition-colors ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-400'}`}
-                            onClick={() => setVoiceLang(lang.code)}
-                          >
-                            {lang.label}
-                          </button>
+              {/* Footer Area (Modernized Input) */}
+              <div class="p-4 md:p-6 bg-[#161618] border-t border-white/[0.04] relative z-30">
+                {/* ... existing footer content ... */}
+                {/* (I'll just keep the existing code structure but fix the tags) */}
+                <Presence>
+                  {/* (Shortened for brevity in the tool call, but I will replace the exact lines) */}
+                  <Show when={attachments().length > 0}>
+                    <Motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide"
+                    >
+                      <For each={attachments()}>
+                        {(att, i) => (
+                          <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
+                            <Show when={att.type === 'image'} fallback={
+                              <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
+                                <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
+                                  <FileText class="w-7 h-7 text-red-500" />
+                                </Show>
+                                <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
+                              </div>
+                            }>
+                              <img src={att.preview} class="w-full h-full object-cover" />
+                            </Show>
+                            <button
+                              onClick={() => removeAttachment(i())}
+                              class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                            >
+                              <Trash2 class="w-5 h-5 text-red-400" />
+                            </button>
+                          </div>
                         )}
                       </For>
-                    </div>
-                  </div>
+                    </Motion.div>
+                  </Show>
+                </Presence>
 
-                  {/* Mic Button */}
+                <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
+                  {/* Plus Button */}
                   <button
-                    onClick={toggleRecording}
-                    class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    onClick={() => fileInputRef?.click()}
+                    class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
                   >
-                    <Mic class="w-5 h-5" />
+                    <Plus class="w-6 h-6" />
                   </button>
+                  <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    class="hidden"
+                    accept="image/*,application/pdf,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={handleFileSelect}
+                  />
 
-                  {/* Send Button */}
+                  {/* Input TextField */}
+                  <textarea
+                    rows={1}
+                    class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
+                    placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
+                    value={input()}
+                    onInput={(e) => {
+                      setInput(e.currentTarget.value);
+                      e.currentTarget.style.height = 'auto';
+                      e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.isComposing) return;
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                        // Reset height after sending
+                        const target = e.currentTarget;
+                        setTimeout(() => {
+                          target.style.height = 'auto';
+                        }, 0);
+                      }
+                    }}
+                  />
+
+                  {/* Right Tools */}
+                  <div class="flex items-center gap-1 px-1">
+                    {/* Language Dropdown */}
+                    <div class="relative group/lang">
+                      <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
+                        <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
+                        <ChevronDown class="w-3.5 h-3.5" />
+                      </button>
+                      <div class="absolute bottom-full right-0 mb-3 w-40 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                        <For each={LANGUAGES}>
+                          {(lang) => (
+                            <button
+                              class={`w-full text-left px-4 py-3 text-[13px] font-medium hover:bg-white/5 transition-colors ${voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-400'}`}
+                              onClick={() => setVoiceLang(lang.code)}
+                            >
+                              {lang.label}
+                            </button>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+
+                    {/* Mic Button */}
+                    <button
+                      onClick={toggleRecording}
+                      class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Mic class="w-5 h-5" />
+                    </button>
+
+                    {/* Send Button */}
+                    <button
+                      onClick={handleSend}
+                      disabled={(!input().trim() && attachments().length === 0) || isLoading()}
+                      class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${(!input().trim() && attachments().length === 0)
+                        ? 'bg-blue-600/20 text-blue-400/30 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-90 font-black'}`}
+                    >
+                      <Send class="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-center gap-4 mt-4">
+                  <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Vision Architect System</span>
+                  <div class="w-1 h-1 rounded-full bg-gray-700" />
                   <button
-                    onClick={handleSend}
-                    disabled={(!input().trim() && attachments().length === 0) || isLoading()}
-                    class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${(!input().trim() && attachments().length === 0)
-                      ? 'bg-blue-600/20 text-blue-400/30 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 active:scale-90 font-black'}`}
+                    onClick={() => setIsImageGenMode(!isImageGenMode())}
+                    class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isImageGenMode() ? 'text-purple-400' : 'text-gray-600 hover:text-gray-400'}`}
                   >
-                    <Send class="w-5 h-5" />
+                    {isImageGenMode() ? 'Image Mode Active' : 'Standard Mode'}
                   </button>
                 </div>
               </div>
-
-              <div class="flex items-center justify-center gap-4 mt-4">
-                <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Vision Architect System</span>
-                <div class="w-1 h-1 rounded-full bg-gray-700" />
-                <button
-                  onClick={() => setIsImageGenMode(!isImageGenMode())}
-                  class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isImageGenMode() ? 'text-purple-400' : 'text-gray-600 hover:text-gray-400'}`}
-                >
-                  {isImageGenMode() ? 'Image Mode Active' : 'Standard Mode'}
-                </button>
-              </div>
             </div>
           </div>
-        </div>
-      </Motion.div>
-    </Show>
-      </Presence >
+        </Motion.div>
+      </Show>
+    </Presence>
   );
 };
 
