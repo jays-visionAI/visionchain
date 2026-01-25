@@ -68,7 +68,7 @@ import { WalletNodes } from './wallet/WalletNodes';
 import { WalletContacts } from './wallet/WalletContacts';
 import { WalletSettings } from './wallet/WalletSettings';
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -578,6 +578,15 @@ const Wallet = (): JSX.Element => {
     createEffect(() => {
         if (onboardingStep() > 0 && activeView() !== 'profile') {
             setActiveView('profile');
+        }
+    });
+
+    // Handle History View (Open Full Chat Popup)
+    createEffect(() => {
+        if (activeView() === 'history') {
+            setShowChat(true);
+            // Reset active view to previous or default so clicking again works if closed
+            setActiveView('chat');
         }
     });
 
@@ -1203,6 +1212,7 @@ Final network context: ${networkMode()}.
                             userProfile={userProfile}
                             onboardingStep={onboardingStep}
                             networkMode={networkMode()}
+                            openHistory={() => setShowChat(true)}
                         />
                     </Show>
 

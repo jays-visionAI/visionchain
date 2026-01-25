@@ -13,7 +13,8 @@ import {
     Zap,
     Plus,
     Mic,
-    Paperclip
+    Paperclip,
+    Clock
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -29,6 +30,7 @@ interface WalletDashboardProps {
     userProfile: () => any;
     onboardingStep: () => number;
     networkMode: 'mainnet' | 'testnet';
+    openHistory?: () => void;
 }
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
@@ -259,6 +261,14 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 {/* Left Tools (Attachments/Plus) */}
                                 <button class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 group/btn">
                                     <Plus class="w-5 h-5 group-hover/btn:rotate-90 transition-transform duration-300" />
+                                </button>
+
+                                <button
+                                    onClick={() => props.openHistory?.()}
+                                    class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/5 transition-all flex-shrink-0 group/history"
+                                    title="View Chat History"
+                                >
+                                    <Clock class="w-5 h-5 group-hover/history:scale-110 transition-transform duration-300" />
                                 </button>
 
                                 {/* Textarea Area - Removed inner border to solve 'grey box' issue */}

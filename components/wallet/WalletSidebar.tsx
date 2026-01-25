@@ -13,10 +13,11 @@ import {
     Copy,
     Check,
     LogOut,
-    X
+    X,
+    Clock
 } from 'lucide-solid';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -42,6 +43,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'campaign' as ViewType, label: 'Campaign', icon: Zap },
         { id: 'mint' as ViewType, label: 'Mint', icon: Plus },
         { id: 'contacts' as ViewType, label: 'Address Book', icon: Users },
+        { id: 'history' as ViewType, label: 'History', icon: Clock },
         { id: 'profile' as ViewType, label: 'Profile', icon: User },
         { id: 'settings' as ViewType, label: 'Settings', icon: Settings },
     ];
