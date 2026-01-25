@@ -1302,6 +1302,17 @@ export const saveConversation = async (conversation: Omit<AiConversation, 'id' |
     }
 };
 
+export const deleteConversation = async (id: string): Promise<boolean> => {
+    try {
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'conversations', id));
+        return true;
+    } catch (e) {
+        console.error("Delete conversation failed:", e);
+        return false;
+    }
+};
+
 export const getUserConversations = async (userId: string, limitCount: number = 30): Promise<AiConversation[]> => {
     try {
         const db = getFirebaseDb();

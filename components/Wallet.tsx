@@ -50,7 +50,11 @@ import {
     getUserData,
     VcnPurchase,
     updateUserData,
-    resolveRecipient
+    resolveRecipient,
+    getUserConversations,
+    saveConversation,
+    deleteConversation,
+    AiConversation
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
@@ -248,6 +252,50 @@ const Wallet = (): JSX.Element => {
     const [sidebarOpen, setSidebarOpen] = createSignal(false);
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
+    const [lastLocale, setLastLocale] = createSignal<'ko' | 'en'>('ko');
+    const detectLanguage = (text: string) => {
+        return (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) ? 'ko' : 'en';
+    };
+
+    const [chatHistory, setChatHistory] = createSignal<AiConversation[]>([]);
+    const [currentSessionId, setCurrentSessionId] = createSignal<string | null>(null);
+
+    const fetchHistory = async () => {
+        if (!userProfile().email) return;
+        const data = await getUserConversations(userProfile().email);
+        setChatHistory(data);
+    };
+
+    const selectConversation = (conv: AiConversation) => {
+        setCurrentSessionId(conv.id);
+        setMessages(conv.messages.map(m => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.text
+        })));
+        setActiveView('chat');
+    };
+
+    const startNewChat = () => {
+        setCurrentSessionId(null);
+        setMessages([{ role: 'assistant', content: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }]);
+        setActiveView('chat');
+    };
+
+    const handleDeleteConversation = async (id: string) => {
+        const success = await deleteConversation(id);
+        if (success) {
+            setChatHistory(prev => prev.filter(c => c.id !== id));
+            if (currentSessionId() === id) {
+                startNewChat();
+            }
+        }
+    };
+
+    createEffect(() => {
+        if (userProfile().email) {
+            fetchHistory();
+        }
+    });
     const [chatLoading, setChatLoading] = createSignal(false); // Dedicated loading for chat
     const [messages, setMessages] = createSignal<Message[]>([]);
     const [marketData, setMarketData] = createSignal<Map<string, CoinGeckoToken>>(new Map());
@@ -409,6 +457,38 @@ const Wallet = (): JSX.Element => {
 
                 setFlowSuccess(true);
                 setFlowStep(3);
+
+                // Add AI Success Message in Chat
+                const successMsg = lastLocale() === 'ko'
+                    ? `성공적으로 ${amount} ${symbol} 전송을 완료했습니다! 🚀 거래가 네트워크에 안전하게 기록되었으며, 이제 잔액이 곧 업데이트될 예정입니다. 추가로 도와드릴 일이 있을까요?`
+                    : `Successfully sent ${amount} ${symbol}! 🚀 The transaction is recorded, and your balance will be updated shortly. Is there anything else I can help with?`;
+
+                setMessages(prev => [...prev, { role: 'assistant', content: successMsg }]);
+
+                // Persist the success message to history
+                if (userProfile().email) {
+                    const convMessages = [...messages()].map(m => ({
+                        role: m.role,
+                        text: m.content,
+                        timestamp: new Date().toISOString()
+                    }));
+
+                    saveConversation(
+                        {
+                            userId: userProfile().email,
+                            botType: 'intent',
+                            messages: convMessages,
+                            lastMessage: successMsg,
+                            status: 'completed'
+                        },
+                        currentSessionId() || undefined
+                    ).then(id => {
+                        if (id) {
+                            setCurrentSessionId(id);
+                            fetchHistory();
+                        }
+                    });
+                }
 
                 // Refresh balances immediately
                 setTimeout(fetchPortfolioData, 1000);
@@ -990,6 +1070,7 @@ const Wallet = (): JSX.Element => {
         if (!input().trim() || chatLoading()) return;
 
         const userMessage = input().trim();
+        setLastLocale(detectLanguage(userMessage));
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setInput('');
         setChatLoading(true);
@@ -1078,10 +1159,47 @@ Final network context: ${networkMode()}.
             }
 
             if (!cleanResponse && intentData) {
-                cleanResponse = `I've prepared the ${intentData.intent} transaction for you. Please review the details in the modal.`;
+                if (lastLocale() === 'ko') {
+                    const intentMap: Record<string, string> = {
+                        'send': '이체',
+                        'swap': '교환',
+                        'stake': '스테이킹',
+                        'bridge': '브릿지',
+                        'schedule': '예약 이체'
+                    };
+                    const intentName = intentMap[intentData.intent] || '거래';
+                    cleanResponse = `요청하신 대로 ${intentName} 준비를 마쳤습니다. 화면에 나타난 상세 내역을 확인하신 뒤 진행해 주세요!`;
+                } else {
+                    cleanResponse = `I've prepared the ${intentData.intent} transaction for you. Please review the details on your screen to proceed!`;
+                }
             }
 
             setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
+
+            // SAVE TO FIREBASE
+            if (userProfile().email) {
+                const convMessages = [...messages()].map(m => ({
+                    role: m.role,
+                    text: m.content,
+                    timestamp: new Date().toISOString()
+                }));
+
+                const savedId = await saveConversation(
+                    {
+                        userId: userProfile().email,
+                        botType: 'intent',
+                        messages: convMessages,
+                        lastMessage: convMessages[convMessages.length - 1]?.text || '',
+                        status: 'completed'
+                    },
+                    currentSessionId() || undefined
+                );
+
+                if (savedId) {
+                    setCurrentSessionId(savedId);
+                    fetchHistory();
+                }
+            }
         } catch (error) {
             console.error('AI Error:', error);
             setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error while processing your request. The system might be busy or undergoing maintenance. Please try again later." }]);
@@ -1092,11 +1210,6 @@ Final network context: ${networkMode()}.
 
     const handleSuggestion = (text: string) => {
         setInput(text);
-    };
-
-    const startNewChat = () => {
-        setMessages([]);
-        setActiveView('chat');
     };
 
     const handleRestoreWallet = async () => {
@@ -1227,6 +1340,11 @@ Final network context: ${networkMode()}.
                             onboardingStep={onboardingStep}
                             networkMode={networkMode()}
                             openHistory={() => setShowChat(true)}
+                            history={chatHistory}
+                            currentSessionId={currentSessionId}
+                            onSelectConversation={selectConversation}
+                            onNewChat={startNewChat}
+                            onDeleteConversation={handleDeleteConversation}
                         />
                     </Show>
 

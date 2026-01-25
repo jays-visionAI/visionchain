@@ -68,7 +68,11 @@ export const generateText = async (
 Date: ${now.toLocaleDateString()}
 Time: ${now.toLocaleTimeString()}
 Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-Locale: ${navigator.language}`;
+Locale: ${navigator.language}
+
+[Language Rule]
+Always respond in the same language used by the user in their most recent message. 
+Unless explicitly requested otherwise by the user, you MUST match their language exactly (e.g., if the user asks in Korean, answer in Korean; if in English, answer in English).`;
 
         const dynamicSystemPrompt = config.systemPrompt
             ? `${config.systemPrompt}\n\n${localeInfo}`

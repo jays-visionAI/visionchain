@@ -14,7 +14,10 @@ import {
     Plus,
     Mic,
     Paperclip,
-    Clock
+    Clock,
+    BookOpen,
+    Trash2,
+    MessageSquare
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -31,6 +34,11 @@ interface WalletDashboardProps {
     onboardingStep: () => number;
     networkMode: 'mainnet' | 'testnet';
     openHistory?: () => void;
+    history: () => any[];
+    currentSessionId: () => string | null;
+    onSelectConversation: (conv: any) => void;
+    onNewChat: () => void;
+    onDeleteConversation: (id: string) => void;
 }
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
@@ -337,8 +345,67 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             </div>
 
             {/* Right Sidebar - Assets & Campaigns */}
-            <div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block">
+            <div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block scrollbar-hide">
                 <div class="p-6 space-y-6">
+
+                    {/* Conversation History Section - Added at the top right */}
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between px-1">
+                            <div class="flex items-center gap-2">
+                                <MessageSquare class="w-4 h-4 text-purple-400" />
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">대화 기록</span>
+                            </div>
+                            <button
+                                onClick={() => props.onNewChat()}
+                                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold rounded-lg transition-all shadow-lg active:scale-95"
+                            >
+                                새 대화
+                            </button>
+                        </div>
+
+                        <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                            <Show when={props.history().length === 0}>
+                                <div class="py-6 text-center bg-white/[0.02] border border-white/[0.04] rounded-2xl">
+                                    <p class="text-[9px] text-gray-600 font-bold uppercase tracking-widest">No history yet</p>
+                                </div>
+                            </Show>
+                            <For each={props.history()}>
+                                {(conv) => (
+                                    <div class="group relative">
+                                        <button
+                                            onClick={() => props.onSelectConversation(conv)}
+                                            class={`w-full p-3.5 rounded-2xl text-left transition-all border ${props.currentSessionId() === conv.id
+                                                ? 'bg-purple-600/10 border-purple-500/30 ring-1 ring-purple-500/20'
+                                                : 'bg-[#18181b]/40 border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.02]'
+                                                }`}
+                                        >
+                                            <div class="flex flex-col gap-1.5">
+                                                <span class={`text-[12px] font-semibold truncate pr-6 ${props.currentSessionId() === conv.id ? 'text-purple-400' : 'text-gray-200'}`}>
+                                                    {conv.messages[0]?.text || 'New Session'}
+                                                </span>
+                                                <div class="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase tracking-wider">
+                                                    <span>{new Date(conv.updatedAt || conv.createdAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</span>
+                                                    <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                                    <span>{conv.messages.length} msgs</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                props.onDeleteConversation(conv.id);
+                                            }}
+                                            class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all bg-[#1a1a1c]"
+                                        >
+                                            <Trash2 class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+                            </For>
+                        </div>
+                    </div>
+
+                    <div class="h-px bg-white/[0.04] w-full" />
 
                     {/* Portfolio Overview */}
                     <div class="relative overflow-hidden group">
@@ -474,35 +541,6 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    {/* System Health & User Info */}
-                    <div class="grid grid-cols-2 gap-3 pt-4">
-                        <div class="col-span-2 p-3 bg-white/[0.02] border border-white/[0.04] rounded-2xl flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shrink-0">
-                                <User class="w-4 h-4 text-white" />
-                            </div>
-                            <div class="overflow-hidden">
-                                <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Logged In As</div>
-                                <div class="text-[11px] font-bold text-white truncate w-full" title={props.userProfile().email}>{props.userProfile().email}</div>
-                            </div>
-                        </div>
-
-                        <div class="p-3 bg-white/[0.02] border border-white/[0.04] rounded-2xl">
-                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Network</div>
-                            <div class="flex items-center gap-2">
-                                <div class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
-                                <span class="text-[12px] font-bold text-white">Connected</span>
-                            </div>
-                        </div>
-                        <div class="p-3 bg-white/[0.02] border border-white/[0.04] rounded-2xl">
-                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Gas Priority</div>
-                            <div class="flex items-center gap-2">
-                                <Zap class="w-3 h-3 text-amber-400" />
-                                <span class="text-[12px] font-bold text-white">0.002 VCN</span>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
             </div>
