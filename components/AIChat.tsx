@@ -3,7 +3,7 @@ import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages, Search, Lightbulb } from 'lucide-solid';
 import { getAudioContext, getAiInstance, createPcmBlob, base64ToArrayBuffer, decodeRawPcm } from '../services/ai/utils';
-import { getChatbotSettings, getProviderFromModel, getUserConversations, getConversationById, saveConversation, AiConversation } from '../services/firebaseService';
+import { getChatbotSettings, getProviderFromModel, getUserConversations, getConversationById, saveConversation, AiConversation, subscribeToQueue } from '../services/firebaseService';
 import { generateText, generateImage, generateSpeech } from '../services/ai';
 import { Message, AspectRatio } from '../types';
 import { Modality, LiveServerMessage } from "@google/genai";
@@ -13,6 +13,9 @@ import { actionResolver } from '../services/actionResolver';
 import TransactionCard from './TransactionCard';
 import { contractService } from '../services/contractService';
 import { useAuth } from './auth/authContext';
+import { AgentTask } from './chat/queue/AgentChip';
+import ChatQueueLine from './chat/queue/ChatQueueLine';
+import QueueDrawer from './chat/queue/QueueDrawer';
 
 interface AIChatProps {
   isOpen: boolean;
@@ -144,6 +147,29 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [useFastModel, setUseFastModel] = createSignal(false);
   const [aspectRatio, setAspectRatio] = createSignal<AspectRatio>(AspectRatio.Square);
 
+  // --- History & Session State ---
+  const { user } = useAuth();
+  const [history, setHistory] = createSignal<AiConversation[]>([]);
+  const [currentSessionId, setCurrentSessionId] = createSignal<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = createSignal(true);
+
+  // -- Real-time Queue Data --
+  const [queueTasks, setQueueTasks] = createSignal<AgentTask[]>([]);
+
+  // Real-time Subscription
+  createEffect(() => {
+    if (!user()) {
+      setQueueTasks([]);
+      return;
+    }
+
+    const unsubscribe = subscribeToQueue(user()!.email, (tasks) => {
+      setQueueTasks(tasks);
+    });
+
+    onCleanup(() => unsubscribe());
+  });
+
   // --- Admin Configured Settings ---
   const [activeProvider, setActiveProvider] = createSignal<string>('');
   const [modelLabel, setModelLabel] = createSignal<string>('');
@@ -158,14 +184,32 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [isImageGenMode, setIsImageGenMode] = createSignal(false);
   const [isComposing, setIsComposing] = createSignal(false);
 
+  // -- Queue Drawer State --
+  const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
+  const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
+  const [isQueueCompact, setIsQueueCompact] = createSignal(false); // Compact Mode State
+
+  // -- Scroll Listener for Compact Mode --
+  createEffect(() => {
+    const el = scrollRef;
+    if (!el) return;
+
+    const handleScroll = () => {
+      setIsQueueCompact(el.scrollTop > 20); // Switch to compact early
+    };
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    onCleanup(() => el.removeEventListener('scroll', handleScroll));
+  });
+
   // --- Thinking Steps (Progress) ---
   const [thinkingSteps, setThinkingSteps] = createSignal<{ id: string, label: string, status: 'pending' | 'loading' | 'completed' | 'success' }[]>([]);
 
   // --- History & Session State ---
-  const { user } = useAuth();
-  const [history, setHistory] = createSignal<AiConversation[]>([]);
-  const [currentSessionId, setCurrentSessionId] = createSignal<string | null>(null);
-  const [isHistoryOpen, setIsHistoryOpen] = createSignal(true);
+  // --- History & Session State (Duplicate declarations removed here) ---
+  // The state variables 'user', 'history', 'currentSessionId', 'isHistoryOpen' 
+  // are already declared above around line 150.
+  // We keep the Refs here.
 
   // --- Refs ---
   let scrollRef: HTMLDivElement | undefined;
@@ -832,6 +876,28 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                 </div>
               </div>
 
+              {/* NEW: Chat Queue Line (Sticky below header) */}
+              <ChatQueueLine
+                tasks={queueTasks()}
+                isCompact={isQueueCompact()}
+                onTaskClick={(id) => {
+                  setSelectedTaskId(id);
+                  setIsQueueDrawerOpen(true);
+                }}
+                onOpenHistory={() => {
+                  setSelectedTaskId(null);
+                  setIsQueueDrawerOpen(true);
+                }}
+              />
+
+              {/* NEW: Queue Drawer (Overlay) */}
+              <QueueDrawer
+                isOpen={isQueueDrawerOpen()}
+                onClose={() => setIsQueueDrawerOpen(false)}
+                tasks={queueTasks()}
+                focusedTaskId={selectedTaskId()}
+              />
+
               {/* Live Mode Overlay */}
               <Show when={isLiveMode()}>
                 {/* ... reuse existing live mode display or simplified ... */}
@@ -878,12 +944,41 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                           <div class="whitespace-pre-wrap">{msg.text}</div>
 
                           {/* RENDER TRANSACTION CARD IF ACTION EXISTS */}
-                          <Show when={msg.action}>
+                          <Show when={msg.action && msg.action.type !== 'MESSAGE' && msg.action.type !== 'ERROR'}>
                             <div class="mt-4">
                               <TransactionCard
-                                action={msg.action}
-                                onComplete={handleTxComplete}
-                                onCancel={() => { }}
+                                action={msg.action!}
+                                onComplete={(hash) => {
+                                  handleTxComplete(hash);
+                                  // Trigger feedback for Scheduled Transfer
+                                  if (msg.action?.visualization?.type === 'SCHEDULE') {
+                                    setMessages(prev => [...prev, {
+                                      role: 'model',
+                                      text: `Scheduled Transfer Confirmed! Check the Queue above for status.`
+                                    }]);
+                                  }
+                                }}
+                                onCancel={() => {
+                                  // Remove action card or just reset
+                                  setMessages(prev => prev.filter(m => m !== msg));
+                                }}
+                                onOptimisticSchedule={(taskData) => {
+                                  // Immediately show in Queue
+                                  setQueueTasks(prev => {
+                                    // Avoid duplicate if already exists
+                                    if (prev.find(t => t.id === taskData.id)) return prev;
+                                    const newTask: AgentTask = {
+                                      ...taskData,
+                                      type: 'TIMELOCK',
+                                      status: 'WAITING',
+                                      recipient: msg.action?.visualization?.recipient || '',
+                                      amount: msg.action?.visualization?.amount || '',
+                                      token: msg.action?.visualization?.asset || 'VCN'
+                                    };
+                                    // Add to top/sorted
+                                    return [newTask, ...prev];
+                                  });
+                                }}
                               />
                             </div>
                           </Show>

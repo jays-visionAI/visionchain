@@ -1,3 +1,4 @@
+import { ethers } from 'ethers';
 import { createSignal, Show } from 'solid-js';
 import { contractService } from '../services/contractService';
 import { ArrowRight, ArrowUpRight, RefreshCw, Check, X, Zap, Clock } from 'lucide-solid';
@@ -21,6 +22,7 @@ interface TransactionCardProps {
     action: ProposedAction;
     onComplete: (txHash: string) => void;
     onCancel: () => void;
+    onOptimisticSchedule?: (taskData: any) => void;
 }
 
 const TransactionCard = (props: TransactionCardProps) => {
@@ -50,7 +52,46 @@ const TransactionCard = (props: TransactionCardProps) => {
                 value: props.action.data.value
             });
 
-            await txResponse.wait();
+            console.log("Transaction sent:", txResponse.hash);
+            const receipt = await txResponse.wait();
+
+            // Only for Scheduled Transfers: Parse logs to get Queue ID immediately
+            if (props.action.visualization?.type === 'SCHEDULE' && props.onOptimisticSchedule) {
+                try {
+                    // TimeLockAgent ABI (NativeTransferScheduled event)
+                    // event NativeTransferScheduled(bytes32 indexed scheduleId, address indexed sender, address indexed recipient, uint256 amount, uint256 unlockTime);
+                    const iface = new ethers.Interface([
+                        "event NativeTransferScheduled(bytes32 indexed scheduleId, address indexed sender, address indexed recipient, uint256 amount, uint256 unlockTime)"
+                    ]);
+
+                    let scheduleId = '';
+                    let unlockTime = 0;
+
+                    for (const log of receipt.logs) {
+                        try {
+                            const parsed = iface.parseLog(log);
+                            if (parsed && parsed.name === 'NativeTransferScheduled') {
+                                scheduleId = parsed.args.scheduleId;
+                                unlockTime = Number(parsed.args.unlockTime);
+                                break;
+                            }
+                        } catch (e) { continue; }
+                    }
+
+                    if (scheduleId) {
+                        props.onOptimisticSchedule({
+                            id: scheduleId,
+                            summary: `${props.action.visualization.amount} ${props.action.visualization.asset} → ${props.action.visualization.recipient?.slice(0, 6)}...`,
+                            timeLeft: props.action.visualization.scheduleTime,
+                            timestamp: Date.now(),
+                            // We can approximate status or assume WAITING
+                        });
+                    }
+                } catch (logErr) {
+                    console.warn("Failed to parse schedule logs:", logErr);
+                }
+            }
+
             props.onComplete(txResponse.hash);
         } catch (err: any) {
             console.error(err);

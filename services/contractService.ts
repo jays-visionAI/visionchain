@@ -440,6 +440,19 @@ export class ContractService {
         return ethers.formatEther(balance);
     }
 
+    // --- TimeLock Agent Functions ---
+    async cancelScheduledTransfer(scheduleId: string) {
+        if (!this.signer) throw new Error("Wallet not connected");
+
+        // Ensure TimeLock ABI is available (Using minimal ABI for cancel)
+        const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
+        const abi = ["function cancelTransfer(bytes32 scheduleId) external"];
+        const contract = new ethers.Contract(timelockAddress, abi, this.signer);
+
+        const tx = await contract.cancelTransfer(scheduleId);
+        return await tx.wait();
+    }
+
     // --- Admin Functions ---
     async createVestingSchedule(
         beneficiary: string,

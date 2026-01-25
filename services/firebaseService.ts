@@ -16,7 +16,8 @@ import {
     where,
     updateDoc,
     addDoc,
-    initializeFirestore
+    initializeFirestore,
+    onSnapshot
 } from 'firebase/firestore';
 import { firebaseConfig } from '../config/firebase.config';
 
@@ -742,6 +743,102 @@ export interface TokenSaleEntry {
     walletAddress?: string; // Updated when user connects wallet
     vestingTx?: string; // Updated when admin deploys vesting
 }
+
+// --- Scheduled Task Queue Subscription ---
+export const subscribeToQueue = (
+    userEmail: string,
+    callback: (tasks: any[]) => void
+) => {
+    const db = getFirebaseDb();
+    const q = query(
+        collection(db, 'scheduledTransfers'),
+        where('userEmail', '==', userEmail.toLowerCase())
+    );
+
+    // Assuming onSnapshot is imported or available. If not, add to imports.
+    // Re-using the top-level imports structure.
+
+    return onSnapshot(q, (snapshot: any) => {
+        const tasks = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            let status = 'WAITING';
+            // Map DB status to UI status
+            if (data.status === 'executed') status = 'SENT';
+            else if (data.status === 'failed') status = 'FAILED';
+            else if (data.status === 'cancelled') status = 'CANCELLED';
+            else if (data.status === 'pending') {
+                // Check if executing (optimistic or separate flag)
+                // For now maps to WAITING.
+                // If we had 'processing' in DB, map to EXECUTING
+                status = 'WAITING';
+            }
+
+            // Calculate relative time or formatted time
+            const unlockTime = data.unlockTime; // Unix timestamp (seconds)
+            const now = Math.floor(Date.now() / 1000);
+            const diff = unlockTime - now;
+            let timeLeft = '';
+
+            if (status === 'WAITING') {
+                if (diff > 0) {
+                    if (diff > 3600) timeLeft = `In ${Math.ceil(diff / 3600)}h`;
+                    else timeLeft = `In ${Math.ceil(diff / 60)}m`;
+                } else {
+                    timeLeft = 'Processing...';
+                    status = 'EXECUTING'; // Optimistic status when time passed
+                }
+            } else {
+                timeLeft = new Date(unlockTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+
+            return {
+                id: doc.id,
+                type: 'TIMELOCK',
+                summary: `${data.amount} ${data.token} → ${data.recipient.slice(0, 6)}...`,
+                status: status,
+                timeLeft: timeLeft,
+                timestamp: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
+                // Extra fields for Drawer
+                recipient: data.recipient,
+                amount: data.amount,
+                token: data.token,
+                scheduleId: doc.id,
+                txHash: data.executionTx || data.creationTx
+            };
+        });
+
+        // Sort: Active (EXECUTING > WAITING) first, then by time
+        const sorted = tasks.sort((a: any, b: any) => {
+            // 1. Status Priority
+            const priority = (s: string) => {
+                if (s === 'EXECUTING') return 0;
+                if (s === 'WAITING') return 1;
+                return 2; // History
+            };
+            if (priority(a.status) !== priority(b.status)) return priority(a.status) - priority(b.status);
+
+            // 2. Time (Ascending for Waiting/Active, Descending for History)
+            if (priority(a.status) < 2) return a.timestamp - b.timestamp; // Nearest first
+            return b.timestamp - a.timestamp; // Newest finished first
+        });
+
+        callback(sorted);
+    });
+};
+
+export const cancelScheduledTask = async (scheduleId: string) => {
+    const db = getFirebaseDb();
+    // In real app, we call Smart Contract cancel first!
+    // Here we just update DB to 'cancelled' for UI demo
+    try {
+        const docRef = doc(db, 'scheduledTransfers', scheduleId);
+        await updateDoc(docRef, { status: 'cancelled' });
+        return true;
+    } catch (e) {
+        console.error("Cancel failed:", e);
+        throw e;
+    }
+};
 
 export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     const db = getFirebaseDb();
