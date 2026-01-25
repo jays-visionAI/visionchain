@@ -1,13 +1,14 @@
 import { contractService } from './contractService';
 
 export interface UserIntent {
-    action: 'TRANSFER' | 'BRIDGE' | 'SWAP_AND_SEND' | 'UNKNOWN';
+    action: 'TRANSFER' | 'BRIDGE' | 'SWAP_AND_SEND' | 'SCHEDULE_TRANSFER' | 'UNKNOWN';
     params: {
         to?: string; // e.g. "jays" or "0x..."
         token?: string; // "VCN", "USDC"
         amount?: string;
         sourceChain?: string;
         destinationChain?: string; // "ETHEREUM", "POLYGON"
+        scheduleTime?: string; // "30m", "1h"
     };
     raw: string;
     confidence: number;
@@ -31,7 +32,12 @@ export class IntentParserService {
             return this.parseBridgeIntent(input);
         }
 
-        // 2. Detect "Send" Intent (possibly Auto-Swap)
+        // 2. Detect "Schedule" Intent
+        if ((lower.includes('send') || lower.includes('transfer')) && (lower.includes(' in ') || lower.includes(' after '))) {
+            return this.parseScheduledTransfer(input);
+        }
+
+        // 3. Detect "Send" Intent (possibly Auto-Swap)
         if (lower.includes('send') || lower.includes('pay') || lower.includes('transfer')) {
             return this.parseTransferIntent(input);
         }
@@ -94,6 +100,32 @@ export class IntentParserService {
             raw: input,
             confidence: 0.9,
             explanation: explanation
+        };
+    }
+
+    private async parseScheduledTransfer(input: string): Promise<UserIntent> {
+        // Regex: "Send 10 VCN to @jays in 30 mins"
+        const regex = /(?:send|pay|transfer)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:to|for)\s+(@?[a-zA-Z0-9]+)\s+(?:in|after)\s+(\d+)\s*(mins?|minutes?|hours?|h|m)/i;
+        const match = input.match(regex);
+
+        if (!match) {
+            return this.parseTransferIntent(input); // Fallback to normal transfer if time parse fails
+        }
+
+        const [_, amount, token, recipient, timeVal, timeUnit] = match;
+        const timeStr = `${timeVal} ${timeUnit}`;
+
+        return {
+            action: 'SCHEDULE_TRANSFER',
+            params: {
+                to: recipient,
+                token: token.toUpperCase(),
+                amount: amount,
+                scheduleTime: timeStr
+            },
+            raw: input,
+            confidence: 0.95,
+            explanation: `I will schedule a transfer of ${amount} ${token} to ${recipient} in ${timeStr}. funds will be locked now.`
         };
     }
 

@@ -7,16 +7,22 @@ export interface ProposedAction {
     summary: string;
     data?: any; // Populated Transaction or arbitrary data
     visualization?: {
-        type: 'TRANSFER' | 'BRIDGE' | 'SWAP';
+        type: 'TRANSFER' | 'BRIDGE' | 'SWAP' | 'SCHEDULE';
         asset: string;
         amount: string;
         fromChain?: string;
         toChain?: string;
         recipient?: string;
+        scheduleTime?: string;
     };
 }
 
 export class ActionResolverService {
+
+    TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
+    TIMELOCK_ABI = [
+        "function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)"
+    ];
 
     constructor() { }
 
@@ -32,6 +38,8 @@ export class ActionResolverService {
                     return this.resolveBridge(intent, userAddress);
                 case 'SWAP_AND_SEND':
                     return this.resolveSwapAndSend(intent, userAddress);
+                case 'SCHEDULE_TRANSFER':
+                    return this.resolveScheduledTransfer(intent, userAddress);
                 case 'UNKNOWN':
                     return {
                         type: 'MESSAGE',
@@ -88,6 +96,96 @@ export class ActionResolverService {
                 asset: token,
                 amount: amount,
                 recipient: to
+            }
+        };
+    }
+
+    private async resolveScheduledTransfer(intent: UserIntent, userAddress: string): Promise<ProposedAction> {
+        const { to, amount, token, scheduleTime } = intent.params;
+        if (!to || !amount || !scheduleTime) throw new Error("Missing params for Scheduled Transfer");
+
+        // --- Chunk 6: Cost Control Policy Checks ---
+        // 1. Minimum Amount Check (Min: 0.1 VCN)
+        if (parseFloat(amount) < 0.1) {
+            return {
+                type: 'ERROR',
+                summary: "Cost Control: Minimum scheduled transfer amount is 0.1 VCN."
+            };
+        }
+
+        // 2. Calculate Unlock Time & Check Minimum Duration (Min: 2 minutes)
+        // scheduleTime format: "30 mins", "1 hour"
+        const now = Math.floor(Date.now() / 1000);
+        let durationSeconds = 0;
+
+        const numeric = parseInt(scheduleTime.match(/\d+/)?.[0] || "0");
+        if (scheduleTime.includes('min')) durationSeconds = numeric * 60;
+        else if (scheduleTime.includes('hour') || scheduleTime.includes('h')) durationSeconds = numeric * 3600;
+        else durationSeconds = numeric;
+
+        if (durationSeconds < 120) { // 2 minutes
+            return {
+                type: 'ERROR',
+                summary: "Cost Control: Minimum schedule duration is 2 minutes."
+            };
+        }
+
+        // 3. Quota Check (Simulation using LocalStorage)
+        // In Prod: Check Firebase/Auth User metadata
+        const today = new Date().toISOString().split('T')[0];
+        const dailyKey = `quota_day_${userAddress}_${today}`;
+        const hourlyKey = `quota_hour_${userAddress}_${new Date().getHours()}`;
+
+        const dailyCount = parseInt(localStorage.getItem(dailyKey) || '0');
+        const hourlyCount = parseInt(localStorage.getItem(hourlyKey) || '0');
+
+        if (dailyCount >= 20) {
+            return {
+                type: 'ERROR',
+                summary: "Daily Quota Exceeded (20/day). Please try again tomorrow."
+            };
+        }
+        if (hourlyCount >= 5) {
+            return {
+                type: 'ERROR',
+                summary: "Hourly Quota Exceeded (5/hour). Please try again later."
+            };
+        }
+
+        // Increment Quota (Optimistic)
+        // Ideally this should happen AFTER tx confirmation, but for cost control acting early is safer for MVP
+        localStorage.setItem(dailyKey, (dailyCount + 1).toString());
+        localStorage.setItem(hourlyKey, (hourlyCount + 1).toString());
+
+        const unlockTime = now + durationSeconds;
+
+        // 4. Resolve Recipient
+        let recipientAddr = to;
+        if (to.startsWith('@')) {
+            if (to.toLowerCase() === '@jays') recipientAddr = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+            else recipientAddr = "0x0000000000000000000000000000000000000000";
+        }
+
+        // 5. Prepare TimeLock Contract Call
+        // This is a Native Transfer schedule, so we send Value with the call
+        const iface = new ethers.Interface(this.TIMELOCK_ABI);
+        const data = iface.encodeFunctionData("scheduleTransferNative", [recipientAddr, unlockTime]);
+        const amountWei = ethers.parseEther(amount);
+
+        return {
+            type: 'TRANSACTION',
+            summary: `Schedule transfer of ${amount} ${token || 'VCN'} to ${to} in ${scheduleTime}`,
+            data: {
+                to: this.TIMELOCK_ADDRESS,
+                data: data,
+                value: amountWei.toString() // Native value to lock
+            },
+            visualization: {
+                type: 'SCHEDULE',
+                asset: token || 'VCN',
+                amount: amount,
+                recipient: to,
+                scheduleTime: scheduleTime
             }
         };
     }

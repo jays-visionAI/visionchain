@@ -12,6 +12,8 @@ const ADDRESSES = {
     NODE_LICENSE: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
     MINING_POOL: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     VCN_VESTING: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb", // Deployed to Vision Testnet
+    TIME_LOCK_AGENT_MOCK: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 
     // V2 Security Core (Hardened)
     VISION_EQUALIZER: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788", // EqualizerV2
@@ -20,13 +22,14 @@ const ADDRESSES = {
 
     // Vision Chain RPC Resource Pool (High Availability)
     RPC_NODES: [
+        "https://vpioneer.infragrid.v.network/ethereum/compatible", // Vpioneer Testnet
         "https://api.visionchain.co/rpc-proxy", // Resilient Proxy (Express-based)
         "https://api.visionchain.co",           // Root API
         "https://rpc.visionchain.co",           // Primary Domain
         "http://46.224.221.201:8545",           // Direct Node #1
         "https://api.visionchain.co/rpc"        // Direct Node #2 (Load Balanced)
     ],
-    RPC_URL: "https://api.visionchain.co/rpc-proxy",
+    RPC_URL: "https://vpioneer.infragrid.v.network/ethereum/compatible",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
 
     // Interoperability (Equalizer Model)

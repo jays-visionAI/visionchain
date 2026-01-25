@@ -1,18 +1,19 @@
 import { createSignal, Show } from 'solid-js';
 import { contractService } from '../services/contractService';
-import { ArrowRight, ArrowUpRight, RefreshCw, Check, X, Zap } from 'lucide-solid';
+import { ArrowRight, ArrowUpRight, RefreshCw, Check, X, Zap, Clock } from 'lucide-solid';
 
 interface ProposedAction {
     type: 'TRANSACTION' | 'MESSAGE' | 'ERROR';
     summary: string;
     data?: any;
     visualization?: {
-        type: 'TRANSFER' | 'BRIDGE' | 'SWAP';
+        type: 'TRANSFER' | 'BRIDGE' | 'SWAP' | 'SCHEDULE';
         asset: string;
         amount: string;
         fromChain?: string;
         toChain?: string;
         recipient?: string;
+        scheduleTime?: string; // New: "30 mins"
     };
 }
 
@@ -65,7 +66,10 @@ const TransactionCard = (props: TransactionCardProps) => {
         <Show when={props.action.type !== 'MESSAGE' && props.action.type !== 'ERROR'}>
             <div class="p-4 my-2 bg-[#0d0d0f] border border-white/10 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-md">
                 <div class="flex items-center justify-between mb-3">
-                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Show when={viz()?.type === 'SCHEDULE'}>
+                            <Clock class="w-3 h-3 text-orange-400" />
+                        </Show>
                         {viz()?.type} REQUEST
                     </span>
                     <div class="flex gap-2">
@@ -84,22 +88,39 @@ const TransactionCard = (props: TransactionCardProps) => {
                     <div class="text-2xl font-bold text-white mb-1 flex items-baseline gap-2">
                         {viz()?.amount} <span class="text-lg text-gray-400">{viz()?.asset}</span>
                     </div>
-                    <div class="flex items-center text-gray-400 text-xs font-medium">
-                        <Show when={viz()?.type === 'BRIDGE'} fallback={
-                            <>
-                                <span>To:</span>
-                                <span class="ml-2 font-mono bg-black/30 px-2 py-1 rounded text-gray-300">
-                                    {viz()?.recipient || 'Unknown'}
-                                </span>
-                            </>
-                        }>
-                            <div class="flex items-center gap-2">
-                                <span>{viz()?.fromChain}</span>
-                                <ArrowRight class="w-3 h-3" />
-                                <span>{viz()?.toChain}</span>
+
+                    <Show when={viz()?.type === 'SCHEDULE'} fallback={
+                        <div class="flex items-center text-gray-400 text-xs font-medium">
+                            <Show when={viz()?.type === 'BRIDGE'} fallback={
+                                <>
+                                    <span>To:</span>
+                                    <span class="ml-2 font-mono bg-black/30 px-2 py-1 rounded text-gray-300">
+                                        {viz()?.recipient || 'Unknown'}
+                                    </span>
+                                </>
+                            }>
+                                <div class="flex items-center gap-2">
+                                    <span>{viz()?.fromChain}</span>
+                                    <ArrowRight class="w-3 h-3" />
+                                    <span>{viz()?.toChain}</span>
+                                </div>
+                            </Show>
+                        </div>
+                    }>
+                        <div class="space-y-2 mt-2">
+                            <div class="flex items-center justify-between text-xs p-2 bg-white/5 rounded-lg border border-white/5">
+                                <span class="text-gray-400">Recipient</span>
+                                <span class="font-mono text-gray-300">{viz()?.recipient}</span>
                             </div>
-                        </Show>
-                    </div>
+                            <div class="flex items-center justify-between text-xs p-2 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                                <span class="text-orange-400 font-bold">Execution Time</span>
+                                <span class="font-mono text-orange-200">In {viz()?.scheduleTime}</span>
+                            </div>
+                            <p class="text-[10px] text-gray-500 mt-1 pl-1">
+                                * Funds will be locked in TimeLock contract until execution.
+                            </p>
+                        </div>
+                    </Show>
                 </div>
 
                 <Show when={error()}>
@@ -124,7 +145,7 @@ const TransactionCard = (props: TransactionCardProps) => {
                     >
                         <Show when={loading()} fallback={
                             <>
-                                <span>Confirm</span>
+                                <span>{viz()?.type === 'SCHEDULE' ? 'Lock & Schedule' : 'Confirm'}</span>
                                 <ArrowRight class="w-3 h-3" />
                             </>
                         }>
