@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onCleanup, Show, For, createMemo } from 'solid-js';
+그냥 import { createSignal, createEffect, onCleanup, Show, For, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { Send, X, Volume2, Bolt, Sparkles, BookOpen, Mic, MicOff, Activity, Paperclip, Trash2, Palette, Bot, User, ChevronDown, FileText, FileSpreadsheet, Globe, Settings, GripHorizontal, Plus, Languages } from 'lucide-solid';
@@ -453,9 +453,13 @@ const AIChat = (props: AIChatProps): JSX.Element => {
         }
       });
 
-      const ai = await getAiInstance();
+      // Use AI Manager to get correct credentials for Voice/Live API
+      const { aiManager } = await import('../services/aiManager');
+      const voiceConfig = await aiManager.resolveVoiceConfig();
+
+      const ai = await getAiInstance(voiceConfig.apiKey);
       const sessionPromise = ai.live.connect({
-        model: 'gemini-1.5-flash',
+        model: voiceConfig.model || 'gemini-1.5-flash',
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
