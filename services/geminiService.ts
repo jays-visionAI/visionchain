@@ -8,14 +8,30 @@ const getApiKey = async (providerOverride?: string): Promise<string> => {
   // 1. Check Global Admin API Key from Firebase (The source of truth)
   try {
     // Determine provider if not specified
-    let targetProvider = providerOverride || 'gemini';
+    let targetProvider = providerOverride || '';
 
     if (!providerOverride) {
       const settings = await getChatbotSettings();
-      const modelName = settings?.intentBot?.model || 'gemini-1.5-flash';
-      if (modelName.includes('deepseek')) targetProvider = 'deepseek';
-      else if (modelName.includes('gpt')) targetProvider = 'openai';
-      else if (modelName.includes('claude')) targetProvider = 'anthropic';
+      // REMOVED HARDCODED FALLBACK: || 'gemini-1.5-flash'
+      const modelName = settings?.intentBot?.model;
+
+      if (modelName) {
+        if (modelName.includes('deepseek')) targetProvider = 'deepseek';
+        else if (modelName.includes('gpt')) targetProvider = 'openai';
+        else if (modelName.includes('claude')) targetProvider = 'anthropic';
+        else targetProvider = 'gemini'; // Default only if modelName exists but is unknown (likely gemini variant)
+      } else {
+        // If no settings found, we cannot assume provider. 
+        // However, to prevent breaking, we might need to check if we should return error.
+        // For now, let's allow it to fall through to globalKey check with 'gemini' 
+        // ONLY IF targetProvider was initialized to something. 
+        // Wait, 'gemini' init at line 11 is also a hardcode.
+      }
+    }
+
+    if (!targetProvider) {
+      console.warn("[AI] No provider resolved from settings. Cannot fetch API key.");
+      return '';
     }
 
     const globalKey = await getActiveGlobalApiKey(targetProvider);
