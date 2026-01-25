@@ -24,6 +24,7 @@ import {
     Shield,
     Globe,
     ChevronDown,
+    ChevronUp,
     Users,
     Search,
     Smartphone,
@@ -783,7 +784,7 @@ const Wallet = (): JSX.Element => {
             setPendingAction({
                 type: 'send_tokens',
                 data: {
-                    amount: sendAmount(),
+                    amount: sendAmount().replace(/,/g, ''),
                     recipient: recipientAddress(),
                     symbol: selectedToken()
                 }
@@ -2082,15 +2083,22 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                         <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                                                             <div>
                                                                 <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
-                                                                <div class="grid grid-cols-3 gap-2">
+                                                                <div class="grid grid-cols-2 gap-2">
                                                                     <For each={['VCN']}>
                                                                         {(symbol) => (
-                                                                            <button
-                                                                                onClick={() => setSelectedToken(symbol)}
-                                                                                class={`p-3 rounded-xl border text-xs font-bold transition-all ${selectedToken() === symbol ? 'bg-blue-500/10 border-blue-500/50 text-white' : 'bg-white/5 border-white/5 text-gray-500 hover:border-white/10'}`}
-                                                                            >
-                                                                                {symbol}
-                                                                            </button>
+                                                                            <div class="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/50 rounded-xl relative">
+                                                                                <div class="text-xs font-bold text-white flex-1">{symbol}</div>
+                                                                                <span
+                                                                                    onClick={() => {
+                                                                                        const max = getAssetData(selectedToken()).liquidBalance;
+                                                                                        setSendAmount(max.toLocaleString()); // Format as per user request
+                                                                                        fetchPortfolioData();
+                                                                                    }}
+                                                                                    class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors flex items-center gap-1 bg-blue-500/20 px-2 py-1 rounded-lg"
+                                                                                >
+                                                                                    Available: {getAssetData(selectedToken()).liquidBalance.toLocaleString()} <RefreshCw class="w-3 h-3" />
+                                                                                </span>
+                                                                            </div>
                                                                         )}
                                                                     </For>
                                                                 </div>
@@ -2108,30 +2116,51 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             <div>
                                                                 <div class="flex items-center justify-between mb-2 px-1">
                                                                     <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Amount</label>
-                                                                    <span
-                                                                        onClick={() => {
-                                                                            setSendAmount(getAssetData(selectedToken()).liquidBalance.toString());
-                                                                            fetchPortfolioData(); // Allow manual refresh
-                                                                        }}
-                                                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors flex items-center gap-1"
-                                                                    >
-                                                                        Available: {getAssetData(selectedToken()).liquidBalance.toLocaleString()} {selectedToken()}
-                                                                        <RefreshCw class="w-3 h-3 hover:rotate-180 transition-transform" />
-                                                                    </span>
                                                                 </div>
                                                                 <div class="relative">
                                                                     <input
-                                                                        type="number"
+                                                                        type="text"
                                                                         placeholder="0.00"
                                                                         value={sendAmount()}
-                                                                        onInput={(e) => setSendAmount(e.currentTarget.value)}
+                                                                        onInput={(e) => {
+                                                                            // Remove non-numeric chars except dot
+                                                                            const raw = e.currentTarget.value.replace(/,/g, '');
+                                                                            if (!isNaN(Number(raw)) || raw === '.') {
+                                                                                // Add commas for display
+                                                                                const parts = raw.split('.');
+                                                                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                                                setSendAmount(parts.join('.'));
+                                                                            }
+                                                                        }}
                                                                         class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all text-xl font-bold font-mono"
                                                                     />
-                                                                    <div class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">{selectedToken()}</div>
+                                                                    <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+                                                                        <span class="text-sm font-bold text-gray-400">{selectedToken()}</span>
+                                                                        <div class="flex flex-col gap-px">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const current = Number(sendAmount().replace(/,/g, '') || '0');
+                                                                                    setSendAmount((current + 1).toLocaleString());
+                                                                                }}
+                                                                                class="p-0.5 text-gray-500 hover:text-blue-400 transition-colors"
+                                                                            >
+                                                                                <ChevronUp class="w-3 h-3" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const current = Number(sendAmount().replace(/,/g, '') || '0');
+                                                                                    setSendAmount(Math.max(0, current - 1).toLocaleString());
+                                                                                }}
+                                                                                class="p-0.5 text-gray-500 hover:text-blue-400 transition-colors"
+                                                                            >
+                                                                                <ChevronDown class="w-3 h-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <button
-                                                                disabled={!recipientAddress() || !sendAmount() || Number(sendAmount()) <= 0}
+                                                                disabled={!recipientAddress() || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0}
                                                                 onClick={() => setFlowStep(2)}
                                                                 class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             >
@@ -2146,7 +2175,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             <div class="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6 text-center">
                                                                 <div class="text-[11px] font-bold text-blue-400 uppercase tracking-widest mb-2">You are sending</div>
                                                                 <div class="text-4xl font-bold text-white mb-1">{sendAmount()} {selectedToken()}</div>
-                                                                <div class="text-sm text-gray-500">≈ ${(Number(sendAmount()) * getAssetData(selectedToken()).price).toFixed(2)}</div>
+                                                                <div class="text-sm text-gray-500">≈ ${(Number(sendAmount().replace(/,/g, '')) * getAssetData(selectedToken()).price).toFixed(2)}</div>
                                                             </div>
 
                                                             <div class="space-y-3">
@@ -2195,27 +2224,46 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                             <div class="mb-4 text-3xl font-black text-blue-400">
                                                                 {sendAmount()} {selectedToken()}
                                                             </div>
-                                                            <div class="mb-6 px-4 py-3 bg-white/[0.03] border border-white/[0.08] rounded-2xl w-full">
-                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5 flex items-center justify-between">
-                                                                    <div class="flex items-center gap-2">
-                                                                        <div class="w-1 h-1 rounded-full bg-blue-500"></div>
-                                                                        Transaction ID
+                                                            <div class="mb-6 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
+                                                                <div class="px-4 py-4 space-y-3">
+                                                                    <div class="flex items-center justify-between text-xs">
+                                                                        <span class="text-gray-500 font-bold uppercase tracking-wider">Time</span>
+                                                                        <span class="text-gray-300 font-mono tracking-tight">{new Date().toLocaleString()}</span>
                                                                     </div>
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            const success = await copyToClipboard(lastTxHash());
-                                                                            if (success) {
-                                                                                setCopied(true);
-                                                                                setTimeout(() => setCopied(false), 2000);
-                                                                            }
-                                                                        }}
-                                                                        class="hover:text-white transition-colors flex items-center gap-1 group"
-                                                                    >
-                                                                        {copied() ? 'Copied!' : 'Copy'}
-                                                                        <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
-                                                                    </button>
+                                                                    <div class="flex items-center justify-between text-xs">
+                                                                        <span class="text-gray-500 font-bold uppercase tracking-wider">From</span>
+                                                                        <span class="text-blue-400 font-mono tracking-tight">{walletAddress().slice(0, 8)}...{walletAddress().slice(-8)}</span>
+                                                                    </div>
+                                                                    <div class="flex items-center justify-between text-xs">
+                                                                        <span class="text-gray-500 font-bold uppercase tracking-wider">To</span>
+                                                                        <span class="text-blue-400 font-mono tracking-tight">{recipientAddress().slice(0, 8)}...{recipientAddress().slice(-8)}</span>
+                                                                    </div>
+
+                                                                    <div class="h-px bg-white/5 w-full my-1"></div>
+
+                                                                    <div class="space-y-1.5 text-left">
+                                                                        <div class="flex items-center justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                                                            <div class="flex items-center gap-2">
+                                                                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                                                                Transaction ID
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={async () => {
+                                                                                    const success = await copyToClipboard(lastTxHash());
+                                                                                    if (success) {
+                                                                                        setCopied(true);
+                                                                                        setTimeout(() => setCopied(false), 2000);
+                                                                                    }
+                                                                                }}
+                                                                                class="hover:text-white text-gray-500 transition-colors flex items-center gap-1.5 group cursor-pointer"
+                                                                            >
+                                                                                {copied() ? 'Copied!' : 'Copy'}
+                                                                                <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
+                                                                            </button>
+                                                                        </div>
+                                                                        <div class="text-[11px] font-mono text-gray-400 break-all leading-relaxed select-all hover:text-white transition-colors">{lastTxHash()}</div>
+                                                                    </div>
                                                                 </div>
-                                                                <div class="text-[11px] font-mono text-blue-400 break-all leading-relaxed">{lastTxHash()}</div>
                                                             </div>
                                                             <p class="text-gray-500 mb-8 max-w-xs leading-relaxed text-sm">
                                                                 Your transaction has been submitted to the Vision Chain network.
@@ -2485,7 +2533,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                        class="relative w-[90vw] max-w-[360px] bg-[#0e0e12] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl mx-auto"
+                                        class="relative w-[90vw] max-w-[420px] bg-[#27272a] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl mx-auto"
                                     >
                                         <div class="p-8 space-y-6">
                                             <div class="text-center">
@@ -2506,12 +2554,12 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                 </p>
                                             </div>
 
-                                            <div class="px-2 space-y-4">
+                                            <div class="space-y-4">
                                                 <div class="relative w-full">
                                                     <input
                                                         type={showWalletPassword() ? "text" : "password"}
                                                         placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
-                                                        class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
+                                                        class="w-full bg-[#18181b] border border-white/10 rounded-2xl py-4 px-12 text-white placeholder:text-gray-500 outline-none focus:border-blue-500/50 transition-all font-mono text-center tracking-widest"
                                                         value={walletPassword()}
                                                         onInput={(e) => setWalletPassword(e.currentTarget.value)}
                                                         onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
@@ -2529,7 +2577,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
                                                         <input
                                                             type={showWalletPassword() ? "text" : "password"}
                                                             placeholder="Confirm spending password"
-                                                            class="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/50 transition-all font-mono text-center"
+                                                            class="w-full bg-[#18181b] border border-white/10 rounded-2xl py-4 px-12 text-white placeholder:text-gray-500 outline-none focus:border-blue-500/50 transition-all font-mono text-center tracking-widest"
                                                             value={confirmWalletPassword()}
                                                             onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
                                                             onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}

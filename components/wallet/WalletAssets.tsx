@@ -318,7 +318,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         const displayBalance = () => isMainnet() ? asset().balance : (asset().balance * 0.1);
                                         const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
                                         const displayName = () => isMainnet() ? 'Purchased (VCN)' : 'VCN (Testnet)';
-                                        const displaySymbol = () => isMainnet() ? 'VCN' : 'TVCN';
+                                        const displaySymbol = () => 'VCN';
 
                                         const isLast = () => index() === 2;
 
