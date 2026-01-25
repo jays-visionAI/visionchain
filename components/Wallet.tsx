@@ -1089,13 +1089,19 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 `;
 
             // Enhanced Intent-Aware Prompt
+            const languageInstruction = lastLocale() === 'ko'
+                ? "반드시 한국어로 답변해 주세요."
+                : "Please respond in English.";
+
             const fullPrompt = `${context}
+[Language Rule]
+${languageInstruction}
 
 User Input: "${userMessage}"
 
 You are the Vision AI Architect. If the user wants to perform an action (Send, Swap, Bridge, Stake, Schedule), identify it.
 Output Format:
-1. Friendly explanation of what you are doing (Keep it brief, in the user's language).
+1. Friendly explanation of what you are doing (Keep it brief, in the user's language: ${lastLocale() === 'ko' ? 'Korean' : 'English'}).
 2. If an action is detected, append THIS EXACT JSON BLOCK at the end:
 {"intent": "send" | "swap" | "bridge" | "stake" | "schedule", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN", "time": "time_string if schedule"}
 
@@ -1145,8 +1151,19 @@ Final network context: ${networkMode()}.
                 } else if (intentData.intent === 'bridge') {
                     startFlow('bridge');
                 } else if (intentData.intent === 'schedule') {
-                    // Wallet dashboard doesn't have native schedule UI yet, direct to AIChat
-                    setMessages(prev => [...prev, { role: 'assistant', content: "I've detected your request for a Scheduled Transfer. To proceed with time-locked scheduling and multisig orchestration, please use the Main Vision AI Architect (the Sparkle icon on the right menu)." }]);
+                    setRecipientAddress(intentData.recipient || '');
+                    setSendAmount(intentData.amount || '');
+                    setSelectedToken(intentData.symbol || 'VCN');
+                    startFlow('send');
+                    // If we have both amount and recipient, skip to confirmation
+                    if (intentData.amount && ethers.isAddress(intentData.recipient)) {
+                        setFlowStep(2);
+                    }
+
+                    const msg = lastLocale() === 'ko'
+                        ? `일정을 확인했습니다. ${intentData.amount} ${intentData.symbol} 예약 이체 설정을 시작합니다. 상세 예약(타임락 등)은 홈페이지 우측 'Vision AI'를 통해 정교하게 조정하실 수 있습니다.`
+                        : `I've started the flow for your scheduled transfer of ${intentData.amount} ${intentData.symbol}. Advanced time-lock orchestration can be refined via the primary Vision AI Assistant.`;
+                    setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
                     setChatLoading(false);
                     return;
                 }
