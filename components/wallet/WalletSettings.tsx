@@ -86,10 +86,52 @@ export function WalletSettings() {
 
     const tabs = [
         { id: 'general', label: 'General', icon: Settings },
+        { id: 'presets', label: 'Payment Presets', icon: Globe },
         { id: 'notifications', label: 'Notifications', icon: Bell },
         { id: 'security', label: 'Security', icon: Shield },
         { id: 'password', label: 'Password', icon: Lock },
     ];
+
+    // Preset State
+    const [primaryAsset, setPrimaryAsset] = createSignal('VCN');
+    const [secondaryAsset, setSecondaryAsset] = createSignal('USDC');
+    const [preferredChain, setPreferredChain] = createSignal('Vision Chain');
+    const [presetLoading, setPresetLoading] = createSignal(false);
+
+    // Import service (Assuming it is exported now)
+    const { getUserPreset, saveUserPreset } = require('../../services/firebaseService');
+    const { useAuth } = require('../auth/authContext');
+    const auth = useAuth();
+
+    // Load preset on mount
+    onMount(async () => {
+        if (auth.user()?.email) {
+            const preset = await getUserPreset(auth.user().email);
+            if (preset) {
+                setPrimaryAsset(preset.primaryAsset);
+                setSecondaryAsset(preset.secondaryAsset);
+                setPreferredChain(preset.preferredChain);
+            }
+        }
+    });
+
+    const handleSavePreset = async () => {
+        if (!auth.user()?.email) return;
+        setPresetLoading(true);
+        try {
+            await saveUserPreset(auth.user().email, {
+                primaryAsset: primaryAsset(),
+                secondaryAsset: secondaryAsset(),
+                preferredChain: preferredChain()
+            });
+            alert("Payment preferences updated!");
+        } catch (e) {
+            console.error(e);
+            alert("Failed to save preferences.");
+        } finally {
+            setPresetLoading(false);
+        }
+    };
 
     return (
         <div class="space-y-8">
@@ -155,6 +197,85 @@ export function WalletSettings() {
                                 <option value="ja">Japanese</option>
                                 <option value="zh">Chinese</option>
                             </select>
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
+            {/* Presets Tab */}
+            <Show when={activeTab() === 'presets'}>
+                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
+                        <div class="p-2 rounded-xl bg-cyan-500/20">
+                            <Globe class="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <h2 class="text-lg font-semibold text-white">Payment Preferences</h2>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <p class="text-gray-400 text-sm">
+                            Configure which assets you prefer to receive. Vision AI will try to auto-swap incoming payments to these preferences.
+                        </p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Primary Asset */}
+                            <div>
+                                <label class="text-white font-medium block mb-2">Primary Asset</label>
+                                <select
+                                    value={primaryAsset()}
+                                    onChange={(e) => setPrimaryAsset(e.currentTarget.value)}
+                                    class="w-full px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
+                                >
+                                    <option value="VCN">VCN (Vision Coin)</option>
+                                    <option value="USDC">USDC</option>
+                                    <option value="USDT">USDT</option>
+                                    <option value="ETH">Ethereum</option>
+                                    <option value="WBTC">Wrapped BTC</option>
+                                </select>
+                            </div>
+
+                            {/* Secondary Asset */}
+                            <div>
+                                <label class="text-white font-medium block mb-2">Secondary Asset</label>
+                                <select
+                                    value={secondaryAsset()}
+                                    onChange={(e) => setSecondaryAsset(e.currentTarget.value)}
+                                    class="w-full px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
+                                >
+                                    <option value="USDC">USDC</option>
+                                    <option value="VCN">VCN (Vision Coin)</option>
+                                    <option value="USDT">USDT</option>
+                                    <option value="ETH">Ethereum</option>
+                                </select>
+                            </div>
+
+                            {/* Preferred Network */}
+                            <div class="md:col-span-2">
+                                <label class="text-white font-medium block mb-2">Preferred Network</label>
+                                <div class="flex gap-4">
+                                    <button
+                                        onClick={() => setPreferredChain('Vision Chain')}
+                                        class={`flex-1 py-3 rounded-xl border font-bold transition-all ${preferredChain() === 'Vision Chain' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                                    >
+                                        Vision Chain
+                                    </button>
+                                    <button
+                                        onClick={() => setPreferredChain('Ethereum')}
+                                        class={`flex-1 py-3 rounded-xl border font-bold transition-all ${preferredChain() === 'Ethereum' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                                    >
+                                        Ethereum
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-white/5 flex justify-end">
+                            <button
+                                onClick={handleSavePreset}
+                                disabled={presetLoading()}
+                                class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
+                            >
+                                {presetLoading() ? 'Saving...' : <><Save class="w-4 h-4" /> Save Preferences</>}
+                            </button>
                         </div>
                     </div>
                 </div>

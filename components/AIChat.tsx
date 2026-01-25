@@ -328,12 +328,53 @@ const AIChat = (props: AIChatProps): JSX.Element => {
               // Resolve the action into concrete TX data
               // Use mock address for now or try to get real one
               const userAddress = localStorage.getItem('vcn_wallet_address') || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-              const action = await actionResolver.resolve(intent, userAddress);
+
+              let finalAction = null;
+              let explanationText = intent.explanation;
+
+              // NEW: Optimization Step (Step 3)
+              // If it's a transfer/payment, run it through the Optimizer first
+              if (intent.action === 'TRANSFER' || intent.action === 'SWAP_AND_SEND') {
+                try {
+                  const { transactionOptimizer } = await import('../services/transactionOptimizer');
+                  const plan = await transactionOptimizer.optimizeTransaction(
+                    userAddress,
+                    intent.params.to || 'unknown_recipient',
+                    intent.params.amount || '0',
+                    intent.params.token || 'VCN'
+                  );
+
+                  // Convert Plan to Action for UI
+                  finalAction = {
+                    type: plan.type === 'DIRECT_TRANSFER' ? 'transfer' : 'swap',
+                    summary: plan.explanation,
+                    data: {
+                      token: plan.inputAsset,
+                      amount: plan.inputAmount,
+                      to: plan.recipient,
+                      // If swap
+                      fromToken: plan.inputAsset,
+                      toToken: plan.outputAsset,
+                      fromAmount: plan.inputAmount,
+                      toAmount: plan.outputAmount
+                    }
+                  };
+                  explanationText = plan.explanation;
+
+                } catch (optErr) {
+                  console.warn("Optimizer skipped or failed, falling back to basic resolution:", optErr);
+                  // Fallback to basic resolver
+                  finalAction = await actionResolver.resolve(intent, userAddress);
+                }
+              } else {
+                // Standard resolver for Bridge/Other
+                finalAction = await actionResolver.resolve(intent, userAddress);
+              }
 
               setMessages(prev => [...prev, {
                 role: 'model',
-                text: intent.explanation || action.summary,
-                action: action // Pass the proposed action to UI
+                text: explanationText || finalAction.summary,
+                action: finalAction // Pass the proposed action to UI
               }]);
               setIsLoading(false);
               return; // EXIT EARLY to skip Gemini for this turn

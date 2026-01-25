@@ -59,7 +59,69 @@ const sendEmailViaResend = async (options: {
     }
 };
 
+// --- User Presets (Intent Optimization) ---
+export interface PaymentPreset {
+    primaryAsset: string; // e.g., 'VCN', 'USDC'
+    secondaryAsset: string; // e.g., 'ETH'
+    preferredChain: string; // e.g., 'Vision Chain', 'Ethereum'
+    updatedAt: string;
+}
+
+export const getUserPreset = async (vidOrEmail: string): Promise<PaymentPreset | null> => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'user_presets', vidOrEmail.toLowerCase());
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+            return snapshot.data() as PaymentPreset;
+        }
+        return null;
+    } catch (e) {
+        console.error("Error fetching preset:", e);
+        return null;
+    }
+};
+
+export const saveUserPreset = async (vidOrEmail: string, preset: Omit<PaymentPreset, 'updatedAt'>) => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'user_presets', vidOrEmail.toLowerCase());
+        await setDoc(docRef, {
+            ...preset,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`[Firebase] Saved preset for ${vidOrEmail}`);
+    } catch (e) {
+        console.error("Error saving preset:", e);
+        throw e;
+    }
+};
+
+// Simplified user search for intent resolution
+export const searchUserByPhone = async (phone: string): Promise<{ vid: string, email: string, address: string } | null> => {
+    try {
+        const db = getFirebaseDb();
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('phone', '==', phone), limit(1));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            const data = doc.data();
+            return {
+                vid: doc.id, // Using email/docID as VID essentially
+                email: data.email,
+                address: data.walletAddress
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error("User search failed:", e);
+        return null;
+    }
+};
+
 // Initialize Firebase (singleton pattern)
+
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
