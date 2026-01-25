@@ -30,5 +30,40 @@ export const AI_TOOLS = [
             },
             required: ["symbol"]
         }
+    },
+    {
+        name: "search_defi_pools",
+        description: "Search for high-yield DeFi investment opportunities (Lending, Staking, LP).",
+        parameters: {
+            type: "object",
+            properties: {
+                symbol: {
+                    type: "string",
+                    description: "Filter by asset symbol (e.g., 'USDC', 'ETH')."
+                },
+                chain: {
+                    type: "string",
+                    description: "Filter by blockchain (e.g., 'Ethereum', 'Solana', 'Polygon')."
+                },
+                minTvl: {
+                    type: "number",
+                    description: "Minimum TVL in USD to filter out small/risky pools."
+                }
+            }
+        }
+    },
+    {
+        name: "analyze_protocol_risk",
+        description: "Analyze the risk and security status of a specific DeFi protocol.",
+        parameters: {
+            type: "object",
+            properties: {
+                projectName: {
+                    type: "string",
+                    description: "The name of the protocol/project (e.g., 'Aave', 'Lido')."
+                }
+            },
+            required: ["projectName"]
+        }
     }
 ];

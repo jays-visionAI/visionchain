@@ -98,6 +98,12 @@ Locale: ${navigator.language}`;
                     } else if (name === 'get_current_price') {
                         const { marketDataService } = await import('../marketDataService');
                         toolResult = await marketDataService.getCurrentPrice(args.symbol);
+                    } else if (name === 'search_defi_pools') {
+                        const { defiService } = await import('../defiService');
+                        toolResult = await defiService.getTopYields(args);
+                    } else if (name === 'analyze_protocol_risk') {
+                        const { defiService } = await import('../defiService');
+                        toolResult = await defiService.analyzeProtocolRisk(args.projectName);
                     }
 
                     // Feed tool result back to AI
