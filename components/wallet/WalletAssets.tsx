@@ -162,7 +162,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                 {/* Stats Row */}
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                    <div class="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/[0.08] rounded-3xl p-6 relative overflow-hidden group hover:border-blue-500/30 transition-all duration-500 shadow-xl">
+                    <div class="bg-gradient-to-br from-black/40 to-transparent border border-white/[0.05] rounded-3xl p-6 relative overflow-hidden group hover:border-blue-500/30 transition-all duration-500 shadow-2xl">
                         <div class="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                             <WalletIcon class="w-16 h-16 text-blue-400" />
                         </div>
@@ -179,7 +179,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         </div>
                     </div>
 
-                    <div class="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/[0.08] rounded-3xl p-6 relative overflow-hidden group hover:border-amber-500/30 transition-all duration-500 shadow-xl">
+                    <div class="bg-gradient-to-br from-black/40 to-transparent border border-white/[0.05] rounded-3xl p-6 relative overflow-hidden group hover:border-amber-500/30 transition-all duration-500 shadow-2xl">
                         <div class="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                             <Shield class="w-16 h-16 text-amber-400" />
                         </div>
@@ -196,7 +196,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         </div>
                     </div>
 
-                    <div class="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/[0.08] rounded-3xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition-all duration-500 shadow-xl">
+                    <div class="bg-gradient-to-br from-black/40 to-transparent border border-white/[0.05] rounded-3xl p-6 relative overflow-hidden group hover:border-purple-500/30 transition-all duration-500 shadow-2xl">
                         <div class="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                             <Zap class="w-16 h-16 text-purple-400" />
                         </div>
@@ -222,7 +222,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         </div>
                     </div>
 
-                    <div class="bg-gradient-to-br from-white/[0.05] to-transparent border border-white/[0.08] rounded-3xl p-6 relative overflow-hidden group hover:border-cyan-500/30 transition-all duration-500 shadow-xl">
+                    <div class="bg-gradient-to-br from-black/40 to-transparent border border-white/[0.05] rounded-3xl p-6 relative overflow-hidden group hover:border-cyan-500/30 transition-all duration-500 shadow-2xl">
                         <div class="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
                             <Sparkles class="w-16 h-16 text-cyan-400" />
                         </div>
@@ -413,7 +413,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     <Menu class="w-3.5 h-3.5 text-gray-500" />
                                 </div>
                             </div>
-                            <div class="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/[0.06] rounded-[32px] p-8 shadow-2xl relative overflow-hidden">
+                            <div class="bg-gradient-to-br from-black/20 to-transparent border border-white/[0.05] rounded-[32px] p-8 shadow-3xl relative overflow-hidden">
                                 <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
 
                                 {/* Donut Chart */}

@@ -48,7 +48,8 @@ import {
     updateWalletStatus,
     getUserPurchases,
     getUserData,
-    VcnPurchase
+    VcnPurchase,
+    updateUserData
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
@@ -64,6 +65,7 @@ import { WalletAssets } from './wallet/WalletAssets';
 import { WalletCampaign } from './wallet/WalletCampaign';
 import { WalletMint } from './wallet/WalletMint';
 import { WalletNodes } from './wallet/WalletNodes';
+import { WalletContacts } from './wallet/WalletContacts';
 import { WalletSettings } from './wallet/WalletSettings';
 
 type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes';
@@ -197,6 +199,8 @@ const Wallet = (): JSX.Element => {
     const [referralBonus, setReferralBonus] = createSignal('0');
     const [isLocalWalletMissing, setIsLocalWalletMissing] = createSignal(false);
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
+    const [editPhone, setEditPhone] = createSignal('');
+    const [isSavingPhone, setIsSavingPhone] = createSignal(false);
     const [isRestoring, setIsRestoring] = createSignal(false);
     const [lastTxHash, setLastTxHash] = createSignal('');
     const [loadingMessage, setLoadingMessage] = createSignal('LOADING WALLET');
@@ -728,6 +732,43 @@ const Wallet = (): JSX.Element => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
+
+    createEffect(() => {
+        if (userProfile().phone) {
+            setEditPhone(userProfile().phone);
+        } else {
+            setEditPhone('');
+        }
+    });
+
+    const handleUpdatePhone = async () => {
+        if (!userProfile().email) return;
+        setIsSavingPhone(true);
+        try {
+            await updateUserData(userProfile().email, { phone: editPhone() });
+            // Refresh local profile
+            const freshData = await getUserData(userProfile().email);
+            if (freshData) {
+                setUserProfile({
+                    username: freshData.name || freshData.email.split('@')[0],
+                    displayName: freshData.name || freshData.email.split('@')[0],
+                    email: freshData.email,
+                    bio: freshData.bio || '',
+                    twitter: freshData.twitter || '',
+                    discord: freshData.discord || '',
+                    phone: freshData.phone || '',
+                    isVerified: freshData.isVerified || false,
+                    tier: freshData.tier || 0,
+                    address: freshData.walletAddress || '',
+                    role: freshData.role || 'user'
+                });
+            }
+        } catch (e) {
+            console.error("Failed to update phone:", e);
+        } finally {
+            setIsSavingPhone(false);
+        }
+    };
 
     // Derived list of tokens based on actual balances
     const tokens = createMemo(() => {
@@ -1328,13 +1369,30 @@ Final network context: ${networkMode()}.
                                                             </Show>
                                                         </div>
                                                         <div class="flex items-center justify-between p-4 bg-white/[0.03] rounded-2xl">
-                                                            <div class="flex items-center gap-3">
+                                                            <div class="flex items-center gap-3 flex-1">
                                                                 <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
                                                                     <Phone class="w-5 h-5 text-purple-400" />
                                                                 </div>
-                                                                <div>
+                                                                <div class="flex-1">
                                                                     <div class="text-sm font-bold text-white">Phone Number</div>
-                                                                    <div class="text-[11px] text-gray-500">{userProfile().phone || 'Not verified'}</div>
+                                                                    <Show when={onboardingStep() === 0}>
+                                                                        <div class="flex items-center gap-2 mt-1">
+                                                                            <input
+                                                                                type="tel"
+                                                                                value={editPhone()}
+                                                                                onInput={(e) => setEditPhone(e.currentTarget.value)}
+                                                                                placeholder="Add phone for VID Search"
+                                                                                class="flex-1 bg-black/20 border border-white/5 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-purple-500/50"
+                                                                            />
+                                                                            <button
+                                                                                onClick={handleUpdatePhone}
+                                                                                disabled={isSavingPhone() || editPhone() === userProfile().phone}
+                                                                                class="p-1 px-2 bg-purple-600 rounded text-[10px] font-bold text-white disabled:opacity-30"
+                                                                            >
+                                                                                {isSavingPhone() ? '...' : 'Save'}
+                                                                            </button>
+                                                                        </div>
+                                                                    </Show>
                                                                 </div>
                                                             </div>
                                                             <Show when={userProfile().phone} fallback={<CheckCircle class="w-5 h-5 text-gray-700" />}>
@@ -1889,124 +1947,11 @@ Final network context: ${networkMode()}.
                     </Show>
 
                     <Show when={activeView() === 'contacts'}>
-                        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
-                            <div class="max-w-4xl mx-auto space-y-8">
-                                <Motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    class="flex flex-col md:flex-row md:items-center justify-between gap-4"
-                                >
-                                    <div>
-                                        <h2 class="text-3xl font-bold text-white mb-1">Address Book</h2>
-                                        <p class="text-gray-500 text-sm">Manage your network and earn rewards for invitations.</p>
-                                    </div>
-                                    <div class="flex items-center gap-3">
-                                        <button
-                                            onClick={importMobileContacts}
-                                            class="flex items-center gap-2 px-4 py-2.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all font-medium text-sm"
-                                        >
-                                            <Smartphone class="w-4 h-4" />
-                                            Import Mobile
-                                        </button>
-                                        <button class="flex items-center gap-2 px-4 py-2.5 bg-white text-black rounded-xl hover:bg-white/90 transition-all font-bold text-sm">
-                                            <Plus class="w-4 h-4" />
-                                            Add Contact
-                                        </button>
-                                    </div>
-                                </Motion.div>
-
-                                {/* Referral Tracker */}
-                                <Motion.div
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: 0.1 }}
-                                    class="relative overflow-hidden group"
-                                >
-                                    <div class="absolute inset-0 bg-gradient-to-r from-blue-600/20 via-cyan-500/20 to-purple-600/20 rounded-[24px] blur-xl opacity-50 group-hover:opacity-100 transition-opacity duration-1000" />
-                                    <div class="relative bg-[#111113] border border-white/[0.08] rounded-[24px] p-6 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden">
-                                        <div class="flex items-center gap-5">
-                                            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/40">
-                                                <Zap class="w-7 h-7 text-white fill-white/20" />
-                                            </div>
-                                            <div>
-                                                <div class="text-[11px] font-black text-orange-400 uppercase tracking-widest mb-1">Referral Campaign</div>
-                                                <div class="text-xl font-bold text-white">Invite Friends & Get 50 VCN Each</div>
-                                            </div>
-                                        </div>
-                                        <div class="flex gap-8 px-6 border-l border-white/[0.06]">
-                                            <div class="text-center">
-                                                <div class="text-2xl font-black text-white">{referralBonus()}</div>
-                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">VCN Earned</div>
-                                            </div>
-                                            <div class="text-center">
-                                                <div class="text-2xl font-black text-white">{contacts().filter((c: any) => c.invited).length}</div>
-                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Invites Sent</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </Motion.div>
-
-                                {/* Contacts List */}
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <For each={contacts().filter(c => c.name.toLowerCase().includes(searchQuery().toLowerCase()))}>
-                                        {(contact: any) => (
-                                            <Motion.div
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                class="p-4 bg-white/[0.02] border border-white/[0.06] rounded-2xl hover:bg-white/[0.05] transition-all group"
-                                            >
-                                                <div class="flex items-center justify-between gap-4">
-                                                    <div class="flex items-center gap-4">
-                                                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white font-black text-lg shadow-inner">
-                                                            {contact.avatar}
-                                                        </div>
-                                                        <div>
-                                                            <div class="font-bold text-white flex items-center gap-2">
-                                                                {contact.name}
-                                                                <Show when={contact.isUser}>
-                                                                    <div class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_#10b981]" />
-                                                                </Show>
-                                                            </div>
-                                                            <div class="text-[11px] font-mono text-gray-500">{contact.address}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex items-center gap-2">
-                                                        <button
-                                                            onClick={() => toggleFavorite(contact.id)}
-                                                            class={`p-2 rounded-lg transition-colors ${contact.isFavorite ? 'text-yellow-400 bg-yellow-400/10' : 'text-gray-600 hover:bg-white/5'}`}
-                                                        >
-                                                            <Sparkles class="w-4 h-4" />
-                                                        </button>
-                                                        <Show
-                                                            when={contact.isUser}
-                                                            fallback={
-                                                                <button
-                                                                    onClick={() => inviteContact(contact.id)}
-                                                                    disabled={contact.invited}
-                                                                    class={`px-4 py-1.5 rounded-lg text-[11px] font-black tracking-widest uppercase transition-all ${contact.invited ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20'}`}
-                                                                >
-                                                                    {contact.invited ? 'Invited' : 'Invite'}
-                                                                </button>
-                                                            }
-                                                        >
-                                                            <button
-                                                                onClick={() => {
-                                                                    setRecipientAddress(contact.address);
-                                                                    startFlow('send');
-                                                                }}
-                                                                class="px-4 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg text-[11px] font-black tracking-widest uppercase hover:bg-blue-500/20 transition-all"
-                                                            >
-                                                                Send
-                                                            </button>
-                                                        </Show>
-                                                    </div>
-                                                </div>
-                                            </Motion.div>
-                                        )}
-                                    </For>
-                                </div>
-                            </div>
-                        </div>
+                        <WalletContacts
+                            userProfile={userProfile}
+                            startFlow={setActiveFlow}
+                            setRecipientAddress={setRecipientAddress}
+                        />
                     </Show>
 
                     <Presence>

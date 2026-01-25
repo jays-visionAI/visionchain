@@ -97,18 +97,42 @@ export const saveUserPreset = async (vidOrEmail: string, preset: Omit<PaymentPre
     }
 };
 
+// --- Phone Normalization Utility ---
+export const normalizePhoneNumber = (phone: string): string => {
+    if (!phone) return '';
+    // Remove all non-numeric characters
+    const clean = phone.replace(/\D/g, '');
+
+    // Example: 01029322888 -> +82-10-2932-2888
+    if (clean.startsWith('010') && clean.length === 11) {
+        return `+82-10-${clean.slice(3, 7)}-${clean.slice(7)}`;
+    }
+    if (clean.startsWith('10') && clean.length === 10) {
+        return `+82-10-${clean.slice(2, 6)}-${clean.slice(6)}`;
+    }
+    if (clean.startsWith('8210') && clean.length === 12) {
+        return `+82-10-${clean.slice(4, 8)}-${clean.slice(8)}`;
+    }
+
+    return phone; // Fallback
+};
+
 // Simplified user search for intent resolution
 export const searchUserByPhone = async (phone: string): Promise<{ vid: string, email: string, address: string } | null> => {
     try {
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('phone', '==', phone), limit(1));
+        const normalized = normalizePhoneNumber(phone);
+
+        // Search by normalized phone
+        const q = query(usersRef, where('phone', '==', normalized), limit(1));
         const snapshot = await getDocs(q);
+
         if (!snapshot.empty) {
             const doc = snapshot.docs[0];
             const data = doc.data();
             return {
-                vid: doc.id, // Using email/docID as VID essentially
+                vid: doc.id,
                 email: data.email,
                 address: data.walletAddress
             };
@@ -116,6 +140,28 @@ export const searchUserByPhone = async (phone: string): Promise<{ vid: string, e
         return null;
     } catch (e) {
         console.error("User search failed:", e);
+        return null;
+    }
+};
+
+export const searchUserByEmail = async (email: string): Promise<{ vid: string, email: string, address: string } | null> => {
+    try {
+        const db = getFirebaseDb();
+        const emailLower = email.toLowerCase().trim();
+        const docRef = doc(db, 'users', emailLower);
+        const snapshot = await getDoc(docRef);
+
+        if (snapshot.exists()) {
+            const data = snapshot.data();
+            return {
+                vid: snapshot.id,
+                email: data.email,
+                address: data.walletAddress
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error("User search by email failed:", e);
         return null;
     }
 };
@@ -321,13 +367,23 @@ export interface UserData {
     joinDate?: string;
     isVerified?: boolean;
     tier?: number;
-    amountToken?: number; // Added
+    amountToken?: number;
     name?: string;
     phone?: string;
     bio?: string;
     twitter?: string;
     discord?: string;
     walletReady?: boolean;
+}
+
+export interface Contact {
+    id?: string;
+    internalName: string;
+    phone: string;
+    email: string;
+    address?: string;
+    vchainUserUid?: string;
+    createdAt: string;
 }
 
 export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
@@ -509,6 +565,80 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
         };
     }
     return null;
+};
+
+export const updateUserData = async (email: string, updates: Partial<UserData>) => {
+    try {
+        const db = getFirebaseDb();
+        const emailLower = email.toLowerCase().trim();
+        const userRef = doc(db, 'users', emailLower);
+
+        const preparedUpdates = { ...updates };
+        if (preparedUpdates.phone) {
+            preparedUpdates.phone = normalizePhoneNumber(preparedUpdates.phone);
+        }
+
+        await setDoc(userRef, {
+            ...preparedUpdates,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        console.log(`[Firebase] Updated profile for ${emailLower}`);
+    } catch (e) {
+        console.error("Error updating user data:", e);
+        throw e;
+    }
+};
+
+// --- Contact Management ---
+
+export const saveUserContacts = async (userEmail: string, contacts: Omit<Contact, 'createdAt'>[]) => {
+    try {
+        const db = getFirebaseDb();
+        const userEmailLower = userEmail.toLowerCase().trim();
+        const batch = writeBatch(db);
+
+        for (const contact of contacts) {
+            const contactRef = doc(collection(db, 'users', userEmailLower, 'contacts'));
+            const normalizedPhone = normalizePhoneNumber(contact.phone);
+
+            // Try to resolve VID/Address immediately if possible
+            const resolved = await searchUserByPhone(normalizedPhone);
+
+            batch.set(contactRef, {
+                ...contact,
+                phone: normalizedPhone,
+                email: contact.email.toLowerCase().trim(),
+                vchainUserUid: resolved?.vid || null,
+                address: resolved?.address || null,
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        await batch.commit();
+        console.log(`[Firebase] Saved ${contacts.length} contacts for ${userEmailLower}`);
+    } catch (e) {
+        console.error("Error saving contacts:", e);
+        throw e;
+    }
+};
+
+export const getUserContacts = async (userEmail: string): Promise<Contact[]> => {
+    try {
+        const db = getFirebaseDb();
+        const userEmailLower = userEmail.toLowerCase().trim();
+        const contactsRef = collection(db, 'users', userEmailLower, 'contacts');
+        const q = query(contactsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Contact));
+    } catch (e) {
+        console.error("Error fetching contacts:", e);
+        return [];
+    }
 };
 
 // ==================== Token Sale & Vesting ====================

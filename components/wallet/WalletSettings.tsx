@@ -12,8 +12,12 @@ import {
     Lock,
     Eye,
     EyeOff,
-    Check
+    Check,
+    AlertCircle
 } from 'lucide-solid';
+import { getUserPreset, saveUserPreset } from '../../services/firebaseService';
+import { useAuth } from '../auth/authContext';
+
 
 // Storage key for user settings (using different key than admin)
 const USER_SETTINGS_KEY = 'visionhub_user_settings';
@@ -98,9 +102,6 @@ export function WalletSettings() {
     const [preferredChain, setPreferredChain] = createSignal('Vision Chain');
     const [presetLoading, setPresetLoading] = createSignal(false);
 
-    // Import service (Assuming it is exported now)
-    const { getUserPreset, saveUserPreset } = require('../../services/firebaseService');
-    const { useAuth } = require('../auth/authContext');
     const auth = useAuth();
 
     // Load preset on mount

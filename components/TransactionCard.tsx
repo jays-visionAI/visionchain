@@ -63,7 +63,7 @@ const TransactionCard = (props: TransactionCardProps) => {
 
     return (
         <Show when={props.action.type !== 'MESSAGE' && props.action.type !== 'ERROR'}>
-            <div class="p-4 my-2 bg-gray-800/80 border border-gray-700/50 rounded-2xl shadow-lg backdrop-blur-md">
+            <div class="p-4 my-2 bg-[#0d0d0f] border border-white/10 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] backdrop-blur-md">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                         {viz()?.type} REQUEST

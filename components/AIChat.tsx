@@ -48,13 +48,13 @@ const TypingIndicator = (): JSX.Element => (
     animate={{ opacity: 1, y: 0, scale: 1 }}
     class="flex gap-3"
   >
-    <div class="w-8 h-8 rounded-full bg-[#1d1d1f] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+    <div class="w-8 h-8 rounded-full bg-[#111113] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-2xl">
       <Bot class="w-4 h-4 text-emerald-400" />
     </div>
-    <div class="bg-[#1d1d1f] px-4 py-3 rounded-2xl rounded-tl-sm border border-white/10 flex items-center gap-1.5 shadow-sm">
-      <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
-      <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ "animation-delay": "0.2s" }} />
-      <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ "animation-delay": "0.4s" }} />
+    <div class="bg-[#111113] px-4 py-3 rounded-2xl rounded-tl-sm border border-white/5 flex items-center gap-1.5 shadow-2xl">
+      <span class="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
+      <span class="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ "animation-delay": "0.1s" }} />
+      <span class="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce" style={{ "animation-delay": "0.2s" }} />
     </div>
   </Motion.div>
 );
@@ -65,18 +65,18 @@ const ImageSkeleton = (): JSX.Element => (
     animate={{ opacity: 1, y: 0, scale: 1 }}
     class="flex gap-3"
   >
-    <div class="w-8 h-8 rounded-full bg-[#1d1d1f] border border-white/10 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+    <div class="w-8 h-8 rounded-full bg-[#111113] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-2xl">
       <Bot class="w-4 h-4 text-emerald-400" />
     </div>
     <div class="space-y-2">
-      <div class="bg-[#1d1d1f] border border-white/10 p-2 rounded-2xl rounded-tl-sm shadow-sm">
+      <div class="bg-[#111113] border border-white/5 p-2 rounded-2xl rounded-tl-sm shadow-2xl">
         <div class="w-48 h-48 bg-white/5 rounded-xl animate-pulse relative overflow-hidden flex items-center justify-center">
           <div class="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-20" />
           <Sparkles class="w-6 h-6 text-white/20 animate-pulse" />
         </div>
       </div>
       <div class="flex items-center gap-2 ml-1">
-        <div class="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+        <div class="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
         <span class="text-[10px] text-gray-500 font-medium animate-pulse">Generating visual...</span>
       </div>
     </div>
@@ -89,22 +89,22 @@ const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'p
     animate={{ opacity: 1, y: 0 }}
     class="flex gap-3 mb-6 px-4"
   >
-    <div class="w-8 h-8 rounded-full bg-[#1c1c1e] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-lg">
-      <div class="w-4 h-4 text-purple-400 animate-pulse">
+    <div class="w-8 h-8 rounded-full bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-[0_0_20px_rgba(0,0,0,0.4)]">
+      <div class="w-4 h-4 text-purple-400 animate-pulse shadow-purple-500/50">
         <Bot class="w-full h-full" />
       </div>
     </div>
-    <div class="flex-1 max-w-[400px] bg-[#111113]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-5 space-y-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
+    <div class="flex-1 max-w-[400px] bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 rounded-2xl p-5 space-y-4 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6),0_0_15px_rgba(168,85,247,0.1)]">
       <div class="flex items-center justify-between pb-3 border-b border-white/5">
         <div class="flex items-center gap-2">
           <span class="text-[13px] font-bold text-gray-100">생각 중...</span>
           <div class="flex gap-1">
-            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
-            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.1s" }} />
-            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.2s" }} />
+            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce shadow-[0_0_8px_rgba(168,85,247,0.8)]" style={{ "animation-delay": "0s" }} />
+            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce shadow-[0_0_8px_rgba(168,85,247,0.8)]" style={{ "animation-delay": "0.1s" }} />
+            <span class="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce shadow-[0_0_8px_rgba(168,85,247,0.8)]" style={{ "animation-delay": "0.2s" }} />
           </div>
         </div>
-        <div class="w-4 h-4 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+        <div class="w-4 h-4 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin shadow-[0_0_10px_rgba(168,85,247,0.4)]" />
       </div>
 
       <div class="space-y-3 pt-1">
@@ -114,7 +114,7 @@ const ThinkingDisplay = (props: { steps: { id: string, label: string, status: 'p
             <div class={`flex items-center gap-3 transition-all duration-500 ${step.status === 'pending' ? 'opacity-20 grayscale' : 'opacity-100'}`}>
               <div class="relative flex items-center justify-center">
                 <Show when={step.status === 'loading'} fallback={
-                  <div class={`w-2 h-2 rounded-full ${step.status === 'completed' || step.status === 'success' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-gray-700'}`} />
+                  <div class={`w-2 h-2 rounded-full ${step.status === 'completed' || step.status === 'success' ? 'bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.8)]' : 'bg-gray-800'}`} />
                 }>
                   <div class="w-2 h-2 bg-blue-400 rounded-full animate-ping" />
                 </Show>
@@ -704,7 +704,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 50, scale: 0.9 }}
           transition={{ duration: 0.3, easing: [0.32, 0.72, 0, 1] }}
-          class="fixed bottom-0 left-1/2 -translate-x-1/2 w-[95%] max-w-[1000px] h-[85vh] md:h-[80vh] bg-[#161618] border border-white/[0.08] rounded-t-[32px] md:rounded-[32px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)] flex flex-col z-[100] overflow-hidden font-sans backdrop-blur-xl"
+          class="fixed bottom-0 left-1/2 -translate-x-1/2 w-[95%] max-w-[1000px] h-[85vh] md:h-[80vh] bg-[#0d0d0f] border border-white/[0.08] rounded-t-[32px] md:rounded-[32px] shadow-[0_32px_80px_-16px_rgba(0,0,0,0.8),0_0_60px_rgba(59,130,246,0.1)] flex flex-col z-[100] overflow-hidden font-sans backdrop-blur-3xl"
           style={{ "margin-bottom": "max(env(safe-area-inset-bottom), 16px)" }}
           onDragEnter={handleDrag}
         >
@@ -842,7 +842,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
 
               {/* Messages Area (ChatGPT Style Bubble) */}
-              <div class="flex-1 overflow-y-auto p-4 pb-32 space-y-6 scroll-smooth bg-[#1a1a1a]" ref={scrollRef}>
+              <div class="flex-1 overflow-y-auto p-4 pt-10 pb-32 space-y-6 scroll-smooth bg-[#0d0d0f]" ref={scrollRef}>
                 <For each={messages()}>
                   {(msg, idx) => (
                     <div class={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -860,9 +860,9 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                         </span>
 
                         {/* Bubble */}
-                        <div class={`px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-sm backdrop-blur-sm ${msg.role === 'user'
-                          ? 'bg-[#3b82f6] text-white rounded-tr-sm'
-                          : 'bg-[#242424] text-gray-200 border border-white/5 rounded-tl-sm'
+                        <div class={`px-4 py-3 rounded-2xl text-[14px] leading-relaxed shadow-lg backdrop-blur-sm ${msg.role === 'user'
+                          ? 'bg-[#2563eb] text-white rounded-tr-sm shadow-[0_0_20px_rgba(37,99,235,0.2)]'
+                          : 'bg-[#18181b] text-gray-200 border border-white/5 rounded-tl-sm shadow-[0_5px_15px_rgba(0,0,0,0.3)]'
                           }`}>
                           <Show when={msg.imageUrl}>
                             <div class="mb-3 rounded-xl overflow-hidden border border-white/10 shadow-md">
@@ -931,11 +931,11 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                     >
                       <For each={attachments()}>
                         {(att, i) => (
-                          <div class="relative w-20 h-20 rounded-2xl border border-white/10 bg-[#1d1d1f] flex-shrink-0 group overflow-hidden shadow-lg">
+                          <div class="relative w-20 h-20 rounded-2xl border border-white/[0.05] bg-[#0d0d0f] flex-shrink-0 group overflow-hidden shadow-3xl">
                             <Show when={att.type === 'image'} fallback={
-                              <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-500">
-                                <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-500" />}>
-                                  <FileText class="w-7 h-7 text-red-500" />
+                              <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-600">
+                                <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-600" />}>
+                                  <FileText class="w-7 h-7 text-red-600" />
                                 </Show>
                                 <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
                               </div>
@@ -955,7 +955,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                   </Show>
                 </Presence>
 
-                <div class="relative flex items-center gap-3 bg-[#1d1d1f] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-2xl group">
+                <div class="relative flex items-center gap-3 bg-[#0a0a0c] rounded-[24px] border border-white/[0.08] p-2 focus-within:border-blue-500/50 transition-all shadow-3xl group">
                   {/* Plus Button */}
                   <button
                     onClick={() => fileInputRef?.click()}
@@ -1001,7 +1001,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
                   <div class="flex items-center gap-1 px-1">
                     {/* Language Dropdown */}
                     <div class="relative group/lang">
-                      <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-[#888] hover:text-white transition-all text-sm font-bold">
+                      <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/[0.05] text-[#777] hover:text-white transition-all text-sm font-bold">
                         <span class="uppercase">{voiceLang().split('-')[0]} ({LANGUAGES.find(l => l.code === voiceLang())?.label.split(' ')[0]})</span>
                         <ChevronDown class="w-3.5 h-3.5" />
                       </button>

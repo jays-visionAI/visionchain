@@ -38,9 +38,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             <div class="flex-1 flex flex-col overflow-hidden relative">
 
                 {/* Messages Area */}
-                <div class="flex-1 overflow-y-auto">
+                <div class="flex-1 overflow-y-auto bg-[#0d0d0f]">
                     <Show when={props.messages().length === 0}>
-                        {/* Bento Grid Layout */}
+                        {/* Bento Grid Layout - This will scroll if content is long, but normally it's static */}
                         <div class="flex flex-col items-center justify-start px-6 md:px-20 py-12">
                             <Motion.div
                                 initial={{ opacity: 0, y: 30 }}
@@ -196,9 +196,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         </div>
                     </Show>
 
-
                     <Show when={props.messages().length > 0}>
-                        <div class="max-w-3xl mx-auto px-6 py-10 space-y-8">
+                        <div class="max-w-3xl mx-auto px-6 pt-24 pb-48 space-y-8">
                             <For each={props.messages()}>
                                 {(msg) => (
                                     <Motion.div
@@ -213,9 +212,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             </div>
                                         </Show>
                                         <div class={`max-w-[75%] ${msg.role === 'user' ? 'order-first' : ''}`}>
-                                            <div class={`px-5 py-4 rounded-2xl text-[15px] leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
-                                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-tr-md shadow-lg shadow-blue-500/20'
-                                                : 'bg-[#17171a] text-gray-200 border border-white/[0.06] rounded-tl-md'
+                                            <div class={`px-5 py-4 rounded-2xl text-[15px] leading-relaxed whitespace-pre-wrap shadow-lg ${msg.role === 'user'
+                                                ? 'bg-blue-600 text-white rounded-tr-md shadow-blue-500/20'
+                                                : 'bg-[#18181b] text-gray-200 border border-white/[0.06] rounded-tl-md'
                                                 }`}>
                                                 {msg.content}
                                             </div>
@@ -234,7 +233,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
                                         <Sparkles class="w-4 h-4 text-white animate-pulse" />
                                     </div>
-                                    <div class="bg-[#17171a] border border-white/[0.06] px-5 py-4 rounded-2xl rounded-tl-md flex items-center gap-2">
+                                    <div class="bg-[#18181b] border border-white/[0.06] px-5 py-4 rounded-2xl rounded-tl-md flex items-center gap-2">
                                         <div class="flex gap-1.5">
                                             <span class="w-2 h-2 bg-cyan-400/60 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
                                             <span class="w-2 h-2 bg-cyan-400/60 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
@@ -248,7 +247,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 </div>
 
                 {/* Input Area - Redesigned Premium Floating Style */}
-                <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/98 to-transparent pt-32 pointer-events-none">
+                <div class="fixed bottom-0 left-[280px] right-[320px] p-8 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/98 to-transparent pt-32 z-30 pointer-events-none">
                     <div class="max-w-4xl mx-auto pointer-events-auto">
                         <div class="relative group">
                             {/* Dynamic Border Glow */}
