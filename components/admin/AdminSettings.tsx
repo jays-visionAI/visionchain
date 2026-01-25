@@ -13,7 +13,7 @@ import {
     TrendingUp,
     Activity,
 } from 'lucide-solid';
-import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory } from '../../services/vcnPriceService';
+import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory, initPriceService } from '../../services/vcnPriceService';
 import AdminAIManagement from './AdminAIManagement';
 import { contractService } from '../../services/contractService';
 
@@ -88,6 +88,7 @@ export default function AdminSettings() {
     };
 
     onMount(() => {
+        initPriceService();
         refreshNodeStats();
 
         const settings = getVcnPriceSettings();
@@ -240,8 +241,16 @@ export default function AdminSettings() {
                                             </div>
                                         </div>
                                         <div class="text-right">
-                                            <div class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Current Price</div>
-                                            <div class="text-2xl font-black text-white tracking-tighter tabular-nums">${getVcnPrice().toFixed(4)}</div>
+                                            <div class="flex items-center justify-end gap-2 mb-1">
+                                                <span class="relative flex h-2 w-2">
+                                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                                    <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                                </span>
+                                                <div class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Live Price (1s Refresh)</div>
+                                            </div>
+                                            <div class="text-2xl font-black text-white tracking-tighter tabular-nums transition-all duration-300">
+                                                ${getVcnPrice().toFixed(4)}
+                                            </div>
                                         </div>
                                     </div>
 
