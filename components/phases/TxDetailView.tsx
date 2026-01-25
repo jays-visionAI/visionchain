@@ -95,12 +95,21 @@ export default function TxDetailView(props: TxDetailProps) {
                                 </div>
                             </div>
                         </div>
-                        <div class="bg-blue-600/5 border border-blue-600/10 rounded-xl p-5">
-                            <div class="flex justify-between items-center mb-4">
-                                <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Value</span>
-                                <span class="text-xl font-black text-white">{Number(props.tx.value).toLocaleString()} VCN</span>
+
+                        {/* Dual Value Section (Accounting) */}
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-blue-600/5 border border-blue-600/10 rounded-xl p-4">
+                                <span class="text-[8px] font-black text-blue-500 uppercase tracking-widest block mb-2">Value at Confirmation</span>
+                                <div class="text-lg font-black text-white">{Number(props.tx.value).toLocaleString()} VCN</div>
+                                <div class="text-[10px] text-gray-500 font-mono mt-1">${(Number(props.tx.value) * 4.25).toLocaleString()} USD (Historical)</div>
+                            </div>
+                            <div class="bg-emerald-600/5 border border-emerald-600/10 rounded-xl p-4">
+                                <span class="text-[8px] font-black text-emerald-500 uppercase tracking-widest block mb-2">Current Market Value</span>
+                                <div class="text-lg font-black text-white">{Number(props.tx.value).toLocaleString()} VCN</div>
+                                <div class="text-[10px] text-gray-500 font-mono mt-1">${(Number(props.tx.value) * 4.876).toLocaleString()} USD (Mark-to-Market)</div>
                             </div>
                         </div>
+
                         {/* Cross-chain Section (Phase 2) */}
                         <Show when={isCrossChain}>
                             <div class="bg-gradient-to-r from-purple-900/10 to-blue-900/10 border border-purple-500/20 rounded-xl p-5 relative overflow-hidden group">
@@ -132,8 +141,22 @@ export default function TxDetailView(props: TxDetailProps) {
 
                         {/* Transfers Section Placeholder */}
                         <div class="border border-white/5 rounded-xl p-4">
-                            <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Token Transfers (ERC-20)</h4>
-                            <div class="text-[10px] text-gray-500 italic">No token transfers in this transaction.</div>
+                            <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Token Transfers (On-chain Record)</h4>
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                        <FileText class="w-4 h-4" />
+                                    </div>
+                                    <div class="text-[10px]">
+                                        <div class="font-bold text-white">VCN Asset Transfer</div>
+                                        <div class="text-gray-500 font-mono">{props.tx.from?.slice(0, 8)}... → {props.tx.to?.slice(0, 8)}...</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-[11px] font-black text-white">{Number(props.tx.value).toLocaleString()} VCN</div>
+                                    <div class="text-[9px] text-gray-500 uppercase tracking-widest">Verified Log</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </Show>
@@ -142,13 +165,13 @@ export default function TxDetailView(props: TxDetailProps) {
                     <div class="space-y-4">
                         <div class="p-4 bg-white/[0.02] border border-white/5 rounded-xl">
                             <div class="flex justify-between items-center mb-2">
-                                <span class="text-[10px] font-black text-gray-400 uppercase">Log #1 (Transfer)</span>
+                                <span class="text-[10px] font-black text-gray-400 uppercase">Log #1 (TRANSFER)</span>
                                 <span class="text-[9px] px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">Decoded</span>
                             </div>
                             <div class="font-mono text-[10px] text-gray-400 space-y-1">
-                                <div>From: <span class="text-blue-400">0x1234...5678</span></div>
-                                <div>To: <span class="text-blue-400">0x8765...4321</span></div>
-                                <div>Value: <span class="text-white">100.00 USDT</span></div>
+                                <div>From: <span class="text-blue-400">{props.tx.from}</span></div>
+                                <div>To: <span class="text-blue-400">{props.tx.to}</span></div>
+                                <div>Value: <span class="text-white">{Number(props.tx.value).toLocaleString()} VCN</span></div>
                             </div>
                         </div>
                         <div class="p-4 bg-white/[0.02] border border-white/5 rounded-xl opacity-50">
@@ -156,7 +179,7 @@ export default function TxDetailView(props: TxDetailProps) {
                                 <span class="text-[10px] font-black text-gray-400 uppercase">Input Data</span>
                             </div>
                             <div class="font-mono text-[10px] text-gray-500 break-all">
-                                0xa9059cbb000000000000000000000000...
+                                0xa9059cbb000000000000000000000000{props.tx.to?.slice(2)}...
                             </div>
                         </div>
                     </div>
@@ -182,26 +205,42 @@ export default function TxDetailView(props: TxDetailProps) {
                             </div>
                         </div>
 
-                        <div class="bg-white/[0.02] border border-white/5 rounded-xl text-center overflow-hidden">
-                            <div class="px-4 py-2 bg-white/[0.02] border-b border-white/5 flex justify-between items-center text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                                <span>Entry #14283</span>
-                                <span>Rule: TRANSFER_V1</span>
+                        <div class="bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex justify-between items-center">
+                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Journal Entry #14283</span>
+                                <div class="flex gap-2">
+                                    <span class="px-2 py-0.5 bg-blue-500/10 text-[8px] text-blue-400 rounded font-black">COST BASIS</span>
+                                    <span class="px-2 py-0.5 bg-emerald-500/10 text-[8px] text-emerald-400 rounded font-black">MTM READY</span>
+                                </div>
                             </div>
-                            <div class="p-4 font-mono text-xs space-y-2">
-                                <div class="flex justify-between items-center group cursor-pointer hover:bg-white/5 p-2 rounded">
-                                    <div class="text-green-400 font-black">DR Asset (VCN)</div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-white">1,000.00</span>
-                                        <span class="px-1.5 py-0.5 bg-blue-500/10 text-[8px] text-blue-400 rounded opacity-0 group-hover:opacity-100 transition-opacity">Evidence #L1</span>
+                            <div class="p-6 font-mono text-xs space-y-4">
+                                <div class="grid grid-cols-2 gap-8">
+                                    <div class="space-y-3">
+                                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest border-b border-white/5 pb-1">Historical Basis</div>
+                                        <div class="flex justify-between items-center group">
+                                            <div class="text-green-400 font-bold">DR Asset</div>
+                                            <div class="text-white">${(Number(props.tx.value) * 4.25).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                        </div>
+                                        <div class="flex justify-between items-center group">
+                                            <div class="text-orange-400 font-bold italic pl-4">CR Funds</div>
+                                            <div class="text-white">${(Number(props.tx.value) * 4.25).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-3 border-l border-white/10 pl-8">
+                                        <div class="text-[9px] font-black text-blue-500 uppercase tracking-widest border-b border-white/5 pb-1">Mark-to-Market</div>
+                                        <div class="flex justify-between items-center group">
+                                            <div class="text-blue-400 font-bold">Current value</div>
+                                            <div class="text-white">${(Number(props.tx.value) * 4.876).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                        </div>
+                                        <div class="flex justify-between items-center group">
+                                            <div class="text-purple-400 font-bold italic">Unrealized P/L</div>
+                                            <div class="text-green-400">+${(Number(props.tx.value) * (4.876 - 4.25)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="flex justify-between items-center group cursor-pointer hover:bg-white/5 p-2 rounded">
-                                    <div class="text-orange-400 font-black">CR Liability (User Funds)</div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-white">1,000.00</span>
-                                        <span class="px-1.5 py-0.5 bg-blue-500/10 text-[8px] text-blue-400 rounded opacity-0 group-hover:opacity-100 transition-opacity">Evidence #L1</span>
-                                    </div>
-                                </div>
+                            </div>
+                            <div class="px-4 py-2 bg-blue-500/5 text-[8px] font-black text-blue-400 uppercase tracking-widest text-right">
+                                Generated via Accounting Rule: {props.tx.type === 'Transfer' ? 'ASSET_TRANSFER_V2' : 'CONTRACT_CALL_V1'}
                             </div>
                         </div>
                     </div>

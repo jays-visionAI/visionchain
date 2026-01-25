@@ -9,8 +9,9 @@ import {
     Download,
     BarChart3,
     Globe,
-    XCircle, // Added
-    CheckCircle2 // Added
+    XCircle,
+    CheckCircle2,
+    ArrowRight
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import LightSpeedBackground from './LightSpeedBackground';
@@ -269,38 +270,54 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                 <tr class="border-b border-white/10 bg-white/5 text-[10px] uppercase tracking-widest text-gray-500">
                                     <th class="p-4 font-black">Tx Hash</th>
                                     <th class="p-4 font-black">Type</th>
-                                    <th class="p-4 font-black hidden md:table-cell">Method</th>
-                                    <th class="p-4 font-black hidden sm:table-cell">From</th>
-                                    <th class="p-4 font-black hidden sm:table-cell">To</th>
-                                    <th class="p-4 font-black text-right">Value</th>
-                                    <th class="p-4 font-black text-right hidden md:table-cell">Time</th>
+                                    <th class="p-4 font-black hidden lg:table-cell">From / To</th>
+                                    <th class="p-4 font-black text-right">Historical Basis (USD)</th>
+                                    <th class="p-4 font-black text-right">Market Value (USD)</th>
+                                    <th class="p-4 font-black text-right hidden md:table-cell">Amount</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-white/5">
                                 <For each={props.latestTransactions}>
-                                    {(tx: any) => (
-                                        <tr
-                                            class="hover:bg-white/5 transition-colors cursor-pointer group"
-                                            onClick={() => props.onSearch(tx.hash)}
-                                        >
-                                            <td class="p-4 font-mono text-xs text-blue-400 group-hover:text-blue-300 transition-colors">
-                                                {tx.hash.slice(0, 10)}...
-                                            </td>
-                                            <td class="p-4">
-                                                <span class={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${tx.type === 'Transfer' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                                    }`}>
-                                                    {tx.type}
-                                                </span>
-                                            </td>
-                                            <td class="p-4 text-xs font-bold text-gray-400 hidden md:table-cell">{tx.method}</td>
-                                            <td class="p-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{tx.from ? tx.from.slice(0, 6) + '...' + tx.from.slice(-4) : '-'}</td>
-                                            <td class="p-4 text-xs font-mono text-gray-500 hidden sm:table-cell">{tx.to ? tx.to.slice(0, 6) + '...' + tx.to.slice(-4) : '-'}</td>
-                                            <td class="p-4 text-right font-mono text-xs font-bold text-white">
-                                                {tx.value ? parseFloat(tx.value).toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0'} VCN
-                                            </td>
-                                            <td class="p-4 text-right text-xs text-gray-500 font-mono hidden md:table-cell">{tx.time}</td>
-                                        </tr>
-                                    )}
+                                    {(tx: any) => {
+                                        const amount = parseFloat(tx.value || '0');
+                                        const historicalBasis = amount * 4.25; // Simulated price at confirmation
+                                        const marketValue = amount * 4.876; // Current simulated price
+
+                                        return (
+                                            <tr
+                                                class="hover:bg-white/5 transition-colors cursor-pointer group"
+                                                onClick={() => props.onSearch(tx.hash)}
+                                            >
+                                                <td class="p-4 font-mono text-xs text-blue-400 group-hover:text-blue-300 transition-colors">
+                                                    {tx.hash.slice(0, 10)}...
+                                                </td>
+                                                <td class="p-4">
+                                                    <span class={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider ${tx.type === 'Transfer' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                                        }`}>
+                                                        {tx.type === 'Transfer' ? 'Asset' : 'Protocol'}
+                                                    </span>
+                                                </td>
+                                                <td class="p-4 hidden lg:table-cell">
+                                                    <div class="flex items-center gap-2 text-[10px] font-mono text-gray-500">
+                                                        <span>{tx.from?.slice(0, 6)}...</span>
+                                                        <ArrowRight class="w-3 h-3 text-gray-700" />
+                                                        <span>{tx.to?.slice(0, 6)}...</span>
+                                                    </div>
+                                                </td>
+                                                <td class="p-4 text-right">
+                                                    <div class="text-xs font-bold text-white">${historicalBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    <div class="text-[9px] text-gray-600 uppercase font-black">At Confirmation</div>
+                                                </td>
+                                                <td class="p-4 text-right">
+                                                    <div class="text-xs font-bold text-blue-400">${marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                                    <div class="text-[9px] text-blue-900 uppercase font-black">Live Market</div>
+                                                </td>
+                                                <td class="p-4 text-right text-xs font-bold text-gray-400 hidden md:table-cell font-mono">
+                                                    {amount.toLocaleString()} VCN
+                                                </td>
+                                            </tr>
+                                        );
+                                    }}
                                 </For>
                                 <Show when={!props.latestTransactions || props.latestTransactions.length === 0}>
                                     <tr>
