@@ -61,8 +61,21 @@ export const generateText = async (
         }
 
         const provider = factory.getProvider(config.providerId);
+
+        // --- Locale & Time Injection ---
+        const now = new Date();
+        const localeInfo = `[Current Context]
+Date: ${now.toLocaleDateString()}
+Time: ${now.toLocaleTimeString()}
+Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+Locale: ${navigator.language}`;
+
+        const dynamicSystemPrompt = config.systemPrompt
+            ? `${config.systemPrompt}\n\n${localeInfo}`
+            : localeInfo;
+
         const result = await provider.generateText(prompt, config.model, config.apiKey, {
-            systemPrompt: config.systemPrompt,
+            systemPrompt: dynamicSystemPrompt,
             temperature: config.temperature,
             maxTokens: config.maxTokens,
             imageBase64,
@@ -78,7 +91,6 @@ export const generateText = async (
                 { role: 'assistant', text: result, timestamp: new Date().toISOString() }
             ],
             lastMessage: result.substring(0, 100),
-            createdAt: new Date().toISOString(),
             status: 'completed'
         }).catch(e => console.warn("[AIService] Log failed:", e));
 
