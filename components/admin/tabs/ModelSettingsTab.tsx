@@ -61,7 +61,8 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                             >
                                 <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
                                 <option value="gemini-1.5-pro">Gemini 1.5 Pro (Powerful)</option>
-                                <option value="deepseek-chat">DeepSeek Chat (Reasoning)</option>
+                                <option value="deepseek-chat">DeepSeek Chat (V3)</option>
+                                <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
                             </select>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl">
@@ -94,7 +95,8 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                             >
                                 <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
                                 <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                <option value="deepseek-chat">DeepSeek Chat</option>
+                                <option value="deepseek-chat">DeepSeek Chat (V3)</option>
+                                <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
                             </select>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl">
