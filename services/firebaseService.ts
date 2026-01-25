@@ -100,21 +100,68 @@ export const saveUserPreset = async (vidOrEmail: string, preset: Omit<PaymentPre
 // --- Phone Normalization Utility ---
 export const normalizePhoneNumber = (phone: string): string => {
     if (!phone) return '';
-    // Remove all non-numeric characters
-    const clean = phone.replace(/\D/g, '');
+    const trimmed = phone.trim();
 
-    // Example: 01029322888 -> +82-10-2932-2888
-    if (clean.startsWith('010') && clean.length === 11) {
-        return `+82-10-${clean.slice(3, 7)}-${clean.slice(7)}`;
-    }
-    if (clean.startsWith('10') && clean.length === 10) {
-        return `+82-10-${clean.slice(2, 6)}-${clean.slice(6)}`;
-    }
-    if (clean.startsWith('8210') && clean.length === 12) {
-        return `+82-10-${clean.slice(4, 8)}-${clean.slice(8)}`;
+    // If already starts with +, assume user provided country code
+    if (trimmed.startsWith('+')) {
+        // Just return as is if it looks formatted, or clean it up
+        if (trimmed.includes('-')) return trimmed;
+        const numeric = trimmed.replace(/\D/g, '');
+        return `+${numeric}`;
     }
 
-    return phone; // Fallback
+    // Remove all non-numeric characters for processing
+    const clean = trimmed.replace(/\D/g, '');
+    if (!clean) return '';
+
+    // Detect Country Code from Browser Locale
+    let countryCode = '82'; // Default to Korea (as per project context)
+    try {
+        if (typeof navigator !== 'undefined') {
+            const locale = navigator.language || 'ko-KR';
+            const country = (locale.split('-')[1] || '').toUpperCase();
+
+            const mapping: Record<string, string> = {
+                'KR': '82', 'US': '1', 'JP': '81', 'CN': '86', 'GB': '44',
+                'DE': '49', 'FR': '33', 'CA': '1', 'AU': '61', 'SG': '65'
+            };
+
+            if (mapping[country]) {
+                countryCode = mapping[country];
+            } else {
+                // Try to infer from language if country part is missing
+                const lang = locale.split('-')[0].toLowerCase();
+                if (lang === 'ko') countryCode = '82';
+                else if (lang === 'ja') countryCode = '81';
+                else if (lang === 'zh') countryCode = '86';
+            }
+        }
+    } catch (e) {
+        console.warn('[Phone] Failed to detect locale, falling back to +82');
+    }
+
+    // Specialized formatting for Korea (common use case)
+    if (countryCode === '82') {
+        if (clean.startsWith('010') && clean.length === 11) {
+            return `+82-10-${clean.slice(3, 7)}-${clean.slice(7)}`;
+        }
+        if (clean.startsWith('10') && (clean.length === 10 || clean.length === 11)) {
+            const digits = clean.startsWith('10') ? clean : clean.slice(1);
+            return `+82-10-${digits.slice(2, 6)}-${digits.slice(6)}`;
+        }
+        if (clean.startsWith('8210') && clean.length === 12) {
+            return `+82-10-${clean.slice(4, 8)}-${clean.slice(8)}`;
+        }
+    }
+
+    // Generic formatting for other countries
+    let processedDigits = clean;
+    // Remove leading zero if present in local format
+    if (processedDigits.startsWith('0') && processedDigits.length > 5) {
+        processedDigits = processedDigits.slice(1);
+    }
+
+    return `+${countryCode}-${processedDigits}`;
 };
 
 // Simplified user search for intent resolution
