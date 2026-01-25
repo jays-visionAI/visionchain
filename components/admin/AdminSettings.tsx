@@ -32,7 +32,7 @@ export default function AdminSettings() {
         }
     };
 
-    const [priceInput, setPriceInput] = createSignal({ min: 0, max: 0 });
+    const [priceInput, setPriceInput] = createSignal({ min: '0', max: '0' });
 
     const PriceChart = () => {
         const history = getVcnPriceHistory();
@@ -77,7 +77,7 @@ export default function AdminSettings() {
         refreshNodeStats();
 
         const settings = getVcnPriceSettings();
-        setPriceInput({ min: settings.minPrice, max: settings.maxPrice });
+        setPriceInput({ min: settings.minPrice.toString(), max: settings.maxPrice.toString() });
 
         // Polling nodes every 30s
         const interval = setInterval(refreshNodeStats, 30000);
@@ -85,9 +85,17 @@ export default function AdminSettings() {
     });
 
     const handleUpdatePriceRange = async () => {
+        const min = parseFloat(priceInput().min.replace(',', '.'));
+        const max = parseFloat(priceInput().max.replace(',', '.'));
+
+        if (isNaN(min) || isNaN(max)) {
+            alert("Please enter valid numeric values");
+            return;
+        }
+
         await updateVcnPriceSettings({
-            minPrice: Number(priceInput().min),
-            maxPrice: Number(priceInput().max)
+            minPrice: min,
+            maxPrice: max
         });
         alert("VCN Price Range Updated Successfully");
     };
@@ -220,21 +228,23 @@ export default function AdminSettings() {
                                         <div>
                                             <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Min Range (USD)</label>
                                             <input
-                                                type="number"
-                                                step="0.0001"
+                                                type="text"
+                                                inputmode="decimal"
                                                 value={priceInput().min}
-                                                onInput={(e) => setPriceInput({ ...priceInput(), min: Number(e.currentTarget.value) })}
+                                                onInput={(e) => setPriceInput({ ...priceInput(), min: e.currentTarget.value })}
                                                 class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                                placeholder="0.0000"
                                             />
                                         </div>
                                         <div>
                                             <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Range (USD)</label>
                                             <input
-                                                type="number"
-                                                step="0.0001"
+                                                type="text"
+                                                inputmode="decimal"
                                                 value={priceInput().max}
-                                                onInput={(e) => setPriceInput({ ...priceInput(), max: Number(e.currentTarget.value) })}
+                                                onInput={(e) => setPriceInput({ ...priceInput(), max: e.currentTarget.value })}
                                                 class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                                placeholder="0.0000"
                                             />
                                         </div>
                                     </div>
