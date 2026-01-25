@@ -189,11 +189,12 @@ export default function AccountingSettingsView(props: AccountingSettingsProps) {
                                 <div>
                                     <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Range (%)</label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputmode="decimal"
                                         value={priceInput().range}
                                         onInput={(e) => setPriceInput({ ...priceInput(), range: e.currentTarget.value })}
                                         class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
-                                        placeholder="5"
+                                        placeholder="5.00"
                                     />
                                 </div>
                             </div>
