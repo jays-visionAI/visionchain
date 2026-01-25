@@ -10,7 +10,9 @@ import {
     Cpu,
     Coins,
     RefreshCw,
+    TrendingUp,
 } from 'lucide-solid';
+import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings } from '../../services/vcnPriceService';
 import AdminAIManagement from './AdminAIManagement';
 import { contractService } from '../../services/contractService';
 
@@ -29,12 +31,26 @@ export default function AdminSettings() {
         }
     };
 
+    const [priceInput, setPriceInput] = createSignal({ min: 0, max: 0 });
+
     onMount(() => {
         refreshNodeStats();
+
+        const settings = getVcnPriceSettings();
+        setPriceInput({ min: settings.minPrice, max: settings.maxPrice });
+
         // Polling nodes every 30s
         const interval = setInterval(refreshNodeStats, 30000);
         return () => clearInterval(interval);
     });
+
+    const handleUpdatePriceRange = async () => {
+        await updateVcnPriceSettings({
+            minPrice: Number(priceInput().min),
+            maxPrice: Number(priceInput().max)
+        });
+        alert("VCN Price Range Updated Successfully");
+    };
 
     return (
         <div class="max-w-4xl mx-auto pb-20">
@@ -138,6 +154,55 @@ export default function AdminSettings() {
                                         </div>
                                         <ChevronRight class="w-5 h-5 text-gray-700" />
                                     </div>
+                                </div>
+
+                                {/* VCN Price Management (Admin Live) */}
+                                <div class="bg-[#15151a] border border-blue-500/20 rounded-2xl p-6 shadow-2xl">
+                                    <div class="flex items-center justify-between mb-8">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                                                <TrendingUp class="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h3 class="font-bold text-white">VCN Price Management</h3>
+                                                <p class="text-[10px] text-gray-500 uppercase font-black tracking-widest mt-1">Live Volatility Engine</p>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Current Price</div>
+                                            <div class="text-2xl font-black text-white tracking-tighter tabular-nums">${getVcnPrice().toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4 mb-6">
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2">Min Range (USD)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={priceInput().min}
+                                                onInput={(e) => setPriceInput({ ...priceInput(), min: Number(e.currentTarget.value) })}
+                                                class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-2">Max Range (USD)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={priceInput().max}
+                                                onInput={(e) => setPriceInput({ ...priceInput(), max: Number(e.currentTarget.value) })}
+                                                class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-blue-500/50"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={handleUpdatePriceRange}
+                                        class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+                                    >
+                                        Update Volatility Bounds
+                                    </button>
                                 </div>
 
                                 <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 hover:bg-white/[0.04] transition-all cursor-not-allowed group opacity-80">
