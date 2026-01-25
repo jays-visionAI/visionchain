@@ -156,6 +156,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [recognition, setRecognition] = createSignal<any>(null); // Web Speech API
 
   const [isImageGenMode, setIsImageGenMode] = createSignal(false);
+  const [isComposing, setIsComposing] = createSignal(false);
 
   // --- Thinking Steps (Progress) ---
   const [thinkingSteps, setThinkingSteps] = createSignal<{ id: string, label: string, status: 'pending' | 'loading' | 'completed' | 'success' }[]>([]);
@@ -169,6 +170,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   // --- Refs ---
   let scrollRef: HTMLDivElement | undefined;
   let fileInputRef: HTMLInputElement | undefined;
+  let textareaRef: HTMLTextAreaElement | undefined;
 
   // --- Live Voice Mode (Advanced) State - Keeping for backward compatibility if user wants full Live API ---
   const [isLiveMode, setIsLiveMode] = createSignal(false);
@@ -397,6 +399,10 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     // Clear attachments after send
     setAttachments([]);
     if (fileInputRef) fileInputRef.value = '';
+    if (textareaRef) {
+      textareaRef.value = '';
+      textareaRef.style.height = 'auto';
+    }
 
     setLoadingType(isImageGenMode() ? 'image' : 'text');
     setThinkingSteps([
@@ -974,24 +980,31 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
                   {/* Input TextField */}
                   <textarea
+                    ref={textareaRef}
                     rows={1}
                     class="flex-1 bg-transparent text-white text-[15px] py-3 border-none outline-none focus:ring-0 focus:outline-none resize-none placeholder:text-gray-600 max-h-32 font-medium shadow-none appearance-none"
                     placeholder={isRecording() ? "Listening to your voice..." : "Ask Vision AI anything..."}
                     value={input()}
+                    onCompositionStart={() => setIsComposing(true)}
+                    onCompositionEnd={(e) => {
+                      setIsComposing(false);
+                      setInput(e.currentTarget.value);
+                    }}
                     onInput={(e) => {
                       setInput(e.currentTarget.value);
                       e.currentTarget.style.height = 'auto';
                       e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
                     }}
                     onKeyDown={(e) => {
-                      if (e.isComposing) return;
+                      if (isComposing()) return;
+
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         handleSend();
                         // Reset height after sending
                         const target = e.currentTarget;
                         setTimeout(() => {
-                          target.style.height = 'auto';
+                          if (target) target.style.height = 'auto';
                         }, 0);
                       }
                     }}
