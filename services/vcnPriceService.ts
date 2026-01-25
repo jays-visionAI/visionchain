@@ -26,9 +26,9 @@ const [priceSettings, setPriceSettings] = createSignal<VcnPriceSettings>(DEFAULT
 
 // Fibonacci-inspired Price Volatility Engine
 // Uses harmonics based on the Golden Ratio (PHI) to simulate natural market cycles
-const calculateFibonacciPrice = (settings: VcnPriceSettings) => {
+const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number) => {
     const PHI = 1.61803398875;
-    const now = Date.now() / 1000; // time in seconds
+    const now = (targetTime || Date.now()) / 1000; // time in seconds
 
     // Period adjustment: 2x slower than previous (previous was ~8s for small cycle, now user-defined)
     // We use settings.volatilityPeriod as the base cycle
@@ -96,6 +96,13 @@ export const initPriceService = () => {
 export const getVcnPrice = () => currentPrice();
 export const getVcnPriceHistory = () => priceHistory();
 export const getVcnPriceSettings = () => priceSettings();
+
+// Get the price at midnight today (local time)
+export const getDailyOpeningPrice = () => {
+    const now = new Date();
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    return calculateFibonacciPrice(priceSettings(), midnight.getTime());
+};
 
 export const updateVcnPriceSettings = async (settings: Partial<VcnPriceSettings>) => {
     const db = getFirebaseDb();

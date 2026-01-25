@@ -62,8 +62,10 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     })()}
                                 </span>
                                 <div class="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full border border-white/10">
-                                    <TrendingUp class="w-3.5 h-3.5 text-gray-500" />
-                                    <span class="text-sm text-gray-500 font-bold">+$0.00 (0.00%)</span>
+                                    <TrendingUp class={`w-3.5 h-3.5 ${props.getAssetData('VCN').change24h >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+                                    <span class={`text-sm font-bold ${props.getAssetData('VCN').change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                        {props.getAssetData('VCN').change24h >= 0 ? '+' : ''}${Math.abs((props.totalValue() * props.getAssetData('VCN').change24h) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({props.getAssetData('VCN').change24h.toFixed(2)}%)
+                                    </span>
                                 </div>
                             </div>
                         </div>

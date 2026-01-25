@@ -52,7 +52,7 @@ import {
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
-import { initPriceService, getVcnPrice } from '../services/vcnPriceService';
+import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services/vcnPriceService';
 import AIChat from './AIChat';
 import { generateText } from '../services/aiService';
 import { useAuth } from './auth/authContext';
@@ -202,6 +202,8 @@ const Wallet = (): JSX.Element => {
     const [lastTxHash, setLastTxHash] = createSignal('');
     const [loadingMessage, setLoadingMessage] = createSignal('LOADING WALLET');
     const [purchasedVcn, setPurchasedVcn] = createSignal(0);
+    const [snapshotVcnPrice, setSnapshotVcnPrice] = createSignal(getVcnPrice());
+    const [snapshotDailyChange, setSnapshotDailyChange] = createSignal(0);
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -483,6 +485,14 @@ const Wallet = (): JSX.Element => {
     // Fetch data on mount
     onMount(async () => {
         initPriceService();
+        // Capture a static snapshot of the price for the entire wallet session
+        const currentVcnPrice = getVcnPrice();
+        const openingPrice = getDailyOpeningPrice();
+        const dailyChange = ((currentVcnPrice - openingPrice) / openingPrice) * 100;
+
+        setSnapshotVcnPrice(currentVcnPrice);
+        setSnapshotDailyChange(dailyChange);
+
         // Sanitize corrupted local storage keys
         const encrypted = localStorage.getItem('vcn_encrypted_wallet');
         if (encrypted === 'null' || encrypted === 'undefined' || (encrypted && encrypted.length < 20)) {
@@ -686,9 +696,9 @@ const Wallet = (): JSX.Element => {
         const liquid = (userHoldings() as any)[symbol] || 0;
         const purchased = (symbol === 'VCN') ? purchasedVcn() : 0;
 
-        // Use live VCN price from service, static for others
+        // Use snapshot VCN price from service (fixed at page load), static for others
         const staticPrices: Record<string, { name: string, price: number, image?: string }> = {
-            'VCN': { name: 'Vision Chain', price: getVcnPrice() },
+            'VCN': { name: 'Vision Chain', price: snapshotVcnPrice() },
             'ETH': { name: 'Ethereum', price: 3200.00 }
         };
 
@@ -702,7 +712,7 @@ const Wallet = (): JSX.Element => {
             liquidBalance: liquid,
             image: null,
             price: config.price,
-            change24h: 0,
+            change24h: symbol === 'VCN' ? snapshotDailyChange() : 0,
             sparkline: [config.price, config.price, config.price],
             isLoading: false
         };

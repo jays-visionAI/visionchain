@@ -290,8 +290,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         <div class="flex items-center justify-between mb-4">
                             <div class="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Net Worth</div>
                             <div class="flex items-center gap-1.5 px-2 py-1 bg-white/[0.04] rounded-full border border-white/[0.06]">
-                                <span class="w-1 h-1 rounded-full bg-gray-500" />
-                                <span class="text-[10px] text-gray-500 font-bold">0.00%</span>
+                                <span class={`w-1 h-1 rounded-full ${props.getAssetData('VCN').change24h >= 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+                                <span class={`text-[10px] font-bold ${props.getAssetData('VCN').change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {props.getAssetData('VCN').change24h >= 0 ? '+' : ''}{props.getAssetData('VCN').change24h.toFixed(2)}%
+                                </span>
                             </div>
                         </div>
                         <div class="text-3xl font-bold text-white mb-8 tracking-tight font-mono">
