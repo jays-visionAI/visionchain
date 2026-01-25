@@ -93,8 +93,8 @@ const AIChat = (props: AIChatProps): JSX.Element => {
   const [aspectRatio, setAspectRatio] = createSignal<AspectRatio>(AspectRatio.Square);
 
   // --- Admin Configured Settings ---
-  const [activeProvider, setActiveProvider] = createSignal<string>('gemini');
-  const [modelLabel, setModelLabel] = createSignal<string>('Gemini 1.5 Flash');
+  const [activeProvider, setActiveProvider] = createSignal<string>('');
+  const [modelLabel, setModelLabel] = createSignal<string>('');
 
   // --- New Features State ---
   const [dragActive, setDragActive] = createSignal(false);
@@ -131,20 +131,26 @@ const AIChat = (props: AIChatProps): JSX.Element => {
     try {
       const settings = await getChatbotSettings();
       const botConfig = settings?.helpdeskBot;
-      const modelName = botConfig?.model || 'gemini-1.5-flash';
+      const modelName = botConfig?.model || '';
 
-      let provider = 'gemini';
-      let label = 'Gemini 1.5 Flash';
+      let provider = '';
+      let label = '';
 
-      if (modelName.includes('deepseek')) {
-        provider = 'deepseek';
-        label = 'DeepSeek Chat';
-      } else if (modelName.includes('gpt')) {
-        provider = 'openai';
-        label = 'GPT-4o';
-      } else if (modelName.includes('claude')) {
-        provider = 'anthropic';
-        label = 'Claude 3.5 Sonnet';
+      if (modelName) {
+        if (modelName.includes('deepseek')) {
+          provider = 'deepseek';
+          label = 'DeepSeek Chat';
+        } else if (modelName.includes('gpt')) {
+          provider = 'openai';
+          label = 'GPT-4o';
+        } else if (modelName.includes('claude')) {
+          provider = 'anthropic';
+          label = 'Claude 3.5 Sonnet';
+        } else {
+          // Default to Gemini if model name exists but doesn't match others (or is explicitly gemini)
+          provider = 'gemini';
+          label = 'Gemini 1.5 Flash';
+        }
       }
 
       setActiveProvider(provider);
