@@ -54,9 +54,9 @@ export const generateTextGemini = async (
       return response.text || "No response generated.";
 
     } catch (e: any) {
-      // Fallback Logic for Quota Exceeded (429)
-      if (e.message && (e.message.includes('429') || e.message.includes('RESOURCE_EXHAUSTED')) && model !== 'gemini-1.5-flash') {
-        console.warn(`[Gemini] ${model} exhausted. Falling back to gemini-1.5-flash.`);
+      // Fallback Logic for Quota Exceeded (429) OR Model Not Found (404)
+      if (e.message && (e.message.includes('429') || e.message.includes('RESOURCE_EXHAUSTED') || e.message.includes('404') || e.message.includes('NOT_FOUND')) && model !== 'gemini-1.5-flash-latest') {
+        console.warn(`[Gemini] ${model} failed (404/429). Falling back to gemini-1.5-flash-latest.`);
         const fallbackResponse = await ai.models.generateContent({
           model: 'gemini-1.5-flash-latest',
           contents: contents,
