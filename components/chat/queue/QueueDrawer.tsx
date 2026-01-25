@@ -2,8 +2,8 @@ import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History } from 'lucide-solid';
 import { AgentTask } from './AgentChip';
-import { contractService } from '../../services/contractService';
-import { cancelScheduledTask } from '../../services/firebaseService';
+import { contractService } from '../../../services/contractService';
+import { cancelScheduledTask } from '../../../services/firebaseService';
 
 // Extend AgentTask locally if needed or assume it has extra props from subscription
 interface DetailedAgentTask extends AgentTask {
