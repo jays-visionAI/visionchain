@@ -43,14 +43,15 @@ export class GeminiProvider implements AIProvider {
         try {
             return await executeRequest(model);
         } catch (e: any) {
-            const errorMsg = e.message || '';
-            // Robust Fallback for 404 (Not Found) or 429 (Resource Exhausted)
-            const isFailing = errorMsg.includes('404') || errorMsg.includes('NOT_FOUND') ||
-                errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
+            const errorMsg = JSON.stringify(e).toLowerCase();
+            // Catch 404 (Not Found), 400 (Bad Request - often version mismatch), 429 (Quota)
+            const isFailing = errorMsg.includes('404') || errorMsg.includes('not_found') ||
+                errorMsg.includes('429') || errorMsg.includes('resource_exhausted') ||
+                errorMsg.includes('400');
 
-            if (isFailing && model !== 'gemini-1.5-pro') {
-                console.warn(`[GeminiProvider] ${model} failed. Falling back to gemini-1.5-pro.`);
-                return await executeRequest('gemini-1.5-pro');
+            if (isFailing && model !== 'gemini-1.5-pro-latest') {
+                console.warn(`[GeminiProvider] ${model} failed. Falling back to gemini-1.5-pro-latest.`);
+                return await executeRequest('gemini-1.5-pro-latest');
             }
             throw e;
         }

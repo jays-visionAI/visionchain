@@ -23,7 +23,7 @@ class ProviderFactory {
         if (!settings) throw new Error("AI Configuration not found.");
 
         const botConfig = botType === 'helpdesk' ? settings.helpdeskBot : settings.intentBot;
-        const model = botConfig?.model || 'gemini-1.5-pro';
+        const model = botConfig?.model || 'deepseek-chat';
         const providerId = getProviderFromModel(model) as AIProviderID;
         const apiKey = await getActiveGlobalApiKey(providerId);
 
@@ -56,7 +56,7 @@ export const generateText = async (
             const geminiKey = await getActiveGlobalApiKey('gemini');
             if (geminiKey) {
                 console.warn("[AIService] DeepSeek doesn't support images. Falling back to Gemini.");
-                config = { ...config, providerId: 'gemini', model: 'gemini-1.5-pro', apiKey: geminiKey };
+                config = { ...config, providerId: 'gemini', model: 'gemini-1.5-pro-latest', apiKey: geminiKey };
             }
         }
 
@@ -121,7 +121,7 @@ export const generateSpeech = async (text: string): Promise<string | null> => {
  */
 export const resolveVoiceConfig = async () => {
     const settings = await getChatbotSettings();
-    const config = settings?.voiceSettings || { model: 'gemini-1.5-pro', ttsVoice: 'Kore' };
+    const config = settings?.voiceSettings || { model: 'gemini-1.5-pro-latest', ttsVoice: 'Kore' };
     const apiKey = await getActiveGlobalApiKey('gemini');
     if (!apiKey) throw new Error("API Key for Voice Service missing.");
 
@@ -129,7 +129,7 @@ export const resolveVoiceConfig = async () => {
         provider: 'gemini',
         model: config.model,
         ttsVoice: config.ttsVoice,
-        sttModel: (config as any).sttModel || 'gemini-1.5-pro',
+        sttModel: (config as any).sttModel || 'gemini-1.5-pro-latest',
         apiKey
     };
 };
