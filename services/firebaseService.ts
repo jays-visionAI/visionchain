@@ -817,19 +817,61 @@ export const getProviderFromModel = (modelName: string = ''): string => {
 };
 
 export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
-    const db = getFirebaseDb();
-    const docRef = doc(db, 'settings', 'chatbot');
-    const snapshot = await getDoc(docRef);
-    if (!snapshot.exists()) return null;
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'settings', 'chatbot');
+        const snapshot = await getDoc(docRef);
 
-    const data = snapshot.data();
-    return {
-        knowledgeBase: data.knowledgeBase || '',
-        intentBot: data.intentBot || { systemPrompt: '', model: '', temperature: 0.7, maxTokens: 2048 },
-        helpdeskBot: data.helpdeskBot || { systemPrompt: '', model: '', temperature: 0.7, maxTokens: 2048 },
-        imageSettings: data.imageSettings || { model: '', quality: 'standard', size: '1k' },
-        voiceSettings: data.voiceSettings || { model: '', ttsVoice: 'Kore', sttModel: '' }
-    } as ChatbotSettings;
+        const defaultSettings: ChatbotSettings = {
+            knowledgeBase: '',
+            intentBot: {
+                systemPrompt: 'You are Vision AI, an advanced blockchain assistant capable of executing transactions and analyzing chain data.',
+                model: 'gemini-2.0-flash-exp',
+                temperature: 0.7,
+                maxTokens: 2048
+            },
+            helpdeskBot: {
+                systemPrompt: 'You are a helpful support agent for Vision Chain.',
+                model: 'gemini-2.0-flash-exp',
+                temperature: 0.7,
+                maxTokens: 2048
+            },
+            imageSettings: {
+                model: 'imagen-3.0-generate-001',
+                quality: 'standard',
+                size: '1024x1024'
+            },
+            voiceSettings: {
+                model: 'gemini-2.0-flash-exp',
+                ttsVoice: 'Kore',
+                sttModel: 'gemini-2.0-flash-exp'
+            }
+        };
+
+        if (!snapshot.exists()) {
+            console.warn('[Firebase] Chatbot settings not found, using defaults.');
+            return defaultSettings;
+        }
+
+        const data = snapshot.data();
+        return {
+            knowledgeBase: data.knowledgeBase || defaultSettings.knowledgeBase,
+            intentBot: data.intentBot || defaultSettings.intentBot,
+            helpdeskBot: data.helpdeskBot || defaultSettings.helpdeskBot,
+            imageSettings: data.imageSettings || defaultSettings.imageSettings,
+            voiceSettings: data.voiceSettings || defaultSettings.voiceSettings
+        } as ChatbotSettings;
+    } catch (e) {
+        console.error("Error fetching chatbot settings:", e);
+        // Fallback robustly
+        return {
+            knowledgeBase: '',
+            intentBot: { systemPrompt: '', model: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
+            helpdeskBot: { systemPrompt: '', model: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
+            imageSettings: { model: 'imagen-3.0-generate-001', quality: 'standard', size: '1024x1024' },
+            voiceSettings: { model: 'gemini-2.0-flash-exp', ttsVoice: 'Kore', sttModel: 'gemini-2.0-flash-exp' }
+        };
+    }
 };
 
 export const saveChatbotSettings = async (settings: ChatbotSettings): Promise<void> => {
