@@ -631,7 +631,7 @@ const AIChat = (props: AIChatProps): JSX.Element => {
 
 
           {/* Messages Area (ChatGPT Style Bubble) */}
-          <div class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth bg-[#1a1a1a]" ref={scrollRef}>
+          <div class="flex-1 overflow-y-auto p-4 pb-32 space-y-6 scroll-smooth bg-[#1a1a1a]" ref={scrollRef}>
             <For each={messages()}>
               {(msg, idx) => (
                 <div class={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
