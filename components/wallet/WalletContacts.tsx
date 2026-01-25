@@ -222,8 +222,8 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                             <td class="px-8 py-4">
                                                 <div class="flex items-center gap-4">
                                                     <div class={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-xl transition-transform group-hover:scale-110 ${contact.vchainUserUid
-                                                            ? 'bg-gradient-to-br from-blue-600 to-indigo-600'
-                                                            : 'bg-gray-800 border border-white/5'
+                                                        ? 'bg-gradient-to-br from-blue-600 to-indigo-600'
+                                                        : 'bg-gray-800 border border-white/5'
                                                         }`}>
                                                         {contact.internalName.charAt(0)}
                                                     </div>
@@ -297,7 +297,8 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
+                                    }
+                                </For>
                             </tbody>
                         </table>
                     </div>
