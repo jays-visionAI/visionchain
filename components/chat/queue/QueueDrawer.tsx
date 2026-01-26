@@ -226,14 +226,14 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                         </Show>
                                                     </button>
 
-                                                    {/* Test Force Run Button */}
+                                                    {/* Force Run / Retry Button */}
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             props.onForceExecute?.(task.id);
                                                         }}
                                                         class="w-10 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg flex items-center justify-center transition-colors"
-                                                        title="Force Execute (Debug)"
+                                                        title="Execute Now"
                                                     >
                                                         <Play class="w-3 h-3 fill-current" />
                                                     </button>

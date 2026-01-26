@@ -125,6 +125,13 @@ Unless explicitly requested otherwise by the user, you MUST match their language
    [JSON FORMAT]
    - When executing, append this JSON to the very end of your response:
    {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
+
+5. TIME SENSITIVITY & SCHEDULING RULE:
+   - **DEFAULT TO IMMEDIATE EXECUTION** (intent: 'send') unless the user EXPLICITLY specifies a future time in the **CURRENT MESSAGE**.
+   - **IGNORE** time references from the [Previous Conversation History]. ONLY use the [Current User Input].
+   - Example A: "Send 10 VCN" -> Immediate.
+   - Example B: "Send 10 VCN in 5 mins" -> Schedule (intent: 'schedule', calculate timestamp based on Current Time).
+
 `;
 
         let result = await provider.generateText(fullPrompt, config.model, config.apiKey, {
