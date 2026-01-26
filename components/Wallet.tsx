@@ -2946,17 +2946,21 @@ Final network context: ${networkMode()}.
                                                     <input
                                                         type={showWalletPassword() ? "text" : "password"}
                                                         placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
-                                                        class="w-full bg-[#18181b] border border-white/10 rounded-2xl py-4 px-12 text-white placeholder:text-gray-500 outline-none focus:border-blue-500/50 transition-all font-mono text-center tracking-widest"
+                                                        class="w-full bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
                                                         value={walletPassword()}
                                                         onInput={(e) => setWalletPassword(e.currentTarget.value)}
                                                         onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
                                                     />
                                                     <button
                                                         onClick={() => setShowWalletPassword(!showWalletPassword())}
-                                                        class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
+                                                        class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
                                                     >
                                                         {showWalletPassword() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
                                                     </button>
+                                                    {/* Visual Balancer for Symmetry */}
+                                                    <div class="absolute left-5 top-1/2 -translate-y-1/2 p-2 opacity-0 pointer-events-none">
+                                                        <Eye class="w-4 h-4" />
+                                                    </div>
                                                 </div>
 
                                                 <Show when={passwordMode() === 'setup' && !isRestoring()}>
@@ -2964,11 +2968,18 @@ Final network context: ${networkMode()}.
                                                         <input
                                                             type={showWalletPassword() ? "text" : "password"}
                                                             placeholder="Confirm spending password"
-                                                            class="w-full bg-[#18181b] border border-white/10 rounded-2xl py-4 px-12 text-white placeholder:text-gray-500 outline-none focus:border-blue-500/50 transition-all font-mono text-center tracking-widest"
+                                                            class="w-full bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
                                                             value={confirmWalletPassword()}
                                                             onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
                                                             onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
                                                         />
+                                                        {/* Symmetry Balancers */}
+                                                        <div class="absolute right-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
+                                                            <Eye class="w-4 h-4" />
+                                                        </div>
+                                                        <div class="absolute left-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
+                                                            <Eye class="w-4 h-4" />
+                                                        </div>
                                                     </div>
                                                 </Show>
 

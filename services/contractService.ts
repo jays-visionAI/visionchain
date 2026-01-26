@@ -29,7 +29,7 @@ const ADDRESSES = {
         "https://api.visionchain.co/rpc",       // Direct Node #2 (Load Balanced)
         "http://127.0.0.1:8545"                 // Local Hardhat Node (Fallback)
     ],
-    RPC_URL: "http://127.0.0.1:8545",
+    RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
 
     // Interoperability (Equalizer Model)
@@ -245,9 +245,9 @@ export class ContractService {
         return new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, provider);
     }
 
-    private getVcnVestingContract() {
+    private async getVcnVestingContract() {
         if (this.vcnVesting) return this.vcnVesting;
-        const provider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const provider = await this.getRobustProvider();
         return new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, provider);
     }
 
@@ -331,7 +331,7 @@ export class ContractService {
             throw new Error(`Invalid recipient address: "${toAddress}". The user has not connected their wallet properly.`);
         }
         const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const rpcProvider = await this.getRobustProvider();
         const wallet = new ethers.Wallet(adminPK, rpcProvider);
         const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, wallet);
 
@@ -479,7 +479,7 @@ export class ContractService {
     ) {
         // Ensure contract is ready locally
         const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const rpcProvider = await this.getRobustProvider();
         const wallet = new ethers.Wallet(adminPK, rpcProvider);
         const vestingContract = this.vcnVesting || new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, wallet);
 
