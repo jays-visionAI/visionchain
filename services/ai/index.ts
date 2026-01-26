@@ -73,16 +73,11 @@ export const generateText = async (
 
         // --- Locale & Time Injection ---
         const now = new Date();
-        const localeInfo = `[Current Context]
-Date: ${now.toLocaleDateString()}
-Time: ${now.toLocaleTimeString()}
-Timestamp (ms): ${Date.now()}
-Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-Locale: ${navigator.language}
-
-[Language Rule]
-Always respond in the same language used by the user in their most recent message. 
-Unless explicitly requested otherwise by the user, you MUST match their language exactly (e.g., if the user asks in Korean, answer in Korean; if in English, answer in English).`;
+        const localeInfo = `[System Time Context]
+CURRENT_UTC_TIME: ${now.toISOString()}
+CURRENT_TIMESTAMP_MS: ${Date.now()}
+TIMEZONE: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+USER_LOCALE: ${navigator.language}`;
 
         const pt = (config as any).promptTuning;
         const tuningInfo = pt ? `
@@ -131,12 +126,11 @@ Unless explicitly requested otherwise by the user, you MUST match their language
 
 5. TIME SENSITIVITY & SCHEDULING RULE:
    - **STRICT INDEPENDENCE**: IGNORE all time references in [Previous Conversation History]. THOSE ARE STALE.
-   - **CALCULATION SOURCE**: Use ONLY the [Current User Input] and the [Timestamp (ms)] provided in [Current Context].
-   - **MATHEMATICAL RULE**: If user says "X minutes later", the 'executeAt' MUST be exactly (Timestamp (ms) + X * 60000). 
-   - **PAST TIME FORBIDDEN**: Never return an 'executeAt' that is equal to or earlier than the [Timestamp (ms)].
-   - Example: Timestamp is 1706271600000 (21:20:00) -> "10 mins later" -> MUST be 1706272200000.
-
-
+   - **CALCULATION SOURCE**: Use ONLY the [Current User Input] and the [System Time Context] provided above.
+   - **MATHEMATICAL RULE**: executeAt = CURRENT_TIMESTAMP_MS + (Delay in Minutes * 60000).
+   - **PAST TIME FORBIDDEN**: Never return an 'executeAt' that is equal to or earlier than the CURRENT_TIMESTAMP_MS.
+   - Example: CURRENT_TIMESTAMP_MS is 1706271600000 -> "10 mins later" -> MUST be 1706272200000.
+   - **WARNING**: Do not use any other clock or adjust for timezone offsets manually. The timestamp is global UTC.
 `;
 
         let result = await provider.generateText(fullPrompt, config.model, config.apiKey, {

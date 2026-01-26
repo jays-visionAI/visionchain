@@ -174,10 +174,29 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     let fileInputRef: HTMLInputElement | undefined;
+    let messagesContainerRef: HTMLDivElement | undefined;
 
     const LANGUAGES = [
         { code: 'en-US', label: 'English' }
     ];
+
+    // --- Auto-scroll Logic ---
+    createEffect(() => {
+        // Dependencies: Anytime messages, thinking steps, or loading state changes
+        const msgs = props.messages();
+        const steps = props.thinkingSteps();
+        const loading = props.isLoading();
+
+        if (messagesContainerRef) {
+            // Use requestAnimationFrame to ensure the scroll happens after the browser has painted the new elements
+            requestAnimationFrame(() => {
+                messagesContainerRef?.scrollTo({
+                    top: messagesContainerRef.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+        }
+    });
 
     return (
         <div class="flex-1 flex overflow-hidden relative bg-[#070708]">
@@ -197,7 +216,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 />
 
                 {/* Messages Area */}
-                <div class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide">
+                <div
+                    ref={messagesContainerRef}
+                    class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth"
+                >
                     <Show when={props.messages().length === 0}>
                         <div class="flex flex-col items-center justify-start px-6 md:px-20 py-24">
                             <Motion.div
@@ -369,26 +391,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             />
                             <div class="absolute -inset-[1px] bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
 
-                            <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 rounded-[28px] p-2 flex items-end gap-2 group-focus-within:bg-[#0d0d0f] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
-
-                                {/* Tools */}
-                                <button
-                                    onClick={() => fileInputRef?.click()}
-                                    class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
-                                >
-                                    <Plus class="w-5 h-5" />
-                                </button>
-                                <input
-                                    type="file"
-                                    multiple
-                                    ref={fileInputRef}
-                                    class="hidden"
-                                    onChange={props.handleFileSelect}
-                                />
-
-                                <div class="flex-1 px-1 border border-[#1d1d1f] rounded-xl self-stretch my-1">
+                            <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 rounded-[28px] p-2 flex flex-col md:flex-row items-stretch md:items-end gap-2 group-focus-within:bg-[#0d0d0f] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
+                                {/* Text area - Top on mobile, Center on desktop */}
+                                <div class="flex-1 px-1 border border-[#1d1d1f] rounded-xl self-stretch my-1 order-1 md:order-2">
                                     <textarea
-                                        class="w-full bg-transparent text-white text-[16px] py-3.5 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
+                                        class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
                                         placeholder={props.isRecording() ? "Listening..." : "Tell Vision AI what to do..."}
                                         rows={1}
                                         value={props.input()}
@@ -411,36 +418,56 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     />
                                 </div>
 
-                                <div class="flex items-center gap-1.5 pb-0.5 pr-1.5">
-                                    {/* Language Selection Popover */}
-                                    <div class="relative group/lang">
-                                        <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
-                                            <span>{props.voiceLang().split('-')[0]}</span>
-                                            <ChevronDown class="w-3 h-3" />
+                                {/* Bottom controls for mobile / side for desktop */}
+                                <div class="flex items-center justify-between md:justify-end gap-1.5 pb-0.5 pr-1.5 order-2 md:order-3">
+                                    <div class="flex items-center gap-1.5">
+                                        {/* Tools / Plus Button */}
+                                        <button
+                                            onClick={() => fileInputRef?.click()}
+                                            class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                                        >
+                                            <Plus class="w-5 h-5" />
                                         </button>
-                                        <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                            <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
-                                                <For each={LANGUAGES}>
-                                                    {(lang) => (
-                                                        <button
-                                                            onClick={() => props.setVoiceLang(lang.code)}
-                                                            class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
-                                                        >
-                                                            {lang.label}
-                                                        </button>
-                                                    )}
-                                                </For>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            ref={fileInputRef}
+                                            class="hidden"
+                                            onChange={props.handleFileSelect}
+                                        />
+
+                                        {/* Language Selection Popover */}
+                                        <div class="relative group/lang">
+                                            <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
+                                                <span>{props.voiceLang().split('-')[0]}</span>
+                                                <ChevronDown class="w-3 h-3" />
+                                            </button>
+                                            <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
+                                                    <For each={LANGUAGES}>
+                                                        {(lang) => (
+                                                            <button
+                                                                onClick={() => props.setVoiceLang(lang.code)}
+                                                                class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
+                                                            >
+                                                                {lang.label}
+                                                            </button>
+                                                        )}
+                                                    </For>
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {/* Voice Button */}
+                                        <button
+                                            onClick={props.toggleRecording}
+                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            <Mic class="w-5 h-5" />
+                                        </button>
                                     </div>
 
-                                    <button
-                                        onClick={props.toggleRecording}
-                                        class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                                    >
-                                        <Mic class="w-5 h-5" />
-                                    </button>
-
+                                    {/* Send/Stop Button */}
                                     <button
                                         onClick={() => {
                                             if (props.isLoading()) {
