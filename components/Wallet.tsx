@@ -1362,7 +1362,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                 { id: '2', label: 'Processing Request...', status: 'loading' }
             ]);
 
-            let response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
+            let response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email, messages());
 
             // --- State-of-the-Art Thinking Process Parsing ---
             const thoughtRegex = /<think>([\s\S]*?)<\/think>/g;

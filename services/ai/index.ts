@@ -47,7 +47,8 @@ export const generateText = async (
     prompt: string,
     imageBase64?: string,
     botType: 'intent' | 'helpdesk' = 'intent',
-    userId: string = 'anonymous'
+    userId: string = 'anonymous',
+    previousHistory: { role: string; content: string }[] = []
 ): Promise<string> => {
     try {
         let config = await factory.resolveConfig(botType);
@@ -60,6 +61,13 @@ export const generateText = async (
                 config = { ...config, providerId: 'gemini', model: 'gemini-1.5-pro-latest', apiKey: geminiKey };
             }
         }
+
+        // Inject History Context
+        const historyContext = previousHistory.length > 0
+            ? `[Previous Conversation History]\n${previousHistory.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')}\n\n[Current User Input]\n`
+            : '';
+
+        const fullPrompt = historyContext + prompt;
 
         const provider = factory.getProvider(config.providerId);
 
@@ -119,7 +127,7 @@ Unless explicitly requested otherwise by the user, you MUST match their language
    {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
 `;
 
-        let result = await provider.generateText(prompt, config.model, config.apiKey, {
+        let result = await provider.generateText(fullPrompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
             temperature: config.temperature,
             maxTokens: config.maxTokens,
@@ -130,7 +138,7 @@ Unless explicitly requested otherwise by the user, you MUST match their language
         // --- Tool Execution Loop ---
         if (typeof result !== 'string' && result.candidates?.[0]?.content?.parts) {
             const parts = result.candidates[0].content.parts;
-            const history: any[] = [{ role: 'user', parts: [{ text: prompt }] }, result.candidates[0].content];
+            const history: any[] = [{ role: 'user', parts: [{ text: fullPrompt }] }, result.candidates[0].content];
 
             for (const part of parts) {
                 if (part.functionCall) {
