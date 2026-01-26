@@ -88,7 +88,7 @@ import { WalletContacts } from './wallet/WalletContacts';
 import { WalletSettings } from './wallet/WalletSettings';
 import { WalletNotifications } from './wallet/WalletNotifications';
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history' | 'notifications';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -815,13 +815,6 @@ const Wallet = (): JSX.Element => {
         }
     });
 
-    // Handle History View (Redirect to Wallet Chat)
-    createEffect(() => {
-        if (activeView() === 'history') {
-            setChatHistoryOpen(true);
-            setActiveView('chat');
-        }
-    });
 
     // Helper to get asset data with live prices
     const fetchPortfolioData = async () => {
