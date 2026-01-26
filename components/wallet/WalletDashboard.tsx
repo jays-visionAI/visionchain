@@ -339,7 +339,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
                 </div>
 
-                {/* Modern Floating Input Area (Synced with AIChat style) */}
+                {/* Modern Floating Input Area */}
                 <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
                     <div class="max-w-4xl mx-auto pointer-events-auto">
                         <Presence>
@@ -442,7 +442,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 </div>
 
                                 <div class="flex items-center gap-1.5 pb-0.5 pr-1.5">
-                                    {/* Language Selection Popover (Mirrored from AIChat) */}
+                                    {/* Language Selection Popover */}
                                     <div class="relative group/lang">
                                         <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
                                             <span>{props.voiceLang().split('-')[0]}</span>

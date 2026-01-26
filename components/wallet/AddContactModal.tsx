@@ -5,6 +5,7 @@ import {
     Plus,
     Trash2,
     Upload,
+    Download,
     FileText,
     CheckCircle,
     AlertCircle,
@@ -152,7 +153,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     onClick={downloadCsvTemplate}
                                     class="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition-all text-xs font-bold text-gray-300 active:scale-95"
                                 >
-                                    <Upload class="w-3.5 h-3.5 rotate-180" />
+                                    <Download class="w-3.5 h-3.5" />
                                     Download Template
                                 </button>
                                 <button

@@ -10,7 +10,6 @@ import Stats from './components/Stats';
 import Applications from './components/Applications';
 import Architecture from './components/Architecture';
 import Footer from './components/Footer';
-import AIChat from './components/AIChat';
 import { Sparkles } from 'lucide-solid';
 
 // Lazy-loaded components (loaded only when needed)
@@ -63,7 +62,6 @@ function PageLoader() {
 
 // Layout wrapper for all pages
 function Layout(props: { children?: any }) {
-  const [isAIModalOpen, setIsAIModalOpen] = createSignal(false);
   const auth = useAuth();
   const location = useLocation();
 
@@ -86,19 +84,7 @@ function Layout(props: { children?: any }) {
         </Show>
       </div>
 
-      {/* Floating Action Button for AI - hide for Admin or if Logged In */}
-      <Show when={!isAIModalOpen() && !isAdminRoute() && !auth.user()}>
-        <button
-          onClick={() => setIsAIModalOpen(true)}
-          class="fixed bottom-8 right-8 p-4 bg-blue-600 rounded-full shadow-[0_0_30px_rgba(37,99,235,0.6)] hover:scale-110 transition-transform z-40 group"
-        >
-          <Sparkles class="w-6 h-6 text-white group-hover:rotate-12 transition-transform" />
-        </button>
-      </Show>
-
-      <Show when={!isAdminRoute()}>
-        <AIChat isOpen={isAIModalOpen()} onClose={() => setIsAIModalOpen(false)} />
-      </Show>
+      {/* Floating Action Button for AI removed - consolidated into wallet */}
     </div>
   );
 }
