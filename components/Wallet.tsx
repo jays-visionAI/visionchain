@@ -1343,38 +1343,54 @@ Identify the intent and provide a friendly response following the established ar
             let response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
 
             // --- State-of-the-Art Thinking Process Parsing ---
-            const thoughtRegex = /<think>(.*?)<\/think>/g;
+            const thoughtRegex = /<think>([\s\S]*?)<\/think>/g;
             const parsedSteps: any[] = [];
             let match;
+            let hasTags = false;
 
-            // Extract thoughts
+            // 1. Try Tag-based parsing first (Preferred)
             while ((match = thoughtRegex.exec(response)) !== null) {
+                hasTags = true;
                 const content = match[1];
-                // Try to split "Title: Detail" 
                 const parts = content.split(':');
-                const label = parts[0].trim();
                 parsedSteps.push({
                     id: crypto.randomUUID(),
-                    label: label,
-                    status: 'completed' // AI returns them all at once here, so mark done
+                    label: parts[0]?.trim() || 'Thinking Process',
+                    detail: parts[1]?.trim() || '',
+                    status: 'completed'
                 });
             }
 
-            if (parsedSteps.length > 0) {
-                // Flash the parsed steps clearly to the user
-                setThinkingSteps(parsedSteps);
+            // 2. Fallback: If no tags, try to parse markdown steps (e.g. **Step 1: ...**)
+            if (!hasTags) {
+                // Clean up the response first to avoid duplication
+                let cleanResponse = response;
 
-                // Keep them visible for a moment so user can read, then clear or shrink
-                // (In a real streaming setup, these would appear one by one. 
-                //  Here we simulate the "done" state immediately for the received block)
-                setTimeout(() => setThinkingSteps([]), 4000);
-            } else {
-                // Fallback cleanup if no tags found
-                setThinkingSteps([]);
+                // Regex to catch **Step 1: ...** blocks
+                const stepMatches = [...response.matchAll(/\*\*Step (\d+).*?[-:](.*?)\*\*(.*?)(?=\*\*Step|$)/gs)];
+                if (stepMatches.length > 0) {
+                    stepMatches.forEach(m => {
+                        parsedSteps.push({
+                            id: crypto.randomUUID(),
+                            label: `Step ${m[1]}: ${m[2]?.trim()}`,
+                            detail: m[3]?.trim().slice(0, 100) + '...', // Truncate detail
+                            status: 'completed'
+                        });
+                        // Remove this part from the final response
+                        cleanResponse = cleanResponse.replace(m[0], '');
+                    });
+                    response = cleanResponse; // Update response to show only the final parts
+                }
             }
 
-            // Remove tags from final message to user
+            if (parsedSteps.length > 0) {
+                setThinkingSteps(parsedSteps);
+                setTimeout(() => setThinkingSteps([]), 8000);
+            }
+
+            // Clean tags again just in case
             response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            response = response.replace(/^\s*[-—]+\s*$/gm, '').trim();
 
 
             // 1. Check for Intent JSON

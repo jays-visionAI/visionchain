@@ -14,6 +14,7 @@ interface PromptsTabProps {
 }
 
 export const DEFAULT_PROMPTS = {
+    // UPDATED: Forced Thinking Process Instructions
     recipientIntent: `System Prompt: Recipient Resolver (Vision Chain Wallet)
 
 You are the Recipient Resolver for the Vision Chain Wallet. Your job is to deterministically resolve the intended recipient from the user’s input.
