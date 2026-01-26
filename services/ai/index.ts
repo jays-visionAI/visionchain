@@ -118,25 +118,53 @@ Unless explicitly requested otherwise by the user, you MUST match their language
                     } else if (name === 'search_user_contacts') {
                         const { getUserContacts } = await import('../firebaseService');
                         const contacts = await getUserContacts(userId);
-                        const searchQuery = (args.name || "").toLowerCase().replace('@', '');
+                        const rawQuery = (args.name || "").toLowerCase().replace('@', '');
+                        const searchQuery = rawQuery.replace(/\s+/g, ''); // Remove spaces
+
+                        // Simple Fuzzy Match Helper
+                        const getMatchScore = (target: string, query: string) => {
+                            const t = target.toLowerCase().replace(/\s+/g, '');
+                            if (t.includes(query) || query.includes(t)) return 100; // Direct/Partial match
+
+                            // Check for character overlap (useful for reordered names like "성국류")
+                            const targetChars = t.split('');
+                            const queryChars = query.split('');
+                            const intersection = queryChars.filter(c => targetChars.includes(c));
+                            if (intersection.length >= 2 && intersection.length >= query.length - 1) return 80;
+
+                            // Common Korean phonetic swaps/typos (Basic)
+                            const phoneticMap: Record<string, string> = { '우': '유', '유': '우', '오': '어', '어': '오', '국': '쿡', '쿡': '국', '루': '류', '류': '루' };
+                            let fuzzyQuery = query;
+                            for (const char of query) {
+                                if (phoneticMap[char]) fuzzyQuery = fuzzyQuery.replace(char, phoneticMap[char]);
+                            }
+                            if (t.includes(fuzzyQuery)) return 70;
+
+                            return 0;
+                        };
 
                         toolResult = contacts
-                            .filter(c =>
-                                (c.internalName || "").toLowerCase().includes(searchQuery) ||
-                                (c.email || "").toLowerCase().includes(searchQuery) ||
-                                (c.vchainUserUid || "").toLowerCase() === searchQuery ||
-                                (c.alias || "").toLowerCase().includes(searchQuery)
-                            )
+                            .map(c => ({
+                                ...c,
+                                score: Math.max(
+                                    getMatchScore(c.internalName || "", searchQuery),
+                                    getMatchScore(c.alias || "", searchQuery),
+                                    getMatchScore(c.vchainUserUid || "", searchQuery)
+                                )
+                            }))
+                            .filter(c => c.score >= 70)
+                            .sort((a, b) => b.score - a.score)
                             .map(c => ({
                                 name: c.internalName,
                                 alias: c.alias,
                                 vid: c.vchainUserUid ? `@${c.vchainUserUid}` : "Not linked",
                                 address: c.address || "No address",
-                                email: c.email
+                                email: c.email,
+                                matchConfidence: c.score >= 100 ? 'Exact/Partner' : 'Potential'
                             }));
 
                         if (toolResult.length === 0) {
-                            toolResult = `No contacts found matching '${args.name}' in your address book.`;
+                            toolResult = `No contacts found matching '${args.name}'. Suggest confirming the exact name or address.`;
                         }
                     }
 

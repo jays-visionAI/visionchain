@@ -17,10 +17,12 @@ export const DEFAULT_PROMPTS = {
     recipientIntent: `Task: Identify and resolve the intended RECIPIENT.
 1. Context Resolution:
    - Use 'search_user_contacts' to find Names, Emails, or VIDs.
-   - Support VNS Handles (@handle) and 0x Wallet Addresses directly.
-2. Conflict Resolution:
-   - If multiple contacts match (e.g., "Alice"), list the options and ask which one.
-   - If no contact is found, check if the input is a valid 0x address. If not, inform the user you couldn't find them in the address book.
+   - Be Smart: If user says "류성국" but address book has "류성국대표", handle it as a potential match.
+   - Handle Typos/Phonetic: Accept similarity like "루성국", "류성쿡", or reordered "성국류".
+2. Conflict & Confirmation:
+   - If a 'Potential' match or multiple matches are found, ALWAYS ask: "Did you mean [Name]?" before proceeding.
+   - Do not assume the recipient if the name is not an exact match; prioritize user safety.
+   - If no contact is found, check if input is a valid 0x address.
 3. Verification: Ensure the resolved address is valid before proceeding.`,
 
     senderIntent: `Task: Analyze the SENDER'S context and eligibility.
