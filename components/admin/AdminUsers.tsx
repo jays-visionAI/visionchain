@@ -141,7 +141,7 @@ const AdminUsers = () => {
                         placeholder="이름, 이메일 또는 지갑 주소검색"
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
+                        class="w-full pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
                     />
                 </div>
                 <div class="md:col-span-4 relative group">
@@ -149,7 +149,7 @@ const AdminUsers = () => {
                     <select
                         value={statusFilter()}
                         onChange={(e) => setStatusFilter(e.currentTarget.value)}
-                        class="w-full appearance-none pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
+                        class="w-full appearance-none pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
                     >
                         <option value="all">모든 상태</option>
                         <option value="Registered">가입 완료</option>
@@ -303,7 +303,7 @@ const AdminUsers = () => {
                                                         );
                                                         setSuccessModal({
                                                             isOpen: true,
-                                                            txHash: receipt.hash || receipt.transactionHash || '',
+                                                            txHash: receipt.hash || '',
                                                             recipient: user.email,
                                                             recipientAddress: user.walletAddress!,
                                                             amount: amount
@@ -362,7 +362,7 @@ const AdminUsers = () => {
                                     required
                                     value={inviteEmail()}
                                     onInput={(e) => setInviteEmail(e.currentTarget.value)}
-                                    class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                    class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500"
                                 />
                             </div>
 
@@ -373,7 +373,7 @@ const AdminUsers = () => {
                                     placeholder="DIRECT"
                                     value={invitePartnerCode()}
                                     onInput={(e) => setInvitePartnerCode(e.currentTarget.value)}
-                                    class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                    class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500"
                                 />
                             </div>
 
@@ -383,7 +383,7 @@ const AdminUsers = () => {
                                     <select
                                         value={inviteTier()}
                                         onChange={(e) => setInviteTier(Number(e.currentTarget.value))}
-                                        class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                        class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500"
                                     >
                                         <option value={1}>Tier 1</option>
                                         <option value={2}>Tier 2</option>
@@ -396,7 +396,7 @@ const AdminUsers = () => {
                                         type="number"
                                         value={inviteAmount()}
                                         onInput={(e) => setInviteAmount(Number(e.currentTarget.value))}
-                                        class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl focus:outline-none focus:border-cyan-500"
+                                        class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500"
                                     />
                                 </div>
                             </div>
