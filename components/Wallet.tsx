@@ -43,7 +43,8 @@ import {
     Info,
     ShieldCheck,
     LogOut,
-    Clock
+    Clock,
+    Bell
 } from 'lucide-solid';
 import {
     updateWalletStatus,
@@ -58,8 +59,12 @@ import {
     AiConversation,
     subscribeToQueue,
     saveScheduledTransfer,
-    cancelScheduledTask
+    cancelScheduledTask,
+    createNotification,
+    NotificationData,
+    getFirebaseDb
 } from '../services/firebaseService';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services/vcnPriceService';
@@ -76,8 +81,9 @@ import { WalletMint } from './wallet/WalletMint';
 import { WalletNodes } from './wallet/WalletNodes';
 import { WalletContacts } from './wallet/WalletContacts';
 import { WalletSettings } from './wallet/WalletSettings';
+import { WalletNotifications } from './wallet/WalletNotifications';
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history' | 'notifications';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -219,6 +225,22 @@ const Wallet = (): JSX.Element => {
     const [queueTasks, setQueueTasks] = createSignal<any[]>([]);
     const [isSchedulingTimeLock, setIsSchedulingTimeLock] = createSignal(false);
     const [lockDelaySeconds, setLockDelaySeconds] = createSignal(0);
+    const [unreadNotificationsCount, setUnreadNotificationsCount] = createSignal(0);
+
+    createEffect(() => {
+        const email = auth.user()?.email;
+        if (!email) return;
+
+        const db = getFirebaseDb();
+        const notificationsRef = collection(db, 'users', email.toLowerCase(), 'notifications');
+        const q = query(notificationsRef, where('read', '==', false));
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setUnreadNotificationsCount(snapshot.size);
+        });
+
+        return unsubscribe;
+    });
 
     createEffect(() => {
         const email = userProfile().email;
@@ -543,6 +565,34 @@ const Wallet = (): JSX.Element => {
 
                 setFlowSuccess(true);
                 setFlowStep(3);
+
+                // --- Notification Logic ---
+                try {
+                    const isScheduled = isSchedulingTimeLock();
+
+                    // 1. Notify Sender
+                    await createNotification(userProfile().email, {
+                        type: isScheduled ? 'transfer_scheduled' : 'alert',
+                        title: isScheduled ? 'Transfer Scheduled' : 'Transfer Successful',
+                        content: isScheduled
+                            ? `You have scheduled ${amount} ${symbol} to be sent to ${recipient}.`
+                            : `You successfully sent ${amount} ${symbol} to ${recipient}.`,
+                        data: { amount, symbol, recipient, isScheduled }
+                    });
+
+                    // 2. Resolve Recipient for Incoming Notification
+                    const recipientInfo = await resolveRecipient(recipient);
+                    if (recipientInfo?.email && !isScheduled) {
+                        await createNotification(recipientInfo.email, {
+                            type: 'transfer_received',
+                            title: 'Assets Received',
+                            content: `You received ${amount} ${symbol} from ${userProfile().email || 'a Vision user'}.`,
+                            data: { amount, symbol, from: userProfile().email }
+                        });
+                    }
+                } catch (notifyErr) {
+                    console.warn("Failed to trigger notifications:", notifyErr);
+                }
 
                 // Add AI Success Message in Chat
                 const isScheduled = isSchedulingTimeLock();
@@ -1518,6 +1568,7 @@ Final network context: ${networkMode()}.
                     onLogout={() => auth.logout()}
                     networkMode={networkMode()}
                     setNetworkMode={setNetworkMode}
+                    unreadCount={unreadNotificationsCount()}
                 />
 
                 {/* Main Content Area */}
@@ -2317,6 +2368,12 @@ Final network context: ${networkMode()}.
                             <div class="max-w-4xl mx-auto">
                                 <WalletSettings />
                             </div>
+                        </div>
+                    </Show>
+
+                    <Show when={activeView() === 'notifications'}>
+                        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+                            <WalletNotifications />
                         </div>
                     </Show>
 

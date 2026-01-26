@@ -14,10 +14,11 @@ import {
     Check,
     LogOut,
     X,
-    Clock
+    Clock,
+    Bell
 } from 'lucide-solid';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'history' | 'notifications';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -33,6 +34,7 @@ interface WalletSidebarProps {
     isAdmin?: boolean;
     networkMode: 'mainnet' | 'testnet';
     setNetworkMode: (mode: 'mainnet' | 'testnet') => void;
+    unreadCount: number;
 }
 
 export const WalletSidebar = (props: WalletSidebarProps) => {
@@ -45,6 +47,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'contacts' as ViewType, label: 'Address Book', icon: Users },
         { id: 'history' as ViewType, label: 'History', icon: Clock },
         { id: 'profile' as ViewType, label: 'Profile', icon: User },
+        { id: 'notifications' as ViewType, label: 'Notification', icon: Bell },
         { id: 'settings' as ViewType, label: 'Settings', icon: Settings },
     ];
 
@@ -129,7 +132,12 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                                 <item.icon class={`w-4 h-4 ${props.activeView === item.id ? 'text-cyan-400' : ''}`} />
                             </div>
                             <span class="font-medium text-[14px]">{item.label}</span>
-                            <Show when={props.activeView === item.id}>
+                            <Show when={item.id === 'notifications' && props.unreadCount > 0}>
+                                <div class="ml-auto min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center animate-pulse border border-red-400/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]">
+                                    {props.unreadCount > 99 ? '99+' : props.unreadCount}
+                                </div>
+                            </Show>
+                            <Show when={props.activeView === item.id && (item.id !== 'notifications' || props.unreadCount === 0)}>
                                 <div class="ml-auto w-1.5 h-1.5 rounded-full bg-cyan-400" />
                             </Show>
                         </button>

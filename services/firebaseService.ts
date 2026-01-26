@@ -1771,5 +1771,30 @@ export const deleteAdminDocument = async (id: string): Promise<void> => {
     await deleteDoc(docRef);
 };
 
+// --- Notification Engine ---
+
+export interface NotificationData {
+    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert';
+    title: string;
+    content: string;
+    data?: any;
+}
+
+export const createNotification = async (email: string, notification: NotificationData) => {
+    if (!email) return;
+    try {
+        const db = getFirebaseDb();
+        const notificationRef = collection(db, 'users', email.toLowerCase(), 'notifications');
+        await addDoc(notificationRef, {
+            ...notification,
+            timestamp: new Date().toISOString(),
+            read: false
+        });
+        console.log(`[Notification] Created for ${email}: ${notification.title}`);
+    } catch (error) {
+        console.error('[Notification] Error creating:', error);
+    }
+};
+
 // Initialize on import
 initializeFirebase();
