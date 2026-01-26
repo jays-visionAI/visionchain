@@ -69,9 +69,9 @@ const submitToSequencer = async (signedTx, type, metadata) => {
             type,
             metadata
         });
-        console.log(`✅ [Sequencer] Tx Submitted: ${response.data.status} | TxId: ${response.data.sequencerTxId}`);
+        console.log(`[Sequencer] Tx Submitted: ${response.data.status} | TxId: ${response.data.sequencerTxId}`);
     } catch (error) {
-        console.error(`❌ [Sequencer] Submission Failed:`, error.response?.data || error.message);
+        console.error(`[Sequencer] Submission Failed:`, error.response?.data || error.message);
     }
 };
 
@@ -79,7 +79,7 @@ const submitToSequencer = async (signedTx, type, metadata) => {
  * Simulate the traffic loop
  */
 const startTrafficLoop = async () => {
-    console.log("🚀 Vision Chain Traffic Simulator Started...");
+    console.log("Vision Chain Traffic Simulator Started...");
     console.log(`📡 Linked to RPC: ${RPC_URL}`);
     console.log(`🔗 Sequencer Endpoint: ${SEQUENCER_URL}`);
 
@@ -87,7 +87,7 @@ const startTrafficLoop = async () => {
         try {
             // 1. Random Interval (10 to 25 seconds)
             const waitTime = getRandomInt(10 * 1000, 25 * 1000);
-            console.log(`\n🕒 Next action in ${waitTime / 1000}s...`);
+            console.log(`\nNext action in ${waitTime / 1000}s...`);
             await sleep(waitTime);
 
             // 2. Decide Action: Create New Wallet or Send from Existing
@@ -137,7 +137,7 @@ const startTrafficLoop = async () => {
             }
 
         } catch (err) {
-            console.error("💥 Error in Simulation Loop:", err);
+            console.error("Error in Simulation Loop:", err);
             await sleep(5000);
         }
     }
