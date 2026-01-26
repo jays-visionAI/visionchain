@@ -42,7 +42,14 @@ export const useTimeLockAgent = (
 
             // Ensure Wallet is Connected
             if (!contractService.isWalletConnected()) {
-                console.log("[Scheduler] Signer not found. Attempting to connect...");
+                // If Auto-Scheduler: Do NOT disturb user with popup. Just skip.
+                if (!isForced) {
+                    console.log("[Scheduler] Wallet not connected. Skipping execution.");
+                    return;
+                }
+
+                // If Force Execute (Manual): Try to connect because user asked for it.
+                console.log("[Force Run] Attempting to connect wallet...");
                 await contractService.connectWallet();
                 if (!contractService.isWalletConnected()) {
                     throw new Error("Wallet connection failed. Please connect your wallet to execute.");
