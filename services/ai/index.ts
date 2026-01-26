@@ -123,20 +123,18 @@ USER_LOCALE: ${navigator.language}`;
    - For immediate: {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
    - For scheduled: {"intent": "schedule", "recipient": "0x...", "amount": "...", "symbol": "...", "executeAt": 1731234567890}
      (executeAt is the absolute JS timestamp in milliseconds)
-   - For multiple actions: {"intent": "multi", "transactions": [{"intent": "send", ...}], "description": "Summary"}
-   - For Enterprise Bulk (CSV): {"intent": "multi", "transactions": [... parsed from CSV ...], "description": "Bulk Transfer Plan"}
+   - [CRITICAL] MULTIPLE ACTIONS POLICY:
+     - IF there are TWO or MORE transactions (e.g. sending to 3 people), DO NOT output individual JSON objects.
+     - YOU MUST wrap ALL transactions into a SINGLE "multi" intent object.
+     - Format: {"intent": "multi", "transactions": [{"intent": "send", ...}, {"intent": "send", ...}], "description": "Summary of operations"}
+     - Even for 2 transactions, use the "multi" wrapper. This triggers the specialized Review UI.
 
-6. ENTERPRISE CSV PROCESSING RULES:
-   - IF the user asks about "bulk transfer", "multi-transaction", or "sending to many people":
-     1. EXPLAIN the 3-step process: (1) Prepare CSV, (2) Upload & Review, (3) Sequential Execution (10s intervals).
-     2. PROACTIVELY ASK: "Would you like me to provide a standard CSV template to help you get started?"
-     3. GUIDANCE: Inform them they can use names/VIDs from their address book or raw 0x addresses.
-     
    - IF [ATTACHED CSV DATA] is present and the user asks to "process the list", "send to these people", etc:
      1. PARSE the CSV. Typical headers: VID (or Name), recipient, amount, symbol.
      2. RESOLVE Addresses: If a VID or Name matches a entry in the [ADDRESS BOOK], use that address.
      3. CONSTRUCT the "multi" intent JSON with ALL valid rows as individual "send" intents.
      4. REPORT summarized stats (Count, Total amount) in the response.
+     5. GUIDANCE: "I've prepared the batch list. Please review the details below before execution."
      
    - IF the user asks for the "CSV template" or says "Yes" to the offer:
      1. EXPLAIN: "I've prepared a standard CSV template for you. You can fill out either VID (for saved contacts) or Recipient (for new addresses). Symbols can be VCN, ETH, etc."

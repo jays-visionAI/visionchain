@@ -236,6 +236,7 @@ const Wallet = (): JSX.Element => {
 
     // --- Enterprise Bulk Transfer Agent State ---
     const [batchAgents, setBatchAgents] = createSignal<any[]>([]);
+    const [reviewMulti, setReviewMulti] = createSignal<any[] | null>(null);
 
     createEffect(() => {
         const email = auth.user()?.email;
@@ -1567,14 +1568,36 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
 
             // 1. Check for Intent JSON
             let intentData: any = null;
-            const jsonMatch = response.match(/\{"intent":\s*".*?"\}/) || response.match(/\{[\s\S]*?"intent"[\s\S]*?\}/);
 
-            if (jsonMatch) {
+            // Advanced Intent Discovery: Try to find "multi" intent first (Priority)
+            const multiMatch = response.match(/\{[\s\S]*?"intent"\s*:\s*"multi"[\s\S]*?\}/);
+            const genericMatches = response.match(/\{[\s\S]*?"intent"[\s\S]*?\}/g);
+
+            if (multiMatch) {
                 try {
-                    const jsonStr = jsonMatch[0];
-                    intentData = JSON.parse(jsonStr);
+                    intentData = JSON.parse(multiMatch[0]);
                 } catch (e) {
-                    console.warn("Intent JSON Parse Failed", e);
+                    console.warn("Multi Intent Parse Failed", e);
+                }
+            } else if (genericMatches && genericMatches.length > 1) {
+                // HEURISTIC: If AI outputted multiple individual JSONs, wrap them into a 'multi' intent automatically
+                console.log("[AI] Auto-wrapping multiple intents into 'multi'");
+                const wrappedTransactions = genericMatches.map(str => {
+                    try { return JSON.parse(str); } catch { return null; }
+                }).filter(Boolean);
+
+                if (wrappedTransactions.length > 0) {
+                    intentData = {
+                        intent: 'multi',
+                        transactions: wrappedTransactions,
+                        description: "Consolidated Batch Transfer"
+                    };
+                }
+            } else if (genericMatches && genericMatches.length === 1) {
+                try {
+                    intentData = JSON.parse(genericMatches[0]);
+                } catch (e) {
+                    console.warn("Single Intent Parse Failed", e);
                 }
             }
 
@@ -1665,9 +1688,16 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                     setChatLoading(false);
                     return;
                 } else if (intentData.intent === 'multi') {
-                    setMultiTransactions(intentData.transactions || []);
-                    startFlow('multi');
-                    setFlowStep(1);
+                    setReviewMulti(intentData.transactions || []);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: lastLocale() === 'ko'
+                            ? "분석된 전송 리스트입니다. 내용을 확인하시고 '전송 시작' 버튼을 눌러주세요."
+                            : "I've analyzed the transfer list. Please review the details and click 'Start Transfer' to proceed.",
+                        isMultiReview: true,
+                        batchData: intentData.transactions
+                    }]);
+                    setChatLoading(false);
                     return;
                 } else if (intentData.intent === 'provide_csv_template') {
                     const csvContent = "VID,Recipient,Amount,Symbol\nRyu CEO,,100,VCN\n,0x123...,0.5,ETH\n";
@@ -1683,10 +1713,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
             }
 
             // 3. Clean up response for display
-            let cleanResponse = response;
-            if (jsonMatch) {
-                cleanResponse = response.replace(jsonMatch[0], "").trim();
-            }
+            let cleanResponse = response.replace(/\{[\s\S]*?"intent"[\s\S]*?\}/g, "").trim();
 
             if (!cleanResponse && intentData) {
                 const intent = intentData.intent || 'transaction';
@@ -1894,6 +1921,13 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                             chatHistoryOpen={chatHistoryOpen()}
                             setChatHistoryOpen={setChatHistoryOpen}
                             batchAgents={batchAgents}
+                            reviewMulti={reviewMulti}
+                            setReviewMulti={setReviewMulti}
+                            onStartBatch={(txs) => {
+                                setPendingAction({ type: 'multi_transactions', data: { transactions: txs } });
+                                setShowPasswordModal(true);
+                                setPasswordMode('verify');
+                            }}
                         />
                     </Show>
 

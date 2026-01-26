@@ -74,6 +74,9 @@ interface WalletDashboardProps {
     chatHistoryOpen: boolean;
     setChatHistoryOpen: (val: boolean) => void;
     batchAgents: () => any[];
+    reviewMulti: () => any[] | null;
+    setReviewMulti: (val: any[] | null) => void;
+    onStartBatch: (txs: any[]) => void;
 }
 
 const TypingIndicator = () => (
@@ -172,9 +175,178 @@ const ThinkingDisplay = (props: { steps: any[] }) => {
     );
 };
 
+const MultiReviewCard = (props: {
+    transactions: any[],
+    onApprove: () => void,
+    onCancel: () => void,
+    onViewDetail: () => void
+}) => {
+    return (
+        <Motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            class="mt-4 bg-[#0d0d0f]/60 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl w-full max-w-md"
+        >
+            <div class="p-4 border-b border-white/5 bg-gradient-to-r from-blue-500/10 to-transparent">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <Layers class="w-4 h-4 text-blue-400" />
+                        <span class="text-[11px] font-black text-white uppercase tracking-widest">Batch Review</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+                        {props.transactions.length} ITEMS
+                    </span>
+                </div>
+            </div>
+
+            <div class="p-4 space-y-3 max-h-[320px] overflow-y-auto scrollbar-hide">
+                <For each={props.transactions.slice(0, 10)}>
+                    {(tx) => (
+                        <div class="flex items-center justify-between group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-white/[0.03] flex items-center justify-center border border-white/5 group-hover:border-blue-500/30 transition-colors">
+                                    <User class="w-3.5 h-3.5 text-gray-400" />
+                                </div>
+                                <div class="flex flex-col">
+                                    <span class="text-[12px] font-bold text-gray-200">{tx.vid || 'New Recipient'}</span>
+                                    <span class="text-[10px] text-gray-500 font-mono italic">
+                                        {tx.recipient.slice(0, 6)}...{tx.recipient.slice(-4)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-[12px] font-black text-white">{tx.amount}</div>
+                                <div class="text-[9px] font-bold text-gray-500 uppercase">{tx.symbol || 'VCN'}</div>
+                            </div>
+                        </div>
+                    )}
+                </For>
+
+                <Show when={props.transactions.length > 10}>
+                    <button
+                        onClick={props.onViewDetail}
+                        class="w-full py-2 bg-white/[0.03] hover:bg-white/[0.06] rounded-xl border border-white/5 text-[10px] font-black text-blue-400 uppercase tracking-widest transition-all"
+                    >
+                        + {props.transactions.length - 10} More Items (View Full List)
+                    </button>
+                </Show>
+            </div>
+
+            <div class="p-3 bg-black/40 border-t border-white/5 flex gap-2">
+                <button
+                    onClick={props.onCancel}
+                    class="flex-1 py-2 rounded-xl text-[11px] font-black text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={props.onApprove}
+                    class="flex-[2] py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-[11px] font-black text-white shadow-lg shadow-blue-500/20 transition-all uppercase tracking-widest"
+                >
+                    Start Batch Transfer
+                </button>
+            </div>
+        </Motion.div>
+    );
+};
+
+const MultiBatchDrawer = (props: {
+    isOpen: boolean,
+    onClose: () => void,
+    transactions: any[],
+    onApprove: () => void
+}) => {
+    return (
+        <Presence>
+            <Show when={props.isOpen}>
+                <div class="fixed inset-0 z-[100] flex items-end justify-center">
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={props.onClose}
+                        class="absolute inset-0 bg-black/80 backdrop-blur-md"
+                    />
+                    <Motion.div
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        transition={{ duration: 0.5, easing: [0.16, 1, 0.3, 1] }}
+                        class="relative w-full max-w-4xl h-[85vh] bg-[#0d0d0f] border-t border-white/10 rounded-t-[40px] shadow-3xl flex flex-col overflow-hidden"
+                    >
+                        <div class="p-8 flex items-center justify-between border-b border-white/5 bg-gradient-to-br from-blue-500/5 to-transparent">
+                            <div>
+                                <h2 class="text-2xl font-black text-white mb-1">Detailed Batch List</h2>
+                                <p class="text-gray-500 text-sm font-medium italic">Review all {props.transactions.length} items for precision</p>
+                            </div>
+                            <button
+                                onClick={props.onClose}
+                                class="w-12 h-12 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                            >
+                                <Plus class="w-6 h-6 rotate-45" />
+                            </button>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto p-8 scrollbar-hide">
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr class="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                        <th class="pb-4 pl-2">#</th>
+                                        <th class="pb-4">Recipient (VID)</th>
+                                        <th class="pb-4">Wallet Address</th>
+                                        <th class="pb-4 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-white/[0.03]">
+                                    <For each={props.transactions}>
+                                        {(tx, i) => (
+                                            <tr class="group hover:bg-white/[0.01] transition-colors">
+                                                <td class="py-4 pl-2 text-xs font-mono text-gray-600 italic">{(i() + 1).toString().padStart(2, '0')}</td>
+                                                <td class="py-4">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="w-6 h-6 rounded-md bg-blue-500/10 flex items-center justify-center">
+                                                            <User class="w-3 h-3 text-blue-400" />
+                                                        </div>
+                                                        <span class="text-xs font-bold text-gray-200">{tx.vid || 'External'}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="py-4 text-xs font-mono text-gray-500">{tx.recipient}</td>
+                                                <td class="py-4 text-right">
+                                                    <span class="text-xs font-black text-white">{tx.amount}</span>
+                                                    <span class="text-[9px] font-bold text-gray-500 ml-1 uppercase">{tx.symbol || 'VCN'}</span>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </For>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="p-8 bg-black/40 border-t border-white/5 flex gap-4">
+                            <button
+                                onClick={props.onClose}
+                                class="flex-1 py-4 rounded-2xl border border-white/10 text-[13px] font-black text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
+                            >
+                                Continue Editing
+                            </button>
+                            <button
+                                onClick={props.onApprove}
+                                class="flex-[2] py-4 bg-blue-500 hover:bg-blue-600 rounded-2xl text-[13px] font-black text-white shadow-2xl shadow-blue-500/20 transition-all uppercase tracking-widest"
+                            >
+                                Confirm & Execute Batch
+                            </button>
+                        </div>
+                    </Motion.div>
+                </div>
+            </Show>
+        </Presence>
+    );
+};
+
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isComposing, setIsComposing] = createSignal(false);
     const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
+    const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
@@ -216,6 +388,17 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     focusedTaskId={selectedTaskId()}
                     onCancelTask={props.onCancelTask}
                     onForceExecute={props.onForceExecute}
+                />
+
+                <MultiBatchDrawer
+                    isOpen={isBatchDrawerOpen()}
+                    onClose={() => setIsBatchDrawerOpen(false)}
+                    transactions={props.reviewMulti() || []}
+                    onApprove={() => {
+                        props.onStartBatch(props.reviewMulti() || []);
+                        setIsBatchDrawerOpen(false);
+                        props.setReviewMulti(null);
+                    }}
                 />
 
                 {/* Batch Agent Queue (Top) */}
@@ -381,6 +564,22 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 }`}>
                                                 {msg.content}
                                             </div>
+
+                                            {/* Specialized Multi-Transaction Review UI */}
+                                            <Show when={msg.role === 'assistant' && msg.isMultiReview && msg.batchData}>
+                                                <MultiReviewCard
+                                                    transactions={msg.batchData}
+                                                    onApprove={() => {
+                                                        props.onStartBatch(msg.batchData);
+                                                        props.setReviewMulti(null);
+                                                    }}
+                                                    onCancel={() => props.setReviewMulti(null)}
+                                                    onViewDetail={() => {
+                                                        props.setReviewMulti(msg.batchData);
+                                                        setIsBatchDrawerOpen(true);
+                                                    }}
+                                                />
+                                            </Show>
                                         </div>
                                         <Show when={msg.role === 'user'}>
                                             <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border border-white/[0.05] flex items-center justify-center flex-shrink-0 mt-1 shadow-xl">
