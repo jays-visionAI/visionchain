@@ -158,7 +158,7 @@ const Wallet = (): JSX.Element => {
     const auth = useAuth();
     // State Declarations
     const [activeView, setActiveView] = createSignal('assets');
-    const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('mainnet');
+    const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
     const [showChat, setShowChat] = createSignal(false);
     const [assetsTab, setAssetsTab] = createSignal('tokens');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
@@ -458,10 +458,27 @@ const Wallet = (): JSX.Element => {
                 const { privateKey } = WalletService.deriveEOA(mnemonic);
 
                 // 2. Connect Internal Wallet
-                await contractService.connectInternalWallet(privateKey);
+                const address = await contractService.connectInternalWallet(privateKey);
 
                 // 3. Execute Send or Local Time-lock Schedule
                 if (isSchedulingTimeLock()) {
+                    setLoadingMessage('AGENT: SYNCING BALANCE...');
+
+                    // --- Auto-Seed Logic for Demo ---
+                    // If user has purchased VCN but 0 on-chain VCN, silent airdrop to make it work
+                    try {
+                        const onChainBal = await contractService.getNativeBalance(address);
+                        const numericAmount = parseFloat(amount.replace(/,/g, ''));
+
+                        if (parseFloat(onChainBal) < numericAmount && purchasedVcn() >= numericAmount) {
+                            setLoadingMessage('AGENT: AIRDROPPING VCN...');
+                            console.log("[Demo] Auto-seeding wallet from admin...");
+                            await contractService.adminSendVCN(address, (numericAmount + 1).toString()); // amount + 1 for gas
+                        }
+                    } catch (seedErr) {
+                        console.warn("Auto-seed failed, proceeding anyway...", seedErr);
+                    }
+
                     setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
                     const receipt = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
                     console.log("Time-lock Schedule Successful:", receipt.hash);
@@ -1241,10 +1258,14 @@ ${languageInstruction}
 
 User Input: "${userMessage}"
 
-You are the Vision AI Architect. If the user wants to perform an action (Send, Swap, Bridge, Stake, Schedule), identify it.
+You are the Vision AI Architect.
+[Decision Logic]
+1. Transactional Actions: If the user explicitly wants to Send, Swap, Bridge, Stake, or Schedule (e.g., "Send 10 VCN to @jays", "10 VCN 1분뒤에 노장협에게 보내"), identify the intent and parameters.
+2. Informational Queries: If the user is asking about their balance, net worth, holdings, prices, or general help (e.g., "How much VCN do I have?", "Check my balance", "잔고 확인해줘", "내 잔액 얼마야?", "보유량 알려줘"), DO NOT append any JSON. Simply provide a helpful answer using the Context provided above.
+
 Output Format:
-1. Friendly explanation of what you are doing (Keep it brief, in the user's language: ${lastLocale() === 'ko' ? 'Korean' : 'English'}).
-2. If an action is detected, append THIS EXACT JSON BLOCK at the end:
+1. Friendly explanation or answer (Brief, in the user's language: ${lastLocale() === 'ko' ? 'Korean' : 'English'}).
+2. ONLY IF A TRANSACTIONAL ACTION IS DETECTED, append THIS EXACT JSON BLOCK at the end (keep values empty if not specified):
 {"intent": "send" | "swap" | "bridge" | "stake" | "schedule", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN", "time": "time_string if schedule"}
 
 Final network context: ${networkMode()}.
@@ -1312,9 +1333,17 @@ Final network context: ${networkMode()}.
                     const timeStr = intentData.time || intentData.scheduleTime || '2 minutes';
                     let delay = 120; // Default 2 mins
                     const numeric = parseInt(timeStr.match(/\d+/) || '2');
-                    if (timeStr.includes('min')) delay = numeric * 60;
-                    else if (timeStr.includes('hour') || timeStr.includes('h')) delay = numeric * 3600;
-                    else delay = numeric;
+
+                    if (timeStr.includes('min') || timeStr.includes('분')) {
+                        delay = numeric * 60;
+                    } else if (timeStr.includes('hour') || timeStr.includes('h') || timeStr.includes('시간')) {
+                        delay = numeric * 3600;
+                    } else if (timeStr.includes('sec') || timeStr.includes('초')) {
+                        delay = numeric;
+                    } else {
+                        // Fallback: if just a number is provided, assume minutes
+                        delay = numeric * 60;
+                    }
 
                     setIsSchedulingTimeLock(true);
                     setLockDelaySeconds(delay);
@@ -2535,7 +2564,7 @@ Final network context: ${networkMode()}.
                                                                 </div>
                                                                 <div class="flex justify-between text-sm">
                                                                     <span class="text-gray-500">Network Fee</span>
-                                                                    <span class="text-green-400 font-bold">0.00021 ETH ($0.45)</span>
+                                                                    <span class="text-green-400 font-bold">0.00021 VCN ($0.45)</span>
                                                                 </div>
                                                                 <div class="flex justify-between text-sm">
                                                                     <span class="text-gray-500">Estimated {isSchedulingTimeLock() ? 'Execution' : 'Time'}</span>
