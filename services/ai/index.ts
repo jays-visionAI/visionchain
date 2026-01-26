@@ -83,7 +83,14 @@ Unless explicitly requested otherwise by the user, you MUST match their language
 3. Execution Route: ${pt.processingRoute}
 ` : '';
 
-        const dynamicSystemPrompt = `${config.systemPrompt}\n${tuningInfo}\n${localeInfo}`;
+        const dynamicSystemPrompt = `${config.systemPrompt}\n${tuningInfo}\n${localeInfo}
+
+[CRITICAL INSTRUCTIONS - OVERRIDE]
+1. RESPONSE LANGUAGE: You MUST respond in the SAME language as the user's input.
+2. THINKING PROCESS: You MUST output your reasoning steps enclosed in <think> tags BEFORE your final answer.
+Format: <think>Step Title: Brief detail</think>
+Example: <think>Contact Search: Checking database...</think>
+DO NOT output markdown for steps (e.g. **Step 1**). Use ONLY the <think> tags.`;
 
         let result = await provider.generateText(prompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
