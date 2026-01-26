@@ -909,6 +909,7 @@ export const subscribeToQueue = (
 
             return {
                 id: doc.id,
+                dbStatus: data.status,
                 type: 'TIMELOCK',
                 summary: `${data.amount} ${data.token} → ${data.recipient.slice(0, 6)}...`,
                 status: status,
@@ -919,6 +920,7 @@ export const subscribeToQueue = (
                 amount: data.amount,
                 token: data.token,
                 scheduleId: doc.id,
+                executeAt: data.unlockTime * 1000,
                 txHash: data.executionTx || data.creationTx
             };
         });

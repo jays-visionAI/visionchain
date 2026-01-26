@@ -20,15 +20,17 @@ export const useTimeLockAgent = (
         const email = userEmail();
         if (!email) return;
 
-        // Double Check: Avoid re-executing
-        if (!task || task.status === 'SENT') {
+        // Fresh DB check: Avoid re-executing
+        const currentDbStatus = task.dbStatus || task.status;
+        if (!task || currentDbStatus === 'SENT' || currentDbStatus === 'executed') {
             return;
         }
 
-        // If automatically scheduled, strictly block if already executing
-        if (!isForced && task.status === 'EXECUTING') {
+        // Only block if it's REALLY being processed in DB (not just optimistic UI)
+        if (!isForced && (currentDbStatus === 'EXECUTING' || currentDbStatus === 'processing')) {
             return;
         }
+
 
         // If Forced (Manual Retry) on an Executing task, ask for confirmation
         if (isForced && task.status === 'EXECUTING') {
@@ -108,7 +110,7 @@ export const useTimeLockAgent = (
     // Scheduler Interval
     createEffect(() => {
         const tasks = queueTasks();
-        if (!tasks.some(t => t.status === 'WAITING')) return;
+        if (!tasks.some(t => ['WAITING', 'EXECUTING'].includes(t.status))) return;
 
         const timer = setInterval(() => {
             const now = Date.now();
@@ -121,7 +123,8 @@ export const useTimeLockAgent = (
             // That's fine as long as updates aren't super frequent (seconds).
 
             tasks.forEach(task => {
-                if (task.status === 'WAITING' && task.executeAt && task.executeAt <= now) {
+                const isPending = task.dbStatus === 'pending' || task.status === 'WAITING';
+                if (isPending && task.executeAt && task.executeAt <= now) {
                     processScheduledTask(task);
                 }
             });

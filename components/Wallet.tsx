@@ -1478,21 +1478,35 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                     setSendAmount(intentData.amount || '');
                     setSelectedToken(intentData.symbol || 'VCN');
 
-                    // Parse Time from intentData.time or intentData.scheduleTime
-                    const timeStr = intentData.time || intentData.scheduleTime || '2 minutes';
+                    // Parse Time from intentData.executeAt (timestamp) or intentData.time/scheduleTime (relative string)
                     let delay = 120; // Default 2 mins
-                    const numeric = parseInt(timeStr.match(/\d+/) || '2');
+                    let displayTime = '2 minutes';
 
-                    if (timeStr.includes('min')) {
-                        delay = numeric * 60;
-                    } else if (timeStr.includes('hour') || timeStr.includes('h')) {
-                        delay = numeric * 3600;
-                    } else if (timeStr.includes('sec')) {
-                        delay = numeric;
+                    if (intentData.executeAt && typeof intentData.executeAt === 'number') {
+                        // If it's a future timestamp in ms
+                        const now = Date.now();
+                        if (intentData.executeAt > now) {
+                            delay = Math.max(1, Math.floor((intentData.executeAt - now) / 1000));
+                            displayTime = `${Math.floor(delay / 60)} minutes`;
+                            console.log(`[AI] Using absolute timestamp. Delay: ${delay}s`);
+                        }
                     } else {
-                        // Fallback: if just a number is provided, assume minutes
-                        delay = numeric * 60;
+                        const timeStr = intentData.time || intentData.scheduleTime || '2 minutes';
+                        displayTime = timeStr;
+                        const numeric = parseInt(timeStr.match(/\d+/) || '2');
+
+                        if (timeStr.includes('min')) {
+                            delay = numeric * 60;
+                        } else if (timeStr.includes('hour') || timeStr.includes('h')) {
+                            delay = numeric * 3600;
+                        } else if (timeStr.includes('sec')) {
+                            delay = numeric;
+                        } else {
+                            delay = numeric * 60;
+                        }
+                        console.log(`[AI] Using relative time string: ${timeStr}. Delay: ${delay}s`);
                     }
+
 
                     setIsSchedulingTimeLock(true);
                     setLockDelaySeconds(delay);
@@ -1503,7 +1517,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                         setFlowStep(2);
                     }
 
-                    const msg = config.chat.scheduledConfirm(intentData.amount || '', intentData.symbol || 'VCN', timeStr);
+                    const msg = config.chat.scheduledConfirm(intentData.amount || '', intentData.symbol || 'VCN', displayTime);
                     setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
                     setChatLoading(false);
                     return;

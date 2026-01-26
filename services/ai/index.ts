@@ -124,7 +124,9 @@ Unless explicitly requested otherwise by the user, you MUST match their language
 
    [JSON FORMAT]
    - When executing, append this JSON to the very end of your response:
-   {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
+   - For immediate: {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
+   - For scheduled: {"intent": "schedule", "recipient": "0x...", "amount": "...", "symbol": "...", "executeAt": 1731234567890}
+     (executeAt is the absolute JS timestamp in milliseconds)
 
 5. TIME SENSITIVITY & SCHEDULING RULE:
    - **STRICT INDEPENDENCE**: IGNORE all time references in [Previous Conversation History]. THOSE ARE STALE.
