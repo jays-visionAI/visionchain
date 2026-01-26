@@ -178,79 +178,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
     return (
         <div class="flex-1 flex overflow-hidden relative bg-[#070708]">
-            {/* Left Sidebar - Chat History (Synced with Global AI) */}
-            <div
-                class={`h-full border-r border-white/[0.04] bg-[#0c0c0e]/60 backdrop-blur-2xl transition-all duration-500 ease-in-out relative flex flex-col ${props.chatHistoryOpen ? 'w-[280px]' : 'w-0 overflow-hidden'}`}
-            >
-                <div class="p-6 flex flex-col h-full space-y-6">
-                    <div class="flex items-center justify-between shrink-0">
-                        <div class="flex items-center gap-2">
-                            <div class="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                <Clock class="w-4 h-4 text-purple-400" />
-                            </div>
-                            <span class="text-[11px] font-black text-white uppercase tracking-[0.2em]">History</span>
-                        </div>
-                        <button
-                            onClick={() => props.onNewChat()}
-                            class="p-2 hover:bg-white/5 rounded-xl transition-all text-purple-400 hover:text-white"
-                        >
-                            <Plus class="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    <div class="flex-1 overflow-y-auto pr-2 scrollbar-hide space-y-3">
-                        <Show when={props.history().length === 0}>
-                            <div class="py-12 text-center">
-                                <div class="w-12 h-12 rounded-full bg-white/[0.02] border border-white/[0.05] flex items-center justify-center mx-auto mb-4">
-                                    <MessageSquare class="w-5 h-5 text-gray-600" />
-                                </div>
-                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">No sessions yet</p>
-                            </div>
-                        </Show>
-                        <For each={props.history()}>
-                            {(conv) => (
-                                <div class="group relative">
-                                    <button
-                                        onClick={() => props.onSelectConversation(conv)}
-                                        class={`w-full p-4 rounded-2xl text-left transition-all border group-hover:scale-[1.02] active:scale-[0.98] ${props.currentSessionId() === conv.id
-                                            ? 'bg-purple-600/10 border-purple-500/30'
-                                            : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.05]'
-                                            }`}
-                                    >
-                                        <div class="flex flex-col gap-1.5">
-                                            <span class={`text-[13px] font-bold truncate pr-6 ${props.currentSessionId() === conv.id ? 'text-purple-400' : 'text-gray-100'}`}>
-                                                {conv.messages[0]?.text || 'New Chat'}
-                                            </span>
-                                            <div class="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase tracking-widest">
-                                                <span>{new Date(conv.updatedAt || conv.createdAt).toLocaleDateString()}</span>
-                                                <span class="w-1 h-1 rounded-full bg-gray-700" />
-                                                <span>{conv.messages.length} msgs</span>
-                                            </div>
-                                        </div>
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            props.onDeleteConversation(conv.id);
-                                        }}
-                                        class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all bg-[#0c0c0e]/90"
-                                    >
-                                        <Trash2 class="w-4 h-4" />
-                                    </button>
-                                </div>
-                            )}
-                        </For>
-                    </div>
-                </div>
-            </div>
-
-            {/* Toggle History Sidebar */}
-            <button
-                onClick={() => props.setChatHistoryOpen(!props.chatHistoryOpen)}
-                class={`absolute z-50 top-1/2 -translate-y-1/2 w-6 h-12 bg-[#121214] border border-white/5 rounded-r-xl flex items-center justify-center text-gray-500 hover:text-white transition-all shadow-2xl ${props.chatHistoryOpen ? 'left-[280px]' : 'left-0'}`}
-            >
-                {props.chatHistoryOpen ? <ChevronLeft class="w-4 h-4" /> : <ChevronRight class="w-4 h-4" />}
-            </button>
+            {/* Left Sidebar & Toggle Removed - Moved to Right Sidebar */}
 
             {/* Main Chat Area */}
             <div class="flex-1 flex flex-col overflow-hidden relative">
@@ -538,46 +466,64 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             {/* Right Sidebar - Portfolio & Analytics (Always Fixed for Wallet context) */}
             <div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block scrollbar-hide">
                 <div class="p-8 space-y-10">
-                    {/* Portfolio Card */}
-                    <div class="relative overflow-hidden group">
-                        <div class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-4">Live Net Worth</div>
-                        <div class="flex items-end gap-3 mb-8">
-                            <span class="text-4xl font-black text-white tracking-tight tabular-nums">{props.totalValueStr()}</span>
+                    {/* Chat History Section (Moved from Left Sidebar) */}
+                    <div class="h-[45vh] min-h-[400px] flex flex-col bg-white/[0.02] border border-white/[0.04] rounded-[30px] overflow-hidden shrink-0">
+                        <div class="p-5 flex items-center justify-between border-b border-white/[0.04] shrink-0">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                    <Clock class="w-4 h-4 text-purple-400" />
+                                </div>
+                                <span class="text-[11px] font-black text-white uppercase tracking-[0.2em]">History</span>
+                            </div>
+                            <button
+                                onClick={() => props.onNewChat()}
+                                class="p-2 hover:bg-white/5 rounded-xl transition-all text-purple-400 hover:text-white"
+                            >
+                                <Plus class="w-4 h-4" />
+                            </button>
                         </div>
 
-                        {/* Token Breakdown (Simplified) */}
-                        <div class="space-y-5">
-                            <For each={['VCN', 'ETH']}>
-                                {(symbol) => {
-                                    const asset = props.getAssetData(symbol);
-                                    if (!asset) return null;
-                                    return (
-                                        <div class="flex items-center justify-between group/item cursor-pointer">
-                                            <div class="flex items-center gap-3">
-                                                <div class={`w-10 h-10 rounded-xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-center flex-shrink-0 group-hover/item:border-blue-500/30 transition-all shadow-xl`}>
-                                                    <span class="text-xs font-black text-white">{symbol.slice(0, 2)}</span>
-                                                </div>
-                                                <div>
-                                                    <div class="text-[14px] font-bold text-white uppercase tracking-wide group-hover/item:text-blue-400 transition-colors">{symbol}</div>
-                                                    <div class="text-[10px] text-gray-500 font-bold">{asset.balance.toFixed(2)} Vol</div>
+                        <div class="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
+                            <Show when={props.history().length === 0}>
+                                <div class="py-8 text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest">
+                                    No sessions yet
+                                </div>
+                            </Show>
+                            <For each={props.history()}>
+                                {(conv) => (
+                                    <div class="group relative">
+                                        <button
+                                            onClick={() => props.onSelectConversation(conv)}
+                                            class={`w-full p-3 rounded-xl text-left transition-all border group-hover:scale-[1.02] active:scale-[0.98] ${props.currentSessionId() === conv.id
+                                                ? 'bg-purple-600/10 border-purple-500/30'
+                                                : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.05]'
+                                                }`}
+                                        >
+                                            <div class="flex flex-col gap-1">
+                                                <span class={`text-[12px] font-bold truncate pr-6 ${props.currentSessionId() === conv.id ? 'text-purple-400' : 'text-gray-100'}`}>
+                                                    {conv.messages[0]?.text || 'New Chat'}
+                                                </span>
+                                                <div class="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                                    <span>{new Date(conv.updatedAt || conv.createdAt).toLocaleDateString()}</span>
+                                                    <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                                    <span>{conv.messages.length} msgs</span>
                                                 </div>
                                             </div>
-                                            <div class="text-right">
-                                                <div class="text-[14px] font-black text-white font-mono tracking-tighter">
-                                                    ${(asset.balance * asset.price).toLocaleString()}
-                                                </div>
-                                                <div class={`text-[10px] font-bold ${asset.change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                                    {asset.change24h >= 0 ? '+' : ''}{asset.change24h.toFixed(2)}%
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }}
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                props.onDeleteConversation(conv.id);
+                                            }}
+                                            class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all bg-[#0c0c0e]/90"
+                                        >
+                                            <Trash2 class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                )}
                             </For>
                         </div>
                     </div>
-
-                    <div class="h-px bg-white/[0.04] w-full" />
 
                     {/* Staking / Rewards (Mirrored from Sidebar logic) */}
                     <div class="space-y-6">
