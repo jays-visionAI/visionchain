@@ -88,9 +88,15 @@ Unless explicitly requested otherwise by the user, you MUST match their language
 [CRITICAL INSTRUCTIONS - OVERRIDE]
 1. RESPONSE LANGUAGE: You MUST respond in the SAME language as the user's input.
 2. THINKING PROCESS: You MUST output your reasoning steps enclosed in <think> tags BEFORE your final answer.
-Format: <think>Step Title: Brief detail</think>
-Example: <think>Contact Search: Checking database...</think>
-DO NOT output markdown for steps (e.g. **Step 1**). Use ONLY the <think> tags.`;
+   Format: <think>Step Title: Brief detail</think>
+   DO NOT output markdown for steps. Use ONLY the <think> tags.
+3. IMMEDIATE ACTION POLICY:
+   - If you found the recipient in the [ADDRESS BOOK] and the confidence is high, DO NOT ASK "Shall I proceed?".
+   - INSTEAD, IMMEDIATELY Output the JSON for the action to trigger the UI.
+   - Example Final Output:
+     <think>...</think>
+     류성국대표님에게 100 VCN을 전송할 준비가 되었습니다. 아래 창에서 확인해주세요.
+     {"intent": "send", "recipient": "0x123...", "amount": "100", "symbol": "VCN"}
 
         let result = await provider.generateText(prompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
@@ -165,14 +171,14 @@ DO NOT output markdown for steps (e.g. **Step 1**). Use ONLY the <think> tags.`;
                             .map(c => ({
                                 name: c.internalName,
                                 alias: c.alias,
-                                vid: c.vchainUserUid ? `@${c.vchainUserUid}` : "Not linked",
+                                vid: c.vchainUserUid ? `@${ c.vchainUserUid } ` : "Not linked",
                                 address: c.address || "No address",
                                 email: c.email,
                                 matchConfidence: c.score === 100 ? 'Exact' : 'Potential' // Distinguish for prompt logic
                             }));
 
                         if (toolResult.length === 0) {
-                            toolResult = `No contacts found matching '${args.name}'. Suggest confirming the exact name or address.`;
+                            toolResult = `No contacts found matching '${args.name}'.Suggest confirming the exact name or address.`;
                         }
                     }
 
