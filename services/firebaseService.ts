@@ -1866,11 +1866,20 @@ export const createNotification = async (email: string, notification: Notificati
 };
 
 // Initialize on import
-// Initialize on import
 initializeFirebase();
 
 export const updateScheduledTaskStatus = async (userEmail: string, taskId: string, updates: any) => {
     const db = getFirebaseDb();
     const taskRef = doc(db, 'users', userEmail.toLowerCase(), 'queue', taskId);
     await setDoc(taskRef, updates, { merge: true });
+};
+
+export const findUserByAddress = async (address: string): Promise<User | null> => {
+    const db = getFirebaseDb();
+    const q = query(collection(db, 'users'), where('walletAddress', '==', address));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        return snapshot.docs[0].data() as User;
+    }
+    return null;
 };
