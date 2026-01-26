@@ -1309,7 +1309,8 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
             intentBot: data.intentBot || defaultSettings.intentBot,
             helpdeskBot: data.helpdeskBot || defaultSettings.helpdeskBot,
             imageSettings: data.imageSettings || defaultSettings.imageSettings,
-            voiceSettings: data.voiceSettings || defaultSettings.voiceSettings
+            voiceSettings: data.voiceSettings || defaultSettings.voiceSettings,
+            promptTuning: data.promptTuning
         } as ChatbotSettings;
     } catch (e) {
         console.error("Error fetching chatbot settings:", e);
