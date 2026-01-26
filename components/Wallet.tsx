@@ -2465,7 +2465,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                     </Show>
 
                     <Show when={activeView() === 'notifications'}>
-                        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+                        <div class="flex-1 h-full overflow-y-auto p-4 lg:p-8 pb-32">
                             <WalletNotifications />
                         </div>
                     </Show>
