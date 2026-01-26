@@ -46,6 +46,7 @@ import {
     Clock,
     Bell
 } from 'lucide-solid';
+import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
     updateWalletStatus,
     getUserPurchases,
@@ -310,9 +311,13 @@ const Wallet = (): JSX.Element => {
     const [sidebarOpen, setSidebarOpen] = createSignal(false);
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
-    const [lastLocale, setLastLocale] = createSignal<'ko' | 'en'>('ko');
-    const detectLanguage = (text: string) => {
-        return (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) ? 'ko' : 'en';
+    const [lastLocale, setLastLocale] = createSignal<string>('en');
+    const detectLanguage = (text: string): string => {
+        // Simple heuristic for demo; in production use a library or AI-based detection
+        if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) return 'ko';
+        if (/[ぁ-んァ-ヶ]/.test(text)) return 'ja';
+        if (/[一-龠]/.test(text)) return 'zh'; // Simplified for CJK
+        return 'en';
     };
 
     const [chatHistory, setChatHistory] = createSignal<AiConversation[]>([]);
@@ -321,7 +326,7 @@ const Wallet = (): JSX.Element => {
     // --- Advanced AI Features (Synced with Global AI) ---
     const [attachments, setAttachments] = createSignal<any[]>([]);
     const [thinkingSteps, setThinkingSteps] = createSignal<any[]>([]);
-    const [voiceLang, setVoiceLang] = createSignal('ko-KR');
+    const [voiceLang, setVoiceLang] = createSignal('en-US');
     const [isRecording, setIsRecording] = createSignal(false);
     const [loadingType, setLoadingType] = createSignal<'text' | 'image' | 'voice'>('text');
 
@@ -580,7 +585,7 @@ const Wallet = (): JSX.Element => {
                     });
 
                     // 2. Resolve Recipient for Incoming Notification
-                    const recipientInfo = await resolveRecipient(recipient);
+                    const recipientInfo = await resolveRecipient(recipient, userProfile().email);
                     if (recipientInfo?.email && !isScheduled) {
                         await createNotification(recipientInfo.email, {
                             type: 'transfer_received',
@@ -1282,8 +1287,19 @@ const Wallet = (): JSX.Element => {
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setInput('');
         setChatLoading(true);
+        const currentLang = lastLocale();
+        const config = AI_LOCALIZATION[currentLang] || AI_LOCALIZATION['en'];
+        const getLabel = (step: '1' | '2' | '3') => {
+            const labels: Record<string, any> = {
+                'ko': { '1': '의도 분석 중...', '2': '포트폴리오 분석 및 시뮬레이션...', '3': '응답 생성 완료' },
+                'ja': { '1': '意図を分析中...', '2': 'ポートフォリオ分析とシュミレーション...', '3': '回答の生成完了' },
+                'en': { '1': 'Analyzing Intent...', '2': 'Comparing Portfolio & Simulating...', '3': 'Response Generated' }
+            };
+            return (labels[currentLang] || labels['en'])[step];
+        };
+
         setThinkingSteps([
-            { id: '1', label: 'Analyzing Intent...', status: 'loading' }
+            { id: '1', label: getLabel('1'), status: 'loading' }
         ]);
 
         try {
@@ -1301,12 +1317,15 @@ Holdings:
 ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
 
 (Important: You are currently on the ${networkMode()}. ${networkMode() === 'testnet' ? 'Testnet VCN is distributed at 10% of the purchased amount for testing node purchases and transactions.' : 'Mainnet shows actual purchased assets.'})
+
+Contact List (Your Address Book):
+${contacts().length > 0
+                    ? contacts().map((c: any) => `- ${c.internalName}${c.alias ? ` (Alias: ${c.alias})` : ''}${c.vchainUserUid ? ` [@${c.vchainUserUid}]` : ''}`).join('\n')
+                    : 'No contacts saved yet.'}
 `;
 
             // Enhanced Intent-Aware Prompt
-            const languageInstruction = lastLocale() === 'ko'
-                ? "반드시 한국어로 답변해 주세요."
-                : "Please respond in English.";
+            const languageInstruction = "CRITICAL: You MUST respond in the SAME language as the User Input.";
 
             const fullPrompt = `${context}
 [Language Rule]
@@ -1316,11 +1335,11 @@ User Input: "${userMessage}"
 
 You are the Vision AI Architect.
 [Decision Logic]
-1. Transactional Actions: If the user explicitly wants to Send, Swap, Bridge, Stake, or Schedule (e.g., "Send 10 VCN to @jays", "10 VCN 1분뒤에 노장협에게 보내"), identify the intent and parameters.
-2. Informational Queries: If the user is asking about their balance, net worth, holdings, prices, or general help (e.g., "How much VCN do I have?", "Check my balance", "잔고 확인해줘", "내 잔액 얼마야?", "보유량 알려줘"), DO NOT append any JSON. Simply provide a helpful answer using the Context provided above.
+1. Transactional Actions: If the user explicitly wants to Send, Swap, Bridge, Stake, or Schedule (e.g., "Send 10 VCN to @jays", "Send 10 VCN to John Doe in 1 minute"), identify the intent and parameters.
+2. Informational Queries: If the user is asking about their balance, net worth, holdings, prices, or general help (e.g., "How much VCN do I have?", "Check my balance"), DO NOT append any JSON. Simply provide a helpful answer using the Context provided above.
 
 Output Format:
-1. Friendly explanation or answer (Brief, in the user's language: ${lastLocale() === 'ko' ? 'Korean' : 'English'}).
+1. Friendly explanation or answer (Brief, ALWAYS in the user's language).
 2. ONLY IF A TRANSACTIONAL ACTION IS DETECTED, append THIS EXACT JSON BLOCK at the end (keep values empty if not specified):
 {"intent": "send" | "swap" | "bridge" | "stake" | "schedule", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN", "time": "time_string if schedule"}
 
@@ -1329,14 +1348,14 @@ Final network context: ${networkMode()}.
 
             setThinkingSteps(prev => [
                 ...prev.map(s => ({ ...s, status: 'completed' as const })),
-                { id: '2', label: 'Comparing Portfolio & Simulating...', status: 'loading' }
+                { id: '2', label: getLabel('2'), status: 'loading' }
             ]);
 
             const response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
 
             setThinkingSteps(prev => [
                 ...prev.map(s => ({ ...s, status: 'completed' as const })),
-                { id: '3', label: 'Response Generated', status: 'success' }
+                { id: '3', label: getLabel('3'), status: 'success' }
             ]);
             setTimeout(() => setThinkingSteps([]), 1500);
 
@@ -1360,6 +1379,17 @@ Final network context: ${networkMode()}.
                     const resolved = await resolveRecipient(intentData.recipient, userProfile().email);
                     if (resolved && resolved.address) {
                         intentData.recipient = resolved.address;
+                    } else {
+                        console.warn(`[AI] Could not resolve name: ${intentData.recipient}`);
+                        if (intentData.intent === 'send' || intentData.intent === 'schedule') {
+                            const errorMsg = config.chat.accountNotFound(intentData.recipient || '');
+                            setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }]);
+                            setChatLoading(false);
+                            setRecipientAddress(intentData.recipient || '');
+                            setSendAmount(intentData.amount || '');
+                            startFlow('send');
+                            return;
+                        }
                     }
                 }
 
@@ -1390,11 +1420,11 @@ Final network context: ${networkMode()}.
                     let delay = 120; // Default 2 mins
                     const numeric = parseInt(timeStr.match(/\d+/) || '2');
 
-                    if (timeStr.includes('min') || timeStr.includes('분')) {
+                    if (timeStr.includes('min')) {
                         delay = numeric * 60;
-                    } else if (timeStr.includes('hour') || timeStr.includes('h') || timeStr.includes('시간')) {
+                    } else if (timeStr.includes('hour') || timeStr.includes('h')) {
                         delay = numeric * 3600;
-                    } else if (timeStr.includes('sec') || timeStr.includes('초')) {
+                    } else if (timeStr.includes('sec')) {
                         delay = numeric;
                     } else {
                         // Fallback: if just a number is provided, assume minutes
@@ -1410,9 +1440,7 @@ Final network context: ${networkMode()}.
                         setFlowStep(2);
                     }
 
-                    const msg = lastLocale() === 'ko'
-                        ? `일정을 확인했습니다. ${intentData.amount} ${intentData.symbol} (${timeStr}) 예약 이체 설정을 시작합니다.`
-                        : `I've prepared your scheduled transfer of ${intentData.amount} ${intentData.symbol} (${timeStr}).`;
+                    const msg = config.chat.scheduledConfirm(intentData.amount || '', intentData.symbol || 'VCN', timeStr);
                     setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
                     setChatLoading(false);
                     return;
@@ -1426,19 +1454,20 @@ Final network context: ${networkMode()}.
             }
 
             if (!cleanResponse && intentData) {
-                if (lastLocale() === 'ko') {
-                    const intentMap: any = {
-                        'send': 'transfer',
-                        'swap': 'swap',
-                        'stake': 'staking',
-                        'bridge': 'bridge',
-                        'schedule': 'scheduled transfer'
-                    };
-                    const intentName = intentMap[intentData.intent] || 'transaction';
-                    cleanResponse = `I've prepared the ${intentName} as you requested. Please review the details on the screen and proceed when you're ready!`;
-                } else {
-                    cleanResponse = `I've prepared the ${intentData.intent} transaction for you. Please review the details on your screen to proceed!`;
-                }
+                const intent = intentData.intent || 'transaction';
+                const intentMap: Record<string, Record<string, string>> = {
+                    'ko': { 'send': '송금', 'swap': '스왑', 'bridge': '브릿지', 'stake': '스테이킹', 'schedule': '예약 송금', 'transaction': '트랜잭션' },
+                    'ja': { 'send': '送金', 'swap': 'スワップ', 'bridge': 'ブリッジ', 'stake': 'ステーキング', 'schedule': '予約送金', 'transaction': 'トランザクション' },
+                    'en': { 'send': 'transfer', 'swap': 'swap', 'bridge': 'bridge', 'stake': 'staking', 'schedule': 'scheduled transfer', 'transaction': 'transaction' }
+                };
+                const localizedIntent = (intentMap[lastLocale()] || intentMap['en'])[intent] || intent;
+
+                const defaultMsgMap: Record<string, string> = {
+                    'ko': `요청하신 ${localizedIntent} 업무를 준비했습니다. 화면의 내용을 확인하고 진행해 주세요!`,
+                    'ja': `ご依頼の ${localizedIntent} の準備ができました。画面の内容を確認して進めてください。`,
+                    'en': `I've prepared the ${localizedIntent} for you. Please review the details on your screen to proceed!`
+                };
+                cleanResponse = defaultMsgMap[lastLocale()] || defaultMsgMap['en'];
             }
 
             setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
@@ -2551,8 +2580,11 @@ Final network context: ${networkMode()}.
                                                                     placeholder="0x..."
                                                                     value={recipientAddress()}
                                                                     onInput={(e) => setRecipientAddress(e.currentTarget.value)}
-                                                                    class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all font-mono text-sm"
+                                                                    class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${recipientAddress() && !ethers.isAddress(recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
                                                                 />
+                                                                <Show when={recipientAddress() && !ethers.isAddress(recipientAddress())}>
+                                                                    <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address (Please enter a valid 0x address or resolve name)</p>
+                                                                </Show>
                                                             </div>
                                                             <div>
                                                                 <div class="flex items-center justify-between mb-2 px-1">
@@ -2601,7 +2633,7 @@ Final network context: ${networkMode()}.
                                                                 </div>
                                                             </div>
                                                             <button
-                                                                disabled={!recipientAddress() || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0}
+                                                                disabled={!ethers.isAddress(recipientAddress()) || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0}
                                                                 onClick={() => setFlowStep(2)}
                                                                 class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             >

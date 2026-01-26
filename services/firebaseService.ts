@@ -214,6 +214,45 @@ export const searchUserByEmail = async (email: string): Promise<{ vid: string, e
     }
 };
 
+export const searchUserByName = async (name: string): Promise<{ vid: string, email: string, address: string } | null> => {
+    try {
+        const db = getFirebaseDb();
+        const usersRef = collection(db, 'users');
+        // We prefer 'displayName' but often it might be 'name' or even email prefix
+        // For simplicity and performance, we search displayName exactly
+        const q = query(usersRef, where('displayName', '==', name), limit(1));
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+            const docResult = snapshot.docs[0];
+            const data = docResult.data();
+            return {
+                vid: docResult.id,
+                email: data.email,
+                address: data.walletAddress
+            };
+        }
+
+        // Fallback for fields named 'name'
+        const q2 = query(usersRef, where('name', '==', name), limit(1));
+        const snapshot2 = await getDocs(q2);
+        if (!snapshot2.empty) {
+            const docResult = snapshot2.docs[0];
+            const data = docResult.data();
+            return {
+                vid: docResult.id,
+                email: data.email,
+                address: data.walletAddress
+            };
+        }
+
+        return null;
+    } catch (e) {
+        console.error("User search by name failed:", e);
+        return null;
+    }
+};
+
 /**
  * Resolves a recipient identifier (phone, email, name, handle) to a VID and Address.
  */
@@ -240,12 +279,14 @@ export const resolveRecipient = async (identifier: string, currentUserEmail?: st
         if (result) return result;
     }
 
-    // 4. Search in User's Address Book (Contacts) - Crucial for Names like "노장협"
+    // 4. Search in User's Address Book (Contacts) - Crucial for human-readable names
     if (currentUserEmail) {
         try {
             const contacts = await getUserContacts(currentUserEmail);
             const contact = contacts.find(c =>
                 c.internalName.toLowerCase() === cleanId.toLowerCase() ||
+                c.alias?.toLowerCase() === cleanId.toLowerCase() ||
+                c.tags?.some(t => t.toLowerCase() === cleanId.toLowerCase()) ||
                 c.vchainUserUid?.toLowerCase() === cleanId.toLowerCase()
             );
 
@@ -261,7 +302,11 @@ export const resolveRecipient = async (identifier: string, currentUserEmail?: st
         }
     }
 
-    // 5. Try direct VID lookup
+    // 5. Global Name Lookup
+    const nameResult = await searchUserByName(cleanId);
+    if (nameResult) return nameResult;
+
+    // 6. Try direct VID lookup (via searchUserByEmail as it matches doc ID)
     return await searchUserByEmail(cleanId);
 };
 
@@ -483,6 +528,8 @@ export interface UserData {
 export interface Contact {
     id?: string;
     internalName: string;
+    alias?: string;
+    tags?: string[];
     phone: string;
     email?: string;
     address?: string;
@@ -712,9 +759,9 @@ export const saveUserContacts = async (userEmail: string, contacts: Omit<Contact
             batch.set(contactRef, {
                 ...contact,
                 phone: normalizedPhone,
-                email: contact.email.toLowerCase().trim(),
-                vchainUserUid: resolved?.vid || null,
-                address: resolved?.address || null,
+                email: (contact as any).email ? (contact as any).email.toLowerCase().trim() : null,
+                vchainUserUid: resolved?.vid || (contact as any).vchainUserUid || null,
+                address: resolved?.address || (contact as any).address || null,
                 createdAt: new Date().toISOString()
             });
         }

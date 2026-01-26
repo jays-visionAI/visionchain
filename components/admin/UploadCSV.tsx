@@ -141,7 +141,7 @@ export const UploadCSV = () => {
 
             setUploadStatus({
                 success: true,
-                message: `성공적으로 ${result.count}건을 처리했습니다. ${emailCount}명의 신규 사용자를 초대하고, ${result.existingMembers.length}명의 기존 회원 정보를 업데이트했습니다. (테스트넷 토큰 10% 지급 대기 중)`
+                message: `Successfully processed ${result.count} entries. Invited ${emailCount} new users and updated ${result.existingMembers.length} existing members. (Testnet tokens 10% distribution pending)`
             });
 
             // Clear file selection after successful upload but keep result view

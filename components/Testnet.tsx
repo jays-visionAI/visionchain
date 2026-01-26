@@ -335,7 +335,7 @@ const Testnet: Component = () => {
                                 >
                                     <div class="flex items-center gap-3">
                                         <BookOpen class="w-4 h-4 text-slate-400" />
-                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400">한글 단계별 매뉴얼 (KO)</span>
+                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Step-by-Step Manual (EN)</span>
                                     </div>
                                     <ExternalLink class="w-4 h-4 text-slate-500" />
                                 </a>
@@ -393,7 +393,7 @@ const Testnet: Component = () => {
                             target="_blank"
                             class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group"
                         >
-                            <span class="text-xs font-black text-white uppercase tracking-widest text-[10px]">한글 매뉴얼 (KO)</span>
+                            <span class="text-xs font-black text-white uppercase tracking-widest text-[10px]">Manual (EN)</span>
                         </a>
                         <A href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
                             <span class="text-xs font-black text-white uppercase tracking-widest text-[10px]">Enter Console</span>

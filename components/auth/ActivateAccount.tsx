@@ -35,7 +35,7 @@ export default function ActivateAccount() {
 
     onMount(async () => {
         if (!token) {
-            setError('활성화 토큰이 없습니다. 이메일의 링크를 다시 확인해 주세요.');
+            setError('Activation token missing. Please check the link in your email.');
             setIsVerifying(false);
             return;
         }
@@ -47,11 +47,11 @@ export default function ActivateAccount() {
                 setPartnerCode(validation.partnerCode || '');
                 setIsValidToken(true);
             } else {
-                setError(validation.error || '유효하지 않은 토큰입니다.');
+                setError(validation.error || 'Invalid token.');
             }
         } catch (err) {
             console.error('Token validation error:', err);
-            setError('토큰 확인 중 오류가 발생했습니다.');
+            setError('An error occurred while verifying the token.');
         } finally {
             setIsVerifying(false);
         }
@@ -62,12 +62,12 @@ export default function ActivateAccount() {
         setError('');
 
         if (password() !== confirmPassword()) {
-            setError('비밀번호가 일치하지 않습니다.');
+            setError('Passwords do not match.');
             return;
         }
 
         if (password().length < 6) {
-            setError('비밀번호는 최소 6자 이상이어야 합니다.');
+            setError('Password must be at least 6 characters long.');
             return;
         }
 
@@ -84,9 +84,9 @@ export default function ActivateAccount() {
         } catch (err: any) {
             console.error('Activation error:', err);
             if (err.code === 'auth/email-already-in-use') {
-                setError('이미 가입된 이메일입니다. 로그인해 주세요.');
+                setError('Email already in use. Please log in.');
             } else {
-                setError('계정 활성화에 실패했습니다: ' + (err.message || '알 수 없는 오류'));
+                setError('Account activation failed: ' + (err.message || 'Unknown error'));
             }
         } finally {
             setIsLoading(false);
@@ -104,14 +104,14 @@ export default function ActivateAccount() {
                 <div class="rounded-3xl bg-white/[0.02] border border-white/10 p-8 backdrop-blur-xl shadow-2xl">
 
                     <div class="text-center mb-8">
-                        <h1 class="text-2xl font-bold text-white mb-2">계정 활성화</h1>
-                        <p class="text-gray-400 text-sm">Vision Chain 시작을 위해 비밀번호를 설정해 주세요.</p>
+                        <h1 class="text-2xl font-bold text-white mb-2">Account Activation</h1>
+                        <p class="text-gray-400 text-sm">Please set your password to start using Vision Chain.</p>
                     </div>
 
                     <Show when={isVerifying()}>
                         <div class="flex flex-col items-center justify-center py-10">
                             <div class="w-10 h-10 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mb-4" />
-                            <p class="text-gray-400 text-sm">토큰 정보를 확인하고 있습니다...</p>
+                            <p class="text-gray-400 text-sm">Verifying token information...</p>
                         </div>
                     </Show>
 
@@ -119,8 +119,8 @@ export default function ActivateAccount() {
                         <Show when={success()}>
                             <div class="bg-green-500/10 border border-green-500/20 rounded-lg p-6 text-center">
                                 <CheckCircle class="w-12 h-12 text-green-500 mx-auto mb-4" />
-                                <p class="text-green-400 font-bold text-lg">활성화 성공!</p>
-                                <p class="text-green-400/70 text-sm mt-1">로그인 페이지로 이동합니다...</p>
+                                <p class="text-green-400 font-bold text-lg">Activation Success!</p>
+                                <p class="text-green-400/70 text-sm mt-1">Redirecting to login page...</p>
                             </div>
                         </Show>
 
@@ -131,7 +131,7 @@ export default function ActivateAccount() {
                                     <p class="text-red-400 font-bold">{error()}</p>
                                     <a href="/login" class="inline-flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm mt-6 transition-colors">
                                         <ArrowLeft class="w-4 h-4" />
-                                        로그인 페이지로 돌아가기
+                                        Back to Login Page
                                     </a>
                                 </div>
                             </Show>
@@ -140,7 +140,7 @@ export default function ActivateAccount() {
                                 <form onSubmit={handleSubmit} class="space-y-4">
                                     {/* Email (Readonly) */}
                                     <div>
-                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1 text-cyan-400/70">등록된 이메일</label>
+                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1 text-cyan-400/70">Registered Email</label>
                                         <div class="relative">
                                             <Mail class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-500/50" />
                                             <input
@@ -154,7 +154,7 @@ export default function ActivateAccount() {
 
                                     {/* Partner Code (Readonly) */}
                                     <div>
-                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1 text-cyan-400/70">파트너 코드</label>
+                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1 text-cyan-400/70">Partner Code</label>
                                         <div class="relative">
                                             <User class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-500/50" />
                                             <input
@@ -168,7 +168,7 @@ export default function ActivateAccount() {
 
                                     {/* Password */}
                                     <div>
-                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1">새 비밀번호 설정</label>
+                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1">New Password</label>
                                         <div class="relative">
                                             <Key class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                             <input
@@ -176,7 +176,7 @@ export default function ActivateAccount() {
                                                 value={password()}
                                                 onInput={(e) => setPassword(e.currentTarget.value)}
                                                 class="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-12 text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-all text-sm"
-                                                placeholder="6자 이상 입력"
+                                                placeholder="Enter at least 6 characters"
                                                 required
                                             />
                                             <button
@@ -191,7 +191,7 @@ export default function ActivateAccount() {
 
                                     {/* Confirm Password */}
                                     <div>
-                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1">비밀번호 확인</label>
+                                        <label class="text-gray-400 text-xs mb-1 block font-medium ml-1">Confirm Password</label>
                                         <div class="relative">
                                             <Key class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                             <input
@@ -199,7 +199,7 @@ export default function ActivateAccount() {
                                                 value={confirmPassword()}
                                                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
                                                 class="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 pr-12 text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-all text-sm"
-                                                placeholder="비밀번호 재입력"
+                                                placeholder="Re-enter password"
                                                 required
                                             />
                                         </div>
@@ -217,7 +217,7 @@ export default function ActivateAccount() {
                                         disabled={isLoading()}
                                         class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                                     >
-                                        {isLoading() ? '처리 중...' : '계정 활성화 완료'}
+                                        {isLoading() ? 'Processing...' : 'Complete Activation'}
                                     </button>
                                 </form>
                             </Show>

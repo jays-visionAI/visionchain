@@ -13,7 +13,7 @@ import {
     Loader2
 } from 'lucide-solid';
 import Papa from 'papaparse';
-import { saveUserContacts, Contact } from '../../services/firebaseService';
+import { saveUserContacts, Contact, getUserContacts } from '../../services/firebaseService';
 
 interface AddContactModalProps {
     isOpen: boolean;
@@ -24,19 +24,42 @@ interface AddContactModalProps {
 
 interface NewContactEntry {
     internalName: string;
+    alias: string;
     phone: string;
 }
 
 export const AddContactModal = (props: AddContactModalProps) => {
     const [entries, setEntries] = createSignal<NewContactEntry[]>(
-        Array(5).fill(null).map(() => ({ internalName: '', phone: '' }))
+        Array(5).fill(null).map(() => ({ internalName: '', alias: '', phone: '' }))
     );
+    const [existingContacts, setExistingContacts] = createSignal<Contact[]>([]);
     const [isSaving, setIsSaving] = createSignal(false);
     const [isDragging, setIsDragging] = createSignal(false);
-    const [uploadStatus, setUploadStatus] = createSignal<{ type: 'success' | 'error', message: string } | null>(null);
+    const [uploadStatus, setUploadStatus] = createSignal<{ type: 'success' | 'error' | 'warning', message: string } | null>(null);
+
+    onMount(async () => {
+        if (props.userEmail) {
+            const contacts = await getUserContacts(props.userEmail);
+            setExistingContacts(contacts);
+        }
+    });
+
+    const isDuplicateName = (name: string, currentIndex: number) => {
+        if (!name.trim()) return false;
+
+        // Check against existing contacts
+        const existsInDb = existingContacts().some(c => c.internalName.toLowerCase() === name.trim().toLowerCase());
+        if (existsInDb) return true;
+
+        // Check against other entries in the current modal
+        const existsInEntries = entries().some((e, i) =>
+            i !== currentIndex && e.internalName.trim().toLowerCase() === name.trim().toLowerCase()
+        );
+        return existsInEntries;
+    };
 
     const addRow = () => {
-        setEntries([...entries(), { internalName: '', phone: '' }]);
+        setEntries([...entries(), { internalName: '', alias: '', phone: '' }]);
     };
 
     const removeRow = (index: number) => {
@@ -63,6 +86,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                 const parsedData = results.data as any[];
                 const newEntries: NewContactEntry[] = parsedData.map(row => ({
                     internalName: row.name || row.Name || row.internalName || '',
+                    alias: row.alias || row.Alias || row.note || row.Note || '',
                     phone: row.phone || row.Phone || row.tel || ''
                 })).filter(e => e.internalName || e.phone);
 
@@ -90,12 +114,19 @@ export const AddContactModal = (props: AddContactModalProps) => {
         const validEntries = entries().filter(e => e.internalName || e.phone);
         if (validEntries.length === 0) return;
 
+        // Check for duplicates for warning/guidance
+        const hasDuplicates = validEntries.some((e, i) => isDuplicateName(e.internalName, i));
+        if (hasDuplicates) {
+            const confirmSave = confirm("Warning: Some names are duplicated. It is highly recommended to use unique names or add an Alias (e.g. John Work) for better AI recognition. Do you still want to save?");
+            if (!confirmSave) return;
+        }
+
         setIsSaving(true);
         try {
             await saveUserContacts(props.userEmail, validEntries);
             props.onSuccess();
             props.onClose();
-            setEntries(Array(5).fill(null).map(() => ({ internalName: '', phone: '' })));
+            setEntries(Array(5).fill(null).map(() => ({ internalName: '', alias: '', phone: '' })));
         } catch (e) {
             setUploadStatus({ type: 'error', message: 'Failed to save contacts to server.' });
         } finally {
@@ -201,7 +232,9 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     animate={{ opacity: 1, height: 'auto' }}
                                     class={`p-4 rounded-2xl border flex items-center gap-3 ${uploadStatus()?.type === 'success'
                                         ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                                        : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                        : uploadStatus()?.type === 'warning'
+                                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                            : 'bg-red-500/10 border-red-500/20 text-red-400'
                                         }`}
                                 >
                                     <Show when={uploadStatus()?.type === 'success'} fallback={<AlertCircle class="w-5 h-5" />}>
@@ -214,8 +247,9 @@ export const AddContactModal = (props: AddContactModalProps) => {
                             {/* Input Grid */}
                             <div class="space-y-4">
                                 <div class="grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                    <div class="col-span-5">Internal Name</div>
-                                    <div class="col-span-6">Phone Number</div>
+                                    <div class="col-span-4">Internal Name</div>
+                                    <div class="col-span-3">Alias / Tags</div>
+                                    <div class="col-span-4">Phone Number</div>
                                     <div class="col-span-1"></div>
                                 </div>
 
@@ -223,16 +257,35 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     <Index each={entries()}>
                                         {(entry, index) => (
                                             <div class="grid grid-cols-12 gap-3 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
-                                                <div class="col-span-5">
+                                                <div class="col-span-4">
+                                                    <div class="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g. John Doe"
+                                                            value={entry().internalName}
+                                                            onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
+                                                            class={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-sm outline-none transition-all ${isDuplicateName(entry().internalName, index)
+                                                                ? 'border-red-500/50 text-red-400 focus:bg-red-500/5'
+                                                                : 'border-white/[0.06] text-white focus:border-blue-500/50 focus:bg-white/[0.08]'
+                                                                }`}
+                                                        />
+                                                        <Show when={isDuplicateName(entry().internalName, index)}>
+                                                            <div class="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
+                                                                <AlertCircle class="w-3 h-3 text-white" />
+                                                            </div>
+                                                        </Show>
+                                                    </div>
+                                                </div>
+                                                <div class="col-span-3">
                                                     <input
                                                         type="text"
-                                                        placeholder="e.g. John Doe"
-                                                        value={entry().internalName}
-                                                        onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none transition-all"
+                                                        placeholder="e.g. Work, Family"
+                                                        value={entry().alias}
+                                                        onInput={(e) => updateEntry(index, 'alias', e.currentTarget.value)}
+                                                        class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-xs outline-none transition-all"
                                                     />
                                                 </div>
-                                                <div class="col-span-6">
+                                                <div class="col-span-4">
                                                     <input
                                                         type="tel"
                                                         placeholder="010-1234-5678"

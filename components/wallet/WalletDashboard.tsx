@@ -134,7 +134,6 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     let fileInputRef: HTMLInputElement | undefined;
 
     const LANGUAGES = [
-        { code: 'ko-KR', label: '한국어' },
         { code: 'en-US', label: 'English' }
     ];
 

@@ -74,9 +74,9 @@ const AdminUsers = () => {
         setResendingEmail(email);
         try {
             await resendActivationEmail(email);
-            alert('인증 이메일이 재전송되었습니다.');
+            alert('Verification email resent.');
         } catch (e) {
-            alert('이메일 재전송 실패');
+            alert('Failed to resend email');
         } finally {
             setResendingEmail(null);
         }
@@ -93,11 +93,11 @@ const AdminUsers = () => {
                 tier: inviteTier(),
                 amountToken: inviteAmount()
             });
-            alert('초대 메일이 발송되었습니다.');
+            alert('Invitation email sent.');
             setIsInviteModalOpen(false);
             refetch();
         } catch (e) {
-            alert('초대 실패');
+            alert('Invitation failed');
         } finally {
             setIsInviting(false);
         }
@@ -118,7 +118,7 @@ const AdminUsers = () => {
                     <button
                         onClick={() => refetch()}
                         class="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-gray-400 hover:text-white transition-all"
-                        title="새로고침"
+                        title="Refresh"
                     >
                         <RefreshCw class={`w-5 h-5 ${users.loading ? 'animate-spin' : ''}`} />
                     </button>
@@ -138,7 +138,7 @@ const AdminUsers = () => {
                     <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
                     <input
                         type="text"
-                        placeholder="이름, 이메일 또는 지갑 주소검색"
+                        placeholder="Search by name, email or address"
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}
                         class="w-full pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
@@ -151,11 +151,11 @@ const AdminUsers = () => {
                         onChange={(e) => setStatusFilter(e.currentTarget.value)}
                         class="w-full appearance-none pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
                     >
-                        <option value="all">모든 상태</option>
-                        <option value="Registered">가입 완료</option>
-                        <option value="WalletCreated">지갑 생성됨</option>
-                        <option value="VestingDeployed">베스팅 배포됨</option>
-                        <option value="Pending">대기 중</option>
+                        <option value="all">All Status</option>
+                        <option value="Registered">Registered</option>
+                        <option value="WalletCreated">Wallet Created</option>
+                        <option value="VestingDeployed">Vesting Deployed</option>
+                        <option value="Pending">Pending</option>
                     </select>
                 </div>
             </div>
@@ -285,14 +285,14 @@ const AdminUsers = () => {
                                             <button
                                                 onClick={async () => {
                                                     const defaultAmount = Math.floor((user.amountToken || 1000) * 0.1);
-                                                    const input = prompt(`[${user.email}] 에게 보낼 VCN 수량을 입력하세요:`, defaultAmount.toString());
+                                                    const input = prompt(`Enter VCN amount to send to [${user.email}]:`, defaultAmount.toString());
 
                                                     if (input === null) return;
                                                     const amountStr = input.trim();
                                                     const amount = parseFloat(amountStr);
 
                                                     if (isNaN(amount) || amount <= 0) {
-                                                        alert("유효한 수량을 입력해주세요.");
+                                                        alert("Please enter a valid amount.");
                                                         return;
                                                     }
 
@@ -310,7 +310,7 @@ const AdminUsers = () => {
                                                         });
                                                     } catch (e: any) {
                                                         console.error(e);
-                                                        alert(`전송 실패: ${e.message}`);
+                                                        alert(`Transfer failed: ${e.message}`);
                                                     }
                                                 }}
                                                 class="px-2 py-1 bg-cyan-600/10 hover:bg-cyan-600 text-cyan-400 hover:text-white rounded-lg transition-all border border-cyan-500/20 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest"

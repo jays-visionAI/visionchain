@@ -31,40 +31,40 @@ import { getDocuments, saveAdminDocument, deleteAdminDocument, AdminDocument } f
 const MOCK_DOCUMENTS: AdminDocument[] = [
     {
         id: '1',
-        title: '비전체인 노드 분류 체계 (Authority, Consensus, Agent, Edge)',
-        category: '기술 문서',
-        type: '기술 자료',
-        content: `<h1>비전체인 노드 분류 체계</h1><p>Vision Chain v2.0은 역할과 보상 구조에 따라 4가지 핵심 노드로 구성됩니다.</p><ul><li><strong>Authority Node</strong>: 네트워크 거버넌스 및 최종 서명</li><li><strong>Consensus Node</strong>: 트랜잭션 검증 및 블록 생성</li><li><strong>Agent Node</strong>: AI 추론 및 페이마스터 서비스 제공</li><li><strong>Edge Node</strong>: 경량 데이터 처리 및 단말 컴퓨팅</li></ul>`,
+        title: 'Vision Chain Node Classification (Authority, Consensus, Agent, Edge)',
+        category: 'Technical Document',
+        type: 'Technical Data',
+        content: `<h1>Vision Chain Node Classification</h1><p>Vision Chain v2.0 consists of 4 core nodes based on roles and reward structures.</p><ul><li><strong>Authority Node</strong>: Network governance and final signing</li><li><strong>Consensus Node</strong>: Transaction verification and block creation</li><li><strong>Agent Node</strong>: AI inference and paymaster services</li><li><strong>Edge Node</strong>: Lightweight data processing and endpoint computing</li></ul>`,
         author: 'Vision Tech Team',
         updatedAt: '2024-03-20',
         attachments: []
     },
     {
         id: '2',
-        title: '리소스 기여 노드 모델 및 보상 구조',
-        category: '경제 모델',
-        type: '기술 자료',
-        content: `<h2>리소스 기여 보상 (RC-Reward)</h2><p>노드 기여도($C_{node}$)는 연산 능력($P_{gpu}$)과 저장 용량($S_{data}$)의 결합으로 계산됩니다.</p><p>보상 공식: $R_{node} = (w_1 \cdot P_{gpu} + w_2 \cdot S_{data}) \times U_{time}$</p>`,
+        title: 'Resource Contribution Model and Reward Structure',
+        category: 'Economic Model',
+        type: 'Technical Data',
+        content: `<h2>Resource Contribution Reward (RC-Reward)</h2><p>Node contribution ($C_{node}$) is calculated as a combination of computing power ($P_{gpu}$) and storage capacity ($S_{data}$).</p><p>Reward formula: $R_{node} = (w_1 \\cdot P_{gpu} + w_2 \\cdot S_{data}) \\times U_{time}$</p>`,
         author: 'Eco Division',
         updatedAt: '2024-03-19',
         attachments: []
     },
     {
         id: '3',
-        title: '비전체인 TVL 성장 전략 및 로드맵',
-        category: '기획안',
-        type: '텍스트/매뉴얼',
-        content: `<h2>TVL 성장 5단계 계획</h2><ol><li><strong>부트스트래핑</strong>: 초기 보상 강화</li><li><strong>유틸리티 확장</strong>: 리소스 스테이킹 도입</li><li><strong>금융 인프라</strong>: DEX 및 LST 활성화</li><li><strong>실질 수익 정착</strong>: AI 서비스 요금 정산</li><li><strong>생태계 락인</strong>: 거버넌스 강화</li></ol>`,
+        title: 'Vision Chain TVL Growth Strategy and Roadmap',
+        category: 'Planning',
+        type: 'Text/Manual',
+        content: `<h2>TVL Growth 5-Step Plan</h2><ol><li><strong>Bootstrapping</strong>: Enhance early rewards</li><li><strong>Utility Expansion</strong>: Introduce resource staking</li><li><strong>Financial Infrastructure</strong>: Activate DEX and LST</li><li><strong>Real Revenue Settlement</strong>: AI service fee settlement</li><li><strong>Ecosystem Lock-in</strong>: Strengthen governance</li></ol>`,
         author: 'Ops Lead',
         updatedAt: '2024-03-18',
         attachments: []
     },
     {
         id: '4',
-        title: '단일 서버 내 5개 노드 배포 가이드',
-        category: '운영 매뉴얼',
-        type: '기술 자료',
-        content: `<h3>5노드 클러스터 배포</h3><p>Docker Compose를 활용하여 포트 충돌 없이 단일 서버에서 5개의 노드를 운영하는 방법입니다. RPC 포트는 8545부터 8549까지 할당됩니다.</p>`,
+        title: '5-Node Cluster Deployment Guide on Single Server',
+        category: 'Operations Manual',
+        type: 'Technical Data',
+        content: `<h3>5-Node Cluster Deployment</h3><p>Method of operating 5 nodes on a single server without port conflicts using Docker Compose. RPC ports are assigned from 8545 to 8549.</p>`,
         author: 'DevOps',
         updatedAt: '2024-03-17',
         attachments: []
@@ -130,8 +130,8 @@ export default function AdminDocuments() {
 
     // Form Signals
     const [title, setTitle] = createSignal('');
-    const [category, setCategory] = createSignal('운영 매뉴얼');
-    const [docType, setDocType] = createSignal('텍스트/매뉴얼');
+    const [category, setCategory] = createSignal('Operations Manual');
+    const [docType, setDocType] = createSignal('Text/Manual');
     const [attachments, setAttachments] = createSignal<string[]>([]);
 
     let editorRef: HTMLDivElement | undefined;
@@ -159,8 +159,8 @@ export default function AdminDocuments() {
         } else {
             setSelectedDoc(null);
             setTitle('');
-            setCategory('운영 매뉴얼');
-            setDocType('텍스트/매뉴얼');
+            setCategory('Operations Manual');
+            setDocType('Text/Manual');
             setAttachments([]);
         }
         setIsEditorOpen(true);
@@ -221,7 +221,7 @@ export default function AdminDocuments() {
             setIsEditorOpen(false);
         } catch (error) {
             console.error("Failed to save document:", error);
-            alert("저장에 실패했습니다.");
+            alert("Failed to save.");
         } finally {
             setIsSaving(false);
         }
@@ -238,7 +238,7 @@ export default function AdminDocuments() {
             setIsEditorOpen(false);
         } catch (error) {
             console.error("Failed to delete document:", error);
-            alert("삭제에 실패했습니다.");
+            alert("Failed to delete.");
         } finally {
             setIsSaving(false);
         }
@@ -548,10 +548,10 @@ export default function AdminDocuments() {
                                         onChange={(e) => setCategory(e.currentTarget.value)}
                                         class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-colors appearance-none"
                                     >
-                                        <option value="운영 매뉴얼">운영 매뉴얼</option>
-                                        <option value="기술 문서">기술 문서</option>
-                                        <option value="기획안">기획안</option>
-                                        <option value="기타">기타</option>
+                                        <option value="Operations Manual">Operations Manual</option>
+                                        <option value="Technical Document">Technical Document</option>
+                                        <option value="Planning">Planning</option>
+                                        <option value="Other">Other</option>
                                     </select>
                                 </div>
                                 <div>
@@ -561,9 +561,9 @@ export default function AdminDocuments() {
                                         onChange={(e) => setDocType(e.currentTarget.value)}
                                         class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-colors appearance-none"
                                     >
-                                        <option value="텍스트/매뉴얼">텍스트/매뉴얼</option>
-                                        <option value="기술 자료">기술 자료</option>
-                                        <option value="시스템 공지">시스템 공지</option>
+                                        <option value="Text/Manual">Text/Manual</option>
+                                        <option value="Technical Data">Technical Data</option>
+                                        <option value="System Notice">System Notice</option>
                                     </select>
                                 </div>
                             </div>

@@ -1,4 +1,5 @@
 import { contractService } from './contractService';
+import { AI_LOCALIZATION, LanguageConfig } from './ai/aiLocalization';
 
 export interface UserIntent {
     action: 'TRANSFER' | 'BRIDGE' | 'SWAP_AND_SEND' | 'SCHEDULE_TRANSFER' | 'UNKNOWN';
@@ -15,34 +16,29 @@ export interface UserIntent {
     explanation: string;
 }
 
-/**
- * Service to parse natural language into structured Intents.
- * Future: Connect to OpenAI/Gemini API.
- * Current: Advanced Regex/Heuristic Parser.
- */
 export class IntentParserService {
-
     constructor() { }
 
-    async parseIntent(input: string): Promise<UserIntent> {
+    async parseIntent(input: string, locale: string = 'en'): Promise<UserIntent> {
         const lower = input.toLowerCase();
+        const config = AI_LOCALIZATION[locale] || AI_LOCALIZATION['en'];
 
-        // 1. Detect "Bridge" Intent (English & Korean)
-        if (lower.includes('bridge') || lower.includes('move to') || lower.includes('cross-chain') || lower.includes('브릿지') || lower.includes('옮겨')) {
-            return this.parseBridgeIntent(input);
+        // 1. Detect "Bridge" Intent
+        if (config.intents.keywords.bridge.some(k => lower.includes(k))) {
+            return this.parseBridgeIntent(input, config);
         }
 
-        // 2. Detect "Schedule" Intent (English & Korean)
-        const isSchedule = (lower.includes('send') || lower.includes('transfer') || lower.includes('보내') || lower.includes('이체') || lower.includes('송금')) &&
-            (lower.includes(' in ') || lower.includes(' after ') || lower.includes(' 뒤에') || lower.includes(' 후에') || lower.includes(' 예약'));
+        // 2. Detect "Schedule" Intent
+        const hasSendKeyword = config.intents.keywords.send.some(k => lower.includes(k));
+        const hasScheduleKeyword = config.intents.keywords.schedule.some(k => lower.includes(k));
 
-        if (isSchedule) {
-            return this.parseScheduledTransfer(input);
+        if (hasSendKeyword && hasScheduleKeyword) {
+            return this.parseScheduledTransfer(input, config);
         }
 
-        // 3. Detect "Send" Intent (possibly Auto-Swap) (English & Korean)
-        if (lower.includes('send') || lower.includes('pay') || lower.includes('transfer') || lower.includes('보내') || lower.includes('이체') || lower.includes('송금') || lower.includes('결제')) {
-            return this.parseTransferIntent(input);
+        // 3. Detect "Send" Intent
+        if (hasSendKeyword) {
+            return this.parseTransferIntent(input, config);
         }
 
         return {
@@ -50,31 +46,25 @@ export class IntentParserService {
             params: {},
             raw: input,
             confidence: 0,
-            explanation: "I couldn't understand that request. Try 'Send 10 VCN to @jays' or 'Bridge 100 VCN to Ethereum'."
+            explanation: locale === 'ko'
+                ? "요청을 이해하지 못했습니다. '10 VCN을 @jays에게 보내줘' 또는 '@jays에게 100 VCN 브릿지 전송해줘'와 같이 입력해 보세요."
+                : "I couldn't understand that request. Try 'Send 10 VCN to @jays' or 'Bridge 100 VCN to Ethereum'."
         };
     }
 
-    private async parseTransferIntent(input: string): Promise<UserIntent> {
-        // Regex for: "Send 10 VCN to @jays"
-        // Also supports Korean: "노장협에게 10 VCN 보내"
-        const regex = /(?:send|pay|transfer|보내|이체|송금|결제)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:to|for|에게)\s+(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)/i;
-        const koRegex = /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s*(?:보내|이체|송금|전송)/i;
+    private async parseTransferIntent(input: string, config: LanguageConfig): Promise<UserIntent> {
+        let match: RegExpMatchArray | null = null;
+        let mapping: any = null;
 
-        let match = input.match(regex);
-        let final_amount = "";
-        let final_token = "";
-        let final_recipient = "";
-
-        if (match) {
-            [, final_amount, final_token, final_recipient] = match;
-        } else {
-            match = input.match(koRegex);
+        for (const pattern of config.intents.patterns.send) {
+            match = input.match(pattern.regex);
             if (match) {
-                [, final_recipient, final_amount, final_token] = match;
+                mapping = pattern.mapping;
+                break;
             }
         }
 
-        if (!match) {
+        if (!match || !mapping) {
             return {
                 action: 'UNKNOWN',
                 params: {},
@@ -84,85 +74,81 @@ export class IntentParserService {
             };
         }
 
-        // Scenario: Auto-Settlement Check
-        // If recipient is a VNS handle (@), we check their preference.
-        let explanation = `Sending ${final_amount} ${final_token} to ${final_recipient}.`;
+        const amount = match[mapping.amount];
+        const token = match[mapping.token];
+        const recipient = match[mapping.recipient];
 
-        // Mocking the "Smart" logic:
-        if (final_recipient.toLowerCase() === '@alice' && final_token.toUpperCase() === 'USDC') {
+        // Scenario: Auto-Settlement Check (Mock)
+        if (recipient.toLowerCase() === '@alice' && token.toUpperCase() === 'USDC') {
             return {
                 action: 'SWAP_AND_SEND',
-                params: {
-                    to: final_recipient,
-                    token: final_token.toUpperCase(),
-                    amount: final_amount
-                },
+                params: { to: recipient, token: token.toUpperCase(), amount: amount },
                 raw: input,
                 confidence: 0.95,
-                explanation: `Detected intent to pay @alice. Her preference is WBTC. I will AUTO-SWAP ${final_amount} USDC -> WBTC and send it to her.`
+                explanation: `Detected intent to pay @alice. Her preference is WBTC. I will AUTO-SWAP ${amount} USDC -> WBTC and send it to her.`
             };
         }
 
         return {
             action: 'TRANSFER',
-            params: {
-                to: final_recipient,
-                token: final_token.toUpperCase(),
-                amount: final_amount
-            },
+            params: { to: recipient, token: token.toUpperCase(), amount: amount },
             raw: input,
             confidence: 0.9,
-            explanation: explanation
+            explanation: `Sending ${amount} ${token} to ${recipient}.`
         };
     }
 
-    private async parseScheduledTransfer(input: string): Promise<UserIntent> {
-        // Regex: "Send 10 VCN to @jays in 30 mins"
-        const regex = /(?:send|pay|transfer)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:to|for|에게)\s+(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)\s+(?:in|after|뒤에|후에)\s+(\d+)\s*(mins?|minutes?|hours?|h|m|분|시간)/i;
-        const koRegex = /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s+(\d+)\s*(mins?|minutes?|hours?|h|m|분|시간)\s*(?:뒤에|후에|시간 후에|이후에)\s*(?:보내|이체|송금|예약)/i;
+    private async parseScheduledTransfer(input: string, config: LanguageConfig): Promise<UserIntent> {
+        let match: RegExpMatchArray | null = null;
+        let mapping: any = null;
 
-        let match = input.match(regex);
-        let s_amount = "";
-        let s_token = "";
-        let s_recipient = "";
-        let s_timeVal = "";
-        let s_timeUnit = "";
-
-        if (match) {
-            [, s_amount, s_token, s_recipient, s_timeVal, s_timeUnit] = match;
-        } else {
-            match = input.match(koRegex);
+        for (const pattern of config.intents.patterns.schedule) {
+            match = input.match(pattern.regex);
             if (match) {
-                [, s_recipient, s_amount, s_token, s_timeVal, s_timeUnit] = match;
+                mapping = pattern.mapping;
+                break;
             }
         }
 
-        if (!match) {
-            return this.parseTransferIntent(input); // Fallback to normal transfer if time parse fails
+        if (!match || !mapping) {
+            return this.parseTransferIntent(input, config);
         }
 
-        const timeStr = `${s_timeVal} ${s_timeUnit}`;
+        const amount = match[mapping.amount];
+        const token = match[mapping.token];
+        const recipient = match[mapping.recipient];
+        const timeVal = match[mapping.timeVal];
+        let timeUnit = match[mapping.timeUnit];
+
+        // Normalize time unit
+        if (config.intents.timeUnits[timeUnit]) {
+            timeUnit = config.intents.timeUnits[timeUnit];
+        }
+
+        const timeStr = `${timeVal} ${timeUnit}`;
 
         return {
             action: 'SCHEDULE_TRANSFER',
-            params: {
-                to: s_recipient,
-                token: s_token.toUpperCase(),
-                amount: s_amount,
-                scheduleTime: timeStr
-            },
+            params: { to: recipient, token: token.toUpperCase(), amount: amount, scheduleTime: timeStr },
             raw: input,
             confidence: 0.95,
-            explanation: `I will schedule a transfer of ${s_amount} ${s_token} to ${s_recipient} in ${timeStr}. funds will be locked now.`
+            explanation: `I will schedule a transfer of ${amount} ${token} to ${recipient} in ${timeStr}.`
         };
     }
 
-    private async parseBridgeIntent(input: string): Promise<UserIntent> {
-        // Regex for: "Bridge 100 VCN to Ethereum"
-        const regex = /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z]+)/i;
-        const match = input.match(regex);
+    private async parseBridgeIntent(input: string, config: LanguageConfig): Promise<UserIntent> {
+        let match: RegExpMatchArray | null = null;
+        let mapping: any = null;
 
-        if (!match) {
+        for (const pattern of config.intents.patterns.bridge) {
+            match = input.match(pattern.regex);
+            if (match) {
+                mapping = pattern.mapping;
+                break;
+            }
+        }
+
+        if (!match || !mapping) {
             return {
                 action: 'UNKNOWN',
                 params: {},
@@ -172,15 +158,13 @@ export class IntentParserService {
             };
         }
 
-        const [_, amount, token, chain] = match;
+        const amount = match[mapping.amount];
+        const token = match[mapping.token];
+        const chain = match[mapping.chain];
 
         return {
             action: 'BRIDGE',
-            params: {
-                token: token.toUpperCase(),
-                amount: amount,
-                destinationChain: chain.toUpperCase()
-            },
+            params: { token: token.toUpperCase(), amount: amount, destinationChain: chain.toUpperCase() },
             raw: input,
             confidence: 0.9,
             explanation: `Bridging ${amount} ${token} from Vision Chain to ${chain}.`

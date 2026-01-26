@@ -44,11 +44,11 @@ export default function AdminLogin() {
             } else {
                 // If a normal user tries to access admin login
                 await auth.logout();
-                setError('권한이 없습니다. 어드민 전용 계정으로 로그인해 주세요.');
+                setError('Access denied. Please log in with an admin account.');
             }
         } catch (err: any) {
             console.error('Admin Login error:', err);
-            setError('로그인에 실패했습니다. 자격 증명을 확인해 주세요.');
+            setError('Login failed. Please check your credentials.');
         } finally {
             setIsLoading(false);
         }

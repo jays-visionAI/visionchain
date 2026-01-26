@@ -1,0 +1,159 @@
+
+export interface LanguageConfig {
+    chat: {
+        analyzingIntent: string;
+        simulating: string;
+        responseGenerated: string;
+        accountNotFound: (recipient: string) => string;
+        scheduledConfirm: (amount: string, symbol: string, time: string) => string;
+        intentPrepared: (intentName: string) => string;
+        errorInvalidAmount: string;
+    };
+    intents: {
+        keywords: {
+            bridge: string[];
+            schedule: string[];
+            send: string[];
+            timeAfter: string[];
+        };
+        patterns: {
+            // Returns [amount, token, recipient] or [recipient, amount, token]
+            send: {
+                regex: RegExp;
+                mapping: { amount: number; token: number; recipient: number };
+            }[];
+            // Returns [amount, token, recipient, timeVal, timeUnit] or similar
+            schedule: {
+                regex: RegExp;
+                mapping: { amount: number; token: number; recipient: number; timeVal: number; timeUnit: number };
+            }[];
+            // Returns [amount, token, destinationChain]
+            bridge: {
+                regex: RegExp;
+                mapping: { amount: number; token: number; chain: number };
+            }[];
+        };
+        intentNames: Record<string, string>;
+        timeUnits: Record<string, string>; // min -> 분, etc.
+    };
+}
+
+export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
+    en: {
+        chat: {
+            analyzingIntent: 'Analyzing Intent...',
+            simulating: 'Comparing Portfolio & Simulating...',
+            responseGenerated: 'Response Generated',
+            accountNotFound: (name) => `I couldn't find a wallet address for '${name}'. Please check your contacts or enter the 0x address manually.`,
+            scheduledConfirm: (amount, symbol, time) => `I've prepared your scheduled transfer of ${amount} ${symbol} (${time}).`,
+            intentPrepared: (intent) => `I've prepared the ${intent} for you. Please review the details on your screen to proceed!`,
+            errorInvalidAmount: "Please enter a valid amount."
+        },
+        intents: {
+            keywords: {
+                bridge: ['bridge', 'move to', 'cross-chain'],
+                schedule: [' in ', ' after '],
+                send: ['send', 'pay', 'transfer'],
+                timeAfter: ['in', 'after']
+            },
+            patterns: {
+                send: [
+                    {
+                        regex: /(?:send|pay|transfer)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:to|for)\s+(@?[a-zA-Z0-9@.]+)/i,
+                        mapping: { amount: 1, token: 2, recipient: 3 }
+                    }
+                ],
+                schedule: [
+                    {
+                        regex: /(?:send|pay|transfer)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:to|for)\s+(@?[a-zA-Z0-9@.]+)\s+(?:in|after)\s+(\d+)\s*(mins?|minutes?|hours?|h|m)/i,
+                        mapping: { amount: 1, token: 2, recipient: 3, timeVal: 4, timeUnit: 5 }
+                    }
+                ],
+                bridge: [
+                    {
+                        regex: /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z]+)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    }
+                ]
+            },
+            intentNames: { 'send': 'transfer', 'swap': 'swap', 'bridge': 'bridge', 'stake': 'staking', 'schedule': 'scheduled transfer', 'transaction': 'transaction' },
+            timeUnits: {}
+        }
+    },
+    ko: {
+        chat: {
+            analyzingIntent: '의도 분석 중...',
+            simulating: '포트폴리오 분석 및 시뮬레이션...',
+            responseGenerated: '응답 생성 완료',
+            accountNotFound: (name) => `죄송합니다. '${name}' 님의 지갑 주소를 찾을 수 없습니다. 주소록을 확인하거나 직접 0x 주소를 입력해 주세요.`,
+            scheduledConfirm: (amount, symbol, time) => `일정을 확인했습니다. ${amount} ${symbol} (${time}) 예약 이체 설정을 시작합니다.`,
+            intentPrepared: (intent) => `요청하신 ${intent} 업무를 준비했습니다. 화면의 내용을 확인하고 진행해 주세요!`,
+            errorInvalidAmount: "유효한 수량을 입력해주세요."
+        },
+        intents: {
+            keywords: {
+                bridge: ['브릿지', '옮겨', '이동'],
+                schedule: [' 뒤에', ' 후에', ' 예약'],
+                send: ['보내', '이체', '송금', '결제', '전송'],
+                timeAfter: ['뒤에', '후에', '이후에']
+            },
+            patterns: {
+                send: [
+                    {
+                        regex: /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s*(?:보내|이체|송금|전송|결제)/i,
+                        mapping: { recipient: 1, amount: 2, token: 3 }
+                    },
+                    {
+                        regex: /(?:보내|이체|송금|전송|결제)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:에게|께)\s+(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)/i,
+                        mapping: { amount: 1, token: 2, recipient: 3 }
+                    }
+                ],
+                schedule: [
+                    {
+                        regex: /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s+(\d+)\s*(mins?|minutes?|hours?|h|m|분|시간)\s*(?:뒤에|후에|시간 후에|이후에)\s*(?:보내|이체|송금|예약)/i,
+                        mapping: { recipient: 1, amount: 2, token: 3, timeVal: 4, timeUnit: 5 }
+                    }
+                ],
+                bridge: [
+                    {
+                        regex: /([0-9.]+)\s+([a-zA-Z]+)\s+(?:브릿지|옮겨|이동)\s+(?:to|로|으로)\s+([a-zA-Z]+)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    }
+                ]
+            },
+            intentNames: { 'send': '송금', 'swap': '스왑', 'bridge': '브릿지', 'stake': '스테이킹', 'schedule': '예약 송금', 'transaction': '트랜잭션' },
+            timeUnits: { '분': 'min', '시간': 'hour', '초': 'sec' }
+        }
+    },
+    ja: {
+        chat: {
+            analyzingIntent: '意図を分析中...',
+            simulating: 'ポートフォリオ分析とシュミレーション...',
+            responseGenerated: '回答の生成完了',
+            accountNotFound: (name) => `'${name}' さんのウォレットアドレスが見つかりませんでした。連絡先を確認するか、0xアドレスを直接入力してください。`,
+            scheduledConfirm: (amount, symbol, time) => `スケジュールを確認しました。${amount} ${symbol} (${time}) の予約送金設定を開始します。`,
+            intentPrepared: (intent) => `ご依頼の ${intent} の準備ができました。画面の内容を確認して進めてください。`,
+            errorInvalidAmount: "有効な数量を入力してください。"
+        },
+        intents: {
+            keywords: {
+                bridge: ['ブリッジ', '移動'],
+                schedule: ['後で', '予約'],
+                send: ['送って', '送金', '支払い'],
+                timeAfter: ['後', '以降']
+            },
+            patterns: {
+                send: [
+                    {
+                        regex: /(@?[a-zA-Z0-9@.]+)\s*(?:に|え)\s*([0-9.]+)\s*([a-zA-Z]+)\s*(?:送って|送金|支払い)/i,
+                        mapping: { recipient: 1, amount: 2, token: 3 }
+                    }
+                ],
+                schedule: [],
+                bridge: []
+            },
+            intentNames: { 'send': '送金', 'swap': 'スワップ', 'bridge': 'ブリッジ', 'stake': 'ステーキング', 'schedule': '予約送金', 'transaction': 'トランザクション' },
+            timeUnits: { '分': 'min', '時間': 'hour', '秒': 'sec' }
+        }
+    }
+};
