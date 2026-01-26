@@ -177,4 +177,3 @@ export function PromptsTab(props: PromptsTabProps) {
         </div>
     );
 }
-}
