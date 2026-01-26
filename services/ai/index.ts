@@ -97,6 +97,7 @@ Unless explicitly requested otherwise by the user, you MUST match their language
      <think>...</think>
      류성국대표님에게 100 VCN을 전송할 준비가 되었습니다. 아래 창에서 확인해주세요.
      {"intent": "send", "recipient": "0x123...", "amount": "100", "symbol": "VCN"}
+`;
 
         let result = await provider.generateText(prompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
@@ -106,7 +107,7 @@ Unless explicitly requested otherwise by the user, you MUST match their language
             botType
         });
 
-        // --- Tool Execution Loop (Gemini specific for now) ---
+        // --- Tool Execution Loop ---
         if (typeof result !== 'string' && result.candidates?.[0]?.content?.parts) {
             const parts = result.candidates[0].content.parts;
             const history: any[] = [{ role: 'user', parts: [{ text: prompt }] }, result.candidates[0].content];
@@ -138,15 +139,15 @@ Unless explicitly requested otherwise by the user, you MUST match their language
                         const getMatchScore = (target: string, query: string) => {
                             const t = target.toLowerCase().replace(/\s+/g, '');
                             if (t === query) return 100; // Exact match
-                            if (t.includes(query) || query.includes(t)) return 90; // Partial match (e.g. "류성국" in "류성국대표")
+                            if (t.includes(query) || query.includes(t)) return 90; // Partial match
 
-                            // Check for character overlap (useful for reordered names like "성국류")
+                            // Check for character overlap
                             const targetChars = t.split('');
                             const queryChars = query.split('');
                             const intersection = queryChars.filter(c => targetChars.includes(c));
                             if (intersection.length >= 2 && intersection.length >= query.length - 1) return 80;
 
-                            // Common Korean phonetic swaps/typos (Basic)
+                            // Common phonetic swaps
                             const phoneticMap: Record<string, string> = { '우': '유', '유': '우', '오': '어', '어': '오', '국': '쿡', '쿡': '국', '루': '류', '류': '루' };
                             let fuzzyQuery = query;
                             for (const char of query) {
@@ -157,28 +158,28 @@ Unless explicitly requested otherwise by the user, you MUST match their language
                             return 0;
                         };
 
-                        toolResult = contacts
-                            .map(c => ({
-                                ...c,
-                                score: Math.max(
-                                    getMatchScore(c.internalName || "", searchQuery),
-                                    getMatchScore(c.alias || "", searchQuery),
-                                    getMatchScore(c.vchainUserUid || "", searchQuery)
-                                )
-                            }))
-                            .filter(c => c.score >= 70)
-                            .sort((a, b) => b.score - a.score)
-                            .map(c => ({
-                                name: c.internalName,
-                                alias: c.alias,
-                                vid: c.vchainUserUid ? `@${ c.vchainUserUid } ` : "Not linked",
-                                address: c.address || "No address",
-                                email: c.email,
-                                matchConfidence: c.score === 100 ? 'Exact' : 'Potential' // Distinguish for prompt logic
-                            }));
+                        const scoredContacts = contacts.map(c => ({
+                            ...c,
+                            score: Math.max(
+                                getMatchScore(c.internalName || "", searchQuery),
+                                getMatchScore(c.alias || "", searchQuery),
+                                getMatchScore(c.vchainUserUid || "", searchQuery)
+                            )
+                        }));
+
+                        const filtered = scoredContacts.filter(c => c.score >= 70).sort((a, b) => b.score - a.score);
+
+                        toolResult = filtered.map(c => ({
+                            name: c.internalName,
+                            alias: c.alias,
+                            vid: c.vchainUserUid ? `@${c.vchainUserUid}` : "Not linked",
+                            address: c.address || "No address",
+                            email: c.email,
+                            matchConfidence: c.score === 100 ? 'Exact' : 'Potential'
+                        }));
 
                         if (toolResult.length === 0) {
-                            toolResult = `No contacts found matching '${args.name}'.Suggest confirming the exact name or address.`;
+                            toolResult = `No contacts found matching '${args.name}'. Suggest confirming the exact name or address.`;
                         }
                     }
 
@@ -278,4 +279,3 @@ export const resolveVoiceConfig = async () => {
 export const resolveProviderConfig = async (botType: 'intent' | 'helpdesk') => {
     return await factory.resolveConfig(botType);
 };
-
