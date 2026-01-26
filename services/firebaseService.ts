@@ -347,6 +347,20 @@ export const getFirebaseAuth = () => {
     return auth;
 };
 
+// --- Isolated Admin Auth (Prevents Session Conflict) ---
+let adminApp: FirebaseApp;
+let adminAuth: Auth;
+
+export const getAdminFirebaseAuth = () => {
+    if (!adminAuth) {
+        // Create a named app for Admin to segregate storage/auth state
+        const apps = getApps();
+        adminApp = apps.find(a => a.name === 'AdminConsole') || initializeApp(firebaseConfig, 'AdminConsole');
+        adminAuth = getAuth(adminApp);
+    }
+    return adminAuth;
+};
+
 export const getFirebaseDb = () => {
     if (!db) initializeFirebase();
     return db;
@@ -355,7 +369,7 @@ export const getFirebaseDb = () => {
 // ==================== Auth Functions ====================
 
 export const adminLogin = async (email: string, password: string): Promise<User> => {
-    const auth = getFirebaseAuth();
+    const auth = getAdminFirebaseAuth();
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     return userCredential.user;
 };
@@ -497,12 +511,12 @@ export const manualInviteUser = async (data: {
 };
 
 export const adminLogout = async (): Promise<void> => {
-    const auth = getFirebaseAuth();
+    const auth = getAdminFirebaseAuth();
     await signOut(auth);
 };
 
 export const onAdminAuthStateChanged = (callback: (user: User | null) => void) => {
-    const auth = getFirebaseAuth();
+    const auth = getAdminFirebaseAuth();
     return onAuthStateChanged(auth, callback);
 };
 

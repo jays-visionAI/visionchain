@@ -1,8 +1,9 @@
-import { createSignal, Show, For, onMount, createEffect } from 'solid-js';
+import { createSignal, Show, For, onMount, createEffect, onCleanup } from 'solid-js';
 import { A, useLocation, useNavigate, Navigate } from '@solidjs/router';
 import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity, Globe } from 'lucide-solid';
 import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
-import { useAuth } from '../auth/authContext';
+import { onAdminAuthStateChanged, adminLogout } from '../../services/firebaseService';
+import { User } from 'firebase/auth';
 
 interface AdminLayoutProps {
     children?: any;
@@ -13,17 +14,25 @@ export default function AdminLayout(props: AdminLayoutProps) {
     const [expandedMenus, setExpandedMenus] = createSignal<Set<string>>(new Set());
     const location = useLocation();
     const navigate = useNavigate();
-    const auth = useAuth();
 
-    // Reactive redirect to login if not authenticated
-    createEffect(() => {
-        if (!auth.loading() && !auth.user()) {
-            navigate('/admin-login', { replace: true });
-        }
+    // Local Admin Auth State (Separate from User Context)
+    const [adminUser, setAdminUser] = createSignal<User | null>(null);
+    const [loading, setLoading] = createSignal(true);
+
+    onMount(() => {
+        const unsubscribe = onAdminAuthStateChanged((user) => {
+            setAdminUser(user);
+            setLoading(false);
+            if (!user) {
+                navigate('/admin-login', { replace: true });
+            }
+        });
+
+        onCleanup(() => unsubscribe());
     });
 
     const handleLogout = async () => {
-        await auth.logout();
+        await adminLogout();
         navigate('/admin-login', { replace: true });
     };
 
@@ -115,7 +124,7 @@ export default function AdminLayout(props: AdminLayoutProps) {
 
     return (
         <Show
-            when={!auth.loading()}
+            when={!loading()}
             fallback={
                 <div class="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
                     <div class="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />

@@ -13,7 +13,7 @@ import {
     Terminal
 } from 'lucide-solid';
 import { useAuth } from './authContext';
-import { getUserRole } from '../../services/firebaseService';
+import { getUserRole, adminLogin } from '../../services/firebaseService';
 
 export default function AdminLogin() {
     const [email, setEmail] = createSignal('');
@@ -22,7 +22,7 @@ export default function AdminLogin() {
     const [error, setError] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
 
-    const auth = useAuth();
+    // const auth = useAuth(); // Removed global auth usage
     const navigate = useNavigate();
 
     const handleSubmit = async (e: Event) => {
@@ -34,17 +34,16 @@ export default function AdminLogin() {
         const pwdVal = password();
 
         try {
-            // 1. Authenticate
-            await auth.login(emailVal, pwdVal);
+            // 1. Authenticate using Admin Isolated Auth
+            await adminLogin(emailVal, pwdVal);
 
-            // 2. Strict Role Check
+            // 2. Strict Role Check (still checks global role, but auth is separate)
             const role = await getUserRole(emailVal);
             if (role === 'admin' || role === 'partner') {
                 navigate('/adminsystem', { replace: true });
             } else {
-                // If a normal user tries to access admin login
-                await auth.logout();
-                setError('Access denied. Please log in with an admin account.');
+                // Access denied for this verified user
+                setError('Access denied. This account does not have admin privileges.');
             }
         } catch (err: any) {
             console.error('Admin Login error:', err);
