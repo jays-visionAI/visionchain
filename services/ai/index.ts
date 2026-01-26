@@ -127,10 +127,12 @@ Unless explicitly requested otherwise by the user, you MUST match their language
    {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
 
 5. TIME SENSITIVITY & SCHEDULING RULE:
-   - **DEFAULT TO IMMEDIATE EXECUTION** (intent: 'send') unless the user EXPLICITLY specifies a future time in the **CURRENT MESSAGE**.
-   - **IGNORE** time references from the [Previous Conversation History]. ONLY use the [Current User Input].
-   - Example A: "Send 10 VCN" -> Immediate.
-   - Example B: "Send 10 VCN in 5 mins" -> Schedule (intent: 'schedule', calculate timestamp based on Current Time).
+   - **STRICT INDEPENDENCE**: IGNORE all time references in [Previous Conversation History]. THOSE ARE STALE.
+   - **CALCULATION SOURCE**: Use ONLY the [Current User Input] and the [Current Time] provided at the top.
+   - **MATHEMATICAL RULE**: If user says "X minutes later", the timestamp MUST be exactly (Current Time + X minutes). 
+   - **PAST TIME FORBIDDEN**: Never return a timestamp that is equal to or earlier than the [Current Time].
+   - Example (Current is 20:06): "10 mins later" -> MUST be exactly 20:16. Do NOT use 20:05 or 20:12 from any example or history.
+
 
 `;
 
