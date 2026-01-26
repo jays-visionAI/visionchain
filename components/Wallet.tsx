@@ -1324,26 +1324,15 @@ ${contacts().length > 0
                     : 'No contacts saved yet.'}
 `;
 
-            // Enhanced Intent-Aware Prompt
-            const languageInstruction = "CRITICAL: You MUST respond in the SAME language as the User Input.";
+            // The systemic rules (Prompt Tuning) are now managed in the Admin Dashboard.
+            const fullPrompt = `
+[Live Context]
+${context}
 
-            const fullPrompt = `${context}
-[Language Rule]
-${languageInstruction}
+[User Request]
+"${userMessage}"
 
-User Input: "${userMessage}"
-
-You are the Vision AI Architect.
-[Decision Logic]
-1. Transactional Actions: If the user explicitly wants to Send, Swap, Bridge, Stake, or Schedule (e.g., "Send 10 VCN to @jays", "Send 10 VCN to John Doe in 1 minute"), identify the intent and parameters.
-2. Informational Queries: If the user is asking about their balance, net worth, holdings, prices, or general help (e.g., "How much VCN do I have?", "Check my balance"), DO NOT append any JSON. Simply provide a helpful answer using the Context provided above.
-
-Output Format:
-1. Friendly explanation or answer (Brief, ALWAYS in the user's language).
-2. ONLY IF A TRANSACTIONAL ACTION IS DETECTED, append THIS EXACT JSON BLOCK at the end (keep values empty if not specified):
-{"intent": "send" | "swap" | "bridge" | "stake" | "schedule", "amount": "number_string", "recipient": "0x... or name", "symbol": "VCN", "time": "time_string if schedule"}
-
-Final network context: ${networkMode()}.
+Identify the intent and provide a friendly response following the established architect persona. Use provided tools if necessary.
 `;
 
             setThinkingSteps(prev => [

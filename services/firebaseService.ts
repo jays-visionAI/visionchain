@@ -1236,6 +1236,11 @@ export interface ChatbotSettings {
         ttsVoice: string;
         sttModel: string;
     };
+    promptTuning?: {
+        recipientIntent: string;
+        senderIntent: string;
+        processingRoute: string;
+    };
 }
 
 export interface SystemSettings {

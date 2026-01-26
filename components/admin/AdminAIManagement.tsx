@@ -34,6 +34,7 @@ import { ModelSettingsTab } from './tabs/ModelSettingsTab';
 import { UsageStatsTab } from './tabs/UsageStatsTab';
 import { EcosystemTab } from './tabs/EcosystemTab';
 import { SimulatorTab } from './tabs/SimulatorTab';
+import { PromptsTab } from './tabs/PromptsTab';
 
 // Tabs configuration
 const tabs = [
@@ -84,6 +85,11 @@ export default function AdminAIManagement() {
     const [helpdeskBot, setHelpdeskBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
     const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-1.5-pro', size: '1k', quality: 'standard' });
     const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'whisper-1' });
+    const [promptTuning, setPromptTuning] = createSignal({
+        recipientIntent: '',
+        senderIntent: '',
+        processingRoute: ''
+    });
 
     // Monitoring & Ecosystem
     const [realConversations, setRealConversations] = createSignal<AiConversation[]>([]);
@@ -107,6 +113,7 @@ export default function AdminAIManagement() {
                 setHelpdeskBot(settings.helpdeskBot || helpdeskBot());
                 if (settings.imageSettings) setImageSettings(settings.imageSettings);
                 if (settings.voiceSettings) setVoiceSettings(settings.voiceSettings);
+                if (settings.promptTuning) setPromptTuning(settings.promptTuning);
             }
 
             setApiKeys(keys);
@@ -126,7 +133,8 @@ export default function AdminAIManagement() {
                 intentBot: intentBot(),
                 helpdeskBot: helpdeskBot(),
                 imageSettings: imageSettings(),
-                voiceSettings: voiceSettings()
+                voiceSettings: voiceSettings(),
+                promptTuning: promptTuning()
             });
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 3000);
@@ -275,10 +283,13 @@ export default function AdminAIManagement() {
                 </Show>
 
                 <Show when={activeTab() === 'prompts'}>
-                    <div class="flex flex-col items-center justify-center h-[400px] text-gray-500 space-y-4">
-                        <Wand2 class="w-12 h-12 opacity-20" />
-                        <p class="font-medium italic">System Prompts & Tuning feature coming in next internal release.</p>
-                    </div>
+                    <PromptsTab
+                        settings={promptTuning}
+                        setSettings={setPromptTuning}
+                        onSave={handleSave}
+                        isSaving={isSaving}
+                        saveSuccess={saveSuccess}
+                    />
                 </Show>
             </div>
         </div>

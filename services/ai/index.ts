@@ -35,7 +35,8 @@ class ProviderFactory {
             apiKey,
             systemPrompt: botConfig?.systemPrompt || '',
             temperature: botConfig?.temperature || 0.7,
-            maxTokens: botConfig?.maxTokens || 2048
+            maxTokens: botConfig?.maxTokens || 2048,
+            promptTuning: settings.promptTuning
         };
     }
 }
@@ -74,9 +75,15 @@ Locale: ${navigator.language}
 Always respond in the same language used by the user in their most recent message. 
 Unless explicitly requested otherwise by the user, you MUST match their language exactly (e.g., if the user asks in Korean, answer in Korean; if in English, answer in English).`;
 
-        const dynamicSystemPrompt = config.systemPrompt
-            ? `${config.systemPrompt}\n\n${localeInfo}`
-            : localeInfo;
+        const pt = (config as any).promptTuning;
+        const tuningInfo = pt ? `
+[Intent Resolution Guidelines]
+1. Recipient Identification: ${pt.recipientIntent}
+2. Sender Context: ${pt.senderIntent}
+3. Execution Route: ${pt.processingRoute}
+` : '';
+
+        const dynamicSystemPrompt = `${config.systemPrompt}\n${tuningInfo}\n${localeInfo}`;
 
         let result = await provider.generateText(prompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
@@ -111,21 +118,25 @@ Unless explicitly requested otherwise by the user, you MUST match their language
                     } else if (name === 'search_user_contacts') {
                         const { getUserContacts } = await import('../firebaseService');
                         const contacts = await getUserContacts(userId);
-                        const searchQuery = (args.name || "").toLowerCase();
+                        const searchQuery = (args.name || "").toLowerCase().replace('@', '');
+
                         toolResult = contacts
                             .filter(c =>
                                 (c.internalName || "").toLowerCase().includes(searchQuery) ||
-                                (c.email || "").toLowerCase().includes(searchQuery)
+                                (c.email || "").toLowerCase().includes(searchQuery) ||
+                                (c.vchainUserUid || "").toLowerCase() === searchQuery ||
+                                (c.alias || "").toLowerCase().includes(searchQuery)
                             )
                             .map(c => ({
                                 name: c.internalName,
-                                vid: c.vchainUserUid || "Not linked",
+                                alias: c.alias,
+                                vid: c.vchainUserUid ? `@${c.vchainUserUid}` : "Not linked",
                                 address: c.address || "No address",
                                 email: c.email
                             }));
 
                         if (toolResult.length === 0) {
-                            toolResult = "No contacts found matching that name in your address book.";
+                            toolResult = `No contacts found matching '${args.name}' in your address book.`;
                         }
                     }
 
