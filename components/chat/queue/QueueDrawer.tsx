@@ -215,13 +215,13 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
                                             {/* Action Buttons */}
                                             <div class="flex gap-2 pt-2 border-t border-white/5">
-                                                <Show when={task.status === 'WAITING'}>
+                                                <Show when={['WAITING', 'EXECUTING'].includes(task.status)}>
                                                     <button
                                                         onClick={(e) => handleCancel(task.scheduleId, e)}
                                                         disabled={isCancelling() === task.scheduleId}
                                                         class="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                                                     >
-                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3 h-3" /> Cancel</>}>
+                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3 h-3" /> {task.status === 'EXECUTING' ? 'Stop' : 'Cancel'}</>}>
                                                             <div class="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                                                         </Show>
                                                     </button>
@@ -232,18 +232,23 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                             e.stopPropagation();
                                                             props.onForceExecute?.(task.id);
                                                         }}
-                                                        class="w-10 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg flex items-center justify-center transition-colors"
-                                                        title="Execute Now"
+                                                        class={`w-10 py-2 border rounded-lg flex items-center justify-center transition-colors ${task.status === 'EXECUTING'
+                                                            ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-400'
+                                                            : 'bg-green-500/10 hover:bg-green-500/20 border-green-500/30 text-green-400'}`}
+                                                        title={task.status === 'EXECUTING' ? "Force Retry" : "Execute Now"}
                                                     >
                                                         <Play class="w-3 h-3 fill-current" />
                                                     </button>
                                                 </Show>
-                                                <button
-                                                    onClick={() => window.open(`https://vision-scan.com/tx/${task.txHash}`, '_blank')}
-                                                    class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5"
-                                                >
-                                                    <ExternalLink class="w-3 h-3" /> View TX
-                                                </button>
+
+                                                <Show when={!['WAITING', 'EXECUTING'].includes(task.status)}>
+                                                    <button
+                                                        onClick={() => window.open(`https://vision-scan.com/tx/${task.txHash}`, '_blank')}
+                                                        class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <ExternalLink class="w-3 h-3" /> View TX
+                                                    </button>
+                                                </Show>
                                             </div>
                                         </div>
                                     </Show>

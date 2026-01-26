@@ -16,16 +16,24 @@ export const useTimeLockAgent = (
     queueTasks: () => any[]
 ) => {
 
-    const processScheduledTask = async (task: any) => {
+    const processScheduledTask = async (task: any, isForced: boolean = false) => {
         const email = userEmail();
         if (!email) return;
 
         // Double Check: Avoid re-executing
-        if (!task || task.status !== 'WAITING') {
-            if (task && (task.status === 'EXECUTING' || task.status === 'SENT')) {
-                alert("이미 실행된 컨트랙트입니다. (Transaction already processed)");
-            }
+        if (!task || task.status === 'SENT') {
             return;
+        }
+
+        // If automatically scheduled, strictly block if already executing
+        if (!isForced && task.status === 'EXECUTING') {
+            return;
+        }
+
+        // If Forced (Manual Retry) on an Executing task, ask for confirmation
+        if (isForced && task.status === 'EXECUTING') {
+            const confirmRetry = confirm("This task is marked as 'Processing'. Do you want to force retry? (Only do this if the transaction is stuck)");
+            if (!confirmRetry) return;
         }
 
         try {
@@ -78,7 +86,7 @@ export const useTimeLockAgent = (
 
     const handleForceExecute = (taskId: string) => {
         const task = queueTasks().find(t => t.id === taskId);
-        if (task) processScheduledTask(task);
+        if (task) processScheduledTask(task, true);
     };
 
     // Scheduler Interval
