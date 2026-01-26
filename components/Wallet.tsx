@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, createEffect, Switch, Match, createMemo } from 'solid-js';
+import { createSignal, Show, For, onMount, createEffect, Switch, Match, createMemo, onCleanup } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
@@ -44,7 +44,8 @@ import {
     ShieldCheck,
     LogOut,
     Clock,
-    Bell
+    Bell,
+    Play
 } from 'lucide-solid';
 import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
@@ -64,7 +65,8 @@ import {
     createNotification,
     NotificationData,
     getFirebaseDb,
-    getUserContacts
+    getUserContacts,
+    updateScheduledTaskStatus
 } from '../services/firebaseService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
@@ -270,6 +272,63 @@ const Wallet = (): JSX.Element => {
             setLoadingMessage('LOADING WALLET');
         }
     };
+
+    // --- Client-side Scheduler for Time-lock Agent ---
+    const processScheduledTask = async (task: any) => {
+        if (!task || task.status !== 'WAITING') return;
+
+        try {
+            console.log(`[Scheduler] Executing Task ${task.id}...`);
+            // 1. Update status to EXECUTING
+            await updateScheduledTaskStatus(userProfile().email, task.id, { status: 'EXECUTING' });
+
+            // 2. Execute Transfer via Contract Service
+            const symbol = task.token || 'VCN';
+            // Parse amount if needed, contractService handles string usually
+            const receipt = await contractService.sendTokens(task.recipient, task.amount, symbol);
+            const txHash = receipt.hash || "0xMockHash";
+
+            // 3. Update status to SENT
+            await updateScheduledTaskStatus(userProfile().email, task.id, {
+                status: 'SENT',
+                txHash,
+                executedAt: new Date().toISOString()
+            });
+
+            // Notify success logic
+            // (We could add a system message to chat if needed, but the drawer updates automatically)
+
+        } catch (e: any) {
+            console.error("Scheduled execution failed:", e);
+            await updateScheduledTaskStatus(userProfile().email, task.id, {
+                status: 'FAILED',
+                error: e.message || "Execution error"
+            });
+        }
+    };
+
+    const handleForceExecute = (taskId: string) => {
+        const task = queueTasks().find(t => t.id === taskId);
+        if (task) processScheduledTask(task);
+    };
+
+    // Scheduler Interval
+    createEffect(() => {
+        // Only run if there are waiting tasks
+        if (!queueTasks().some(t => t.status === 'WAITING')) return;
+
+        const timer = setInterval(() => {
+            const now = Date.now();
+            queueTasks().forEach(task => {
+                // Check if waiting and time has arrived (include 2sec buffer for potential lag)
+                if (task.status === 'WAITING' && task.executeAt && task.executeAt <= now) {
+                    processScheduledTask(task);
+                }
+            });
+        }, 2000); // Check every 2s
+
+        onCleanup(() => clearInterval(timer));
+    });
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -1710,6 +1769,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                             // Queue Integration (Time-lock Agent)
                             queueTasks={queueTasks}
                             onCancelTask={handleCancelTask}
+                            onForceExecute={handleForceExecute}
                             isScheduling={isSchedulingTimeLock()}
                             chatHistoryOpen={chatHistoryOpen()}
                             setChatHistoryOpen={setChatHistoryOpen}

@@ -1,6 +1,6 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History } from 'lucide-solid';
+import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play } from 'lucide-solid';
 import { AgentTask } from './AgentChip';
 import { contractService } from '../../../services/contractService';
 import { cancelScheduledTask } from '../../../services/firebaseService';
@@ -20,6 +20,7 @@ interface QueueDrawerProps {
     tasks: DetailedAgentTask[];
     focusedTaskId?: string | null;
     onCancelTask?: (taskId: string) => void;
+    onForceExecute?: (taskId: string) => void;
 }
 
 const QueueDrawer = (props: QueueDrawerProps) => {
@@ -223,6 +224,18 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                         <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3 h-3" /> Cancel</>}>
                                                             <div class="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                                                         </Show>
+                                                    </button>
+
+                                                    {/* Test Force Run Button */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            props.onForceExecute?.(task.id);
+                                                        }}
+                                                        class="w-10 py-2 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg flex items-center justify-center transition-colors"
+                                                        title="Force Execute (Debug)"
+                                                    >
+                                                        <Play class="w-3 h-3 fill-current" />
                                                     </button>
                                                 </Show>
                                                 <button

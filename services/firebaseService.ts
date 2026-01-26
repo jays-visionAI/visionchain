@@ -1866,4 +1866,11 @@ export const createNotification = async (email: string, notification: Notificati
 };
 
 // Initialize on import
+// Initialize on import
 initializeFirebase();
+
+export const updateScheduledTaskStatus = async (userEmail: string, taskId: string, updates: any) => {
+    const db = getFirebaseDb();
+    const taskRef = doc(db, 'users', userEmail.toLowerCase(), 'queue', taskId);
+    await setDoc(taskRef, updates, { merge: true });
+};
