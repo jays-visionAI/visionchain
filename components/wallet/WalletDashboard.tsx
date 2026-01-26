@@ -1,5 +1,7 @@
 import { createSignal, Show, For } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
+import ChatQueueLine from '../chat/queue/ChatQueueLine';
+import QueueDrawer from '../chat/queue/QueueDrawer';
 import {
     Sparkles,
     User,
@@ -57,6 +59,11 @@ interface WalletDashboardProps {
     setVoiceLang: (lang: string) => void;
     toggleRecording: () => void;
     isRecording: () => boolean;
+
+    // Queue Integration
+    queueTasks: () => any[];
+    onCancelTask: (taskId: string) => void;
+    isScheduling: boolean;
 }
 
 const TypingIndicator = () => (
@@ -120,6 +127,8 @@ const ThinkingDisplay = (props: { steps: any[] }) => (
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isComposing, setIsComposing] = createSignal(false);
     const [historyOpen, setHistoryOpen] = createSignal(true);
+    const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
+    const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     let fileInputRef: HTMLInputElement | undefined;
 
     const LANGUAGES = [
@@ -205,6 +214,15 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
             {/* Main Chat Area */}
             <div class="flex-1 flex flex-col overflow-hidden relative">
+
+
+                <QueueDrawer
+                    isOpen={isQueueDrawerOpen()}
+                    onClose={() => setIsQueueDrawerOpen(false)}
+                    tasks={props.queueTasks()}
+                    focusedTaskId={selectedTaskId()}
+                    onCancelTask={props.onCancelTask}
+                />
 
                 {/* Messages Area */}
                 <div class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide">
@@ -323,6 +341,21 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
                     <div class="max-w-4xl mx-auto pointer-events-auto">
                         <Presence>
+                            {/* Active Queue Bar (Time-lock Agent) - Above Input */}
+                            <Show when={props.queueTasks().length > 0}>
+                                <div class="px-2 mb-2">
+                                    <ChatQueueLine
+                                        tasks={props.queueTasks()}
+                                        isCompact={true}
+                                        onTaskClick={(id) => {
+                                            setSelectedTaskId(id);
+                                            setIsQueueDrawerOpen(true);
+                                        }}
+                                        onOpenHistory={() => setIsQueueDrawerOpen(true)}
+                                    />
+                                </div>
+                            </Show>
+
                             <Show when={props.attachments().length > 0}>
                                 <Motion.div
                                     initial={{ opacity: 0, y: 10, height: 0 }}
@@ -357,8 +390,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         </Presence>
 
                         <div class="relative group">
-                            {/* Glow Effects */}
-                            <div class="absolute -inset-[3px] bg-gradient-to-r from-blue-600 via-cyan-400 to-purple-600 rounded-[30px] blur-2xl opacity-20 group-focus-within:opacity-50 transition-all duration-700" />
+                            {/* Agent Activated Glow Effect */}
+                            <div class={`absolute -inset-[3px] rounded-[30px] blur-2xl transition-all duration-700 ${props.isScheduling
+                                ? 'bg-gradient-to-r from-orange-600 via-amber-400 to-orange-600 opacity-60'
+                                : 'bg-gradient-to-r from-blue-600 via-cyan-400 to-purple-600 opacity-20 group-focus-within:opacity-50'}`}
+                            />
                             <div class="absolute -inset-[1px] bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
 
                             <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-white/10 rounded-[28px] p-2 flex items-end gap-2 group-focus-within:bg-[#0d0d0f] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
@@ -410,17 +446,19 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             <span>{props.voiceLang().split('-')[0]}</span>
                                             <ChevronDown class="w-3 h-3" />
                                         </button>
-                                        <div class="absolute bottom-full right-0 mb-4 w-32 bg-[#121214] border border-white/10 rounded-2xl shadow-3xl hidden group-hover/lang:block z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                            <For each={LANGUAGES}>
-                                                {(lang) => (
-                                                    <button
-                                                        onClick={() => props.setVoiceLang(lang.code)}
-                                                        class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
-                                                    >
-                                                        {lang.label}
-                                                    </button>
-                                                )}
-                                            </For>
+                                        <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                            <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
+                                                <For each={LANGUAGES}>
+                                                    {(lang) => (
+                                                        <button
+                                                            onClick={() => props.setVoiceLang(lang.code)}
+                                                            class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
+                                                        >
+                                                            {lang.label}
+                                                        </button>
+                                                    )}
+                                                </For>
+                                            </div>
                                         </div>
                                     </div>
 

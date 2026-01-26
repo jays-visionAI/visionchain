@@ -879,6 +879,29 @@ export const subscribeToQueue = (
     });
 };
 
+export const saveScheduledTransfer = async (task: {
+    userEmail: string;
+    recipient: string;
+    amount: string;
+    token: string;
+    unlockTime: number; // Unix timestamp
+    creationTx: string;
+    status: 'pending' | 'executed' | 'failed' | 'cancelled';
+}) => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = await addDoc(collection(db, 'scheduledTransfers'), {
+            ...task,
+            userEmail: task.userEmail.toLowerCase(),
+            createdAt: new Date().toISOString()
+        });
+        return docRef.id;
+    } catch (e) {
+        console.error("Save scheduled transfer failed:", e);
+        return null;
+    }
+};
+
 export const cancelScheduledTask = async (scheduleId: string) => {
     const db = getFirebaseDb();
     // In real app, we call Smart Contract cancel first!

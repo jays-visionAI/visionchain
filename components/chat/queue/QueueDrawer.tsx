@@ -19,6 +19,7 @@ interface QueueDrawerProps {
     onClose: () => void;
     tasks: DetailedAgentTask[];
     focusedTaskId?: string | null;
+    onCancelTask?: (taskId: string) => void;
 }
 
 const QueueDrawer = (props: QueueDrawerProps) => {

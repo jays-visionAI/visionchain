@@ -441,6 +441,21 @@ export class ContractService {
     }
 
     // --- TimeLock Agent Functions ---
+    async scheduleTransferNative(recipient: string, amount: string, delaySeconds: number) {
+        if (!this.signer) throw new Error("Wallet not connected");
+
+        const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
+        const abi = [
+            "function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)"
+        ];
+        const contract = new ethers.Contract(timelockAddress, abi, this.signer);
+        const amountWei = ethers.parseEther(amount);
+        const unlockTime = Math.floor(Date.now() / 1000) + delaySeconds;
+
+        const tx = await contract.scheduleTransferNative(recipient, unlockTime, { value: amountWei });
+        return await tx.wait();
+    }
+
     async cancelScheduledTransfer(scheduleId: string) {
         if (!this.signer) throw new Error("Wallet not connected");
 

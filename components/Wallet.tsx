@@ -42,7 +42,8 @@ import {
     AlertTriangle,
     Info,
     ShieldCheck,
-    LogOut
+    LogOut,
+    Clock
 } from 'lucide-solid';
 import {
     updateWalletStatus,
@@ -54,7 +55,10 @@ import {
     getUserConversations,
     saveConversation,
     deleteConversation,
-    AiConversation
+    AiConversation,
+    subscribeToQueue,
+    saveScheduledTransfer,
+    cancelScheduledTask
 } from '../services/firebaseService';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
@@ -210,6 +214,39 @@ const Wallet = (): JSX.Element => {
     const [lastTxHash, setLastTxHash] = createSignal('');
     const [loadingMessage, setLoadingMessage] = createSignal('LOADING WALLET');
     const [purchasedVcn, setPurchasedVcn] = createSignal(0);
+
+    // --- Time-lock Agent (Scheduled Transfer) State ---
+    const [queueTasks, setQueueTasks] = createSignal<any[]>([]);
+    const [isSchedulingTimeLock, setIsSchedulingTimeLock] = createSignal(false);
+    const [lockDelaySeconds, setLockDelaySeconds] = createSignal(0);
+
+    createEffect(() => {
+        const email = userProfile().email;
+        if (email) {
+            const unsubscribe = subscribeToQueue(email, (tasks) => {
+                setQueueTasks(tasks);
+            });
+            return () => unsubscribe();
+        }
+    });
+
+    const handleCancelTask = async (taskId: string) => {
+        try {
+            setIsLoading(true);
+            setLoadingMessage('CANCELLING TASK...');
+
+            // 1. Contract Cancel (If it has a scheduleId/creationTx)
+            // For now, simple mock or direct firebase update
+            await cancelScheduledTask(taskId);
+
+            alert('Task cancelled successfully.');
+        } catch (e) {
+            console.error("Cancel failed:", e);
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('LOADING WALLET');
+        }
+    };
 
     const copyToClipboard = async (text: string) => {
         try {
@@ -423,8 +460,25 @@ const Wallet = (): JSX.Element => {
                 // 2. Connect Internal Wallet
                 await contractService.connectInternalWallet(privateKey);
 
-                // 3. Execute Send
-                if (symbol === 'VCN') {
+                // 3. Execute Send or Local Time-lock Schedule
+                if (isSchedulingTimeLock()) {
+                    setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
+                    const receipt = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
+                    console.log("Time-lock Schedule Successful:", receipt.hash);
+                    setLastTxHash(receipt.hash);
+
+                    // 4. Register with Global Agent Queue (Firebase)
+                    await saveScheduledTransfer({
+                        userEmail: userProfile().email,
+                        recipient: recipient,
+                        amount: amount,
+                        token: symbol,
+                        unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
+                        creationTx: receipt.hash,
+                        status: 'pending'
+                    });
+
+                } else if (symbol === 'VCN') {
                     try {
                         // Use Paymaster (Gasless) Logic for VCN
                         const result = await contractService.sendGaslessTokens(recipient, amount);
@@ -466,9 +520,14 @@ const Wallet = (): JSX.Element => {
                 setFlowStep(3);
 
                 // Add AI Success Message in Chat
+                const isScheduled = isSchedulingTimeLock();
                 const successMsg = lastLocale() === 'ko'
-                    ? `성공적으로 ${amount} ${symbol} 전송을 완료했습니다! 🚀 거래가 네트워크에 안전하게 기록되었으며, 이제 잔액이 곧 업데이트될 예정입니다. 추가로 도와드릴 일이 있을까요?`
-                    : `Successfully sent ${amount} ${symbol}! 🚀 The transaction is recorded, and your balance will be updated shortly. Is there anything else I can help with?`;
+                    ? (isScheduled
+                        ? `타임록 에이전트(Time-lock Agent) 시스템에 의해 ${amount} ${symbol} 예약 전송이 설정되었습니다. ⏳ 설정된 시간이 되면 에이전트가 자동 처리를 시작합니다. 채팅방 상단의 대기열에서 진행 상황을 확인하세요.`
+                        : `성공적으로 ${amount} ${symbol} 전송을 완료했습니다! 🚀 거래가 네트워크에 안전하게 기록되었으며, 이제 잔액이 곧 업데이트될 예정입니다. 추가로 도와드릴 일이 있을까요?`)
+                    : (isScheduled
+                        ? `Your ${amount} ${symbol} transfer has been orchestrated by the Time-lock Agent. ⏳ It will be executed automatically at the scheduled time. Monitors the progress in the Queue above.`
+                        : `Successfully sent ${amount} ${symbol}! 🚀 The transaction is recorded, and your balance will be updated shortly. Is there anything else I can help with?`);
 
                 setMessages(prev => [...prev, { role: 'assistant', content: successMsg }]);
 
@@ -1111,8 +1170,18 @@ const Wallet = (): JSX.Element => {
         recognitionInstance.interimResults = true;
         recognitionInstance.onstart = () => setIsRecording(true);
         recognitionInstance.onresult = (event: any) => {
-            const transcript = Array.from(event.results).map((result: any) => result[0].transcript).join('');
-            setInput(transcript);
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                }
+            }
+            if (finalTranscript) {
+                setInput(prev => {
+                    const cleanPrev = prev.trim();
+                    return cleanPrev ? `${cleanPrev} ${finalTranscript}` : finalTranscript;
+                });
+            }
         };
         recognitionInstance.onerror = () => setIsRecording(false);
         recognitionInstance.onend = () => setIsRecording(false);
@@ -1128,6 +1197,8 @@ const Wallet = (): JSX.Element => {
         setSendAmount('');
         setSwapAmount('');
         setRecipientAddress('');
+        setIsSchedulingTimeLock(false);
+        setLockDelaySeconds(0);
     };
 
     const handleSend = async () => {
@@ -1236,6 +1307,18 @@ Final network context: ${networkMode()}.
                     setRecipientAddress(intentData.recipient || '');
                     setSendAmount(intentData.amount || '');
                     setSelectedToken(intentData.symbol || 'VCN');
+
+                    // Parse Time from intentData.time or intentData.scheduleTime
+                    const timeStr = intentData.time || intentData.scheduleTime || '2 minutes';
+                    let delay = 120; // Default 2 mins
+                    const numeric = parseInt(timeStr.match(/\d+/) || '2');
+                    if (timeStr.includes('min')) delay = numeric * 60;
+                    else if (timeStr.includes('hour') || timeStr.includes('h')) delay = numeric * 3600;
+                    else delay = numeric;
+
+                    setIsSchedulingTimeLock(true);
+                    setLockDelaySeconds(delay);
+
                     startFlow('send');
                     // If we have both amount and recipient, skip to confirmation
                     if (intentData.amount && ethers.isAddress(intentData.recipient)) {
@@ -1243,8 +1326,8 @@ Final network context: ${networkMode()}.
                     }
 
                     const msg = lastLocale() === 'ko'
-                        ? `일정을 확인했습니다. ${intentData.amount} ${intentData.symbol} 예약 이체 설정을 시작합니다. 상세 예약(타임락 등)은 홈페이지 우측 'Vision AI'를 통해 정교하게 조정하실 수 있습니다.`
-                        : `I've started the flow for your scheduled transfer of ${intentData.amount} ${intentData.symbol}. Advanced time-lock orchestration can be refined via the primary Vision AI Assistant.`;
+                        ? `일정을 확인했습니다. ${intentData.amount} ${intentData.symbol} (${timeStr}) 예약 이체 설정을 시작합니다.`
+                        : `I've prepared your scheduled transfer of ${intentData.amount} ${intentData.symbol} (${timeStr}).`;
                     setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
                     setChatLoading(false);
                     return;
@@ -1453,6 +1536,10 @@ Final network context: ${networkMode()}.
                             setVoiceLang={setVoiceLang}
                             toggleRecording={toggleRecording}
                             isRecording={isRecording}
+                            // Queue Integration (Time-lock Agent)
+                            queueTasks={queueTasks}
+                            onCancelTask={handleCancelTask}
+                            isScheduling={isSchedulingTimeLock()}
                         />
                     </Show>
 
@@ -2434,7 +2521,9 @@ Final network context: ${networkMode()}.
                                                     <Show when={flowStep() === 2}>
                                                         <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                                             <div class="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6 text-center">
-                                                                <div class="text-[11px] font-bold text-blue-400 uppercase tracking-widest mb-2">You are sending</div>
+                                                                <div class="text-[11px] font-bold text-blue-400 uppercase tracking-widest mb-2">
+                                                                    <Show when={isSchedulingTimeLock()} fallback="You are sending">Agent is Scheduling</Show>
+                                                                </div>
                                                                 <div class="text-4xl font-bold text-white mb-1">{sendAmount()} {selectedToken()}</div>
                                                                 <div class="text-sm text-gray-500">≈ ${(Number(sendAmount().replace(/,/g, '')) * getAssetData(selectedToken()).price).toFixed(2)}</div>
                                                             </div>
@@ -2449,8 +2538,12 @@ Final network context: ${networkMode()}.
                                                                     <span class="text-green-400 font-bold">0.00021 ETH ($0.45)</span>
                                                                 </div>
                                                                 <div class="flex justify-between text-sm">
-                                                                    <span class="text-gray-500">Estimated Time</span>
-                                                                    <span class="text-white font-bold">~12 seconds</span>
+                                                                    <span class="text-gray-500">Estimated {isSchedulingTimeLock() ? 'Execution' : 'Time'}</span>
+                                                                    <span class="text-white font-bold">
+                                                                        <Show when={isSchedulingTimeLock()} fallback="~12 seconds">
+                                                                            In {Math.ceil(lockDelaySeconds() / 60)} minutes (Agent Lock)
+                                                                        </Show>
+                                                                    </span>
                                                                 </div>
                                                             </div>
 
@@ -2466,9 +2559,9 @@ Final network context: ${networkMode()}.
                                                                     disabled={flowLoading()}
                                                                     class="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/25 flex items-center justify-center gap-2"
                                                                 >
-                                                                    <Show when={flowLoading()} fallback="Confirm & Send">
+                                                                    <Show when={flowLoading()} fallback={isSchedulingTimeLock() ? "Schedule with Agent" : "Confirm & Send"}>
                                                                         <RefreshCw class="w-4 h-4 animate-spin" />
-                                                                        Sending...
+                                                                        {isSchedulingTimeLock() ? "Agent Working..." : "Sending..."}
                                                                     </Show>
                                                                 </button>
                                                             </div>
@@ -2479,9 +2572,13 @@ Final network context: ${networkMode()}.
                                                     <Show when={flowStep() === 3}>
                                                         <div class="py-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
                                                             <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30 mb-6">
-                                                                <Check class="w-10 h-10 text-white" />
+                                                                <Show when={isSchedulingTimeLock()} fallback={<Check class="w-10 h-10 text-white" />}>
+                                                                    <Clock class="w-10 h-10 text-white" />
+                                                                </Show>
                                                             </div>
-                                                            <h4 class="text-2xl font-bold text-white mb-2">Transaction Sent!</h4>
+                                                            <h4 class="text-2xl font-bold text-white mb-2">
+                                                                {isSchedulingTimeLock() ? 'Agent Scheduled!' : 'Transaction Sent!'}
+                                                            </h4>
                                                             <div class="mb-4 text-3xl font-black text-blue-400">
                                                                 {sendAmount()} {selectedToken()}
                                                             </div>
