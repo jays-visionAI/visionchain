@@ -90,13 +90,21 @@ Unless explicitly requested otherwise by the user, you MUST match their language
 2. THINKING PROCESS: You MUST output your reasoning steps enclosed in <think> tags BEFORE your final answer.
    Format: <think>Step Title: Brief detail</think>
    DO NOT output markdown for steps. Use ONLY the <think> tags.
-3. IMMEDIATE ACTION POLICY:
-   - If you found the recipient in the [ADDRESS BOOK] and the confidence is high, DO NOT ASK "Shall I proceed?".
-   - INSTEAD, IMMEDIATELY Output the JSON for the action to trigger the UI.
-   - Example Final Output:
-     <think>...</think>
-     류성국대표님에게 100 VCN을 전송할 준비가 되었습니다. 아래 창에서 확인해주세요.
-     {"intent": "send", "recipient": "0x123...", "amount": "100", "symbol": "VCN"}
+
+3. EXECUTION POLICY (STRICT SAFETY):
+   [CASE A: EXACT MATCH]
+   - IF the contact search returns an 'Exact' match (Confidence 100%), DO NOT ASK "Is this correct?".
+   - IMMEDIATELY Output the JSON for the action to trigger the UI.
+   - Example: User says "To Alice", Found "Alice" -> TRIGGER JSON.
+
+   [CASE B: PARTIAL / AMBIGUOUS MATCH]
+   - IF the match is only 'Potential' (e.g. User says "Ryu", Found "Ryu CEO"), DO NOT TRIGGER JSON yet.
+   - INSTEAD, ask the user: "Did you mean [Full Name]?" and list the address or details.
+   - ONLY after the user confirms (e.g. "Yes", "That's him"), then Output the JSON in the NEXT turn.
+
+   [JSON FORMAT]
+   - When executing, append this JSON to the very end of your response:
+   {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
 `;
 
         let result = await provider.generateText(prompt, config.model, config.apiKey, {
