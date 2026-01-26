@@ -319,7 +319,9 @@ let db: Firestore;
 export const initializeFirebase = (useLongPolling = false) => {
     if (!app) {
         const apps = getApps();
-        app = apps.length ? apps[0] : initializeApp(firebaseConfig);
+        // Explicitly look for the default app, or create it. 
+        // DO NOT take apps[0] blindly as it might be the isolated Admin app.
+        app = apps.find(a => a.name === '[DEFAULT]') || initializeApp(firebaseConfig);
     }
 
     if (!auth) {

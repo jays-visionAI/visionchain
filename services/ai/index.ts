@@ -124,7 +124,8 @@ Unless explicitly requested otherwise by the user, you MUST match their language
                         // Simple Fuzzy Match Helper
                         const getMatchScore = (target: string, query: string) => {
                             const t = target.toLowerCase().replace(/\s+/g, '');
-                            if (t.includes(query) || query.includes(t)) return 100; // Direct/Partial match
+                            if (t === query) return 100; // Exact match
+                            if (t.includes(query) || query.includes(t)) return 90; // Partial match (e.g. "류성국" in "류성국대표")
 
                             // Check for character overlap (useful for reordered names like "성국류")
                             const targetChars = t.split('');
@@ -160,7 +161,7 @@ Unless explicitly requested otherwise by the user, you MUST match their language
                                 vid: c.vchainUserUid ? `@${c.vchainUserUid}` : "Not linked",
                                 address: c.address || "No address",
                                 email: c.email,
-                                matchConfidence: c.score >= 100 ? 'Exact/Partner' : 'Potential'
+                                matchConfidence: c.score === 100 ? 'Exact' : 'Potential' // Distinguish for prompt logic
                             }));
 
                         if (toolResult.length === 0) {
