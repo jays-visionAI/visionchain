@@ -40,6 +40,15 @@ export const useTimeLockAgent = (
             console.log(`[Scheduler] Executing Task ${task.id}...`);
             await updateScheduledTaskStatus(email, task.id, { status: 'EXECUTING' });
 
+            // Ensure Wallet is Connected
+            if (!contractService.isWalletConnected()) {
+                console.log("[Scheduler] Signer not found. Attempting to connect...");
+                await contractService.connectWallet();
+                if (!contractService.isWalletConnected()) {
+                    throw new Error("Wallet connection failed. Please connect your wallet to execute.");
+                }
+            }
+
             // Execute Transfer
             const symbol = task.token || 'VCN';
             const receipt = await contractService.sendTokens(task.recipient, task.amount, symbol);

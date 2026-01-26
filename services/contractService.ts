@@ -67,6 +67,10 @@ export class ContractService {
         return address;
     }
 
+    isWalletConnected(): boolean {
+        return !!this.signer;
+    }
+
     async connectInternalWallet(privateKey: string): Promise<string> {
         try {
             const provider = await this.getRobustProvider();
