@@ -63,7 +63,8 @@ import {
     cancelScheduledTask,
     createNotification,
     NotificationData,
-    getFirebaseDb
+    getFirebaseDb,
+    getUserContacts
 } from '../services/firebaseService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
@@ -1307,32 +1308,43 @@ const Wallet = (): JSX.Element => {
             const imageAttachment = attachments().find(a => a.type === 'image');
             const imageBase64 = imageAttachment?.preview?.split(',')[1];
 
-            // Construct context from wallet state
+            // Ensure contacts are loaded before generating context
+            let activeContacts = contacts();
+            if (activeContacts.length === 0 && userProfile().email) {
+                // Quick fetch backup if state is empty (rare but possible on refresh)
+                try {
+                    const loaded = await getUserContacts(userProfile().email);
+                    setContacts(loaded);
+                    activeContacts = loaded;
+                } catch (e) { console.warn("Background contact fetch failed", e); }
+            }
+
+            // Construct context from wallet state with ENFORCED Contact List
             const context = `
-Current Portfolio Summary:
+[Live Context]
 Network: ${networkMode().toUpperCase()}
 Wallet Address: ${walletAddress()}
 Total Value: ${totalValueStr()}
+
+[ADDRESS BOOK - PRIMARY SOURCE OF TRUTH]
+(You MUST check this list first. If the name matches precisely or partially, use the address below.)
+${activeContacts.length > 0
+                    ? activeContacts.map((c: any) => `- Name: "${c.internalName}"${c.alias ? `, Alias: "${c.alias}"` : ''} -> Address: ${c.address} ${c.vchainUserUid ? `(@${c.vchainUserUid})` : ''}`).join('\n')
+                    : '(Address book is currently empty. Ask user for address.)'}
+
 Holdings:
 ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
-
-(Important: You are currently on the ${networkMode()}. ${networkMode() === 'testnet' ? 'Testnet VCN is distributed at 10% of the purchased amount for testing node purchases and transactions.' : 'Mainnet shows actual purchased assets.'})
-
-Contact List (Your Address Book):
-${contacts().length > 0
-                    ? contacts().map((c: any) => `- ${c.internalName}${c.alias ? ` (Alias: ${c.alias})` : ''}${c.vchainUserUid ? ` [@${c.vchainUserUid}]` : ''}`).join('\n')
-                    : 'No contacts saved yet.'}
 `;
 
             // The systemic rules (Prompt Tuning) are now managed in the Admin Dashboard.
             const fullPrompt = `
-[Live Context]
 ${context}
 
 [User Request]
 "${userMessage}"
 
-Identify the intent and provide a friendly response following the established architect persona. Use provided tools if necessary.
+Identify the intent and provide a friendly response following the established architect persona. 
+IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address and proceed to confirmation.
 `;
 
             setThinkingSteps(prev => [
