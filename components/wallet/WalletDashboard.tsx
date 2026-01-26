@@ -386,7 +386,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     onChange={props.handleFileSelect}
                                 />
 
-                                <div class="flex-1 px-1">
+                                <div class="flex-1 px-1 border border-[#1d1d1f] rounded-xl self-stretch my-1">
                                     <textarea
                                         class="w-full bg-transparent text-white text-[16px] py-3.5 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
                                         placeholder={props.isRecording() ? "Listening..." : "Tell Vision AI what to do..."}
