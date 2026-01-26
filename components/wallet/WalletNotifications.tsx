@@ -48,13 +48,21 @@ export function WalletNotifications() {
 
         const db = getFirebaseDb();
         const notificationsRef = collection(db, 'users', auth.user().email.toLowerCase(), 'notifications');
-        const q = query(notificationsRef, orderBy('timestamp', 'desc'));
+        // Fetch all and sort in memory to be robust against missing/inconsistent fields
+        const q = query(notificationsRef);
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list: Notification[] = [];
             snapshot.forEach((doc) => {
                 list.push({ id: doc.id, ...doc.data() } as Notification);
             });
+
+            // Sort by timestamp desc (handle both ISO string and potential Firestore Timestamps)
+            list.sort((a, b) => {
+                const getVal = (v: any) => v && typeof v === 'object' && v.toMillis ? v.toMillis() : new Date(v).getTime();
+                return getVal(b.timestamp) - getVal(a.timestamp);
+            });
+
             setNotifications(list);
             setIsLoading(false);
         }, (error) => {
@@ -73,12 +81,13 @@ export function WalletNotifications() {
     };
 
     const markAllAsRead = async () => {
-        if (!auth.user()?.email) return;
+        const email = auth.user()?.email;
+        if (!email) return;
         const db = getFirebaseDb();
         const batch = writeBatch(db);
 
         notifications().filter(n => !n.read).forEach(n => {
-            const docRef = doc(db, 'users', auth.user().email.toLowerCase(), 'notifications', n.id);
+            const docRef = doc(db, 'users', email.toLowerCase(), 'notifications', n.id);
             batch.update(docRef, { read: true });
         });
 
@@ -90,6 +99,21 @@ export function WalletNotifications() {
         const db = getFirebaseDb();
         const docRef = doc(db, 'users', auth.user().email.toLowerCase(), 'notifications', id);
         await deleteDoc(docRef);
+    };
+
+    const deleteAllNotifications = async () => {
+        const email = auth.user()?.email;
+        if (!email || !confirm("Are you sure you want to delete all notifications?")) return;
+
+        const db = getFirebaseDb();
+        const batch = writeBatch(db);
+
+        notifications().forEach(n => {
+            const docRef = doc(db, 'users', email.toLowerCase(), 'notifications', n.id);
+            batch.delete(docRef);
+        });
+
+        await batch.commit();
     };
 
     const filteredNotifications = () => {
@@ -109,11 +133,13 @@ export function WalletNotifications() {
         }
     };
 
-    const formatTime = (isoString: string) => {
-        const date = new Date(isoString);
+    const formatTime = (ts: any) => {
+        if (!ts) return '';
+        const date = (ts && typeof ts === 'object' && ts.toDate) ? ts.toDate() : new Date(ts);
         const now = new Date();
         const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
+        if (isNaN(date.getTime())) return 'Some time ago';
         if (diffInSeconds < 60) return 'Just now';
         if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
         if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
@@ -130,9 +156,16 @@ export function WalletNotifications() {
                 </div>
                 <div class="flex items-center gap-2">
                     <button
+                        onClick={deleteAllNotifications}
+                        disabled={notifications().length === 0}
+                        class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-0"
+                    >
+                        Clear All
+                    </button>
+                    <button
                         onClick={markAllAsRead}
                         disabled={!notifications().some(n => !n.read)}
-                        class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all disabled:opacity-0"
+                        class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 hover:text-white hover:bg-blue-500/20 transition-all disabled:opacity-0"
                     >
                         Mark all as read
                     </button>
