@@ -36,11 +36,12 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
         setIsCancelling(scheduleId);
         try {
-            // 1. On-chain Cancel
-            await contractService.cancelScheduledTransfer(scheduleId);
-
-            // 2. Off-chain Database Update
-            await cancelScheduledTask(scheduleId);
+            // Cancel via Parent Prop (which handles Firebase update only)
+            if (props.onCancelTask) {
+                await props.onCancelTask(scheduleId);
+            } else {
+                console.warn("No cancel handler provided");
+            }
 
             // Optimistic UI update could happen here via subscription automatically
         } catch (err) {
