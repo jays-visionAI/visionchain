@@ -333,10 +333,15 @@ export class ContractService {
         const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
         const rpcProvider = await this.getRobustProvider();
         const wallet = new ethers.Wallet(adminPK, rpcProvider);
-        const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, wallet);
 
+        // --- Native Transfer (Required for Gas + TimeLock Value) ---
         const amountWei = ethers.parseEther(amountStr);
-        const tx = await vcnContract.transfer(toAddress, amountWei);
+        const tx = await wallet.sendTransaction({
+            to: toAddress,
+            value: amountWei
+        });
+
+        console.log(`[Admin] Native Airdrop sent: ${tx.hash}`);
         return await tx.wait();
     }
 

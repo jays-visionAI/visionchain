@@ -473,7 +473,15 @@ const Wallet = (): JSX.Element => {
                         if (parseFloat(onChainBal) < numericAmount && purchasedVcn() >= numericAmount) {
                             setLoadingMessage('AGENT: AIRDROPPING VCN...');
                             console.log("[Demo] Auto-seeding wallet from admin...");
-                            await contractService.adminSendVCN(address, (numericAmount + 1).toString()); // amount + 1 for gas
+                            const seedReceipt = await contractService.adminSendVCN(address, (numericAmount + 1).toString()); // amount + 1 for gas
+                            console.log("[Demo] Airdrop confirmed. Hash:", seedReceipt.hash);
+
+                            // Give RPC a moment to update state
+                            setLoadingMessage('AGENT: FINALIZING SYNC...');
+                            await new Promise(r => setTimeout(r, 2000));
+
+                            const newBal = await contractService.getNativeBalance(address);
+                            console.log("[Demo] Verified post-airdrop balance:", newBal);
                         }
                     } catch (seedErr) {
                         console.warn("Auto-seed failed, proceeding anyway...", seedErr);
