@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { getFirebaseDb } from './firebaseService';
+import { getFirebaseDb, createNotification, findUserByAddress } from './firebaseService';
 import { collection, query, where, limit, getDocs, updateDoc, doc, runTransaction, Timestamp, increment } from 'firebase/firestore';
 
 // --- Configuration ---
@@ -101,6 +101,33 @@ export const runSchedulerTick = async () => {
                 txHash: tx.hash
             });
             console.log(`Success: ${jobId}`);
+
+            // 6. Create Notifications
+            const taskData = jobDoc.data();
+            const symbol = taskData.token || 'VCN';
+
+            // To Sender
+            await createNotification(taskData.userEmail, {
+                type: 'transfer_scheduled',
+                title: 'Scheduled Transfer Complete',
+                content: `Successfully sent ${taskData.amount} ${symbol} to ${taskData.recipient.slice(0, 8)}... via Time Lock Agent.`,
+                data: { txHash: tx.hash, jobId }
+            });
+
+            // To Recipient
+            try {
+                const recipientUser = await findUserByAddress(taskData.recipient);
+                if (recipientUser && recipientUser.email) {
+                    await createNotification(recipientUser.email, {
+                        type: 'transfer_received',
+                        title: 'Token Received',
+                        content: `You received ${taskData.amount} ${symbol} from ${taskData.userEmail} via Time Lock Agent.`,
+                        data: { txHash: tx.hash, sender: taskData.userEmail }
+                    });
+                }
+            } catch (notifyErr) {
+                console.warn("Failed to notify recipient", notifyErr);
+            }
 
         } catch (error: any) {
             console.error(`Failed Job ${jobId}:`, error);

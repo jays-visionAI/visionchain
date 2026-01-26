@@ -988,6 +988,23 @@ export const cancelScheduledTask = async (scheduleId: string) => {
     }
 };
 
+export const retryScheduledTask = async (taskId: string) => {
+    const db = getFirebaseDb();
+    try {
+        const docRef = doc(db, 'scheduledTransfers', taskId);
+        await updateDoc(docRef, {
+            status: 'WAITING',
+            nextRetryAt: Timestamp.now(),
+            retryCount: 0,
+            error: null
+        });
+        return true;
+    } catch (e) {
+        console.error("Retry failed:", e);
+        throw e;
+    }
+};
+
 export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     const db = getFirebaseDb();
     const newInvitations: { email: string; partnerCode: string }[] = [];
