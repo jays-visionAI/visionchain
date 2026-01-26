@@ -1337,16 +1337,45 @@ Identify the intent and provide a friendly response following the established ar
 
             setThinkingSteps(prev => [
                 ...prev.map(s => ({ ...s, status: 'completed' as const })),
-                { id: '2', label: getLabel('2'), status: 'loading' }
+                { id: '2', label: 'Processing Request...', status: 'loading' }
             ]);
 
-            const response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
+            let response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
 
-            setThinkingSteps(prev => [
-                ...prev.map(s => ({ ...s, status: 'completed' as const })),
-                { id: '3', label: getLabel('3'), status: 'success' }
-            ]);
-            setTimeout(() => setThinkingSteps([]), 1500);
+            // --- State-of-the-Art Thinking Process Parsing ---
+            const thoughtRegex = /<think>(.*?)<\/think>/g;
+            const parsedSteps: any[] = [];
+            let match;
+
+            // Extract thoughts
+            while ((match = thoughtRegex.exec(response)) !== null) {
+                const content = match[1];
+                // Try to split "Title: Detail" 
+                const parts = content.split(':');
+                const label = parts[0].trim();
+                parsedSteps.push({
+                    id: crypto.randomUUID(),
+                    label: label,
+                    status: 'completed' // AI returns them all at once here, so mark done
+                });
+            }
+
+            if (parsedSteps.length > 0) {
+                // Flash the parsed steps clearly to the user
+                setThinkingSteps(parsedSteps);
+
+                // Keep them visible for a moment so user can read, then clear or shrink
+                // (In a real streaming setup, these would appear one by one. 
+                //  Here we simulate the "done" state immediately for the received block)
+                setTimeout(() => setThinkingSteps([]), 4000);
+            } else {
+                // Fallback cleanup if no tags found
+                setThinkingSteps([]);
+            }
+
+            // Remove tags from final message to user
+            response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
 
             // 1. Check for Intent JSON
             let intentData: any = null;
