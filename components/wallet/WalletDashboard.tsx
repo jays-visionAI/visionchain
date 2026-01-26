@@ -1,4 +1,4 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, Show, For, createEffect } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import QueueDrawer from '../chat/queue/QueueDrawer';
@@ -27,7 +27,8 @@ import {
     GripHorizontal,
     Search,
     ChevronLeft,
-    ShieldCheck
+    ShieldCheck,
+    Check
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -86,46 +87,84 @@ const TypingIndicator = () => (
     </Motion.div>
 );
 
-const ThinkingDisplay = (props: { steps: any[] }) => (
-    <div class="max-w-3xl mx-auto px-6 mb-8 w-full z-20 relative">
-        <div class="flex gap-4">
-            <div class="w-9 h-9 rounded-xl bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 mt-1 shadow-xl">
-                <Bot class="w-4 h-4 text-purple-400 animate-pulse" />
-            </div>
-            <div class="flex-1 max-w-[400px] bg-[#0d0d0f]/80 backdrop-blur-3xl border border-white/10 rounded-2xl p-4 space-y-3 shadow-2xl">
-                <div class="flex items-center justify-between pb-2 border-b border-white/5">
-                    <span class="text-[12px] font-bold text-gray-100">AI Architect Thinking...</span>
-                    <div class="flex gap-1">
-                        <div class="w-1 h-1 bg-purple-500 rounded-full animate-ping" />
+const ThinkingDisplay = (props: { steps: any[] }) => {
+    const [isExpanded, setIsExpanded] = createSignal(false);
+
+    // Auto-expand if error occurs
+    createEffect(() => {
+        if (props.steps.some(s => s.status === 'error')) {
+            setIsExpanded(true);
+        }
+    });
+
+    return (
+        <div class="max-w-3xl mx-auto px-6 mb-6 w-full z-20 relative">
+            <Motion.div
+                class="bg-[#0d0d0f]/90 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl transition-all duration-300"
+            >
+                {/* Header / Summary View */}
+                <div
+                    class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.02]"
+                    onClick={() => setIsExpanded(!isExpanded())}
+                >
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+                            <Bot class="w-4 h-4 text-purple-400 animate-pulse" />
+                        </div>
+                        <div class="flex flex-col">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[13px] font-bold text-gray-100">AI Architect Thinking</span>
+                                <div class="flex gap-0.5 items-end h-3 pb-0.5">
+                                    <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
+                                    <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
+                                    <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.3s" }} />
+                                </div>
+                            </div>
+                            <span class="text-[10px] text-gray-500 font-medium truncate max-w-[200px]">
+                                {props.steps[props.steps.length - 1]?.label || "Processing..."}
+                            </span>
+                        </div>
                     </div>
+
+                    <button class="text-gray-500 hover:text-white transition-colors p-1">
+                        <ChevronDown class={`w-4 h-4 transition-transform duration-300 ${isExpanded() ? 'rotate-180' : ''}`} />
+                    </button>
                 </div>
-                <div class="space-y-2">
-                    <For each={props.steps}>
-                        {(step) => (
-                            <div class="flex items-center gap-3 group">
-                                <div class="relative">
-                                    <Show when={step.status === 'loading'} fallback={
-                                        <div class={`w-2 h-2 rounded-full ${step.status === 'completed' || step.status === 'success' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-600'}`} />
-                                    }>
-                                        <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+
+                {/* Expanded Details */}
+                <Show when={isExpanded()}>
+                    <div class="border-t border-white/5 bg-black/20 p-4 space-y-3">
+                        <For each={props.steps}>
+                            {(step) => (
+                                <div class="flex items-start gap-3 group animate-in fade-in slide-in-from-top-1 duration-300">
+                                    <div class="mt-1 relative">
+                                        <Show when={step.status === 'loading'} fallback={
+                                            <div class={`w-2 h-2 rounded-full ${step.status === 'completed' ? 'bg-green-500' : 'bg-red-500'}`} />
+                                        }>
+                                            <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+                                        </Show>
+                                        <Show when={step.status === 'completed'}>
+                                            <div class="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20" />
+                                        </Show>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-[12px] font-bold text-gray-300">{step.label}</div>
+                                        <Show when={step.detail}>
+                                            <div class="text-[10px] text-gray-500 mt-0.5 truncate">{step.detail}</div>
+                                        </Show>
+                                    </div>
+                                    <Show when={step.status === 'completed'}>
+                                        <Check class="w-3 h-3 text-green-500/50" />
                                     </Show>
                                 </div>
-                                <span class={`text-[11px] font-medium transition-colors ${step.status === 'loading' ? 'text-purple-400' : 'text-gray-500'}`}>
-                                    {step.label}
-                                </span>
-                                <Show when={step.status === 'completed' || step.status === 'success'}>
-                                    <Motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                        <span class="text-[10px] text-green-500/50 font-bold">DONE</span>
-                                    </Motion.div>
-                                </Show>
-                            </div>
-                        )}
-                    </For>
-                </div>
-            </div>
+                            )}
+                        </For>
+                    </div>
+                </Show>
+            </Motion.div>
         </div>
-    </div>
-);
+    );
+};
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isComposing, setIsComposing] = createSignal(false);
