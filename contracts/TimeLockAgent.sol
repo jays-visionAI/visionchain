@@ -120,6 +120,37 @@ contract TimeLockAgent is ReentrancyGuard, Pausable, Ownable {
     }
 
     /**
+     * @dev Executes multiple scheduled transfers in a single transaction.
+     * @param scheduleIds An array of schedule IDs to execute.
+     */
+    function executeBatch(uint256[] calldata scheduleIds) 
+        external 
+        nonReentrant 
+        whenNotPaused
+        onlyExecutor
+    {
+        for (uint256 i = 0; i < scheduleIds.length; i++) {
+            uint256 scheduleId = scheduleIds[i];
+            ScheduledTransfer storage transfer = transfers[scheduleId];
+
+            // Skip if doesn't exist, not waiting, or not yet unlockable
+            if (transfer.createdAt == 0 || transfer.status != Status.Waiting || block.timestamp < transfer.unlockTime) {
+                continue;
+            }
+
+            transfer.status = Status.Executed;
+            (bool success, ) = transfer.to.call{value: transfer.amount}("");
+            
+            if (success) {
+                emit TransferExecuted(scheduleId, msg.sender, block.timestamp);
+            } else {
+                // If one fails, we revert it back to Waiting so it can be retried individually
+                transfer.status = Status.Waiting;
+            }
+        }
+    }
+
+    /**
      * @dev Cancels a scheduled transfer and refunds the creator.
      * Can only be called before execution and before expiration logic takes over (though expiration also refunds).
      * @param scheduleId The ID of the transfer to cancel.

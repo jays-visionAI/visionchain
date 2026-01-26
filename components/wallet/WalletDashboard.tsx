@@ -29,7 +29,9 @@ import {
     ChevronLeft,
     ShieldCheck,
     Check,
-    Square
+    Square,
+    Layers,
+    Lock
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -71,6 +73,7 @@ interface WalletDashboardProps {
     // Sidebar Control
     chatHistoryOpen: boolean;
     setChatHistoryOpen: (val: boolean) => void;
+    batchAgents: () => any[];
 }
 
 const TypingIndicator = () => (
@@ -214,6 +217,74 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     onCancelTask={props.onCancelTask}
                     onForceExecute={props.onForceExecute}
                 />
+
+                {/* Batch Agent Queue (Top) */}
+                <Show when={props.batchAgents().length > 0}>
+                    <div class="absolute top-4 left-0 right-0 z-[40] pointer-events-none px-6">
+                        <div class="max-w-4xl mx-auto flex items-center justify-end gap-3 pointer-events-auto">
+                            <For each={props.batchAgents()}>
+                                {(agent) => (
+                                    <Motion.div
+                                        initial={{ opacity: 0, x: 20, scale: 0.8 }}
+                                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        class="group relative flex items-center gap-3 bg-[#111113]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-2 pr-4 shadow-2xl overflow-hidden"
+                                    >
+                                        {/* Status Glow */}
+                                        <div class={`absolute inset-0 opacity-10 ${agent.status === 'executing' ? 'bg-blue-500' : 'bg-amber-500'}`} />
+
+                                        <div class="relative w-10 h-10 flex items-center justify-center">
+                                            {/* Progress Ring */}
+                                            <svg class="absolute inset-0 w-full h-full -rotate-90">
+                                                <circle
+                                                    cx="20" cy="20" r="18"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="3"
+                                                    class="text-white/[0.05]"
+                                                />
+                                                <circle
+                                                    cx="20" cy="20" r="18"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="3"
+                                                    stroke-dasharray="113"
+                                                    stroke-dashoffset={(113 - (113 * (agent.successCount + agent.failedCount)) / agent.totalCount).toString()}
+                                                    stroke-linecap="round"
+                                                    class={`${agent.status === 'executing' ? 'text-blue-500' : 'text-amber-500'} transition-all duration-1000`}
+                                                />
+                                            </svg>
+                                            <div class="flex items-center justify-center">
+                                                <Show when={agent.status === 'executing'} fallback={<Lock class="w-4 h-4 text-amber-500" />}>
+                                                    <Layers class="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                                                </Show>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex flex-col min-w-[80px]">
+                                            <div class="text-[10px] font-black text-white uppercase tracking-wider mb-0.5">Enterprise Batch</div>
+                                            <div class="flex items-center gap-2">
+                                                <div class="text-[11px] font-bold text-gray-400">
+                                                    {agent.successCount + agent.failedCount} / {agent.totalCount}
+                                                </div>
+                                                <div class="h-1 w-1 rounded-full bg-gray-700" />
+                                                <div class={`${agent.status === 'executing' ? 'text-blue-400' : 'text-amber-400'} text-[9px] font-black uppercase`}>
+                                                    {agent.status}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <Show when={agent.failedCount > 0}>
+                                            <div class="px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded-md">
+                                                <div class="text-[9px] font-black text-red-400">-{agent.failedCount} FAIL</div>
+                                            </div>
+                                        </Show>
+                                    </Motion.div>
+                                )}
+                            </For>
+                        </div>
+                    </div>
+                </Show>
 
                 {/* Messages Area */}
                 <div

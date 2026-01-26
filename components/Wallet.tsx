@@ -45,7 +45,8 @@ import {
     LogOut,
     Clock,
     Bell,
-    Play
+    Play,
+    Layers
 } from 'lucide-solid';
 import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
@@ -229,8 +230,12 @@ const Wallet = (): JSX.Element => {
     const [queueTasks, setQueueTasks] = createSignal<any[]>([]);
     const [isSchedulingTimeLock, setIsSchedulingTimeLock] = createSignal(false);
     const [lockDelaySeconds, setLockDelaySeconds] = createSignal(0);
+    const [multiTransactions, setMultiTransactions] = createSignal<any[]>([]);
     const [unreadNotificationsCount, setUnreadNotificationsCount] = createSignal(0);
     const [chatHistoryOpen, setChatHistoryOpen] = createSignal(true);
+
+    // --- Enterprise Bulk Transfer Agent State ---
+    const [batchAgents, setBatchAgents] = createSignal<any[]>([]);
 
     createEffect(() => {
         const email = auth.user()?.email;
@@ -647,6 +652,126 @@ const Wallet = (): JSX.Element => {
                 // Refresh balances immediately
                 setTimeout(fetchPortfolioData, 1000);
                 setTimeout(fetchPortfolioData, 5000); // Second check as nodes might take a moment
+            } else if (action.type === 'multi_transactions') {
+                const { transactions } = action.data;
+                setFlowLoading(true);
+                setFlowStep(1); // Ensure we show processing UI
+
+                // 1. Initialize Batch Agent
+                const agentId = Math.random().toString(36).substring(7);
+                const newAgent = {
+                    id: agentId,
+                    status: 'executing',
+                    totalCount: transactions.length,
+                    successCount: 0,
+                    failedCount: 0,
+                    startTime: Date.now(),
+                    transactions: transactions.map((tx: any) => ({ ...tx, status: 'pending' }))
+                };
+                setBatchAgents(prev => [...prev, newAgent]);
+
+                // 2. Decrypt Mnemonic for all transactions
+                setLoadingMessage('AGENT: DECRYPTING VAULT...');
+                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                if (!encrypted) throw new Error("Wallet not found");
+                const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
+                const { privateKey } = WalletService.deriveEOA(mnemonic);
+                await contractService.connectInternalWallet(privateKey);
+
+                const finalResults = [];
+                for (let i = 0; i < transactions.length; i++) {
+                    const tx = transactions[i];
+                    setLoadingMessage(`AGENT: PROCESSING ${i + 1}/${transactions.length}...`);
+
+                    try {
+                        let receipt;
+                        if (tx.intent === 'send') {
+                            receipt = await contractService.sendTokens(tx.recipient, tx.amount, tx.symbol || 'VCN');
+                        } else if (tx.intent === 'schedule') {
+                            const delay = tx.executeAt ? Math.max(60, Math.floor((tx.executeAt - Date.now()) / 1000)) : 300;
+                            const scheduleRes = await contractService.scheduleTransferNative(tx.recipient, tx.amount, delay);
+                            receipt = scheduleRes.receipt;
+                            await saveScheduledTransfer({
+                                userEmail: userProfile().email,
+                                recipient: tx.recipient,
+                                amount: tx.amount,
+                                token: tx.symbol || 'VCN',
+                                unlockTime: Math.floor(Date.now() / 1000) + delay,
+                                creationTx: receipt.hash,
+                                scheduleId: scheduleRes.scheduleId,
+                                status: 'pending'
+                            });
+                        }
+
+                        finalResults.push({ success: true, hash: receipt?.hash, tx });
+                        setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, successCount: a.successCount + 1 } : a));
+                    } catch (err: any) {
+                        console.error("Batch item failed:", err);
+                        finalResults.push({ success: false, error: err.message || "Unknown error", tx });
+                        setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, failedCount: a.failedCount + 1 } : a));
+                    }
+
+                    // 10 second interval between transactions (except the last one)
+                    if (i < transactions.length - 1) {
+                        setLoadingMessage(`AGENT: WAITING 10S INTERVAL (${i + 1}/${transactions.length})...`);
+                        await new Promise(resolve => setTimeout(resolve, 10000));
+                    }
+                }
+
+                // 3. Finalize
+                setFlowSuccess(true);
+                setFlowStep(3);
+                setFlowLoading(false);
+
+                // 4. Generate Report
+                const successMsg = finalResults.filter(r => r.success).length;
+                const failMsg = finalResults.filter(r => !r.success).length;
+
+                // 4. Generate Final Accounting Report CSV
+                let accountingCsv = "Date,BatchID,Intent,VID,Recipient,Amount,Symbol,Status,TxHash,Error\n";
+                const timestamp = new Date().toISOString();
+                finalResults.forEach(r => {
+                    accountingCsv += `${timestamp},${agentId},${r.tx.intent},${r.tx.vid || ''},${r.tx.recipient},${r.tx.amount},${r.tx.symbol || 'VCN'},${r.success ? 'SUCCESS' : 'FAILED'},${r.hash || ''},"${r.error || ''}"\n`;
+                });
+                const accountingUri = `data:text/csv;charset=utf-8,${encodeURIComponent(accountingCsv)}`;
+
+                let report = lastLocale() === 'ko'
+                    ? `### 📊 최종 전송 결과 보고서 (Batch ID: ${agentId})\n\n`
+                    : `### 📊 Final Execution Report (Batch ID: ${agentId})\n\n`;
+
+                report += lastLocale() === 'ko'
+                    ? `- **기업 재무용 레포트**: [📥 전송결과_회계보고서_${agentId}.csv 다운로드](${accountingUri})\n`
+                    : `- **Accounting Report**: [📥 Execution_Report_${agentId}.csv Download](${accountingUri})\n`;
+
+                report += lastLocale() === 'ko'
+                    ? `- **총 요청 건수**: ${transactions.length}건\n- **성공**: ${successMsg}건\n- **실패**: ${failMsg}건\n\n`
+                    : `- **Total Requests**: ${transactions.length}\n- **Success**: ${successMsg}\n- **Failed**: ${failMsg}\n\n`;
+
+                if (failMsg > 0) {
+                    const failedTXs = finalResults.filter(r => !r.success);
+                    report += lastLocale() === 'ko'
+                        ? `⚠️ **실패 내역 조치**\n일부 전송이 실패했습니다. 아래의 복구용 CSV를 다운로드하여 사유 확인 후 다시 시도해 주세요.\n`
+                        : `⚠️ **Action Required**\nSome transactions failed. Download the remediation CSV to review reasons and retry.\n`;
+
+                    let failCsv = "VID,Recipient,Amount,Symbol,Error\n";
+                    failedTXs.forEach(f => {
+                        failCsv += `${f.tx.vid || 'N/A'},${f.tx.recipient},${f.tx.amount},${f.tx.symbol || 'VCN'},"${f.error}"\n`;
+                    });
+                    const failUri = `data:text/csv;charset=utf-8,${encodeURIComponent(failCsv)}`;
+                    report += lastLocale() === 'ko'
+                        ? `\n[📥 실패 리스트_복구용.csv 다운로드](${failUri})\n\n`
+                        : `\n[📥 Remediation_List.csv Download](${failUri})\n\n`;
+                }
+
+                setMessages(prev => [...prev, { role: 'assistant', content: report }]);
+
+                // 5. Remove from Queue with delay
+                setTimeout(() => {
+                    setBatchAgents(prev => prev.filter(a => a.id !== agentId));
+                }, 5000);
+
+                setTimeout(fetchPortfolioData, 1000);
+
             } else if (action.type === 'claim_rewards') {
                 // 1. Decrypt Mnemonic
                 const encrypted = WalletService.getEncryptedWallet(userProfile().email);
@@ -1054,7 +1179,7 @@ const Wallet = (): JSX.Element => {
         URL.revokeObjectURL(url);
     };
 
-    const startFlow = (flow: 'send' | 'receive' | 'swap' | 'stake' | 'bridge') => {
+    const startFlow = (flow: 'send' | 'receive' | 'swap' | 'stake' | 'bridge' | 'multi') => {
         setActiveFlow(flow);
         setFlowStep(1);
         setFlowSuccess(false);
@@ -1071,6 +1196,14 @@ const Wallet = (): JSX.Element => {
                     recipient: recipientAddress(),
                     symbol: selectedToken()
                 }
+            });
+            setWalletPassword('');
+            setShowPasswordModal(true);
+        } else if (activeFlow() === 'multi') {
+            setPasswordMode('verify');
+            setPendingAction({
+                type: 'multi_transactions',
+                data: { transactions: multiTransactions() }
             });
             setWalletPassword('');
             setShowPasswordModal(true);
@@ -1219,11 +1352,22 @@ const Wallet = (): JSX.Element => {
             else if (file.type === 'application/pdf') type = 'pdf';
             else if (file.name.endsWith('.csv') || file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) type = 'excel';
 
-            setAttachments(prev => [...prev, {
+            const newAttachment: any = {
                 file,
                 preview: e.target?.result as string,
                 type
-            }]);
+            };
+
+            if (type === 'excel' && file.name.endsWith('.csv')) {
+                const textReader = new FileReader();
+                textReader.onload = (te) => {
+                    newAttachment.csvData = te.target?.result as string;
+                    setAttachments(prev => [...prev, newAttachment]);
+                };
+                textReader.readAsText(file);
+            } else {
+                setAttachments(prev => [...prev, newAttachment]);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -1347,9 +1491,14 @@ Holdings:
 ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
 `;
 
+            // Excel/CSV Context
+            const excelAttachment = attachments().find(a => a.type === 'excel' && a.csvData);
+            const csvContext = excelAttachment ? `\n[ATTACHED CSV DATA]\n${excelAttachment.csvData}\n` : '';
+
             // The systemic rules (Prompt Tuning) are now managed in the Admin Dashboard.
             const fullPrompt = `
 ${context}
+${csvContext}
 
 [User Request]
 "${userMessage}"
@@ -1513,6 +1662,21 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
 
                     const msg = config.chat.scheduledConfirm(intentData.amount || '', intentData.symbol || 'VCN', displayTime);
                     setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
+                    setChatLoading(false);
+                    return;
+                } else if (intentData.intent === 'multi') {
+                    setMultiTransactions(intentData.transactions || []);
+                    startFlow('multi');
+                    setFlowStep(1);
+                    return;
+                } else if (intentData.intent === 'provide_csv_template') {
+                    const csvContent = "VID,Recipient,Amount,Symbol\nRyu CEO,,100,VCN\n,0x123...,0.5,ETH\n";
+                    const encodedUri = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`;
+                    const templateMsg = lastLocale() === 'ko'
+                        ? `표준 CSV 템플릿을 준비했습니다. 아래 링크를 클릭하여 다운로드 후 전송 리스트를 작성해 주세요.\n\n[📥 Vision_Batch_Template.csv 다운로드](${encodedUri})`
+                        : `I've prepared the standard CSV template for you. Click the link below to download and fill in your transfer list.\n\n[📥 Vision_Batch_Template.csv Download](${encodedUri})`;
+
+                    setMessages(prev => [...prev, { role: 'assistant', content: templateMsg }]);
                     setChatLoading(false);
                     return;
                 }
@@ -1729,6 +1893,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                             isScheduling={isSchedulingTimeLock()}
                             chatHistoryOpen={chatHistoryOpen()}
                             setChatHistoryOpen={setChatHistoryOpen}
+                            batchAgents={batchAgents}
                         />
                     </Show>
 
@@ -2552,6 +2717,7 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                                                 <Show when={activeFlow() === 'receive'}><div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center"><ArrowDownLeft class="w-5 h-5 text-green-400" /></div>Receive Tokens</Show>
                                                 <Show when={activeFlow() === 'swap'}><div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><RefreshCw class="w-5 h-5 text-purple-400" /></div>Swap Assets</Show>
                                                 <Show when={activeFlow() === 'stake'}><div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center"><TrendingUp class="w-5 h-5 text-indigo-400" /></div>Stake VCN</Show>
+                                                <Show when={activeFlow() === 'multi'}><div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center"><Layers class="w-5 h-5 text-blue-400" /></div>Multi-Transaction</Show>
                                                 <Show when={networkMode() === 'testnet'}>
                                                     <span class="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] rounded-md font-black uppercase tracking-widest">Testnet</span>
                                                 </Show>
@@ -3063,6 +3229,84 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                                                                     Done
                                                                 </button>
                                                             </div>
+                                                        </div>
+                                                    </Show>
+                                                </div>
+                                            </Show>
+
+                                            <Show when={activeFlow() === 'multi'}>
+                                                <div class="space-y-4">
+                                                    <Show when={flowStep() === 1}>
+                                                        <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                                                            <div class="p-6 bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-blue-500/20 rounded-3xl relative overflow-hidden">
+                                                                <div class="absolute top-0 right-0 p-4 opacity-10">
+                                                                    <Layers class="w-16 h-16" />
+                                                                </div>
+                                                                <h4 class="text-xl font-bold text-white mb-1">Batch Execution Plan</h4>
+                                                                <p class="text-xs text-blue-400 font-medium">Vision AI has orchestrated {multiTransactions().length} actions for you.</p>
+                                                            </div>
+
+                                                            <div class="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                                                <For each={multiTransactions()}>
+                                                                    {(tx, i) => (
+                                                                        <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between group hover:bg-white/[0.05] transition-all">
+                                                                            <div class="flex items-center gap-3">
+                                                                                <div class={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.intent === 'send' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                                                                    {tx.intent === 'send' ? <ArrowUpRight class="w-5 h-5" /> : <Clock class="w-5 h-5" />}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <div class="text-sm font-bold text-white uppercase tracking-tight">
+                                                                                        {tx.intent === 'send' ? 'Immediate Transfer' : 'Scheduled Transfer'}
+                                                                                    </div>
+                                                                                    <div class="text-[10px] font-medium text-gray-500 truncate max-w-[150px]">
+                                                                                        To: {tx.recipient.slice(0, 6)}...{tx.recipient.slice(-4)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div class="text-right">
+                                                                                <div class="text-sm font-black text-white">{tx.amount} {tx.symbol || 'VCN'}</div>
+                                                                                <Show when={tx.intent === 'schedule'}>
+                                                                                    <div class="text-[10px] text-amber-500 font-bold">Time-locked</div>
+                                                                                </Show>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </For>
+                                                            </div>
+
+                                                            <div class="pt-4 space-y-3">
+                                                                <div class="flex justify-between items-center px-2">
+                                                                    <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Batch Value</span>
+                                                                    <span class="text-lg font-black text-white">
+                                                                        {multiTransactions().reduce((acc, tx) => acc + parseFloat(tx.amount || '0'), 0).toLocaleString()} VCN
+                                                                    </span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={handleTransaction}
+                                                                    class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] uppercase tracking-widest text-sm"
+                                                                >
+                                                                    Authorize All Transactions
+                                                                </button>
+                                                                <p class="text-[10px] text-center text-gray-600 font-medium">Authorizing this batch will process all transactions sequentially.</p>
+                                                            </div>
+                                                        </div>
+                                                    </Show>
+
+                                                    <Show when={flowStep() === 3}>
+                                                        <div class="flex flex-col items-center py-8 text-center animate-in zoom-in-95 duration-500">
+                                                            <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30 mb-6">
+                                                                <Check class="w-10 h-10 text-white" />
+                                                            </div>
+                                                            <h4 class="text-2xl font-bold text-white mb-2">Batch Processed!</h4>
+                                                            <p class="text-gray-500 mb-8 max-w-xs leading-relaxed text-sm">
+                                                                All transactions in the batch have been processed. You can review each in your activity history.
+                                                            </p>
+                                                            <button
+                                                                onClick={resetFlow}
+                                                                class="w-full py-4 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90"
+                                                            >
+                                                                Done
+                                                            </button>
                                                         </div>
                                                     </Show>
                                                 </div>

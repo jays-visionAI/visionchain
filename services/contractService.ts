@@ -487,12 +487,22 @@ export class ContractService {
     async cancelScheduledTransfer(scheduleId: string) {
         if (!this.signer) throw new Error("Wallet not connected");
 
-        // Ensure TimeLock ABI is available (Using minimal ABI for cancel)
         const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
-        const abi = ["function cancelTransfer(bytes32 scheduleId) external"];
+        const abi = ["function cancelTransfer(uint256 scheduleId) external"];
         const contract = new ethers.Contract(timelockAddress, abi, this.signer);
 
         const tx = await contract.cancelTransfer(scheduleId);
+        return await tx.wait();
+    }
+
+    async executeBatchJobs(scheduleIds: string[]) {
+        if (!this.signer) throw new Error("Wallet not connected");
+
+        const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
+        const abi = ["function executeBatch(uint256[] calldata scheduleIds) external"];
+        const contract = new ethers.Contract(timelockAddress, abi, this.signer);
+
+        const tx = await contract.executeBatch(scheduleIds);
         return await tx.wait();
     }
 
