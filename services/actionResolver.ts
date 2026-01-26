@@ -125,10 +125,10 @@ export class ActionResolverService {
         else if (scheduleTime.includes('hour') || scheduleTime.includes('h')) durationSeconds = numeric * 3600;
         else durationSeconds = numeric;
 
-        if (durationSeconds < 120) { // 2 minutes
+        if (durationSeconds < 300) { // 5 minutes
             return {
                 type: 'ERROR',
-                summary: "Cost Control: Minimum schedule duration is 2 minutes."
+                summary: "Cost Control: Minimum schedule duration is 5 minutes."
             };
         }
 

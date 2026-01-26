@@ -29,7 +29,7 @@ interface ScheduleJob {
  * Main Runner Function: Scheduled to run every minute (e.g. via Cron)
  */
 export const runSchedulerTick = async () => {
-    console.log("⏰ Scheduler tick started:", new Date().toISOString());
+    console.log("Scheduler tick started:", new Date().toISOString());
 
     const db = getFirebaseDb();
     const now = new Date();
@@ -82,7 +82,7 @@ export const runSchedulerTick = async () => {
             });
 
             // 4. Submit Execute Transaction (Real Blockchain Interaction)
-            console.log(`🚀 Executing Schedule ID: ${jobDoc.data().scheduleId}`);
+            console.log(`Executing Schedule ID: ${jobDoc.data().scheduleId}`);
 
             // Note: This is where we use the Paymaster wallet directly. 
             // In a more complex Paymaster setup (ERC-4337), this would build a UserOp.
@@ -100,10 +100,10 @@ export const runSchedulerTick = async () => {
                 executedAt: Timestamp.now(),
                 txHash: tx.hash
             });
-            console.log(`✅ Success: ${jobId}`);
+            console.log(`Success: ${jobId}`);
 
         } catch (error: any) {
-            console.error(`❌ Failed Job ${jobId}:`, error);
+            console.error(`Failed Job ${jobId}:`, error);
 
             // 6. Error Handling & Retry Logic
             let newStatus = 'WAITING';

@@ -17,7 +17,8 @@ import {
     updateDoc,
     addDoc,
     initializeFirestore,
-    onSnapshot
+    onSnapshot,
+    Timestamp
 } from 'firebase/firestore';
 import { firebaseConfig } from '../config/firebase.config';
 
@@ -951,12 +952,18 @@ export const saveScheduledTransfer = async (task: {
     token: string;
     unlockTime: number; // Unix timestamp
     creationTx: string;
+    scheduleId?: string; // ID from smart contract
     status: 'pending' | 'executed' | 'failed' | 'cancelled';
 }) => {
     try {
-        const db = getFirebaseDb();
+        const db = getFirestore(); // Ensure we use the right db instance
         const docRef = await addDoc(collection(db, 'scheduledTransfers'), {
             ...task,
+            scheduleId: task.scheduleId || 0, // Fallback if not provided
+            status: 'WAITING', // Set to WAITING for backend runner
+            unlockTimeTs: Timestamp.fromMillis(task.unlockTime * 1000), // Indexable field for runner
+            nextRetryAt: Timestamp.now(), // First try immediately when due
+            retryCount: 0,
             userEmail: task.userEmail.toLowerCase(),
             createdAt: new Date().toISOString()
         });

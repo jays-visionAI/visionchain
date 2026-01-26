@@ -109,7 +109,7 @@ export const UploadCSV = () => {
             });
 
             // --- 4. Auto-Distribute Testnet Tokens (10% of Purchased Amount) ---
-            console.log("🚀 Starting Automatic Testnet Token Distribution...");
+            console.log("Starting Automatic Testnet Token Distribution...");
             const { contractService } = await import('../../services/contractService'); // Dynamic Import
 
             let distributedCount = 0;

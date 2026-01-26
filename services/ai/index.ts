@@ -76,6 +76,7 @@ export const generateText = async (
         const localeInfo = `[Current Context]
 Date: ${now.toLocaleDateString()}
 Time: ${now.toLocaleTimeString()}
+Timestamp (ms): ${Date.now()}
 Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
 Locale: ${navigator.language}
 
@@ -130,10 +131,10 @@ Unless explicitly requested otherwise by the user, you MUST match their language
 
 5. TIME SENSITIVITY & SCHEDULING RULE:
    - **STRICT INDEPENDENCE**: IGNORE all time references in [Previous Conversation History]. THOSE ARE STALE.
-   - **CALCULATION SOURCE**: Use ONLY the [Current User Input] and the [Current Time] provided at the top.
-   - **MATHEMATICAL RULE**: If user says "X minutes later", the timestamp MUST be exactly (Current Time + X minutes). 
-   - **PAST TIME FORBIDDEN**: Never return a timestamp that is equal to or earlier than the [Current Time].
-   - Example (Current is 20:06): "10 mins later" -> MUST be exactly 20:16. Do NOT use 20:05 or 20:12 from any example or history.
+   - **CALCULATION SOURCE**: Use ONLY the [Current User Input] and the [Timestamp (ms)] provided in [Current Context].
+   - **MATHEMATICAL RULE**: If user says "X minutes later", the 'executeAt' MUST be exactly (Timestamp (ms) + X * 60000). 
+   - **PAST TIME FORBIDDEN**: Never return an 'executeAt' that is equal to or earlier than the [Timestamp (ms)].
+   - Example: Timestamp is 1706271600000 (21:20:00) -> "10 mins later" -> MUST be 1706272200000.
 
 
 `;

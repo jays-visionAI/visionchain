@@ -522,7 +522,7 @@ const Wallet = (): JSX.Element => {
                     }
 
                     setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
-                    const receipt = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
+                    const { receipt, scheduleId } = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
                     console.log("Time-lock Schedule Successful:", receipt.hash);
                     setLastTxHash(receipt.hash);
 
@@ -534,6 +534,7 @@ const Wallet = (): JSX.Element => {
                         token: symbol,
                         unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
                         creationTx: receipt.hash,
+                        scheduleId: scheduleId,
                         status: 'pending'
                     });
 
@@ -1286,7 +1287,7 @@ const Wallet = (): JSX.Element => {
         setThinkingSteps([{ id: 'stop', label: 'Stopped', status: 'error', detail: 'Generation cancelled by user.' }]);
         setMessages(prev => [...prev, {
             role: 'assistant',
-            content: "⚠️ Generation stopped by user request."
+            content: "Generation stopped by user request."
         }]);
     };
 
@@ -1472,8 +1473,8 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                     setSelectedToken(intentData.symbol || 'VCN');
 
                     // Parse Time from intentData.executeAt (timestamp) or intentData.time/scheduleTime (relative string)
-                    let delay = 120; // Default 2 mins
-                    let displayTime = '2 minutes';
+                    let delay = 300; // Default 5 mins
+                    let displayTime = '5 minutes';
 
                     if (intentData.executeAt && typeof intentData.executeAt === 'number') {
                         // If it's a future timestamp in ms
@@ -1484,15 +1485,15 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                             console.log(`[AI] Using absolute timestamp. Delay: ${delay}s`);
                         }
                     } else {
-                        const timeStr = intentData.time || intentData.scheduleTime || '2 minutes';
+                        const timeStr = (intentData.time || intentData.scheduleTime || '5 minutes').toLowerCase();
                         displayTime = timeStr;
-                        const numeric = parseInt(timeStr.match(/\d+/) || '2');
+                        const numeric = parseInt(timeStr.match(/\d+/) || '5');
 
-                        if (timeStr.includes('min')) {
+                        if (timeStr.includes('min') || timeStr.includes('분') || timeStr.includes('分')) {
                             delay = numeric * 60;
-                        } else if (timeStr.includes('hour') || timeStr.includes('h')) {
+                        } else if (timeStr.includes('hour') || timeStr.includes('h') || timeStr.includes('시') || timeStr.includes('時')) {
                             delay = numeric * 3600;
-                        } else if (timeStr.includes('sec')) {
+                        } else if (timeStr.includes('sec') || timeStr.includes('초') || timeStr.includes('秒')) {
                             delay = numeric;
                         } else {
                             delay = numeric * 60;

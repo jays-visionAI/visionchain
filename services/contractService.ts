@@ -455,14 +455,33 @@ export class ContractService {
 
         const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
         const abi = [
-            "function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)"
+            "function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)",
+            "event TransferScheduled(uint256 indexed scheduleId, address indexed creator, address indexed to, uint256 amount, uint256 unlockTime)"
         ];
         const contract = new ethers.Contract(timelockAddress, abi, this.signer);
         const amountWei = ethers.parseEther(amount);
         const unlockTime = Math.floor(Date.now() / 1000) + delaySeconds;
 
         const tx = await contract.scheduleTransferNative(recipient, unlockTime, { value: amountWei });
-        return await tx.wait();
+        const receipt = await tx.wait();
+
+        // Parse logs to find the TransferScheduled event
+        let scheduleId = null;
+        if (receipt && receipt.logs) {
+            for (const log of (receipt as any).logs) {
+                try {
+                    const parsed = contract.interface.parseLog(log);
+                    if (parsed?.name === 'TransferScheduled') {
+                        scheduleId = parsed.args.scheduleId.toString();
+                        break;
+                    }
+                } catch (e) {
+                    // Not our event
+                }
+            }
+        }
+
+        return { receipt, scheduleId };
     }
 
     async cancelScheduledTransfer(scheduleId: string) {

@@ -1,4 +1,4 @@
-# 🚀 Vision AI: Intelligent DeFi Portfolio Strategist
+# Vision AI: Intelligent DeFi Portfolio Strategist
 
 Welcome to the future of decentralized finance. Vision AI is no longer just a chatbot—it is your personal, on-chain investment strategist. 
 
