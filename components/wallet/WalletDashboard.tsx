@@ -43,7 +43,6 @@ interface WalletDashboardProps {
     userProfile: () => any;
     onboardingStep: () => number;
     networkMode: 'mainnet' | 'testnet';
-    openHistory?: () => void;
     history: () => any[];
     currentSessionId: () => string | null;
     onSelectConversation: (conv: any) => void;
@@ -64,6 +63,10 @@ interface WalletDashboardProps {
     queueTasks: () => any[];
     onCancelTask: (taskId: string) => void;
     isScheduling: boolean;
+
+    // Sidebar Control
+    chatHistoryOpen: boolean;
+    setChatHistoryOpen: (val: boolean) => void;
 }
 
 const TypingIndicator = () => (
@@ -126,7 +129,6 @@ const ThinkingDisplay = (props: { steps: any[] }) => (
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isComposing, setIsComposing] = createSignal(false);
-    const [historyOpen, setHistoryOpen] = createSignal(true);
     const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     let fileInputRef: HTMLInputElement | undefined;
@@ -140,7 +142,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
         <div class="flex-1 flex overflow-hidden relative bg-[#070708]">
             {/* Left Sidebar - Chat History (Synced with Global AI) */}
             <div
-                class={`h-full border-r border-white/[0.04] bg-[#0c0c0e]/60 backdrop-blur-2xl transition-all duration-500 ease-in-out relative flex flex-col ${historyOpen() ? 'w-[280px]' : 'w-0 overflow-hidden'}`}
+                class={`h-full border-r border-white/[0.04] bg-[#0c0c0e]/60 backdrop-blur-2xl transition-all duration-500 ease-in-out relative flex flex-col ${props.chatHistoryOpen ? 'w-[280px]' : 'w-0 overflow-hidden'}`}
             >
                 <div class="p-6 flex flex-col h-full space-y-6">
                     <div class="flex items-center justify-between shrink-0">
@@ -206,10 +208,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
             {/* Toggle History Sidebar */}
             <button
-                onClick={() => setHistoryOpen(!historyOpen())}
-                class={`absolute z-50 top-1/2 -translate-y-1/2 w-6 h-12 bg-[#121214] border border-white/5 rounded-r-xl flex items-center justify-center text-gray-500 hover:text-white transition-all shadow-2xl ${historyOpen() ? 'left-[280px]' : 'left-0'}`}
+                onClick={() => props.setChatHistoryOpen(!props.chatHistoryOpen)}
+                class={`absolute z-50 top-1/2 -translate-y-1/2 w-6 h-12 bg-[#121214] border border-white/5 rounded-r-xl flex items-center justify-center text-gray-500 hover:text-white transition-all shadow-2xl ${props.chatHistoryOpen ? 'left-[280px]' : 'left-0'}`}
             >
-                {historyOpen() ? <ChevronLeft class="w-4 h-4" /> : <ChevronRight class="w-4 h-4" />}
+                {props.chatHistoryOpen ? <ChevronLeft class="w-4 h-4" /> : <ChevronRight class="w-4 h-4" />}
             </button>
 
             {/* Main Chat Area */}

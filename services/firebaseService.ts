@@ -484,7 +484,7 @@ export interface Contact {
     id?: string;
     internalName: string;
     phone: string;
-    email: string;
+    email?: string;
     address?: string;
     vchainUserUid?: string;
     createdAt: string;

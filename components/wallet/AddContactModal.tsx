@@ -24,19 +24,18 @@ interface AddContactModalProps {
 interface NewContactEntry {
     internalName: string;
     phone: string;
-    email: string;
 }
 
 export const AddContactModal = (props: AddContactModalProps) => {
     const [entries, setEntries] = createSignal<NewContactEntry[]>(
-        Array(5).fill(null).map(() => ({ internalName: '', phone: '', email: '' }))
+        Array(5).fill(null).map(() => ({ internalName: '', phone: '' }))
     );
     const [isSaving, setIsSaving] = createSignal(false);
     const [isDragging, setIsDragging] = createSignal(false);
     const [uploadStatus, setUploadStatus] = createSignal<{ type: 'success' | 'error', message: string } | null>(null);
 
     const addRow = () => {
-        setEntries([...entries(), { internalName: '', phone: '', email: '' }]);
+        setEntries([...entries(), { internalName: '', phone: '' }]);
     };
 
     const removeRow = (index: number) => {
@@ -63,9 +62,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
                 const parsedData = results.data as any[];
                 const newEntries: NewContactEntry[] = parsedData.map(row => ({
                     internalName: row.name || row.Name || row.internalName || '',
-                    phone: row.phone || row.Phone || row.tel || '',
-                    email: row.email || row.Email || ''
-                })).filter(e => e.internalName || e.phone || e.email);
+                    phone: row.phone || row.Phone || row.tel || ''
+                })).filter(e => e.internalName || e.phone);
 
                 if (newEntries.length > 0) {
                     setEntries([...newEntries]);
@@ -88,7 +86,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
     };
 
     const handleSave = async () => {
-        const validEntries = entries().filter(e => e.internalName || e.phone || e.email);
+        const validEntries = entries().filter(e => e.internalName || e.phone);
         if (validEntries.length === 0) return;
 
         setIsSaving(true);
@@ -96,12 +94,26 @@ export const AddContactModal = (props: AddContactModalProps) => {
             await saveUserContacts(props.userEmail, validEntries);
             props.onSuccess();
             props.onClose();
-            setEntries(Array(5).fill(null).map(() => ({ internalName: '', phone: '', email: '' })));
+            setEntries(Array(5).fill(null).map(() => ({ internalName: '', phone: '' })));
         } catch (e) {
             setUploadStatus({ type: 'error', message: 'Failed to save contacts to server.' });
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const downloadCsvTemplate = () => {
+        const headers = 'name,phone\n';
+        const dummyData = 'John Doe,+123456789\nJane Smith,+987654321';
+        const blob = new Blob([headers + dummyData], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'vision_contacts_template.csv');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     return (
@@ -135,12 +147,21 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     <p class="text-xs text-gray-500 font-medium">Bulk add or import from CSV file</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={props.onClose}
-                                class="p-2 hover:bg-white/5 rounded-xl transition-colors text-gray-500 hover:text-white"
-                            >
-                                <X class="w-6 h-6" />
-                            </button>
+                            <div class="flex items-center gap-3">
+                                <button
+                                    onClick={downloadCsvTemplate}
+                                    class="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition-all text-xs font-bold text-gray-300 active:scale-95"
+                                >
+                                    <Upload class="w-3.5 h-3.5 rotate-180" />
+                                    Download Template
+                                </button>
+                                <button
+                                    onClick={props.onClose}
+                                    class="p-2 hover:bg-white/5 rounded-xl transition-colors text-gray-500 hover:text-white"
+                                >
+                                    <X class="w-6 h-6" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Content Scroll Area */}
@@ -168,7 +189,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                 </div>
                                 <div class="text-center">
                                     <p class="text-[15px] font-bold text-white mb-1">Drag & Drop CSV File</p>
-                                    <p class="text-xs text-gray-500 font-medium tracking-tight">Support auto-detection for Name, Phone, and Email columns</p>
+                                    <p class="text-xs text-gray-500 font-medium tracking-tight">Support auto-detection for Name and Phone columns</p>
                                 </div>
                             </div>
 
@@ -192,9 +213,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
                             {/* Input Grid */}
                             <div class="space-y-4">
                                 <div class="grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                    <div class="col-span-4">Internal Name</div>
-                                    <div class="col-span-4">Phone Number</div>
-                                    <div class="col-span-3">Email Address</div>
+                                    <div class="col-span-5">Internal Name</div>
+                                    <div class="col-span-6">Phone Number</div>
                                     <div class="col-span-1"></div>
                                 </div>
 
@@ -202,7 +222,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                     <Index each={entries()}>
                                         {(entry, index) => (
                                             <div class="grid grid-cols-12 gap-3 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
-                                                <div class="col-span-4">
+                                                <div class="col-span-5">
                                                     <input
                                                         type="text"
                                                         placeholder="e.g. 홍길동 사장님"
@@ -211,22 +231,13 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                         class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none transition-all"
                                                     />
                                                 </div>
-                                                <div class="col-span-4">
+                                                <div class="col-span-6">
                                                     <input
                                                         type="tel"
                                                         placeholder="010-1234-5678"
                                                         value={entry().phone}
                                                         onInput={(e) => updateEntry(index, 'phone', e.currentTarget.value)}
                                                         class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm font-mono outline-none transition-all"
-                                                    />
-                                                </div>
-                                                <div class="col-span-3">
-                                                    <input
-                                                        type="email"
-                                                        placeholder="user@example.com"
-                                                        value={entry().email}
-                                                        onInput={(e) => updateEntry(index, 'email', e.currentTarget.value)}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none transition-all"
                                                     />
                                                 </div>
                                                 <div class="col-span-1 flex justify-end">

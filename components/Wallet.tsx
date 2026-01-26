@@ -68,7 +68,6 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services/vcnPriceService';
-import AIChat from './AIChat';
 import { generateText } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
@@ -165,7 +164,6 @@ const Wallet = (): JSX.Element => {
     // State Declarations
     const [activeView, setActiveView] = createSignal('assets');
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
-    const [showChat, setShowChat] = createSignal(false);
     const [assetsTab, setAssetsTab] = createSignal('tokens');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
@@ -226,6 +224,7 @@ const Wallet = (): JSX.Element => {
     const [isSchedulingTimeLock, setIsSchedulingTimeLock] = createSignal(false);
     const [lockDelaySeconds, setLockDelaySeconds] = createSignal(0);
     const [unreadNotificationsCount, setUnreadNotificationsCount] = createSignal(0);
+    const [chatHistoryOpen, setChatHistoryOpen] = createSignal(true);
 
     createEffect(() => {
         const email = auth.user()?.email;
@@ -803,11 +802,10 @@ const Wallet = (): JSX.Element => {
         }
     });
 
-    // Handle History View (Open Full Chat Popup)
+    // Handle History View (Redirect to Wallet Chat)
     createEffect(() => {
         if (activeView() === 'history') {
-            setShowChat(true);
-            // Reset active view to previous or default so clicking again works if closed
+            setChatHistoryOpen(true);
             setActiveView('chat');
         }
     });
@@ -1609,7 +1607,6 @@ Final network context: ${networkMode()}.
                             userProfile={userProfile}
                             onboardingStep={onboardingStep}
                             networkMode={networkMode()}
-                            openHistory={() => setShowChat(true)}
                             history={chatHistory}
                             currentSessionId={currentSessionId}
                             onSelectConversation={selectConversation}
@@ -1628,6 +1625,8 @@ Final network context: ${networkMode()}.
                             queueTasks={queueTasks}
                             onCancelTask={handleCancelTask}
                             isScheduling={isSchedulingTimeLock()}
+                            chatHistoryOpen={chatHistoryOpen()}
+                            setChatHistoryOpen={setChatHistoryOpen}
                         />
                     </Show>
 
@@ -3141,7 +3140,6 @@ Final network context: ${networkMode()}.
                             </Show>
                         </Presence>
                     </Portal>
-                    <AIChat isOpen={showChat()} onClose={() => setShowChat(false)} />
                 </main>
             </section >
         </Show>
