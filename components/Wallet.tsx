@@ -1280,6 +1280,16 @@ const Wallet = (): JSX.Element => {
         setLockDelaySeconds(0);
     };
 
+    const handleStopChat = () => {
+        if (!chatLoading()) return;
+        setChatLoading(false);
+        setThinkingSteps([{ id: 'stop', label: 'Stopped', status: 'error', detail: 'Generation cancelled by user.' }]);
+        setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: "⚠️ Generation stopped by user request."
+        }]);
+    };
+
     const handleSend = async () => {
         if (!input().trim() || chatLoading()) return;
 
@@ -1671,7 +1681,8 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                     <Show when={activeView() === 'chat'}>
                         <WalletDashboard
                             messages={messages}
-                            isLoading={chatLoading} // Use chat-specific loading
+                            isLoading={chatLoading}
+                            onStop={handleStopChat} // Use chat-specific loading
                             input={input}
                             setInput={setInput}
                             handleSend={handleSend}

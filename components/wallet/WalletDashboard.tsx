@@ -28,7 +28,8 @@ import {
     Search,
     ChevronLeft,
     ShieldCheck,
-    Check
+    Check,
+    Square
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -37,6 +38,7 @@ interface WalletDashboardProps {
     input: () => string;
     setInput: (val: string) => void;
     handleSend: () => void;
+    onStop?: () => void;
     setActiveView: (view: any) => void;
     setActiveFlow: (flow: any) => void;
     totalValueStr: () => string;
@@ -438,14 +440,24 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     </button>
 
                                     <button
-                                        onClick={props.handleSend}
-                                        disabled={props.isLoading() || (!props.input().trim() && props.attachments().length === 0)}
-                                        class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${(!props.input().trim() && props.attachments().length === 0)
-                                            ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
-                                            : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
+                                        onClick={() => {
+                                            if (props.isLoading()) {
+                                                props.onStop?.();
+                                            } else {
+                                                props.handleSend();
+                                            }
+                                        }}
+                                        disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
+                                        class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
+                                                ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100' // Stop state
+                                                : (!props.input().trim() && props.attachments().length === 0)
+                                                    ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
+                                                    : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
                                             }`}
                                     >
-                                        <Send class={`w-5 h-5 ${props.isLoading() ? 'animate-pulse' : ''}`} />
+                                        <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
+                                            <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
+                                        </Show>
                                     </button>
                                 </div>
                             </div>
