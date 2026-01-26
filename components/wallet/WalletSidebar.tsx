@@ -94,7 +94,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                             }`}
                     >
                         <div class={`w-1 h-1 rounded-full animate-pulse ${props.networkMode === 'testnet' ? 'bg-amber-400' : 'bg-green-400'}`} />
-                        {props.networkMode === 'testnet' ? 'Testnet 전환됨' : 'Mainnet'}
+                        {props.networkMode === 'testnet' ? 'Testnet' : 'Mainnet'}
                     </button>
                 </div>
                 <Show when={!props.isDesktop}>

@@ -226,7 +226,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                 <div class="col-span-5">
                                                     <input
                                                         type="text"
-                                                        placeholder="e.g. 홍길동 사장님"
+                                                        placeholder="e.g. John Doe"
                                                         value={entry().internalName}
                                                         onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
                                                         class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm outline-none transition-all"

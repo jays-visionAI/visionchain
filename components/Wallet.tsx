@@ -597,11 +597,11 @@ const Wallet = (): JSX.Element => {
                 const isScheduled = isSchedulingTimeLock();
                 const successMsg = lastLocale() === 'ko'
                     ? (isScheduled
-                        ? `타임록 에이전트(Time-lock Agent) 시스템에 의해 ${amount} ${symbol} 예약 전송이 설정되었습니다. ⏳ 설정된 시간이 되면 에이전트가 자동 처리를 시작합니다. 채팅방 상단의 대기열에서 진행 상황을 확인하세요.`
-                        : `성공적으로 ${amount} ${symbol} 전송을 완료했습니다! 🚀 거래가 네트워크에 안전하게 기록되었으며, 이제 잔액이 곧 업데이트될 예정입니다. 추가로 도와드릴 일이 있을까요?`)
+                        ? `A scheduled transfer of ${amount} ${symbol} has been set up by the Time-lock Agent system. The agent will automatically process it at the set time. You can check the progress in the queue at the top of the chat.`
+                        : `Successfully completed the transfer of ${amount} ${symbol}! The transaction has been securely recorded on the network, and your balance will update shortly. Is there anything else I can help you with?`)
                     : (isScheduled
-                        ? `Your ${amount} ${symbol} transfer has been orchestrated by the Time-lock Agent. ⏳ It will be executed automatically at the scheduled time. Monitors the progress in the Queue above.`
-                        : `Successfully sent ${amount} ${symbol}! 🚀 The transaction is recorded, and your balance will be updated shortly. Is there anything else I can help with?`);
+                        ? `Your ${amount} ${symbol} transfer has been orchestrated by the Time-lock Agent. It will be executed automatically at the scheduled time. Monitors the progress in the Queue above.`
+                        : `Successfully sent ${amount} ${symbol}! The transaction is recorded, and your balance will be updated shortly. Is there anything else I can help with?`);
 
                 setMessages(prev => [...prev, { role: 'assistant', content: successMsg }]);
 
@@ -1283,7 +1283,7 @@ const Wallet = (): JSX.Element => {
         setInput('');
         setChatLoading(true);
         setThinkingSteps([
-            { id: '1', label: '의도 분석 중...', status: 'loading' }
+            { id: '1', label: 'Analyzing Intent...', status: 'loading' }
         ]);
 
         try {
@@ -1329,14 +1329,14 @@ Final network context: ${networkMode()}.
 
             setThinkingSteps(prev => [
                 ...prev.map(s => ({ ...s, status: 'completed' as const })),
-                { id: '2', label: '포트폴리오 대조 및 시뮬레이션 중...', status: 'loading' }
+                { id: '2', label: 'Comparing Portfolio & Simulating...', status: 'loading' }
             ]);
 
             const response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email);
 
             setThinkingSteps(prev => [
                 ...prev.map(s => ({ ...s, status: 'completed' as const })),
-                { id: '3', label: '응답 생성 완료', status: 'success' }
+                { id: '3', label: 'Response Generated', status: 'success' }
             ]);
             setTimeout(() => setThinkingSteps([]), 1500);
 
@@ -1427,15 +1427,15 @@ Final network context: ${networkMode()}.
 
             if (!cleanResponse && intentData) {
                 if (lastLocale() === 'ko') {
-                    const intentMap: Record<string, string> = {
-                        'send': '이체',
-                        'swap': '교환',
-                        'stake': '스테이킹',
-                        'bridge': '브릿지',
-                        'schedule': '예약 이체'
+                    const intentMap: any = {
+                        'send': 'transfer',
+                        'swap': 'swap',
+                        'stake': 'staking',
+                        'bridge': 'bridge',
+                        'schedule': 'scheduled transfer'
                     };
-                    const intentName = intentMap[intentData.intent] || '거래';
-                    cleanResponse = `요청하신 대로 ${intentName} 준비를 마쳤습니다. 화면에 나타난 상세 내역을 확인하신 뒤 진행해 주세요!`;
+                    const intentName = intentMap[intentData.intent] || 'transaction';
+                    cleanResponse = `I've prepared the ${intentName} as you requested. Please review the details on the screen and proceed when you're ready!`;
                 } else {
                     cleanResponse = `I've prepared the ${intentData.intent} transaction for you. Please review the details on your screen to proceed!`;
                 }
