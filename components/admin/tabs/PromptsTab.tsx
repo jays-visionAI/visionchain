@@ -57,8 +57,39 @@ export function PromptsTab(props: PromptsTabProps) {
         }
     });
 
+    const [showSuccessModal, setShowSuccessModal] = createSignal(false);
+
+    const handleDeploy = async () => {
+        await props.onSave();
+        setShowSuccessModal(true);
+        setTimeout(() => setShowSuccessModal(false), 4000);
+    };
+
     return (
-        <div class="space-y-8">
+        <div class="space-y-8 relative">
+            {/* Success Notification Modal */}
+            <Show when={showSuccessModal()}>
+                <div class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div class="bg-[#1A1A24] border border-cyan-500/30 rounded-[32px] p-8 max-w-sm w-full shadow-[0_0_50px_rgba(6,182,212,0.2)] text-center space-y-6 transform animate-in zoom-in-95 duration-300">
+                        <div class="w-20 h-20 bg-cyan-500/10 rounded-full flex items-center justify-center mx-auto border border-cyan-500/20">
+                            <Check class="w-10 h-10 text-cyan-400" />
+                        </div>
+                        <div class="space-y-2">
+                            <h3 class="text-2xl font-bold text-white">AI Models Deployed</h3>
+                            <p class="text-gray-400 text-sm leading-relaxed">
+                                Your custom intent prompts have been synchronized across all Vision Chain nodes and are now live.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setShowSuccessModal(false)}
+                            class="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold hover:scale-[1.02] transition-transform active:scale-95"
+                        >
+                            Got it
+                        </button>
+                    </div>
+                </div>
+            </Show>
+
             <div class="flex items-center justify-between">
                 <div class="space-y-1">
                     <h2 class="text-xl font-semibold text-white flex items-center gap-2">
@@ -68,12 +99,12 @@ export function PromptsTab(props: PromptsTabProps) {
                     <p class="text-xs text-gray-500">Tune the core logic for intent parsing and action resolution.</p>
                 </div>
                 <button
-                    onClick={() => props.onSave()}
+                    onClick={handleDeploy}
                     disabled={props.isSaving()}
                     class="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
                 >
                     <Save class="w-4 h-4" />
-                    {props.isSaving() ? 'Saving...' : 'Deploy Propts'}
+                    {props.isSaving() ? 'Saving...' : 'Deploy Prompt'}
                 </button>
             </div>
 
@@ -136,6 +167,7 @@ export function PromptsTab(props: PromptsTabProps) {
                 </div>
             </div>
 
+            {/* Inline success state for footer as fallback */}
             <Show when={props.saveSuccess()}>
                 <div class="flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-2">
                     <Check class="w-4 h-4" />
@@ -144,4 +176,5 @@ export function PromptsTab(props: PromptsTabProps) {
             </Show>
         </div>
     );
+}
 }
