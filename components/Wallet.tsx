@@ -2049,7 +2049,7 @@ Format:
                     />
 
                     {/* Main Content Area */}
-                    <main class="flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden">
+                    <main class={`flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden ${onboardingStep() === 0 ? 'pb-[72px] lg:pb-0' : ''}`}>
 
                         {/* Top Bar */}
                         <div class="flex items-center gap-4 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-0 z-20 shrink-0">
@@ -3670,7 +3670,7 @@ Format:
                             </Show>
                         </Presence>
                         {/* Mobile Bottom Navigation */}
-                        <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-3 pb-safe flex items-center justify-around h-[80px]">
+                        <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[72px]">
                             {
                                 [
                                     { id: 'assets', label: 'Assets', icon: PieChart },
@@ -3683,12 +3683,12 @@ Format:
                                         onClick={() => onboardingStep() === 0 && setActiveView(item.id)}
                                         class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                     >
-                                        <div class={`w-12 h-10 rounded-2xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-2 scale-110' : ''}`}>
-                                            <item.icon class="w-5 h-5" />
+                                        <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>
+                                            <item.icon class={`${item.primary ? 'w-5 h-5' : 'w-4.5 h-4.5'}`} />
                                         </div>
-                                        <span class={`text-[9px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
+                                        <span class={`text-[8px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
                                         {activeView() === item.id && !item.primary && (
-                                            <div class="absolute -bottom-1 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
+                                            <div class="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
                                         )}
                                     </button>
                                 ))
