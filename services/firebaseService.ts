@@ -1289,6 +1289,7 @@ export const subscribeToQueue = (
                 amount: data.amount,
                 token: data.token,
                 scheduleId: doc.id,
+                contractScheduleId: data.scheduleId, // Real Contract ID
                 executeAt: data.unlockTime * 1000,
                 txHash: data.executionTx || data.creationTx,
                 error: data.lastError || data.error || null
@@ -1370,6 +1371,22 @@ export const retryScheduledTask = async (taskId: string) => {
         return true;
     } catch (e) {
         console.error("Retry failed:", e);
+        throw e;
+    }
+};
+
+export const markTaskAsSent = async (taskId: string, txHash: string) => {
+    const db = getFirebaseDb();
+    try {
+        const docRef = doc(db, 'scheduledTransfers', taskId);
+        await updateDoc(docRef, {
+            status: 'SENT',
+            executionTx: txHash,
+            executedAt: new Date().toISOString()
+        });
+        return true;
+    } catch (e) {
+        console.error("Mark sent failed:", e);
         throw e;
     }
 };

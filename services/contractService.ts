@@ -494,6 +494,16 @@ export class ContractService {
         const tx = await contract.cancelTransfer(scheduleId);
         return await tx.wait();
     }
+    async executeScheduledTransfer(scheduleId: string) {
+        if (!this.signer) throw new Error("Wallet not connected");
+
+        const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
+        const abi = ["function executeTransfer(uint256 scheduleId) external"];
+        const contract = new ethers.Contract(timelockAddress, abi, this.signer);
+
+        const tx = await contract.executeTransfer(scheduleId);
+        return await tx.wait();
+    }
 
     async executeBatchJobs(scheduleIds: string[]) {
         if (!this.signer) throw new Error("Wallet not connected");
