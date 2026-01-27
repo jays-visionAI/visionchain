@@ -83,8 +83,8 @@ export const WalletReferral = (props: WalletReferralProps) => {
 
                         <div class="relative z-10">
                             <h3 class="text-xl font-black text-white italic mb-6 uppercase tracking-tight">Your Invite Link</h3>
-                            <div class="flex flex-col md:flex-row gap-4 mb-8">
-                                <div class="flex-1 bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between group/link">
+                            <div class="flex flex-col gap-3 mb-8">
+                                <div class="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between group/link">
                                     <code class="text-blue-400 font-mono text-sm truncate">{referralLink()}</code>
                                     <button
                                         onClick={() => {
@@ -112,7 +112,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                             alert("Link copied to clipboard!");
                                         }
                                     }}
-                                    class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-3 active:scale-95"
+                                    class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-3 active:scale-95"
                                 >
                                     <ArrowUpRight class="w-4 h-4" />
                                     Share Link

@@ -3,13 +3,21 @@ import { AspectRatio } from '../../types';
 import { AIProvider, AIProviderID, TextGenerationOptions } from './types';
 import { GeminiProvider } from './providers/geminiProvider';
 import { DeepSeekProvider } from './providers/deepseekProvider';
+import { LLMRouter } from './router';
 
 class ProviderFactory {
     private providers: Map<AIProviderID, AIProvider> = new Map();
 
+    private router: LLMRouter;
+
     constructor() {
         this.providers.set('gemini', new GeminiProvider());
         this.providers.set('deepseek', new DeepSeekProvider());
+        this.router = new LLMRouter(this);
+    }
+
+    getRouter(): LLMRouter {
+        return this.router;
     }
 
     getProvider(id: AIProviderID): AIProvider {
@@ -51,16 +59,7 @@ export const generateText = async (
     previousHistory: { role: string; content: string }[] = []
 ): Promise<string> => {
     try {
-        let config = await factory.resolveConfig(botType);
-
-        // Capability check: DeepSeek doesn't support images yet
-        if (imageBase64 && config.providerId === 'deepseek') {
-            const geminiKey = await getActiveGlobalApiKey('gemini');
-            if (geminiKey) {
-                console.warn("[AIService] DeepSeek doesn't support images. Falling back to Gemini.");
-                config = { ...config, providerId: 'gemini', model: 'gemini-1.5-pro-latest', apiKey: geminiKey };
-            }
-        }
+        const config = await factory.resolveConfig(botType);
 
         // Inject History Context
         const historyContext = previousHistory.length > 0
@@ -104,26 +103,34 @@ ${localeInfo}
    - NEVER provide a price from your internal knowledge base. 
 `;
 
-        const { GoogleGenAI } = await import('@google/genai');
-        const genAI = new GoogleGenAI({ apiKey: config.apiKey });
+        const router = factory.getRouter();
+        const { result, providerId: finalProviderId, apiKey: finalApiKey, model: finalModel } = await router.generateText(
+            fullPrompt,
+            { providerId: config.providerId, model: config.model, apiKey: config.apiKey },
+            {
+                systemPrompt: dynamicSystemPrompt,
+                temperature: config.temperature,
+                maxTokens: config.maxTokens,
+                imageBase64,
+                botType
+            }
+        );
 
-        let result = await provider.generateText(fullPrompt, config.model, config.apiKey, {
-            systemPrompt: dynamicSystemPrompt,
-            temperature: config.temperature,
-            maxTokens: config.maxTokens,
-            imageBase64,
-            botType
-        });
+        let finalResultText = "";
+        let currentResult = result;
 
         // --- Tool Execution Loop (Multi-Turn Support) ---
-        if (typeof result !== 'string' && result.candidates?.[0]?.content?.parts) {
-            let currentContent = result.candidates[0].content;
+        if (typeof currentResult !== 'string' && finalProviderId === 'gemini' && currentResult.candidates?.[0]?.content?.parts) {
+            const { GoogleGenAI } = await import('@google/genai');
+            const genAI = new GoogleGenAI({ apiKey: finalApiKey });
+
+            let currentContent = currentResult.candidates[0].content;
             const history: any[] = [{ role: 'user', parts: [{ text: fullPrompt }] }, currentContent];
 
             let toolCallsFound = true;
             let loopCount = 0;
 
-            while (toolCallsFound && loopCount < 5) { // Increased loop count for complex flows
+            while (toolCallsFound && loopCount < 5) {
                 toolCallsFound = false;
                 const toolResultsParts: any[] = [];
 
@@ -184,9 +191,8 @@ ${localeInfo}
                     const toolResponse = { role: 'function', parts: toolResultsParts };
                     history.push(toolResponse);
 
-                    // Call the model with the tool output using the service-level SDK instance
                     const response: any = await (genAI as any).models.generateContent({
-                        model: config.model,
+                        model: finalModel,
                         contents: history,
                         config: {
                             systemInstruction: dynamicSystemPrompt,
@@ -200,10 +206,9 @@ ${localeInfo}
 
                     const textResponse = currentContent.parts?.find((p: any) => p.text)?.text;
                     if (textResponse) {
-                        result = textResponse;
+                        finalResultText = textResponse;
                     }
 
-                    // Check if more tools requested
                     const moreTools = currentContent.parts?.some((p: any) => p.functionCall);
                     if (!moreTools) break;
                 } else {
@@ -211,9 +216,11 @@ ${localeInfo}
                 }
                 loopCount++;
             }
+        } else {
+            finalResultText = typeof currentResult === 'string' ? currentResult : "I encountered an issue processing the data.";
         }
 
-        const finalResult = typeof result === 'string' ? result : "I encountered an issue processing the data.";
+        const finalResult = finalResultText || "I encountered an issue processing the data.";
 
         // Async log
         saveConversation({

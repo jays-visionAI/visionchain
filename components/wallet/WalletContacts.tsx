@@ -33,6 +33,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
     const [isLoading, setIsLoading] = createSignal(true);
     const [isSyncing, setIsSyncing] = createSignal(false);
     const [copiedId, setCopiedId] = createSignal<string | null>(null);
+    const [activeTab, setActiveTab] = createSignal<'all' | 'favorites'>('all');
 
     const loadContacts = async () => {
         setIsLoading(true);
@@ -66,13 +67,36 @@ export const WalletContacts = (props: WalletContactsProps) => {
     });
 
     const filteredContacts = () => {
+        let base = contacts();
+        if (activeTab() === 'favorites') {
+            base = base.filter(c => c.isFavorite);
+        }
+
         const query = searchQuery().toLowerCase().trim();
-        if (!query) return contacts();
-        return contacts().filter(c =>
+        if (!query) return base;
+        return base.filter(c =>
             c.internalName.toLowerCase().includes(query) ||
             c.phone.includes(query) ||
             (c.email && c.email.toLowerCase().includes(query))
         );
+    };
+
+    const toggleFavorite = async (e: MouseEvent, contact: Contact) => {
+        e.stopPropagation();
+        if (!contact.id) return;
+
+        try {
+            const newState = !contact.isFavorite;
+            // Optimistic Update
+            setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, isFavorite: newState } : c));
+
+            const { toggleContactFavorite } = await import('../../services/firebaseService');
+            await toggleContactFavorite(props.userProfile().email, contact.id, newState);
+        } catch (err) {
+            console.error("Toggle favorite failed:", err);
+            // Revert on error
+            loadContacts();
+        }
     };
 
     const copyAddress = (address: string, id: string) => {
@@ -158,15 +182,23 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 {/* Search & Tabs */}
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-white/5">
                     <div class="flex items-center gap-6 md:gap-8 overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-                        <button class="relative py-4 text-[13px] md:text-sm font-bold text-white whitespace-nowrap">
+                        <button
+                            onClick={() => setActiveTab('all')}
+                            class={`relative py-4 text-[13px] md:text-sm font-bold transition-colors whitespace-nowrap ${activeTab() === 'all' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+                        >
                             All Contacts
-                            <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
+                            <Show when={activeTab() === 'all'}>
+                                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
+                            </Show>
                         </button>
-                        <button class="py-4 text-[13px] md:text-sm font-bold text-gray-500 hover:text-white transition-colors whitespace-nowrap">
+                        <button
+                            onClick={() => setActiveTab('favorites')}
+                            class={`relative py-4 text-[13px] md:text-sm font-bold transition-colors whitespace-nowrap ${activeTab() === 'favorites' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
+                        >
                             Favorites
-                        </button>
-                        <button class="py-4 text-[13px] md:text-sm font-bold text-gray-500 hover:text-white transition-colors whitespace-nowrap">
-                            Recently Added
+                            <Show when={activeTab() === 'favorites'}>
+                                <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
+                            </Show>
                         </button>
                     </div>
 
@@ -289,8 +321,11 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                             <Zap class="w-4 h-4" />
                                                         </button>
                                                     </Show>
-                                                    <button class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-yellow-500 rounded-xl transition-all">
-                                                        <Star class="w-4 h-4" />
+                                                    <button
+                                                        onClick={(e) => toggleFavorite(e, contact)}
+                                                        class={`p-2 rounded-xl transition-all ${contact.isFavorite ? 'bg-yellow-500/10 text-yellow-500' : 'bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-yellow-500'}`}
+                                                    >
+                                                        <Star class={`w-4 h-4 ${contact.isFavorite ? 'fill-current' : ''}`} />
                                                     </button>
                                                     <button class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-white rounded-xl transition-all">
                                                         <ChevronRight class="w-4 h-4" />

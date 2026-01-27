@@ -576,9 +576,24 @@ export const adminRegister = async (email: string, password: string, phone?: str
             if (saleSnap.exists()) {
                 await setDoc(saleRef, { status: 'Registered' }, { merge: true });
             }
+
+            // AUTO-ADD TO REFERRER'S ADDRESS BOOK
+            if (referrerId) {
+                try {
+                    await saveUserContacts(referrerId, [{
+                        internalName: (userCredential.user as any).displayName || emailLower.split('@')[0],
+                        phone: normalizedPhone || userData.phone || '',
+                        email: emailLower,
+                        vchainUserUid: emailLower,
+                        address: ''
+                    }]);
+                } catch (err) {
+                    console.warn("[Referral] Auto-add failed:", err);
+                }
+            }
         }
     } else {
-        // New user from scratch (not in CSV)
+        // New user signup
         await setDoc(userRef, {
             email: emailLower,
             phone: normalizedPhone,
@@ -594,6 +609,21 @@ export const adminRegister = async (email: string, password: string, phone?: str
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
+
+        // AUTO-ADD TO REFERRER'S ADDRESS BOOK
+        if (referrerId) {
+            try {
+                await saveUserContacts(referrerId, [{
+                    internalName: emailLower.split('@')[0],
+                    phone: normalizedPhone,
+                    email: emailLower,
+                    vchainUserUid: emailLower,
+                    address: ''
+                }]);
+            } catch (err) {
+                console.warn("[Referral] Auto-add failed:", err);
+            }
+        }
     }
 
     return userCredential.user;
@@ -742,6 +772,7 @@ export interface Contact {
     email?: string;
     address?: string;
     vchainUserUid?: string;
+    isFavorite?: boolean;
     createdAt: string;
 }
 
@@ -985,6 +1016,21 @@ export const saveUserContacts = async (userEmail: string, contacts: Omit<Contact
         console.log(`[Firebase] Saved ${contacts.length} contacts for ${userEmailLower}`);
     } catch (e) {
         console.error("Error saving contacts:", e);
+        throw e;
+    }
+};
+
+export const toggleContactFavorite = async (userEmail: string, contactId: string, isFavorite: boolean): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        const userEmailLower = userEmail.toLowerCase().trim();
+        const contactRef = doc(db, 'users', userEmailLower, 'contacts', contactId);
+        await updateDoc(contactRef, {
+            isFavorite,
+            updatedAt: new Date().toISOString()
+        });
+    } catch (e) {
+        console.error("Error toggling favorite:", e);
         throw e;
     }
 };
