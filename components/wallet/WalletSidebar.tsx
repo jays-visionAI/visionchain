@@ -19,7 +19,7 @@ import {
     Bell
 } from 'lucide-solid';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -44,9 +44,10 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral Engine', icon: UserPlus },
-        { id: 'campaign' as ViewType, label: 'Campaign', icon: Zap },
+        { id: 'quest' as ViewType, label: 'Quest', icon: Zap },
         { id: 'mint' as ViewType, label: 'Mint', icon: Plus },
         { id: 'contacts' as ViewType, label: 'Address Book', icon: Users },
+        { id: 'history' as ViewType, label: 'History', icon: Clock },
         { id: 'profile' as ViewType, label: 'Profile', icon: User },
         { id: 'notifications' as ViewType, label: 'Notification', icon: Bell },
         { id: 'settings' as ViewType, label: 'Settings', icon: Settings },

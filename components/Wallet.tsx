@@ -91,8 +91,9 @@ import { WalletContacts } from './wallet/WalletContacts';
 import { WalletSettings } from './wallet/WalletSettings';
 import { WalletNotifications } from './wallet/WalletNotifications';
 import { WalletReferral } from './wallet/WalletReferral';
+import { WalletActivity } from './wallet/WalletActivity';
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -174,7 +175,6 @@ const Wallet = (): JSX.Element => {
     // State Declarations
     const [activeView, setActiveView] = createSignal('assets');
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
-    const [assetsTab, setAssetsTab] = createSignal('tokens');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
     const [receiveNetwork, setReceiveNetwork] = createSignal('Ethereum');
@@ -2139,9 +2139,26 @@ Format:
                             />
                         </Show>
 
-                        {/* Campaign View */}
-                        <Show when={activeView() === 'campaign'}>
+                        {/* Quest (formerly Campaign) View */}
+                        <Show when={activeView() === 'campaign' || activeView() === 'quest'}>
                             <WalletCampaign userProfile={userProfile} />
+                        </Show>
+
+                        {/* History View */}
+                        <Show when={activeView() === 'history'}>
+                            <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32">
+                                <div class="max-w-4xl mx-auto">
+                                    <div class="mb-8">
+                                        <h2 class="text-3xl font-bold text-white mb-2">Transaction History</h2>
+                                        <p class="text-gray-400">View your on-chain activity and purchase records.</p>
+                                    </div>
+                                    <WalletActivity
+                                        purchases={vcnPurchases}
+                                        walletAddress={walletAddress()}
+                                        contacts={contacts()}
+                                    />
+                                </div>
+                            </div>
                         </Show>
 
                         {/* Mint View */}
@@ -2186,8 +2203,6 @@ Format:
                             <WalletAssets
                                 totalValueStr={totalValueStr}
                                 portfolioStats={portfolioStats}
-                                assetsTab={assetsTab}
-                                setAssetsTab={setAssetsTab}
                                 getAssetData={getAssetData}
                                 startFlow={setActiveFlow}
                                 setActiveView={setActiveView}
