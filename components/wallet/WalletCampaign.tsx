@@ -21,7 +21,7 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
                         <Zap class="w-8 h-8 text-white group-hover:animate-pulse" />
                     </div>
                     <div>
-                        <h2 class="text-4xl font-bold text-white tracking-tight mb-2">Campaign Central</h2>
+                        <h2 class="text-4xl font-bold text-white tracking-tight mb-2">Quest</h2>
                         <p class="text-gray-500 font-medium">Maximize your earnings through Vision ecosystem events and rewards</p>
                     </div>
                 </div>

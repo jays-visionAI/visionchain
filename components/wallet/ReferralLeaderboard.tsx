@@ -140,38 +140,38 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
                             initial={{ opacity: 0, x: -20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i() * 0.05 }}
-                            class={`relative flex items-center gap-6 p-4 rounded-[28px] border overflow-hidden transition-all hover:scale-[1.02] ${getRankStyle(user.rank)} ${user.isCurrentUser ? 'ring-2 ring-blue-500/50' : ''}`}
+                            class={`relative flex items-center gap-2 sm:gap-6 p-3 sm:p-4 rounded-[24px] sm:rounded-[28px] border overflow-hidden transition-all hover:scale-[1.02] ${getRankStyle(user.rank)} ${user.isCurrentUser ? 'ring-2 ring-blue-500/50' : ''}`}
                         >
                             {/* Rank Number Area */}
-                            <div class="flex items-center justify-center w-12 h-12 rounded-2xl bg-black/20 font-black text-xl italic select-none">
-                                {user.rank === 1 ? <Crown class="w-6 h-6 text-amber-500" /> : user.rank}
+                            <div class="flex items-center justify-center w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-black/20 font-black text-sm sm:text-xl italic select-none">
+                                {user.rank === 1 ? <Crown class="w-4 h-4 sm:w-6 sm:h-6 text-amber-500" /> : user.rank}
                             </div>
 
                             {/* User Info */}
-                            <div class="flex items-center gap-4 flex-1">
-                                <div class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-gray-300">
+                            <div class="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                                <div class="w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-[10px] sm:text-xs font-black text-gray-300 flex-shrink-0">
                                     {(user.name || 'U').substring(0, 2).toUpperCase()}
                                 </div>
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-black text-white tracking-tight uppercase text-sm">{user.name}</span>
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5 sm:gap-2">
+                                        <span class="font-black text-white tracking-tight uppercase text-[11px] sm:text-sm truncate">{user.name}</span>
                                         <Show when={user.isCurrentUser}>
-                                            <span class="px-2 py-0.5 bg-blue-500 text-[8px] font-black rounded text-white uppercase tracking-widest">You</span>
+                                            <span class="px-1.5 py-0.5 bg-blue-500 text-[7px] sm:text-[8px] font-black rounded text-white uppercase tracking-widest whitespace-nowrap">You</span>
                                         </Show>
                                     </div>
-                                    <div class="text-[10px] font-bold text-gray-500 tracking-wider">NETWORK MEMBER</div>
+                                    <div class="text-[8px] sm:text-[10px] font-bold text-gray-500 tracking-wider">NETWORK MEMBER</div>
                                 </div>
                             </div>
 
                             {/* Stats & Rewards */}
-                            <div class="flex items-center gap-8 pr-4">
-                                <div class="text-right">
-                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Invites</div>
-                                    <div class="text-lg font-black text-white font-mono">{user.invites}</div>
+                            <div class="flex items-center gap-4 sm:gap-8 pr-1 sm:pr-4">
+                                <div class="text-right whitespace-nowrap">
+                                    <div class="text-[8px] sm:text-[9px] font-black text-gray-600 uppercase tracking-widest">Invites</div>
+                                    <div class="text-[14px] sm:text-lg font-black text-white font-mono">{user.invites}</div>
                                 </div>
-                                <div class="text-right min-w-[100px]">
-                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Est. Reward</div>
-                                    <div class={`text-lg font-black font-mono ${user.rank <= 3 ? 'text-blue-400' : 'text-gray-400'}`}>
+                                <div class="text-right min-w-[70px] sm:min-w-[100px] whitespace-nowrap">
+                                    <div class="text-[8px] sm:text-[9px] font-black text-gray-600 uppercase tracking-widest">Est. Reward</div>
+                                    <div class={`text-[14px] sm:text-lg font-black font-mono ${user.rank <= 3 ? 'text-blue-400' : 'text-gray-400'}`}>
                                         <Show when={user.rank <= 3} fallback={`${user.invites * 5} VCN`}>
                                             {user.invites * getMultiplier(user.rank)} VCN
                                         </Show>
