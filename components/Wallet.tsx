@@ -1513,6 +1513,19 @@ ${csvContext}
 
 Identify the intent and provide a friendly response following the established architect persona. 
 IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address and proceed to confirmation.
+
+[CRITICAL: ACTION FORMAT]
+If the user wants to execute a transaction (Send, Swap, Schedule, etc.), you MUST append a JSON block to the end of your response.
+Format:
+\`\`\`json
+{
+  "intent": "send" | "swap" | "schedule" | "stake" | "bridge",
+  "recipient": "0x..." (or name if not resolved),
+  "amount": "100",
+  "symbol": "VCN",
+  "executeAt": "ISO_TIMESTAMP" (for schedule only)
+}
+\`\`\`
 `;
 
             setThinkingSteps(prev => [
@@ -1608,6 +1621,8 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                 }
             }
 
+            console.log("[AI Intent Data]", intentData);
+
             // 2. Trigger Wallet Flow if intent detected
             if (intentData) {
                 // Name Resolution Step (VNS)
@@ -1617,25 +1632,22 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                         intentData.recipient = resolved.address;
                     } else {
                         console.warn(`[AI] Could not resolve name: ${intentData.recipient}`);
-                        if (intentData.intent === 'send' || intentData.intent === 'schedule') {
-                            const errorMsg = config.chat.accountNotFound(intentData.recipient || '');
-                            setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }]);
-                            setChatLoading(false);
-                            setRecipientAddress(intentData.recipient || '');
-                            setSendAmount(intentData.amount || '');
-                            startFlow('send');
-                            return;
-                        }
+                        // Even if not resolved, allow flow to start so user can fix it
                     }
                 }
 
                 if (intentData.intent === 'send') {
+                    console.log("Starting Send Flow with:", intentData);
                     setRecipientAddress(intentData.recipient || '');
-                    setSendAmount(intentData.amount || '');
+                    // Sanitize amount - remove any non-numeric chars except dot
+                    const cleanAmount = (intentData.amount || '').toString().replace(/[^0-9.]/g, '');
+                    setSendAmount(cleanAmount);
                     setSelectedToken(intentData.symbol || 'VCN');
+
                     startFlow('send');
-                    // If we have both amount and recipient, skip to confirmation
-                    if (intentData.amount && ethers.isAddress(intentData.recipient)) {
+
+                    // If we have both amount and VALID recipient, skip to confirmation
+                    if (cleanAmount && intentData.recipient && ethers.isAddress(intentData.recipient)) {
                         setFlowStep(2);
                     }
                 } else if (intentData.intent === 'swap') {
