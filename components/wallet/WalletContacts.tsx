@@ -62,11 +62,17 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 await loadContacts();
             }
 
-            let msg = `${result.updated} contacts synced successfully.`;
             if (result.ambiguous > 0) {
-                msg += `\n${result.ambiguous} contacts have multiple accounts. Please select one manually.`;
+                // Find first ambiguous contact to start resolution process automatically
+                const firstAmbiguous = contacts().find(c => c.syncStatus === 'ambiguous');
+                if (firstAmbiguous) {
+                    setSelectedContact(firstAmbiguous);
+                }
+            } else if (result.updated > 0) {
+                alert(`${result.updated} contacts synced successfully.`);
+            } else {
+                alert('Everything is up to date.');
             }
-            alert(msg);
         } catch (e) {
             console.error("Sync failed:", e);
         } finally {
@@ -354,10 +360,17 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                             </td>
                                             <td class="px-6 py-4">
                                                 <Show when={contact.vchainUserUid} fallback={
-                                                    <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-orange-500/5 border border-orange-500/10 rounded-md">
-                                                        <div class="w-1 h-1 rounded-full bg-orange-500" />
-                                                        <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">Pending</span>
-                                                    </div>
+                                                    <Show when={contact.syncStatus === 'ambiguous'} fallback={
+                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-orange-500/5 border border-orange-500/10 rounded-md">
+                                                            <div class="w-1 h-1 rounded-full bg-orange-500" />
+                                                            <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">Pending</span>
+                                                        </div>
+                                                    }>
+                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                                            <div class="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+                                                            <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">Action Required</span>
+                                                        </div>
+                                                    </Show>
                                                 }>
                                                     <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/5 border border-green-500/10 rounded-md">
                                                         <div class="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_8px_#10b981]" />
@@ -484,25 +497,55 @@ const SelectionModal = (props: { contact: Contact | null, onClose: () => void, u
 
     return (
         <Show when={props.contact}>
-            <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={props.onClose} />
-                <div class="relative w-full max-w-lg bg-[#0d0d0f] border border-white/[0.08] rounded-[24px] p-6 shadow-2xl">
-                    <h3 class="text-xl font-black text-white mb-2 italic uppercase">Select Account</h3>
-                    <p class="text-sm text-gray-500 mb-6">Multiple accounts found for <span class="text-white font-bold">{props.contact?.phone}</span>. Please choose the correct recipient.</p>
+            <div class="fixed inset-0 z-[130] flex items-center justify-center p-4">
+                <Motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                    onClick={props.onClose}
+                />
+                <Motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    class="relative w-full max-w-lg bg-[#0d0d0f] border border-white/[0.08] rounded-[32px] p-8 shadow-3xl overflow-hidden"
+                >
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 blur-[50px] -mr-16 -mt-16" />
 
-                    <div class="space-y-3">
+                    <div class="relative z-10 text-center mb-8">
+                        <div class="w-16 h-16 rounded-[24px] bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4 text-amber-500">
+                            <AlertCircle class="w-8 h-8" />
+                        </div>
+                        <h3 class="text-2xl font-black text-white italic uppercase tracking-tight">Resolve Ambiguity</h3>
+                        <p class="text-sm text-gray-500 mt-2">
+                            Multiple accounts found for <span class="text-white font-bold">{props.contact?.internalName}</span> ({props.contact?.phone}).
+                            Please select the correct email to link.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                         <For each={props.contact?.potentialMatches}>
                             {(match) => (
                                 <button
                                     onClick={() => handleSelect(match)}
                                     disabled={isSaving()}
-                                    class="w-full flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl transition-all group active:scale-[0.98]"
+                                    class="w-full flex items-center justify-between p-5 bg-white/[0.02] border border-white/[0.06] hover:border-blue-500/50 hover:bg-blue-500/[0.04] rounded-[24px] transition-all group active:scale-[0.98] text-left"
                                 >
-                                    <div class="text-left">
-                                        <div class="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">{match.vid}</div>
-                                        <div class="text-xs font-mono text-gray-500 truncate max-w-[200px]">{match.address}</div>
+                                    <div class="flex items-center gap-4">
+                                        <div class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                                            <Mail class="w-5 h-5" />
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-[13px] font-black text-white truncate mb-0.5">{match.email}</div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">{match.vid}</span>
+                                                <span class="text-[10px] font-mono text-gray-600 truncate max-w-[120px]">{match.address?.substring(0, 10)}...</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <ChevronRight class="w-4 h-4 text-gray-700 group-hover:text-blue-400 transition-colors" />
+                                    <div class="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-700 group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-all">
+                                        <ChevronRight class="w-4 h-4" />
+                                    </div>
                                 </button>
                             )}
                         </For>
@@ -510,11 +553,11 @@ const SelectionModal = (props: { contact: Contact | null, onClose: () => void, u
 
                     <button
                         onClick={props.onClose}
-                        class="w-full mt-6 py-3 text-sm font-bold text-gray-500 hover:text-white transition-colors"
+                        class="w-full mt-8 py-4 text-xs font-black text-gray-500 hover:text-white uppercase tracking-[0.2em] transition-colors border-t border-white/[0.06]"
                     >
-                        Cancel
+                        Resolve Later
                     </button>
-                </div>
+                </Motion.div>
             </div>
         </Show>
     );
