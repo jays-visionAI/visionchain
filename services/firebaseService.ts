@@ -1272,6 +1272,8 @@ export const subscribeToQueue = (
                     // Keep status as WAITING so user knows they can still cancel/interact
                     status = 'WAITING';
                 }
+            } else if (status === 'SENT') {
+                timeLeft = ''; // Will fallback to label 'Success'
             } else {
                 timeLeft = new Date(unlockTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
