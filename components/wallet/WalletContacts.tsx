@@ -15,7 +15,8 @@ import {
     ExternalLink,
     RefreshCw,
     Loader2,
-    AlertCircle
+    AlertCircle,
+    Share2
 } from 'lucide-solid';
 import { getUserContacts, Contact, normalizePhoneNumber, searchUserByPhone, syncUserContacts } from '../../services/firebaseService';
 import { AddContactModal } from './AddContactModal';
@@ -30,6 +31,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
     const [contacts, setContacts] = createSignal<Contact[]>([]);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [isModalOpen, setIsModalOpen] = createSignal(false);
+    const [selectedContact, setSelectedContact] = createSignal<Contact | null>(null);
     const [isLoading, setIsLoading] = createSignal(true);
     const [isSyncing, setIsSyncing] = createSignal(false);
     const [copiedId, setCopiedId] = createSignal<string | null>(null);
@@ -50,11 +52,16 @@ export const WalletContacts = (props: WalletContactsProps) => {
     const handleSync = async () => {
         setIsSyncing(true);
         try {
-            const updatedCount = await syncUserContacts(props.userProfile().email);
-            if (updatedCount > 0) {
+            const result = await syncUserContacts(props.userProfile().email);
+            if (result.updated > 0 || result.ambiguous > 0) {
                 await loadContacts();
             }
-            alert(`${updatedCount} contacts synced with Vision Chain ID.`);
+
+            let msg = `${result.updated} contacts synced successfully.`;
+            if (result.ambiguous > 0) {
+                msg += `\n${result.ambiguous} contacts have multiple accounts. Please select one manually.`;
+            }
+            alert(msg);
         } catch (e) {
             console.error("Sync failed:", e);
         } finally {
@@ -87,14 +94,12 @@ export const WalletContacts = (props: WalletContactsProps) => {
 
         try {
             const newState = !contact.isFavorite;
-            // Optimistic Update
             setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, isFavorite: newState } : c));
 
             const { toggleContactFavorite } = await import('../../services/firebaseService');
             await toggleContactFavorite(props.userProfile().email, contact.id, newState);
         } catch (err) {
             console.error("Toggle favorite failed:", err);
-            // Revert on error
             loadContacts();
         }
     };
@@ -105,13 +110,32 @@ export const WalletContacts = (props: WalletContactsProps) => {
         setTimeout(() => setCopiedId(null), 2000);
     };
 
+    const handleInvite = (contact: Contact) => {
+        const refCode = props.userProfile().referralCode || props.userProfile().email;
+        const referralLink = `${window.location.origin}/signup?ref=${refCode}`;
+        const message = `[Vision Chain] Join me on the next generation AI blockchain! Create your Vision ID and participate in the ecosystem. Join here: ${referralLink}`;
+
+        if (navigator.share) {
+            navigator.share({
+                title: 'Join Vision Chain',
+                text: message,
+                url: referralLink
+            }).catch(() => {
+                navigator.clipboard.writeText(message);
+                alert('Invite message copied to clipboard!');
+            });
+        } else {
+            navigator.clipboard.writeText(message);
+            alert('Invite message copied to clipboard!');
+        }
+    };
+
     const invitationCount = () => contacts().filter(c => c.vchainUserUid).length;
 
     return (
         <div class="flex-1 overflow-y-auto p-4 lg:p-8">
             <div class="max-w-6xl mx-auto space-y-8">
 
-                {/* Header Section */}
                 {/* Header Section */}
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div>
@@ -160,14 +184,14 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                 <div class="flex items-center justify-center md:justify-start gap-2 mb-1">
                                     <span class="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-md text-[9px] font-black text-blue-400 uppercase tracking-widest">Active Campaign</span>
                                 </div>
-                                <h3 class="text-xl md:text-2xl font-black text-white leading-tight">Invite Friends & Get 50 VCN Each</h3>
-                                <p class="text-sm text-gray-500 mt-1 max-w-sm">Both you and your friend receive a welcome bonus upon VID creation.</p>
+                                <h3 class="text-xl md:text-2xl font-black text-white leading-tight">Invite Friends & Build Network</h3>
+                                <p class="text-sm text-gray-500 mt-1 max-w-sm">Bring your friends to Vision Chain and grow the decentralized future together.</p>
                             </div>
                         </div>
 
                         <div class="w-full xl:w-auto flex items-center justify-around xl:justify-center gap-6 md:gap-12 px-6 md:px-10 py-5 bg-white/[0.02] rounded-[24px] border border-white/[0.04]">
                             <div class="text-center">
-                                <div class="text-2xl md:text-3xl font-black text-white tabular-nums">{(invitationCount() * 50).toLocaleString()}</div>
+                                <div class="text-2xl md:text-3xl font-black text-white tabular-nums">{(invitationCount() * 0).toLocaleString()}</div>
                                 <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VCN Earned</div>
                             </div>
                             <div class="h-10 w-px bg-white/[0.06]" />
@@ -283,7 +307,18 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                 </div>
                                             </td>
                                             <td class="px-6 py-4">
-                                                <Show when={contact.address} fallback={<span class="text-xs font-mono text-gray-600">Wait for sync...</span>}>
+                                                <Show when={contact.address} fallback={
+                                                    <Show when={contact.syncStatus === 'ambiguous'} fallback={
+                                                        <span class="text-xs font-mono text-gray-600">Wait for sync...</span>
+                                                    }>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
+                                                            class="text-[10px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-md hover:bg-amber-400/20 transition-all animate-pulse"
+                                                        >
+                                                            Select Account
+                                                        </button>
+                                                    </Show>
+                                                }>
                                                     <div class="flex items-center gap-2 group/addr cursor-pointer" onClick={() => copyAddress(contact.address!, contact.id!)}>
                                                         <span class="text-xs font-mono text-blue-400 group-hover/addr:text-blue-300 transition-colors bg-blue-400/5 px-2 py-1 rounded-md border border-blue-400/10">
                                                             {contact.address?.substring(0, 10)}...{contact.address?.substring(contact.address.length - 8)}
@@ -309,7 +344,16 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                             </td>
                                             <td class="px-8 py-4 text-right">
                                                 <div class="flex items-center justify-end gap-2">
-                                                    <Show when={contact.address}>
+                                                    <Show when={contact.address} fallback={
+                                                        <button
+                                                            onClick={() => handleInvite(contact)}
+                                                            class="flex items-center gap-2 px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all border border-orange-500/20 active:scale-95 group/invite"
+                                                            title="Invite Friend"
+                                                        >
+                                                            <Share2 class="w-3.5 h-3.5 group-hover/invite:rotate-12 transition-transform" />
+                                                            <span class="text-[10px] font-black uppercase tracking-wider">Invite</span>
+                                                        </button>
+                                                    }>
                                                         <button
                                                             onClick={() => {
                                                                 props.setRecipientAddress(contact.address!);
@@ -333,8 +377,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                 </div>
                                             </td>
                                         </tr>
-                                    )
-                                    }
+                                    )}
                                 </For>
                             </tbody>
                         </table>
@@ -362,6 +405,75 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 userEmail={props.userProfile().email}
                 onSuccess={loadContacts}
             />
+
+            <SelectionModal
+                contact={selectedContact()}
+                onClose={() => setSelectedContact(null)}
+                userEmail={props.userProfile().email}
+                onSuccess={loadContacts}
+            />
         </div>
+    );
+};
+
+const SelectionModal = (props: { contact: Contact | null, onClose: () => void, userEmail: string, onSuccess: () => void }) => {
+    const [isSaving, setIsSaving] = createSignal(false);
+
+    const handleSelect = async (match: { vid: string, email: string, address: string }) => {
+        if (!props.contact?.id) return;
+        setIsSaving(true);
+        try {
+            const { updateContact } = await import('../../services/firebaseService');
+            await updateContact(props.userEmail, props.contact.id, {
+                vchainUserUid: match.vid,
+                address: match.address,
+                email: match.email,
+                syncStatus: 'verified',
+                potentialMatches: null
+            });
+            props.onSuccess();
+            props.onClose();
+        } catch (e) {
+            console.error("Failed to select account:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Show when={props.contact}>
+            <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={props.onClose} />
+                <div class="relative w-full max-w-lg bg-[#0d0d0f] border border-white/[0.08] rounded-[24px] p-6 shadow-2xl">
+                    <h3 class="text-xl font-black text-white mb-2 italic uppercase">Select Account</h3>
+                    <p class="text-sm text-gray-500 mb-6">Multiple accounts found for <span class="text-white font-bold">{props.contact?.phone}</span>. Please choose the correct recipient.</p>
+
+                    <div class="space-y-3">
+                        <For each={props.contact?.potentialMatches}>
+                            {(match) => (
+                                <button
+                                    onClick={() => handleSelect(match)}
+                                    disabled={isSaving()}
+                                    class="w-full flex items-center justify-between p-4 bg-white/[0.03] border border-white/[0.06] hover:border-blue-500/50 hover:bg-blue-500/5 rounded-xl transition-all group active:scale-[0.98]"
+                                >
+                                    <div class="text-left">
+                                        <div class="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">{match.vid}</div>
+                                        <div class="text-xs font-mono text-gray-500 truncate max-w-[200px]">{match.address}</div>
+                                    </div>
+                                    <ChevronRight class="w-4 h-4 text-gray-700 group-hover:text-blue-400 transition-colors" />
+                                </button>
+                            )}
+                        </For>
+                    </div>
+
+                    <button
+                        onClick={props.onClose}
+                        class="w-full mt-6 py-3 text-sm font-bold text-gray-500 hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </Show>
     );
 };

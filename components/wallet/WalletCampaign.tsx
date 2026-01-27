@@ -79,8 +79,8 @@ export const WalletCampaign = () => {
                                     <div class="px-3 py-1 bg-orange-500/10 rounded-full text-[10px] font-bold text-orange-400 uppercase tracking-widest">Referral Program</div>
                                     <div class="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
                                 </div>
-                                <h2 class="text-3xl font-bold text-white mb-4">Invite & Earn 50 VCN</h2>
-                                <p class="text-gray-400 mb-6 max-w-lg">Share the vision with your friends. For every friend who connects their wallet, you both receive 50 VCN tokens instantly.</p>
+                                <h2 class="text-3xl font-bold text-white mb-4">Invite & Build Your Network</h2>
+                                <p class="text-gray-400 mb-6 max-w-lg">Share the vision with your friends. Join the decentralized AI ecosystem together and expand the Vision network.</p>
                                 <div class="flex flex-wrap items-center justify-center md:justify-start gap-4">
                                     <div class="px-6 py-3 bg-[#1a1a1f] border border-orange-500/20 rounded-xl font-mono text-xl font-black text-orange-400 tracking-widest shadow-lg shadow-orange-500/5">
                                         VC7F3A
@@ -98,7 +98,7 @@ export const WalletCampaign = () => {
                                 </div>
                                 <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between">
                                     <div class="text-xs text-gray-500 font-bold uppercase">VCN Earned</div>
-                                    <div class="text-lg font-bold text-orange-400">600</div>
+                                    <div class="text-lg font-bold text-orange-400">0</div>
                                 </div>
                             </div>
                         </div>

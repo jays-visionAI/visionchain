@@ -167,30 +167,34 @@ export const normalizePhoneNumber = (phone: string): string => {
 };
 
 // Simplified user search for intent resolution
-export const searchUserByPhone = async (phone: string): Promise<{ vid: string, email: string, address: string } | null> => {
+export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, email: string, address: string }[]> => {
     try {
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
         const normalized = normalizePhoneNumber(phone);
 
         // Search by normalized phone
-        const q = query(usersRef, where('phone', '==', normalized), limit(1));
+        const q = query(usersRef, where('phone', '==', normalized));
         const snapshot = await getDocs(q);
 
-        if (!snapshot.empty) {
-            const doc = snapshot.docs[0];
+        return snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 vid: doc.id,
                 email: data.email,
                 address: data.walletAddress
             };
-        }
-        return null;
+        });
     } catch (e) {
         console.error("User search failed:", e);
-        return null;
+        return [];
     }
+};
+
+// Kept for backward compatibility if needed by other components
+export const searchUserByPhone = async (phone: string) => {
+    const results = await searchUsersByPhone(phone);
+    return results.length > 0 ? results[0] : null;
 };
 
 export const searchUserByEmail = async (email: string): Promise<{ vid: string, email: string, address: string } | null> => {
@@ -839,6 +843,9 @@ export interface Contact {
     vchainUserUid?: string;
     isFavorite?: boolean;
     createdAt: string;
+    updatedAt?: string;
+    syncStatus?: 'verified' | 'ambiguous' | 'pending';
+    potentialMatches?: { vid: string, email: string, address: string }[] | null;
 }
 
 export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
@@ -1068,7 +1075,22 @@ export const getUserContacts = async (userEmail: string): Promise<Contact[]> => 
     }
 };
 
-export const syncUserContacts = async (userEmail: string): Promise<number> => {
+export const updateContact = async (userEmail: string, contactId: string, updates: Partial<Contact>) => {
+    try {
+        const db = getFirebaseDb();
+        const userEmailLower = userEmail.toLowerCase().trim();
+        const contactRef = doc(db, 'users', userEmailLower, 'contacts', contactId);
+        await updateDoc(contactRef, {
+            ...updates,
+            updatedAt: new Date().toISOString()
+        });
+    } catch (e) {
+        console.error("Error updating contact:", e);
+        throw e;
+    }
+};
+
+export const syncUserContacts = async (userEmail: string): Promise<{ updated: number, ambiguous: number }> => {
     try {
         const db = getFirebaseDb();
         const userEmailLower = userEmail.toLowerCase().trim();
@@ -1076,30 +1098,44 @@ export const syncUserContacts = async (userEmail: string): Promise<number> => {
         const snapshot = await getDocs(contactsRef);
 
         let updateCount = 0;
+        let ambiguousCount = 0;
         const batch = writeBatch(db);
 
         for (const docSnap of snapshot.docs) {
             const data = docSnap.data() as Contact;
-            // Only sync those without vchainUserUid or address
+            // Only sync those without vchainUserUid or address, or those explicitly marked for re-sync
             if (!data.vchainUserUid || !data.address) {
                 const normalizedPhone = normalizePhoneNumber(data.phone);
-                const resolved = await searchUserByPhone(normalizedPhone);
+                const results = await searchUsersByPhone(normalizedPhone);
 
-                if (resolved && (resolved.vid !== data.vchainUserUid || resolved.address !== data.address)) {
+                if (results.length === 1) {
+                    const resolved = results[0];
+                    if (resolved.vid !== data.vchainUserUid || resolved.address !== data.address) {
+                        batch.update(docSnap.ref, {
+                            vchainUserUid: resolved.vid,
+                            address: resolved.address,
+                            syncStatus: 'verified',
+                            potentialMatches: null,
+                            updatedAt: new Date().toISOString()
+                        });
+                        updateCount++;
+                    }
+                } else if (results.length > 1) {
+                    // Flag as ambiguous for manual selection
                     batch.update(docSnap.ref, {
-                        vchainUserUid: resolved.vid,
-                        address: resolved.address,
+                        syncStatus: 'ambiguous',
+                        potentialMatches: results,
                         updatedAt: new Date().toISOString()
                     });
-                    updateCount++;
+                    ambiguousCount++;
                 }
             }
         }
 
-        if (updateCount > 0) {
+        if (updateCount > 0 || ambiguousCount > 0) {
             await batch.commit();
         }
-        return updateCount;
+        return { updated: updateCount, ambiguous: ambiguousCount };
     } catch (e) {
         console.error("Error syncing contacts:", e);
         throw e;
