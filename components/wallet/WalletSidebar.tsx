@@ -82,7 +82,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
     return (
         <>
             {/* Header */}
-            <div class={`${props.isDesktop ? 'h-[88px] pt-4' : 'h-[20px] pt-0'} shrink-0 flex items-center px-8 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl`}>
+            <div class={`${props.isDesktop ? 'h-[88px] pt-4' : 'h-[60px] pt-6'} shrink-0 flex items-center px-8 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl`}>
                 <div class="flex flex-col">
                     <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
                         Vision Chain
