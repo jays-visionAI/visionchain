@@ -3057,19 +3057,14 @@ Format:
 
                                             <Show when={activeFlow() === 'send'}>
                                                 <div class="space-y-4">
-                                                    {/* Mode Switcher */}
-                                                    <div class="flex p-1 bg-white/5 rounded-xl mb-4">
+                                                    {/* Header: Single Send */}
+                                                    <div class="flex justify-between items-center mb-2">
+                                                        <span class="text-[11px] font-black text-blue-400 uppercase tracking-widest">Single Transfer</span>
                                                         <button
-                                                            onClick={() => setSendMode('single')}
-                                                            class={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${sendMode() === 'single' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                                            onClick={() => setActiveFlow('batch_send')}
+                                                            class="text-[10px] font-bold text-gray-500 hover:text-purple-400 uppercase tracking-widest transition-colors"
                                                         >
-                                                            Single Transfer
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setSendMode('batch')}
-                                                            class={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${sendMode() === 'batch' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                                                        >
-                                                            Batch (Excel)
+                                                            Switch to Batch Mode &rarr;
                                                         </button>
                                                     </div>
 
@@ -3101,126 +3096,53 @@ Format:
                                                                 </div>
                                                             </div>
 
-                                                            {/* Single Send Mode */}
-                                                            <Show when={sendMode() === 'single'}>
-                                                                <div>
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Recipient Address</label>
+                                                            {/* Single Send Inputs */}
+                                                            <div>
+                                                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Recipient Address</label>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="0x..."
+                                                                    value={recipientAddress()}
+                                                                    onInput={(e) => setRecipientAddress(e.currentTarget.value)}
+                                                                    class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${recipientAddress() && !ethers.isAddress(recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
+                                                                />
+                                                                <Show when={recipientAddress() && !ethers.isAddress(recipientAddress())}>
+                                                                    <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address</p>
+                                                                </Show>
+                                                            </div>
+                                                            <div>
+                                                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Amount</label>
+                                                                <div class="relative">
                                                                     <input
                                                                         type="text"
-                                                                        placeholder="0x..."
-                                                                        value={recipientAddress()}
-                                                                        onInput={(e) => setRecipientAddress(e.currentTarget.value)}
-                                                                        class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${recipientAddress() && !ethers.isAddress(recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
+                                                                        placeholder="0.00"
+                                                                        value={sendAmount()}
+                                                                        onInput={(e) => {
+                                                                            const raw = e.currentTarget.value.replace(/,/g, '');
+                                                                            if (!isNaN(Number(raw)) || raw === '.') {
+                                                                                const parts = raw.split('.');
+                                                                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                                                setSendAmount(parts.join('.'));
+                                                                            }
+                                                                        }}
+                                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all text-xl font-bold font-mono"
                                                                     />
-                                                                    <Show when={recipientAddress() && !ethers.isAddress(recipientAddress())}>
-                                                                        <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address</p>
-                                                                    </Show>
+                                                                    <div class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">{selectedToken()}</div>
                                                                 </div>
-                                                                <div>
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Amount</label>
-                                                                    <div class="relative">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="0.00"
-                                                                            value={sendAmount()}
-                                                                            onInput={(e) => {
-                                                                                const raw = e.currentTarget.value.replace(/,/g, '');
-                                                                                if (!isNaN(Number(raw)) || raw === '.') {
-                                                                                    const parts = raw.split('.');
-                                                                                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                                                                    setSendAmount(parts.join('.'));
-                                                                                }
-                                                                            }}
-                                                                            class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all text-xl font-bold font-mono"
-                                                                        />
-                                                                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">{selectedToken()}</div>
-                                                                    </div>
-                                                                </div>
-                                                            </Show>
-
-                                                            {/* Batch Send Mode */}
-                                                            <Show when={sendMode() === 'batch'}>
-                                                                <div class="space-y-4">
-                                                                    <div>
-                                                                        <div class="flex justify-between items-center mb-2 px-1">
-                                                                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bulk Input</label>
-                                                                            <button
-                                                                                class="text-[10px] text-purple-400 cursor-pointer hover:underline font-bold"
-                                                                                onClick={() => {
-                                                                                    // Generate a random valid address for demonstration
-                                                                                    const randomHeader = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-                                                                                    setBatchInput(prev => (prev ? prev + "\n" : "") + `User${Math.floor(Math.random() * 99)}, ${randomHeader}, ${(Math.random() * 100).toFixed(0)}`);
-                                                                                }}
-                                                                            >
-                                                                                + Add Test Row
-                                                                            </button>
-                                                                        </div>
-                                                                        <textarea
-                                                                            placeholder={`Format: Name, Address, Amount\nExample: Alice, 0x742d35Cc6634C0532925a3b844Bc454e4438f44e, 50`}
-                                                                            value={batchInput()}
-                                                                            onInput={(e) => setBatchInput(e.currentTarget.value)}
-                                                                            class="w-full h-32 bg-[#1a1a1e] border border-white/10 rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-500 outline-none focus:border-purple-500/50 transition-all resize-none leading-relaxed whitespace-pre shadow-inner"
-                                                                        />
-                                                                    </div>
-
-                                                                    {/* Grid View of Parsed Data */}
-                                                                    <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
-                                                                        <div class="grid grid-cols-12 gap-2 p-3 bg-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                                                            <div class="col-span-3">Name</div>
-                                                                            <div class="col-span-6">Address</div>
-                                                                            <div class="col-span-3 text-right">Amount</div>
-                                                                        </div>
-                                                                        <div class="max-h-40 overflow-y-auto custom-scrollbar">
-                                                                            <For each={parsedBatchTransactions()}>
-                                                                                {(tx, i) => (
-                                                                                    <div class="grid grid-cols-12 gap-2 p-3 border-b border-white/5 hover:bg-white/5 transition-colors text-xs items-center">
-                                                                                        <div class="col-span-3 text-gray-300 truncate font-medium">{tx.name || `User ${i() + 1}`}</div>
-                                                                                        <div class="col-span-6 font-mono text-[10px] text-blue-400 truncate" title={tx.recipient}>{tx.recipient}</div>
-                                                                                        <div class="col-span-3 text-right font-mono font-bold text-white">{parseFloat(tx.amount || '0').toLocaleString()} {tx.symbol || 'VCN'}</div>
-                                                                                    </div>
-                                                                                )}
-                                                                            </For>
-                                                                            <Show when={parsedBatchTransactions().length === 0}>
-                                                                                <div class="p-8 text-center text-gray-600 text-xs italic">
-                                                                                    No valid entries found.<br />Paste date above.
-                                                                                </div>
-                                                                            </Show>
-                                                                        </div>
-                                                                        <div class="p-3 bg-purple-900/10 border-t border-purple-500/20 flex justify-between items-center">
-                                                                            <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Total</span>
-                                                                            <span class="text-sm font-bold text-white font-mono">
-                                                                                {parsedBatchTransactions().reduce((acc, curr) => acc + parseFloat(curr.amount || '0'), 0).toLocaleString()} VCN
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </Show>
+                                                            </div>
 
                                                             <button
-                                                                disabled={
-                                                                    sendMode() === 'single'
-                                                                        ? !ethers.isAddress(recipientAddress()) || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0
-                                                                        : parsedBatchTransactions().length === 0
-                                                                }
-                                                                onClick={() => {
-                                                                    if (sendMode() === 'batch') {
-                                                                        handleBatchTransaction();
-                                                                    } else {
-                                                                        setFlowStep(2);
-                                                                    }
-                                                                }}
-                                                                class={`w-full py-5 bg-gradient-to-r text-white font-bold rounded-2xl transition-all shadow-xl active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed ${sendMode() === 'batch'
-                                                                    ? 'from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-purple-500/20'
-                                                                    : 'from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-500/20'
-                                                                    }`}
+                                                                disabled={!ethers.isAddress(recipientAddress()) || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0}
+                                                                onClick={() => setFlowStep(2)}
+                                                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                                             >
-                                                                {sendMode() === 'batch' ? `Process Batch (${parsedBatchTransactions().length})` : 'Review Transaction'}
+                                                                Review Transaction
                                                             </button>
                                                         </div>
                                                     </Show>
 
-                                                    {/* Step 2: Confirmation (Single Only) - Batch handles its own confirmation flow via Password Modal */}
-                                                    <Show when={flowStep() === 2 && sendMode() === 'single'}>
+                                                    {/* Step 2: Confirmation (Single) */}
+                                                    <Show when={flowStep() === 2}>
                                                         <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                                             <div class="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6 text-center">
                                                                 <div class="text-[11px] font-bold text-blue-400 uppercase tracking-widest mb-2">
@@ -3249,21 +3171,16 @@ Format:
                                                                 </div>
                                                             </div>
 
-                                                            <div class="flex gap-3">
-                                                                <button
-                                                                    onClick={() => setFlowStep(1)}
-                                                                    class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-2xl transition-all"
-                                                                >
-                                                                    Back
-                                                                </button>
+                                                            <div class="flex gap-4">
+                                                                <button onClick={() => setFlowStep(1)} class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl transition-all">Back</button>
                                                                 <button
                                                                     onClick={handleTransaction}
                                                                     disabled={flowLoading()}
-                                                                    class="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/25 flex items-center justify-center gap-2"
+                                                                    class="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2"
                                                                 >
-                                                                    <Show when={flowLoading()} fallback={isSchedulingTimeLock() ? "Schedule with Agent" : "Confirm & Send"}>
+                                                                    <Show when={flowLoading()} fallback="Confirm & Send">
                                                                         <RefreshCw class="w-4 h-4 animate-spin" />
-                                                                        {isSchedulingTimeLock() ? "Agent Working..." : "Sending..."}
+                                                                        Sending...
                                                                     </Show>
                                                                 </button>
                                                             </div>
@@ -3325,9 +3242,6 @@ Format:
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <p class="text-gray-500 mb-8 max-w-xs leading-relaxed text-sm">
-                                                                Your transaction has been submitted to the Vision Chain network.
-                                                            </p>
                                                             <div class="w-full space-y-3">
                                                                 <a
                                                                     href={`/visionscan?tx=${lastTxHash()}`}
@@ -3347,6 +3261,105 @@ Format:
                                                     </Show>
                                                 </div>
                                             </Show>
+
+                                            {/* NEW: Batch Send Flow */}
+                                            <Show when={activeFlow() === 'batch_send'}>
+                                                <div class="space-y-4">
+                                                    {/* Header: Batch Send */}
+                                                    <div class="flex justify-between items-center mb-2">
+                                                        <span class="text-[11px] font-black text-purple-400 uppercase tracking-widest">Batch Transfer (Excel)</span>
+                                                        <button
+                                                            onClick={() => setActiveFlow('send')}
+                                                            class="text-[10px] font-bold text-gray-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
+                                                        >
+                                                            &larr; Switch to Single Mode
+                                                        </button>
+                                                    </div>
+
+                                                    <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                                                        {/* Asset Selection (Simplified for Batch) */}
+                                                        <div>
+                                                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
+                                                            <div class="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/50 rounded-xl relative">
+                                                                <div class="text-xs font-bold text-white flex-1">VCN</div>
+                                                                <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/20 px-2 py-1 rounded-lg">
+                                                                    Available: {getAssetData('VCN').liquidBalance.toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Batch Logic */}
+                                                        <div>
+                                                            <div class="flex justify-between items-center mb-2 px-1">
+                                                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bulk Input</label>
+                                                                <button
+                                                                    class="text-[10px] text-purple-400 cursor-pointer hover:underline font-bold"
+                                                                    onClick={() => {
+                                                                        const randomHeader = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                                                                        setBatchInput(prev => (prev ? prev + "\n" : "") + `User${Math.floor(Math.random() * 99)}, ${randomHeader}, ${(Math.random() * 100).toFixed(0)}`);
+                                                                    }}
+                                                                >
+                                                                    + Add Test Row
+                                                                </button>
+                                                            </div>
+                                                            <textarea
+                                                                placeholder={`Format: Name, Address, Amount\nExample: Alice, 0x742d35Cc6634C0532925a3b844Bc454e4438f44e, 50`}
+                                                                value={batchInput()}
+                                                                onInput={(e) => setBatchInput(e.currentTarget.value)}
+                                                                class="w-full h-32 bg-[#1a1a1e] border border-white/10 rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-500 outline-none focus:border-purple-500/50 transition-all resize-none leading-relaxed whitespace-pre shadow-inner"
+                                                            />
+                                                        </div>
+
+                                                        {/* Grid View of Parsed Data */}
+                                                        <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
+                                                            <div class="grid grid-cols-12 gap-2 p-3 bg-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                                                <div class="col-span-3">Name</div>
+                                                                <div class="col-span-6">Address</div>
+                                                                <div class="col-span-3 text-right">Amount</div>
+                                                            </div>
+                                                            <div class="max-h-40 overflow-y-auto custom-scrollbar">
+                                                                <For each={parsedBatchTransactions()}>
+                                                                    {(tx, i) => (
+                                                                        <div class="grid grid-cols-12 gap-2 p-3 border-b border-white/5 hover:bg-white/5 transition-colors text-xs items-center">
+                                                                            <div class="col-span-3 text-gray-300 truncate font-medium">{tx.name || `User ${i() + 1}`}</div>
+                                                                            <div class="col-span-6 font-mono text-[10px] text-blue-400 truncate" title={tx.recipient}>{tx.recipient}</div>
+                                                                            <div class="col-span-3 text-right font-mono font-bold text-white">{parseFloat(tx.amount || '0').toLocaleString()} {tx.symbol || 'VCN'}</div>
+                                                                        </div>
+                                                                    )}
+                                                                </For>
+                                                                <Show when={parsedBatchTransactions().length === 0}>
+                                                                    <div class="p-8 text-center text-gray-600 text-xs italic">
+                                                                        No valid entries found.<br />Paste data above.
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
+                                                            <div class="p-3 bg-purple-900/10 border-t border-purple-500/20 flex justify-between items-center">
+                                                                <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Total</span>
+                                                                <span class="text-sm font-bold text-white font-mono">
+                                                                    {parsedBatchTransactions().reduce((acc, curr) => acc + parseFloat(curr.amount || '0'), 0).toLocaleString()} VCN
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            disabled={parsedBatchTransactions().length === 0}
+                                                            onClick={handleBatchTransaction}
+                                                            class="w-full py-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-purple-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            Process Batch ({parsedBatchTransactions().length})
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </Show>
+
+
+
+
+
+
+
+
+
 
                                             <Show when={activeFlow() === 'receive'}>
                                                 <div class="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -3651,274 +3664,278 @@ Format:
                                             </Show>
                                         </div>
                                     </div>
-                                </Motion.div>
-                            </div>
-                        </Show>
-                    </Presence>
+                                </Motion.div >
+                            </div >
+                        </Show >
+                    </Presence >
                     {/* Password Modal */}
-                    <Portal>
-                        <Presence>
-                            <Show when={showPasswordModal()}>
-                                <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                                    <Motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        class="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                                        onClick={() => setShowPasswordModal(false)}
-                                    />
-                                    <Motion.div
-                                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                        class="relative w-[90vw] max-w-[420px] bg-[#27272a] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl mx-auto"
-                                    >
-                                        <div class="p-8 space-y-6">
-                                            <div class="text-center">
-                                                <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
-                                                    <Lock class="w-8 h-8 text-blue-400" />
-                                                </div>
-                                                <h3 class="text-2xl font-bold text-white mb-2">
-                                                    {isRestoring() ? 'Finalize Restoration' : (passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password')}
-                                                </h3>
-                                                <p class="text-sm text-gray-400">
-                                                    {isRestoring()
-                                                        ? 'Set a spending password to protect your wallet on this browser. This can be different from your old password.'
-                                                        : (passwordMode() === 'setup'
-                                                            ? 'This password encrypts your private key locally and is required for transactions.'
-                                                            : 'Please enter your spending password to authorize this transaction.')}
-                                                    <br />
-                                                    <span class="text-blue-400 font-bold">It is different from your login password.</span>
-                                                </p>
-                                            </div>
-
-                                            <div class="space-y-4">
-                                                <div class="relative w-full flex items-center">
-                                                    <input
-                                                        type={showWalletPassword() ? "text" : "password"}
-                                                        placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
-                                                        class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
-                                                        value={walletPassword()}
-                                                        onInput={(e) => setWalletPassword(e.currentTarget.value)}
-                                                        onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
-                                                        autocomplete="new-password"
-                                                        spellcheck={false}
-                                                    />
-                                                    <button
-                                                        onClick={() => setShowWalletPassword(!showWalletPassword())}
-                                                        class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
-                                                    >
-                                                        {showWalletPassword() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
-                                                    </button>
-                                                    {/* Visual Balancer for Symmetry */}
-                                                    <div class="absolute left-5 top-1/2 -translate-y-1/2 p-2 opacity-0 pointer-events-none">
-                                                        <Eye class="w-4 h-4" />
-                                                    </div>
-                                                </div>
-
-                                                <Show when={passwordMode() === 'setup' && !isRestoring()}>
-                                                    <div class="relative w-full flex items-center">
-                                                        <input
-                                                            type={showWalletPassword() ? "text" : "password"}
-                                                            placeholder="Confirm spending password"
-                                                            class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
-                                                            value={confirmWalletPassword()}
-                                                            onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
-                                                            onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
-                                                            autocomplete="new-password"
-                                                            spellcheck={false}
-                                                        />
-                                                        {/* Symmetry Balancers */}
-                                                        <div class="absolute right-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
-                                                            <Eye class="w-4 h-4" />
-                                                        </div>
-                                                        <div class="absolute left-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
-                                                            <Eye class="w-4 h-4" />
-                                                        </div>
-                                                    </div>
-                                                </Show>
-
-                                                <div class="flex items-center justify-center gap-2">
-                                                    <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
-                                                    <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                                                        Encrypted Locally. AES-256 GCM.
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            <div class="flex gap-3">
-                                                <button
-                                                    onClick={() => setShowPasswordModal(false)}
-                                                    class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
-                                                    disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword())}
-                                                    class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    <Show when={isLoading()} fallback={isRestoring() ? "Restore Wallet" : (passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment")}>
-                                                        <RefreshCw class="w-4 h-4 animate-spin" />
-                                                        {isRestoring() ? 'Restoring...' : (passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...')}
-                                                    </Show>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </Motion.div>
-                                </div>
-                            </Show>
-
-                            {/* Onboarding Success Modal */}
-                            <Show when={onboardingSuccess()}>
-                                <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                                    <Motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        class="absolute inset-0 bg-black/90 backdrop-blur-md"
-                                    />
-                                    <Motion.div
-                                        initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        class="relative w-full max-w-lg bg-gradient-to-b from-[#111116] to-[#0a0a0b] border border-white/10 rounded-[40px] p-10 text-center shadow-[0_0_50px_rgba(34,197,94,0.1)] overflow-hidden"
-                                    >
-                                        {/* Success Confetti Effect (simulated with glow) */}
-                                        <div class="absolute -top-20 -left-20 w-64 h-64 bg-green-500/10 rounded-full blur-[100px]" />
-                                        <div class="absolute -bottom-20 -right-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]" />
-
-                                        <div class="relative z-10 space-y-8">
-                                            <div class="w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto rotate-12 shadow-2xl shadow-green-500/30">
-                                                <Check class="w-12 h-12 text-white -rotate-12" />
-                                            </div>
-
-                                            <div class="space-y-3">
-                                                <h3 class="text-4xl font-black text-white tracking-tight">Welcome to Vision Chain</h3>
-                                                <p class="text-gray-400 font-medium text-lg leading-relaxed">
-                                                    Your decentralized identity is ready. Your assets and nodes are now under your full control.
-                                                </p>
-                                            </div>
-
-                                            <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-3xl space-y-4 text-left">
-                                                <div class="flex items-center gap-4">
-                                                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                                                        <Shield class="w-5 h-5 text-blue-400" />
-                                                    </div>
-                                                    <div>
-                                                        <div class="text-sm font-bold text-white">Encrypted & Secure</div>
-                                                        <div class="text-xs text-gray-500">Your seed phrase is locked with your password.</div>
-                                                    </div>
-                                                </div>
-                                                <div class="flex items-center gap-4">
-                                                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                                        <Zap class="w-5 h-5 text-purple-400" />
-                                                    </div>
-                                                    <div>
-                                                        <div class="text-sm font-bold text-white">Asset Ready</div>
-                                                        <div class="text-xs text-gray-500">Your purchases have been detected and linked.</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <button
-                                                onClick={finishOnboarding}
-                                                class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
-                                            >
-                                                Go to Wallet
-                                            </button>
-                                        </div>
-                                    </Motion.div>
-                                </div>
-                            </Show>
-                        </Presence>
-                    </Portal>
-                    {/* Mobile Bottom Navigation */}
-                    <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-3 pb-safe flex items-center justify-around h-[80px]">
-                        {[
-                            { id: 'assets', label: 'Assets', icon: PieChart },
-                            { id: 'nodes', label: 'Nodes', icon: Camera },
-                            { id: 'chat', label: 'Vision AI', icon: Sparkles, primary: true },
-                            { id: 'referral', label: 'Earn', icon: UserPlus },
-                            { id: 'settings', label: 'Settings', icon: Settings },
-                        ].map((item) => (
-                            <button
-                                onClick={() => onboardingStep() === 0 && setActiveView(item.id)}
-                                class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                            >
-                                <div class={`w-12 h-10 rounded-2xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-2 scale-110' : ''}`}>
-                                    <item.icon class="w-5 h-5" />
-                                </div>
-                                <span class={`text-[9px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
-                                {activeView() === item.id && !item.primary && (
-                                    <div class="absolute -bottom-1 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
-                                )}
-                            </button>
-                        ))}
-                    </div>
                 </main>
-            </section >
-
-            {/* Hidden canvas for cropping */}
-            <canvas ref={cropCanvasRef} class="hidden" />
-
-            {/* Profile Image Crop Modal */}
-            <Presence>
-                <Show when={isCropping()}>
-                    <Portal>
-                        <Motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            class="fixed inset-0 z-[100] flex items-center justify-center px-4"
-                        >
-                            <div class="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => !isUploadingImage() && setIsCropping(false)} />
-
+            </section>
+            < Portal >
+                <Presence>
+                    <Show when={showPasswordModal()}>
+                        <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
                             <Motion.div
-                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                                animate={{ scale: 1, opacity: 1, y: 0 }}
-                                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                                class="relative w-full max-w-lg bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                                onClick={() => setShowPasswordModal(false)}
+                            />
+                            <Motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                class="relative w-[90vw] max-w-[420px] bg-[#27272a] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl mx-auto"
                             >
-                                <div class="p-8 pb-4">
-                                    <h3 class="text-2xl font-bold text-white mb-2">Crop Profile Picture</h3>
-                                    <p class="text-gray-400 text-sm">Adjust the photo to fit your profile best</p>
-                                </div>
+                                <div class="p-8 space-y-6">
+                                    <div class="text-center">
+                                        <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-4">
+                                            <Lock class="w-8 h-8 text-blue-400" />
+                                        </div>
+                                        <h3 class="text-2xl font-bold text-white mb-2">
+                                            {isRestoring() ? 'Finalize Restoration' : (passwordMode() === 'setup' ? 'Set Wallet Spending Password' : 'Confirm Spending Password')}
+                                        </h3>
+                                        <p class="text-sm text-gray-400">
+                                            {isRestoring()
+                                                ? 'Set a spending password to protect your wallet on this browser. This can be different from your old password.'
+                                                : (passwordMode() === 'setup'
+                                                    ? 'This password encrypts your private key locally and is required for transactions.'
+                                                    : 'Please enter your spending password to authorize this transaction.')}
+                                            <br />
+                                            <span class="text-blue-400 font-bold">It is different from your login password.</span>
+                                        </p>
+                                    </div>
 
-                                <div class="p-8 flex flex-col items-center">
-                                    <div class="w-72 h-72 rounded-3xl overflow-hidden border-2 border-blue-500/50 relative bg-black/20 group">
-                                        <img
-                                            src={imageToCrop()!}
-                                            class="w-full h-full object-cover opacity-80"
-                                        />
-                                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                            <div class="w-64 h-64 border-2 border-dashed border-white/30 rounded-2xl" />
+                                    <div class="space-y-4">
+                                        <div class="relative w-full flex items-center">
+                                            <input
+                                                type={showWalletPassword() ? "text" : "password"}
+                                                placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
+                                                class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
+                                                value={walletPassword()}
+                                                onInput={(e) => setWalletPassword(e.currentTarget.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
+                                                autocomplete="new-password"
+                                                spellcheck={false}
+                                            />
+                                            <button
+                                                onClick={() => setShowWalletPassword(!showWalletPassword())}
+                                                class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors p-2"
+                                            >
+                                                {showWalletPassword() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
+                                            </button>
+                                            {/* Visual Balancer for Symmetry */}
+                                            <div class="absolute left-5 top-1/2 -translate-y-1/2 p-2 opacity-0 pointer-events-none">
+                                                <Eye class="w-4 h-4" />
+                                            </div>
+                                        </div>
+
+                                        <Show when={passwordMode() === 'setup' && !isRestoring()}>
+                                            <div class="relative w-full flex items-center">
+                                                <input
+                                                    type={showWalletPassword() ? "text" : "password"}
+                                                    placeholder="Confirm spending password"
+                                                    class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
+                                                    value={confirmWalletPassword()}
+                                                    onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                                    autocomplete="new-password"
+                                                    spellcheck={false}
+                                                />
+                                                {/* Symmetry Balancers */}
+                                                <div class="absolute right-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
+                                                    <Eye class="w-4 h-4" />
+                                                </div>
+                                                <div class="absolute left-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
+                                                    <Eye class="w-4 h-4" />
+                                                </div>
+                                            </div>
+                                        </Show>
+
+                                        <div class="flex items-center justify-center gap-2">
+                                            <ShieldCheck class="w-3.5 h-3.5 text-green-500" />
+                                            <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                                                Encrypted Locally. AES-256 GCM.
+                                            </p>
                                         </div>
                                     </div>
 
-                                    <div class="mt-8 flex gap-4 w-full">
+                                    <div class="flex gap-3">
                                         <button
-                                            onClick={() => setIsCropping(false)}
-                                            disabled={isUploadingImage()}
-                                            class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/10 disabled:opacity-50"
+                                            onClick={() => setShowPasswordModal(false)}
+                                            class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
                                         >
                                             Cancel
                                         </button>
                                         <button
-                                            onClick={handleUploadCrop}
-                                            disabled={isUploadingImage()}
-                                            class="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                                            onClick={() => passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction()}
+                                            disabled={!walletPassword() || isLoading() || (passwordMode() === 'setup' && !isRestoring() && !confirmWalletPassword())}
+                                            class="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-30 transition-all flex items-center justify-center gap-2"
                                         >
-                                            <Show when={isUploadingImage()} fallback={<><Check class="w-5 h-5" /> Save Changes</>}>
-                                                <RefreshCw class="w-5 h-5 animate-spin" /> Uploading...
+                                            <Show when={isLoading()} fallback={isRestoring() ? "Restore Wallet" : (passwordMode() === 'setup' ? "Create Wallet" : "Confirm Payment")}>
+                                                <RefreshCw class="w-4 h-4 animate-spin" />
+                                                {isRestoring() ? 'Restoring...' : (passwordMode() === 'setup' ? 'Encrypting...' : 'Authorizing...')}
                                             </Show>
                                         </button>
                                     </div>
                                 </div>
                             </Motion.div>
-                        </Motion.div>
-                    </Portal>
-                </Show>
-            </Presence>
+                        </div>
+                    </Show>
+
+                    {/* Onboarding Success Modal */}
+                    <Show when={onboardingSuccess()}>
+                        <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                            <Motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                            />
+                            <Motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                class="relative w-full max-w-lg bg-gradient-to-b from-[#111116] to-[#0a0a0b] border border-white/10 rounded-[40px] p-10 text-center shadow-[0_0_50px_rgba(34,197,94,0.1)] overflow-hidden"
+                            >
+                                {/* Success Confetti Effect (simulated with glow) */}
+                                <div class="absolute -top-20 -left-20 w-64 h-64 bg-green-500/10 rounded-full blur-[100px]" />
+                                <div class="absolute -bottom-20 -right-20 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px]" />
+
+                                <div class="relative z-10 space-y-8">
+                                    <div class="w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto rotate-12 shadow-2xl shadow-green-500/30">
+                                        <Check class="w-12 h-12 text-white -rotate-12" />
+                                    </div>
+
+                                    <div class="space-y-3">
+                                        <h3 class="text-4xl font-black text-white tracking-tight">Welcome to Vision Chain</h3>
+                                        <p class="text-gray-400 font-medium text-lg leading-relaxed">
+                                            Your decentralized identity is ready. Your assets and nodes are now under your full control.
+                                        </p>
+                                    </div>
+
+                                    <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-3xl space-y-4 text-left">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                                <Shield class="w-5 h-5 text-blue-400" />
+                                            </div>
+                                            <div>
+                                                <div class="text-sm font-bold text-white">Encrypted & Secure</div>
+                                                <div class="text-xs text-gray-500">Your seed phrase is locked with your password.</div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                <Zap class="w-5 h-5 text-purple-400" />
+                                            </div>
+                                            <div>
+                                                <div class="text-sm font-bold text-white">Asset Ready</div>
+                                                <div class="text-xs text-gray-500">Your purchases have been detected and linked.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={finishOnboarding}
+                                        class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
+                                    >
+                                        Go to Wallet
+                                    </button>
+                                </div>
+                            </Motion.div>
+                        </div>
+                    </Show>
+                </Presence>
+            </Portal >
+            {/* Mobile Bottom Navigation */}
+            < div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-3 pb-safe flex items-center justify-around h-[80px]" >
+                {
+                    [
+                        { id: 'assets', label: 'Assets', icon: PieChart },
+                        { id: 'nodes', label: 'Nodes', icon: Camera },
+                        { id: 'chat', label: 'Vision AI', icon: Sparkles, primary: true },
+                        { id: 'referral', label: 'Earn', icon: UserPlus },
+                        { id: 'settings', label: 'Settings', icon: Settings },
+                    ].map((item) => (
+                        <button
+                            onClick={() => onboardingStep() === 0 && setActiveView(item.id)}
+                            class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                        >
+                            <div class={`w-12 h-10 rounded-2xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-2 scale-110' : ''}`}>
+                                <item.icon class="w-5 h-5" />
+                            </div>
+                            <span class={`text-[9px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
+                            {activeView() === item.id && !item.primary && (
+                                <div class="absolute -bottom-1 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
+                            )}
+                        </button>
+                    ))
+                }
+            </div >
+        </main >
+            </section >
+
+    {/* Hidden canvas for cropping */ }
+    < canvas ref = { cropCanvasRef } class="hidden" />
+
+        {/* Profile Image Crop Modal */ }
+        < Presence >
+        <Show when={isCropping()}>
+            <Portal>
+                <Motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    class="fixed inset-0 z-[100] flex items-center justify-center px-4"
+                >
+                    <div class="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => !isUploadingImage() && setIsCropping(false)} />
+
+                    <Motion.div
+                        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                        class="relative w-full max-w-lg bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                    >
+                        <div class="p-8 pb-4">
+                            <h3 class="text-2xl font-bold text-white mb-2">Crop Profile Picture</h3>
+                            <p class="text-gray-400 text-sm">Adjust the photo to fit your profile best</p>
+                        </div>
+
+                        <div class="p-8 flex flex-col items-center">
+                            <div class="w-72 h-72 rounded-3xl overflow-hidden border-2 border-blue-500/50 relative bg-black/20 group">
+                                <img
+                                    src={imageToCrop()!}
+                                    class="w-full h-full object-cover opacity-80"
+                                />
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-64 h-64 border-2 border-dashed border-white/30 rounded-2xl" />
+                                </div>
+                            </div>
+
+                            <div class="mt-8 flex gap-4 w-full">
+                                <button
+                                    onClick={() => setIsCropping(false)}
+                                    disabled={isUploadingImage()}
+                                    class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/10 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleUploadCrop}
+                                    disabled={isUploadingImage()}
+                                    class="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                                >
+                                    <Show when={isUploadingImage()} fallback={<><Check class="w-5 h-5" /> Save Changes</>}>
+                                        <RefreshCw class="w-5 h-5 animate-spin" /> Uploading...
+                                    </Show>
+                                </button>
+                            </div>
+                        </div>
+                    </Motion.div>
+                </Motion.div>
+            </Portal>
         </Show>
+            </Presence >
+        </Show >
     );
 };
 
