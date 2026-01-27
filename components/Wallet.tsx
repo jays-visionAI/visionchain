@@ -1679,35 +1679,68 @@ Format:
             // 1. Check for Intent JSON
             let intentData: any = null;
 
-            // Advanced Intent Discovery: Try to find "multi" intent first (Priority)
-            const multiMatch = response.match(/\{[\s\S]*?"intent"\s*:\s*"multi"[\s\S]*?\}/);
-            const genericMatches = response.match(/\{[\s\S]*?"intent"[\s\S]*?\}/g);
+            // STRATEGY A: Check for Markdown Code Blocks first (Highest Reliability)
+            const codeBlockMatch = response.match(/```json([\s\S]*?)```/);
+            if (codeBlockMatch) {
+                let jsonStr = codeBlockMatch[1].trim();
+                // Fix common AI JSON errors
+                if (jsonStr.startsWith(',')) jsonStr = jsonStr.substring(1).trim(); // Remove leading comma
 
-            if (multiMatch) {
                 try {
-                    intentData = JSON.parse(multiMatch[0]);
+                    // Try parsing as is
+                    intentData = JSON.parse(jsonStr);
                 } catch (e) {
-                    console.warn("Multi Intent Parse Failed", e);
+                    // Try wrapping in array if it looks like a list of objects e.g. {..}, {..}
+                    try {
+                        intentData = JSON.parse(`[${jsonStr}]`);
+                    } catch (e2) {
+                        console.warn("[AI] JSON Parse Failed in Code Block", e2);
+                    }
                 }
-            } else if (genericMatches && genericMatches.length > 1) {
-                // HEURISTIC: If AI outputted multiple individual JSONs, wrap them into a 'multi' intent automatically
-                console.log("[AI] Auto-wrapping multiple intents into 'multi'");
-                const wrappedTransactions = genericMatches.map(str => {
-                    try { return JSON.parse(str); } catch { return null; }
-                }).filter(Boolean);
 
-                if (wrappedTransactions.length > 0) {
+                // If processed successfully, check if valid intent or transaction list
+                if (Array.isArray(intentData)) {
+                    // Auto-convert array to 'multi' intent
                     intentData = {
                         intent: 'multi',
-                        transactions: wrappedTransactions,
-                        description: "Consolidated Batch Transfer"
+                        transactions: intentData,
+                        description: "Batch Transfer"
                     };
                 }
-            } else if (genericMatches && genericMatches.length === 1) {
-                try {
-                    intentData = JSON.parse(genericMatches[0]);
-                } catch (e) {
-                    console.warn("Single Intent Parse Failed", e);
+            }
+
+            // STRATEGY B: Regex fallback if no code block found (Backward Compatibility)
+            if (!intentData) {
+                // Advanced Intent Discovery: Try to find "multi" intent first (Priority)
+                const multiMatch = response.match(/\{[\s\S]*?"intent"\s*:\s*"multi"[\s\S]*?\}/);
+                const genericMatches = response.match(/\{[\s\S]*?"intent"[\s\S]*?\}/g);
+
+                if (multiMatch) {
+                    try {
+                        intentData = JSON.parse(multiMatch[0]);
+                    } catch (e) {
+                        console.warn("Multi Intent Parse Failed", e);
+                    }
+                } else if (genericMatches && genericMatches.length > 1) {
+                    // HEURISTIC: If AI outputted multiple individual JSONs, wrap them into a 'multi' intent automatically
+                    console.log("[AI] Auto-wrapping multiple intents into 'multi'");
+                    const wrappedTransactions = genericMatches.map(str => {
+                        try { return JSON.parse(str); } catch { return null; }
+                    }).filter(Boolean);
+
+                    if (wrappedTransactions.length > 0) {
+                        intentData = {
+                            intent: 'multi',
+                            transactions: wrappedTransactions,
+                            description: "Consolidated Batch Transfer"
+                        };
+                    }
+                } else if (genericMatches && genericMatches.length === 1) {
+                    try {
+                        intentData = JSON.parse(genericMatches[0]);
+                    } catch (e) {
+                        console.warn("Single Intent Parse Failed", e);
+                    }
                 }
             }
 
@@ -1837,7 +1870,11 @@ Format:
             }
 
             // 3. Clean up response for display
+            // Remove intent JSON blocks
             let cleanResponse = response.replace(/\{[\s\S]*?"intent"[\s\S]*?\}/g, "").trim();
+            // Remove markdown code blocks
+            cleanResponse = cleanResponse.replace(/```json[\s\S]*?```/g, "").trim();
+            cleanResponse = cleanResponse.replace(/```[\s\S]*?```/g, "").trim(); // Generic blocks too
 
             if (!cleanResponse && intentData) {
                 const intent = intentData.intent || 'transaction';
