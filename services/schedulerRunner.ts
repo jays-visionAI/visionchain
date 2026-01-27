@@ -35,30 +35,67 @@ export const runSchedulerTick = async () => {
     const now = new Date();
     const nowTs = Timestamp.fromDate(now);
 
+    // --- 0. Recover Stuck Jobs ---
+    // Tasks that are 'EXECUTING' but their lock has expired should be reset to 'WAITING'
+    const stuckRef = collection(db, 'scheduledTransfers');
+    const stuckQ = query(
+        stuckRef,
+        where('status', '==', 'EXECUTING'),
+        where('lockExpiresAt', '<', nowTs),
+        limit(10)
+    );
+    const stuckSnapshot = await getDocs(stuckQ);
+    if (!stuckSnapshot.empty) {
+        console.log(`-> Recovering ${stuckSnapshot.size} stuck jobs...`);
+        for (const stuckDoc of stuckSnapshot.docs) {
+            await updateDoc(stuckDoc.ref, {
+                status: 'WAITING',
+                lockExpiresAt: null,
+                lastError: 'RECOVERED: Runner lock expired'
+            });
+        }
+    }
+
     // 1. Query Due Jobs
     const jobsRef = collection(db, 'scheduledTransfers');
+
+    // We keep the query relatively simple to avoid composite index requirements
+    // if possible, while still filtering enough.
     const q = query(
         jobsRef,
         where('status', '==', 'WAITING'),
         where('unlockTimeTs', '<=', nowTs),
-        where('nextRetryAt', '<=', nowTs),
         limit(EXECUTION_BATCH_SIZE)
     );
 
+    console.log("-> Querying WAITING tasks where unlockTimeTs <=", now.toISOString());
     const snapshot = await getDocs(q);
+
     if (snapshot.empty) {
-        console.log("No due jobs found.");
+        console.log("-> No due jobs found in this tick.");
         return;
     }
 
-    console.log(`Found ${snapshot.docs.length} jobs to process.`);
+    // Secondary Filter: only pick those where nextRetryAt <= now
+    const eligibleJobs = snapshot.docs.filter(docSnap => {
+        const data = docSnap.data();
+        if (!data.nextRetryAt) return true; // Default to due
+        return data.nextRetryAt.toMillis() <= now.getTime();
+    });
+
+    if (eligibleJobs.length === 0) {
+        console.log("-> Found tasks but none are past their nextRetryAt yet.");
+        return;
+    }
+
+    console.log(`-> Processing ${eligibleJobs.length} eligible jobs.`);
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider); // Paymaster/Executor Wallet
     const contract = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, wallet);
 
     // 2. Process Each Job
-    for (const jobDoc of snapshot.docs) {
+    for (const jobDoc of eligibleJobs) {
         const jobId = jobDoc.id;
         try {
             await runTransaction(db, async (transaction) => {

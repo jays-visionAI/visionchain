@@ -878,16 +878,14 @@ export const subscribeToQueue = (
     return onSnapshot(q, (snapshot: any) => {
         const tasks = snapshot.docs.map((doc: any) => {
             const data = doc.data();
-            let status = 'WAITING';
-            // Map DB status to UI status
-            if (data.status === 'executed') status = 'SENT';
-            else if (data.status === 'failed') status = 'FAILED';
-            else if (data.status === 'cancelled') status = 'CANCELLED';
-            else if (data.status === 'pending') {
-                // Check if executing (optimistic or separate flag)
-                // For now maps to WAITING.
-                // If we had 'processing' in DB, map to EXECUTING
+            // Map DB status to UI status (Aligned with Backend Runner)
+            if (data.status === 'SENT') status = 'SENT';
+            else if (data.status === 'FAILED') status = 'FAILED';
+            else if (data.status === 'CANCELLED') status = 'CANCELLED';
+            else if (data.status === 'WAITING' || data.status === 'pending') {
                 status = 'WAITING';
+            } else if (data.status === 'EXECUTING') {
+                status = 'EXECUTING';
             }
 
             // Calculate relative time or formatted time
@@ -953,7 +951,7 @@ export const saveScheduledTransfer = async (task: {
     unlockTime: number; // Unix timestamp
     creationTx: string;
     scheduleId?: string; // ID from smart contract
-    status: 'pending' | 'executed' | 'failed' | 'cancelled';
+    status: 'WAITING' | 'SENT' | 'FAILED' | 'CANCELLED';
 }) => {
     try {
         const db = getFirestore(); // Ensure we use the right db instance

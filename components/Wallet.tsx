@@ -541,7 +541,7 @@ const Wallet = (): JSX.Element => {
                         unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
                         creationTx: receipt.hash,
                         scheduleId: scheduleId,
-                        status: 'pending'
+                        status: 'WAITING'
                     });
 
                 } else if (symbol === 'VCN') {
@@ -700,7 +700,7 @@ const Wallet = (): JSX.Element => {
                                 unlockTime: Math.floor(Date.now() / 1000) + delay,
                                 creationTx: receipt.hash,
                                 scheduleId: scheduleRes.scheduleId,
-                                status: 'pending'
+                                status: 'WAITING'
                             });
                         }
 

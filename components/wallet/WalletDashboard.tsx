@@ -1,6 +1,7 @@
 import { createSignal, Show, For, createEffect } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
+import AgentChip from '../chat/queue/AgentChip';
 import QueueDrawer from '../chat/queue/QueueDrawer';
 import {
     Sparkles,
@@ -396,82 +397,35 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     transactions={props.reviewMulti() || []}
                     onApprove={() => {
                         props.onStartBatch(props.reviewMulti() || []);
-                        setIsBatchDrawerOpen(false);
-                        props.setReviewMulti(null);
                     }}
                 />
 
-                {/* Batch Agent Queue (Top) */}
-                <Show when={props.batchAgents().length > 0}>
-                    <div class="absolute top-4 left-0 right-0 z-[40] pointer-events-none px-6">
-                        <div class="max-w-4xl mx-auto flex items-center justify-end gap-3 pointer-events-auto">
-                            <For each={props.batchAgents()}>
-                                {(agent) => (
-                                    <Motion.div
-                                        initial={{ opacity: 0, x: 20, scale: 0.8 }}
-                                        animate={{ opacity: 1, x: 0, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.8 }}
-                                        class="group relative flex items-center gap-3 bg-[#111113]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-2 pr-4 shadow-2xl overflow-hidden"
-                                    >
-                                        {/* Status Glow */}
-                                        <div class={`absolute inset-0 opacity-10 ${agent.status === 'executing' ? 'bg-blue-500' : 'bg-amber-500'}`} />
-
-                                        <div class="relative w-10 h-10 flex items-center justify-center">
-                                            {/* Progress Ring */}
-                                            <svg class="absolute inset-0 w-full h-full -rotate-90">
-                                                <circle
-                                                    cx="20" cy="20" r="18"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    stroke-width="3"
-                                                    class="text-white/[0.05]"
-                                                />
-                                                <circle
-                                                    cx="20" cy="20" r="18"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    stroke-width="3"
-                                                    stroke-dasharray="113"
-                                                    stroke-dashoffset={(113 - (113 * (agent.successCount + agent.failedCount)) / agent.totalCount).toString()}
-                                                    stroke-linecap="round"
-                                                    class={`${agent.status === 'executing' ? 'text-blue-500' : 'text-amber-500'} transition-all duration-1000`}
-                                                />
-                                            </svg>
-                                            <div class="flex items-center justify-center">
-                                                <Show when={agent.status === 'executing'} fallback={<Lock class="w-4 h-4 text-amber-500" />}>
-                                                    <Layers class="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
-                                                </Show>
-                                            </div>
-                                        </div>
-
-                                        <div class="flex flex-col min-w-[80px]">
-                                            <div class="text-[10px] font-black text-white uppercase tracking-wider mb-0.5">Enterprise Batch</div>
-                                            <div class="flex items-center gap-2">
-                                                <div class="text-[11px] font-bold text-gray-400">
-                                                    {agent.successCount + agent.failedCount} / {agent.totalCount}
-                                                </div>
-                                                <div class="h-1 w-1 rounded-full bg-gray-700" />
-                                                <div class={`${agent.status === 'executing' ? 'text-blue-400' : 'text-amber-400'} text-[9px] font-black uppercase`}>
-                                                    {agent.status}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <Show when={agent.failedCount > 0}>
-                                            <div class="px-2 py-0.5 bg-red-500/10 border border-red-500/20 rounded-md">
-                                                <div class="text-[9px] font-black text-red-400">-{agent.failedCount} FAIL</div>
-                                            </div>
-                                        </Show>
-                                    </Motion.div>
-                                )}
-                            </For>
-                        </div>
+                {/* Top Queue Monitor: unified view for all background agents */}
+                <div class="absolute top-4 left-0 right-0 z-[40] pointer-events-none px-6">
+                    <div class="max-w-4xl mx-auto flex flex-col items-end gap-3 pointer-events-auto">
+                        <For each={props.batchAgents()}>
+                            {(agent) => (
+                                <AgentChip
+                                    task={{
+                                        id: agent.id,
+                                        type: 'BATCH',
+                                        summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
+                                        status: agent.status === 'executing' ? 'EXECUTING' : 'SENT',
+                                        timestamp: agent.startTime,
+                                        progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
+                                    }}
+                                    onClick={() => {
+                                        // Potential: Show details modal for this batch
+                                    }}
+                                />
+                            )}
+                        </For>
                     </div>
-                </Show>
+                </div>
 
                 {/* Messages Area */}
                 <div
-                    ref={messagesContainerRef}
+                    ref={(el) => messagesContainerRef = el}
                     class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth"
                 >
                     <Show when={props.messages().length === 0}>
@@ -772,10 +726,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* Right Sidebar - Portfolio & Analytics (Always Fixed for Wallet context) */}
-            <div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block scrollbar-hide">
+            < div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block scrollbar-hide" >
                 <div class="p-8 space-y-10">
                     {/* Chat History Section (Moved from Left Sidebar) */}
                     <div class="h-[45vh] min-h-[400px] flex flex-col bg-white/[0.02] border border-white/[0.04] rounded-[30px] overflow-hidden shrink-0">

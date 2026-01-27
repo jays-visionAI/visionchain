@@ -88,32 +88,33 @@ export const WalletContacts = (props: WalletContactsProps) => {
             <div class="max-w-6xl mx-auto space-y-8">
 
                 {/* Header Section */}
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                {/* Header Section */}
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div>
-                        <h2 class="text-4xl font-black text-white mb-2 tracking-tight">Address Book</h2>
-                        <p class="text-gray-500 font-medium text-sm">Manage your network and map identifiers to Vision IDs.</p>
+                        <h2 class="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">Address Book</h2>
+                        <p class="text-gray-500 font-medium text-xs md:text-sm">Manage your network and map identifiers to Vision IDs.</p>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing()}
-                            class="flex items-center gap-2 px-5 py-3 bg-blue-600/10 border border-blue-500/20 hover:bg-blue-600/20 text-blue-400 rounded-2xl transition-all font-bold text-sm active:scale-95 disabled:opacity-50"
-                        >
-                            <RefreshCw class={`w-4 h-4 ${isSyncing() ? 'animate-spin' : ''}`} />
-                            {isSyncing() ? 'Syncing...' : 'Sync Contacts'}
-                        </button>
-                        <button
-                            class="flex items-center gap-2 px-5 py-3 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] rounded-2xl transition-all font-bold text-sm text-gray-300 active:scale-95 group"
-                        >
-                            <Smartphone class="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
-                            Import Mobile
-                        </button>
+                    <div class="grid grid-cols-2 md:flex items-center gap-2 md:gap-3">
                         <button
                             onClick={() => setIsModalOpen(true)}
-                            class="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-2xl hover:bg-white/90 transition-all font-black text-sm active:scale-95 shadow-xl shadow-white/5"
+                            class="col-span-2 md:order-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-black rounded-2xl hover:bg-neutral-200 transition-all font-black text-sm active:scale-95 shadow-xl shadow-white/5"
                         >
                             <Plus class="w-4 h-4" />
                             Add Contact
+                        </button>
+                        <button
+                            onClick={handleSync}
+                            disabled={isSyncing()}
+                            class="flex items-center justify-center gap-2 px-4 md:px-5 py-3.5 bg-blue-600/10 border border-blue-500/20 hover:bg-blue-600/20 text-blue-400 rounded-2xl transition-all font-bold text-[13px] md:text-sm active:scale-95 disabled:opacity-50"
+                        >
+                            <RefreshCw class={`w-4 h-4 ${isSyncing() ? 'animate-spin' : ''}`} />
+                            {isSyncing() ? 'Syncing' : 'Sync Contacts'}
+                        </button>
+                        <button
+                            class="flex items-center justify-center gap-2 px-4 md:px-5 py-3.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] rounded-2xl transition-all font-bold text-[13px] md:text-sm text-gray-300 active:scale-95 group"
+                        >
+                            <Smartphone class="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+                            Import Contacts
                         </button>
                     </div>
                 </div>
@@ -125,30 +126,30 @@ export const WalletContacts = (props: WalletContactsProps) => {
                     class="relative overflow-hidden group rounded-[32px]"
                 >
                     <div class="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-cyan-500/10 to-indigo-600/10 blur-xl opacity-50 group-hover:opacity-80 transition-opacity duration-1000" />
-                    <div class="relative bg-[#0d0d0f]/50 backdrop-blur-sm border border-white/[0.08] p-8 flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div class="flex items-center gap-6">
-                            <div class="w-16 h-16 rounded-[24px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-2xl shadow-blue-500/20 relative group-hover:rotate-6 transition-transform">
+                    <div class="relative bg-[#0d0d0f]/50 backdrop-blur-xl border border-white/[0.08] p-6 md:p-8 flex flex-col xl:flex-row items-center justify-between gap-8">
+                        <div class="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-6">
+                            <div class="w-16 h-16 shrink-0 rounded-[24px] bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-2xl shadow-blue-500/20 relative group-hover:rotate-6 transition-transform">
                                 <Zap class="w-8 h-8 text-white fill-white/20" />
                                 <div class="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-4 border-[#0d0d0f] animate-pulse" />
                             </div>
                             <div>
-                                <div class="flex items-center gap-2 mb-1">
+                                <div class="flex items-center justify-center md:justify-start gap-2 mb-1">
                                     <span class="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-md text-[9px] font-black text-blue-400 uppercase tracking-widest">Active Campaign</span>
                                 </div>
-                                <h3 class="text-2xl font-black text-white">Invite Friends & Get 50 VCN Each</h3>
-                                <p class="text-sm text-gray-500 mt-1">Both you and your friend receive a welcome bonus upon VID creation.</p>
+                                <h3 class="text-xl md:text-2xl font-black text-white leading-tight">Invite Friends & Get 50 VCN Each</h3>
+                                <p class="text-sm text-gray-500 mt-1 max-w-sm">Both you and your friend receive a welcome bonus upon VID creation.</p>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-12 px-10 py-4 bg-white/[0.02] rounded-[24px] border border-white/[0.04]">
+                        <div class="w-full xl:w-auto flex items-center justify-around xl:justify-center gap-6 md:gap-12 px-6 md:px-10 py-5 bg-white/[0.02] rounded-[24px] border border-white/[0.04]">
                             <div class="text-center">
-                                <div class="text-3xl font-black text-white tabular-nums">{(invitationCount() * 50).toLocaleString()}</div>
-                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VCN Earned</div>
+                                <div class="text-2xl md:text-3xl font-black text-white tabular-nums">{(invitationCount() * 50).toLocaleString()}</div>
+                                <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VCN Earned</div>
                             </div>
                             <div class="h-10 w-px bg-white/[0.06]" />
                             <div class="text-center">
-                                <div class="text-3xl font-black text-white tabular-nums">{invitationCount()}</div>
-                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VID Linked</div>
+                                <div class="text-2xl md:text-3xl font-black text-white tabular-nums">{invitationCount()}</div>
+                                <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VID Linked</div>
                             </div>
                         </div>
                     </div>
@@ -156,27 +157,27 @@ export const WalletContacts = (props: WalletContactsProps) => {
 
                 {/* Search & Tabs */}
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 py-2 border-b border-white/5">
-                    <div class="flex items-center gap-8">
-                        <button class="relative py-4 text-sm font-bold text-white">
+                    <div class="flex items-center gap-6 md:gap-8 overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
+                        <button class="relative py-4 text-[13px] md:text-sm font-bold text-white whitespace-nowrap">
                             All Contacts
                             <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
                         </button>
-                        <button class="py-4 text-sm font-bold text-gray-500 hover:text-white transition-colors">
+                        <button class="py-4 text-[13px] md:text-sm font-bold text-gray-500 hover:text-white transition-colors whitespace-nowrap">
                             Favorites
                         </button>
-                        <button class="py-4 text-sm font-bold text-gray-500 hover:text-white transition-colors">
+                        <button class="py-4 text-[13px] md:text-sm font-bold text-gray-500 hover:text-white transition-colors whitespace-nowrap">
                             Recently Added
                         </button>
                     </div>
 
-                    <div class="relative w-full md:w-[360px]">
+                    <div class="relative w-full md:w-[320px] lg:w-[360px]">
                         <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
                         <input
                             type="text"
-                            placeholder="Search names, phone or email..."
+                            placeholder="Search names or identifiers..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="w-full bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-blue-500/50 rounded-2xl pl-11 pr-4 py-3 text-sm text-white outline-none transition-all placeholder:text-gray-600"
+                            class="w-full bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-blue-500/50 rounded-2xl pl-11 pr-4 py-3 text-[13px] md:text-sm text-white outline-none transition-all placeholder:text-gray-600"
                         />
                     </div>
                 </div>
