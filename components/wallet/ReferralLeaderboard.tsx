@@ -19,51 +19,68 @@ interface LeaderboardUser {
 }
 
 export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
-    const [timeLeft, setTimeLeft] = createSignal('');
-    const [mockData, setMockData] = createSignal<LeaderboardUser[]>([]);
+    const [timeLeft, setTimeLeft] = createSignal('--:--:--');
+
+    // Better initial data strategy to ensure rendering
+    const [mockData, setMockData] = createSignal<LeaderboardUser[]>([
+        { rank: 1, name: "CryptoKing", email: "ck@example.com", invites: 156 },
+        { rank: 2, name: "Visionary", email: "v@example.com", invites: 142 },
+        { rank: 3, name: "EarlyAdopter", email: "ea@example.com", invites: 128 },
+        { rank: 4, name: "NodeMaster", email: "nm@example.com", invites: 95 },
+        { rank: 5, name: "Web3Whale", email: "ww@example.com", invites: 84 },
+        { rank: 6, name: "AlphaNode", email: "an@example.com", invites: 72 },
+        { rank: 7, name: "ChainRunner", email: "cr@example.com", invites: 61 },
+        { rank: 8, name: "BlockHustler", email: "bh@example.com", invites: 55 },
+        { rank: 9, name: "Satoshi_N", email: "sn@example.com", invites: 48 },
+        { rank: 10, name: "DeepVCN", email: "dv@example.com", invites: 42 },
+        { rank: 11, name: "LiquidMiner", email: "lm@example.com", invites: 38 },
+        { rank: 35, name: "SwiftBot", email: "sb@example.com", invites: 12 },
+        { rank: 36, name: "TrailBlazer", email: "tb@example.com", invites: 11 },
+        { rank: 37, name: "Me (You)", email: props.currentUserEmail || 'user@example.com', invites: 10, isCurrentUser: true },
+        { rank: 38, name: "NodeHacker", email: "nh@example.com", invites: 9 },
+        { rank: 39, name: "DeFiLover", email: "dl@example.com", invites: 8 },
+        { rank: 40, name: "GhostProtocol", email: "gp@example.com", invites: 7 },
+        { rank: 41, name: "MetaSurfer", email: "ms@example.com", invites: 6 },
+    ]);
 
     const updateCountdown = () => {
         const now = new Date();
-        const hour = now.getUTCHours();
-        const nextTargetHour = Math.ceil((hour + 0.1) / 4) * 4;
-        const target = new Date(now);
-        target.setUTCHours(nextTargetHour, 0, 0, 0);
-        const diff = target.getTime() - now.getTime();
-        const h = Math.floor(diff / (1000 * 60 * 60));
-        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        const nextPayout = new Date();
+        // Set to next 4-hour mark (0, 4, 8, 12, 16, 20, 24)
+        const nextHour = Math.ceil((now.getUTCHours() + 0.001) / 4) * 4;
+        nextPayout.setUTCHours(nextHour, 0, 0, 0);
+
+        const diff = nextPayout.getTime() - now.getTime();
+        if (diff <= 0) {
+            setTimeLeft('00:00:00');
+            return;
+        }
+
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+
         setTimeLeft(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
     };
 
     onMount(() => {
-        const timer = setInterval(updateCountdown, 1000);
         updateCountdown();
-
-        const data: LeaderboardUser[] = [
-            { rank: 1, name: "CryptoKing", email: "ck@example.com", invites: 42 },
-            { rank: 2, name: "Visionary", email: "v@example.com", invites: 28 },
-            { rank: 3, name: "EarlyAdopter", email: "ea@example.com", invites: 19 },
-            { rank: 4, name: "NodeMaster", email: "nm@example.com", invites: 15 },
-            { rank: 5, name: "Web3Whale", email: "ww@example.com", invites: 14 },
-            { rank: 6, name: "AlphaNode", email: "an@example.com", invites: 12 },
-            { rank: 7, name: "ChainRunner", email: "cr@example.com", invites: 11 },
-            { rank: 11, name: "Satoshi_N", email: "sn@example.com", invites: 8 },
-            { rank: 12, name: "Me (You)", email: props.currentUserEmail, invites: 7, isCurrentUser: true },
-            { rank: 13, name: "NodeHacker", email: "nh@example.com", invites: 6 },
-            { rank: 14, name: "DeFiLover", email: "dl@example.com", invites: 5 },
-        ];
-        setMockData(data);
+        const timer = setInterval(updateCountdown, 1000);
         onCleanup(() => clearInterval(timer));
     });
 
     const displayData = () => {
-        const top3 = mockData().slice(0, 3);
-        const userIdx = mockData().findIndex(u => u.isCurrentUser);
+        const full = mockData();
+        const top3 = full.slice(0, 3);
+        const userIdx = full.findIndex(u => u.isCurrentUser);
+
         if (userIdx > 2) {
-            const neighbors = mockData().slice(Math.max(3, userIdx - 2), Math.min(mockData().length, userIdx + 3));
+            // Focus on user: 5 neighbors above, 5 neighbors below
+            const neighbors = full.slice(Math.max(3, userIdx - 5), Math.min(full.length, userIdx + 6));
             return [...top3, ...neighbors];
         }
-        return mockData().slice(0, 8);
+
+        return full.slice(0, 10);
     };
 
     const getRankStyle = (rank: number) => {
@@ -172,7 +189,7 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
                             {/* Background Accents for Top 3 */}
                             <Show when={user.rank <= 3}>
                                 <div class={`absolute top-0 right-0 w-32 h-32 blur-[40px] -mr-16 -mt-16 opacity-30 ${user.rank === 1 ? 'bg-amber-500' :
-                                        user.rank === 2 ? 'bg-blue-500' : 'bg-purple-500'
+                                    user.rank === 2 ? 'bg-blue-500' : 'bg-purple-500'
                                     }`} />
                             </Show>
                         </Motion.div>
