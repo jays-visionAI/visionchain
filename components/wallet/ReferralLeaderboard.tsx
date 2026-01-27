@@ -9,6 +9,7 @@ import {
     Users,
     ChevronRight
 } from 'lucide-solid';
+import { getReferralLeaderboard } from '../../services/firebaseService';
 
 interface LeaderboardUser {
     rank: number;
@@ -20,28 +21,7 @@ interface LeaderboardUser {
 
 export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
     const [timeLeft, setTimeLeft] = createSignal('--:--:--');
-
-    // Better initial data strategy to ensure rendering
-    const [mockData, setMockData] = createSignal<LeaderboardUser[]>([
-        { rank: 1, name: "CryptoKing", email: "ck@example.com", invites: 156 },
-        { rank: 2, name: "Visionary", email: "v@example.com", invites: 142 },
-        { rank: 3, name: "EarlyAdopter", email: "ea@example.com", invites: 128 },
-        { rank: 4, name: "NodeMaster", email: "nm@example.com", invites: 95 },
-        { rank: 5, name: "Web3Whale", email: "ww@example.com", invites: 84 },
-        { rank: 6, name: "AlphaNode", email: "an@example.com", invites: 72 },
-        { rank: 7, name: "ChainRunner", email: "cr@example.com", invites: 61 },
-        { rank: 8, name: "BlockHustler", email: "bh@example.com", invites: 55 },
-        { rank: 9, name: "Satoshi_N", email: "sn@example.com", invites: 48 },
-        { rank: 10, name: "DeepVCN", email: "dv@example.com", invites: 42 },
-        { rank: 11, name: "LiquidMiner", email: "lm@example.com", invites: 38 },
-        { rank: 35, name: "SwiftBot", email: "sb@example.com", invites: 12 },
-        { rank: 36, name: "TrailBlazer", email: "tb@example.com", invites: 11 },
-        { rank: 37, name: "Me (You)", email: props.currentUserEmail || 'user@example.com', invites: 10, isCurrentUser: true },
-        { rank: 38, name: "NodeHacker", email: "nh@example.com", invites: 9 },
-        { rank: 39, name: "DeFiLover", email: "dl@example.com", invites: 8 },
-        { rank: 40, name: "GhostProtocol", email: "gp@example.com", invites: 7 },
-        { rank: 41, name: "MetaSurfer", email: "ms@example.com", invites: 6 },
-    ]);
+    const [leaderboardData, setLeaderboardData] = createSignal<LeaderboardUser[]>([]);
 
     const updateCountdown = () => {
         const now = new Date();
@@ -63,14 +43,27 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
         setTimeLeft(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
     };
 
-    onMount(() => {
+    onMount(async () => {
         updateCountdown();
         const timer = setInterval(updateCountdown, 1000);
+
+        // Fetch real data from Firebase
+        const data = await getReferralLeaderboard(50);
+
+        const formatted: LeaderboardUser[] = data.map((u, index) => ({
+            rank: index + 1,
+            name: u.name,
+            email: u.email,
+            invites: u.invites,
+            isCurrentUser: (props.currentUserEmail || '').toLowerCase() === (u.email || '').toLowerCase()
+        }));
+
+        setLeaderboardData(formatted);
         onCleanup(() => clearInterval(timer));
     });
 
     const displayData = () => {
-        const full = mockData();
+        const full = leaderboardData();
         const top3 = full.slice(0, 3);
         const userIdx = full.findIndex(u => u.isCurrentUser);
 
@@ -213,7 +206,7 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
                         { count: 6, reward: 150, color: 'purple' },
                         { count: 9, reward: 400, color: 'amber' }
                     ].map((m) => {
-                        const invited = mockData().find(u => u.isCurrentUser)?.invites || 0;
+                        const invited = leaderboardData().find(u => u.isCurrentUser)?.invites || 0;
                         const isAchieved = invited >= m.count;
 
                         return (

@@ -402,6 +402,32 @@ export const getUserReferrals = async (email: string): Promise<UserData[]> => {
 };
 
 /**
+ * Fetches the referral leaderboard.
+ */
+export const getReferralLeaderboard = async (limitCount: number = 50): Promise<any[]> => {
+    try {
+        const db = getFirebaseDb();
+        const usersRef = collection(db, 'users');
+        // Index Required: users collection, orderBy referralCount desc
+        const q = query(usersRef, orderBy('referralCount', 'desc'), limit(limitCount));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map((doc, index) => {
+            const data = doc.data();
+            return {
+                rank: index + 1,
+                name: data.displayName || data.name || data.email?.split('@')[0] || 'Unknown',
+                email: data.email,
+                invites: data.referralCount || 0
+            };
+        });
+    } catch (e) {
+        console.error("Error fetching leaderboard:", e);
+        return [];
+    }
+};
+
+/**
  * Resolves a recipient identifier (phone, email, name, handle) to a VID and Address.
  */
 export const resolveRecipient = async (identifier: string, currentUserEmail?: string): Promise<{ vid: string, email: string, address: string } | null> => {
@@ -1463,11 +1489,31 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
 
 
 
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+// ... (existing imports)
+
 export const updateWalletStatus = async (email: string, walletAddress: string) => {
+    console.log(`[Firebase] Securely updating wallet address for ${email}...`);
+
+    // Use Cloud Function to bypass client-side permission issues (Email vs UID mismatch)
+    try {
+        const functions = getFunctions();
+        const updateFn = httpsCallable(functions, 'updateWalletAddress');
+
+        await updateFn({ walletAddress });
+        console.log(`[Firebase] Cloud update successful for ${email}`);
+
+        return;
+    } catch (err) {
+        console.error("Cloud function update failed, falling back to direct write:", err);
+    }
+
+    // Fallback: Direct Write (Legacy / Admin)
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase();
 
-    // 1. Update Token Sale Entry (New System)
+    // 1. Update Token Sale Entry
     const tokenSaleRef = doc(db, 'token_sales', emailLower);
     const tokenSaleSnap = await getDoc(tokenSaleRef);
     if (tokenSaleSnap.exists()) {
@@ -1475,10 +1521,9 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
             walletAddress: walletAddress,
             status: 'WalletCreated'
         }, { merge: true });
-        console.log(`[Firebase] Updated token_sales for ${email}`);
     }
 
-    // 2. Update User Profile (Ensuring top-level and potential sub-structure)
+    // 2. Update User Profile
     const userRef = doc(db, 'users', emailLower);
     await setDoc(userRef, {
         walletReady: true,
