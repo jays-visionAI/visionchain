@@ -904,13 +904,14 @@ const Wallet = (): JSX.Element => {
 
                 // Check if wallet exists in backend OR locally
                 const hasBackendWallet = !!data.walletAddress;
-                // Try to get address from local storage if not in profile
-                const localAddress = localStorage.getItem('vcn_wallet_address');
+                // Try to get address from local storage if not in profile (SCOPED)
+                const localAddress = WalletService.getAddressHint(user.email);
                 const hasLocalWallet = WalletService.hasWallet(user.email);
                 setIsLocalWalletMissing(hasBackendWallet && !hasLocalWallet);
 
                 if (hasBackendWallet || hasLocalWallet) {
                     const finalAddress = data.walletAddress || localAddress || '';
+                    console.log(`[Profile] Loading address for ${user.email}:`, finalAddress);
                     if (finalAddress) {
                         setWalletAddressSignal(finalAddress);
                     }
@@ -929,7 +930,7 @@ const Wallet = (): JSX.Element => {
                 }
             } else {
                 // No profile data found in database, but maybe user exists in Auth
-                const localAddress = localStorage.getItem('vcn_wallet_address');
+                const localAddress = WalletService.getAddressHint(user.email);
                 if (WalletService.hasWallet(user.email)) {
                     setWalletAddressSignal(localAddress || '');
                     setOnboardingStep(0);
@@ -1306,30 +1307,37 @@ const Wallet = (): JSX.Element => {
 
             // 1. Derive EOA for metadata
             const mnemonic = seedPhrase().join(' ');
+            console.log("[Wallet] Deriving address for finalization...");
+
             if (!WalletService.validateMnemonic(mnemonic)) {
+                console.error("[Wallet] INVALID MNEMONIC DETECTED");
                 throw new Error("Invalid mnemonic during finalization");
             }
             const { address } = WalletService.deriveEOA(mnemonic);
+            console.log("[Wallet] NEW ADDRESS DERIVED:", address);
 
             // 2. Encrypt and Save 
             const encrypted = await WalletService.encrypt(mnemonic, walletPassword());
             WalletService.saveEncryptedWallet(encrypted, userProfile().email);
-            // Save address unencrypted for UI consistency
-            localStorage.setItem('vcn_wallet_address', address);
+            // Save address unencrypted for UI consistency (SCOPED)
+            WalletService.saveAddressHint(address, userProfile().email);
 
             // 3. Update Backend Status
             const user = auth.user();
             if (user && user.email) {
+                console.log("[Wallet] Syncing new address to Firebase...");
                 await updateWalletStatus(user.email, address);
             }
 
-            // 4. Update User State
+            // 4. Update User State & Signals
+            setWalletAddressSignal(address); // Force update the signal
             setUserProfile(prev => ({
                 ...prev,
                 isVerified: true,
                 tier: 1,
                 address: address
             }));
+            console.log("[Wallet] Local state updated with new address.");
 
             // 5. Success state
             setShowPasswordModal(false);
@@ -1812,6 +1820,9 @@ Format:
             alert("Invalid recovery phrase. Please check the words and try again.");
             return;
         }
+
+        const derived = WalletService.deriveEOA(mnemonic);
+        console.log("[Restore] Mnemonic valid. Targeted address will be:", derived.address);
 
         setSeedPhrase(mnemonic.split(' '));
         setIsRestoring(true);

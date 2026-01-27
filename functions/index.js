@@ -64,6 +64,7 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
       for (const docSnap of dueJobs) {
         const jobId = docSnap.id;
         const data = docSnap.data();
+        let skipped = false;
 
         try {
         // Optimistic Locking
@@ -79,36 +80,55 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
               lockAt: nowTs,
             });
           });
+        } catch (e) {
+          console.log(`Skipping ${jobId}: ${e.message}`);
+          skipped = true;
+        }
 
+        if (skipped) continue;
+
+        try {
           console.log(`Executing ID: ${data.scheduleId} nonce ${currentNonce}`);
 
-          // Execute with specific nonce to prevent race conditions if scaling
+          // Execute with specific nonce to prevent race conditions
           const tx = await contract.executeTransfer(data.scheduleId, {
             nonce: currentNonce,
           });
 
           console.log(`   Hash: ${tx.hash}`);
 
-          // Wait for 1 confirmation to ensure ordering
-          await tx.wait(1);
-
-          // Increment Local Nonce
+          // Increment Local Nonce immediately to unblock next job
           currentNonce++;
 
-          // Update Success
+          // Update Success (Async)
+          // We don't await tx.wait() inside the loop to speed up processing
+          // But valid nonce management relies on the order.
+          // Since we use the same wallet, we SHOULD ideally wait or manage
+          // pending nonces.
+          // For stability, we wait for 1 confirmation.
+          await tx.wait(1);
+
           await docSnap.ref.update({
             status: "SENT",
             executedAt: admin.firestore.Timestamp.now(),
             txHash: tx.hash,
+            error: null, // Clear prev errors
           });
           console.log(`Success: ${jobId}`);
         } catch (err) {
           console.error(`Failed Job ${jobId}:`, err);
 
-          // If execution failed but NOT due to status change...
-          // reset nonce just in case
-          if (err.message && err.message.includes("nonce")) {
-          // Refresh nonce for next iteration just in case
+          // CRITICAL: If nonce issue, reset nonce from network
+          if (err.message && (err.message.includes("nonce") ||
+          err.message.includes("replacement"))) {
+            console.log("Refetching nonce due to error...");
+            currentNonce = await wallet.getNonce();
+          } else {
+          // For other errors (reverts), we bump nonce to prevent stuck queue?
+          // Actually, if it failed locally (pre-mining), nonce isn't used.
+          // If it reverted on chain, nonce IS used.
+          // It's hard to distinguish without parsing.
+          // Safer strategy: Always refetch nonce on error.
             currentNonce = await wallet.getNonce();
           }
 
@@ -117,23 +137,20 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
           let newStatus = "WAITING";
           let nextRetry = null;
 
-          if (retryCount >= 3) {
+          if (retryCount >= 5) { // Increased max retries
             newStatus = "FAILED";
           } else {
             nextRetry = admin.firestore.Timestamp.fromMillis(
-                nowMillis + (retryCount * 60000),
+                nowMillis + (retryCount * 60000), // 1m, 2m, 3m...
             );
           }
 
-          // Only update if it wasn't a Status Changed error
-          if (err.message !== "Status changed") {
-            await docSnap.ref.update({
-              status: newStatus,
-              lastError: err.message,
-              retryCount: retryCount,
-              nextRetryAt: nextRetry,
-            });
-          }
+          await docSnap.ref.update({
+            status: newStatus,
+            lastError: err.message, // Store error for UI
+            retryCount: retryCount,
+            nextRetryAt: nextRetry,
+          });
         }
       }
     });

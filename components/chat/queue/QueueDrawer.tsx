@@ -12,6 +12,7 @@ interface DetailedAgentTask extends AgentTask {
     token?: string;
     scheduleId?: string;
     txHash?: string;
+    error?: string;
 }
 
 interface QueueDrawerProps {
@@ -214,6 +215,17 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                 </div>
                                             </div>
 
+                                            <Show when={task.status === 'FAILED' && task.error}>
+                                                <div class="col-span-2 mt-1 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                                    <span class="text-[9px] font-bold text-red-500 uppercase flex items-center gap-1">
+                                                        <AlertTriangle class="w-2.5 h-2.5" /> Failure Reason
+                                                    </span>
+                                                    <div class="text-[10px] text-red-300 mt-1 break-words font-mono leading-tight">
+                                                        {task.error}
+                                                    </div>
+                                                </div>
+                                            </Show>
+
                                             {/* Action Buttons */}
                                             <div class="flex gap-2 pt-2 border-t border-white/5">
                                                 <Show when={['WAITING', 'EXECUTING'].includes(task.status)}>
@@ -258,8 +270,8 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                         </For>
                     </div>
                 </Motion.div>
-            </Show>
-        </Presence>
+            </Show >
+        </Presence >
     );
 };
 

@@ -1179,7 +1179,8 @@ export const subscribeToQueue = (
                 token: data.token,
                 scheduleId: doc.id,
                 executeAt: data.unlockTime * 1000,
-                txHash: data.executionTx || data.creationTx
+                txHash: data.executionTx || data.creationTx,
+                error: data.lastError || data.error || null
             };
         });
 

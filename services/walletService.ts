@@ -144,8 +144,24 @@ export class WalletService {
     static saveEncryptedWallet(encryptedWallet: string, identifier: string) {
         const key = `vcn_wallet_${btoa(identifier).substring(0, 16)}`;
         localStorage.setItem(key, encryptedWallet);
-        // Also store the address mapping for quick UI checks
-        localStorage.setItem(`${key}_address_hint`, 'active');
+        // Also store the address mapping for quick UI checks - scoped to ID
+        localStorage.setItem(`${key}_id_active`, 'true');
+    }
+
+    /**
+     * Local storage helper for unencrypted address hint (scoped to user)
+     */
+    static saveAddressHint(address: string, identifier: string) {
+        const key = `vcn_addr_${btoa(identifier).substring(0, 16)}`;
+        localStorage.setItem(key, address);
+    }
+
+    /**
+     * Retrieves unencrypted address hint from local storage (scoped to user)
+     */
+    static getAddressHint(identifier: string): string | null {
+        const key = `vcn_addr_${btoa(identifier).substring(0, 16)}`;
+        return localStorage.getItem(key);
     }
 
     /**
