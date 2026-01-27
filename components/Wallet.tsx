@@ -521,6 +521,19 @@ const Wallet = (): JSX.Element => {
     const [mintedSuccess, setMintedSuccess] = createSignal(false);
     const [flowSuccess, setFlowSuccess] = createSignal(false);
 
+    // Reset flow step when active flow changes
+    createEffect(() => {
+        if (activeFlow()) {
+            setFlowStep(1);
+            // If switching to 'multi', set mode to batch automatically? 
+            // Or just keep the modal state clean.
+            if (activeFlow() === 'send') {
+                // Keep user preference or reset? Resetting is safer.
+                // setSendMode('single'); 
+            }
+        }
+    });
+
     // Node License State
     const [ownedNodes, setOwnedNodes] = createSignal<any[]>([]); // Initialize empty, fetch later if needed
     const [nodeStats, setNodeStats] = createSignal({
@@ -3137,7 +3150,7 @@ Format:
                                                                             placeholder={`Format:\nName, Address, Amount\nAlice, 0x123..., 50\nBob, 0x456..., 20`}
                                                                             value={batchInput()}
                                                                             onInput={(e) => setBatchInput(e.currentTarget.value)}
-                                                                            class="w-full h-32 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-600 outline-none focus:border-purple-500/30 transition-all resize-none leading-relaxed whitespace-pre"
+                                                                            class="w-full h-32 bg-[#1a1a1e] border border-white/10 rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-500 outline-none focus:border-purple-500/50 transition-all resize-none leading-relaxed whitespace-pre shadow-inner"
                                                                         />
                                                                     </div>
 
