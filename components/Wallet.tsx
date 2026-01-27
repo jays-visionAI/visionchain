@@ -69,7 +69,8 @@ import {
     getFirebaseDb,
     getUserContacts,
     updateScheduledTaskStatus,
-    findUserByAddress
+    findUserByAddress,
+    uploadProfileImage
 } from '../services/firebaseService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
@@ -198,8 +199,15 @@ const Wallet = (): JSX.Element => {
         referrerId: '',
         referralCount: 0,
         totalRewardsVCN: 0,
-        totalRewardsUSD: 0
+        totalRewardsUSD: 0,
+        photoURL: auth.user()?.photoURL || ''
     });
+    // Profile Image & Crop State
+    const [imageToCrop, setImageToCrop] = createSignal<string | null>(null);
+    const [isCropping, setIsCropping] = createSignal(false);
+    const [isUploadingImage, setIsUploadingImage] = createSignal(false);
+    let fileInputRef: HTMLInputElement | undefined;
+    let cropCanvasRef: HTMLCanvasElement | undefined;
     const [walletAddressSignal, setWalletAddressSignal] = createSignal('');
     const walletAddress = createMemo(() => userProfile().address || walletAddressSignal() || '');
     const [showSeed, setShowSeed] = createSignal(false);
@@ -348,6 +356,52 @@ const Wallet = (): JSX.Element => {
     const [attachments, setAttachments] = createSignal<any[]>([]);
     const [thinkingSteps, setThinkingSteps] = createSignal<any[]>([]);
     const [voiceLang, setVoiceLang] = createSignal('en-US');
+
+    const handleFileChange = (e: Event) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setImageToCrop(event.target?.result as string);
+                setIsCropping(true);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleUploadCrop = async () => {
+        if (!imageToCrop() || !auth.user()?.email) return;
+        setIsUploadingImage(true);
+        try {
+            const canvas = cropCanvasRef!;
+            const ctx = canvas.getContext('2d')!;
+            const img = new Image();
+            img.src = imageToCrop()!;
+            await new Promise((resolve) => img.onload = resolve);
+
+            // Simple square crop from center
+            const size = Math.min(img.width, img.height);
+            const startX = (img.width - size) / 2;
+            const startY = (img.height - size) / 2;
+
+            canvas.width = 512;
+            canvas.height = 512;
+            ctx.drawImage(img, startX, startY, size, size, 0, 0, 512, 512);
+
+            const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9));
+            const url = await uploadProfileImage(auth.user().email, blob);
+
+            setUserProfile(prev => ({ ...prev, photoURL: url }));
+            setIsCropping(false);
+            setImageToCrop(null);
+            if (fileInputRef) fileInputRef.value = '';
+        } catch (err) {
+            console.error("Upload failed", err);
+            alert("Image upload failed. Please try again.");
+        } finally {
+            setIsUploadingImage(false);
+        }
+    };
     const [isRecording, setIsRecording] = createSignal(false);
     const [loadingType, setLoadingType] = createSignal<'text' | 'image' | 'voice'>('text');
 
@@ -903,7 +957,8 @@ const Wallet = (): JSX.Element => {
                     referrerId: data.referrerId || '',
                     referralCount: data.referralCount || 0,
                     totalRewardsVCN: data.totalRewardsVCN || 0,
-                    totalRewardsUSD: data.totalRewardsUSD || 0
+                    totalRewardsUSD: data.totalRewardsUSD || 0,
+                    photoURL: data.photoURL || user.photoURL || ''
                 });
 
                 // Check if wallet exists in backend OR locally
@@ -1149,7 +1204,8 @@ const Wallet = (): JSX.Element => {
                     referrerId: freshData.referrerId || '',
                     referralCount: freshData.referralCount || 0,
                     totalRewardsVCN: freshData.totalRewardsVCN || 0,
-                    totalRewardsUSD: freshData.totalRewardsUSD || 0
+                    totalRewardsUSD: freshData.totalRewardsUSD || 0,
+                    photoURL: freshData.photoURL || ''
                 });
             }
         } catch (e) {
@@ -2104,10 +2160,32 @@ Format:
                                                 <div class="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-cyan-500/20 to-purple-600/20 rounded-[32px] blur-xl opacity-50 group-hover:opacity-100 transition-opacity" />
                                                 <div class="relative bg-[#111113] border border-white/[0.08] rounded-[32px] p-8 flex flex-col md:flex-row items-center gap-8">
                                                     <div class="relative">
-                                                        <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-3xl font-black text-white shadow-2xl">
-                                                            {userProfile().displayName.charAt(0)}
+                                                        <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-2xl relative">
+                                                            <Show when={userProfile().photoURL} fallback={
+                                                                <span class="text-6xl font-black text-white/90">
+                                                                    {userProfile().displayName.charAt(0)}
+                                                                </span>
+                                                            }>
+                                                                <img src={userProfile().photoURL} class="w-full h-full object-cover" />
+                                                            </Show>
+                                                            <Show when={isUploadingImage()}>
+                                                                <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                                    <RefreshCw class="w-6 h-6 text-white animate-spin" />
+                                                                </div>
+                                                            </Show>
                                                         </div>
-                                                        <button class="absolute -bottom-2 -right-2 p-2 bg-blue-600 rounded-xl border-4 border-[#111113] text-white hover:scale-110 transition-transform">
+                                                        <input
+                                                            type="file"
+                                                            ref={fileInputRef}
+                                                            class="hidden"
+                                                            accept="image/*"
+                                                            onChange={handleFileChange}
+                                                        />
+                                                        <button
+                                                            onClick={() => fileInputRef?.click()}
+                                                            disabled={isUploadingImage()}
+                                                            class="absolute -bottom-2 -right-2 p-2 bg-blue-600 rounded-xl border-4 border-[#111113] text-white hover:scale-110 active:scale-95 transition-transform disabled:opacity-50"
+                                                        >
                                                             <Camera class="w-4 h-4" />
                                                         </button>
                                                     </div>
@@ -3618,6 +3696,68 @@ Format:
                     </div>
                 </main>
             </section >
+
+            {/* Hidden canvas for cropping */}
+            <canvas ref={cropCanvasRef} class="hidden" />
+
+            {/* Profile Image Crop Modal */}
+            <Presence>
+                <Show when={isCropping()}>
+                    <Portal>
+                        <Motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            class="fixed inset-0 z-[100] flex items-center justify-center px-4"
+                        >
+                            <div class="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => !isUploadingImage() && setIsCropping(false)} />
+
+                            <Motion.div
+                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                animate={{ scale: 1, opacity: 1, y: 0 }}
+                                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                                class="relative w-full max-w-lg bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                            >
+                                <div class="p-8 pb-4">
+                                    <h3 class="text-2xl font-bold text-white mb-2">Crop Profile Picture</h3>
+                                    <p class="text-gray-400 text-sm">Adjust the photo to fit your profile best</p>
+                                </div>
+
+                                <div class="p-8 flex flex-col items-center">
+                                    <div class="w-72 h-72 rounded-3xl overflow-hidden border-2 border-blue-500/50 relative bg-black/20 group">
+                                        <img
+                                            src={imageToCrop()!}
+                                            class="w-full h-full object-cover opacity-80"
+                                        />
+                                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                            <div class="w-64 h-64 border-2 border-dashed border-white/30 rounded-2xl" />
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-8 flex gap-4 w-full">
+                                        <button
+                                            onClick={() => setIsCropping(false)}
+                                            disabled={isUploadingImage()}
+                                            class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/10 disabled:opacity-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleUploadCrop}
+                                            disabled={isUploadingImage()}
+                                            class="flex-[2] py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                                        >
+                                            <Show when={isUploadingImage()} fallback={<><Check class="w-5 h-5" /> Save Changes</>}>
+                                                <RefreshCw class="w-5 h-5 animate-spin" /> Uploading...
+                                            </Show>
+                                        </button>
+                                    </div>
+                                </div>
+                            </Motion.div>
+                        </Motion.div>
+                    </Portal>
+                </Show>
+            </Presence>
         </Show>
     );
 };

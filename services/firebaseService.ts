@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { getAuth, Auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User, updateProfile } from 'firebase/auth';
 import {
     getFirestore,
     Firestore,
@@ -20,6 +20,7 @@ import {
     onSnapshot,
     Timestamp
 } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from '../config/firebase.config';
 
 // Helper to send email via Resend API
@@ -525,6 +526,7 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
 let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
+let storage: FirebaseStorage;
 
 export const initializeFirebase = (useLongPolling = false) => {
     if (!app) {
@@ -550,13 +552,22 @@ export const initializeFirebase = (useLongPolling = false) => {
         }
     }
 
-    return { app, auth, db };
+    if (!storage) {
+        storage = getStorage(app);
+    }
+
+    return { app, auth, db, storage };
 };
 
 // Export getters
 export const getFirebaseAuth = () => {
     if (!auth) initializeFirebase();
     return auth;
+};
+
+export const getFirebaseStorage = () => {
+    if (!storage) initializeFirebase();
+    return storage;
 };
 
 // --- Isolated Admin Auth (Prevents Session Conflict) ---
@@ -576,6 +587,42 @@ export const getAdminFirebaseAuth = () => {
 export const getFirebaseDb = () => {
     if (!db) initializeFirebase();
     return db;
+};
+
+/**
+ * Uploads a profile image to Firebase Storage and updates user document/profile
+ */
+export const uploadProfileImage = async (email: string, imageBlob: Blob): Promise<string> => {
+    if (!email) throw new Error("Email required for upload");
+
+    try {
+        const store = getFirebaseStorage();
+        const imageRef = ref(store, `profiles/${email.toLowerCase()}/avatar_${Date.now()}.jpg`);
+
+        await uploadBytes(imageRef, imageBlob, { contentType: 'image/jpeg' });
+        const downloadURL = await getDownloadURL(imageRef);
+
+        // 1. Update Firestore
+        const firestore = getFirebaseDb();
+        const userDocRef = doc(firestore, 'users', email.toLowerCase());
+        await updateDoc(userDocRef, {
+            photoURL: downloadURL
+        });
+
+        // 2. Update Auth Profile
+        const firebaseAuth = getFirebaseAuth();
+        if (firebaseAuth.currentUser) {
+            await updateProfile(firebaseAuth.currentUser, {
+                photoURL: downloadURL
+            });
+        }
+
+        console.log(`[Firebase] Profile image uploaded for ${email}: ${downloadURL}`);
+        return downloadURL;
+    } catch (e) {
+        console.error("Error uploading profile image:", e);
+        throw e;
+    }
 };
 
 // ==================== Auth Functions ====================
@@ -813,6 +860,7 @@ export interface UserData {
     twitter?: string;
     discord?: string;
     walletReady?: boolean;
+    photoURL?: string;
 
     // Referral System Fields
     referralCode?: string;
