@@ -46,7 +46,8 @@ import {
     Clock,
     Bell,
     Play,
-    Layers
+    Layers,
+    UserPlus
 } from 'lucide-solid';
 import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
@@ -1882,7 +1883,7 @@ Format:
                 </div>
             </div>
         }>
-            <section class="bg-[#0a0a0b] min-h-screen pt-14 flex overflow-hidden">
+            <section class="bg-[#0a0a0b] min-h-screen flex overflow-hidden">
 
                 {/* Ambient Background */}
                 <div class="fixed inset-0 pointer-events-none overflow-hidden">
@@ -1909,10 +1910,10 @@ Format:
                 />
 
                 {/* Main Content Area */}
-                <main class="flex-1 flex flex-col h-[calc(100vh-56px)] transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden">
+                <main class="flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden">
 
                     {/* Top Bar */}
-                    <div class="flex items-center gap-4 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-14 z-20">
+                    <div class="flex items-center gap-4 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-0 z-20 shrink-0">
                         <button
                             onClick={() => {
                                 if (onboardingStep() === 0) setSidebarOpen(!sidebarOpen());
@@ -1996,7 +1997,7 @@ Format:
 
                     {/* Campaign View */}
                     <Show when={activeView() === 'campaign'}>
-                        <WalletCampaign />
+                        <WalletCampaign userProfile={userProfile} />
                     </Show>
 
                     {/* Mint View */}
@@ -2059,13 +2060,13 @@ Format:
                     </Show>
 
                     <Show when={activeView() === 'profile'}>
-                        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+                        <div class="flex-1 overflow-y-auto p-4 lg:p-6 pb-32">
                             <div class="max-w-4xl mx-auto space-y-6">
 
                                 {/* Onboarding Header (Progress Stepper) - Redesigned to match image */}
                                 <Show when={onboardingStep() > 0}>
-                                    <div class="max-w-xl mx-auto mb-12">
-                                        <div class="text-center mb-8">
+                                    <div class="max-w-xl mx-auto mb-8">
+                                        <div class="text-center mb-6">
                                             <h2 class="text-3xl font-bold text-white mb-2">Secure Wallet Setup</h2>
                                             <p class="text-gray-400 text-sm">Your account is active. Now, let's secure your digital assets by creating your wallet.</p>
                                         </div>
@@ -2433,11 +2434,11 @@ Format:
 
                                     {/* Step 1.5: Confirmation - Redesigned to match image 2 */}
                                     <Match when={onboardingStep() === 1.5}>
-                                        <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto">
+                                        <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto pb-10">
                                             <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
-                                                <div class="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-10 flex flex-col items-center text-center">
-                                                    <h2 class="text-2xl font-black text-white mb-2 uppercase tracking-tight">Confirm Recovery Phrase</h2>
-                                                    <p class="text-gray-400 font-bold text-sm">Select the words in the correct order to verify your backup</p>
+                                                <div class="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-6 flex flex-col items-center text-center">
+                                                    <h2 class="text-xl font-black text-white mb-2 uppercase tracking-tight">Confirm Recovery Phrase</h2>
+                                                    <p class="text-gray-400 font-bold text-xs">Select the words in the correct order to verify your backup</p>
                                                 </div>
 
                                                 <div class="p-8 space-y-6">
@@ -3592,6 +3593,29 @@ Format:
                             </Show>
                         </Presence>
                     </Portal>
+                    {/* Mobile Bottom Navigation */}
+                    <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-3 pb-safe flex items-center justify-around h-[80px]">
+                        {[
+                            { id: 'assets', label: 'Assets', icon: PieChart },
+                            { id: 'nodes', label: 'Nodes', icon: Camera },
+                            { id: 'chat', label: 'Vision AI', icon: Sparkles, primary: true },
+                            { id: 'referral', label: 'Earn', icon: UserPlus },
+                            { id: 'settings', label: 'Settings', icon: Settings },
+                        ].map((item) => (
+                            <button
+                                onClick={() => onboardingStep() === 0 && setActiveView(item.id)}
+                                class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                            >
+                                <div class={`w-12 h-10 rounded-2xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-2 scale-110' : ''}`}>
+                                    <item.icon class="w-5 h-5" />
+                                </div>
+                                <span class={`text-[9px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
+                                {activeView() === item.id && !item.primary && (
+                                    <div class="absolute -bottom-1 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 </main>
             </section >
         </Show>

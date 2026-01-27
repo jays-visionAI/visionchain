@@ -430,7 +430,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="flex flex-col items-center justify-start px-6 md:px-20 py-24">
+                        <div class="flex flex-col items-center justify-start px-6 md:px-20 py-12 md:py-24">
                             <Motion.div
                                 initial={{ opacity: 0, y: 30 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -506,7 +506,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
 
                     <Show when={props.messages().length > 0}>
-                        <div class="max-w-3xl mx-auto px-6 pt-32 pb-64 space-y-12">
+                        <div class="max-w-3xl mx-auto px-4 md:px-6 pt-16 md:pt-32 pb-64 space-y-8 md:space-y-12">
                             <For each={props.messages()}>
                                 {(msg) => (
                                     <Motion.div

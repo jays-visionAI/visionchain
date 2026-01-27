@@ -35,7 +35,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
     return (
 
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto pb-32">
             {/* Top Header */}
             <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
                 {/* ... header content ... */}
@@ -45,7 +45,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                 {/* Decorative Background Blur */}
                 <div class="absolute top-0 right-[20%] w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
 
-                <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-8 md:py-10 pt-16 md:pt-20">
+                <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-6 md:py-10">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                         <div class="relative group">
                             <div class="text-[11px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-2">Total Portfolio Value</div>

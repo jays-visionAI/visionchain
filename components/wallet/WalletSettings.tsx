@@ -160,7 +160,7 @@ export function WalletSettings() {
     };
 
     return (
-        <div class="space-y-8">
+        <div class="space-y-6 p-4 lg:p-8 pb-32">
             {/* Header */}
             <div>
                 <h1 class="text-3xl font-bold text-white">Settings</h1>

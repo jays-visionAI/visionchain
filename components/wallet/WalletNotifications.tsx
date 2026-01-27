@@ -162,7 +162,7 @@ export function WalletNotifications() {
     };
 
     return (
-        <div class="space-y-8 max-w-4xl mx-auto p-4 custom-scrollbar">
+        <div class="space-y-6 max-w-4xl mx-auto p-4 custom-scrollbar pb-32">
             {/* Header */}
             <div class="flex items-center gap-6">
                 <button
