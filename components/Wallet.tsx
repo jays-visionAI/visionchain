@@ -182,6 +182,68 @@ const Wallet = (): JSX.Element => {
     const [swapAmount, setSwapAmount] = createSignal('');
     const [recipientAddress, setRecipientAddress] = createSignal('');
     const [stakeAmount, setStakeAmount] = createSignal('');
+    const [sendMode, setSendMode] = createSignal<'single' | 'batch'>('single');
+    const [batchInput, setBatchInput] = createSignal('');
+
+    // Batch Parsing Logic
+    const parsedBatchTransactions = createMemo(() => {
+        if (!batchInput().trim()) return [];
+        return batchInput().split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .map(line => {
+                // Support Comma or Tab separated
+                const parts = line.split(/[,\t]+/).map(p => p.trim());
+                let recipient = '';
+                let amount = '';
+                let name = '';
+
+                // Strategy: Find Address (0x...)
+                const addrIdx = parts.findIndex(p => p.startsWith('0x') && p.length === 42);
+
+                if (addrIdx !== -1) {
+                    recipient = parts[addrIdx];
+                    // Look for amount (first number that isn't the address)
+                    const amtPart = parts.find((p, i) => i !== addrIdx && !isNaN(parseFloat(p.replace(/,/g, ''))));
+                    if (amtPart) amount = amtPart.replace(/,/g, '');
+
+                    // Name is whatever is left (first non-addr, non-amt part)
+                    const namePart = parts.find((p, i) => i !== addrIdx && p.replace(/,/g, '') !== amount);
+                    if (namePart) name = namePart;
+                }
+
+                if (!recipient || !ethers.isAddress(recipient)) return null;
+
+                return {
+                    recipient,
+                    amount: amount || '0',
+                    name: name || 'Unknown',
+                    symbol: 'VCN'
+                };
+            })
+            .filter((tx): tx is { recipient: string, amount: string, name: string, symbol: string } => tx !== null);
+    });
+
+    const handleBatchTransaction = () => {
+        const txs = parsedBatchTransactions();
+        if (txs.length === 0) return;
+
+        setPendingAction({
+            type: 'multi_transactions',
+            data: {
+                transactions: txs.map(tx => ({
+                    recipient: tx.recipient,
+                    amount: tx.amount,
+                    symbol: tx.symbol,
+                    intent: 'send',
+                    description: `Batch transfer to ${tx.name}`
+                }))
+            }
+        });
+        setPasswordMode('verify');
+        setShowPasswordModal(true);
+    };
+
     const [onboardingStep, setOnboardingStep] = createSignal(0);
     const [userProfile, setUserProfile] = createSignal({
         username: 'Vision User',
@@ -2982,9 +3044,27 @@ Format:
 
                                             <Show when={activeFlow() === 'send'}>
                                                 <div class="space-y-4">
+                                                    {/* Mode Switcher */}
+                                                    <div class="flex p-1 bg-white/5 rounded-xl mb-4">
+                                                        <button
+                                                            onClick={() => setSendMode('single')}
+                                                            class={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${sendMode() === 'single' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                                        >
+                                                            Single Transfer
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setSendMode('batch')}
+                                                            class={`flex-1 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${sendMode() === 'batch' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                                        >
+                                                            Batch (Excel)
+                                                        </button>
+                                                    </div>
+
                                                     {/* Step 1: Destination and Token */}
                                                     <Show when={flowStep() === 1}>
                                                         <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+
+                                                            {/* Asset Selection (Common) */}
                                                             <div>
                                                                 <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
                                                                 <div class="grid grid-cols-2 gap-2">
@@ -2995,7 +3075,7 @@ Format:
                                                                                 <span
                                                                                     onClick={() => {
                                                                                         const max = getAssetData(selectedToken()).liquidBalance;
-                                                                                        setSendAmount(max.toLocaleString()); // Format as per user request
+                                                                                        setSendAmount(max.toLocaleString());
                                                                                         fetchPortfolioData();
                                                                                     }}
                                                                                     class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors flex items-center gap-1 bg-blue-500/20 px-2 py-1 rounded-lg"
@@ -3007,77 +3087,118 @@ Format:
                                                                     </For>
                                                                 </div>
                                                             </div>
-                                                            <div>
-                                                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Recipient Address</label>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="0x..."
-                                                                    value={recipientAddress()}
-                                                                    onInput={(e) => setRecipientAddress(e.currentTarget.value)}
-                                                                    class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${recipientAddress() && !ethers.isAddress(recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
-                                                                />
-                                                                <Show when={recipientAddress() && !ethers.isAddress(recipientAddress())}>
-                                                                    <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address (Please enter a valid 0x address or resolve name)</p>
-                                                                </Show>
-                                                            </div>
-                                                            <div>
-                                                                <div class="flex items-center justify-between mb-2 px-1">
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Amount</label>
-                                                                </div>
-                                                                <div class="relative">
+
+                                                            {/* Single Send Mode */}
+                                                            <Show when={sendMode() === 'single'}>
+                                                                <div>
+                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Recipient Address</label>
                                                                     <input
                                                                         type="text"
-                                                                        placeholder="0.00"
-                                                                        value={sendAmount()}
-                                                                        onInput={(e) => {
-                                                                            // Remove non-numeric chars except dot
-                                                                            const raw = e.currentTarget.value.replace(/,/g, '');
-                                                                            if (!isNaN(Number(raw)) || raw === '.') {
-                                                                                // Add commas for display
-                                                                                const parts = raw.split('.');
-                                                                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                                                                setSendAmount(parts.join('.'));
-                                                                            }
-                                                                        }}
-                                                                        class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all text-xl font-bold font-mono"
+                                                                        placeholder="0x..."
+                                                                        value={recipientAddress()}
+                                                                        onInput={(e) => setRecipientAddress(e.currentTarget.value)}
+                                                                        class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${recipientAddress() && !ethers.isAddress(recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
                                                                     />
-                                                                    <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                                                                        <span class="text-sm font-bold text-gray-400">{selectedToken()}</span>
-                                                                        <div class="flex flex-col gap-px">
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const current = Number(sendAmount().replace(/,/g, '') || '0');
-                                                                                    setSendAmount((current + 1).toLocaleString());
-                                                                                }}
-                                                                                class="p-0.5 text-gray-500 hover:text-blue-400 transition-colors"
-                                                                            >
-                                                                                <ChevronUp class="w-3 h-3" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const current = Number(sendAmount().replace(/,/g, '') || '0');
-                                                                                    setSendAmount(Math.max(0, current - 1).toLocaleString());
-                                                                                }}
-                                                                                class="p-0.5 text-gray-500 hover:text-blue-400 transition-colors"
-                                                                            >
-                                                                                <ChevronDown class="w-3 h-3" />
-                                                                            </button>
+                                                                    <Show when={recipientAddress() && !ethers.isAddress(recipientAddress())}>
+                                                                        <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address</p>
+                                                                    </Show>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Amount</label>
+                                                                    <div class="relative">
+                                                                        <input
+                                                                            type="text"
+                                                                            placeholder="0.00"
+                                                                            value={sendAmount()}
+                                                                            onInput={(e) => {
+                                                                                const raw = e.currentTarget.value.replace(/,/g, '');
+                                                                                if (!isNaN(Number(raw)) || raw === '.') {
+                                                                                    const parts = raw.split('.');
+                                                                                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                                                    setSendAmount(parts.join('.'));
+                                                                                }
+                                                                            }}
+                                                                            class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all text-xl font-bold font-mono"
+                                                                        />
+                                                                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">{selectedToken()}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            {/* Batch Send Mode */}
+                                                            <Show when={sendMode() === 'batch'}>
+                                                                <div class="space-y-4">
+                                                                    <div>
+                                                                        <div class="flex justify-between items-center mb-2 px-1">
+                                                                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bulk Input</label>
+                                                                            <span class="text-[10px] text-purple-400 cursor-pointer hover:underline" onClick={() => setBatchInput(prev => prev + "Name, 0x..., 10\n")}>+ Add Example</span>
+                                                                        </div>
+                                                                        <textarea
+                                                                            placeholder={`Format:\nName, Address, Amount\nAlice, 0x123..., 50\nBob, 0x456..., 20`}
+                                                                            value={batchInput()}
+                                                                            onInput={(e) => setBatchInput(e.currentTarget.value)}
+                                                                            class="w-full h-32 bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-600 outline-none focus:border-purple-500/30 transition-all resize-none leading-relaxed whitespace-pre"
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Grid View of Parsed Data */}
+                                                                    <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
+                                                                        <div class="grid grid-cols-12 gap-2 p-3 bg-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                                                            <div class="col-span-3">Name</div>
+                                                                            <div class="col-span-6">Address</div>
+                                                                            <div class="col-span-3 text-right">Amount</div>
+                                                                        </div>
+                                                                        <div class="max-h-40 overflow-y-auto custom-scrollbar">
+                                                                            <For each={parsedBatchTransactions()}>
+                                                                                {(tx, i) => (
+                                                                                    <div class="grid grid-cols-12 gap-2 p-3 border-b border-white/5 hover:bg-white/5 transition-colors text-xs items-center">
+                                                                                        <div class="col-span-3 text-gray-300 truncate font-medium">{tx.name || `User ${i() + 1}`}</div>
+                                                                                        <div class="col-span-6 font-mono text-[10px] text-blue-400 truncate" title={tx.recipient}>{tx.recipient}</div>
+                                                                                        <div class="col-span-3 text-right font-mono font-bold text-white">{parseFloat(tx.amount || '0').toLocaleString()} {tx.symbol || 'VCN'}</div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </For>
+                                                                            <Show when={parsedBatchTransactions().length === 0}>
+                                                                                <div class="p-8 text-center text-gray-600 text-xs italic">
+                                                                                    No valid entries found.<br />Paste date above.
+                                                                                </div>
+                                                                            </Show>
+                                                                        </div>
+                                                                        <div class="p-3 bg-purple-900/10 border-t border-purple-500/20 flex justify-between items-center">
+                                                                            <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Total</span>
+                                                                            <span class="text-sm font-bold text-white font-mono">
+                                                                                {parsedBatchTransactions().reduce((acc, curr) => acc + parseFloat(curr.amount || '0'), 0).toLocaleString()} VCN
+                                                                            </span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
+                                                            </Show>
+
                                                             <button
-                                                                disabled={!ethers.isAddress(recipientAddress()) || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0}
-                                                                onClick={() => setFlowStep(2)}
-                                                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                disabled={
+                                                                    sendMode() === 'single'
+                                                                        ? !ethers.isAddress(recipientAddress()) || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0
+                                                                        : parsedBatchTransactions().length === 0
+                                                                }
+                                                                onClick={() => {
+                                                                    if (sendMode() === 'batch') {
+                                                                        handleBatchTransaction();
+                                                                    } else {
+                                                                        setFlowStep(2);
+                                                                    }
+                                                                }}
+                                                                class={`w-full py-5 bg-gradient-to-r text-white font-bold rounded-2xl transition-all shadow-xl active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed ${sendMode() === 'batch'
+                                                                    ? 'from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-purple-500/20'
+                                                                    : 'from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-500/20'
+                                                                    }`}
                                                             >
-                                                                Review Transaction
+                                                                {sendMode() === 'batch' ? `Process Batch (${parsedBatchTransactions().length})` : 'Review Transaction'}
                                                             </button>
                                                         </div>
                                                     </Show>
 
-                                                    {/* Step 2: Confirmation */}
-                                                    <Show when={flowStep() === 2}>
+                                                    {/* Step 2: Confirmation (Single Only) - Batch handles its own confirmation flow via Password Modal */}
+                                                    <Show when={flowStep() === 2 && sendMode() === 'single'}>
                                                         <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                                             <div class="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6 text-center">
                                                                 <div class="text-[11px] font-bold text-blue-400 uppercase tracking-widest mb-2">
