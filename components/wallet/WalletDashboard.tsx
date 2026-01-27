@@ -449,7 +449,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 </p>
 
                                 {/* Quick Actions Bento */}
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto overflow-visible">
+                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto overflow-visible">
                                     <div
                                         onClick={() => props.setActiveFlow('send')}
                                         class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-blue-500/40 hover:bg-blue-500/[0.02] transition-all group cursor-pointer"
@@ -457,8 +457,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                             <ArrowUpRight class="w-5 h-5 text-blue-400" />
                                         </div>
-                                        <div class="text-sm font-bold text-white mb-1">Send</div>
-                                        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Transfer Assets</div>
+                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Send</div>
+                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Transfer Assets</div>
                                     </div>
                                     <div
                                         onClick={() => props.setActiveFlow('swap')}
@@ -467,8 +467,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                             <RefreshCw class="w-5 h-5 text-purple-400" />
                                         </div>
-                                        <div class="text-sm font-bold text-white mb-1">Swap</div>
-                                        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Exchange Tokens</div>
+                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Swap</div>
+                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Exchange Tokens</div>
                                     </div>
                                     <div
                                         onClick={() => props.setActiveView('nodes')}
@@ -477,8 +477,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                             <Zap class="w-5 h-5 text-emerald-400" />
                                         </div>
-                                        <div class="text-sm font-bold text-white mb-1">Nodes</div>
-                                        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Stake & Reward</div>
+                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Nodes</div>
+                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Stake & Reward</div>
                                     </div>
                                     <div
                                         onClick={() => props.setActiveView('mint')}
@@ -487,19 +487,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                                             <FileText class="w-5 h-5 text-cyan-400" />
                                         </div>
-                                        <div class="text-sm font-bold text-white mb-1">Mint</div>
-                                        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Generate NFTs</div>
+                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Mint</div>
+                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Generate NFTs</div>
                                     </div>
-                                    <div
-                                        onClick={() => props.setActiveView('referral')}
-                                        class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-blue-500/40 hover:bg-blue-500/[0.02] transition-all group cursor-pointer"
-                                    >
-                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            <UserPlus class="w-5 h-5 text-blue-400" />
-                                        </div>
-                                        <div class="text-sm font-bold text-white mb-1">Referral</div>
-                                        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Earn Rewards</div>
-                                    </div>
+
                                 </div>
                             </Motion.div>
                         </div>

@@ -1757,26 +1757,41 @@ Format:
                     let delay = 300; // Default 5 mins
                     let displayTime = '5 minutes';
 
-                    if (intentData.executeAt && typeof intentData.executeAt === 'number') {
-                        // If it's a future timestamp in ms
-                        const now = Date.now();
-                        if (intentData.executeAt > now) {
-                            delay = Math.max(1, Math.floor((intentData.executeAt - now) / 1000));
-                            displayTime = `${Math.floor(delay / 60)} minutes`;
-                            console.log(`[AI] Using absolute timestamp. Delay: ${delay}s`);
+                    // Logic to handle execution time: Supports both ISO timestamp and relative string
+                    let timestampMs = 0;
+                    if (intentData.executeAt) {
+                        if (typeof intentData.executeAt === 'number') {
+                            timestampMs = intentData.executeAt;
+                        } else if (typeof intentData.executeAt === 'string') {
+                            // Try parsing ISO or other date formats
+                            const parsed = new Date(intentData.executeAt).getTime();
+                            if (!isNaN(parsed)) {
+                                timestampMs = parsed;
+                            }
                         }
-                    } else {
-                        const timeStr = (intentData.time || intentData.scheduleTime || '5 minutes').toLowerCase();
-                        displayTime = timeStr;
-                        const numeric = parseInt(timeStr.match(/\d+/) || '5');
+                    }
 
-                        if (timeStr.includes('min') || timeStr.includes('분') || timeStr.includes('分')) {
-                            delay = numeric * 60;
-                        } else if (timeStr.includes('hour') || timeStr.includes('h') || timeStr.includes('시') || timeStr.includes('時')) {
+                    if (timestampMs > 0 && timestampMs > Date.now()) {
+                        const now = Date.now();
+                        delay = Math.max(1, Math.floor((timestampMs - now) / 1000));
+                        displayTime = `${Math.ceil(delay / 60)} minutes`;
+                        console.log(`[AI] Using parsed timestamp. Delay: ${delay}s`);
+                    } else {
+                        // Relative parsing fallback
+                        // Check executeAt too in case LLM put "10 minutes" there
+                        const rawStr = intentData.time || intentData.scheduleTime || intentData.executeAt || '5 minutes';
+                        const timeStr = String(rawStr).toLowerCase();
+                        displayTime = timeStr;
+
+                        const match = timeStr.match(/(\d+)/);
+                        const numeric = match ? parseInt(match[0]) : 5;
+
+                        if (timeStr.includes('hour') || timeStr.includes('h') || timeStr.includes('시') || timeStr.includes('時')) {
                             delay = numeric * 3600;
                         } else if (timeStr.includes('sec') || timeStr.includes('초') || timeStr.includes('秒')) {
                             delay = numeric;
                         } else {
+                            // Default to minutes (covers 'min', '분', '分' and failures)
                             delay = numeric * 60;
                         }
                         console.log(`[AI] Using relative time string: ${timeStr}. Delay: ${delay}s`);

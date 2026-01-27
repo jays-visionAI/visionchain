@@ -1,4 +1,4 @@
-import { createMemo, Show } from 'solid-js';
+import { createMemo, Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Motion } from 'solid-motionone';
 import { Clock, Check, AlertTriangle, Loader2, X, Repeat, Shield, Wallet, Play, Layers } from 'lucide-solid';
@@ -109,6 +109,33 @@ const AgentChip = (props: AgentChipProps) => {
         return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     };
 
+    // Real-time Ticker for Overdue Status
+    const [currentTime, setCurrentTime] = createSignal(Date.now());
+
+    // Only run interval if task is waiting
+    createEffect(() => {
+        if (props.task.status === 'WAITING') {
+            const timer = setInterval(() => setCurrentTime(Date.now()), 1000); // 1s tick
+            onCleanup(() => clearInterval(timer));
+        }
+    });
+
+    const timeStatus = createMemo(() => {
+        if (props.task.status !== 'WAITING') return props.task.timeLeft || '';
+        if (!props.task.executeAt) return props.task.timeLeft || '';
+
+        const diff = props.task.executeAt - currentTime();
+        if (diff > 0) {
+            if (diff > 3600000) return `In ${Math.ceil(diff / 3600000)}h`;
+            return `In ${Math.ceil(diff / 60000)}m`;
+        } else {
+            // Overdue logic
+            const overdueSecs = Math.abs(Math.floor(diff / 1000));
+            if (overdueSecs < 60) return `Due Now`;
+            return `Overdue (${Math.ceil(overdueSecs / 60)}m)`;
+        }
+    });
+
     return (
         <Motion.button
             class={`relative flex flex-col group rounded-2xl border backdrop-blur-xl transition-all active:scale-[0.98] text-left overflow-hidden
@@ -160,7 +187,7 @@ const AgentChip = (props: AgentChipProps) => {
                                 <Clock class="w-2 h-2" /> Scheduled Target
                             </span>
                             <span class={`text-[10px] font-mono ${props.task.status === 'WAITING' ? 'text-blue-400' : 'text-neutral-500'}`}>
-                                {props.task.executeAt ? formatTime(props.task.executeAt) : (props.task.timeLeft || '--:--')}
+                                {props.task.status === 'WAITING' ? timeStatus() : (props.task.executeAt ? formatTime(props.task.executeAt) : (props.task.timeLeft || '--:--'))}
                             </span>
                         </div>
                     </div>
@@ -180,7 +207,7 @@ const AgentChip = (props: AgentChipProps) => {
             <Show when={props.isCompact}>
                 <div class="mt-1 flex items-center gap-1.5">
                     <span class={`text-[9px] font-mono ${config().color}`}>
-                        {props.task.timeLeft || config().label}
+                        {timeStatus() || config().label}
                     </span>
                 </div>
             </Show>
