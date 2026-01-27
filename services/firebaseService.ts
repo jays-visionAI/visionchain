@@ -166,15 +166,20 @@ export const normalizePhoneNumber = (phone: string): string => {
     return `+${countryCode}-${processedDigits}`;
 };
 
-// Simplified user search for intent resolution
 export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, email: string, address: string }[]> => {
     try {
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
         const normalized = normalizePhoneNumber(phone);
+        const numeric = normalized.replace(/\D/g, '');
+        const compact = normalized.startsWith('+') ? `+${numeric}` : numeric;
 
-        // Search by normalized phone
-        const q = query(usersRef, where('phone', '==', normalized));
+        // Search by multiple potential formats in Firestore
+        // Note: Firestore doesn't support 'OR' queries on the same field easily with 'where' 
+        // without 'in' operator, but 'in' is limited to 10-30 values.
+        const searchVariants = Array.from(new Set([normalized, numeric, compact, phone]));
+
+        const q = query(usersRef, where('phone', 'in', searchVariants));
         const snapshot = await getDocs(q);
 
         return snapshot.docs.map(doc => {
@@ -182,7 +187,7 @@ export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, 
             return {
                 vid: doc.id,
                 email: data.email,
-                address: data.walletAddress
+                address: data.walletAddress || data.address || ''
             };
         });
     } catch (e) {
@@ -1115,32 +1120,41 @@ export const syncUserContacts = async (userEmail: string): Promise<{ updated: nu
 
         for (const docSnap of snapshot.docs) {
             const data = docSnap.data() as Contact;
-            // Only sync those without vchainUserUid or address, or those explicitly marked for re-sync
-            if (!data.vchainUserUid || !data.address) {
-                const normalizedPhone = normalizePhoneNumber(data.phone);
-                const results = await searchUsersByPhone(normalizedPhone);
+            // Re-sync all contacts to check for new/multiple accounts
+            const normalizedPhone = normalizePhoneNumber(data.phone);
+            const results = await searchUsersByPhone(normalizedPhone);
 
-                if (results.length === 1) {
-                    const resolved = results[0];
-                    if (resolved.vid !== data.vchainUserUid || resolved.address !== data.address) {
-                        batch.update(docSnap.ref, {
-                            vchainUserUid: resolved.vid,
-                            address: resolved.address,
-                            syncStatus: 'verified',
-                            potentialMatches: null,
-                            updatedAt: new Date().toISOString()
-                        });
-                        updateCount++;
-                    }
-                } else if (results.length > 1) {
-                    // Flag as ambiguous for manual selection
+            if (results.length === 1) {
+                const resolved = results[0];
+                // Only update if data changed or status was not verified
+                if (resolved.vid !== data.vchainUserUid || resolved.address !== data.address || data.syncStatus !== 'verified') {
                     batch.update(docSnap.ref, {
-                        syncStatus: 'ambiguous',
-                        potentialMatches: results,
+                        vchainUserUid: resolved.vid,
+                        address: resolved.address,
+                        email: resolved.email,
+                        syncStatus: 'verified',
+                        potentialMatches: null,
                         updatedAt: new Date().toISOString()
                     });
-                    ambiguousCount++;
+                    updateCount++;
                 }
+            } else if (results.length > 1) {
+                // Flag as ambiguous for manual selection
+                batch.update(docSnap.ref, {
+                    syncStatus: 'ambiguous',
+                    potentialMatches: results,
+                    updatedAt: new Date().toISOString()
+                });
+                ambiguousCount++;
+            } else if (data.syncStatus === 'verified' && results.length === 0) {
+                // Previously verified but now not found (user deleted or phone changed)
+                batch.update(docSnap.ref, {
+                    syncStatus: 'pending',
+                    vchainUserUid: '',
+                    address: '',
+                    updatedAt: new Date().toISOString()
+                });
+                updateCount++;
             }
         }
 
