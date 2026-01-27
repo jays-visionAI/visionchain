@@ -71,38 +71,6 @@ export const WalletCampaign = () => {
                         </button>
                     </div>
 
-                    <div class="col-span-1 md:col-span-2 bg-gradient-to-br from-orange-600/10 to-transparent border border-orange-500/20 rounded-[24px] p-8 hover:border-orange-500/40 transition-all group relative overflow-hidden">
-                        <div class="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl -mr-20 -mt-20" />
-                        <div class="relative z-10 flex flex-col md:flex-row gap-8 items-center">
-                            <div class="flex-1 text-center md:text-left">
-                                <div class="flex items-center justify-center md:justify-start gap-3 mb-4">
-                                    <div class="px-3 py-1 bg-orange-500/10 rounded-full text-[10px] font-bold text-orange-400 uppercase tracking-widest">Referral Program</div>
-                                    <div class="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-                                </div>
-                                <h2 class="text-3xl font-bold text-white mb-4">Invite & Build Your Network</h2>
-                                <p class="text-gray-400 mb-6 max-w-lg">Share the vision with your friends. Join the decentralized AI ecosystem together and expand the Vision network.</p>
-                                <div class="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                                    <div class="px-6 py-3 bg-[#1a1a1f] border border-orange-500/20 rounded-xl font-mono text-xl font-black text-orange-400 tracking-widest shadow-lg shadow-orange-500/5">
-                                        VC7F3A
-                                    </div>
-                                    <button class="px-6 py-3.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-orange-500/20 flex items-center gap-2">
-                                        <Copy class="w-4 h-4" />
-                                        Copy Link
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="w-full md:w-48 space-y-3">
-                                <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between">
-                                    <div class="text-xs text-gray-500 font-bold uppercase">Total Invites</div>
-                                    <div class="text-lg font-bold text-white">12</div>
-                                </div>
-                                <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between">
-                                    <div class="text-xs text-gray-500 font-bold uppercase">VCN Earned</div>
-                                    <div class="text-lg font-bold text-orange-400">0</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
