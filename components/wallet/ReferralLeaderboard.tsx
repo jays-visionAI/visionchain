@@ -1,16 +1,13 @@
-import { createSignal, onMount, For, Show, createEffect, onCleanup } from 'solid-js';
+import { createSignal, onMount, For, Show, onCleanup } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import {
     Trophy,
     Zap,
     Timer,
-    ChevronUp,
-    ChevronDown,
     Star,
     Crown,
     Users,
-    ArrowUpRight,
-    TrendingUp
+    ChevronRight
 } from 'lucide-solid';
 
 interface LeaderboardUser {
@@ -24,22 +21,17 @@ interface LeaderboardUser {
 export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
     const [timeLeft, setTimeLeft] = createSignal('');
     const [mockData, setMockData] = createSignal<LeaderboardUser[]>([]);
-    const [currentUserRank, setCurrentUserRank] = createSignal(12);
 
-    // Countdown logic for 4-hour cycles
     const updateCountdown = () => {
         const now = new Date();
         const hour = now.getUTCHours();
         const nextTargetHour = Math.ceil((hour + 0.1) / 4) * 4;
-
         const target = new Date(now);
         target.setUTCHours(nextTargetHour, 0, 0, 0);
-
         const diff = target.getTime() - now.getTime();
         const h = Math.floor(diff / (1000 * 60 * 60));
         const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const s = Math.floor((diff % (1000 * 60)) / 1000);
-
         setTimeLeft(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
     };
 
@@ -47,34 +39,40 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
         const timer = setInterval(updateCountdown, 1000);
         updateCountdown();
 
-        // Mock data generation
         const data: LeaderboardUser[] = [
             { rank: 1, name: "CryptoKing", email: "ck@example.com", invites: 42 },
             { rank: 2, name: "Visionary", email: "v@example.com", invites: 28 },
             { rank: 3, name: "EarlyAdopter", email: "ea@example.com", invites: 19 },
-            // ... padding for neighbors
-            { rank: 7, name: "User_007", email: "u7@example.com", invites: 12 },
-            { rank: 8, name: "AlphaNode", email: "an@example.com", invites: 11 },
-            { rank: 9, name: "ChainRunner", email: "cr@example.com", invites: 10 },
-            { rank: 10, name: "Web3Master", email: "w3m@example.com", invites: 9 },
+            { rank: 4, name: "NodeMaster", email: "nm@example.com", invites: 15 },
+            { rank: 5, name: "Web3Whale", email: "ww@example.com", invites: 14 },
+            { rank: 6, name: "AlphaNode", email: "an@example.com", invites: 12 },
+            { rank: 7, name: "ChainRunner", email: "cr@example.com", invites: 11 },
             { rank: 11, name: "Satoshi_N", email: "sn@example.com", invites: 8 },
             { rank: 12, name: "Me (You)", email: props.currentUserEmail, invites: 7, isCurrentUser: true },
             { rank: 13, name: "NodeHacker", email: "nh@example.com", invites: 6 },
             { rank: 14, name: "DeFiLover", email: "dl@example.com", invites: 5 },
-            { rank: 15, name: "VCN_Bull", email: "vb@example.com", invites: 4 },
-            { rank: 16, name: "MetaTrader", email: "mt@example.com", invites: 3 },
-            { rank: 17, name: "TechEnthusiast", email: "te@example.com", invites: 2 },
         ];
         setMockData(data);
-
         onCleanup(() => clearInterval(timer));
     });
 
-    const topThree = () => mockData().slice(0, 3);
-    const neighbors = () => {
+    const displayData = () => {
+        const top3 = mockData().slice(0, 3);
         const userIdx = mockData().findIndex(u => u.isCurrentUser);
-        if (userIdx === -1) return [];
-        return mockData().slice(Math.max(3, userIdx - 5), Math.min(mockData().length, userIdx + 6));
+        if (userIdx > 2) {
+            const neighbors = mockData().slice(Math.max(3, userIdx - 2), Math.min(mockData().length, userIdx + 3));
+            return [...top3, ...neighbors];
+        }
+        return mockData().slice(0, 8);
+    };
+
+    const getRankStyle = (rank: number) => {
+        switch (rank) {
+            case 1: return "bg-gradient-to-r from-amber-500/20 to-amber-500/5 border-amber-500/30 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.1)]";
+            case 2: return "bg-gradient-to-r from-blue-500/20 to-blue-500/5 border-blue-500/30 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.1)]";
+            case 3: return "bg-gradient-to-r from-purple-500/20 to-purple-500/5 border-purple-500/30 text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.1)]";
+            default: return "bg-white/[0.02] border-white/[0.06] text-gray-400";
+        }
     };
 
     const getMultiplier = (rank: number) => {
@@ -85,169 +83,137 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
     };
 
     return (
-        <div class="mb-16 space-y-8">
-            {/* Header & Timer */}
-            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 shadow-lg shadow-amber-500/5">
-                        <Trophy class="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h2 class="text-2xl font-black text-white italic uppercase tracking-tight">Referral Rush</h2>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-amber-500/80 uppercase tracking-widest">Flash Sprint Sprint</span>
-                            <div class="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
-                        </div>
-                    </div>
+        <div class="mb-20 space-y-12">
+            {/* Header Section with Ribbon Style */}
+            <div class="relative flex flex-col items-center py-8">
+                <div class="absolute inset-0 bg-blue-600/5 blur-[100px] rounded-full" />
+
+                {/* Modern Ribbon */}
+                <div class="relative z-10 scale-110 mb-4">
+                    <svg width="320" height="60" viewBox="0 0 320 60" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-[0_0_15px_rgba(37,99,235,0.3)]">
+                        <path d="M20 10H300L320 30L300 50H20L0 30L20 10Z" fill="#1e40af" />
+                        <path d="M30 0H290L310 30L290 60H30L10 30L30 0Z" fill="#2563eb" />
+                        <text x="160" y="38" text-anchor="middle" fill="white" font-weight="900" font-size="14" font-style="italic" letter-spacing="0.2em" filter="url(#glow)">
+                            WINNER'S LEADERBOARD
+                        </text>
+                        <defs>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur" />
+                                    <feMergeNode in="SourceGraphic" />
+                                </feMerge>
+                            </filter>
+                        </defs>
+                    </svg>
                 </div>
 
-                <div class="flex items-center gap-6 bg-white/[0.02] border border-white/[0.06] px-6 py-3 rounded-2xl backdrop-blur-md">
+                <div class="flex items-center gap-8 bg-black/40 backdrop-blur-xl border border-white/5 px-8 py-3 rounded-2xl relative z-10">
                     <div class="flex items-center gap-3">
                         <Timer class="w-4 h-4 text-blue-400" />
-                        <div class="flex flex-col">
-                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Round Ends In</span>
-                            <span class="text-lg font-black text-white font-mono tracking-wider">{timeLeft()}</span>
-                        </div>
+                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Next Payout:</span>
+                        <span class="text-sm font-black text-white font-mono">{timeLeft()}</span>
                     </div>
-                    <div class="w-px h-8 bg-white/10" />
-                    <div class="flex flex-col">
-                        <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Current Multiplier</span>
-                        <span class="text-lg font-black text-blue-400 font-mono tracking-wider">UP TO 100X</span>
+                    <div class="w-px h-4 bg-white/10" />
+                    <div class="flex items-center gap-2">
+                        <Trophy class="w-4 h-4 text-amber-500" />
+                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Multiplier:</span>
+                        <span class="text-sm font-black text-amber-500">Up to 100x</span>
                     </div>
                 </div>
             </div>
 
-            {/* Podium Section */}
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end pt-12">
-                {/* 2nd Place */}
-                <Show when={topThree()[1]}>
-                    <div class="relative group order-2 md:order-1">
-                        <div class="absolute -top-12 left-1/2 -translate-x-1/2 text-center w-full">
-                            <div class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Silver Runner</div>
-                            <div class="text-xs font-bold text-white mb-2">{topThree()[1].name}</div>
-                        </div>
-                        <div class="bg-gradient-to-t from-gray-500/20 to-transparent border-x border-t border-white/10 rounded-t-[32px] p-6 h-40 flex flex-col items-center justify-center gap-2 group-hover:border-white/20 transition-all">
-                            <div class="w-14 h-14 rounded-2xl bg-gray-400/10 border border-gray-400/20 flex items-center justify-center text-gray-400">
-                                <span class="text-2xl font-black">2</span>
+            <div class="max-w-3xl mx-auto space-y-4">
+                <For each={displayData()}>
+                    {(user, i) => (
+                        <Motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i() * 0.05 }}
+                            class={`relative flex items-center gap-6 p-4 rounded-[28px] border overflow-hidden transition-all hover:scale-[1.02] ${getRankStyle(user.rank)} ${user.isCurrentUser ? 'ring-2 ring-blue-500/50' : ''}`}
+                        >
+                            {/* Rank Number Area */}
+                            <div class="flex items-center justify-center w-12 h-12 rounded-2xl bg-black/20 font-black text-xl italic select-none">
+                                {user.rank === 1 ? <Crown class="w-6 h-6 text-amber-500" /> : user.rank}
                             </div>
-                            <div class="text-center">
-                                <div class="text-xl font-black text-white">{topThree()[1].invites} <span class="text-[10px] text-gray-500">INVITES</span></div>
-                                <div class="text-[11px] font-black text-blue-400">+{topThree()[1].invites * 50} VCN</div>
-                            </div>
-                        </div>
-                    </div>
-                </Show>
 
-                {/* 1st Place */}
-                <Show when={topThree()[0]}>
-                    <div class="relative group z-10 order-1 md:order-2">
-                        <div class="absolute -top-16 left-1/2 -translate-x-1/2 text-center w-full">
-                            <Crown class="w-8 h-8 text-amber-500 mx-auto mb-2 drop-shadow-[0_0_15px_rgba(245,158,11,0.5)] animate-bounce" />
-                            <div class="text-[11px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Current Leader</div>
-                            <div class="text-sm font-black text-white mb-2">{topThree()[0].name}</div>
-                        </div>
-                        <div class="bg-gradient-to-t from-amber-500/20 to-transparent border-x border-t border-amber-500/30 rounded-t-[40px] p-8 h-56 flex flex-col items-center justify-center gap-3 group-hover:border-amber-500/50 transition-all shadow-[0_-20px_40px_-15px_rgba(245,158,11,0.1)]">
-                            <div class="w-16 h-16 rounded-3xl bg-amber-500/20 border-2 border-amber-500/40 flex items-center justify-center text-amber-500 shadow-xl shadow-amber-500/20">
-                                <span class="text-3xl font-black italic">1</span>
+                            {/* User Info */}
+                            <div class="flex items-center gap-4 flex-1">
+                                <div class="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-gray-300">
+                                    {(user.name || 'U').substring(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-white tracking-tight uppercase text-sm">{user.name}</span>
+                                        <Show when={user.isCurrentUser}>
+                                            <span class="px-2 py-0.5 bg-blue-500 text-[8px] font-black rounded text-white uppercase tracking-widest">You</span>
+                                        </Show>
+                                    </div>
+                                    <div class="text-[10px] font-bold text-gray-500 tracking-wider">NETWORK MEMBER</div>
+                                </div>
                             </div>
-                            <div class="text-center">
-                                <div class="text-3xl font-black text-white tracking-tighter">{topThree()[0].invites} <span class="text-xs text-gray-500">INVITES</span></div>
-                                <div class="text-sm font-black text-amber-400 leading-none mt-1">+{topThree()[0].invites * 100} VCN REWARD</div>
-                            </div>
-                        </div>
-                        <div class="absolute inset-0 bg-amber-500/5 blur-3xl rounded-full -z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                </Show>
 
-                {/* 3rd Place */}
-                <Show when={topThree()[2]}>
-                    <div class="relative group order-3">
-                        <div class="absolute -top-12 left-1/2 -translate-x-1/2 text-center w-full">
-                            <div class="text-[10px] font-black text-orange-400/60 uppercase tracking-[0.2em] mb-1">Bronze Sprinter</div>
-                            <div class="text-xs font-bold text-white mb-2">{topThree()[2].name}</div>
-                        </div>
-                        <div class="bg-gradient-to-t from-orange-900/20 to-transparent border-x border-t border-white/10 rounded-t-[32px] p-6 h-32 flex flex-col items-center justify-center gap-2 group-hover:border-white/20 transition-all">
-                            <div class="w-12 h-12 rounded-2xl bg-orange-900/20 border border-orange-900/40 flex items-center justify-center text-orange-600">
-                                <span class="text-xl font-black">3</span>
+                            {/* Stats & Rewards */}
+                            <div class="flex items-center gap-8 pr-4">
+                                <div class="text-right">
+                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Invites</div>
+                                    <div class="text-lg font-black text-white font-mono">{user.invites}</div>
+                                </div>
+                                <div class="text-right min-w-[100px]">
+                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest">Est. Reward</div>
+                                    <div class={`text-lg font-black font-mono ${user.rank <= 3 ? 'text-blue-400' : 'text-gray-400'}`}>
+                                        <Show when={user.rank <= 3} fallback={`${user.invites * 5} VCN`}>
+                                            {user.invites * getMultiplier(user.rank)} VCN
+                                        </Show>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="text-center">
-                                <div class="text-lg font-black text-white">{topThree()[2].invites} <span class="text-[10px] text-gray-500">INVITES</span></div>
-                                <div class="text-[10px] font-black text-blue-400">+{topThree()[2].invites * 30} VCN</div>
-                            </div>
-                        </div>
-                    </div>
-                </Show>
+
+                            {/* Background Accents for Top 3 */}
+                            <Show when={user.rank <= 3}>
+                                <div class={`absolute top-0 right-0 w-32 h-32 blur-[40px] -mr-16 -mt-16 opacity-30 ${user.rank === 1 ? 'bg-amber-500' :
+                                        user.rank === 2 ? 'bg-blue-500' : 'bg-purple-500'
+                                    }`} />
+                            </Show>
+                        </Motion.div>
+                    )}
+                </For>
             </div>
 
-            {/* Neighborhood View & Milestones */}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Milestone Targets */}
-                <div class="bg-[#0d0d0f] border border-white/[0.06] rounded-[32px] p-8 flex flex-col justify-center">
-                    <div class="flex items-center gap-3 mb-8">
-                        <Zap class="w-5 h-5 text-blue-400" />
-                        <h3 class="text-sm font-black text-white uppercase tracking-widest italic">Personal Milestones</h3>
-                    </div>
-
-                    <div class="space-y-10 relative px-4">
-                        {/* Milestone Line */}
-                        <div class="absolute left-6 top-2 bottom-2 w-0.5 bg-white/5" />
-
-                        {[3, 6, 9].map((m, i) => {
-                            const invited = mockData().find(u => u.isCurrentUser)?.invites || 0;
-                            const isAchieved = invited >= m;
-                            const bonus = i === 0 ? 50 : i === 1 ? 150 : 400;
-
-                            return (
-                                <div class="relative flex items-center gap-6 group">
-                                    <div class={`w-4 h-4 rounded-full z-10 border-4 ${isAchieved ? 'bg-blue-500 border-blue-500/20 shadow-[0_0_10px_#3b82f6]' : 'bg-gray-800 border-black'} transition-all`} />
-                                    <div class={`flex-1 p-4 rounded-2xl border transition-all ${isAchieved ? 'bg-blue-500/5 border-blue-500/20' : 'bg-white/[0.02] border-white/5 opacity-40'}`}>
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <div class="text-xs font-black text-white uppercase tracking-tight">{m} Successful Invites</div>
-                                                <div class={`text-[10px] font-black uppercase tracking-widest ${isAchieved ? 'text-blue-400' : 'text-gray-600'}`}>Reward: +{bonus} VCN</div>
-                                            </div>
-                                            <Show when={isAchieved}>
-                                                <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
-                                                    <Star class="w-4 h-4 fill-current text-blue-400" />
-                                                </div>
-                                            </Show>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+            {/* Milestones Integrated Style */}
+            <div class="max-w-3xl mx-auto pt-8 border-t border-white/5">
+                <div class="flex items-center justify-between mb-8">
+                    <h3 class="text-xs font-black text-white uppercase tracking-[0.3em] italic flex items-center gap-3">
+                        <Zap class="w-4 h-4 text-blue-400" />
+                        Bonus Milestones
+                    </h3>
+                    <div class="px-3 py-1 bg-white/5 rounded-full text-[9px] font-black text-gray-500 uppercase tracking-widest">Instant Pay</div>
                 </div>
 
-                {/* Neighboring Rankings */}
-                <div class="bg-[#0d0d0f] border border-white/[0.06] rounded-[32px] overflow-hidden">
-                    <div class="px-8 py-6 border-b border-white/[0.06] bg-white/[0.01]">
-                        <h3 class="text-sm font-black text-white uppercase tracking-widest italic flex items-center gap-3">
-                            <Users class="w-4 h-4 text-gray-500" />
-                            Live Rankings Around You
-                        </h3>
-                    </div>
-                    <div class="divide-y divide-white/[0.04]">
-                        <For each={neighbors()}>
-                            {(user) => (
-                                <div class={`px-8 py-4 flex items-center justify-between transition-all ${user.isCurrentUser ? 'bg-blue-600/10 border-y border-blue-600/20' : 'hover:bg-white/[0.02]'}`}>
-                                    <div class="flex items-center gap-4">
-                                        <span class={`text-sm font-black font-mono w-6 ${user.isCurrentUser ? 'text-blue-400' : 'text-gray-600'}`}>
-                                            #{user.rank}
-                                        </span>
-                                        <div>
-                                            <div class={`text-sm font-bold ${user.isCurrentUser ? 'text-white' : 'text-gray-400'}`}>{user.name}</div>
-                                            <div class="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{user.email.substring(0, 4)}***</div>
-                                        </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                        { count: 3, reward: 50, color: 'blue' },
+                        { count: 6, reward: 150, color: 'purple' },
+                        { count: 9, reward: 400, color: 'amber' }
+                    ].map((m) => {
+                        const invited = mockData().find(u => u.isCurrentUser)?.invites || 0;
+                        const isAchieved = invited >= m.count;
+
+                        return (
+                            <div class={`p-5 rounded-[24px] border transition-all ${isAchieved ? 'bg-white/5 border-blue-500/30' : 'bg-white/[0.02] border-white/5 opacity-50'}`}>
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${isAchieved ? 'bg-blue-500 text-white' : 'bg-white/5 text-gray-600'}`}>
+                                        {m.count}
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-sm font-black text-white">{user.invites}</div>
-                                        <div class="text-[9px] font-black text-gray-600 uppercase">Invites</div>
-                                    </div>
+                                    <Show when={isAchieved}>
+                                        <Star class="w-4 h-4 text-blue-400 fill-current" />
+                                    </Show>
                                 </div>
-                            )}
-                        </For>
-                    </div>
+                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Target Invites</div>
+                                <div class="text-lg font-black text-white italic">+{m.reward} VCN</div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
