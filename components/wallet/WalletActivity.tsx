@@ -171,7 +171,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                             : 'bg-blue-500/10 text-blue-400'}`}>
                                             {isIncoming ? <ArrowDownLeft class="w-5 h-5" /> : <ArrowUpRight class="w-5 h-5" />}
                                         </div>
-                                        <div>
+                                        <div class="flex-1 min-w-0 pr-2">
                                             <div class="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">
                                                 {(() => {
                                                     const counterpartyAddr = isIncoming ? tx.from_addr : tx.to_addr;
@@ -179,27 +179,21 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                         c.address?.toLowerCase() === counterpartyAddr?.toLowerCase()
                                                     );
                                                     const shortAddr = counterpartyAddr ? `${counterpartyAddr.slice(0, 6)}...${counterpartyAddr.slice(-4)}` : 'Unknown';
-
-                                                    if (contact) {
-                                                        return (
-                                                            <div class="flex items-center gap-2">
-                                                                <span class="font-black italic uppercase tracking-tight text-blue-400">
-                                                                    {contact.internalName || contact.name}
-                                                                </span>
-                                                                <span class="text-[10px] text-blue-500/50 font-mono">({shortAddr})</span>
-                                                            </div>
-                                                        );
-                                                    }
+                                                    const displayName = contact ? (contact.internalName || contact.name) : 'Unknown';
+                                                    const prefix = isIncoming ? 'Received from' : 'Sent to';
 
                                                     return (
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="font-bold">{isIncoming ? 'Received from' : 'Sent to'}</span>
-                                                            <span class="text-[10px] text-gray-500 font-mono">{shortAddr}</span>
+                                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                            <span class="text-gray-400 font-bold shrink-0">{prefix}</span>
+                                                            <span class={`font-black italic uppercase tracking-tight truncate max-w-[140px] sm:max-w-none ${contact ? 'text-blue-400' : 'text-gray-500'}`}>
+                                                                {displayName}
+                                                            </span>
+                                                            <span class="text-[10px] text-gray-600 font-mono shrink-0">({shortAddr})</span>
                                                         </div>
                                                     );
                                                 })()}
                                             </div>
-                                            <div class="text-xs text-gray-500 font-mono mt-0.5">{date}</div>
+                                            <div class="text-xs text-gray-500 font-mono mt-1 italic opacity-80">{date}</div>
                                         </div>
                                     </div>
                                     <div class="text-right">
