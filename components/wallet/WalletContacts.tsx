@@ -16,10 +16,13 @@ import {
     RefreshCw,
     Loader2,
     AlertCircle,
-    Share2
+    Share2,
+    Trash2,
+    Edit3
 } from 'lucide-solid';
-import { getUserContacts, Contact, normalizePhoneNumber, searchUserByPhone, syncUserContacts } from '../../services/firebaseService';
+import { getUserContacts, Contact, normalizePhoneNumber, searchUserByPhone, syncUserContacts, deleteContact } from '../../services/firebaseService';
 import { AddContactModal } from './AddContactModal';
+import { EditContactModal } from './EditContactModal';
 
 interface WalletContactsProps {
     userProfile: () => any;
@@ -31,7 +34,9 @@ export const WalletContacts = (props: WalletContactsProps) => {
     const [contacts, setContacts] = createSignal<Contact[]>([]);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [isModalOpen, setIsModalOpen] = createSignal(false);
+    const [isEditModalOpen, setIsEditModalOpen] = createSignal(false);
     const [selectedContact, setSelectedContact] = createSignal<Contact | null>(null);
+    const [contactToEdit, setContactToEdit] = createSignal<Contact | null>(null);
     const [isLoading, setIsLoading] = createSignal(true);
     const [isSyncing, setIsSyncing] = createSignal(false);
     const [copiedId, setCopiedId] = createSignal<string | null>(null);
@@ -127,6 +132,24 @@ export const WalletContacts = (props: WalletContactsProps) => {
         } else {
             navigator.clipboard.writeText(message);
             alert('Invite message copied to clipboard!');
+        }
+    };
+
+    const handleEdit = (contact: Contact) => {
+        setContactToEdit(contact);
+        setIsEditModalOpen(true);
+    };
+
+    const handleDelete = async (contact: Contact) => {
+        if (!contact.id) return;
+        if (!confirm(`Are you sure you want to delete ${contact.internalName}?`)) return;
+
+        try {
+            await deleteContact(props.userProfile().email, contact.id);
+            loadContacts();
+        } catch (e) {
+            console.error("Delete failed:", e);
+            alert("Failed to delete contact.");
         }
     };
 
@@ -371,8 +394,19 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                     >
                                                         <Star class={`w-4 h-4 ${contact.isFavorite ? 'fill-current' : ''}`} />
                                                     </button>
-                                                    <button class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-white rounded-xl transition-all">
-                                                        <ChevronRight class="w-4 h-4" />
+                                                    <button
+                                                        onClick={() => handleEdit(contact)}
+                                                        class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-white rounded-xl transition-all"
+                                                        title="Edit Contact"
+                                                    >
+                                                        <Edit3 class="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(contact)}
+                                                        class="p-2 bg-white/[0.03] hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-xl transition-all"
+                                                        title="Delete Contact"
+                                                    >
+                                                        <Trash2 class="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             </td>
@@ -403,6 +437,14 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 isOpen={isModalOpen()}
                 onClose={() => setIsModalOpen(false)}
                 userEmail={props.userProfile().email}
+                onSuccess={loadContacts}
+            />
+
+            <EditContactModal
+                isOpen={isEditModalOpen()}
+                onClose={() => { setIsEditModalOpen(false); setContactToEdit(null); }}
+                userEmail={props.userProfile().email}
+                contact={contactToEdit()}
                 onSuccess={loadContacts}
             />
 

@@ -1090,6 +1090,18 @@ export const updateContact = async (userEmail: string, contactId: string, update
     }
 };
 
+export const deleteContact = async (userEmail: string, contactId: string) => {
+    try {
+        const db = getFirebaseDb();
+        const userEmailLower = userEmail.toLowerCase().trim();
+        const contactRef = doc(db, 'users', userEmailLower, 'contacts', contactId);
+        await deleteDoc(contactRef);
+    } catch (e) {
+        console.error("Error deleting contact:", e);
+        throw e;
+    }
+};
+
 export const syncUserContacts = async (userEmail: string): Promise<{ updated: number, ambiguous: number }> => {
     try {
         const db = getFirebaseDb();
