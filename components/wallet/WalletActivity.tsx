@@ -6,6 +6,7 @@ import { contractService } from '../../services/contractService';
 interface WalletActivityProps {
     purchases: () => any[];
     walletAddress?: string; // Optional for view-only or uninitialized states
+    contacts?: any[];
 }
 
 interface Transaction {
@@ -172,7 +173,27 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                         </div>
                                         <div>
                                             <div class="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">
-                                                {isIncoming ? 'Received' : 'Sent'} {tx.type === 'Transfer' ? 'Asset' : 'Transaction'}
+                                                {(() => {
+                                                    const counterpartyAddr = isIncoming ? tx.from_addr : tx.to_addr;
+                                                    const contact = props.contacts?.find((c: any) =>
+                                                        c.address?.toLowerCase() === counterpartyAddr?.toLowerCase()
+                                                    );
+
+                                                    if (contact) {
+                                                        return (
+                                                            <div class="flex flex-col">
+                                                                <span>{contact.internalName || contact.name || 'Unknown Contact'}</span>
+                                                                <span class="text-[10px] text-gray-400 font-normal">{contact.email}</span>
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <span>
+                                                            {isIncoming ? 'Received' : 'Sent'} {tx.type === 'Transfer' ? 'Asset' : 'Transaction'}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </div>
                                             <div class="text-xs text-gray-500 font-mono">{date}</div>
                                         </div>

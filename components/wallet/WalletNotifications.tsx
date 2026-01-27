@@ -242,7 +242,7 @@ export function WalletNotifications() {
                                             initial={{ opacity: 0, y: 20 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, scale: 0.95 }}
-                                            class={`relative group p-6 rounded-[32px] border transition-all duration-300 ${item.read
+                                            class={`relative group p-4 rounded-[32px] border transition-all duration-300 ${item.read
                                                 ? 'bg-white/[0.01] border-white/5 opacity-60'
                                                 : 'bg-gradient-to-br from-white/[0.05] to-transparent border-white/10 shadow-2xl ring-1 ring-white/5'
                                                 }`}
@@ -272,6 +272,12 @@ export function WalletNotifications() {
                                                             <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                                             <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Transaction</span>
                                                             <span class="text-sm font-black text-blue-400">{item.data.amount} {item.data.symbol || 'VCN'}</span>
+                                                        </div>
+                                                    </Show>
+
+                                                    <Show when={item.data?.image}>
+                                                        <div class="mt-4 rounded-2xl overflow-hidden max-w-md border border-white/10">
+                                                            <img src={item.data.image} alt="Notification media" class="w-full h-auto object-cover" />
                                                         </div>
                                                     </Show>
                                                 </div>

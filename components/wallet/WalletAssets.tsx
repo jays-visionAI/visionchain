@@ -28,6 +28,7 @@ interface WalletAssetsProps {
     isLocalWalletMissing?: boolean;
     onRestoreWallet?: () => void;
     walletAddress?: () => string; // Added prop
+    contacts?: any[];
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
@@ -400,6 +401,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             <WalletActivity
                                 purchases={props.vcnPurchases}
                                 walletAddress={props.walletAddress?.()}
+                                contacts={props.contacts}
                             />
                         </Show>
                     </div>
