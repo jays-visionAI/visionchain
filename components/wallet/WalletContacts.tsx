@@ -24,6 +24,8 @@ import { getUserContacts, Contact, normalizePhoneNumber, searchUserByPhone, sync
 import { AddContactModal } from './AddContactModal';
 import { EditContactModal } from './EditContactModal';
 
+import { WalletViewHeader } from './WalletViewHeader';
+
 interface WalletContactsProps {
     userProfile: () => any;
     startFlow: (flow: string) => void;
@@ -162,39 +164,34 @@ export const WalletContacts = (props: WalletContactsProps) => {
     const invitationCount = () => contacts().filter(c => c.vchainUserUid).length;
 
     return (
-        <div class="flex-1 overflow-y-auto p-4 lg:p-8">
-            <div class="max-w-6xl mx-auto space-y-8">
+        <div class="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
+            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-                {/* Header Section */}
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    <div>
-                        <h2 class="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">Address Book</h2>
-                        <p class="text-gray-500 font-medium text-xs md:text-sm">Manage your network and map identifiers to Vision IDs.</p>
-                    </div>
-                    <div class="grid grid-cols-2 md:flex items-center gap-2 md:gap-3">
-                        <button
-                            onClick={() => setIsModalOpen(true)}
-                            class="col-span-2 md:order-3 flex items-center justify-center gap-2 px-6 py-3.5 bg-white text-black rounded-2xl hover:bg-neutral-200 transition-all font-black text-sm active:scale-95 shadow-xl shadow-white/5"
-                        >
-                            <Plus class="w-4 h-4" />
-                            Add Contact
-                        </button>
-                        <button
-                            onClick={handleSync}
-                            disabled={isSyncing()}
-                            class="flex items-center justify-center gap-2 px-4 md:px-5 py-3.5 bg-blue-600/10 border border-blue-500/20 hover:bg-blue-600/20 text-blue-400 rounded-2xl transition-all font-bold text-[13px] md:text-sm active:scale-95 disabled:opacity-50"
-                        >
-                            <RefreshCw class={`w-4 h-4 ${isSyncing() ? 'animate-spin' : ''}`} />
-                            {isSyncing() ? 'Syncing' : 'Sync Contacts'}
-                        </button>
-                        <button
-                            class="flex items-center justify-center gap-2 px-4 md:px-5 py-3.5 bg-white/[0.03] border border-white/[0.08] hover:bg-white/[0.06] rounded-2xl transition-all font-bold text-[13px] md:text-sm text-gray-300 active:scale-95 group"
-                        >
-                            <Smartphone class="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
-                            Import Contacts
-                        </button>
-                    </div>
-                </div>
+                <WalletViewHeader
+                    tag="Network Directory"
+                    title="ADDRESS"
+                    titleAccent="BOOK"
+                    description="Manage your network and map identifiers to Vision IDs for seamless interaction."
+                    rightElement={
+                        <div class="flex items-center gap-2">
+                            <button
+                                onClick={() => setIsModalOpen(true)}
+                                class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-blue-500/20"
+                            >
+                                <Plus class="w-3.5 h-3.5" />
+                                Add
+                            </button>
+                            <button
+                                onClick={handleSync}
+                                disabled={isSyncing()}
+                                class="p-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all"
+                                title="Sync Contacts"
+                            >
+                                <RefreshCw class={`w-4 h-4 ${isSyncing() ? 'animate-spin' : ''}`} />
+                            </button>
+                        </div>
+                    }
+                />
 
                 {/* Campaign Banner */}
                 <Motion.div

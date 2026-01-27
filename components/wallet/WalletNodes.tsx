@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
-import { Camera, Check, Plus } from 'lucide-solid';
+import { Check, Plus } from 'lucide-solid';
+import { WalletViewHeader } from './WalletViewHeader';
 
 interface WalletNodesProps {
     userNodes: any[];
@@ -18,30 +19,23 @@ export const WalletNodes = (props: WalletNodesProps) => {
     const enterprisePriceVCN = Math.ceil(ENTERPRISE_PRICE_USD / VCN_PRICE);
 
     return (
-        <div class="flex-1 overflow-y-auto relative h-full">
+        <div class="flex-1 overflow-y-auto relative h-full custom-scrollbar p-4 lg:p-8">
             {/* Decorative Background Blur */}
             <div class="absolute top-0 right-[25%] w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[160px] pointer-events-none" />
 
-            <div class="max-w-[1440px] mx-auto px-8 py-10 pt-20 relative">
-
-                {/* Header Section */}
-                <div class="flex flex-col md:flex-row items-start justify-between gap-8 mb-12">
-                    <div class="flex items-center gap-6">
-                        <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center shadow-2xl shadow-emerald-500/20 group animate-in slide-in-from-left duration-700">
-                            <Camera class="w-8 h-8 text-white group-hover:scale-110 transition-transform duration-500" />
-                        </div>
-                        <div>
-                            <h2 class="text-4xl font-bold text-white tracking-tight mb-2">Compute Nodes</h2>
-                            <p class="text-gray-500 font-medium">Manage your decentralized infrastructure fleet</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <div class="px-5 py-3 bg-[#111113] border border-white/10 rounded-2xl flex items-center gap-3">
+            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative">
+                <WalletViewHeader
+                    tag="Network Infrastructure"
+                    title="COMPUTE"
+                    titleAccent="NODES"
+                    description="Manage your decentralized infrastructure fleet and validator licenses across the Vision network."
+                    rightElement={
+                        <div class="flex items-center gap-3">
                             <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span class="text-sm font-bold text-emerald-400">Network Optimal</span>
+                            <span class="text-sm font-black text-emerald-400 uppercase tracking-widest">Network Optimal</span>
                         </div>
-                    </div>
-                </div>
+                    }
+                />
 
                 <div class="space-y-10">
                     {/* Active Nodes List */}

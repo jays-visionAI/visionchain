@@ -12,6 +12,7 @@ import {
     Menu,
     ChevronRight,
 } from 'lucide-solid';
+import { WalletViewHeader } from './WalletViewHeader';
 import { WalletActivity } from './WalletActivity';
 
 interface WalletAssetsProps {
@@ -33,79 +34,60 @@ export const WalletAssets = (props: WalletAssetsProps) => {
     const [networkFilter, setNetworkFilter] = createSignal<'all' | 'mainnet' | 'testnet'>('all');
 
     return (
-
-        <div class="flex-1 overflow-y-auto pb-32">
-            {/* Top Header */}
-            <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
-                {/* ... header content ... */}
-            </div>
-
-            <div class="bg-gradient-to-b from-[#0a0a0b] to-[#0d0d0f] border-b border-white/[0.04] relative overflow-hidden">
-                {/* Decorative Background Blur */}
-                <div class="absolute top-0 right-[20%] w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none" />
-
-                <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-6 md:py-10">
-                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-                        <div class="relative group">
-                            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-[0.2em] mb-2">Total Portfolio Value</div>
-                            <div class="flex items-baseline gap-4">
-                                <span class="text-4xl sm:text-5xl font-bold text-white tracking-tight drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-                                    {(() => {
-                                        const vcn = props.getAssetData('VCN');
-                                        if (networkFilter() === 'mainnet') {
-                                            return (vcn.purchasedBalance * vcn.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-                                        } else if (networkFilter() === 'testnet') {
-                                            return (vcn.liquidBalance * vcn.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-                                        }
-                                        return props.totalValueStr();
-                                    })()}
-                                </span>
-                                <div class="flex items-center gap-1.5 px-2.5 py-1 bg-white/5 rounded-full border border-white/10">
-                                    <TrendingUp class={`w-3.5 h-3.5 ${props.getAssetData('VCN').change24h >= 0 ? 'text-green-500' : 'text-red-500'}`} />
-                                    <span class={`text-sm font-bold ${props.getAssetData('VCN').change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                        {props.getAssetData('VCN').change24h >= 0 ? '+' : ''}${Math.abs((props.totalValue() * props.getAssetData('VCN').change24h) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({props.getAssetData('VCN').change24h.toFixed(2)}%)
-                                    </span>
-                                </div>
+        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <WalletViewHeader
+                    tag="Portfolio Overview"
+                    title="MY"
+                    titleAccent="ASSETS"
+                    description="Manage your digital assets and view your portfolio performance across multiple networks."
+                    rightElement={
+                        <div class="flex flex-col items-end">
+                            <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Total Value</div>
+                            <div class="text-2xl font-black text-white tracking-tighter drop-shadow-sm">
+                                {(() => {
+                                    const vcn = props.getAssetData('VCN');
+                                    if (networkFilter() === 'mainnet') {
+                                        return (vcn.purchasedBalance * vcn.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                                    } else if (networkFilter() === 'testnet') {
+                                        return (vcn.liquidBalance * vcn.price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                                    }
+                                    return props.totalValueStr();
+                                })()}
+                            </div>
+                            <div class={`text-[10px] font-bold ${props.getAssetData('VCN').change24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                {props.getAssetData('VCN').change24h >= 0 ? '+' : ''}${Math.abs((props.totalValue() * props.getAssetData('VCN').change24h) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({props.getAssetData('VCN').change24h.toFixed(2)}%)
                             </div>
                         </div>
+                    }
+                />
 
-                        {/* Action Buttons */}
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto">
-                            <button
-                                onClick={() => props.startFlow('send')}
-                                class="flex items-center gap-3 px-6 py-4 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-2xl transition-all group active:scale-95" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                <div class="w-10 h-10 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/20 flex items-center justify-center transition-all duration-300 shadow-lg shadow-blue-500/5 group-hover:shadow-blue-500/10">
-                                    <ArrowUpRight class="w-5 h-5 text-blue-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                                </div>
-                                <span class="text-sm font-bold text-white tracking-wide">Send</span>
-                            </button>
-                            <button
-                                onClick={() => props.startFlow('receive')}
-                                class="flex items-center gap-3 px-6 py-4 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-2xl transition-all group active:scale-95" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                <div class="w-10 h-10 rounded-xl bg-green-500/10 group-hover:bg-green-500/20 flex items-center justify-center transition-all duration-300 shadow-lg shadow-green-500/5 group-hover:shadow-green-500/10">
-                                    <ArrowDownLeft class="w-5 h-5 text-green-400 group-hover:-translate-x-0.5 group-hover:translate-y-0.5 transition-transform" />
-                                </div>
-                                <span class="text-sm font-bold text-white tracking-wide">Receive</span>
-                            </button>
-                            <button
-                                onClick={() => props.startFlow('swap')}
-                                class="flex items-center gap-3 px-6 py-4 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-2xl transition-all group active:scale-95" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                                <div class="w-10 h-10 rounded-xl bg-purple-500/10 group-hover:bg-purple-500/20 flex items-center justify-center transition-all duration-300 shadow-lg shadow-purple-500/5 group-hover:shadow-purple-500/10">
-                                    <RefreshCw class="w-5 h-5 text-purple-400 group-hover:rotate-180 transition-transform duration-700" />
-                                </div>
-                                <span class="text-sm font-bold text-white tracking-wide">Swap</span>
-                            </button>
-                            <button
-                                onClick={() => props.setActiveView('mint')}
-                                class="flex items-center gap-3 px-6 py-4 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-2xl transition-all group active:scale-95" style={{ background: 'rgba(255,255,255,0.03)' }}
-                            >
-                                <div class="w-10 h-10 rounded-xl bg-cyan-500/10 group-hover:bg-cyan-500/20 flex items-center justify-center transition-all duration-300 shadow-lg shadow-cyan-500/5 group-hover:shadow-cyan-500/10">
-                                    <Sparkles class="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
-                                </div>
-                                <span class="text-sm font-bold text-white tracking-wide">Mint</span>
-                            </button>
-                        </div>
-                    </div>
+                {/* Quick Actions Container */}
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#111113]/40 p-4 rounded-3xl border border-white/[0.05]">
+                    <button
+                        onClick={() => props.startFlow('send')}
+                        class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
+                        <ArrowUpRight class="w-4 h-4 text-blue-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                        <span class="text-xs font-black text-white uppercase tracking-widest">Send</span>
+                    </button>
+                    <button
+                        onClick={() => props.startFlow('receive')}
+                        class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
+                        <ArrowDownLeft class="w-4 h-4 text-green-400 group-hover:-translate-x-0.5 group-hover:translate-y-0.5 transition-transform" />
+                        <span class="text-xs font-black text-white uppercase tracking-widest">Receive</span>
+                    </button>
+                    <button
+                        onClick={() => props.startFlow('swap')}
+                        class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
+                        <RefreshCw class="w-4 h-4 text-purple-400 group-hover:rotate-180 transition-transform duration-700" />
+                        <span class="text-xs font-black text-white uppercase tracking-widest">Swap</span>
+                    </button>
+                    <button
+                        onClick={() => props.setActiveView('mint')}
+                        class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
+                        <Sparkles class="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+                        <span class="text-xs font-black text-white uppercase tracking-widest">Mint</span>
+                    </button>
                 </div>
             </div>
 

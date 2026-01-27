@@ -19,6 +19,8 @@ import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../.
 import { useAuth } from '../auth/authContext';
 
 
+import { WalletViewHeader } from './WalletViewHeader';
+
 // Storage key for user settings (using different key than admin)
 const USER_SETTINGS_KEY = 'visionhub_user_settings';
 
@@ -160,12 +162,14 @@ export function WalletSettings() {
     };
 
     return (
-        <div class="space-y-6 p-4 lg:p-8 pb-32">
-            {/* Header */}
-            <div>
-                <h1 class="text-3xl font-bold text-white">Settings</h1>
-                <p class="text-gray-400 mt-1">Manage your wallet preferences.</p>
-            </div>
+        <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <WalletViewHeader
+                tag="Core configuration"
+                title="WALLET"
+                titleAccent="SETTINGS"
+                description="Manage your identity, security protocols, and payment preferences."
+                icon={Settings}
+            />
 
             {/* Tabs */}
             <div class="flex flex-wrap gap-2 border-b border-white/10 pb-4">

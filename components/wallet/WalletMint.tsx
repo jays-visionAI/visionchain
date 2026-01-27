@@ -10,6 +10,8 @@ import {
     Check
 } from 'lucide-solid';
 
+import { WalletViewHeader } from './WalletViewHeader';
+
 interface WalletMintProps {
     mintStep: () => number;
     setMintStep: (step: number) => void;
@@ -32,36 +34,31 @@ interface WalletMintProps {
 
 export const WalletMint = (props: WalletMintProps) => {
     return (
-        <div class="flex-1 overflow-y-auto relative h-full">
+        <div class="flex-1 overflow-y-auto relative h-full custom-scrollbar p-4 lg:p-8">
             {/* Decorative Background Blur */}
             <div class="absolute top-0 right-[15%] w-[450px] h-[450px] bg-cyan-500/5 rounded-full blur-[130px] pointer-events-none" />
 
-            <div class="max-w-[1440px] mx-auto px-8 py-10 pt-20 relative min-h-full flex flex-col">
-                <div class="flex flex-col md:flex-row items-start justify-between gap-8 mb-12">
-                    <div class="flex items-center gap-6">
-                        <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-cyan-600 to-emerald-500 flex items-center justify-center shadow-2xl shadow-cyan-500/20 group animate-in slide-in-from-left duration-700">
-                            <Plus class="w-8 h-8 text-white group-hover:rotate-90 transition-transform duration-500" />
+            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative min-h-full flex flex-col">
+                <WalletViewHeader
+                    tag="Asset Generation"
+                    title="TOKEN"
+                    titleAccent="MINT"
+                    description="Create new tokens and cross-chain assets powered by Vision Interoperability."
+                    rightElement={
+                        <div class="flex items-center gap-3">
+                            <For each={[1, 2, 3]}>
+                                {(step) => (
+                                    <button
+                                        onClick={() => props.setMintStep(step)}
+                                        class={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all ${props.mintStep() === step ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                        {step}
+                                    </button>
+                                )}
+                            </For>
                         </div>
-                        <div>
-                            <h2 class="text-4xl font-bold text-white tracking-tight mb-2">Minting Studio</h2>
-                            <p class="text-gray-500 font-medium">Cross-chain token deployment powered by Vision Interoperability</p>
-                        </div>
-                    </div>
-
-                    {/* Step Indicator */}
-                    <div class="flex items-center gap-3 bg-white/[0.03] p-1.5 rounded-2xl border border-white/[0.06]">
-                        <For each={[1, 2, 3]}>
-                            {(step) => (
-                                <button
-                                    onClick={() => props.setMintStep(step)}
-                                    class={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold transition-all ${props.mintStep() === step ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                                >
-                                    {step}
-                                </button>
-                            )}
-                        </For>
-                    </div>
-                </div>
+                    }
+                />
 
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-10 flex-1">
                     {/* Left Side: Configuration Form */}

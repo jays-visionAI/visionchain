@@ -7,24 +7,20 @@ import {
     User
 } from 'lucide-solid';
 
+import { WalletViewHeader } from './WalletViewHeader';
 import { ReferralLeaderboard } from './ReferralLeaderboard';
 
 export const WalletCampaign = (props: { userProfile: () => any }) => {
     return (
-        <div class="flex-1 overflow-y-auto relative custom-scrollbar">
-            {/* Decorative Background Blur */}
-            <div class="absolute top-0 right-[10%] w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
-
-            <div class="max-w-[1440px] mx-auto px-8 py-10 pt-20 relative">
-                <div class="flex items-center gap-6 mb-12">
-                    <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-600 to-indigo-500 flex items-center justify-center shadow-2xl shadow-blue-500/20 group hover:scale-105 transition-transform">
-                        <Zap class="w-8 h-8 text-white group-hover:animate-pulse" />
-                    </div>
-                    <div>
-                        <h2 class="text-4xl font-bold text-white tracking-tight mb-2">Quest</h2>
-                        <p class="text-gray-500 font-medium">Maximize your earnings through Vision ecosystem events and rewards</p>
-                    </div>
-                </div>
+        <div class="flex-1 overflow-y-auto relative custom-scrollbar p-4 lg:p-8">
+            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <WalletViewHeader
+                    tag="Earning Center"
+                    title="QUEST"
+                    titleAccent="SYSTEM"
+                    description="Maximize your earnings through Vision ecosystem events, rewards, and community missions."
+                    icon={Zap}
+                />
 
                 {/* Referral Leaderboard Sprint Section */}
                 <ReferralLeaderboard currentUserEmail={props.userProfile()?.email || ''} />

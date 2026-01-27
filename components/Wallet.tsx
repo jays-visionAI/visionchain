@@ -47,7 +47,8 @@ import {
     Bell,
     Play,
     Layers,
-    UserPlus
+    UserPlus,
+    History as HistoryIcon
 } from 'lucide-solid';
 import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
@@ -92,6 +93,7 @@ import { WalletSettings } from './wallet/WalletSettings';
 import { WalletNotifications } from './wallet/WalletNotifications';
 import { WalletReferral } from './wallet/WalletReferral';
 import { WalletActivity } from './wallet/WalletActivity';
+import { WalletViewHeader } from './wallet/WalletViewHeader';
 
 type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest';
 
@@ -2146,12 +2148,15 @@ Format:
 
                         {/* History View */}
                         <Show when={activeView() === 'history'}>
-                            <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32">
-                                <div class="max-w-4xl mx-auto">
-                                    <div class="mb-8">
-                                        <h2 class="text-3xl font-bold text-white mb-2">Transaction History</h2>
-                                        <p class="text-gray-400">View your on-chain activity and purchase records.</p>
-                                    </div>
+                            <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32 custom-scrollbar">
+                                <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                    <WalletViewHeader
+                                        tag="Blockchain Ledger"
+                                        title="TRANSACTION"
+                                        titleAccent="HISTORY"
+                                        description="View your on-chain activity, token transfers, and purchase records across the Vision network."
+                                        icon={HistoryIcon}
+                                    />
                                     <WalletActivity
                                         purchases={vcnPurchases}
                                         walletAddress={walletAddress()}
@@ -2259,6 +2264,13 @@ Format:
                                         {/* Step 0: Main Dashboard */}
                                         <Match when={onboardingStep() === 0}>
                                             <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="space-y-6">
+                                                <WalletViewHeader
+                                                    tag="Identity Vault"
+                                                    title="USER"
+                                                    titleAccent="PROFILE"
+                                                    description="Manage your Vision ID, linked socials, and account level metrics."
+                                                    icon={User}
+                                                />
                                                 {/* Profile Card */}
                                                 <div class="relative overflow-hidden group">
                                                     <div class="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-cyan-500/20 to-purple-600/20 rounded-[32px] blur-xl opacity-50 group-hover:opacity-100 transition-opacity" />

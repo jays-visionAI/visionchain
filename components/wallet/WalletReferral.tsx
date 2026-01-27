@@ -15,6 +15,8 @@ import {
 } from 'lucide-solid';
 import { getUserReferrals, UserData } from '../../services/firebaseService';
 
+import { WalletViewHeader } from './WalletViewHeader';
+
 interface WalletReferralProps {
     userProfile: () => any;
 }
@@ -55,29 +57,23 @@ export const WalletReferral = (props: WalletReferralProps) => {
     return (
         <div class="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
             <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                {/* Header Section */}
-                <div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                    <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <div class="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 uppercase tracking-widest">
-                                Growth Program
+                <WalletViewHeader
+                    tag="Growth Program"
+                    title="REFERRAL"
+                    titleAccent="ENGINE"
+                    description="Build your network and earn multi-tier rewards for every person you bring to the Vision Chain ecosystem."
+                    rightElement={
+                        <>
+                            <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                <TrendingUp class="w-6 h-6 text-blue-400" />
                             </div>
-                        </div>
-                        <h1 class="text-4xl font-black italic text-white tracking-tight uppercase">
-                            REFERRAL <span class="text-blue-500">ENGINE</span>
-                        </h1>
-                        <p class="text-gray-500 font-medium max-w-md">Build your network and earn multi-tier rewards for every person you bring to the Vision Chain ecosystem.</p>
-                    </div>
-                    <div class="bg-[#111113] border border-white/[0.08] rounded-2xl p-4 flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                            <TrendingUp class="w-6 h-6 text-blue-400" />
-                        </div>
-                        <div>
-                            <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Global Rank</div>
-                            <div class="text-lg font-black text-white">Top 5%</div>
-                        </div>
-                    </div>
-                </div>
+                            <div>
+                                <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Global Rank</div>
+                                <div class="text-lg font-black text-white">Top 5%</div>
+                            </div>
+                        </>
+                    }
+                />
 
                 {/* Primary Actions / Stats Container */}
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
