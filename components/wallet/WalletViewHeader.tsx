@@ -33,7 +33,7 @@ export const WalletViewHeader = (props: WalletViewHeaderProps) => {
             </div>
 
             <Show when={props.rightElement || props.icon}>
-                <div class="bg-[#111113]/60 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-4 flex items-center gap-4 transition-all hover:bg-[#111113]/80 group">
+                <div class="bg-[#111113]/60 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-4 flex items-center justify-center md:justify-start gap-4 transition-all hover:bg-[#111113]/80 group">
                     {props.rightElement || (
                         <>
                             <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-105 transition-transform">

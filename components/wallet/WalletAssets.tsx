@@ -42,7 +42,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                     titleAccent="ASSETS"
                     description="Manage your digital assets and view your portfolio performance across multiple networks."
                     rightElement={
-                        <div class="flex flex-col items-end">
+                        <div class="flex flex-col items-center md:items-end w-full">
                             <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Total Value</div>
                             <div class="text-2xl font-black text-white tracking-tighter drop-shadow-sm">
                                 {(() => {
