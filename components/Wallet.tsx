@@ -2049,7 +2049,7 @@ Format:
                     />
 
                     {/* Main Content Area */}
-                    <main class={`flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden ${onboardingStep() === 0 ? 'pb-[72px] lg:pb-0' : ''}`}>
+                    <main class={`flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
 
                         {/* Top Bar */}
                         <div class="flex items-center gap-4 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-0 z-20 shrink-0">
@@ -3670,7 +3670,7 @@ Format:
                             </Show>
                         </Presence>
                         {/* Mobile Bottom Navigation */}
-                        <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[72px]">
+                        <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[68px]">
                             {
                                 [
                                     { id: 'assets', label: 'Assets', icon: PieChart },
