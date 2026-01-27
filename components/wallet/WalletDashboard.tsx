@@ -411,7 +411,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         id: agent.id,
                                         type: 'BATCH',
                                         summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
-                                        status: agent.status === 'executing' ? 'EXECUTING' : 'SENT',
+                                        status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : 'SENT',
                                         timestamp: agent.startTime,
                                         progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
                                     }}

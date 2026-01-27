@@ -170,7 +170,7 @@ const AgentChip = (props: AgentChipProps) => {
                         <Motion.div
                             class={`h-full ${config().accent} opacity-40`}
                             initial={{ width: '0%' }}
-                            animate={{ width: props.task.status === 'SENT' ? '100%' : (props.task.status === 'EXECUTING' ? '60%' : '10%') }}
+                            animate={{ width: props.task.status === 'SENT' ? '100%' : (props.task.status === 'EXECUTING' ? (props.task.progress ? `${props.task.progress}%` : '60%') : '10%') }}
                         />
                     </div>
                 </div>

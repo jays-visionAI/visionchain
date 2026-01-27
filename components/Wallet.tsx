@@ -722,12 +722,12 @@ const Wallet = (): JSX.Element => {
                 const agentId = Math.random().toString(36).substring(7);
                 const newAgent = {
                     id: agentId,
-                    status: 'executing',
+                    status: 'EXECUTING',
                     totalCount: transactions.length,
                     successCount: 0,
                     failedCount: 0,
                     startTime: Date.now(),
-                    transactions: transactions.map((tx: any) => ({ ...tx, status: 'pending' }))
+                    transactions: transactions.map((tx: any) => ({ ...tx, status: 'PENDING' }))
                 };
                 setBatchAgents(prev => [...prev, newAgent]);
 
@@ -746,8 +746,21 @@ const Wallet = (): JSX.Element => {
 
                     try {
                         let receipt;
+                        const symbol = tx.symbol || 'VCN';
+
                         if (tx.intent === 'send') {
-                            receipt = await contractService.sendTokens(tx.recipient, tx.amount, tx.symbol || 'VCN');
+                            if (symbol === 'VCN') {
+                                try {
+                                    // Try gasless first for VCN in batch
+                                    const result = await contractService.sendGaslessTokens(tx.recipient, tx.amount);
+                                    receipt = { hash: result.txHashes?.transfer || result.txHashes?.permit || '0x...' };
+                                } catch (gcError) {
+                                    console.warn("Batch gasless failed, trying standard...", gcError);
+                                    receipt = await contractService.sendTokens(tx.recipient, tx.amount, symbol);
+                                }
+                            } else {
+                                receipt = await contractService.sendTokens(tx.recipient, tx.amount, symbol);
+                            }
                         } else if (tx.intent === 'schedule') {
                             const delay = tx.executeAt ? Math.max(60, Math.floor((tx.executeAt - Date.now()) / 1000)) : 300;
                             const scheduleRes = await contractService.scheduleTransferNative(tx.recipient, tx.amount, delay);
@@ -772,10 +785,10 @@ const Wallet = (): JSX.Element => {
                         setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, failedCount: a.failedCount + 1 } : a));
                     }
 
-                    // 10 second interval between transactions (except the last one)
+                    // 3 second interval between transactions (except the last one)
                     if (i < transactions.length - 1) {
-                        setLoadingMessage(`AGENT: WAITING 10S INTERVAL (${i + 1}/${transactions.length})...`);
-                        await new Promise(resolve => setTimeout(resolve, 10000));
+                        setLoadingMessage(`AGENT: WAITING 3S INTERVAL (${i + 1}/${transactions.length})...`);
+                        await new Promise(resolve => setTimeout(resolve, 3000));
                     }
                 }
 
@@ -783,6 +796,7 @@ const Wallet = (): JSX.Element => {
                 setFlowSuccess(true);
                 setFlowStep(3);
                 setFlowLoading(false);
+                setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, status: 'SENT' } : a));
 
                 // 4. Generate Report
                 const successMsg = finalResults.filter(r => r.success).length;
@@ -3538,6 +3552,8 @@ Format:
                                                         value={walletPassword()}
                                                         onInput={(e) => setWalletPassword(e.currentTarget.value)}
                                                         onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
+                                                        autocomplete="new-password"
+                                                        spellcheck={false}
                                                     />
                                                     <button
                                                         onClick={() => setShowWalletPassword(!showWalletPassword())}
@@ -3560,6 +3576,8 @@ Format:
                                                             value={confirmWalletPassword()}
                                                             onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
                                                             onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
+                                                            autocomplete="new-password"
+                                                            spellcheck={false}
                                                         />
                                                         {/* Symmetry Balancers */}
                                                         <div class="absolute right-5 top-1/2 -translate-y-1/2 p-2 opacity-0">
