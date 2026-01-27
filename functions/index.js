@@ -57,6 +57,10 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
           TIMELOCK_ABI, wallet);
 
       // 4. Execute Jobs
+      // Note: We execute sequentially to manage nonce automatically.
+      // Parallel execution would require explicit nonce management.
+      let currentNonce = await wallet.getNonce();
+
       for (const docSnap of dueJobs) {
         const jobId = docSnap.id;
         const data = docSnap.data();
@@ -76,10 +80,20 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
             });
           });
 
-          console.log(`Executing Schedule ID: ${data.scheduleId}`);
-          const tx = await contract.executeTransfer(data.scheduleId);
+          console.log(`Executing ID: ${data.scheduleId} nonce ${currentNonce}`);
+
+          // Execute with specific nonce to prevent race conditions if scaling
+          const tx = await contract.executeTransfer(data.scheduleId, {
+            nonce: currentNonce,
+          });
+
           console.log(`   Hash: ${tx.hash}`);
+
+          // Wait for 1 confirmation to ensure ordering
           await tx.wait(1);
+
+          // Increment Local Nonce
+          currentNonce++;
 
           // Update Success
           await docSnap.ref.update({
@@ -90,6 +104,13 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
           console.log(`Success: ${jobId}`);
         } catch (err) {
           console.error(`Failed Job ${jobId}:`, err);
+
+          // If execution failed but NOT due to status change...
+          // reset nonce just in case
+          if (err.message && err.message.includes("nonce")) {
+          // Refresh nonce for next iteration just in case
+            currentNonce = await wallet.getNonce();
+          }
 
           // Retry Logic
           const retryCount = (data.retryCount || 0) + 1;
@@ -104,12 +125,15 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
             );
           }
 
-          await docSnap.ref.update({
-            status: newStatus,
-            lastError: err.message,
-            retryCount: retryCount,
-            nextRetryAt: nextRetry,
-          });
+          // Only update if it wasn't a Status Changed error
+          if (err.message !== "Status changed") {
+            await docSnap.ref.update({
+              status: newStatus,
+              lastError: err.message,
+              retryCount: retryCount,
+              nextRetryAt: nextRetry,
+            });
+          }
         }
       }
     });
