@@ -1247,13 +1247,13 @@ export const subscribeToQueue = (
     return onSnapshot(q, (snapshot: any) => {
         const tasks = snapshot.docs.map((doc: any) => {
             const data = doc.data();
-            // Map DB status to UI status (Aligned with Backend Runner)
-            if (data.status === 'SENT') status = 'SENT';
-            else if (data.status === 'FAILED') status = 'FAILED';
-            else if (data.status === 'CANCELLED') status = 'CANCELLED';
-            else if (data.status === 'WAITING' || data.status === 'pending') {
+            let status: any = 'WAITING';
+            if (data.status === 'SENT' || data.status === 'sent') status = 'SENT';
+            else if (data.status === 'FAILED' || data.status === 'failed') status = 'FAILED';
+            else if (data.status === 'CANCELLED' || data.status === 'cancelled') status = 'CANCELLED';
+            else if (data.status === 'WAITING' || data.status === 'pending' || data.status === 'waiting') {
                 status = 'WAITING';
-            } else if (data.status === 'EXECUTING') {
+            } else if (data.status === 'EXECUTING' || data.status === 'executing') {
                 status = 'EXECUTING';
             }
 
@@ -1268,8 +1268,9 @@ export const subscribeToQueue = (
                     if (diff > 3600) timeLeft = `In ${Math.ceil(diff / 3600)}h`;
                     else timeLeft = `In ${Math.ceil(diff / 60)}m`;
                 } else {
-                    timeLeft = 'Processing...';
-                    status = 'EXECUTING'; // Optimistic status when time passed
+                    timeLeft = 'Execution Due';
+                    // Keep status as WAITING so user knows they can still cancel/interact
+                    status = 'WAITING';
                 }
             } else {
                 timeLeft = new Date(unlockTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1348,7 +1349,7 @@ export const cancelScheduledTask = async (scheduleId: string) => {
     // Here we just update DB to 'cancelled' for UI demo
     try {
         const docRef = doc(db, 'scheduledTransfers', scheduleId);
-        await updateDoc(docRef, { status: 'cancelled' });
+        await updateDoc(docRef, { status: 'CANCELLED' });
         return true;
     } catch (e) {
         console.error("Cancel failed:", e);

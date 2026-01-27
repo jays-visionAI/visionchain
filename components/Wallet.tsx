@@ -280,19 +280,12 @@ const Wallet = (): JSX.Element => {
 
     const handleCancelTask = async (taskId: string) => {
         try {
-            setIsLoading(true);
-            setLoadingMessage('CANCELLING TASK...');
-
-            // 1. Contract Cancel (If it has a scheduleId/creationTx)
-            // For now, simple mock or direct firebase update
+            // Local state is enough (QueueDrawer handles its own isCancelling)
             await cancelScheduledTask(taskId);
-
             alert('Task cancelled successfully.');
         } catch (e) {
             console.error("Cancel failed:", e);
-        } finally {
-            setIsLoading(false);
-            setLoadingMessage('LOADING WALLET');
+            alert('Failed to cancel task. Please try again.');
         }
     };
 
