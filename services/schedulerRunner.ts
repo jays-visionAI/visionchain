@@ -37,58 +37,83 @@ export const runSchedulerTick = async () => {
 
     // --- 0. Recover Stuck Jobs ---
     // Tasks that are 'EXECUTING' but their lock has expired should be reset to 'WAITING'
+    // --- 0. Recover Stuck Jobs ---
+    // Tasks that are 'EXECUTING' but their lock has expired should be reset to 'WAITING'
     const stuckRef = collection(db, 'scheduledTransfers');
     const stuckQ = query(
         stuckRef,
         where('status', '==', 'EXECUTING'),
-        where('lockExpiresAt', '<', nowTs),
-        limit(10)
+        limit(50) // Fetch potential stuck jobs
     );
     const stuckSnapshot = await getDocs(stuckQ);
     if (!stuckSnapshot.empty) {
-        console.log(`-> Recovering ${stuckSnapshot.size} stuck jobs...`);
-        for (const stuckDoc of stuckSnapshot.docs) {
-            await updateDoc(stuckDoc.ref, {
-                status: 'WAITING',
-                lockExpiresAt: null,
-                lastError: 'RECOVERED: Runner lock expired'
-            });
+        const stuckDocs = stuckSnapshot.docs.filter(d => {
+            const data = d.data();
+            return data.lockExpiresAt && data.lockExpiresAt.toMillis() < now.getTime();
+        });
+
+        if (stuckDocs.length > 0) {
+            console.log(`-> Recovering ${stuckDocs.length} stuck jobs...`);
+            for (const stuckDoc of stuckDocs) {
+                await updateDoc(stuckDoc.ref, {
+                    status: 'WAITING',
+                    lockExpiresAt: null,
+                    lastError: 'RECOVERED: Runner lock expired'
+                });
+            }
         }
     }
 
     // 1. Query Due Jobs
     const jobsRef = collection(db, 'scheduledTransfers');
 
-    // We keep the query relatively simple to avoid composite index requirements
-    // if possible, while still filtering enough.
+    // Optimization: Query only by WAITING status to avoid composite index requirements
     const q = query(
         jobsRef,
         where('status', '==', 'WAITING'),
-        where('unlockTimeTs', '<=', nowTs),
-        limit(EXECUTION_BATCH_SIZE)
+        limit(100) // Fetch more to filter in memory
     );
 
-    console.log("-> Querying WAITING tasks where unlockTimeTs <=", now.toISOString());
+    console.log("-> Querying WAITING tasks (in-memory time filter)");
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-        console.log("-> No due jobs found in this tick.");
+        console.log("-> No WAITING jobs found.");
+        return;
+    }
+
+    // Filter for unlockTime <= now
+    const readyJobs = snapshot.docs.filter(docSnap => {
+        const data = docSnap.data();
+        if (!data.unlockTimeTs) return false;
+        return data.unlockTimeTs.toMillis() <= now.getTime();
+    });
+
+    if (readyJobs.length === 0) {
+        console.log("-> Found WAITING jobs but none are due yet.");
         return;
     }
 
     // Secondary Filter: only pick those where nextRetryAt <= now
-    const eligibleJobs = snapshot.docs.filter(docSnap => {
+    const eligibleJobs = readyJobs.filter(docSnap => {
         const data = docSnap.data();
         if (!data.nextRetryAt) return true; // Default to due
         return data.nextRetryAt.toMillis() <= now.getTime();
     });
 
     if (eligibleJobs.length === 0) {
-        console.log("-> Found tasks but none are past their nextRetryAt yet.");
+        console.log("-> Found due tasks but none are past their nextRetryAt yet.");
         return;
     }
 
+    // 2. Process Jobs
     console.log(`-> Processing ${eligibleJobs.length} eligible jobs.`);
+
+    const EXECUTOR_PRIVATE_KEY = process.env.VITE_EXECUTOR_PK || '';
+    if (!EXECUTOR_PRIVATE_KEY) {
+        console.error("Critical: VITE_EXECUTOR_PK is missing.");
+        return;
+    }
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider); // Paymaster/Executor Wallet

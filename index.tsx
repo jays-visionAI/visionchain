@@ -72,7 +72,7 @@ function Layout(props: { children?: any }) {
   return (
     <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
       <div class="relative z-10">
-        <Show when={!isAdminRoute()}>
+        <Show when={!isAdminRoute() && location.pathname !== '/wallet'}>
           <Navbar />
         </Show>
         <main>
