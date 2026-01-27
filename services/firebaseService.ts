@@ -348,13 +348,15 @@ export const processReferralRewards = async (
 };
 
 /**
- * Generates a unique referral code based on the user's name or email.
- * Format: NAME_RANDOM (e.g., JAY_X92K)
+ * Generates a unique referral code.
+ * Format: Random 6-char Alphanumeric (e.g. X9A2B1)
  */
 export const generateReferralCode = async (name: string, email: string): Promise<string> => {
-    const prefix = (name || email.split('@')[0]).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 4);
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const code = `${prefix}_${random}`;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
 
     const db = getFirebaseDb();
     const q = query(collection(db, 'users'), where('referralCode', '==', code));
@@ -444,6 +446,69 @@ export const resolveRecipient = async (identifier: string, currentUserEmail?: st
 
     // 6. Try direct VID lookup (via searchUserByEmail as it matches doc ID)
     return await searchUserByEmail(cleanId);
+};
+
+export const getUserData = async (email: string): Promise<UserData | null> => {
+    const db = getFirebaseDb();
+    const emailLower = email.toLowerCase().trim();
+
+    // 1. Try lowercase lookup (Preferred)
+    let userSnap = await getDoc(doc(db, 'users', emailLower));
+    let saleSnap = await getDoc(doc(db, 'token_sales', emailLower));
+
+    // 2. Fallback to original lookup (Support legacy/case-sensitive IDs)
+    if (!userSnap.exists() && email !== emailLower) {
+        const legacySnap = await getDoc(doc(db, 'users', email));
+        if (legacySnap.exists()) userSnap = legacySnap;
+    }
+    if (!saleSnap.exists() && email !== emailLower) {
+        const legacySnap = await getDoc(doc(db, 'token_sales', email));
+        if (legacySnap.exists()) saleSnap = legacySnap;
+    }
+
+    // 3. One more fallback: uppercase email (sometimes used in legacy systems)
+    if (!userSnap.exists()) {
+        const upperSnap = await getDoc(doc(db, 'users', email.toUpperCase()));
+        if (upperSnap.exists()) userSnap = upperSnap;
+    }
+
+    if (userSnap.exists() || saleSnap.exists()) {
+        const user = userSnap.data();
+        const sale = saleSnap.data();
+
+        // 4. Ensure Referral Code Exists
+        let referralCode = user?.referralCode;
+        if (!referralCode) {
+            console.log(`[Referral] Generating missing code for ${emailLower}`);
+            referralCode = await generateReferralCode('', emailLower);
+            // Save immediately
+            const userRef = doc(db, 'users', emailLower);
+            await setDoc(userRef, { referralCode }, { merge: true });
+        }
+
+        return {
+            email: emailLower,
+            role: user?.role || 'user',
+            name: user?.name || user?.displayName || emailLower.split('@')[0],
+            walletAddress: user?.walletAddress || sale?.walletAddress || '',
+            status: sale?.status || user?.status || 'Registered',
+            isVerified: !!(user?.walletAddress || sale?.walletAddress),
+            tier: sale?.tier || user?.tier || 0,
+            phone: user?.phone || '',
+            bio: user?.bio || '',
+            twitter: user?.twitter || '',
+            discord: user?.discord || '',
+            walletReady: user?.walletReady || sale?.walletReady || false,
+            // Referral Fields
+            referralCode: referralCode,
+            referrerId: user?.referrerId || '',
+            grandReferrerId: user?.grandReferrerId || '',
+            referralCount: user?.referralCount || 0,
+            totalRewardsVCN: user?.totalRewardsVCN || 0,
+            totalRewardsUSD: user?.totalRewardsUSD || 0
+        };
+    }
+    return null;
 };
 
 // Initialize Firebase (singleton pattern)
@@ -912,57 +977,7 @@ export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'pa
     return 'user';
 };
 
-export const getUserData = async (email: string): Promise<UserData | null> => {
-    const db = getFirebaseDb();
-    const emailLower = email.toLowerCase().trim();
 
-    // 1. Try lowercase lookup (Preferred)
-    let userSnap = await getDoc(doc(db, 'users', emailLower));
-    let saleSnap = await getDoc(doc(db, 'token_sales', emailLower));
-
-    // 2. Fallback to original lookup (Support legacy/case-sensitive IDs)
-    if (!userSnap.exists() && email !== emailLower) {
-        const legacySnap = await getDoc(doc(db, 'users', email));
-        if (legacySnap.exists()) userSnap = legacySnap;
-    }
-    if (!saleSnap.exists() && email !== emailLower) {
-        const legacySnap = await getDoc(doc(db, 'token_sales', email));
-        if (legacySnap.exists()) saleSnap = legacySnap;
-    }
-
-    // 3. One more fallback: uppercase email (sometimes used in legacy systems)
-    if (!userSnap.exists()) {
-        const upperSnap = await getDoc(doc(db, 'users', email.toUpperCase()));
-        if (upperSnap.exists()) userSnap = upperSnap;
-    }
-
-    if (userSnap.exists() || saleSnap.exists()) {
-        const user = userSnap.data();
-        const sale = saleSnap.data();
-        return {
-            email: emailLower,
-            role: user?.role || 'user',
-            name: user?.name || user?.displayName || emailLower.split('@')[0],
-            walletAddress: user?.walletAddress || sale?.walletAddress || '',
-            status: sale?.status || user?.status || 'Registered',
-            isVerified: !!(user?.walletAddress || sale?.walletAddress),
-            tier: sale?.tier || user?.tier || 0,
-            phone: user?.phone || '',
-            bio: user?.bio || '',
-            twitter: user?.twitter || '',
-            discord: user?.discord || '',
-            walletReady: user?.walletReady || sale?.walletReady || false,
-            // Referral Fields
-            referralCode: user?.referralCode || '',
-            referrerId: user?.referrerId || '',
-            grandReferrerId: user?.grandReferrerId || '',
-            referralCount: user?.referralCount || 0,
-            totalRewardsVCN: user?.totalRewardsVCN || 0,
-            totalRewardsUSD: user?.totalRewardsUSD || 0
-        };
-    }
-    return null;
-};
 
 export const updateUserData = async (email: string, updates: Partial<UserData>) => {
     try {

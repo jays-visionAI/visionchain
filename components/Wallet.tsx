@@ -192,7 +192,12 @@ const Wallet = (): JSX.Element => {
         isVerified: false,
         tier: 0,
         address: '',
-        role: 'user'
+        role: 'user',
+        referralCode: '',
+        referrerId: '',
+        referralCount: 0,
+        totalRewardsVCN: 0,
+        totalRewardsUSD: 0
     });
     const [walletAddressSignal, setWalletAddressSignal] = createSignal('');
     const walletAddress = createMemo(() => userProfile().address || walletAddressSignal() || '');
@@ -889,7 +894,12 @@ const Wallet = (): JSX.Element => {
                     isVerified: data.isVerified || false,
                     tier: data.tier || 0,
                     address: data.walletAddress || '',
-                    role: data.role || 'user'
+                    role: data.role || 'user',
+                    referralCode: data.referralCode || '',
+                    referrerId: data.referrerId || '',
+                    referralCount: data.referralCount || 0,
+                    totalRewardsVCN: data.totalRewardsVCN || 0,
+                    totalRewardsUSD: data.totalRewardsUSD || 0
                 });
 
                 // Check if wallet exists in backend OR locally
@@ -1129,7 +1139,12 @@ const Wallet = (): JSX.Element => {
                     isVerified: freshData.isVerified || false,
                     tier: freshData.tier || 0,
                     address: freshData.walletAddress || '',
-                    role: freshData.role || 'user'
+                    role: freshData.role || 'user',
+                    referralCode: freshData.referralCode || '',
+                    referrerId: freshData.referrerId || '',
+                    referralCount: freshData.referralCount || 0,
+                    totalRewardsVCN: freshData.totalRewardsVCN || 0,
+                    totalRewardsUSD: freshData.totalRewardsUSD || 0
                 });
             }
         } catch (e) {
