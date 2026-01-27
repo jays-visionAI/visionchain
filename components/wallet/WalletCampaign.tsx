@@ -7,9 +7,11 @@ import {
     User
 } from 'lucide-solid';
 
-export const WalletCampaign = () => {
+import { ReferralLeaderboard } from './ReferralLeaderboard';
+
+export const WalletCampaign = (props: { userProfile: () => any }) => {
     return (
-        <div class="flex-1 overflow-y-auto relative">
+        <div class="flex-1 overflow-y-auto relative custom-scrollbar">
             {/* Decorative Background Blur */}
             <div class="absolute top-0 right-[10%] w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
 
@@ -23,6 +25,9 @@ export const WalletCampaign = () => {
                         <p class="text-gray-500 font-medium">Maximize your earnings through Vision ecosystem events and rewards</p>
                     </div>
                 </div>
+
+                {/* Referral Leaderboard Sprint Section */}
+                <ReferralLeaderboard currentUserEmail={props.userProfile()?.email || ''} />
 
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

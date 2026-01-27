@@ -24,7 +24,13 @@ export const WalletReferral = (props: WalletReferralProps) => {
     const [copied, setCopied] = createSignal(false);
     const [isLoading, setIsLoading] = createSignal(true);
 
-    const referralLink = () => `${window.location.origin}/signup?ref=${props.userProfile().referralCode}`;
+    const referralUrl = () => `${window.location.origin}/signup?ref=${props.userProfile().referralCode}`;
+
+    const invitationMessage = () => {
+        const url = referralUrl();
+        const userName = props.userProfile().name || props.userProfile().email?.split('@')[0] || 'User';
+        return `${url} Invitation Link from ${userName}`;
+    };
 
     onMount(async () => {
         if (props.userProfile().email) {
@@ -35,9 +41,9 @@ export const WalletReferral = (props: WalletReferralProps) => {
     });
 
     const copyLink = () => {
-        navigator.clipboard.writeText(referralLink());
+        navigator.clipboard.writeText(invitationMessage());
         setCopied(true);
-        setTimeout(() => setCopied(true), 2000); // Fixed typo logic below
+        setTimeout(() => setCopied(false), 2000);
     };
 
     const copyCode = () => {
@@ -85,10 +91,10 @@ export const WalletReferral = (props: WalletReferralProps) => {
                             <h3 class="text-xl font-black text-white italic mb-6 uppercase tracking-tight">Your Invite Link</h3>
                             <div class="flex flex-col gap-3 mb-8">
                                 <div class="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between group/link">
-                                    <code class="text-blue-400 font-mono text-sm truncate">{referralLink()}</code>
+                                    <code class="text-blue-400 font-mono text-sm truncate">{referralUrl()}</code>
                                     <button
                                         onClick={() => {
-                                            navigator.clipboard.writeText(referralLink());
+                                            navigator.clipboard.writeText(invitationMessage());
                                             setCopied(true);
                                             setTimeout(() => setCopied(false), 2000);
                                         }}
@@ -104,12 +110,12 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                         if (navigator.share) {
                                             navigator.share({
                                                 title: 'Join Vision Chain',
-                                                text: 'Start your AI asset journey on Vision Chain.',
-                                                url: referralLink()
+                                                text: `Invitation Link from ${props.userProfile().name || 'User'}`,
+                                                url: referralUrl()
                                             });
                                         } else {
                                             copyLink();
-                                            alert("Link copied to clipboard!");
+                                            alert("Invitation link copied to clipboard!");
                                         }
                                     }}
                                     class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-3 active:scale-95"
