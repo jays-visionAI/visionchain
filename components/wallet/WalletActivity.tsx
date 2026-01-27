@@ -178,24 +178,28 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                     const contact = props.contacts?.find((c: any) =>
                                                         c.address?.toLowerCase() === counterpartyAddr?.toLowerCase()
                                                     );
+                                                    const shortAddr = counterpartyAddr ? `${counterpartyAddr.slice(0, 6)}...${counterpartyAddr.slice(-4)}` : 'Unknown';
 
                                                     if (contact) {
                                                         return (
-                                                            <div class="flex flex-col">
-                                                                <span>{contact.internalName || contact.name || 'Unknown Contact'}</span>
-                                                                <span class="text-[10px] text-gray-400 font-normal">{contact.email}</span>
+                                                            <div class="flex items-center gap-2">
+                                                                <span class="font-black italic uppercase tracking-tight text-blue-400">
+                                                                    {contact.internalName || contact.name}
+                                                                </span>
+                                                                <span class="text-[10px] text-blue-500/50 font-mono">({shortAddr})</span>
                                                             </div>
                                                         );
                                                     }
 
                                                     return (
-                                                        <span>
-                                                            {isIncoming ? 'Received' : 'Sent'} {tx.type === 'Transfer' ? 'Asset' : 'Transaction'}
-                                                        </span>
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="font-bold">{isIncoming ? 'Received from' : 'Sent to'}</span>
+                                                            <span class="text-[10px] text-gray-500 font-mono">{shortAddr}</span>
+                                                        </div>
                                                     );
                                                 })()}
                                             </div>
-                                            <div class="text-xs text-gray-500 font-mono">{date}</div>
+                                            <div class="text-xs text-gray-500 font-mono mt-0.5">{date}</div>
                                         </div>
                                     </div>
                                     <div class="text-right">

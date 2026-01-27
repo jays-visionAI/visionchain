@@ -965,6 +965,18 @@ const Wallet = (): JSX.Element => {
         return () => clearInterval(interval);
     });
 
+    createEffect(async () => {
+        const email = auth.user()?.email;
+        if (email) {
+            try {
+                const data = await getUserContacts(email);
+                setContacts(data);
+            } catch (e) {
+                console.warn("Failed to pre-load contacts", e);
+            }
+        }
+    });
+
     const fetchFullProfile = async () => {
         const user = auth.user();
         if (!user || !user.email) return;
