@@ -13,6 +13,7 @@ import {
     TrendingUp,
     ChevronRight,
     Copy,
+    UserPlus,
     Zap,
     Plus,
     Mic,
@@ -489,6 +490,16 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <div class="text-sm font-bold text-white mb-1">Mint</div>
                                         <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Generate NFTs</div>
                                     </div>
+                                    <div
+                                        onClick={() => props.setActiveView('referral')}
+                                        class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-blue-500/40 hover:bg-blue-500/[0.02] transition-all group cursor-pointer"
+                                    >
+                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                            <UserPlus class="w-5 h-5 text-blue-400" />
+                                        </div>
+                                        <div class="text-sm font-bold text-white mb-1">Referral</div>
+                                        <div class="text-[10px] text-gray-500 uppercase tracking-widest font-black">Earn Rewards</div>
+                                    </div>
                                 </div>
                             </Motion.div>
                         </div>
@@ -516,8 +527,26 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 ? 'bg-[#007AFF] text-white rounded-tr-sm shadow-[0_10px_30px_-5px_rgba(0,122,255,0.3)]'
                                                 : 'bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm'
                                                 }`}>
-                                                {msg.content}
+                                                {msg.content.split('[RECOMMENDED_QUESTIONS]')[0]}
                                             </div>
+
+                                            <Show when={msg.role === 'assistant' && msg.content.includes('[RECOMMENDED_QUESTIONS]')}>
+                                                <div class="flex flex-wrap gap-2 mt-3 px-1 animate-in fade-in slide-in-from-top-2 duration-500 delay-300">
+                                                    <For each={msg.content.split('[RECOMMENDED_QUESTIONS]')[1].split('|')}>
+                                                        {(q) => (
+                                                            <button
+                                                                onClick={() => {
+                                                                    props.setInput(q.trim());
+                                                                    props.handleSend();
+                                                                }}
+                                                                class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] font-bold text-gray-400 hover:text-blue-400 hover:border-blue-500/30 transition-all active:scale-95"
+                                                            >
+                                                                {q.trim()}
+                                                            </button>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                            </Show>
 
                                             {/* Specialized Multi-Transaction Review UI */}
                                             <Show when={msg.role === 'assistant' && msg.isMultiReview && msg.batchData}>

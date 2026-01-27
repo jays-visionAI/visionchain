@@ -15,7 +15,8 @@ import {
     Wallet,
     Trophy,
     Activity,
-    Folder
+    Folder,
+    UserPlus
 } from 'lucide-solid';
 
 // Icon mapping for dynamic icon resolution
@@ -35,7 +36,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Wallet,
     Trophy,
     Activity,
-    Folder
+    Folder,
+    UserPlus
 };
 
 // Menu item interface with optional children for sub-menus
@@ -98,12 +100,21 @@ export const adminMenuConfig: AdminMenuItem[] = [
         order: 3
     },
     {
+        id: 'referrals',
+        path: '/adminsystem/referrals',
+        label: 'Referral Engine',
+        icon: 'UserPlus',
+        badge: 'NEW',
+        category: 'core',
+        order: 4
+    },
+    {
         id: 'wallet-management',
         path: '/adminsystem/wallet',
         label: 'Wallet Control',
         icon: 'Wallet',
         category: 'core',
-        order: 4
+        order: 5
     },
     {
         id: 'campaign-management',

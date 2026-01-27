@@ -1,5 +1,5 @@
-import { createSignal, Show } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { createSignal, Show, onMount } from 'solid-js';
+import { useNavigate, useSearchParams } from '@solidjs/router';
 import {
     Lock,
     Mail,
@@ -13,6 +13,7 @@ import {
 import { useAuth } from './authContext';
 
 export default function Signup() {
+    const [searchParams] = useSearchParams();
     const [email, setEmail] = createSignal('');
     const [phone, setPhone] = createSignal('');
     const [password, setPassword] = createSignal('');
@@ -21,11 +22,21 @@ export default function Signup() {
     const [showConfirmPassword, setShowConfirmPassword] = createSignal(false);
     const [error, setError] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
+    const [referralCode, setReferralCode] = createSignal(
+        typeof searchParams.ref === 'string' ? searchParams.ref : ''
+    );
 
     const [isSuccess, setIsSuccess] = createSignal(false);
 
     const auth = useAuth();
     const navigate = useNavigate();
+
+    onMount(() => {
+        const ref = searchParams.ref;
+        if (ref && typeof ref === 'string') {
+            setReferralCode(ref);
+        }
+    });
 
     const handleSubmit = async (e: Event) => {
         e.preventDefault();
@@ -55,7 +66,7 @@ export default function Signup() {
         setIsLoading(true);
 
         try {
-            await auth.register(emailVal, pwdVal, phoneVal);
+            await auth.register(emailVal, pwdVal, phoneVal, referralCode());
             setIsSuccess(true);
             // Optional: Auto redirect after few seconds
             setTimeout(() => {
@@ -207,6 +218,21 @@ export default function Signup() {
                                         <EyeOff class="w-5 h-5" />
                                     </Show>
                                 </button>
+                            </div>
+                        </div>
+
+                        {/* Referral Code (Optional) */}
+                        <div>
+                            <label class="text-gray-400 text-sm mb-2 block font-medium">Referral Code (Optional)</label>
+                            <div class="relative">
+                                <UserPlus class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <input
+                                    type="text"
+                                    value={referralCode()}
+                                    onInput={(e) => setReferralCode(e.currentTarget.value)}
+                                    placeholder="Enter referral code"
+                                    class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
+                                />
                             </div>
                         </div>
 

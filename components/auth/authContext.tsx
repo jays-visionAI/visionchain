@@ -12,7 +12,7 @@ interface AuthContextType {
     user: () => User | null;
     loading: () => boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (email: string, password: string, phone?: string) => Promise<void>;
+    register: (email: string, password: string, phone?: string, referralCode?: string) => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -35,8 +35,8 @@ export function AuthProvider(props: { children: JSX.Element }) {
         await adminLogin(email, password);
     };
 
-    const register = async (email: string, password: string, phone?: string) => {
-        await adminRegister(email, password, phone);
+    const register = async (email: string, password: string, phone?: string, referralCode?: string) => {
+        await adminRegister(email, password, phone, referralCode);
     };
 
     const logout = async () => {

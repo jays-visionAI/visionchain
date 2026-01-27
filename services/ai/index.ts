@@ -95,38 +95,17 @@ ${localeInfo}
 [CRITICAL INSTRUCTIONS - OVERRIDE]
 1. RESPONSE LANGUAGE: You MUST respond in the SAME language as the user's input.
 2. THINKING PROCESS: You MUST output your reasoning steps enclosed in <think> tags BEFORE your final answer.
-   Format: <think>Step Title: Brief detail</think>
-   DO NOT output markdown for steps. Use ONLY the <think> tags.
+3. FINANCIAL CONSULTANT PERSONA: Your tone should be professional, insightful, and helpful, like a top-tier financial advisor.
+4. RECOMMENDED QUESTIONS: If the user asks about market data, prices, or DeFi, YOU MUST provide 3 follow-up questions.
+   Format: Append "[RECOMMENDED_QUESTIONS] Question 1 | Question 2 | Question 3" at the very end.
 
-3. REAL-TIME DATA POLICY (STRICT):
+5. REAL-TIME DATA POLICY (STRICT):
    - **DO NOT HALLUCINATE PRICES.** If the user asks for a price, YOU MUST use 'get_current_price' or 'get_historical_price'.
    - NEVER provide a price from your internal knowledge base. 
-   - ALWAYS verify the CURRENT_TIMESTAMP_MS before deciding if a request is for "now" or "future".
-
-4. TOOL USAGE POLICY (SPEED OPTIMIZATION):
-   - **CHECK THE [ADDRESS BOOK] SECTION FIRST.**
-   - IF the target name appears in the [ADDRESS BOOK] list provided in the context:
-     - **DO NOT** USE THE 'search_user_contacts' TOOL.
-     - USE the address directly from the list and TRIGGER JSON IMMEDIATELY.
-
-5. EXECUTION POLICY (STRICT SAFETY):
-   [CASE A: EXACT MATCH]
-   - IF the contact search returns an 'Exact' match (Confidence 100%), DO NOT ASK "Is this correct?".
-   - IMMEDIATELY Output the JSON for the action to trigger the UI.
-
-   [CASE B: PARTIAL / AMBIGUOUS MATCH]
-   - IF the match is only 'Potential', ask: "Did you mean [Full Name]?"
-   - **CRITICAL**: When the user confirms, **DO NOT ASK for the amount again** if it was mentioned earlier.
-
-   [JSON FORMAT]
-   - When executing, append this JSON to the very end of your response:
-   - For immediate: {"intent": "send", "recipient": "0x...", "amount": "...", "symbol": "..."}
-   - For scheduled: {"intent": "schedule", "recipient": "0x...", "amount": "...", "symbol": "...", "executeAt": 1731234567890}
-
-6. LOCALE AWARENESS:
-   - Format all date/time and currency displays according to the USER_LOCALE provided.
-   - For KR locale, use "만 원", "원" etc. for fiat if requested, but keep crypto symbols as is.
 `;
+
+        const { GoogleGenAI } = await import('@google/genai');
+        const genAI = new GoogleGenAI({ apiKey: config.apiKey });
 
         let result = await provider.generateText(fullPrompt, config.model, config.apiKey, {
             systemPrompt: dynamicSystemPrompt,
@@ -144,7 +123,7 @@ ${localeInfo}
             let toolCallsFound = true;
             let loopCount = 0;
 
-            while (toolCallsFound && loopCount < 3) { // Limit loops to prevent infinite recursion
+            while (toolCallsFound && loopCount < 5) { // Increased loop count for complex flows
                 toolCallsFound = false;
                 const toolResultsParts: any[] = [];
 
@@ -171,40 +150,27 @@ ${localeInfo}
                         } else if (name === 'search_user_contacts') {
                             const { getUserContacts } = await import('../firebaseService');
                             const contacts = await getUserContacts(userId);
-                            const rawQuery = (args.name || "").toLowerCase().replace('@', '');
-                            const searchQuery = rawQuery.replace(/\s+/g, '');
+                            const searchQuery = (args.name || "").toLowerCase().replace('@', '').replace(/\s+/g, '');
 
-                            // Simple Fuzzy Match Helper
                             const getMatchScore = (target: string, query: string) => {
                                 const t = target.toLowerCase().replace(/\s+/g, '');
                                 if (t === query) return 100;
                                 if (t.includes(query) || query.includes(t)) return 90;
-                                const targetChars = t.split('');
-                                const queryChars = query.split('');
-                                const intersection = queryChars.filter(c => targetChars.includes(c));
-                                if (intersection.length >= 2 && intersection.length >= query.length - 1) return 80;
                                 return 0;
                             };
 
-                            const scoredContacts = contacts.map(c => ({
+                            const filtered = contacts.map(c => ({
                                 ...c,
-                                score: Math.max(
-                                    getMatchScore(c.internalName || "", searchQuery),
-                                    getMatchScore(c.alias || "", searchQuery),
-                                    getMatchScore(c.vchainUserUid || "", searchQuery)
-                                )
-                            }));
+                                score: Math.max(getMatchScore(c.internalName || "", searchQuery), getMatchScore(c.alias || "", searchQuery))
+                            })).filter(c => c.score >= 70).sort((a, b) => b.score - a.score);
 
-                            const filtered = scoredContacts.filter(c => c.score >= 70).sort((a, b) => b.score - a.score);
-                            toolResult = filtered.map(c => ({
+                            toolResult = filtered.slice(0, 5).map(c => ({
                                 name: c.internalName,
                                 alias: c.alias,
                                 vid: c.vchainUserUid ? `@${c.vchainUserUid}` : "Not linked",
                                 address: c.address || "No address",
-                                email: c.email,
                                 matchConfidence: c.score === 100 ? 'Exact' : 'Potential'
                             }));
-
                             if (toolResult.length === 0) toolResult = "No contacts found.";
                         }
 
@@ -215,22 +181,35 @@ ${localeInfo}
                 }
 
                 if (toolCallsFound) {
-                    const toolResponse = { role: 'user', parts: toolResultsParts };
+                    const toolResponse = { role: 'function', parts: toolResultsParts };
                     history.push(toolResponse);
 
-                    const ai = new (await import('@google/genai')).GoogleGenAI({ apiKey: config.apiKey });
-                    const finalResponse = await ai.models.generateContent({
+                    // Call the model with the tool output using the service-level SDK instance
+                    const response: any = await (genAI as any).models.generateContent({
                         model: config.model,
                         contents: history,
-                        config: { systemInstruction: dynamicSystemPrompt }
+                        config: {
+                            systemInstruction: dynamicSystemPrompt,
+                            tools: [{ functionDeclarations: (await import('./tools')).AI_TOOLS as any }]
+                        }
                     });
 
-                    currentContent = finalResponse.candidates?.[0]?.content;
+                    currentContent = response.candidates?.[0]?.content;
                     if (!currentContent) break;
                     history.push(currentContent);
-                    result = currentContent.parts?.[0]?.text || "I retrieved the data but failed to format the final answer.";
-                    loopCount++;
+
+                    const textResponse = currentContent.parts?.find((p: any) => p.text)?.text;
+                    if (textResponse) {
+                        result = textResponse;
+                    }
+
+                    // Check if more tools requested
+                    const moreTools = currentContent.parts?.some((p: any) => p.functionCall);
+                    if (!moreTools) break;
+                } else {
+                    break;
                 }
+                loopCount++;
             }
         }
 

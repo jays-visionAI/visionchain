@@ -88,8 +88,9 @@ import { WalletNodes } from './wallet/WalletNodes';
 import { WalletContacts } from './wallet/WalletContacts';
 import { WalletSettings } from './wallet/WalletSettings';
 import { WalletNotifications } from './wallet/WalletNotifications';
+import { WalletReferral } from './wallet/WalletReferral';
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -485,6 +486,12 @@ const Wallet = (): JSX.Element => {
 
                 setLastTxHash(receipt.hash);
                 alert(`Successfully deployed ${nodeType} Node! Tx: ${receipt.hash}`);
+
+                // 5. Trigger Referral Rewards
+                const vcnAmount = nodeType === 'Enterprise' ? 500000 : 70000;
+                import('../services/firebaseService').then(m => {
+                    m.processReferralRewards('token_sale', userProfile().email, vcnAmount, 'VCN', receipt.hash);
+                });
             } else if (action.type === 'send_tokens') {
                 const { amount, recipient, symbol } = action.data;
                 setFlowLoading(true);
@@ -1959,12 +1966,18 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
                         />
                     </Show>
 
-                    {/* Nodes View (New Implementation) */}
                     <Show when={activeView() === 'nodes'}>
                         <WalletNodes
                             userNodes={ownedNodes()}
                             claimNodeRewards={claimNodeRewards}
                             purchaseNode={purchaseNode}
+                        />
+                    </Show>
+
+                    {/* Referral View */}
+                    <Show when={activeView() === 'referral'}>
+                        <WalletReferral
+                            userProfile={userProfile}
                         />
                     </Show>
 

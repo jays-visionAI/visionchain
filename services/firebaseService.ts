@@ -219,39 +219,174 @@ export const searchUserByName = async (name: string): Promise<{ vid: string, ema
     try {
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
-        // We prefer 'displayName' but often it might be 'name' or even email prefix
-        // For simplicity and performance, we search displayName exactly
         const q = query(usersRef, where('displayName', '==', name), limit(1));
         const snapshot = await getDocs(q);
 
         if (!snapshot.empty) {
             const docResult = snapshot.docs[0];
             const data = docResult.data();
-            return {
-                vid: docResult.id,
-                email: data.email,
-                address: data.walletAddress
-            };
+            return { vid: docResult.id, email: data.email, address: data.walletAddress };
         }
 
-        // Fallback for fields named 'name'
         const q2 = query(usersRef, where('name', '==', name), limit(1));
         const snapshot2 = await getDocs(q2);
         if (!snapshot2.empty) {
             const docResult = snapshot2.docs[0];
             const data = docResult.data();
-            return {
-                vid: docResult.id,
-                email: data.email,
-                address: data.walletAddress
-            };
+            return { vid: docResult.id, email: data.email, address: data.walletAddress };
         }
-
         return null;
     } catch (e) {
         console.error("User search by name failed:", e);
         return null;
     }
+};
+
+// --- Referral System Utilities & Processing ---
+
+export interface ReferralConfig {
+    tier1Rate: number;
+    tier2Rate: number;
+    enabledEvents: string[];
+}
+
+/**
+ * Fetches the global referral configuration from Firestore.
+ */
+export const getReferralConfig = async (): Promise<ReferralConfig> => {
+    try {
+        const db = getFirebaseDb();
+        const configSnap = await getDoc(doc(db, 'referral_configs', 'global'));
+        if (configSnap.exists()) {
+            return configSnap.data() as ReferralConfig;
+        }
+    } catch (e) {
+        console.error("Error fetching referral config:", e);
+    }
+    // Default Fallback
+    return {
+        tier1Rate: 0.10, // 10%
+        tier2Rate: 0.02, // 2%
+        enabledEvents: ['subscription', 'token_sale', 'staking']
+    };
+};
+
+/**
+ * Processes referral rewards when a revenue event occurs.
+ */
+export const processReferralRewards = async (
+    event: string,
+    fromUserEmail: string,
+    amount: number,
+    currency: 'USD' | 'VCN' = 'USD',
+    txHash?: string
+): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        const fromUser = await getUserData(fromUserEmail);
+        if (!fromUser || !fromUser.referrerId) return;
+
+        const config = await getReferralConfig();
+        if (!config.enabledEvents.includes(event)) return;
+
+        // 1. Tier 1 Reward
+        const referrer = await getUserData(fromUser.referrerId);
+        if (referrer) {
+            const rewardAmount = amount * config.tier1Rate;
+            await addDoc(collection(db, 'referral_rewards'), {
+                userId: referrer.email,
+                fromUserId: fromUserEmail,
+                amount: rewardAmount,
+                currency,
+                tier: 1,
+                event,
+                percentage: config.tier1Rate,
+                status: 'pending',
+                timestamp: new Date().toISOString(),
+                txHash
+            });
+
+            // Update Referrer Totals
+            const rRef = doc(db, 'users', referrer.email.toLowerCase());
+            const totalField = currency === 'VCN' ? 'totalRewardsVCN' : 'totalRewardsUSD';
+            await updateDoc(rRef, {
+                [totalField]: (referrer[totalField] || 0) + rewardAmount
+            });
+            console.log(`[Referral] Distributed ${rewardAmount} ${currency} to 1st tier referrer ${referrer.email}`);
+        }
+
+        // 2. Tier 2 Reward
+        if (fromUser.grandReferrerId) {
+            const grandReferrer = await getUserData(fromUser.grandReferrerId);
+            if (grandReferrer) {
+                const rewardAmount = amount * config.tier2Rate;
+                await addDoc(collection(db, 'referral_rewards'), {
+                    userId: grandReferrer.email,
+                    fromUserId: fromUserEmail,
+                    amount: rewardAmount,
+                    currency,
+                    tier: 2,
+                    event,
+                    percentage: config.tier2Rate,
+                    status: 'pending',
+                    timestamp: new Date().toISOString(),
+                    txHash
+                });
+
+                // Update Grand Referrer Totals
+                const grRef = doc(db, 'users', grandReferrer.email.toLowerCase());
+                const totalField = currency === 'VCN' ? 'totalRewardsVCN' : 'totalRewardsUSD';
+                await updateDoc(grRef, {
+                    [totalField]: (grandReferrer[totalField] || 0) + rewardAmount
+                });
+                console.log(`[Referral] Distributed ${rewardAmount} ${currency} to 2nd tier referrer ${grandReferrer.email}`);
+            }
+        }
+    } catch (e) {
+        console.error("Failed to process referral rewards:", e);
+    }
+};
+
+/**
+ * Generates a unique referral code based on the user's name or email.
+ * Format: NAME_RANDOM (e.g., JAY_X92K)
+ */
+export const generateReferralCode = async (name: string, email: string): Promise<string> => {
+    const prefix = (name || email.split('@')[0]).replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 4);
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const code = `${prefix}_${random}`;
+
+    const db = getFirebaseDb();
+    const q = query(collection(db, 'users'), where('referralCode', '==', code));
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+        return generateReferralCode(name, email);
+    }
+
+    return code;
+};
+
+/**
+ * Finds a user by their referral code.
+ */
+export const getUserByReferralCode = async (code: string): Promise<UserData | null> => {
+    const db = getFirebaseDb();
+    const q = query(collection(db, 'users'), where('referralCode', '==', code));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) return null;
+    return snapshot.docs[0].data() as UserData;
+};
+
+/**
+ * Gets the list of users referred by a specific email.
+ */
+export const getUserReferrals = async (email: string): Promise<UserData[]> => {
+    const db = getFirebaseDb();
+    const q = query(collection(db, 'users'), where('referrerId', '==', email.toLowerCase()));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as UserData);
 };
 
 /**
@@ -377,7 +512,7 @@ export const adminLogin = async (email: string, password: string): Promise<User>
     return userCredential.user;
 };
 
-export const adminRegister = async (email: string, password: string, phone?: string): Promise<User> => {
+export const adminRegister = async (email: string, password: string, phone?: string, referralCode?: string): Promise<User> => {
     const auth = getFirebaseAuth();
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase().trim();
@@ -392,8 +527,29 @@ export const adminRegister = async (email: string, password: string, phone?: str
         console.log('[Auth] Verification email sent to', emailLower);
     } catch (error) {
         console.error('[Auth] Failed to send verification email:', error);
-        // Don't block registration if email fails, but log it
     }
+
+    // Referral Logic
+    let referrerId = '';
+    let grandReferrerId = '';
+
+    if (referralCode) {
+        const referrer = await getUserByReferralCode(referralCode);
+        if (referrer) {
+            referrerId = referrer.email;
+            grandReferrerId = referrer.referrerId || '';
+
+            // Increment referrer's count
+            const rRef = doc(db, 'users', referrerId.toLowerCase());
+            await updateDoc(rRef, {
+                referralCount: (referrer.referralCount || 0) + 1
+            });
+            console.log(`[Referral] User ${emailLower} referred by ${referrerId}`);
+        }
+    }
+
+    // Generate my own referral code
+    const myReferralCode = await generateReferralCode('', emailLower);
 
     // Check if user doc exists (pre-registered via CSV)
     const userRef = doc(db, 'users', emailLower);
@@ -404,7 +560,13 @@ export const adminRegister = async (email: string, password: string, phone?: str
         if (userData.status === 'PendingActivation') {
             await setDoc(userRef, {
                 status: 'Registered',
-                phone: normalizedPhone || userData.phone || '', // Keep existing if not provided
+                phone: normalizedPhone || userData.phone || '',
+                referralCode: myReferralCode,
+                referrerId,
+                grandReferrerId,
+                referralCount: 0,
+                totalRewardsVCN: 0,
+                totalRewardsUSD: 0,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
 
@@ -423,7 +585,14 @@ export const adminRegister = async (email: string, password: string, phone?: str
             role: 'user',
             status: 'PendingVerification',
             accountOrigin: 'self-signup',
-            createdAt: new Date().toISOString()
+            referralCode: myReferralCode,
+            referrerId,
+            grandReferrerId,
+            referralCount: 0,
+            totalRewardsVCN: 0,
+            totalRewardsUSD: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         });
     }
 
@@ -540,6 +709,28 @@ export interface UserData {
     twitter?: string;
     discord?: string;
     walletReady?: boolean;
+
+    // Referral System Fields
+    referralCode?: string;
+    referrerId?: string;       // Email of the person who referred this user
+    grandReferrerId?: string;  // Email of the person who referred the referrer
+    referralCount?: number;
+    totalRewardsVCN?: number;
+    totalRewardsUSD?: number;
+}
+
+export interface ReferralReward {
+    id?: string;
+    userId: string;         // The user who earned the reward (email)
+    fromUserId: string;     // The user whose action triggered the reward (email)
+    amount: number;         // Amount in USD or VCN
+    currency: 'USD' | 'VCN';
+    tier: 1 | 2;            // 1st tier (Direct) or 2nd tier (Indirect)
+    event: string;          // 'subscription', 'token_sale', 'staking', etc.
+    percentage: number;     // The rate applied (e.g., 0.1 for 10%)
+    status: 'pending' | 'distributed' | 'failed';
+    timestamp: string;
+    txHash?: string;        // Blockchain transaction hash if distributed
 }
 
 export interface Contact {
@@ -729,7 +920,14 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
             bio: user?.bio || '',
             twitter: user?.twitter || '',
             discord: user?.discord || '',
-            walletReady: user?.walletReady || sale?.walletReady || false
+            walletReady: user?.walletReady || sale?.walletReady || false,
+            // Referral Fields
+            referralCode: user?.referralCode || '',
+            referrerId: user?.referrerId || '',
+            grandReferrerId: user?.grandReferrerId || '',
+            referralCount: user?.referralCount || 0,
+            totalRewardsVCN: user?.totalRewardsVCN || 0,
+            totalRewardsUSD: user?.totalRewardsUSD || 0
         };
     }
     return null;
@@ -1807,6 +2005,27 @@ export const activateAccountWithToken = async (token: string, password: string) 
         status: 'Registered'
     });
 
+    // Referral Logic
+    let grandReferrerId = '';
+    if (partnerCode) {
+        // In invitation flow, partnerCode is usually the referrer's ID or code
+        // Let's check if it's a code first
+        const referrer = await getUserByReferralCode(partnerCode);
+        if (referrer) {
+            grandReferrerId = referrer.referrerId || '';
+
+            // Increment referrer's count
+            const rRef = doc(db, 'users', referrer.email.toLowerCase());
+            await updateDoc(rRef, {
+                referralCount: (referrer.referralCount || 0) + 1
+            });
+            console.log(`[Referral] User ${email.toLowerCase()} invited by ${referrer.email}`);
+        }
+    }
+
+    // Generate my own referral code
+    const myReferralCode = await generateReferralCode('', email.toLowerCase());
+
     // 4. Update User Profile
     const userRef = doc(db, 'users', email.toLowerCase());
     await setDoc(userRef, {
@@ -1814,13 +2033,19 @@ export const activateAccountWithToken = async (token: string, password: string) 
         role: 'user',
         status: 'Registered',
         accountOrigin: 'invitation',
+        referralCode: myReferralCode,
+        referrerId: partnerCode || '', // Assuming partnerCode is the referrer email if not found as code
+        grandReferrerId,
+        referralCount: 0,
+        totalRewardsVCN: 0,
+        totalRewardsUSD: 0,
         updatedAt: new Date().toISOString()
     }, { merge: true });
 
     // 5. Mark Token as Used
     await markTokenAsUsed(token);
 
-    return { email, partnerCode };
+    return { email, partnerCode, referralCode: myReferralCode };
 };
 
 // ==================== Document Management ====================

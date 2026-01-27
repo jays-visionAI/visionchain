@@ -169,8 +169,8 @@ const AdminUsers = () => {
                     <div class="col-span-1">Wallet</div>
                     <div class="col-span-3">Wallet Address</div>
                     <div class="col-span-1">Vesting</div>
-                    <div class="col-span-1">Joined</div>
-                    <div class="col-span-2 text-right pr-4">Action</div>
+                    <div class="col-span-1">Referrer</div>
+                    <div class="col-span-1 text-right pr-4">Action</div>
                 </div>
 
                 {/* Table Body */}
@@ -274,13 +274,19 @@ const AdminUsers = () => {
                                         </Show>
                                     </div>
 
-                                    {/* Join Date */}
-                                    <div class="md:col-span-1 flex items-center text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                                        {user.joinDate || '-'}
+                                    {/* Referrer */}
+                                    <div class="md:col-span-1 flex items-center min-w-0">
+                                        <Show when={user.referrerId} fallback={
+                                            <span class="text-[9px] font-bold text-gray-700 uppercase tracking-widest italic">Direct</span>
+                                        }>
+                                            <div class="text-[10px] font-bold text-cyan-500/80 truncate uppercase tracking-tighter" title={user.referrerId}>
+                                                {user.referrerId?.split('@')[0]}
+                                            </div>
+                                        </Show>
                                     </div>
 
                                     {/* Actions */}
-                                    <div class="md:col-span-2 flex items-center justify-end gap-1.5">
+                                    <div class="md:col-span-1 flex items-center justify-end gap-1.5">
                                         <Show when={hasWallet && user.walletAddress && user.walletAddress !== 'Not Created'}>
                                             <button
                                                 onClick={async () => {

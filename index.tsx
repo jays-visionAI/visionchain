@@ -46,6 +46,7 @@ const AdminWallet = lazy(() => import('./components/admin/AdminWallet'));
 const AdminCampaign = lazy(() => import('./components/admin/AdminCampaign'));
 const AdminActivity = lazy(() => import('./components/admin/AdminActivity'));
 const AdminDocuments = lazy(() => import('./components/admin/AdminDocuments'));
+const AdminReferrals = lazy(() => import('./components/admin/AdminReferrals'));
 const AdminVCNDistribution = lazy(() => import('./components/admin/AdminVCNDistribution'));
 const AdminTraffic = lazy(() => import('./components/admin/AdminTraffic'));
 const VcnSettings = lazy(() => import('./components/admin/VcnSettings'));
@@ -286,6 +287,17 @@ function AdminDocumentsPage() {
   );
 }
 
+function AdminReferralsPage() {
+  document.title = 'Referrals | Admin';
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <AdminLayout>
+        <AdminReferrals />
+      </AdminLayout>
+    </Suspense>
+  );
+}
+
 function AdminVCNDistributionPage() {
   document.title = 'VCN Distribution | Admin';
   return (
@@ -369,6 +381,7 @@ render(() => (
       <Route path="/adminsystem/vcn-settings" component={AdminSettingsPage} />
       <Route path="/adminsystem/traffic" component={AdminTrafficPage} />
       <Route path="/adminsystem/documents" component={AdminDocumentsPage} />
+      <Route path="/adminsystem/referrals" component={AdminReferralsPage} />
       <Route path="/adminsystem/ai" component={AdminAIManagementPage} />
       <Route path="/adminsystem/api-docs" component={AdminApiDocsPage} />
       <Route path="/adminsystem/api-docs/*" component={AdminApiDocsPage} />
