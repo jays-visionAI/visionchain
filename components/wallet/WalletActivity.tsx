@@ -185,7 +185,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                     return (
                                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                                             <span class="text-gray-400 font-bold shrink-0">{prefix}</span>
-                                                            <span class={`font-black italic uppercase tracking-tight truncate max-w-[140px] sm:max-w-none ${contact ? 'text-blue-400' : 'text-gray-500'}`}>
+                                                            <span class={`font-black italic uppercase tracking-tight truncate max-w-[140px] sm:max-w-none ${contact ? 'text-blue-400' : 'text-gray-500 text-[11px]'}`}>
                                                                 {displayName}
                                                             </span>
                                                             <span class="text-[10px] text-gray-600 font-mono shrink-0">({shortAddr})</span>
