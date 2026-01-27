@@ -834,6 +834,9 @@ const Wallet = (): JSX.Element => {
         ETH: 0
     });
 
+    // Expose setActiveView globally for child components
+    (window as any).setActiveView = setActiveView;
+
     const shortAddress = () => {
         const addr = walletAddress();
         if (addr.length < 10) return addr;
@@ -1925,6 +1928,21 @@ Format:
                                 <Sparkles class="w-3.5 h-3.5 text-cyan-400" />
                             </div>
                             <span class="font-medium text-white text-[15px]">Vision Wallet</span>
+                        </div>
+
+                        {/* Top Bar Actions (Notification Bell) */}
+                        <div class="ml-auto flex items-center gap-3">
+                            <button
+                                onClick={() => setActiveView('notifications')}
+                                class="relative p-2.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95"
+                            >
+                                <Bell class={`w-5 h-5 transition-colors ${unreadNotificationsCount() > 0 ? 'text-cyan-400' : 'text-gray-400 group-hover:text-white'}`} />
+                                <Show when={unreadNotificationsCount() > 0}>
+                                    <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center border-2 border-[#0a0a0b] animate-pulse">
+                                        {unreadNotificationsCount() > 99 ? '99+' : unreadNotificationsCount()}
+                                    </span>
+                                </Show>
+                            </button>
                         </div>
                     </div>
 

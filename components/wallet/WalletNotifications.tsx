@@ -1,4 +1,4 @@
-import { createSignal, For, Show, onMount } from 'solid-js';
+import { createSignal, For, Show, onMount, createEffect } from 'solid-js';
 import {
     Bell,
     Check,
@@ -10,7 +10,8 @@ import {
     CheckCircle2,
     Calendar,
     Megaphone,
-    Globe
+    Globe,
+    ChevronLeft
 } from 'lucide-solid';
 import { Motion, Presence } from 'solid-motionone';
 import { useAuth } from '../auth/authContext';
@@ -43,15 +44,21 @@ export function WalletNotifications() {
     const [isLoading, setIsLoading] = createSignal(true);
     const [filter, setFilter] = createSignal<'all' | 'unread'>('all');
 
-    onMount(() => {
-        if (!auth.user()?.email) return;
+    // Use createEffect to handle auth state more robustly than onMount
+    createEffect(() => {
+        const email = auth.user()?.email;
+        if (!email) {
+            setIsLoading(false);
+            return;
+        }
 
         const db = getFirebaseDb();
-        const notificationsRef = collection(db, 'users', auth.user().email.toLowerCase(), 'notifications');
+        const notificationsRef = collection(db, 'users', email.toLowerCase(), 'notifications');
         // Fetch all and sort in memory to be robust against missing/inconsistent fields
         const q = query(notificationsRef);
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
+            console.log(`[Notifications] Received snapshot for ${email}: ${snapshot.size} items`);
             const list: Notification[] = [];
             snapshot.forEach((doc) => {
                 list.push({ id: doc.id, ...doc.data() } as Notification);
@@ -70,7 +77,7 @@ export function WalletNotifications() {
             setIsLoading(false);
         });
 
-        return unsubscribe;
+        return () => unsubscribe();
     });
 
     const markAsRead = async (id: string) => {
@@ -149,27 +156,33 @@ export function WalletNotifications() {
     return (
         <div class="space-y-8 max-w-4xl mx-auto">
             {/* Header */}
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <button
+                    onClick={() => (window as any).setActiveView?.('chat')}
+                    class="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400 hover:text-white transition-all border border-white/5"
+                >
+                    <ChevronLeft class="w-5 h-5" />
+                </button>
                 <div>
                     <h1 class="text-3xl font-bold text-white">Notifications</h1>
                     <p class="text-gray-400 mt-1">Stay updated with your account activity.</p>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button
-                        onClick={deleteAllNotifications}
-                        disabled={notifications().length === 0}
-                        class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-0"
-                    >
-                        Clear All
-                    </button>
-                    <button
-                        onClick={markAllAsRead}
-                        disabled={!notifications().some(n => !n.read)}
-                        class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 hover:text-white hover:bg-blue-500/20 transition-all disabled:opacity-0"
-                    >
-                        Mark all as read
-                    </button>
-                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button
+                    onClick={deleteAllNotifications}
+                    disabled={notifications().length === 0}
+                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-0"
+                >
+                    Clear All
+                </button>
+                <button
+                    onClick={markAllAsRead}
+                    disabled={!notifications().some(n => !n.read)}
+                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 hover:text-white hover:bg-blue-500/20 transition-all disabled:opacity-0"
+                >
+                    Mark all as read
+                </button>
             </div>
 
             {/* Filters */}
