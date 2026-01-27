@@ -3144,10 +3144,19 @@ Format:
                                                                     <div>
                                                                         <div class="flex justify-between items-center mb-2 px-1">
                                                                             <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bulk Input</label>
-                                                                            <span class="text-[10px] text-purple-400 cursor-pointer hover:underline" onClick={() => setBatchInput(prev => prev + "Name, 0x..., 10\n")}>+ Add Example</span>
+                                                                            <button
+                                                                                class="text-[10px] text-purple-400 cursor-pointer hover:underline font-bold"
+                                                                                onClick={() => {
+                                                                                    // Generate a random valid address for demonstration
+                                                                                    const randomHeader = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                                                                                    setBatchInput(prev => (prev ? prev + "\n" : "") + `User${Math.floor(Math.random() * 99)}, ${randomHeader}, ${(Math.random() * 100).toFixed(0)}`);
+                                                                                }}
+                                                                            >
+                                                                                + Add Test Row
+                                                                            </button>
                                                                         </div>
                                                                         <textarea
-                                                                            placeholder={`Format:\nName, Address, Amount\nAlice, 0x123..., 50\nBob, 0x456..., 20`}
+                                                                            placeholder={`Format: Name, Address, Amount\nExample: Alice, 0x742d35Cc6634C0532925a3b844Bc454e4438f44e, 50`}
                                                                             value={batchInput()}
                                                                             onInput={(e) => setBatchInput(e.currentTarget.value)}
                                                                             class="w-full h-32 bg-[#1a1a1e] border border-white/10 rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-500 outline-none focus:border-purple-500/50 transition-all resize-none leading-relaxed whitespace-pre shadow-inner"
