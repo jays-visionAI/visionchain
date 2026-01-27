@@ -250,16 +250,16 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                 {/* Two Column Layout */}
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Left Column - Holdings */}
-                    <div class="lg:col-span-8 overflow-x-auto">
+                    <div class="lg:col-span-8">
 
                         <div class="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/[0.06] rounded-[24px] overflow-hidden shadow-2xl backdrop-blur-sm">
-                            {/* Table Header */}
-                            <div class="flex items-center px-4 sm:px-8 py-4 border-b border-white/[0.04] text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest md:tracking-[0.2em] min-w-[500px] md:min-w-[600px] bg-white/[0.01]">
-                                <div class="flex-1 min-w-[150px] md:min-w-[200px]">Asset</div>
-                                <div class="w-20 md:w-24 text-right hidden sm:block">Market Price</div>
-                                <div class="w-20 md:w-24 text-right hidden lg:block">24h Change</div>
-                                <div class="w-28 md:w-32 text-right">User Holdings</div>
-                                <div class="w-28 md:w-32 text-right">Total Value</div>
+                            {/* Table Header - Hidden on mobile, visible on sm+ */}
+                            <div class="hidden sm:flex items-center px-8 py-4 border-b border-white/[0.04] text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] bg-white/[0.01]">
+                                <div class="flex-1">Asset</div>
+                                <div class="w-24 text-right hidden lg:block">Market Price</div>
+                                <div class="w-24 text-right hidden xl:block">24h Change</div>
+                                <div class="w-32 text-right">User Holdings</div>
+                                <div class="w-32 text-right">Total Value</div>
                             </div>
 
                             {/* Dynamic Token Rows */}
@@ -281,11 +281,11 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     const isTestnetStyle = item.network === 'testnet';
 
                                     return (
-                                        <div class={`flex items-center px-4 sm:px-8 py-4 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer min-w-[500px] md:min-w-[600px] group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''}`}>
-                                            {/* Token Info */}
-                                            <div class="flex-1 min-w-[150px] md:min-w-[200px] flex items-center gap-3 md:gap-4">
-                                                <div class="relative">
-                                                    <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0 shadow-lg ${isTestnetStyle
+                                        <div class={`flex items-center justify-between px-4 sm:px-8 py-5 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''}`}>
+                                            {/* Left side: Token Info */}
+                                            <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
+                                                <div class="relative flex-shrink-0">
+                                                    <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-lg ${isTestnetStyle
                                                         ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-500 border border-amber-500/30'
                                                         : 'bg-gradient-to-br from-blue-600 to-cyan-500'
                                                         }`}>
@@ -307,26 +307,36 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                     <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{item.name}</div>
                                                 </div>
                                             </div>
-                                            {/* Price */}
-                                            <div class="w-20 md:w-24 text-right hidden sm:block">
+
+                                            {/* Middle columns - Hidden on small mobile */}
+                                            <div class="hidden lg:block w-24 text-right">
                                                 <span class="text-sm md:text-base font-medium text-white">
                                                     ${asset().price.toFixed(4)}
                                                 </span>
                                             </div>
-                                            {/* 24h Change */}
-                                            <div class="w-20 md:w-24 text-right hidden lg:block">
+                                            <div class="hidden xl:block w-24 text-right px-2">
                                                 <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[12px] md:text-[13px] ${asset().change24h > 0 ? 'text-green-400 bg-green-500/5' : 'text-red-400 bg-red-500/5'}`}>
                                                     {asset().change24h.toFixed(1)}%
                                                 </div>
                                             </div>
-                                            {/* Holdings */}
-                                            <div class="w-28 md:w-32 text-right">
-                                                <div class="text-[14px] md:text-[16px] font-bold text-white tabular-nums tracking-wide">{displayBalance().toLocaleString()}</div>
-                                                <div class="text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{item.symbol}</div>
-                                            </div>
-                                            {/* Value */}
-                                            <div class="w-28 md:w-32 text-right">
-                                                <span class={`text-[15px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : 'text-white'}`}>{displayValue()}</span>
+
+                                            {/* Right side: Holdings & Value */}
+                                            <div class="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-0">
+                                                {/* User Holdings (hidden label on mobile, or stacked) */}
+                                                <div class="w-auto sm:w-32 text-right order-2 sm:order-1">
+                                                    <div class="text-[12px] sm:text-[15px] md:text-[16px] font-medium sm:font-bold text-gray-400 sm:text-white tabular-nums tracking-wide">
+                                                        <span class="sm:hidden text-[10px] text-gray-600 mr-1">Qty:</span>
+                                                        {displayBalance().toLocaleString()}
+                                                    </div>
+                                                    <div class="hidden sm:block text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{item.symbol}</div>
+                                                </div>
+
+                                                {/* Total Value */}
+                                                <div class="w-auto sm:w-32 text-right order-1 sm:order-2">
+                                                    <span class={`text-[16px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : 'text-white'}`}>
+                                                        {displayValue()}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     );
