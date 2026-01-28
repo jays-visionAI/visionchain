@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, Index } from 'solid-js';
+import { createSignal, Show, For, onMount, Index, createEffect } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import {
     X,
@@ -53,8 +53,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
     const [isDragging, setIsDragging] = createSignal(false);
     const [uploadStatus, setUploadStatus] = createSignal<{ type: 'success' | 'error' | 'warning', message: string } | null>(null);
 
-    onMount(async () => {
-        if (props.userEmail) {
+    createEffect(async () => {
+        if (props.isOpen && props.userEmail) {
             const contacts = await getUserContacts(props.userEmail);
             setExistingContacts(contacts);
         }
