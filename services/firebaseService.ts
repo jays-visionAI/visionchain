@@ -18,8 +18,7 @@ import {
     addDoc,
     initializeFirestore,
     onSnapshot,
-    Timestamp,
-    deleteField
+    Timestamp
 } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from '../config/firebase.config';
@@ -1502,7 +1501,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ... (existing imports)
 
-export const updateWalletStatus = async (email: string, walletAddress: string) => {
+export const updateWalletStatus = async (email: string, walletAddress: string, isVerified?: boolean) => {
     console.log(`[Firebase] Securely updating wallet address for ${email}...`);
 
     // Use Cloud Function to bypass client-side permission issues (Email vs UID mismatch)
@@ -1510,7 +1509,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
         const functions = getFunctions();
         const updateFn = httpsCallable(functions, 'updateWalletAddress');
 
-        await updateFn({ walletAddress });
+        await updateFn({ walletAddress, isVerified });
         console.log(`[Firebase] Cloud update successful for ${email}`);
 
         return;
@@ -1534,12 +1533,14 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
 
     // 2. Update User Profile
     const userRef = doc(db, 'users', emailLower);
-    await setDoc(userRef, {
+    const updateData: any = {
         walletReady: true,
         walletAddress: walletAddress,
-        isVerified: true,
         updatedAt: new Date().toISOString()
-    }, { merge: true });
+    };
+    if (isVerified !== undefined) updateData.isVerified = isVerified;
+
+    await setDoc(userRef, updateData, { merge: true });
 
     console.log(`[Firebase] Saved wallet address ${walletAddress} to users/${emailLower}`);
 
@@ -1647,60 +1648,6 @@ export interface ApiKeyData {
     lastTested?: string;
     createdAt: string;
 }
-
-// ==================== Wallet Reset Function ====================
-export const resetUserWallet = async (email: string) => {
-    const db = getFirebaseDb();
-    const emailLower = email.toLowerCase();
-    const userRef = doc(db, 'users', emailLower);
-
-    try {
-        // 1. Get current user data
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) return;
-
-        const userData = userSnap.data();
-
-        // 2. Archive current wallet info
-        if (userData.walletAddress) {
-            const archivedRef = doc(collection(db, 'users', emailLower, 'archived_wallets'));
-            await setDoc(archivedRef, {
-                walletAddress: userData.walletAddress,
-                archivedAt: new Date().toISOString(),
-                reason: 'USER_RESET',
-                dataSnapshot: {
-                    walletReady: userData.walletReady || false,
-                    isVerified: userData.isVerified || false
-                }
-            });
-        }
-
-        // 3. Reset wallet fields in User Profile
-        await updateDoc(userRef, {
-            walletAddress: deleteField(),
-            walletReady: false,
-            isVerified: false,
-            isBackedUp: false,
-            lastActive: deleteField()
-        });
-
-        // 4. Update Token Sale status if exists (revert to Registered)
-        const tokenSaleRef = doc(db, 'token_sales', emailLower);
-        const tokenSaleSnap = await getDoc(tokenSaleRef);
-        if (tokenSaleSnap.exists()) {
-            await updateDoc(tokenSaleRef, {
-                walletAddress: deleteField(),
-                status: 'Registered' // Revert status so they can link again
-            });
-        }
-
-        console.log(`[Wallet] Reset successful for ${emailLower}`);
-        return true;
-    } catch (e) {
-        console.error("Wallet reset failed:", e);
-        throw e;
-    }
-};
 
 export const getApiKeys = async (): Promise<ApiKeyData[]> => {
     const db = getFirebaseDb();

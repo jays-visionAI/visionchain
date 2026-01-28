@@ -1377,6 +1377,9 @@ const Wallet = (): JSX.Element => {
         ));
     };
 
+    const [quizIndices, setQuizIndices] = createSignal<number[]>([]);
+    const [quizAnswers, setQuizAnswers] = createSignal<Record<number, string>>({});
+
     const generateSeedPhrase = () => {
         try {
             console.log("Generating seed phrase...");
@@ -1388,6 +1391,13 @@ const Wallet = (): JSX.Element => {
             setSeedPhrase(words);
             setShuffledSeed([...words].sort(() => Math.random() - 0.5));
             setSelectedWords([]);
+
+            // Prepare Quiz Indices (3 random words)
+            const indices = new Set<number>();
+            while (indices.size < 3) indices.add(Math.floor(Math.random() * 15));
+            setQuizIndices(Array.from(indices).sort((a, b) => a - b));
+            setQuizAnswers({});
+
             // Auto-show seed when generated to improve UX
             setShowSeed(true);
         } catch (err) {
@@ -1437,7 +1447,7 @@ const Wallet = (): JSX.Element => {
             const user = auth.user();
             if (user && user.email) {
                 console.log("[Wallet] Syncing new address to Firebase...");
-                await updateWalletStatus(user.email, address);
+                await updateWalletStatus(user.email, address, true);
             }
 
             // 4. Update User State & Signals
@@ -2679,87 +2689,88 @@ Format:
                                             </Motion.div>
                                         </Match>
 
-                                        {/* Step 1.5: Confirmation - Redesigned to match image 2 */}
+                                        {/* Step 1.5: Smart Quiz Verification */}
                                         <Match when={onboardingStep() === 1.5}>
                                             <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto pb-10">
                                                 <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
                                                     <div class="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-6 flex flex-col items-center text-center">
-                                                        <h2 class="text-xl font-black text-white mb-2 uppercase tracking-tight">Confirm Recovery Phrase</h2>
-                                                        <p class="text-gray-400 font-bold text-xs">Select the words in the correct order to verify your backup</p>
+                                                        <h2 class="text-xl font-black text-white mb-2 uppercase tracking-tight">Security Check</h2>
+                                                        <p class="text-gray-400 font-bold text-xs">Verify your backup by selecting the correct words</p>
                                                     </div>
 
                                                     <div class="p-8 space-y-6">
                                                         <div class="flex justify-between items-end px-1">
                                                             <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
-                                                                Progress: <span class="text-white">{selectedWords().length}/{seedPhrase().length}</span>
+                                                                Quiz: <span class="text-white">{Object.keys(quizAnswers()).length}/3</span>
                                                             </div>
                                                             <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
-                                                                Select word {selectedWords().length + 1}
+                                                                Smart Verify
                                                             </div>
                                                         </div>
 
-                                                        {/* Selected Words Area - Fixed Slots Style */}
+                                                        {/* Quiz Slots Area */}
                                                         <div class="grid grid-cols-3 gap-3 p-6 bg-black/40 rounded-3xl border border-white/[0.05]">
-                                                            <For each={Array.from({ length: seedPhrase().length })}>
-                                                                {(_, i) => (
-                                                                    <div class="flex items-center gap-3 p-3 bg-white/5 border border-white/5 rounded-xl font-mono text-[13px] font-black min-h-[44px]">
-                                                                        <span class="text-gray-600">{i() + 1}.</span>
-                                                                        <Show when={selectedWords()[i()]}>
-                                                                            <span class="text-white animate-in zoom-in-95">{selectedWords()[i()]}</span>
-                                                                        </Show>
-                                                                        <Show when={!selectedWords()[i()]}>
-                                                                            <div class="w-10 h-[1.5px] bg-gray-700/50 mt-1" />
-                                                                        </Show>
+                                                            <For each={quizIndices()}>
+                                                                {(idx) => (
+                                                                    <div class="flex flex-col gap-2">
+                                                                        <span class="text-[10px] font-bold text-gray-500 text-center uppercase">Word #{idx + 1}</span>
+                                                                        <div class={`min-h-[50px] flex items-center justify-center p-2 bg-white/5 border rounded-xl font-mono text-[13px] font-black transition-all ${quizAnswers()[idx] ? 'border-blue-500/50 bg-blue-500/10 text-white' : 'border-white/5 text-gray-700 dashed-border'}`}>
+                                                                            <Show when={quizAnswers()[idx]} fallback={<span class="text-gray-700">?</span>}>
+                                                                                <span class="animate-in zoom-in-95">{quizAnswers()[idx]}</span>
+                                                                            </Show>
+                                                                        </div>
                                                                     </div>
                                                                 )}
                                                             </For>
                                                         </div>
 
                                                         <div class="flex justify-end">
-                                                            <button onClick={() => setSelectedWords([])} class="text-[11px] font-black text-blue-400 uppercase tracking-widest hover:text-white transition-colors">Reset</button>
+                                                            <button onClick={() => setQuizAnswers({})} class="text-[11px] font-black text-blue-400 uppercase tracking-widest hover:text-white transition-colors">Reset Quiz</button>
                                                         </div>
 
                                                         {/* Word Pool Area */}
                                                         <div class="grid grid-cols-3 gap-3 pt-4 border-t border-white/[0.04]">
                                                             <For each={shuffledSeed()}>
-                                                                {(word) => (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            if (!selectedWords().includes(word)) {
-                                                                                setSelectedWords(prev => [...prev, word]);
-                                                                            }
-                                                                        }}
-                                                                        disabled={selectedWords().includes(word)}
-                                                                        class={`p-4 rounded-xl border font-bold text-xs transition-all ${selectedWords().includes(word)
-                                                                            ? 'bg-white/5 border-white/5 text-transparent select-none opacity-0'
-                                                                            : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 text-center active:scale-95'
-                                                                            }`}
-                                                                    >
-                                                                        {word}
-                                                                    </button>
-                                                                )}
+                                                                {(word) => {
+                                                                    const isSelected = Object.values(quizAnswers()).includes(word);
+                                                                    return (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                if (!isSelected) {
+                                                                                    const currentAnswers = quizAnswers();
+                                                                                    const nextIndex = quizIndices().find(idx => !currentAnswers[idx]);
+                                                                                    if (nextIndex !== undefined) {
+                                                                                        setQuizAnswers({ ...currentAnswers, [nextIndex]: word });
+                                                                                    }
+                                                                                }
+                                                                            }}
+                                                                            disabled={isSelected}
+                                                                            class={`p-3 rounded-xl border font-bold text-xs transition-all ${isSelected
+                                                                                ? 'bg-white/5 border-white/5 text-transparent select-none opacity-20'
+                                                                                : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 text-center active:scale-95'
+                                                                                }`}
+                                                                        >
+                                                                            {word}
+                                                                        </button>
+                                                                    );
+                                                                }}
                                                             </For>
                                                         </div>
 
                                                         <div class="pt-6 space-y-4">
                                                             <button
-                                                                onClick={() => setSelectedWords(prev => prev.slice(0, -1))}
-                                                                disabled={selectedWords().length === 0}
-                                                                class="w-full py-4 bg-[#444455] text-white rounded-2xl font-black text-sm hover:bg-[#555566] transition-all disabled:opacity-30"
-                                                            >
-                                                                Remove Last Word
-                                                            </button>
-
-                                                            <button
                                                                 onClick={() => {
-                                                                    const phrase = seedPhrase().join(' ');
-                                                                    const selected = selectedWords().join(' ');
+                                                                    const validSeed = seedPhrase();
+                                                                    const currentAnswers = quizAnswers();
+                                                                    const indices = quizIndices();
+                                                                    const allCorrect = indices.every(idx => currentAnswers[idx] === validSeed[idx]);
 
-                                                                    if (selected === phrase) {
+                                                                    if (allCorrect) {
                                                                         // Derive address immediately
                                                                         try {
+                                                                            const phrase = validSeed.join(' ');
                                                                             const { address } = WalletService.deriveEOA(phrase);
-                                                                            console.log("Onboarding Success - Derived Address:", address);
+                                                                            console.log("Quiz Success - Derived Address:", address);
 
                                                                             // Update all possible state holders for reactivity
                                                                             setWalletAddressSignal(address);
@@ -2772,14 +2783,14 @@ Format:
                                                                             alert("Error generating wallet address. Please try again.");
                                                                         }
                                                                     } else {
-                                                                        alert('Incorrect order. Please try again.');
-                                                                        setSelectedWords([]);
+                                                                        alert('Incorrect words. Please check your backup and try again.');
+                                                                        setQuizAnswers({});
                                                                     }
                                                                 }}
-                                                                disabled={selectedWords().length !== seedPhrase().length}
-                                                                class={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl ${selectedWords().length === seedPhrase().length ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20 hover:scale-[1.02]' : 'bg-[#1a1a1e] text-gray-500 border border-white/5 cursor-not-allowed'}`}
+                                                                disabled={Object.keys(quizAnswers()).length !== 3}
+                                                                class={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl ${Object.keys(quizAnswers()).length === 3 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20 hover:scale-[1.02]' : 'bg-[#1a1a1e] text-gray-500 border border-white/5 cursor-not-allowed'}`}
                                                             >
-                                                                Confirm & Create
+                                                                Verify & Create
                                                             </button>
                                                         </div>
                                                     </div>

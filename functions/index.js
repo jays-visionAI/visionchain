@@ -21,7 +21,7 @@ exports.updateWalletAddress = onCall(async (request) => {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
 
-  const { walletAddress } = request.data;
+  const { walletAddress, isVerified } = request.data;
   const email = request.auth.token.email; // Trust auth token email
 
   if (!email) {
@@ -33,12 +33,14 @@ exports.updateWalletAddress = onCall(async (request) => {
 
   try {
     // 1. Update User Profile
-    await db.collection("users").doc(emailLower).set({
+    const updateData = {
       walletReady: true,
       walletAddress: walletAddress,
-      isVerified: true,
       updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    };
+    if (isVerified !== undefined) updateData.isVerified = isVerified;
+
+    await db.collection("users").doc(emailLower).set(updateData, { merge: true });
 
     // 2. Update Token Sales (if exists)
     const tokenSaleRef = db.collection("token_sales").doc(emailLower);
