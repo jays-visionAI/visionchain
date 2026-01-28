@@ -246,12 +246,18 @@ const Wallet = (): JSX.Element => {
     // Batch Parsing Logic
     const parsedBatchTransactions = createMemo(() => {
         if (!batchInput().trim()) return [];
+        const contactList = contacts();
+
         return batchInput().split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0)
             .map(line => {
+                // Heuristic: If there's a comma surrounded by digits, it's likely a decimal point
+                // Convert "30,50" to "30.50" before splitting if it's not a delimiter
+                let sanitizedLine = line.replace(/(\d),(\d)/g, '$1.$2');
+
                 // Support Comma or Tab separated
-                const parts = line.split(/[,\t]+/).map(p => p.trim());
+                const parts = sanitizedLine.split(/[,\t]+/).map(p => p.trim());
                 let recipient = '';
                 let amount = '';
                 let name = '';
@@ -261,12 +267,12 @@ const Wallet = (): JSX.Element => {
 
                 if (addrIdx !== -1) {
                     recipient = parts[addrIdx];
-                    // Look for amount (first number that isn't the address)
+                    // Look for amount (the first numeric part that isn't the address)
                     const amtPart = parts.find((p, i) => i !== addrIdx && !isNaN(parseFloat(p.replace(/,/g, ''))));
                     if (amtPart) amount = amtPart.replace(/,/g, '');
 
                     // Name is whatever is left (first non-addr, non-amt part)
-                    const namePart = parts.find((p, i) => i !== addrIdx && p.replace(/,/g, '') !== amount);
+                    const namePart = parts.find((p, i) => i !== addrIdx && p !== amtPart && p.length > 0);
                     if (namePart) name = namePart;
                 } else {
                     // No address found, try to find amount and name
@@ -274,6 +280,15 @@ const Wallet = (): JSX.Element => {
                     if (amtPart) amount = amtPart.replace(/,/g, '');
                     const namePart = parts.find(p => p !== amtPart && p.trim().length > 0);
                     if (namePart) name = namePart;
+                }
+
+                // Contact Lookup: If we have an address but no name, or if the name matches a contact, sync them
+                if (recipient) {
+                    const contact = contactList.find(c => c.address?.toLowerCase() === recipient.toLowerCase());
+                    if (contact) name = contact.name;
+                } else if (name) {
+                    const contact = contactList.find(c => c.name?.toLowerCase() === name.toLowerCase());
+                    if (contact && contact.address) recipient = contact.address;
                 }
 
                 if (!recipient && !name) return null;
@@ -864,7 +879,10 @@ const Wallet = (): JSX.Element => {
                 const finalResults = [];
                 for (let i = 0; i < transactions.length; i++) {
                     const tx = transactions[i];
-                    setLoadingMessage(`AGENT: PROCESSING ${i + 1}/${transactions.length}...`);
+                    // Update Agent progress: 3/n Transactions
+                    const progressMsg = `AGENT: PROCESSING ${i + 1}/${transactions.length}...`;
+                    setLoadingMessage(progressMsg);
+                    setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, currentCount: i + 1 } : a));
 
                     try {
                         let receipt;
@@ -873,7 +891,6 @@ const Wallet = (): JSX.Element => {
                         if (tx.intent === 'send') {
                             if (symbol === 'VCN') {
                                 try {
-                                    // Try gasless first for VCN in batch
                                     const result = await contractService.sendGaslessTokens(tx.recipient, tx.amount);
                                     receipt = { hash: result.txHashes?.transfer || result.txHashes?.permit || '0x...' };
                                 } catch (gcError) {
@@ -907,12 +924,15 @@ const Wallet = (): JSX.Element => {
                         setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, failedCount: a.failedCount + 1 } : a));
                     }
 
-                    // 3 second interval between transactions (except the last one)
+                    // 10 second interval for stability
                     if (i < transactions.length - 1) {
-                        setLoadingMessage(`AGENT: WAITING 3S INTERVAL (${i + 1}/${transactions.length})...`);
-                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        setLoadingMessage(`AGENT: WAITING 10S INTERVAL (${i + 1}/${transactions.length})...`);
+                        await new Promise(resolve => setTimeout(resolve, 10000));
                     }
                 }
+
+                // Final Update
+                setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, results: finalResults } : a));
 
                 // 3. Finalize
                 setFlowSuccess(true);
@@ -2278,6 +2298,7 @@ Format:
                                 batchAgents={batchAgents}
                                 reviewMulti={reviewMulti}
                                 setReviewMulti={setReviewMulti}
+                                unreadCount={0}
                                 onStartBatch={(txs) => {
                                     console.log("Starting batch with txs:", txs);
                                     setPendingAction({

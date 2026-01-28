@@ -1,4 +1,4 @@
-import { createSignal, Show, For, createEffect } from 'solid-js';
+import { createSignal, Show, For, createEffect, createMemo } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
@@ -33,7 +33,8 @@ import {
     Check,
     Square,
     Layers,
-    Lock
+    Lock,
+    AlertTriangle
 } from 'lucide-solid';
 
 interface WalletDashboardProps {
@@ -79,6 +80,7 @@ interface WalletDashboardProps {
     reviewMulti: () => any[] | null;
     setReviewMulti: (val: any[] | null) => void;
     onStartBatch: (txs: any[]) => void;
+    unreadCount: number;
 }
 
 const TypingIndicator = () => (
@@ -252,6 +254,127 @@ const MultiReviewCard = (props: {
     );
 };
 
+const BatchResultsModal = (props: {
+    isOpen: boolean,
+    onClose: () => void,
+    agent: any
+}) => {
+    if (!props.agent) return null;
+
+    const successCount = () => props.agent.successCount || 0;
+    const failedCount = () => props.agent.failedCount || 0;
+    const totalCount = () => props.agent.totalCount || 0;
+    const results = () => props.agent.results || [];
+
+    const downloadCSV = () => {
+        let csv = "Date,BatchID,Recipient,Amount,Symbol,Status,TxHash,Error\n";
+        const timestamp = new Date(props.agent.startTime).toISOString();
+        results().forEach((r: any) => {
+            csv += `${timestamp},${props.agent.id},${r.tx.recipient},${r.tx.amount},${r.tx.symbol || 'VCN'},${r.success ? 'SUCCESS' : 'FAILED'},${r.hash || ''},"${r.error || ''}"\n`;
+        });
+        const uri = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+        const link = document.createElement("a");
+        link.setAttribute("href", uri);
+        link.setAttribute("download", `Batch_Report_${props.agent.id}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <Presence>
+            <Show when={props.isOpen}>
+                <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={props.onClose}
+                        class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                    />
+                    <Motion.div
+                        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                        class="relative w-full max-w-2xl bg-[#0d0d0f] border border-white/10 rounded-[32px] shadow-3xl overflow-hidden flex flex-col max-h-[80vh]"
+                    >
+                        <div class="p-8 border-b border-white/5 flex items-center justify-between bg-gradient-to-br from-blue-500/5 to-transparent">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                                    <Layers class="w-6 h-6 text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-black text-white">Execution Report</h3>
+                                    <p class="text-xs text-gray-500 font-bold uppercase tracking-widest">ID: {props.agent.id}</p>
+                                </div>
+                            </div>
+                            <button onClick={props.onClose} class="text-gray-500 hover:text-white transition-colors">
+                                <Plus class="w-6 h-6 rotate-45" />
+                            </button>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div class="grid grid-cols-3 gap-4 mb-8">
+                                <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total</div>
+                                    <div class="text-2xl font-black text-white">{totalCount()}</div>
+                                </div>
+                                <div class="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10">
+                                    <div class="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Success</div>
+                                    <div class="text-2xl font-black text-emerald-400">{successCount()}</div>
+                                </div>
+                                <div class="bg-red-500/5 rounded-2xl p-4 border border-red-500/10">
+                                    <div class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Failed</div>
+                                    <div class="text-2xl font-black text-red-400">{failedCount()}</div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3">
+                                <For each={results()}>
+                                    {(res) => (
+                                        <div class="flex items-center justify-between p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                                            <div class="flex items-center gap-3">
+                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center ${res.success ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+                                                    <Show when={res.success} fallback={<AlertTriangle class="w-4 h-4 text-red-400" />}>
+                                                        <Check class="w-4 h-4 text-emerald-400" />
+                                                    </Show>
+                                                </div>
+                                                <div class="flex flex-col">
+                                                    <span class="text-xs font-bold text-gray-200 truncate max-w-[150px]">{res.tx.recipient}</span>
+                                                    <span class="text-[10px] text-gray-500">{res.tx.amount} {res.tx.symbol || 'VCN'}</span>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <Show when={res.success} fallback={<span class="text-[9px] font-bold text-red-400 uppercase">Blocked</span>}>
+                                                    <span class="text-[9px] font-mono text-blue-400">{res.hash?.slice(0, 10)}...</span>
+                                                </Show>
+                                            </div>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                        </div>
+
+                        <div class="p-8 bg-black/40 border-t border-white/5 flex gap-4">
+                            <button
+                                onClick={downloadCSV}
+                                class="flex-1 py-4 bg-white/5 hover:bg-white/10 rounded-2xl text-[13px] font-black text-white transition-all uppercase tracking-widest flex items-center justify-center gap-2"
+                            >
+                                <FileSpreadsheet class="w-5 h-5" /> Download Report (.csv)
+                            </button>
+                            <button
+                                onClick={props.onClose}
+                                class="flex-1 py-4 bg-blue-500 hover:bg-blue-600 rounded-2xl text-[13px] font-black text-white transition-all uppercase tracking-widest"
+                            >
+                                Close History
+                            </button>
+                        </div>
+                    </Motion.div>
+                </div>
+            </Show>
+        </Presence>
+    );
+};
 const MultiBatchDrawer = (props: {
     isOpen: boolean,
     onClose: () => void,
@@ -350,12 +473,17 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
     const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
+    const [selectedBatchId, setSelectedBatchId] = createSignal<string | null>(null);
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
 
     const LANGUAGES = [
         { code: 'en-US', label: 'English' }
     ];
+
+    const selectedBatchAgent = createMemo(() =>
+        props.batchAgents().find(a => a.id === selectedBatchId())
+    );
 
     // --- Auto-scroll Logic ---
     createEffect(() => {
@@ -401,28 +529,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     }}
                 />
 
-                {/* Top Queue Monitor: unified view for all background agents */}
-                <div class="absolute top-4 left-0 right-0 z-[40] pointer-events-none px-6">
-                    <div class="max-w-5xl mx-auto flex flex-col items-end gap-3 pointer-events-auto">
-                        <For each={props.batchAgents()}>
-                            {(agent) => (
-                                <AgentChip
-                                    task={{
-                                        id: agent.id,
-                                        type: 'BATCH',
-                                        summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
-                                        status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : 'SENT',
-                                        timestamp: agent.startTime,
-                                        progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
-                                    }}
-                                    onClick={() => {
-                                        // Potential: Show details modal for this batch
-                                    }}
-                                />
-                            )}
-                        </For>
-                    </div>
-                </div>
+                <BatchResultsModal
+                    isOpen={!!selectedBatchId()}
+                    onClose={() => setSelectedBatchId(null)}
+                    agent={selectedBatchAgent()}
+                />
 
                 {/* Messages Area */}
                 <div
@@ -579,18 +690,43 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 <div class={`absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none ${!props.onboardingStep() ? 'bottom-[68px] lg:bottom-0' : 'bottom-0'}`}>
                     <div class="max-w-5xl mx-auto pointer-events-auto">
                         <Presence>
-                            {/* Active Queue Bar (Time-lock Agent) - Above Input */}
-                            <Show when={props.queueTasks().length > 0}>
-                                <div class="px-2 mb-2">
-                                    <ChatQueueLine
-                                        tasks={props.queueTasks()}
-                                        isCompact={true}
-                                        onTaskClick={(id) => {
-                                            setSelectedTaskId(id);
-                                            setIsQueueDrawerOpen(true);
-                                        }}
-                                        onOpenHistory={() => setIsQueueDrawerOpen(true)}
-                                    />
+                            {/* Unified Background Agents Bar - Above Input */}
+                            <Show when={props.queueTasks().length > 0 || props.batchAgents().length > 0}>
+                                <div class="px-2 mb-2 flex flex-col gap-2">
+                                    {/* Batch Agent Line */}
+                                    <Show when={props.batchAgents().length > 0}>
+                                        <div class="flex gap-3 overflow-x-auto scrollbar-hide py-1">
+                                            <For each={props.batchAgents()}>
+                                                {(agent) => (
+                                                    <AgentChip
+                                                        task={{
+                                                            id: agent.id,
+                                                            type: 'BATCH',
+                                                            summary: `${agent.currentCount || 0}/${agent.totalCount} Transactions`,
+                                                            status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'WAITING'),
+                                                            timestamp: agent.startTime,
+                                                            progress: ((agent.currentCount || 0) / agent.totalCount) * 100
+                                                        }}
+                                                        isCompact={true}
+                                                        onClick={() => setSelectedBatchId(agent.id)}
+                                                    />
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
+
+                                    {/* Time-lock Agent Line */}
+                                    <Show when={props.queueTasks().length > 0}>
+                                        <ChatQueueLine
+                                            tasks={props.queueTasks()}
+                                            isCompact={true}
+                                            onTaskClick={(id) => {
+                                                setSelectedTaskId(id);
+                                                setIsQueueDrawerOpen(true);
+                                            }}
+                                            onOpenHistory={() => setIsQueueDrawerOpen(true)}
+                                        />
+                                    </Show>
                                 </div>
                             </Show>
 
