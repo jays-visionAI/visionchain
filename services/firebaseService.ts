@@ -1430,20 +1430,18 @@ export const subscribeToQueue = (
             return {
                 id: doc.id,
                 dbStatus: data.status,
-                type: 'TIMELOCK',
+                type: data.type || 'TIMELOCK',
                 summary: `${data.amount} ${data.token} → ${data.recipient.slice(0, 6)}...`,
                 status: status,
                 timeLeft: timeLeft,
-                timestamp: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
-                // Extra fields for Drawer
+                timestamp: data.timestamp || (unlockTime * 1000),
+                executeAt: unlockTime * 1000,
                 recipient: data.recipient,
                 amount: data.amount,
                 token: data.token,
-                scheduleId: doc.id,
-                contractScheduleId: data.scheduleId, // Real Contract ID
-                executeAt: data.unlockTime * 1000,
-                txHash: data.executionTx || data.creationTx,
-                error: data.lastError || data.error || null
+                scheduleId: data.scheduleId,
+                txHash: data.executedTxHash || data.txHash || data.creationTx,
+                error: data.error
             };
         });
 
@@ -1473,22 +1471,36 @@ export const saveScheduledTransfer = async (task: {
     token: string;
     unlockTime: number; // Unix timestamp
     creationTx: string;
-    scheduleId?: string; // ID from smart contract
-    status: 'WAITING' | 'SENT' | 'FAILED' | 'CANCELLED';
+    scheduleId?: string | number;
+    status?: 'WAITING' | 'SENT' | 'FAILED' | 'CANCELLED';
+    type?: string;
+    metadata?: any;
 }) => {
     try {
-        const db = getFirestore(); // Ensure we use the right db instance
-        const docRef = await addDoc(collection(db, 'scheduledTransfers'), {
+        const db = getFirestore();
+        const data: any = {
             ...task,
-            scheduleId: task.scheduleId || 0, // Fallback if not provided
-            status: 'WAITING', // Set to WAITING for backend runner
-            unlockTimeTs: Timestamp.fromMillis(task.unlockTime * 1000), // Indexable field for runner
-            nextRetryAt: Timestamp.now(), // First try immediately when due
+            scheduleId: task.scheduleId || 0,
+            status: task.status || 'WAITING',
+            unlockTimeTs: Timestamp.fromMillis(task.unlockTime * 1000),
+            nextRetryAt: Timestamp.now(),
             retryCount: 0,
             userEmail: task.userEmail.toLowerCase(),
-            createdAt: new Date().toISOString()
-        });
-        return docRef.id;
+            createdAt: new Date().toISOString(),
+            type: task.type || 'TIMELOCK'
+        };
+
+        // If it's a batch item, we use a custom ID to avoid duplicates if re-saved
+        const docId = (task.type === 'BATCH' && task.scheduleId) ? String(task.scheduleId) : null;
+
+        if (docId) {
+            const docRef = doc(db, 'scheduledTransfers', docId);
+            await setDoc(docRef, data, { merge: true });
+            return docId;
+        } else {
+            const docRef = await addDoc(collection(db, 'scheduledTransfers'), data);
+            return docRef.id;
+        }
     } catch (e) {
         console.error("Save scheduled transfer failed:", e);
         return null;

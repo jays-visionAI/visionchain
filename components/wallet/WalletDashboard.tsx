@@ -84,6 +84,7 @@ interface WalletDashboardProps {
     setReviewMulti: (val: any[] | null) => void;
     onStartBatch: (txs: any[]) => void;
     unreadCount: number;
+    contacts: () => any[];
 }
 
 const TypingIndicator = () => (
@@ -578,6 +579,24 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     const [selectedBatchId, setSelectedBatchId] = createSignal<string | null>(null);
+
+    const combinedDrawerTasks = createMemo(() => {
+        const queueTasks = props.queueTasks();
+        const activeBatch = props.batchAgents()
+            .filter(a => a.status === 'EXECUTING')
+            .map(agent => ({
+                id: agent.id,
+                type: 'BATCH',
+                summary: `Processing ${agent.totalCount} Transactions`,
+                status: 'EXECUTING',
+                timestamp: agent.startTime,
+                recipient: agent.transactions?.[0]?.recipient,
+                amount: `${agent.successCount + agent.failedCount}/${agent.totalCount}`,
+                token: 'TX',
+                progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
+            }));
+        return [...queueTasks, ...activeBatch];
+    });
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
 
@@ -618,7 +637,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 <QueueDrawer
                     isOpen={isQueueDrawerOpen()}
                     onClose={() => setIsQueueDrawerOpen(false)}
-                    tasks={props.queueTasks()}
+                    tasks={combinedDrawerTasks()}
+                    contacts={props.contacts()}
                     focusedTaskId={selectedTaskId()}
                     onCancelTask={props.onCancelTask}
                     onForceExecute={props.onForceExecute}

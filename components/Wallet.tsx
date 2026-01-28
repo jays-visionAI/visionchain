@@ -964,6 +964,22 @@ const Wallet = (): JSX.Element => {
                 const successMsg = finalResults.filter(r => r.success).length;
                 const failMsg = finalResults.filter(r => !r.success).length;
 
+                // 3.5 Save each transaction result to persistent history
+                for (let j = 0; j < finalResults.length; j++) {
+                    const r = finalResults[j];
+                    await saveScheduledTransfer({
+                        userEmail: userProfile().email,
+                        recipient: r.tx.recipient,
+                        amount: r.tx.amount,
+                        token: r.tx.symbol || 'VCN',
+                        unlockTime: Math.floor(Date.now() / 1000),
+                        creationTx: r.hash || '',
+                        scheduleId: `batch_${agentId}_${j}`,
+                        status: r.success ? 'SENT' : 'FAILED',
+                        type: 'BATCH'
+                    } as any);
+                }
+
                 // Final Update & Finalize
                 setBatchAgents(prev => prev.map(a => a.id === agentId ? {
                     ...a,
@@ -2257,6 +2273,7 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                                 reviewMulti={reviewMulti}
                                 setReviewMulti={setReviewMulti}
                                 unreadCount={0}
+                                contacts={contacts}
                                 onStartBatch={(txs) => {
                                     console.log("Starting batch with txs:", txs);
                                     setPendingAction({

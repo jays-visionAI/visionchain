@@ -1,6 +1,6 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play } from 'lucide-solid';
+import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers } from 'lucide-solid';
 import { AgentTask } from './AgentChip';
 import { contractService } from '../../../services/contractService';
 import { cancelScheduledTask } from '../../../services/firebaseService';
@@ -19,6 +19,7 @@ interface QueueDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     tasks: DetailedAgentTask[];
+    contacts?: any[];
     focusedTaskId?: string | null;
     onCancelTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
@@ -86,9 +87,24 @@ const QueueDrawer = (props: QueueDrawerProps) => {
         }).sort((a, b) => b.timestamp - a.timestamp);
     });
 
+    const resolveName = (address: string | undefined) => {
+        if (!address || !props.contacts) return 'New Recipient';
+        const contact = props.contacts.find((c: any) => c.address.toLowerCase() === address.toLowerCase());
+        return contact ? contact.name : 'New Recipient';
+    };
+
+    const formatDate = (ts: number) => {
+        const d = new Date(ts);
+        return d.toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        // Toast logic could go here
     };
 
     return (
@@ -150,26 +166,39 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                         class="p-3 flex items-center gap-3 cursor-pointer"
                                         onClick={(e) => toggleExpand(task.id, e)}
                                     >
-                                        <div class={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border 
-                                            ${task.status === 'WAITING' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' :
-                                                task.status === 'EXECUTING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
-                                                    task.status === 'SENT' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
+                                        <div class={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border 
+                                            ${task.status === 'WAITING' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' :
+                                                task.status === 'EXECUTING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse' :
+                                                    task.status === 'SENT' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
                                                         'bg-gray-500/10 border-gray-500/30 text-gray-400'}`}>
-                                            <Show when={task.type === 'TIMELOCK'} fallback={<Activity class="w-4 h-4" />}>
-                                                <Clock class="w-4 h-4" />
+                                            <Show when={task.type === 'BATCH'} fallback={<Clock class="w-4 h-4" />}>
+                                                <Layers class="w-4 h-4" />
                                             </Show>
                                         </div>
                                         <div class="flex-1 min-w-0">
-                                            <div class="flex items-center justify-between">
-                                                <span class="text-xs font-bold text-gray-200 truncate">{task.summary}</span>
-                                                <span class={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${task.status === 'WAITING' ? 'bg-blue-500/20 text-blue-300' :
+                                            <div class="flex items-center justify-between gap-2">
+                                                <div class="flex items-center gap-1.5 min-w-0">
+                                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
+                                                        {task.type || 'TIME AGENT'}
+                                                    </span>
+                                                    <div class="w-1 h-1 rounded-full bg-gray-700 shrink-0" />
+                                                    <span class="text-xs font-bold text-gray-200 truncate">
+                                                        {task.summary}
+                                                    </span>
+                                                </div>
+                                                <span class={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tight shrink-0 ${task.status === 'WAITING' ? 'bg-blue-500/20 text-blue-300' :
                                                     task.status === 'EXECUTING' ? 'bg-amber-500/20 text-amber-300' :
                                                         task.status === 'SENT' ? 'bg-emerald-500/20 text-emerald-300' :
-                                                            'bg-gray-700 text-gray-400'
-                                                    }`}>{task.status}</span>
+                                                            'bg-gray-800 text-gray-400'
+                                                    }`}>{task.status === 'SENT' ? 'SUCCESS' : task.status}</span>
                                             </div>
-                                            <div class="text-[10px] text-gray-500 mt-0.5">
-                                                {task.timeLeft || new Date(task.timestamp).toLocaleTimeString()}
+                                            <div class="flex items-center gap-2 mt-1">
+                                                <div class="text-[10px] text-gray-400 font-medium">
+                                                    {resolveName(task.recipient)}
+                                                </div>
+                                                <div class="text-[10px] text-gray-600">
+                                                    • {formatDate(task.timestamp)}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -181,36 +210,66 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                             {/* Details Grid */}
                                             <div class="grid grid-cols-2 gap-y-3 gap-x-2 py-3">
                                                 <div class="col-span-2">
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Recipient</span>
-                                                    <div class="text-xs text-gray-300 font-mono break-all bg-black/20 p-1.5 rounded mt-0.5">
-                                                        {task.recipient || 'Unknown'}
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Recipient Details</span>
+                                                    <div class="flex items-center justify-between bg-black/40 p-2 rounded-xl border border-white/5 mt-1">
+                                                        <div class="flex flex-col">
+                                                            <span class="text-xs text-white font-bold">{resolveName(task.recipient)}</span>
+                                                            <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate max-w-[200px]">{task.recipient || 'No address'}</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => copyToClipboard(task.recipient || '')}
+                                                            class="p-1.5 hover:bg-white/10 rounded-lg text-gray-500 transition-colors"
+                                                        >
+                                                            <Copy class="w-3.5 h-3.5" />
+                                                        </button>
                                                     </div>
                                                 </div>
 
                                                 <div>
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Amount</span>
-                                                    <div class="text-xs text-white font-bold mt-0.5">{task.amount} {task.token}</div>
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Amount</span>
+                                                    <div class="text-xs text-white font-black mt-0.5 bg-blue-500/10 px-2 py-1 rounded-lg border border-blue-500/20 inline-block">
+                                                        {task.amount} {task.token}
+                                                    </div>
                                                 </div>
 
                                                 <div>
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Schedule ID</span>
-                                                    <div class="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1">
-                                                        {task.scheduleId?.slice(0, 10)}...
-                                                        <button class="hover:text-white" onClick={() => copyToClipboard(task.scheduleId || '')}><Copy class="w-2.5 h-2.5" /></button>
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Source</span>
+                                                    <div class="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
+                                                        {task.id?.slice(0, 12)}
+                                                        <div class="w-1 h-1 rounded-full bg-gray-700" />
+                                                        {task.type || 'TIME'}
                                                     </div>
                                                 </div>
+
+                                                <Show when={task.txHash}>
+                                                    <div class="col-span-2">
+                                                        <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Transaction Result</span>
+                                                        <div class="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/20 mt-1 flex items-center justify-between">
+                                                            <div class="flex flex-col">
+                                                                <span class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Successful Execution</span>
+                                                                <span class="text-[9px] text-emerald-500/60 font-mono mt-0.5 truncate max-w-[250px]">{task.txHash}</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => window.open(`https://vision-scan.com/tx/${task.txHash}`, '_blank')}
+                                                                class="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors"
+                                                            >
+                                                                <ExternalLink class="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </Show>
 
                                                 <div class="col-span-2">
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold">Timeline</span>
+                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Timeline Status</span>
                                                     <div class="flex items-center gap-1 mt-1.5">
-                                                        <div class={`h-1 flex-1 rounded-full ${['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'bg-blue-500' : 'bg-gray-700'}`} />
-                                                        <div class={`h-1 flex-1 rounded-full ${['EXECUTING', 'SENT'].includes(task.status) ? 'bg-amber-500' : 'bg-gray-700'}`} />
-                                                        <div class={`h-1 flex-1 rounded-full ${task.status === 'SENT' ? 'bg-emerald-500' : 'bg-gray-700'}`} />
+                                                        <div class={`h-1 flex-1 rounded-full ${['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-800'}`} />
+                                                        <div class={`h-1 flex-1 rounded-full ${['EXECUTING', 'SENT'].includes(task.status) ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-gray-800'}`} />
+                                                        <div class={`h-1 flex-1 rounded-full ${task.status === 'SENT' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-800'}`} />
                                                     </div>
-                                                    <div class="flex justify-between text-[9px] text-gray-500 mt-1 px-0.5 font-medium">
-                                                        <span>Locked</span>
-                                                        <span>Exec</span>
-                                                        <span>Done</span>
+                                                    <div class="flex justify-between text-[8px] text-gray-600 mt-1.5 px-0.5 font-black uppercase tracking-widest">
+                                                        <span class={['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'text-blue-400' : ''}>Start</span>
+                                                        <span class={['EXECUTING', 'SENT'].includes(task.status) ? 'text-amber-400' : ''}>Exec</span>
+                                                        <span class={task.status === 'SENT' ? 'text-emerald-400' : ''}>Done</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -232,34 +291,33 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                     <button
                                                         onClick={(e) => handleCancel(task.scheduleId, e)}
                                                         disabled={isCancelling() === task.scheduleId}
-                                                        class="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                                        class="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                                     >
-                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3 h-3" /> {task.status === 'EXECUTING' ? 'Stop' : 'Cancel'}</>}>
-                                                            <div class="w-3 h-3 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> {task.status === 'EXECUTING' ? 'Stop Agent' : 'Cancel Task'}</>}>
+                                                            <div class="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                                                         </Show>
                                                     </button>
 
-                                                    {/* Force Run / Retry Button */}
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             props.onForceExecute?.(task.id);
                                                         }}
-                                                        class={`w-10 py-2 border rounded-lg flex items-center justify-center transition-colors ${task.status === 'EXECUTING'
+                                                        class={`w-12 py-2.5 border rounded-xl flex items-center justify-center transition-all ${task.status === 'EXECUTING'
                                                             ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-400'
-                                                            : 'bg-green-500/10 hover:bg-green-500/20 border-green-500/30 text-green-400'}`}
+                                                            : 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400'}`}
                                                         title={task.status === 'EXECUTING' ? "Force Retry" : "Execute Now"}
                                                     >
-                                                        <Play class="w-3 h-3 fill-current" />
+                                                        <Play class="w-3.5 h-3.5 fill-current" />
                                                     </button>
                                                 </Show>
 
                                                 <Show when={!['WAITING', 'EXECUTING'].includes(task.status)}>
                                                     <button
                                                         onClick={() => window.open(`https://vision-scan.com/tx/${task.txHash}`, '_blank')}
-                                                        class="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 rounded-lg text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1.5"
+                                                        class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
                                                     >
-                                                        <ExternalLink class="w-3 h-3" /> View TX
+                                                        <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
                                                     </button>
                                                 </Show>
                                             </div>
