@@ -709,7 +709,32 @@ export const userRegister = async (email: string, password: string, phone?: stri
             await updateDoc(rRef, {
                 referralCount: (referrer.referralCount || 0) + 1
             });
-            console.log(`[Referral] User ${emailLower} referred by ${referrerId}`);
+
+            // 1. Add new user to referrer's contact list (Automatic Networking)
+            const referrerContactsRef = doc(db, 'users', referrerId.toLowerCase(), 'contacts', emailLower);
+            await setDoc(referrerContactsRef, {
+                internalName: emailLower.split('@')[0],
+                email: emailLower,
+                phone: normalizedPhone,
+                vchainUserUid: emailLower,
+                syncStatus: 'verified',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+
+            // 2. Add referrer to new user's contact list (Bi-directional)
+            const newUserContactsRef = doc(db, 'users', emailLower, 'contacts', referrerId.toLowerCase());
+            await setDoc(newUserContactsRef, {
+                internalName: referrer.name || referrerId.split('@')[0],
+                email: referrerId.toLowerCase(),
+                phone: referrer.phone || '',
+                vchainUserUid: referrerId.toLowerCase(),
+                syncStatus: 'verified',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+
+            console.log(`[Referral] User ${emailLower} referred by ${referrerId}. Bi-directional contacts created.`);
         }
     }
 

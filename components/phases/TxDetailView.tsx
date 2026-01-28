@@ -23,6 +23,14 @@ interface TxDetailProps {
 
 export default function TxDetailView(props: TxDetailProps) {
     const [activeTab, setActiveTab] = createSignal<'overview' | 'logs' | 'trace' | 'state' | 'accounting'>('overview');
+    const [copied, setCopied] = createSignal(false);
+
+    const handleCopy = () => {
+        if (!props.tx.hash) return;
+        navigator.clipboard.writeText(props.tx.hash);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
 
     // Mock Cross-chain Detection (Phase 2)
     const isCrossChain = props.tx.method === 'Hub Transfer' || props.tx.type === 'LayerZero';
@@ -79,7 +87,14 @@ export default function TxDetailView(props: TxDetailProps) {
                                 <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Hash</span>
                                 <div class="flex items-center gap-2">
                                     <span class="text-[10px] font-mono text-blue-400 break-all">{props.tx.hash}</span>
-                                    <button class="text-gray-500 hover:text-white"><Copy class="w-3 h-3" /></button>
+                                    <button
+                                        onClick={handleCopy}
+                                        class="text-gray-500 hover:text-white transition-colors p-1"
+                                    >
+                                        <Show when={copied()} fallback={<Copy class="w-3 h-3" />}>
+                                            <CheckCircle2 class="w-3 h-3 text-green-400" />
+                                        </Show>
+                                    </button>
                                 </div>
                             </div>
                             <div class="grid grid-cols-2 gap-4">

@@ -106,8 +106,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                         if (navigator.share) {
                                             navigator.share({
                                                 title: 'Join Vision Chain',
-                                                text: `Invitation Link from ${props.userProfile().name || 'User'}`,
-                                                url: referralUrl()
+                                                text: invitationMessage()
                                             });
                                         } else {
                                             copyLink();
