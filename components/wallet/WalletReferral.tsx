@@ -60,7 +60,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                 <WalletViewHeader
                     tag="Growth Program"
                     title="REFERRAL"
-                    titleAccent="ENGINE"
+                    titleAccent=""
                     description="Build your network and earn multi-tier rewards for every person you bring to the Vision Chain ecosystem."
                     rightElement={
                         <>
