@@ -13,12 +13,11 @@ import {
     Eye,
     EyeOff,
     Check,
-    AlertCircle
+    AlertCircle,
+    ArrowLeft
 } from 'lucide-solid';
 import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
 import { useAuth } from '../auth/authContext';
-
-
 import { WalletViewHeader } from './WalletViewHeader';
 
 // Storage key for user settings (using different key than admin)
@@ -44,7 +43,7 @@ function Toggle(props: ToggleProps) {
     );
 }
 
-export function WalletSettings() {
+export function WalletSettings(props: { onBack?: () => void }) {
     const [activeTab, setActiveTab] = createSignal('general');
     const [emailNotifications, setEmailNotifications] = createSignal(true);
     const [pushNotifications, setPushNotifications] = createSignal(false);
@@ -163,6 +162,18 @@ export function WalletSettings() {
 
     return (
         <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <Show when={props.onBack}>
+                <div class="flex items-center gap-4 mb-2 lg:hidden">
+                    <button
+                        onClick={props.onBack}
+                        class="p-2 bg-white/5 rounded-xl text-gray-400 hover:text-white transition-colors"
+                    >
+                        <ArrowLeft class="w-5 h-5" />
+                    </button>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Back to Assets</span>
+                </div>
+            </Show>
+
             <WalletViewHeader
                 tag="Core configuration"
                 title="WALLET"
@@ -172,12 +183,12 @@ export function WalletSettings() {
             />
 
             {/* Tabs */}
-            <div class="flex flex-wrap gap-2 border-b border-white/10 pb-4">
+            <div class="flex overflow-x-auto gap-2 border-b border-white/10 pb-4 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
                 <For each={tabs}>
                     {(tab) => (
                         <button
                             onClick={() => setActiveTab(tab.id)}
-                            class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all ${activeTab() === tab.id
+                            class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap shrink-0 ${activeTab() === tab.id
                                 ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
                                 : 'text-gray-400 hover:text-white hover:bg-white/5'
                                 }`}
@@ -236,7 +247,7 @@ export function WalletSettings() {
                                 <div class="flex-1">
                                     <p class="text-white font-medium">Phone Number</p>
                                     <p class="text-gray-400 text-sm mt-0.5">Used for user identification and VID mapping</p>
-                                    <div class="mt-3 flex gap-2 max-w-sm">
+                                    <div class="mt-3 flex flex-col sm:flex-row gap-2 max-w-sm w-full">
                                         <input
                                             type="tel"
                                             value={phone()}
@@ -247,7 +258,7 @@ export function WalletSettings() {
                                         <button
                                             onClick={handleSavePhone}
                                             disabled={isSavingPhone()}
-                                            class={`px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center gap-2 ${phoneSuccess()
+                                            class={`px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${phoneSuccess()
                                                 ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                                                 : 'bg-white/10 text-white hover:bg-white/20'
                                                 }`}
@@ -313,16 +324,16 @@ export function WalletSettings() {
                             {/* Preferred Network */}
                             <div class="md:col-span-2">
                                 <label class="text-white font-medium block mb-2">Preferred Network</label>
-                                <div class="flex gap-4">
+                                <div class="flex flex-col sm:flex-row gap-3">
                                     <button
                                         onClick={() => setPreferredChain('Vision Chain')}
-                                        class={`flex-1 py-3 rounded-xl border font-bold transition-all ${preferredChain() === 'Vision Chain' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                                        class={`flex-1 py-3.5 rounded-xl border font-bold transition-all ${preferredChain() === 'Vision Chain' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
                                     >
                                         Vision Chain
                                     </button>
                                     <button
                                         onClick={() => setPreferredChain('Ethereum')}
-                                        class={`flex-1 py-3 rounded-xl border font-bold transition-all ${preferredChain() === 'Ethereum' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                                        class={`flex-1 py-3.5 rounded-xl border font-bold transition-all ${preferredChain() === 'Ethereum' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
                                     >
                                         Ethereum
                                     </button>

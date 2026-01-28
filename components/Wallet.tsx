@@ -2986,7 +2986,7 @@ Format:
                         <Show when={activeView() === 'settings'}>
                             <div class="flex-1 overflow-y-auto p-4 lg:p-8">
                                 <div class="max-w-4xl mx-auto">
-                                    <WalletSettings />
+                                    <WalletSettings onBack={() => setActiveView('assets')} />
                                 </div>
                             </div>
                         </Show>
