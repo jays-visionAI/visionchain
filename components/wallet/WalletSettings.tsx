@@ -14,7 +14,8 @@ import {
     EyeOff,
     Check,
     AlertCircle,
-    ArrowLeft
+    ArrowLeft,
+    ChevronDown
 } from 'lucide-solid';
 import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
 import { useAuth } from '../auth/authContext';
@@ -22,6 +23,32 @@ import { WalletViewHeader } from './WalletViewHeader';
 
 // Storage key for user settings (using different key than admin)
 const USER_SETTINGS_KEY = 'visionhub_user_settings';
+
+interface Country {
+    code: string;
+    name: string;
+    flag: string;
+    dialCode: string;
+}
+
+const COUNTRIES: Country[] = [
+    { code: 'KR', name: 'South Korea', flag: '🇰🇷', dialCode: '+82' },
+    { code: 'US', name: 'United States', flag: '🇺🇸', dialCode: '+1' },
+    { code: 'CA', name: 'Canada', flag: '🇨🇦', dialCode: '+1' },
+    { code: 'JP', name: 'Japan', flag: '🇯🇵', dialCode: '+81' },
+    { code: 'CN', name: 'China', flag: '🇨🇳', dialCode: '+86' },
+    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', dialCode: '+44' },
+    { code: 'DE', name: 'Germany', flag: '🇩🇪', dialCode: '+49' },
+    { code: 'FR', name: 'France', flag: '🇫🇷', dialCode: '+33' },
+    { code: 'AU', name: 'Australia', flag: '🇦🇺', dialCode: '+61' },
+    { code: 'SG', name: 'Singapore', flag: '🇸🇬', dialCode: '+65' },
+    { code: 'VN', name: 'Vietnam', flag: '🇻🇳', dialCode: '+84' },
+    { code: 'TH', name: 'Thailand', flag: '🇹🇭', dialCode: '+66' },
+    { code: 'ID', name: 'Indonesia', flag: '🇮🇩', dialCode: '+62' },
+    { code: 'MY', name: 'Malaysia', flag: '🇲🇾', dialCode: '+60' },
+    { code: 'PH', name: 'Philippines', flag: '🇵🇭', dialCode: '+63' },
+    { code: 'IN', name: 'India', flag: '🇮🇳', dialCode: '+91' },
+];
 
 interface ToggleProps {
     checked: boolean;
@@ -50,8 +77,10 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
     const [darkMode, setDarkMode] = createSignal(true);
     const [phone, setPhone] = createSignal('');
+    const [selectedCountry, setSelectedCountry] = createSignal<Country>(COUNTRIES[0]);
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
     const [phoneSuccess, setPhoneSuccess] = createSignal(false);
+    const [showCountryDropdown, setShowCountryDropdown] = createSignal(false);
 
     // Password state
     const [currentPassword, setCurrentPassword] = createSignal('');
@@ -110,6 +139,13 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
     // Load preset on mount
     onMount(async () => {
+        // 1. Detect Country from Locale
+        const userLocale = navigator.language || 'en-US';
+        const regionCode = userLocale.split('-')[1] || userLocale.toUpperCase();
+
+        let initialCountry = COUNTRIES.find(c => c.code === regionCode) || COUNTRIES.find(c => c.code === 'US') || COUNTRIES[0];
+
+        // 2. Load User Data
         if (auth.user()?.email) {
             const preset = await getUserPreset(auth.user().email);
             if (preset) {
@@ -118,20 +154,34 @@ export function WalletSettings(props: { onBack?: () => void }) {
                 setPreferredChain(preset.preferredChain);
             }
 
-            // Load user profile data (like phone)
             const userData = await getUserData(auth.user().email);
             if (userData?.phone) {
-                setPhone(userData.phone);
+                // Parse E.164 format
+                const savedPhone = userData.phone;
+                // Try to find matching country code
+                const matchedCountry = COUNTRIES.find(c => savedPhone.startsWith(c.dialCode));
+                if (matchedCountry) {
+                    initialCountry = matchedCountry;
+                    setPhone(savedPhone.replace(matchedCountry.dialCode, ''));
+                } else {
+                    setPhone(savedPhone);
+                }
             }
         }
+
+        setSelectedCountry(initialCountry);
     });
 
     const handleSavePhone = async () => {
         if (!auth.user()?.email) return;
         setIsSavingPhone(true);
         setPhoneSuccess(false);
+
+        // Format to E.164
+        const formattedPhone = `${selectedCountry().dialCode}${phone().replace(/^0+/, '')}`; // Remove leading zeros for E.164
+
         try {
-            await updateUserData(auth.user().email, { phone: phone() });
+            await updateUserData(auth.user().email, { phone: formattedPhone });
             setPhoneSuccess(true);
             setTimeout(() => setPhoneSuccess(false), 3000);
         } catch (e) {
@@ -247,26 +297,70 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 <div class="flex-1">
                                     <p class="text-white font-medium">Phone Number</p>
                                     <p class="text-gray-400 text-sm mt-0.5">Used for user identification and VID mapping</p>
-                                    <div class="mt-3 flex flex-col sm:flex-row gap-2 max-w-sm w-full">
-                                        <input
-                                            type="tel"
-                                            value={phone()}
-                                            onInput={(e) => setPhone(e.currentTarget.value)}
-                                            placeholder="010-1234-5678"
-                                            class="flex-1 px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 text-sm"
-                                        />
-                                        <button
-                                            onClick={handleSavePhone}
-                                            disabled={isSavingPhone()}
-                                            class={`px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${phoneSuccess()
-                                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                                : 'bg-white/10 text-white hover:bg-white/20'
-                                                }`}
-                                        >
-                                            <Show when={isSavingPhone()} fallback={phoneSuccess() ? <><Check class="w-3 h-3" /> Saved</> : 'Update'}>
-                                                <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+
+                                    <div class="mt-4 flex flex-col sm:flex-row gap-3 max-w-lg w-full">
+                                        {/* Country Selector */}
+                                        <div class="relative w-full sm:w-[180px]">
+                                            <button
+                                                onClick={() => setShowCountryDropdown(!showCountryDropdown())}
+                                                class="w-full flex items-center justify-between px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white hover:bg-white/[0.08] transition-colors"
+                                            >
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-lg">{selectedCountry().flag}</span>
+                                                    <span class="text-sm font-medium">{selectedCountry().name.split(' ')[0]}</span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs text-gray-400 font-mono">{selectedCountry().dialCode}</span>
+                                                    <ChevronDown class="w-3 h-3 text-gray-500" />
+                                                </div>
+                                            </button>
+
+                                            <Show when={showCountryDropdown()}>
+                                                <div class="absolute top-full left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-[#1a1b26] border border-white/10 rounded-xl shadow-2xl z-50">
+                                                    <For each={COUNTRIES}>
+                                                        {(country) => (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedCountry(country);
+                                                                    setShowCountryDropdown(false);
+                                                                }}
+                                                                class="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
+                                                            >
+                                                                <div class="flex items-center gap-3">
+                                                                    <span class="text-lg">{country.flag}</span>
+                                                                    <span class="text-sm text-gray-300">{country.name}</span>
+                                                                </div>
+                                                                <span class="text-xs text-gray-500 font-mono">{country.dialCode}</span>
+                                                            </button>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                                <div class="fixed inset-0 z-40" onClick={() => setShowCountryDropdown(false)} />
                                             </Show>
-                                        </button>
+                                        </div>
+
+                                        {/* Phone Input */}
+                                        <div class="flex-1 flex gap-2">
+                                            <input
+                                                type="tel"
+                                                value={phone()}
+                                                onInput={(e) => setPhone(e.currentTarget.value.replace(/[^0-9]/g, ''))}
+                                                placeholder="01012345678"
+                                                class="flex-1 px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 text-sm font-mono placeholder-gray-600"
+                                            />
+                                            <button
+                                                onClick={handleSavePhone}
+                                                disabled={isSavingPhone() || !phone()}
+                                                class={`px-6 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${phoneSuccess()
+                                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                                    : 'bg-white/10 text-white hover:bg-white/20'
+                                                    }`}
+                                            >
+                                                <Show when={isSavingPhone()} fallback={phoneSuccess() ? <><Check class="w-3 h-3" /> Saved</> : 'Update'}>
+                                                    <div class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                </Show>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
