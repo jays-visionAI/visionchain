@@ -895,7 +895,11 @@ const Wallet = (): JSX.Element => {
                     successCount: 0,
                     failedCount: 0,
                     startTime: Date.now(),
-                    transactions: transactions.map((tx: any) => ({ ...tx, status: 'PENDING' }))
+                    transactions: transactions.map((tx: any) => ({
+                        ...tx,
+                        status: 'PENDING',
+                        vid: tx.name || tx.vid || 'New Recipient' // Ensure UI shows name
+                    }))
                 };
                 setBatchAgents(prev => [...prev, newAgent]);
 
@@ -955,8 +959,10 @@ const Wallet = (): JSX.Element => {
 
                     // 10 second interval for stability
                     // 10 second interval for stability
+                    // Dynamic interval based on user preference
                     if (i < transactions.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 10000));
+                        const waitTime = (action.data.interval || 10) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
                     }
                 }
 
@@ -2274,11 +2280,11 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                                 setReviewMulti={setReviewMulti}
                                 unreadCount={0}
                                 contacts={contacts}
-                                onStartBatch={(txs) => {
-                                    console.log("Starting batch with txs:", txs);
+                                onStartBatch={(txs, interval) => {
+                                    console.log("Starting batch with txs:", txs, "interval:", interval);
                                     setPendingAction({
                                         type: 'multi_transactions',
-                                        data: { transactions: txs }
+                                        data: { transactions: txs, interval: interval }
                                     });
                                     setPasswordMode('verify');
                                     setWalletPassword('');
