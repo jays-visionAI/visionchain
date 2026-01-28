@@ -256,38 +256,66 @@ const Wallet = (): JSX.Element => {
                 // Convert "30,50" to "30.50" before splitting if it's not a delimiter
                 let sanitizedLine = line.replace(/(\d),(\d)/g, '$1.$2');
 
-                // Support Comma or Tab separated, filter out empty parts from leading/trailing delimiters
-                const parts = sanitizedLine.split(/[,\t]+/).map(p => p.trim()).filter(p => p.length > 0);
+                // Split strategy: Try Comma or Tab first. If only 1 part remains, try splitting by space if it looks like columns.
+                let parts = sanitizedLine.split(/[,\t]+/).map(p => p.trim()).filter(p => p.length > 0);
+                if (parts.length === 1 && sanitizedLine.split(/\s+/).length >= 2) {
+                    // Try splitting by space if we have an address or pattern like Name Amount
+                    parts = sanitizedLine.split(/\s+/).map(p => p.trim()).filter(p => p.length > 0);
+                }
+
                 let recipient = '';
                 let amount = '';
                 let name = '';
 
-                // Strategy: Find Address (0x...)
-                const addrIdx = parts.findIndex(p => p.startsWith('0x') && p.length === 42);
+                // Strategy A: Find ETH Address (0x...)
+                const addrIdx = parts.findIndex(p => p.startsWith('0x') && p.length >= 40);
 
                 if (addrIdx !== -1) {
                     recipient = parts[addrIdx];
-                    // Look for amount (the first numeric part that isn't the address)
-                    const amtPart = parts.find((p, i) => i !== addrIdx && !isNaN(parseFloat(p.replace(/,/g, ''))));
-                    if (amtPart) amount = amtPart.replace(/,/g, '');
+                    // Clean address (remove punctuation around it)
+                    recipient = recipient.replace(/[^a-fA-F0-9x]/g, '');
 
-                    // Name is whatever is left (first non-addr, non-amt part)
-                    const namePart = parts.find((p, i) => i !== addrIdx && p !== amtPart && p.length > 0);
+                    // Look for amount: Find parts that look like numbers (optionally with token symbol)
+                    const amtPart = parts.find((p, i) => {
+                        if (i === addrIdx) return false;
+                        const cleanP = p.replace(/[a-zA-Z,]/g, '').trim();
+                        return cleanP.length > 0 && !isNaN(parseFloat(cleanP));
+                    });
+
+                    if (amtPart) {
+                        amount = amtPart.replace(/[a-zA-Z,]/g, '').trim();
+                    }
+
+                    // Name is whatever is left that isn't address or amount
+                    const namePart = parts.find((p, i) => i !== addrIdx && p !== amtPart && p.length > 1 && !p.includes('/') && !p.includes('>'));
                     if (namePart) name = namePart;
                 } else {
-                    // No address found, try to find amount and name
-                    const amtPart = parts.find(p => !isNaN(parseFloat(p.replace(/,/g, ''))));
-                    if (amtPart) amount = amtPart.replace(/,/g, '');
-                    const namePart = parts.find(p => p !== amtPart && p.trim().length > 0);
-                    if (namePart) name = namePart;
+                    // Strategy B: No address, find Name and Amount
+                    // First find amount
+                    const amtPart = parts.find(p => {
+                        const cleanP = p.replace(/[a-zA-Z,]/g, '').trim();
+                        return cleanP.length > 0 && !isNaN(parseFloat(cleanP));
+                    });
+
+                    if (amtPart) {
+                        amount = amtPart.replace(/[a-zA-Z,]/g, '').trim();
+                        // Name is usually before or after amount
+                        const namePart = parts.find(p => p !== amtPart && p.trim().length > 1 && !p.includes('/') && !p.includes('>'));
+                        if (namePart) name = namePart;
+                    } else if (parts.length > 0) {
+                        // Fallback: Just assume the first long part is a name
+                        name = parts.find(p => p.length > 1) || '';
+                    }
                 }
 
-                // Contact Lookup: Resolve names from our contact list
+                // Contact Lookup & Cleanup
+                name = name.replace(/\*\*|-\s*|>\s*|'\s*/g, '').trim(); // Remove Markdown/Delimiters
+
                 if (recipient) {
                     const contact = contactList.find(c => c.address?.toLowerCase() === recipient.toLowerCase());
-                    if (contact && (!name || name === 'Unknown')) name = contact.name;
+                    if (contact && (!name || name === 'Unknown' || name === '')) name = contact.name;
                 } else if (name && name !== 'Unknown') {
-                    const contact = contactList.find(c => c.name?.toLowerCase() === name.toLowerCase());
+                    const contact = contactList.find(c => c.name?.toLowerCase() === name.toLowerCase() || (name.length > 2 && c.name?.toLowerCase().includes(name.toLowerCase())));
                     if (contact && contact.address) recipient = contact.address;
                 }
 
@@ -300,7 +328,7 @@ const Wallet = (): JSX.Element => {
                     symbol: 'VCN'
                 };
             })
-            .filter((tx): tx is { recipient: string, amount: string, name: string, symbol: string } => tx !== null);
+            .filter(Boolean) as any[];
     });
 
     const handleBatchTransaction = () => {
@@ -1753,16 +1781,31 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
 
 [CRITICAL: ACTION FORMAT]
 If the user wants to execute a transaction (Send, Swap, Schedule, etc.), you MUST append a JSON block to the end of your response.
-Format:
+For multiple transactions or complex batch sends, use the "multi" intent with a "transactions" array.
+
+Format (Single):
 \`\`\`json
 {
-  "intent": "send" | "swap" | "schedule" | "stake" | "bridge",
-  "recipient": "0x..." (or name if not resolved),
+  "intent": "send" | "swap" | "schedule" | "stake",
+  "recipient": "0x..." (or name),
   "amount": "100",
-  "symbol": "VCN",
-  "executeAt": "ISO_TIMESTAMP" (for schedule only)
+  "symbol": "VCN"
 }
 \`\`\`
+
+Format (Multi/Batch):
+\`\`\`json
+{
+  "intent": "multi",
+  "description": "Short summary",
+  "transactions": [
+    { "intent": "send", "recipient": "name/addr", "amount": "30", "name": "optional name" },
+    { "intent": "send", "recipient": "name/addr", "amount": "50", "name": "optional name" }
+  ]
+}
+\`\`\`
+If you detect multiple recipients in one request, ALWAYS use the "multi" format.
+\`\`
 `;
 
             setThinkingSteps(prev => [
@@ -1893,214 +1936,127 @@ Format:
 
             console.log("[AI Intent Data]", intentData);
 
-            // 2. Trigger Wallet Flow if intent detected
+            // 2. Process Intent if detected
             if (intentData) {
-                // Name Resolution Step (VNS)
-                if (intentData.recipient && typeof intentData.recipient === 'string' && !intentData.recipient.startsWith('0x')) {
-                    const resolved = await resolveRecipient(intentData.recipient, userProfile().email);
-                    if (resolved && resolved.address) {
-                        intentData.recipient = resolved.address;
-                    } else {
-                        console.warn(`[AI] Could not resolve name: ${intentData.recipient}`);
-                        // Even if not resolved, allow flow to start so user can fix it
-                    }
-                }
+                console.log("[AI Intent Processing]", intentData);
 
-                if (intentData.intent === 'send') {
-                    console.log("Starting Send Flow with:", intentData);
+                // Helper: Resolve all names to addresses (Check Contacts + VNS)
+                const resolveAllRecipients = async (data: any) => {
+                    const resolveSingle = async (rec: string) => {
+                        if (!rec || ethers.isAddress(rec)) return rec;
+                        // 1st: Check local contacts
+                        const cleanName = rec.replace('@', '').toLowerCase();
+                        const local = contacts().find((c: any) => c.name.toLowerCase() === cleanName);
+                        if (local) return local.address;
+                        // 2nd: Check global registry (VNS)
+                        const global = await resolveRecipient(rec, userProfile().email);
+                        return global?.address || rec;
+                    };
 
-                    // AUTO-DETECT BATCH MODE: If recipient or amount is an array, or if recipient string contains commas/newlines
-                    const rawRecipient = String(intentData.recipient || '');
-                    const isMulti = Array.isArray(intentData.recipient) ||
-                        Array.isArray(intentData.amount) ||
-                        Array.isArray(intentData.transactions) ||
-                        rawRecipient.includes(',') ||
-                        rawRecipient.includes('\n');
-
-                    if (isMulti) {
-                        console.log("[AI] Multi-recipient detected in 'send' intent. Switching to batch mode.");
-                        let batchStr = "";
-                        if (intentData.transactions) {
-                            batchStr = intentData.transactions.map((tx: any) => `${tx.name || ''}, ${tx.recipient || ''}, ${tx.amount || ''}`).join('\n');
-                        } else if (Array.isArray(intentData.recipient)) {
-                            batchStr = intentData.recipient.map((r: any, i: number) => {
-                                const amt = Array.isArray(intentData.amount) ? intentData.amount[i] : intentData.amount;
-                                return `, ${r}, ${amt || ''}`;
-                            }).join('\n');
-                        } else if (rawRecipient.includes(',') || rawRecipient.includes('\n')) {
-                            const addresses = rawRecipient.split(/[,\n]/).map(a => a.trim()).filter(Boolean);
-                            batchStr = addresses.map(a => `, ${a}, ${intentData.amount || ''}`).join('\n');
+                    if (intentData.intent === 'multi' && Array.isArray(intentData.transactions)) {
+                        for (let tx of intentData.transactions) {
+                            tx.recipient = await resolveSingle(tx.recipient);
                         }
-
-                        if (batchStr) {
-                            setBatchInput(batchStr);
-                            setActiveFlow('batch_send');
-                            setChatLoading(false);
-                            return;
-                        }
+                    } else if (intentData.recipient) {
+                        intentData.recipient = await resolveSingle(intentData.recipient);
                     }
+                };
 
-                    setRecipientAddress(String(intentData.recipient || ''));
-                    // Sanitize amount - remove any non-numeric chars except dot
-                    const cleanAmount = (intentData.amount || '').toString().replace(/[^0-9.]/g, '');
-                    setSendAmount(cleanAmount);
-                    setSelectedToken(intentData.symbol || 'VCN');
+                await resolveAllRecipients(intentData);
 
-                    startFlow('send');
+                // FLOW ROUTING: Single vs Scheduled vs Multi
+                if (intentData.intent === 'multi' && Array.isArray(intentData.transactions)) {
+                    // Route to Enterprise Batch Transfer Agent
+                    const results = intentData.transactions.map((tx: any) => ({
+                        ...tx,
+                        amount: String(tx.amount || '0'),
+                        symbol: tx.symbol || 'VCN'
+                    }));
+                    setMultiTransactions(results);
+                    setReviewMulti(results);
 
-                    // If we have both amount and VALID recipient, skip to confirmation
-                    if (cleanAmount && intentData.recipient && ethers.isAddress(intentData.recipient)) {
-                        setFlowStep(2);
-                    }
-                } else if (intentData.intent === 'swap') {
-                    setSwapAmount(String(intentData.amount || ''));
-                    startFlow('swap');
-                } else if (intentData.intent === 'stake') {
-                    setStakeAmount(String(intentData.amount || ''));
-                    startFlow('stake');
-                } else if (intentData.intent === 'bridge') {
-                    startFlow('bridge');
-                } else if (intentData.intent === 'schedule') {
-                    setRecipientAddress(String(intentData.recipient || ''));
-                    setSendAmount(String(intentData.amount || ''));
-                    setSelectedToken(intentData.symbol || 'VCN');
-
-                    // Parse Time from intentData.executeAt (timestamp) or intentData.time/scheduleTime (relative string)
-                    let delay = 300; // Default 5 mins
-                    let displayTime = '5 minutes';
-
-                    // Logic to handle execution time: Supports both ISO timestamp and relative string
-                    let timestampMs = 0;
-                    if (intentData.executeAt) {
-                        if (typeof intentData.executeAt === 'number') {
-                            timestampMs = intentData.executeAt;
-                        } else if (typeof intentData.executeAt === 'string') {
-                            // Try parsing ISO or other date formats
-                            const parsed = new Date(intentData.executeAt).getTime();
-                            if (!isNaN(parsed)) {
-                                timestampMs = parsed;
-                            }
-                        }
-                    }
-
-                    if (timestampMs > 0 && timestampMs > Date.now()) {
-                        const now = Date.now();
-                        delay = Math.max(1, Math.floor((timestampMs - now) / 1000));
-                        displayTime = `${Math.ceil(delay / 60)} minutes`;
-                        console.log(`[AI] Using parsed timestamp. Delay: ${delay}s`);
-                    } else {
-                        // Relative parsing fallback
-                        // Check executeAt too in case LLM put "10 minutes" there
-                        const rawStr = intentData.time || intentData.scheduleTime || intentData.executeAt || '5 minutes';
-                        const timeStr = String(rawStr).toLowerCase();
-                        displayTime = timeStr;
-
-                        const match = timeStr.match(/(\d+)/);
-                        const numeric = match ? parseInt(match[0]) : 5;
-
-                        if (timeStr.includes('hour') || timeStr.includes('h') || timeStr.includes('시') || timeStr.includes('時')) {
-                            delay = numeric * 3600;
-                        } else if (timeStr.includes('sec') || timeStr.includes('초') || timeStr.includes('秒')) {
-                            delay = numeric;
-                        } else {
-                            // Default to minutes (covers 'min', '분', '分' and failures)
-                            delay = numeric * 60;
-                        }
-                        console.log(`[AI] Using relative time string: ${timeStr}. Delay: ${delay}s`);
-                    }
-
-
-                    setIsSchedulingTimeLock(true);
-                    setLockDelaySeconds(delay);
-
-                    startFlow('send');
-                    // If we have both amount and recipient, skip to confirmation
-                    if (intentData.amount && ethers.isAddress(intentData.recipient)) {
-                        setFlowStep(2);
-                    }
-
-                    const msg = config.chat.scheduledConfirm(intentData.amount || '', intentData.symbol || 'VCN', displayTime);
-                    setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
-                    setChatLoading(false);
-                    return;
-                } else if (intentData.intent === 'multi') {
-                    setReviewMulti(intentData.transactions || []);
                     setMessages(prev => [...prev, {
                         role: 'assistant',
                         content: lastLocale() === 'ko'
-                            ? "분석된 전송 리스트입니다. 내용을 확인하시고 '전송 시작' 버튼을 눌러주세요."
-                            : "I've analyzed the transfer list. Please review the details and click 'Start Transfer' to proceed.",
+                            ? `요청하신 ${results.length}건의 대량 전송 리벨을 구성했습니다. 내용을 확인해 주세요.`
+                            : `I've prepared a batch of ${results.length} transfers for you. Please review the details.`,
                         isMultiReview: true,
-                        batchData: intentData.transactions
+                        batchData: results
                     }]);
                     setChatLoading(false);
                     return;
-                } else if (intentData.intent === 'provide_csv_template') {
-                    const csvContent = "VID,Recipient,Amount,Symbol\nRyu CEO,,100,VCN\n,0x123...,0.5,ETH\n";
-                    const encodedUri = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`;
-                    const templateMsg = lastLocale() === 'ko'
-                        ? `표준 CSV 템플릿을 준비했습니다. 아래 링크를 클릭하여 다운로드 후 전송 리스트를 작성해 주세요.\n\n[📥 Vision_Batch_Template.csv 다운로드](${encodedUri})`
-                        : `I've prepared the standard CSV template for you. Click the link below to download and fill in your transfer list.\n\n[📥 Vision_Batch_Template.csv Download](${encodedUri})`;
 
-                    setMessages(prev => [...prev, { role: 'assistant', content: templateMsg }]);
-                    setChatLoading(false);
-                    return;
+                } else if (intentData.intent === 'send' || intentData.intent === 'schedule') {
+                    // Determine if it's a scheduled transfer
+                    const hasSchedule = intentData.intent === 'schedule' || intentData.scheduleTime || intentData.time;
+
+                    setRecipientAddress(intentData.recipient || '');
+                    setSendAmount(String(intentData.amount || '0').replace(/[^0-9.]/g, ''));
+                    setSelectedToken(intentData.symbol || 'VCN');
+
+                    if (hasSchedule) {
+                        setIsSchedulingTimeLock(true);
+                        // Parse delay
+                        let delay = 300;
+                        const timeStr = String(intentData.scheduleTime || intentData.time || '5m').toLowerCase();
+                        const num = parseInt(timeStr) || 5;
+                        if (timeStr.includes('h')) delay = num * 3600;
+                        else if (timeStr.includes('s')) delay = num;
+                        else delay = num * 60;
+                        setLockDelaySeconds(delay);
+                    } else {
+                        setIsSchedulingTimeLock(false);
+                    }
+
+                    startFlow('send');
+                    if (intentData.recipient && intentData.amount) setFlowStep(2); // Skip to Confirmation
                 }
             }
 
-            // 3. Clean up response for display
-            // Remove intent JSON blocks
+            // 3. Finalize Assistant Response Message
             let cleanResponse = response.replace(/\{[\s\S]*?"intent"[\s\S]*?\}/g, "").trim();
-            // Remove markdown code blocks
             cleanResponse = cleanResponse.replace(/```json[\s\S]*?```/g, "").trim();
-            cleanResponse = cleanResponse.replace(/```[\s\S]*?```/g, "").trim(); // Generic blocks too
+            cleanResponse = cleanResponse.replace(/```[\s\S]*?```/g, "").trim();
 
             if (!cleanResponse && intentData) {
-                const intent = intentData.intent || 'transaction';
-                const intentMap: Record<string, Record<string, string>> = {
-                    'ko': { 'send': '송금', 'swap': '스왑', 'bridge': '브릿지', 'stake': '스테이킹', 'schedule': '예약 송금', 'transaction': '트랜잭션' },
-                    'ja': { 'send': '送金', 'swap': 'スワップ', 'bridge': 'ブリッジ', 'stake': 'ステーキング', 'schedule': '予約送金', 'transaction': 'トランザクション' },
-                    'en': { 'send': 'transfer', 'swap': 'swap', 'bridge': 'bridge', 'stake': 'staking', 'schedule': 'scheduled transfer', 'transaction': 'transaction' }
+                const intentMap: any = {
+                    ko: { send: '송금', multi: '대량 송금', schedule: '예약 송금' },
+                    en: { send: 'transfer', multi: 'batch transfer', schedule: 'scheduled transfer' }
                 };
-                const localizedIntent = (intentMap[lastLocale()] || intentMap['en'])[intent] || intent;
-
-                const defaultMsgMap: Record<string, string> = {
-                    'ko': `요청하신 ${localizedIntent} 업무를 준비했습니다. 화면의 내용을 확인하고 진행해 주세요!`,
-                    'ja': `ご依頼の ${localizedIntent} の準備ができました。画面の内容を確認して進めてください。`,
-                    'en': `I've prepared the ${localizedIntent} for you. Please review the details on your screen to proceed!`
-                };
-                cleanResponse = defaultMsgMap[lastLocale()] || defaultMsgMap['en'];
+                const localized = (intentMap[lastLocale()] || intentMap.en)[intentData.intent] || '업무';
+                cleanResponse = lastLocale() === 'ko'
+                    ? `요청하신 ${localized}를 준비했습니다. 화면을 확인해 주세요.`
+                    : `I've prepared the ${localized} for you. Please check your screen.`;
             }
 
             setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
 
-            // SAVE TO FIREBASE
+            // SAVE CONVERSATION
             if (userProfile().email) {
                 const convMessages = [...messages()].map(m => ({
                     role: m.role,
                     text: m.content,
                     timestamp: new Date().toISOString()
                 }));
-
                 const savedId = await saveConversation(
                     {
                         userId: userProfile().email,
                         botType: 'intent',
                         messages: convMessages,
-                        lastMessage: convMessages[convMessages.length - 1]?.text || '',
+                        lastMessage: cleanResponse,
                         status: 'completed'
                     },
                     currentSessionId() || undefined
                 );
-
                 if (savedId) {
                     setCurrentSessionId(savedId);
                     fetchHistory();
                 }
             }
         } catch (error) {
-            console.error('AI Error:', error);
-            setMessages(prev => [...prev, { role: 'assistant', content: "I encountered an error while processing your request. The system might be busy or undergoing maintenance. Please try again later." }]);
+            console.error('AI Chat Error:', error);
+            const errMsg = lastLocale() === 'ko' ? "처리 중 오류가 발생했습니다. 다시 시도해 주세요." : "An error occurred. Please try again.";
+            setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
         } finally {
             setChatLoading(false);
         }

@@ -427,19 +427,43 @@ const BatchReportCard = (props: {
                 </div>
             </div>
 
-            <div class="flex gap-2">
+            <div class="flex flex-col gap-2">
                 <button
                     onClick={downloadReport}
-                    class="flex-1 py-3 bg-white text-black hover:bg-gray-200 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    class="w-full py-3.5 bg-white text-black hover:bg-white/90 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-xl shadow-white/5 active:scale-[0.98]"
                 >
-                    <Download class="w-4 h-4" /> Download Accounting CSV
+                    <Download class="w-4 h-4" /> Download Accounting Report
                 </button>
-                <button
-                    onClick={props.onViewDetail}
-                    class="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border border-white/10"
-                >
-                    Details
-                </button>
+
+                <div class="flex gap-2">
+                    <Show when={props.data.failed > 0}>
+                        <button
+                            onClick={() => {
+                                let csv = "Date,BatchID,Intent,Recipient,Amount,Symbol,Status,Error\n";
+                                const timestamp = new Date().toISOString();
+                                props.data.results.filter((r: any) => !r.success).forEach((r: any) => {
+                                    csv += `${timestamp},${props.data.agentId},${r.tx.intent},${r.tx.recipient},${r.tx.amount},${r.tx.symbol || 'VCN'},FAILED,"${r.error || ''}"\n`;
+                                });
+                                const uri = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+                                const link = document.createElement("a");
+                                link.setAttribute("href", uri);
+                                link.setAttribute("download", `Remediation_List_${props.data.agentId}.csv`);
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }}
+                            class="flex-1 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-red-500/20 flex items-center justify-center gap-2"
+                        >
+                            <RefreshCw class="w-3.5 h-3.5" /> Remediation CSV
+                        </button>
+                    </Show>
+                    <button
+                        onClick={props.onViewDetail}
+                        class="flex-1 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10 active:scale-[0.98]"
+                    >
+                        Detailed Log
+                    </button>
+                </div>
             </div>
         </div>
     );

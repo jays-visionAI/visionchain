@@ -150,24 +150,35 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                                 onInput={(e) => props.setRecipientAddress(e.currentTarget.value)}
                                                                 class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
                                                             />
-                                                            <Show when={props.recipientAddress().trim() && !ethers.isAddress(props.recipientAddress().trim()) && (props.recipientAddress().includes(',') || props.recipientAddress().includes('&') || props.recipientAddress().includes('+') || (props.recipientAddress().trim().split(/\s+/).length > 1))}>
+                                                            <Show when={props.recipientAddress().trim() && !ethers.isAddress(props.recipientAddress().trim()) && (props.recipientAddress().includes(',') || props.recipientAddress().includes('&') || props.recipientAddress().includes('+') || props.recipientAddress().includes('/') || (props.recipientAddress().trim().split(/\s+/).length > 1))}>
                                                                 <button
                                                                     onClick={() => {
                                                                         const raw = props.recipientAddress().trim();
-                                                                        let parts = raw.split(/[,\&+]/).map(a => a.trim()).filter(Boolean);
+                                                                        // Split by various separators
+                                                                        let parts = raw.split(/[,\/&+]+/).map(a => a.trim()).filter(Boolean);
 
                                                                         if (parts.length <= 1 && raw.split(/\s+/).length > 1) {
                                                                             parts = raw.split(/\s+/).map(a => a.trim()).filter(Boolean);
                                                                         }
 
                                                                         const rawAmount = props.sendAmount().replace(/,/g, '');
-                                                                        const batchStr = parts.map(p => `${p}, , ${rawAmount}`).join('\n');
+                                                                        // Build standardized batch strings
+                                                                        const batchStr = parts.map(p => {
+                                                                            // Try to see if part contains its own amount e.g. "Alice 30"
+                                                                            const subParts = p.split(/\s+/);
+                                                                            if (subParts.length >= 2 && !isNaN(parseFloat(subParts[subParts.length - 1]))) {
+                                                                                const amt = subParts.pop();
+                                                                                return `${subParts.join(' ')}, , ${amt}`;
+                                                                            }
+                                                                            return `${p}, , ${rawAmount}`;
+                                                                        }).join('\n');
+
                                                                         props.setBatchInput(batchStr);
                                                                         props.setActiveFlow('batch_send');
                                                                     }}
-                                                                    class="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all animate-bounce shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center gap-2 z-20 border border-blue-400/50"
+                                                                    class="absolute right-2 top-1/2 -translate-y-1/2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-[10px] font-black px-4 py-2.5 rounded-xl transition-all animate-pulse shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center gap-2 z-20 border border-blue-400/50"
                                                                 >
-                                                                    <Layers class="w-4 h-4" /> Multi-Detect! Switch to Batch &rarr;
+                                                                    <Sparkles class="w-3.5 h-3.5" /> Multi-Detect! Switch to Batch &rarr;
                                                                 </button>
                                                             </Show>
                                                         </div>
@@ -331,87 +342,140 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                 <Match when={props.activeFlow() === 'batch_send'}>
                                     <div class="space-y-4">
                                         <div class="flex justify-between items-center mb-2">
-                                            <span class="text-[11px] font-black text-purple-400 uppercase tracking-widest">Batch Transfer (Excel)</span>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-[11px] font-black text-purple-400 uppercase tracking-widest">Architect Batch Mode</span>
+                                                <Show when={props.parsedBatchTransactions().length > 0}>
+                                                    <span class="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] font-bold rounded-lg border border-purple-500/20">{props.parsedBatchTransactions().length} Tasks</span>
+                                                </Show>
+                                            </div>
                                             <button
                                                 onClick={() => props.setActiveFlow('send')}
-                                                class="text-[10px] font-bold text-gray-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
+                                                class="text-[10px] font-bold text-gray-500 hover:text-blue-400 uppercase tracking-widest transition-colors flex items-center gap-1.5"
                                             >
-                                                &larr; Switch to Single Mode
+                                                <ArrowUpRight class="w-3 h-3" /> Single Transfer
                                             </button>
                                         </div>
 
                                         <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                                            <div>
-                                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
-                                                <div class="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/50 rounded-xl relative">
-                                                    <div class="text-xs font-bold text-white flex-1">VCN</div>
-                                                    <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/20 px-2 py-1 rounded-lg">
-                                                        Available: {props.getAssetData('VCN').liquidBalance.toLocaleString()}
-                                                    </span>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2 opacity-60">Selected Asset</label>
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="w-6 h-6 rounded-lg bg-blue-500 flex items-center justify-center text-[10px] font-black">V</div>
+                                                        <span class="text-sm font-bold text-white">VCN Token</span>
+                                                    </div>
+                                                </div>
+                                                <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+                                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1 opacity-60">Account Balance</label>
+                                                    <div class="text-sm font-bold text-green-400">{props.getAssetData('VCN').liquidBalance.toLocaleString()} VCN</div>
                                                 </div>
                                             </div>
 
-                                            <div>
-                                                <div class="flex justify-between items-center mb-2 px-1">
-                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bulk Input</label>
-                                                    <button
-                                                        class="text-[10px] text-purple-400 cursor-pointer hover:underline font-bold"
-                                                        onClick={() => {
-                                                            const randomHeader = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-                                                            props.setBatchInput(props.batchInput() ? props.batchInput() + "\n" : "" + `User${Math.floor(Math.random() * 99)}, ${randomHeader}, ${(Math.random() * 100).toFixed(0)}`);
-                                                        }}
-                                                    >
-                                                        + Add Test Row
-                                                    </button>
+                                            <div class="group">
+                                                <div class="flex justify-between items-center mb-1.5 px-1">
+                                                    <label class="text-[11px] font-black text-gray-400 uppercase tracking-widest">Input Stream</label>
+                                                    <div class="flex items-center gap-3">
+                                                        <button
+                                                            class="text-[10px] text-gray-500 hover:text-white transition-colors flex items-center gap-1"
+                                                            onClick={() => props.setBatchInput("")}
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                        <button
+                                                            class="text-[10px] text-purple-400 cursor-pointer hover:underline font-bold flex items-center gap-1"
+                                                            onClick={() => {
+                                                                const randAddr = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+                                                                const newVal = `Pioneer, ${randAddr}, 50`;
+                                                                props.setBatchInput(props.batchInput() ? props.batchInput() + "\n" + newVal : newVal);
+                                                            }}
+                                                        >
+                                                            <Plus class="w-3 h-3" /> Sample
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <textarea
-                                                    placeholder={`Format: Name, Address, Amount\nExample: Alice, 0x742d35Cc6634C0532925a3b844Bc454e4438f44e, 50`}
-                                                    value={props.batchInput()}
-                                                    onInput={(e) => props.setBatchInput(e.currentTarget.value)}
-                                                    class="w-full h-32 bg-[#1a1a1e] border border-white/10 rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-500 outline-none focus:border-purple-500/50 transition-all resize-none leading-relaxed whitespace-pre shadow-inner"
-                                                />
+                                                <div class="relative">
+                                                    <textarea
+                                                        placeholder={`Format: Name, Address, Amount\nExample: Alice, 0x..., 50`}
+                                                        value={props.batchInput()}
+                                                        onInput={(e) => props.setBatchInput(e.currentTarget.value)}
+                                                        class="w-full h-32 bg-[#0a0a0c] border border-white/[0.08] rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-600 outline-none focus:border-purple-500/40 focus:bg-purple-500/[0.02] transition-all resize-none leading-relaxed shadow-2xl"
+                                                    />
+                                                    <div class="absolute bottom-3 right-3 opacity-20"><Layers class="w-8 h-8 text-purple-500" /></div>
+                                                </div>
                                             </div>
 
-                                            <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
-                                                <div class="grid grid-cols-12 gap-2 p-3 bg-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                                    <div class="col-span-3">Name</div>
-                                                    <div class="col-span-6">Address</div>
-                                                    <div class="col-span-3 text-right">Amount</div>
+                                            <div class="bg-black/40 rounded-3xl border border-white/[0.05] overflow-hidden shadow-xl">
+                                                <div class="grid grid-cols-12 gap-2 p-4 bg-white/[0.02] text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/[0.05]">
+                                                    <div class="col-span-5">Identity / Recipient</div>
+                                                    <div class="col-span-4">Network ID</div>
+                                                    <div class="col-span-3 text-right">Value</div>
                                                 </div>
-                                                <div class="max-h-40 overflow-y-auto custom-scrollbar">
+                                                <div class="max-h-[220px] overflow-y-auto custom-scrollbar">
                                                     <For each={props.parsedBatchTransactions()}>
-                                                        {(tx, i) => (
-                                                            <div class="grid grid-cols-12 gap-2 p-3 border-b border-white/5 hover:bg-white/5 transition-colors text-xs items-center">
-                                                                <div class="col-span-3 text-gray-300 truncate font-medium">{tx.name || `User ${i() + 1}`}</div>
-                                                                <div class="col-span-6 font-mono text-[10px] truncate" title={tx.recipient || 'Address missing'}>
-                                                                    <Show when={tx.recipient} fallback={<span class="text-amber-500/60 italic font-sans flex items-center gap-1"><AlertCircle class="w-3 h-3" /> Resolve via AI</span>}>
-                                                                        <span class="text-blue-400">{tx.recipient}</span>
-                                                                    </Show>
+                                                        {(tx, i) => {
+                                                            const colors = ['bg-blue-500', 'bg-purple-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+                                                            const colorClass = colors[i() % colors.length];
+
+                                                            return (
+                                                                <div class="grid grid-cols-12 gap-2 p-4 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center group/row">
+                                                                    <div class="col-span-5 flex items-center gap-3">
+                                                                        <div class={`w-8 h-8 rounded-full ${colorClass}/20 flex items-center justify-center text-[10px] font-black text-white border border-${colorClass}/20`}>
+                                                                            {(tx.name || 'U')[0].toUpperCase()}
+                                                                        </div>
+                                                                        <div class="flex flex-col min-w-0">
+                                                                            <span class="text-xs font-bold text-white truncate">{tx.name || `Task ${i() + 1}`}</span>
+                                                                            <Show when={tx.recipient} fallback={<span class="text-[9px] text-amber-500/80 font-medium italic flex items-center gap-1"><AlertCircle class="w-2.5 h-2.5" /> Pending Resolution</span>}>
+                                                                                <span class="text-[9px] text-gray-500 font-mono truncate opacity-60">Verified Identity</span>
+                                                                            </Show>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-span-4 font-mono text-[10px] truncate" title={tx.recipient || 'Waiting for resolution...'}>
+                                                                        <Show when={tx.recipient} fallback={<span class="px-2 py-0.5 bg-amber-500/10 text-amber-500 rounded text-[8px] font-black uppercase tracking-tighter border border-amber-500/20">Missing</span>}>
+                                                                            <span class="text-blue-400 group-hover/row:text-blue-300 transition-colors uppercase">{tx.recipient.slice(0, 6)}...{tx.recipient.slice(-4)}</span>
+                                                                        </Show>
+                                                                    </div>
+                                                                    <div class="col-span-3 text-right">
+                                                                        <div class="text-xs font-black text-white">{parseFloat(tx.amount || '0').toLocaleString()}</div>
+                                                                        <div class="text-[9px] text-gray-500 font-bold uppercase tracking-tight">VCN</div>
+                                                                    </div>
                                                                 </div>
-                                                                <div class="col-span-3 text-right font-mono font-bold text-white">{parseFloat(tx.amount || '0').toLocaleString()} {tx.symbol || 'VCN'}</div>
-                                                            </div>
-                                                        )}
+                                                            );
+                                                        }}
                                                     </For>
                                                     <Show when={props.parsedBatchTransactions().length === 0}>
-                                                        <div class="p-8 text-center text-gray-600 text-xs italic">
-                                                            No valid entries found.<br />Paste data above.
+                                                        <div class="p-12 text-center flex flex-col items-center gap-3">
+                                                            <div class="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-1">
+                                                                <Plus class="w-6 h-6 text-gray-700 rotate-45" />
+                                                            </div>
+                                                            <p class="text-gray-600 text-[11px] font-bold uppercase tracking-widest">No Executable Tasks</p>
+                                                            <p class="text-gray-700 text-[10px] max-w-[200px]">The stream is currently empty. Provide names or addresses to begin.</p>
                                                         </div>
                                                     </Show>
                                                 </div>
-                                                <div class="p-3 bg-purple-900/10 border-t border-purple-500/20 flex justify-between items-center">
-                                                    <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Total</span>
-                                                    <span class="text-sm font-bold text-white font-mono">
-                                                        {props.parsedBatchTransactions().reduce((acc, curr) => acc + parseFloat(curr.amount || '0'), 0).toLocaleString()} VCN
-                                                    </span>
+                                                <div class="p-4 bg-gradient-to-r from-purple-900/10 to-transparent border-t border-white/[0.05] flex justify-between items-center">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Consolidated Batch Sum</span>
+                                                    </div>
+                                                    <div class="flex flex-col items-end">
+                                                        <span class="text-lg font-black text-white font-mono leading-none">
+                                                            {props.parsedBatchTransactions().reduce((acc, curr) => acc + parseFloat(curr.amount || '0'), 0).toLocaleString()} <span class="text-xs text-purple-400 ml-1">VCN</span>
+                                                        </span>
+                                                        <span class="text-[9px] text-gray-600 font-bold uppercase mt-1">Estimating Network Fee...</span>
+                                                    </div>
                                                 </div>
                                             </div>
 
                                             <button
                                                 disabled={props.parsedBatchTransactions().length === 0}
                                                 onClick={props.handleBatchTransaction}
-                                                class="w-full py-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-purple-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                class="w-full group/btn relative py-5 bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 text-white font-black rounded-3xl transition-all shadow-[0_10px_30px_rgba(79,70,229,0.3)] active:scale-[0.98] mt-4 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed overflow-hidden"
                                             >
-                                                Process Batch ({props.parsedBatchTransactions().length})
+                                                <div class="absolute inset-0 bg-white/10 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-500" />
+                                                <div class="relative flex items-center justify-center gap-3 text-sm uppercase tracking-widest">
+                                                    <Layers class="w-4 h-4" />
+                                                    Execute Multi-Chain Batch ({props.parsedBatchTransactions().length})
+                                                </div>
                                             </button>
                                         </div>
                                     </div>
