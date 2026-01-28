@@ -30,8 +30,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
 
     const invitationMessage = () => {
         const url = referralUrl();
-        const userName = props.userProfile().name || props.userProfile().email?.split('@')[0] || 'User';
-        return `${url} Invitation Link from ${userName}`;
+        return `Join Vision Chain\n${url}`;
     };
 
     onMount(async () => {
