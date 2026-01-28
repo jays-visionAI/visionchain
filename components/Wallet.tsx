@@ -98,6 +98,7 @@ import { WalletSettings } from './wallet/WalletSettings';
 import { WalletNotifications } from './wallet/WalletNotifications';
 import { WalletReferral } from './wallet/WalletReferral';
 import { WalletActivity } from './wallet/WalletActivity';
+import { WalletFlowModals } from './wallet/WalletFlowModals';
 import { WalletSend } from './wallet/WalletSend';
 import { WalletReceive } from './wallet/WalletReceive';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
@@ -1896,6 +1897,38 @@ Format:
 
                 if (intentData.intent === 'send') {
                     console.log("Starting Send Flow with:", intentData);
+
+                    // AUTO-DETECT BATCH MODE: If recipient or amount is an array, or if recipient string contains commas/newlines
+                    const rawRecipient = String(intentData.recipient || '');
+                    const isMulti = Array.isArray(intentData.recipient) ||
+                        Array.isArray(intentData.amount) ||
+                        Array.isArray(intentData.transactions) ||
+                        rawRecipient.includes(',') ||
+                        rawRecipient.includes('\n');
+
+                    if (isMulti) {
+                        console.log("[AI] Multi-recipient detected in 'send' intent. Switching to batch mode.");
+                        let batchStr = "";
+                        if (intentData.transactions) {
+                            batchStr = intentData.transactions.map((tx: any) => `${tx.name || ''}, ${tx.recipient || ''}, ${tx.amount || ''}`).join('\n');
+                        } else if (Array.isArray(intentData.recipient)) {
+                            batchStr = intentData.recipient.map((r: any, i: number) => {
+                                const amt = Array.isArray(intentData.amount) ? intentData.amount[i] : intentData.amount;
+                                return `, ${r}, ${amt || ''}`;
+                            }).join('\n');
+                        } else if (rawRecipient.includes(',') || rawRecipient.includes('\n')) {
+                            const addresses = rawRecipient.split(/[,\n]/).map(a => a.trim()).filter(Boolean);
+                            batchStr = addresses.map(a => `, ${a}, ${intentData.amount || ''}`).join('\n');
+                        }
+
+                        if (batchStr) {
+                            setBatchInput(batchStr);
+                            setActiveFlow('batch_send');
+                            setChatLoading(false);
+                            return;
+                        }
+                    }
+
                     setRecipientAddress(String(intentData.recipient || ''));
                     // Sanitize amount - remove any non-numeric chars except dot
                     const cleanAmount = (intentData.amount || '').toString().replace(/[^0-9.]/g, '');
@@ -2183,15 +2216,14 @@ Format:
                             onClick={() => setSidebarOpen(true)}
                         >
                             <div
-                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[25px] h-[50px] bg-[#33333b]/95 border border-white/20 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center transition-all duration-300 group-hover:w-[32px] group-hover:bg-[#40404a] group-hover:border-cyan-500/40 group-hover:shadow-[4px_0_20px_rgba(6,182,212,0.2)]"
-                                style="box-shadow: 4px 0 15px rgba(0,0,0,0.5);"
+                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[28px] h-[56px] bg-blue-950/80 border border-blue-400/30 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[0_0_25px_rgba(59,130,246,0.6)] flex items-center justify-center transition-all duration-300 group-hover:w-[36px] group-hover:bg-blue-900/90 group-hover:border-blue-400/50 group-hover:shadow-[0_0_35px_rgba(59,130,246,0.8)]"
                             >
                                 <div class="flex flex-col gap-1 items-center">
-                                    <div class="w-1 h-1 rounded-full bg-white/30 group-hover:bg-cyan-400 group-hover:scale-110 transition-all duration-300" />
-                                    <div class="w-1 h-3 rounded-full bg-white/50 group-hover:bg-cyan-400 group-hover:h-4 transition-all duration-300" />
-                                    <div class="w-1 h-1 rounded-full bg-white/30 group-hover:bg-cyan-400 group-hover:scale-110 transition-all duration-300" />
+                                    <div class="w-1 h-1 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-[0_0_8px_rgba(147,197,253,0.8)]" />
+                                    <div class="w-1 h-3 rounded-full bg-blue-400 group-hover:bg-white group-hover:h-5 transition-all duration-300 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
+                                    <div class="w-1 h-1 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-[0_0_8px_rgba(147,197,253,0.8)]" />
                                 </div>
-                                <ChevronRight class="w-3 h-3 text-white/50 group-hover:text-cyan-400 transition-colors ml-0.5" />
+                                <ChevronRight class="w-3.5 h-3.5 text-blue-200 group-hover:text-white transition-colors ml-0.5 animate-pulse" />
                             </div>
                         </div>
                     </Show>
@@ -3319,708 +3351,39 @@ Format:
 
                         {/* Interaction Modals */}
                         <Presence>
-                            <Show when={activeFlow()}>
-                                <div class="fixed inset-0 z-[100] flex items-center justify-center px-4 p-4">
-                                    <Motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        onClick={() => setActiveFlow(null)}
-                                        class="absolute inset-0 bg-black/80 backdrop-blur-md"
-                                    />
-                                    <Motion.div
-                                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                        class="relative w-full max-w-lg bg-[#111113] border border-white/[0.08] rounded-[32px] overflow-hidden shadow-2xl"
-                                    >
-                                        <div class="p-8">
-                                            <div class="flex items-center justify-between mb-8">
-                                                <h3 class="text-2xl font-bold text-white flex items-center gap-3 capitalize">
-                                                    <Show when={activeFlow() === 'send'}><div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center"><ArrowUpRight class="w-5 h-5 text-blue-400" /></div>Send Tokens</Show>
-                                                    <Show when={activeFlow() === 'receive'}><div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center"><ArrowDownLeft class="w-5 h-5 text-green-400" /></div>Receive Tokens</Show>
-                                                    <Show when={activeFlow() === 'swap'}><div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><RefreshCw class="w-5 h-5 text-purple-400" /></div>Swap Assets</Show>
-                                                    <Show when={activeFlow() === 'stake'}><div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center"><TrendingUp class="w-5 h-5 text-indigo-400" /></div>Stake VCN</Show>
-                                                    <Show when={activeFlow() === 'multi'}><div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center"><Layers class="w-5 h-5 text-blue-400" /></div>Multi-Transaction</Show>
-                                                    <Show when={networkMode() === 'testnet'}>
-                                                        <span class="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] rounded-md font-black uppercase tracking-widest">Testnet</span>
-                                                    </Show>
-                                                </h3>
-                                                <button onClick={() => setActiveFlow(null)} class="p-2 hover:bg-white/10 rounded-full transition-colors"><Plus class="w-6 h-6 text-gray-500 rotate-45" /></button>
-                                            </div>
-                                            <div class="space-y-6">
-                                                <Show when={activeFlow() === 'stake'}>
-                                                    <div class="space-y-4">
-                                                        <Show when={flowStep() === 1}>
-                                                            <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                                                <div>
-                                                                    <div class="flex items-center justify-between mb-2"><label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Stake Amount</label><span class="text-[10px] font-bold text-blue-400">Balance: {getAssetData('VCN').liquidBalance.toLocaleString()} VCN</span></div>
-                                                                    <div class="relative">
-                                                                        <input type="number" placeholder="0.00" value={stakeAmount()} onInput={(e) => setStakeAmount(e.currentTarget.value)} class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-2xl font-bold text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all font-mono" />
-                                                                        <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">VCN</div>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="space-y-3">
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block px-1">Choose Yield Tier</label>
-                                                                    <div class="grid grid-cols-3 gap-3">
-                                                                        {[
-                                                                            { d: 30, a: '4.5%', l: 'Flex' },
-                                                                            { d: 90, a: '8.2%', l: 'Std' },
-                                                                            { d: 180, a: '12.5%', l: 'Pro' }
-                                                                        ].map((o) => (
-                                                                            <button class="flex flex-col items-center gap-1 p-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group">
-                                                                                <div class="text-[10px] font-black text-gray-600 uppercase mb-1">{o.l}</div>
-                                                                                <div class="text-xs font-bold text-white uppercase">{o.d} Days</div>
-                                                                                <div class="text-[10px] font-black text-green-400">{o.a} APY</div>
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="p-5 bg-blue-500/5 border border-blue-500/10 rounded-2xl relative overflow-hidden group">
-                                                                    <div class="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                                    <div class="flex items-center justify-between mb-1 relative z-10">
-                                                                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Est. Rewards</span>
-                                                                        <span class="text-lg font-bold text-green-400">
-                                                                            +{stakeAmount() ? (Number(stakeAmount()) * 0.125).toFixed(2) : '0.00'} VCN
-                                                                        </span>
-                                                                    </div>
-                                                                    <div class="text-[10px] text-gray-500 italic relative z-10">Rewards calculated based on Premium Tier (12.5% APY)</div>
-                                                                </div>
-
-                                                                <button
-                                                                    disabled={!stakeAmount() || Number(stakeAmount()) <= 0}
-                                                                    onClick={() => setFlowStep(2)}
-                                                                    class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] uppercase tracking-widest text-sm"
-                                                                >
-                                                                    Review Stake
-                                                                </button>
-                                                            </div>
-                                                        </Show>
-                                                        <Show when={flowStep() === 2}>
-                                                            <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                                                <div class="flex flex-col items-center text-center py-4"><div class="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4"><TrendingUp class="w-8 h-8" /></div><h4 class="text-xl font-bold text-white">Confirm Staking</h4><p class="text-gray-500 text-sm mt-1">You are locking {stakeAmount()} VCN for 180 days</p></div>
-                                                                <div class="flex gap-3"><button onClick={() => setFlowStep(1)} class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl transition-all">Back</button><button onClick={handleTransaction} disabled={flowLoading()} class="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2"><Show when={flowLoading()} fallback="Confirm Stake"><RefreshCw class="w-4 h-4 animate-spin" />Staking...</Show></button></div>
-                                                            </div>
-                                                        </Show>
-                                                        <Show when={flowStep() === 3}>
-                                                            <div class="flex flex-col items-center py-8 text-center animate-in zoom-in-95 duration-500"><div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl mb-6"><Check class="w-10 h-10 text-white" /></div><h4 class="text-2xl font-bold text-white mb-2">Staking Successful!</h4><button onClick={resetFlow} class="w-full py-4 bg-white text-black font-bold rounded-2xl">Done</button></div>
-                                                        </Show>
-                                                    </div>
-                                                </Show>
-
-                                                <Show when={activeFlow() === 'send'}>
-                                                    <div class="space-y-4">
-                                                        {/* Header: Single Send */}
-                                                        <div class="flex justify-between items-center mb-2">
-                                                            <span class="text-[11px] font-black text-blue-400 uppercase tracking-widest">Single Transfer</span>
-                                                            <button
-                                                                onClick={() => setActiveFlow('batch_send')}
-                                                                class="text-[10px] font-bold text-gray-500 hover:text-purple-400 uppercase tracking-widest transition-colors"
-                                                            >
-                                                                Switch to Batch Mode &rarr;
-                                                            </button>
-                                                        </div>
-
-                                                        {/* Step 1: Destination and Token */}
-                                                        <Show when={flowStep() === 1}>
-                                                            <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-
-                                                                {/* Asset Selection (Common) */}
-                                                                <div>
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
-                                                                    <div class="grid grid-cols-2 gap-2">
-                                                                        <For each={['VCN']}>
-                                                                            {(symbol) => (
-                                                                                <div class="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/50 rounded-xl relative">
-                                                                                    <div class="text-xs font-bold text-white flex-1">{symbol}</div>
-                                                                                    <span
-                                                                                        onClick={() => {
-                                                                                            const max = getAssetData(selectedToken()).liquidBalance;
-                                                                                            setSendAmount(max.toLocaleString());
-                                                                                            fetchPortfolioData();
-                                                                                        }}
-                                                                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors flex items-center gap-1 bg-blue-500/20 px-2 py-1 rounded-lg"
-                                                                                    >
-                                                                                        Available: {getAssetData(selectedToken()).liquidBalance.toLocaleString()} <RefreshCw class="w-3 h-3" />
-                                                                                    </span>
-                                                                                </div>
-                                                                            )}
-                                                                        </For>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Single Send Inputs */}
-                                                                <div>
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Recipient Address</label>
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="0x..."
-                                                                        value={recipientAddress()}
-                                                                        onInput={(e) => setRecipientAddress(e.currentTarget.value)}
-                                                                        class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${recipientAddress() && !ethers.isAddress(recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
-                                                                    />
-                                                                    <Show when={recipientAddress() && !ethers.isAddress(recipientAddress())}>
-                                                                        <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address</p>
-                                                                    </Show>
-                                                                </div>
-                                                                <div>
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Amount</label>
-                                                                    <div class="relative">
-                                                                        <input
-                                                                            type="text"
-                                                                            placeholder="0.00"
-                                                                            value={sendAmount()}
-                                                                            onInput={(e) => {
-                                                                                const raw = e.currentTarget.value.replace(/,/g, '');
-                                                                                if (!isNaN(Number(raw)) || raw === '.') {
-                                                                                    const parts = raw.split('.');
-                                                                                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                                                                    setSendAmount(parts.join('.'));
-                                                                                }
-                                                                            }}
-                                                                            class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 text-white placeholder:text-gray-600 outline-none focus:border-blue-500/30 transition-all text-xl font-bold font-mono"
-                                                                        />
-                                                                        <div class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">{selectedToken()}</div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <button
-                                                                    disabled={!ethers.isAddress(recipientAddress()) || !sendAmount() || Number(sendAmount().replace(/,/g, '')) <= 0}
-                                                                    onClick={() => setFlowStep(2)}
-                                                                    class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                >
-                                                                    Review Transaction
-                                                                </button>
-                                                            </div>
-                                                        </Show>
-
-                                                        {/* Step 2: Confirmation (Single) */}
-                                                        <Show when={flowStep() === 2}>
-                                                            <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                                                <div class="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-6 text-center">
-                                                                    <div class="text-[11px] font-bold text-blue-400 uppercase tracking-widest mb-2">
-                                                                        <Show when={isSchedulingTimeLock()} fallback="You are sending">Agent is Scheduling</Show>
-                                                                    </div>
-                                                                    <div class="text-4xl font-bold text-white mb-1">{sendAmount()} {selectedToken()}</div>
-                                                                    <div class="text-sm text-gray-500">≈ ${(Number(sendAmount().replace(/,/g, '')) * getAssetData(selectedToken()).price).toFixed(2)}</div>
-                                                                </div>
-
-                                                                <div class="space-y-3">
-                                                                    <div class="flex justify-between text-sm">
-                                                                        <span class="text-gray-500">To</span>
-                                                                        <span class="text-white font-mono">{recipientAddress().slice(0, 6)}...{recipientAddress().slice(-4)}</span>
-                                                                    </div>
-                                                                    <div class="flex justify-between text-sm">
-                                                                        <span class="text-gray-500">Network Fee</span>
-                                                                        <span class="text-green-400 font-bold">0.00021 VCN ($0.45)</span>
-                                                                    </div>
-                                                                    <div class="flex justify-between text-sm">
-                                                                        <span class="text-gray-500">Estimated {isSchedulingTimeLock() ? 'Execution' : 'Time'}</span>
-                                                                        <span class="text-white font-bold">
-                                                                            <Show when={isSchedulingTimeLock()} fallback="~12 seconds">
-                                                                                In {Math.ceil(lockDelaySeconds() / 60)} minutes (Agent Lock)
-                                                                            </Show>
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="flex gap-4">
-                                                                    <button onClick={() => setFlowStep(1)} class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl transition-all">Back</button>
-                                                                    <button
-                                                                        onClick={handleTransaction}
-                                                                        disabled={flowLoading()}
-                                                                        class="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2"
-                                                                    >
-                                                                        <Show when={flowLoading()} fallback="Confirm & Send">
-                                                                            <RefreshCw class="w-4 h-4 animate-spin" />
-                                                                            Sending...
-                                                                        </Show>
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </Show>
-
-                                                        {/* Step 3: Result */}
-                                                        <Show when={flowStep() === 3}>
-                                                            <div class="py-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
-                                                                <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30 mb-6">
-                                                                    <Show when={isSchedulingTimeLock()} fallback={<Check class="w-10 h-10 text-white" />}>
-                                                                        <Clock class="w-10 h-10 text-white" />
-                                                                    </Show>
-                                                                </div>
-                                                                <h4 class="text-2xl font-bold text-white mb-2">
-                                                                    {isSchedulingTimeLock() ? 'Agent Scheduled!' : 'Transaction Sent!'}
-                                                                </h4>
-                                                                <div class="mb-4 text-3xl font-black text-blue-400">
-                                                                    {sendAmount()} {selectedToken()}
-                                                                </div>
-                                                                <div class="mb-6 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
-                                                                    <div class="px-4 py-4 space-y-3">
-                                                                        <div class="flex items-center justify-between text-xs">
-                                                                            <span class="text-gray-500 font-bold uppercase tracking-wider">Time</span>
-                                                                            <span class="text-gray-300 font-mono tracking-tight">{new Date().toLocaleString()}</span>
-                                                                        </div>
-                                                                        <div class="flex items-center justify-between text-xs">
-                                                                            <span class="text-gray-500 font-bold uppercase tracking-wider">From</span>
-                                                                            <span class="text-blue-400 font-mono tracking-tight">{walletAddress().slice(0, 8)}...{walletAddress().slice(-8)}</span>
-                                                                        </div>
-                                                                        <div class="flex items-center justify-between text-xs">
-                                                                            <span class="text-gray-500 font-bold uppercase tracking-wider">To</span>
-                                                                            <span class="text-blue-400 font-mono tracking-tight">{recipientAddress().slice(0, 8)}...{recipientAddress().slice(-8)}</span>
-                                                                        </div>
-
-                                                                        <div class="h-px bg-white/5 w-full my-1"></div>
-
-                                                                        <div class="space-y-1.5 text-left">
-                                                                            <div class="flex items-center justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                                                <div class="flex items-center gap-2">
-                                                                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                                                                                    Transaction ID
-                                                                                </div>
-                                                                                <button
-                                                                                    onClick={async () => {
-                                                                                        const success = await copyToClipboard(lastTxHash());
-                                                                                        if (success) {
-                                                                                            setCopied(true);
-                                                                                            setTimeout(() => setCopied(false), 2000);
-                                                                                        }
-                                                                                    }}
-                                                                                    class="hover:text-white text-gray-500 transition-colors flex items-center gap-1.5 group cursor-pointer"
-                                                                                >
-                                                                                    {copied() ? 'Copied!' : 'Copy'}
-                                                                                    <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
-                                                                                </button>
-                                                                            </div>
-                                                                            <div class="text-[11px] font-mono text-gray-400 break-all leading-relaxed select-all hover:text-white transition-colors">{lastTxHash()}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div class="w-full space-y-3">
-                                                                    <a
-                                                                        href={`/visionscan?tx=${lastTxHash()}`}
-                                                                        target="_blank"
-                                                                        class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none"
-                                                                    >
-                                                                        View on Explorer
-                                                                    </a>
-                                                                    <button
-                                                                        onClick={resetFlow}
-                                                                        class="w-full py-4 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90"
-                                                                    >
-                                                                        Done
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </Show>
-                                                    </div>
-                                                </Show>
-
-                                                {/* NEW: Batch Send Flow */}
-                                                <Show when={activeFlow() === 'batch_send'}>
-                                                    <div class="space-y-4">
-                                                        {/* Header: Batch Send */}
-                                                        <div class="flex justify-between items-center mb-2">
-                                                            <span class="text-[11px] font-black text-purple-400 uppercase tracking-widest">Batch Transfer (Excel)</span>
-                                                            <button
-                                                                onClick={() => setActiveFlow('send')}
-                                                                class="text-[10px] font-bold text-gray-500 hover:text-blue-400 uppercase tracking-widest transition-colors"
-                                                            >
-                                                                &larr; Switch to Single Mode
-                                                            </button>
-                                                        </div>
-
-                                                        <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                                                            {/* Asset Selection (Simplified for Batch) */}
-                                                            <div>
-                                                                <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
-                                                                <div class="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/50 rounded-xl relative">
-                                                                    <div class="text-xs font-bold text-white flex-1">VCN</div>
-                                                                    <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/20 px-2 py-1 rounded-lg">
-                                                                        Available: {getAssetData('VCN').liquidBalance.toLocaleString()}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Batch Logic */}
-                                                            <div>
-                                                                <div class="flex justify-between items-center mb-2 px-1">
-                                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Bulk Input</label>
-                                                                    <button
-                                                                        class="text-[10px] text-purple-400 cursor-pointer hover:underline font-bold"
-                                                                        onClick={() => {
-                                                                            const randomHeader = "0x" + Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-                                                                            setBatchInput(prev => (prev ? prev + "\n" : "") + `User${Math.floor(Math.random() * 99)}, ${randomHeader}, ${(Math.random() * 100).toFixed(0)}`);
-                                                                        }}
-                                                                    >
-                                                                        + Add Test Row
-                                                                    </button>
-                                                                </div>
-                                                                <textarea
-                                                                    placeholder={`Format: Name, Address, Amount\nExample: Alice, 0x742d35Cc6634C0532925a3b844Bc454e4438f44e, 50`}
-                                                                    value={batchInput()}
-                                                                    onInput={(e) => setBatchInput(e.currentTarget.value)}
-                                                                    class="w-full h-32 bg-[#1a1a1e] border border-white/10 rounded-2xl p-4 text-xs font-mono text-white placeholder:text-gray-500 outline-none focus:border-purple-500/50 transition-all resize-none leading-relaxed whitespace-pre shadow-inner"
-                                                                />
-                                                            </div>
-
-                                                            {/* Grid View of Parsed Data */}
-                                                            <div class="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
-                                                                <div class="grid grid-cols-12 gap-2 p-3 bg-white/5 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                                                    <div class="col-span-3">Name</div>
-                                                                    <div class="col-span-6">Address</div>
-                                                                    <div class="col-span-3 text-right">Amount</div>
-                                                                </div>
-                                                                <div class="max-h-40 overflow-y-auto custom-scrollbar">
-                                                                    <For each={parsedBatchTransactions()}>
-                                                                        {(tx, i) => (
-                                                                            <div class="grid grid-cols-12 gap-2 p-3 border-b border-white/5 hover:bg-white/5 transition-colors text-xs items-center">
-                                                                                <div class="col-span-3 text-gray-300 truncate font-medium">{tx.name || `User ${i() + 1}`}</div>
-                                                                                <div class="col-span-6 font-mono text-[10px] text-blue-400 truncate" title={tx.recipient}>{tx.recipient}</div>
-                                                                                <div class="col-span-3 text-right font-mono font-bold text-white">{parseFloat(tx.amount || '0').toLocaleString()} {tx.symbol || 'VCN'}</div>
-                                                                            </div>
-                                                                        )}
-                                                                    </For>
-                                                                    <Show when={parsedBatchTransactions().length === 0}>
-                                                                        <div class="p-8 text-center text-gray-600 text-xs italic">
-                                                                            No valid entries found.<br />Paste data above.
-                                                                        </div>
-                                                                    </Show>
-                                                                </div>
-                                                                <div class="p-3 bg-purple-900/10 border-t border-purple-500/20 flex justify-between items-center">
-                                                                    <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Total</span>
-                                                                    <span class="text-sm font-bold text-white font-mono">
-                                                                        {parsedBatchTransactions().reduce((acc, curr) => acc + parseFloat(curr.amount || '0'), 0).toLocaleString()} VCN
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-
-                                                            <button
-                                                                disabled={parsedBatchTransactions().length === 0}
-                                                                onClick={handleBatchTransaction}
-                                                                class="w-full py-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-purple-500/20 active:scale-[0.98] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            >
-                                                                Process Batch ({parsedBatchTransactions().length})
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </Show>
-
-
-
-
-
-
-
-
-
-
-                                                <Show when={activeFlow() === 'receive'}>
-                                                    <div class="flex flex-col items-center gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                                        <div>
-                                                            <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-4 text-center">Select Network</label>
-                                                            <div class="flex flex-wrap justify-center gap-2">
-                                                                <For each={['Vision Chain', 'Ethereum', 'Base']}>
-                                                                    {(net) => (
-                                                                        <button
-                                                                            onClick={() => setReceiveNetwork(net)}
-                                                                            class={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all ${receiveNetwork() === net ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-white/5 border-white/5 text-gray-500 hover:border-white/10'}`}
-                                                                        >
-                                                                            {net}
-                                                                        </button>
-                                                                    )}
-                                                                </For>
-                                                            </div>
-                                                        </div>
-
-                                                        <div class="relative group">
-                                                            <div class="absolute -inset-4 bg-green-500/10 rounded-[48px] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                                            <div class="relative w-64 h-64 bg-white p-6 rounded-[40px] shadow-2xl flex flex-col items-center justify-center">
-                                                                <div class="relative w-full h-full p-2 bg-white rounded-2xl flex items-center justify-center">
-                                                                    <Show when={walletAddress()} fallback={<div class="w-full h-full bg-gray-100 animate-pulse rounded-xl" />}>
-                                                                        <img
-                                                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${walletAddress()}&margin=10&color=000000&bgcolor=FFFFFF`}
-                                                                            alt="Wallet QR Code"
-                                                                            class="w-full h-full"
-                                                                        />
-                                                                        {/* Central Logo Overlay */}
-                                                                        <div class="absolute inset-0 flex items-center justify-center">
-                                                                            <div class="w-12 h-12 bg-white rounded-xl shadow-lg border border-gray-100 flex items-center justify-center p-1.5">
-                                                                                <div class="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                                                                                    <Sparkles class="w-5 h-5 text-white" />
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </Show>
-                                                                </div>
-                                                                <div class="absolute top-4 right-4">
-                                                                    <div class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)] animate-pulse" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div class="w-full space-y-4">
-                                                            <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-[24px] text-center group active:scale-[0.99] transition-all cursor-pointer relative overflow-hidden" onClick={copyAddress}>
-                                                                <div class="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">Your {receiveNetwork()} Address</div>
-                                                                <div class="text-white font-mono break-all text-xs lg:text-sm tracking-tight leading-relaxed px-2">{walletAddress() || 'Fetching address...'}</div>
-                                                            </div>
-                                                            <button
-                                                                onClick={copyAddress}
-                                                                class="w-full py-5 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90 active:scale-[0.98] flex items-center justify-center gap-2 shadow-xl shadow-white/5"
-                                                            >
-                                                                <Show when={copied()} fallback={<><Copy class="w-5 h-5" /> Copy Address</>}>
-                                                                    <Check class="w-5 h-5 text-green-600" /> Copied!
-                                                                </Show>
-                                                            </button>
-                                                        </div>
-                                                        <p class="text-center text-[10px] font-bold text-gray-500 max-w-[280px] uppercase tracking-wider leading-relaxed">
-                                                            Only send assets supported by <span class="text-green-400">{receiveNetwork()}</span>. Other tokens will be lost.
-                                                        </p>
-                                                    </div>
-                                                </Show>
-
-                                                <Show when={activeFlow() === 'swap'}>
-                                                    <div class="space-y-4">
-                                                        <Show when={flowStep() === 1}>
-                                                            <div class="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                                                                <div class="relative">
-                                                                    {/* Pay Section */}
-                                                                    <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-[24px]">
-                                                                        <div class="flex justify-between mb-4">
-                                                                            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">You Pay</span>
-                                                                            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Balance: {getAssetData(selectedToken()).liquidBalance.toLocaleString()}</span>
-                                                                        </div>
-                                                                        <div class="flex items-center justify-between">
-                                                                            <input
-                                                                                type="number"
-                                                                                placeholder="0.0"
-                                                                                value={swapAmount()}
-                                                                                onInput={(e) => setSwapAmount(e.currentTarget.value)}
-                                                                                class="bg-transparent border-none outline-none text-2xl font-bold text-white w-1/2 font-mono"
-                                                                            />
-                                                                            <div
-                                                                                onClick={() => setSelectedToken(selectedToken() === 'ETH' ? 'VCN' : 'ETH')}
-                                                                                class="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-full border border-white/10 hover:bg-white/10 cursor-pointer transition-all"
-                                                                            >
-                                                                                <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${getAssetData(selectedToken()).symbol === 'ETH' ? 'bg-indigo-500' : 'bg-blue-500'}`}>
-                                                                                    {getAssetData(selectedToken()).symbol.slice(0, 1)}
-                                                                                </div>
-                                                                                <span class="font-bold text-white text-sm">{selectedToken()}</span>
-                                                                                <ChevronDown class="w-4 h-4 text-gray-500" />
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    {/* Switch Icon */}
-                                                                    <button
-                                                                        onClick={() => { const tmp = selectedToken(); setSelectedToken(toToken()); setToToken(tmp); }}
-                                                                        class="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-1/2 z-10 w-10 h-10 rounded-xl bg-[#111113] border border-white/[0.08] flex items-center justify-center text-white shadow-xl hover:scale-110 active:scale-95 transition-all"
-                                                                    >
-                                                                        <RefreshCw class="w-5 h-5 text-purple-400" />
-                                                                    </button>
-
-                                                                    {/* Receive Section */}
-                                                                    <div class="p-6 bg-white/[0.03] border border-white/[0.06] rounded-[24px] mt-2">
-                                                                        <div class="flex justify-between mb-4">
-                                                                            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">You Receive</span>
-                                                                            <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Balance: {getAssetData(toToken()).liquidBalance.toLocaleString()}</span>
-                                                                        </div>
-                                                                        <div class="flex items-center justify-between">
-                                                                            <div class="text-2xl font-bold text-white font-mono">
-                                                                                {swapAmount() ? (Number(swapAmount()) * (selectedToken() === 'ETH' ? 850 : 0.0011)).toFixed(4) : '0.0'}
-                                                                            </div>
-                                                                            <div
-                                                                                onClick={() => setToToken(toToken() === 'USDC' ? 'VCN' : 'USDC')}
-                                                                                class="flex items-center gap-2 px-3 py-1.5 bg-purple-500/10 rounded-full border border-purple-500/20 hover:bg-purple-500/20 cursor-pointer transition-all"
-                                                                            >
-                                                                                <div class={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${getAssetData(toToken()).symbol === 'VCN' ? 'bg-blue-500' : 'bg-green-500'}`}>
-                                                                                    {getAssetData(toToken()).symbol.slice(0, 1)}
-                                                                                </div>
-                                                                                <span class="font-bold text-white text-sm">{toToken()}</span>
-                                                                                <ChevronDown class="w-4 h-4 text-gray-500" />
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="px-2 py-2 flex items-center justify-between">
-                                                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Exchange Rate</span>
-                                                                    <span class="text-[10px] font-black text-white font-mono uppercase tracking-widest">
-                                                                        1 {selectedToken()} ={selectedToken() === 'ETH' ? '850.42' : '0.0011'} {toToken()}
-                                                                    </span>
-                                                                </div>
-
-                                                                <button
-                                                                    disabled={!swapAmount() || Number(swapAmount()) <= 0}
-                                                                    onClick={() => setFlowStep(2)}
-                                                                    class="w-full py-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-purple-500/20 active:scale-[0.98]"
-                                                                >
-                                                                    Review Swap
-                                                                </button>
-                                                            </div>
-                                                        </Show>
-
-                                                        {/* Step 2: Confirm Swap */}
-                                                        <Show when={flowStep() === 2}>
-                                                            <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                                                <div class="grid grid-cols-2 gap-4">
-                                                                    <div class="p-4 bg-white/5 rounded-2xl border border-white/5">
-                                                                        <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Selling</div>
-                                                                        <div class="text-xl font-bold text-white">{swapAmount()} {selectedToken()}</div>
-                                                                    </div>
-                                                                    <div class="p-4 bg-purple-500/5 rounded-2xl border border-purple-500/10 text-right">
-                                                                        <div class="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Estimated Buy</div>
-                                                                        <div class="text-xl font-bold text-white">
-                                                                            {(Number(swapAmount()) * (selectedToken() === 'ETH' ? 850 : 0.0011)).toFixed(4)} {toToken()}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="space-y-3">
-                                                                    <div class="flex justify-between text-[11px] font-bold uppercase tracking-widest">
-                                                                        <span class="text-gray-500">Route</span>
-                                                                        <span class="text-white">Vision Router → Uniswap V3</span>
-                                                                    </div>
-                                                                    <div class="flex justify-between text-[11px] font-bold uppercase tracking-widest">
-                                                                        <span class="text-gray-500">Price Impact</span>
-                                                                        <span class="text-green-400 font-black">&lt;0.01%</span>
-                                                                    </div>
-                                                                    <div class="flex justify-between text-[11px] font-bold uppercase tracking-widest">
-                                                                        <span class="text-gray-500">Slippage Tolerance</span>
-                                                                        <span class="text-white">0.5%</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div class="flex gap-3">
-                                                                    <button
-                                                                        onClick={() => setFlowStep(1)}
-                                                                        class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-2xl transition-all"
-                                                                    >
-                                                                        Back
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={handleTransaction}
-                                                                        disabled={flowLoading()}
-                                                                        class="flex-[2] py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-2xl transition-all shadow-xl shadow-purple-500/25 flex items-center justify-center gap-2"
-                                                                    >
-                                                                        <Show when={flowLoading()} fallback="Confirm Swap">
-                                                                            <RefreshCw class="w-4 h-4 animate-spin" />
-                                                                            Processing Swap...
-                                                                        </Show>
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </Show>
-
-                                                        {/* Step 3: Result */}
-                                                        <Show when={flowStep() === 3}>
-                                                            <div class="flex flex-col items-center py-8 text-center animate-in zoom-in-95 duration-500">
-                                                                <div class="w-20 h-20 bg-purple-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/30 mb-6">
-                                                                    <Check class="w-10 h-10 text-white" />
-                                                                </div>
-                                                                <h4 class="text-2xl font-bold text-white mb-2">Swap Complete!</h4>
-                                                                <p class="text-gray-500 mb-8 max-w-xs leading-relaxed text-sm">
-                                                                    Assets have been successfully swapped and are available in your wallet.
-                                                                </p>
-                                                                <div class="w-full space-y-3">
-                                                                    <button class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl border border-white/5 transition-all">
-                                                                        View Transaction
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={resetFlow}
-                                                                        class="w-full py-4 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90"
-                                                                    >
-                                                                        Done
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </Show>
-                                                    </div>
-                                                </Show>
-
-                                                <Show when={activeFlow() === 'multi'}>
-                                                    <div class="space-y-4">
-                                                        <Show when={flowStep() === 1}>
-                                                            <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                                                <div class="p-6 bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-blue-500/20 rounded-3xl relative overflow-hidden">
-                                                                    <div class="absolute top-0 right-0 p-4 opacity-10">
-                                                                        <Layers class="w-16 h-16" />
-                                                                    </div>
-                                                                    <h4 class="text-xl font-bold text-white mb-1">Batch Execution Plan</h4>
-                                                                    <p class="text-xs text-blue-400 font-medium">Vision AI has orchestrated {multiTransactions().length} actions for you.</p>
-                                                                </div>
-
-                                                                <div class="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                                                    <For each={multiTransactions()}>
-                                                                        {(tx, i) => (
-                                                                            <div class="p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl flex items-center justify-between group hover:bg-white/[0.05] transition-all">
-                                                                                <div class="flex items-center gap-3">
-                                                                                    <div class={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.intent === 'send' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                                                                        {tx.intent === 'send' ? <ArrowUpRight class="w-5 h-5" /> : <Clock class="w-5 h-5" />}
-                                                                                    </div>
-                                                                                    <div>
-                                                                                        <div class="text-sm font-bold text-white uppercase tracking-tight">
-                                                                                            {tx.intent === 'send' ? 'Immediate Transfer' : 'Scheduled Transfer'}
-                                                                                        </div>
-                                                                                        <div class="text-[10px] font-medium text-gray-500 truncate max-w-[150px]">
-                                                                                            To: {tx.recipient.slice(0, 6)}...{tx.recipient.slice(-4)}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div class="text-right">
-                                                                                    <div class="text-sm font-black text-white">{tx.amount} {tx.symbol || 'VCN'}</div>
-                                                                                    <Show when={tx.intent === 'schedule'}>
-                                                                                        <div class="text-[10px] text-amber-500 font-bold">Time-locked</div>
-                                                                                    </Show>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                    </For>
-                                                                </div>
-
-                                                                <div class="pt-4 space-y-3">
-                                                                    <div class="flex justify-between items-center px-2">
-                                                                        <span class="text-xs font-bold text-gray-500 uppercase tracking-widest">Total Batch Value</span>
-                                                                        <span class="text-lg font-black text-white">
-                                                                            {multiTransactions().reduce((acc, tx) => acc + parseFloat(tx.amount || '0'), 0).toLocaleString()} VCN
-                                                                        </span>
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={handleTransaction}
-                                                                        class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] uppercase tracking-widest text-sm"
-                                                                    >
-                                                                        Authorize All Transactions
-                                                                    </button>
-                                                                    <p class="text-[10px] text-center text-gray-600 font-medium">Authorizing this batch will process all transactions sequentially.</p>
-                                                                </div>
-                                                            </div>
-                                                        </Show>
-
-                                                        <Show when={flowStep() === 3}>
-                                                            <div class="flex flex-col items-center py-8 text-center animate-in zoom-in-95 duration-500">
-                                                                <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30 mb-6">
-                                                                    <Check class="w-10 h-10 text-white" />
-                                                                </div>
-                                                                <h4 class="text-2xl font-bold text-white mb-2">Batch Processed!</h4>
-                                                                <p class="text-gray-500 mb-8 max-w-xs leading-relaxed text-sm">
-                                                                    All transactions in the batch have been processed. You can review each in your activity history.
-                                                                </p>
-                                                                <button
-                                                                    onClick={resetFlow}
-                                                                    class="w-full py-4 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90"
-                                                                >
-                                                                    Done
-                                                                </button>
-                                                            </div>
-                                                        </Show>
-                                                    </div>
-                                                </Show>
-                                            </div>
-                                        </div>
-                                    </Motion.div>
-                                </div>
-                            </Show>
+                            <WalletFlowModals
+                                activeFlow={activeFlow}
+                                setActiveFlow={setActiveFlow}
+                                flowStep={flowStep}
+                                setFlowStep={setFlowStep}
+                                networkMode={networkMode}
+                                selectedToken={selectedToken}
+                                setSelectedToken={setSelectedToken}
+                                toToken={toToken}
+                                setToToken={setToToken}
+                                sendAmount={sendAmount}
+                                setSendAmount={setSendAmount}
+                                swapAmount={swapAmount}
+                                setSwapAmount={setSwapAmount}
+                                recipientAddress={recipientAddress}
+                                setRecipientAddress={setRecipientAddress}
+                                stakeAmount={stakeAmount}
+                                setStakeAmount={setStakeAmount}
+                                batchInput={batchInput}
+                                setBatchInput={setBatchInput}
+                                parsedBatchTransactions={parsedBatchTransactions}
+                                multiTransactions={multiTransactions}
+                                handleTransaction={handleTransaction}
+                                handleBatchTransaction={handleBatchTransaction}
+                                flowLoading={flowLoading}
+                                resetFlow={resetFlow}
+                                walletAddress={walletAddress}
+                                getAssetData={getAssetData}
+                                lastTxHash={lastTxHash}
+                                copyToClipboard={copyToClipboard}
+                                isSchedulingTimeLock={isSchedulingTimeLock}
+                                lockDelaySeconds={lockDelaySeconds}
+                            />
                         </Presence>
                         {/* Mobile Bottom Navigation */}
                         <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[68px]">
