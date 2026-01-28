@@ -46,7 +46,7 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                     <div class="w-full">
                         <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-4 text-center">Select Destination Network</label>
                         <div class="flex flex-wrap justify-center gap-2">
-                            <For each={['Vision Chain', 'Ethereum', 'Base', 'Solana', 'Polygon']}>
+                            <For each={['Vision Chain', 'Ethereum', 'Polygon']}>
                                 {(net) => (
                                     <button
                                         onClick={() => props.setReceiveNetwork(net)}
@@ -93,7 +93,7 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                             onClick={props.copyAddress}
                         >
                             <div class="absolute inset-0 bg-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">Your {props.receiveNetwork()} Public Address</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">Your Wallet Address</div>
                             <div class="text-white font-mono break-all text-sm lg:text-base tracking-tight leading-relaxed px-4 select-all">{props.walletAddress() || 'Fetching address...'}</div>
                         </div>
 
@@ -101,7 +101,7 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                             onClick={props.copyAddress}
                             class="w-full py-6 bg-white text-black font-black rounded-2xl transition-all hover:bg-white/90 active:scale-[0.98] flex items-center justify-center gap-3 shadow-2xl shadow-white/5 uppercase tracking-widest text-sm"
                         >
-                            <Show when={props.copied()} fallback={<><Copy class="w-5 h-5" /> Copy Public Address</>}>
+                            <Show when={props.copied()} fallback={<><Copy class="w-5 h-5" /> Copy Your Address</>}>
                                 <Check class="w-5 h-5 text-green-600" /> Copied to Clipboard
                             </Show>
                         </button>
