@@ -1,4 +1,4 @@
-import { createSignal, createEffect, For, Show } from 'solid-js';
+import { createSignal, createEffect, createMemo, For, Show } from 'solid-js';
 import { Users, TrendingUp, DollarSign, Calendar, Search, ArrowRight, UserPlus, Calculator, Trophy } from 'lucide-solid';
 import { getFirebaseDb, UserData, ReferralConfig, getReferralConfig } from '../../services/firebaseService';
 import { collection, query, getDocs, limit, where, orderBy, doc, updateDoc, setDoc } from 'firebase/firestore';
@@ -10,7 +10,7 @@ export default function AdminReferrals() {
     const [loading, setLoading] = createSignal(true);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [showConfigModal, setShowConfigModal] = createSignal(false);
-    const [configTab, setConfigTab] = createSignal<'general' | 'levels' | 'ranks'>('general');
+    const [configTab, setConfigTab] = createSignal<'general' | 'levels' | 'ranks' | 'simulation'>('general');
 
     // Form States
     const [newTier1, setNewTier1] = createSignal(0.10);
@@ -19,6 +19,40 @@ export default function AdminReferrals() {
     const [newXpPerLevel, setNewXpPerLevel] = createSignal(0.05);
     const [lvlThresholds, setLvlThresholds] = createSignal<any[]>([]);
     const [ranks, setRanks] = createSignal<any[]>([]);
+
+    const simulationData = createMemo(() => {
+        const data = [];
+        let cumulativeInvites = 0;
+        const sortedRanks = [...ranks()].sort((a, b) => b.minLvl - a.minLvl);
+
+        for (let l = 1; l <= 100; l++) {
+            // Find current rank
+            const rank = sortedRanks.find(r => l >= r.minLvl)
+                || { name: 'None', color: 'text-gray-500' };
+
+            // Find invites needed to get to the NEXT level (the requirement at current level)
+            const threshold = lvlThresholds().find(t => l >= t.minLevel && l <= t.maxLevel);
+            const invitesToNext = threshold ? threshold.invitesPerLevel : 0;
+
+            // Reward Calculation
+            const currentMultiplier = newBaseXp() + (l - 1) * newXpPerLevel();
+            const r1 = (newTier1() * currentMultiplier * 100).toFixed(2) + '%';
+            const r2 = (newTier2() * currentMultiplier * 100).toFixed(2) + '%';
+
+            data.push({
+                level: l,
+                rankName: rank.name,
+                rankColor: rank.color,
+                invitesToNext,
+                cumulative: cumulativeInvites,
+                reward1: r1,
+                reward2: r2
+            });
+
+            cumulativeInvites += invitesToNext;
+        }
+        return data;
+    });
 
     const fetchData = async () => {
         setLoading(true);
@@ -290,6 +324,12 @@ export default function AdminReferrals() {
                                 >
                                     Ranks
                                 </button>
+                                <button
+                                    onClick={() => setConfigTab('simulation')}
+                                    class={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${configTab() === 'simulation' ? 'bg-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                    Simulation
+                                </button>
                             </div>
                         </div>
 
@@ -380,6 +420,42 @@ export default function AdminReferrals() {
                                                             <td class="px-6 py-4"><input type="text" class="bg-transparent text-white font-bold w-full outline-none uppercase italic" value={row.name} onInput={(e) => handleRankChange(i(), 'name', e.currentTarget.value)} /></td>
                                                             <td class="px-6 py-4"><input type="text" class="bg-transparent text-gray-400 text-xs w-full outline-none" value={row.color} onInput={(e) => handleRankChange(i(), 'color', e.currentTarget.value)} /></td>
                                                             <td class="px-6 py-4"><input type="text" class="bg-transparent text-gray-400 text-xs w-full outline-none" value={row.iconName} onInput={(e) => handleRankChange(i(), 'iconName', e.currentTarget.value)} /></td>
+                                                        </tr>
+                                                    )}
+                                                </For>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </Show>
+
+                            {/* Simulation Tab */}
+                            <Show when={configTab() === 'simulation'}>
+                                <div class="bg-black/20 border border-white/5 rounded-[24px] overflow-hidden">
+                                    <div class="max-h-[500px] overflow-y-auto custom-scrollbar">
+                                        <table class="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr class="bg-white/5 sticky top-0 z-10">
+                                                    <th class="px-4 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest">Level</th>
+                                                    <th class="px-4 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest">Rank</th>
+                                                    <th class="px-4 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Invites Needed</th>
+                                                    <th class="px-4 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Cumulative</th>
+                                                    <th class="px-4 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right text-cyan-400">Reward 1</th>
+                                                    <th class="px-4 py-4 text-[9px] font-black text-gray-500 uppercase tracking-widest text-right text-blue-400">Reward 2</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-white/5 font-mono">
+                                                <For each={simulationData()}>
+                                                    {(row) => (
+                                                        <tr class="hover:bg-white/[0.02] transition-colors">
+                                                            <td class="px-4 py-3 text-xs font-bold text-white">Lvl {row.level}</td>
+                                                            <td class="px-4 py-3 text-[10px] font-bold uppercase italic">
+                                                                <span class={row.rankColor}>{row.rankName}</span>
+                                                            </td>
+                                                            <td class="px-4 py-3 text-xs text-center text-gray-400">+{row.invitesToNext}</td>
+                                                            <td class="px-4 py-3 text-xs text-center font-black text-white">{row.cumulative}</td>
+                                                            <td class="px-4 py-3 text-xs text-right font-black text-cyan-400">{row.reward1}</td>
+                                                            <td class="px-4 py-3 text-xs text-right font-black text-blue-400">{row.reward2}</td>
                                                         </tr>
                                                     )}
                                                 </For>
