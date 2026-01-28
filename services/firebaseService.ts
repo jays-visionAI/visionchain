@@ -280,6 +280,27 @@ export interface ReferralConfig {
     ranks: RankInfo[];
 }
 
+export interface DefiConfig {
+    stakingApr: number;
+    unbondingDays: number;
+    instantUnstakeFee: number;
+    minStakingAmount: number;
+    protocolFee: number;
+    sVcnExchangeRate: number; // 1 sVCN = ? VCN
+    totalVcnLocked: number;
+    totalSVcnIssued: number;
+}
+
+export interface StakingPosition {
+    id?: string;
+    email: string;
+    vcnAmount: number;
+    sVcnAmount: number;
+    stakingDate: string;
+    status: 'active' | 'unbonding' | 'withdrawn';
+    unbondingEndsAt?: string;
+}
+
 /**
  * Fetches the global referral configuration from Firestore.
  */
@@ -319,6 +340,47 @@ export const getReferralConfig = async (): Promise<ReferralConfig> => {
             { name: 'Visionary', minLvl: 90, color: 'text-yellow-400', bg: 'bg-yellow-500', gradient: 'from-yellow-500 to-amber-300', iconName: 'Star' }
         ]
     };
+}
+
+/**
+ * Fetches the global De-Fi configuration from Firestore.
+ */
+export const getDefiConfig = async (): Promise<DefiConfig> => {
+    try {
+        const db = getFirebaseDb();
+        const configSnap = await getDoc(doc(db, 'defi_configs', 'global'));
+        if (configSnap.exists()) {
+            return configSnap.data() as DefiConfig;
+        }
+    } catch (e) {
+        console.error("Error fetching defi config:", e);
+    }
+    // Default Fallback
+    return {
+        stakingApr: 12.5,
+        unbondingDays: 14,
+        instantUnstakeFee: 3.0,
+        minStakingAmount: 100,
+        protocolFee: 5.0,
+        sVcnExchangeRate: 1.0,
+        totalVcnLocked: 0,
+        totalSVcnIssued: 0
+    };
+}
+
+/**
+ * Updates the global De-Fi configuration.
+ */
+export const updateDefiConfig = async (config: Partial<DefiConfig>): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        const configRef = doc(db, 'defi_configs', 'global');
+        await setDoc(configRef, config, { merge: true });
+        console.log("[Firebase] Defi config updated");
+    } catch (e) {
+        console.error("Error updating defi config:", e);
+        throw e;
+    }
 }
 
 /**

@@ -16,6 +16,7 @@ export const AdminVCNDistribution = lazy(() => import('../components/admin/Admin
 export const AdminTraffic = lazy(() => import('../components/admin/AdminTraffic'));
 export const VcnSettings = lazy(() => import('../components/admin/VcnSettings'));
 export const PaymasterAdmin = lazy(() => import('../components/admin/PaymasterAdmin'));
+export const AdminDeFi = lazy(() => import('../components/admin/AdminDeFi'));
 
 // Loading spinner component
 export function PageLoader() {
@@ -176,6 +177,16 @@ export function PaymasterAdminPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <PaymasterAdmin />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+export function AdminDeFiPage() {
+    document.title = 'De-Fi Management | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminDeFi />
             </AdminLayout>
         </Suspense>
     );

@@ -16,7 +16,8 @@ import {
     Trophy,
     Activity,
     Folder,
-    UserPlus
+    UserPlus,
+    Zap
 } from 'lucide-solid';
 
 // Icon mapping for dynamic icon resolution
@@ -37,7 +38,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Trophy,
     Activity,
     Folder,
-    UserPlus
+    UserPlus,
+    Zap
 };
 
 // Menu item interface with optional children for sub-menus
@@ -109,12 +111,21 @@ export const adminMenuConfig: AdminMenuItem[] = [
         order: 4
     },
     {
+        id: 'defi',
+        path: '/adminsystem/defi',
+        label: 'De-Fi Management',
+        icon: 'Zap',
+        badge: 'NEW',
+        category: 'core',
+        order: 5
+    },
+    {
         id: 'wallet-management',
         path: '/adminsystem/wallet',
         label: 'Wallet Control',
         icon: 'Wallet',
         category: 'core',
-        order: 5
+        order: 6
     },
     {
         id: 'campaign-management',
@@ -122,7 +133,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Campaigns',
         icon: 'Trophy',
         category: 'core',
-        order: 5
+        order: 7
     },
     {
         id: 'system-activity',
@@ -130,7 +141,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Activity Log',
         icon: 'Activity',
         category: 'core',
-        order: 6
+        order: 8
     },
     {
         id: 'vcn-distribution',
@@ -138,7 +149,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'VCN Distribution',
         icon: 'Activity',
         category: 'core',
-        order: 7
+        order: 9
     },
     {
         id: 'documents',
@@ -146,7 +157,7 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Documents',
         icon: 'Folder',
         category: 'core',
-        order: 8
+        order: 10
     },
     {
         id: 'vcn-settings',

@@ -1884,7 +1884,7 @@ Format:
             // 2. Trigger Wallet Flow if intent detected
             if (intentData) {
                 // Name Resolution Step (VNS)
-                if (intentData.recipient && !intentData.recipient.startsWith('0x')) {
+                if (intentData.recipient && typeof intentData.recipient === 'string' && !intentData.recipient.startsWith('0x')) {
                     const resolved = await resolveRecipient(intentData.recipient, userProfile().email);
                     if (resolved && resolved.address) {
                         intentData.recipient = resolved.address;
@@ -1896,7 +1896,7 @@ Format:
 
                 if (intentData.intent === 'send') {
                     console.log("Starting Send Flow with:", intentData);
-                    setRecipientAddress(intentData.recipient || '');
+                    setRecipientAddress(String(intentData.recipient || ''));
                     // Sanitize amount - remove any non-numeric chars except dot
                     const cleanAmount = (intentData.amount || '').toString().replace(/[^0-9.]/g, '');
                     setSendAmount(cleanAmount);
@@ -1909,16 +1909,16 @@ Format:
                         setFlowStep(2);
                     }
                 } else if (intentData.intent === 'swap') {
-                    setSwapAmount(intentData.amount || '');
+                    setSwapAmount(String(intentData.amount || ''));
                     startFlow('swap');
                 } else if (intentData.intent === 'stake') {
-                    setStakeAmount(intentData.amount || '');
+                    setStakeAmount(String(intentData.amount || ''));
                     startFlow('stake');
                 } else if (intentData.intent === 'bridge') {
                     startFlow('bridge');
                 } else if (intentData.intent === 'schedule') {
-                    setRecipientAddress(intentData.recipient || '');
-                    setSendAmount(intentData.amount || '');
+                    setRecipientAddress(String(intentData.recipient || ''));
+                    setSendAmount(String(intentData.amount || ''));
                     setSelectedToken(intentData.symbol || 'VCN');
 
                     // Parse Time from intentData.executeAt (timestamp) or intentData.time/scheduleTime (relative string)

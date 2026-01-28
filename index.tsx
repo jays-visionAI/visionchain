@@ -92,6 +92,7 @@ render(() => (
       <Route path="/adminsystem/traffic" component={Admin.AdminTrafficPage} />
       <Route path="/adminsystem/documents" component={Admin.AdminDocumentsPage} />
       <Route path="/adminsystem/referrals" component={Admin.AdminReferralsPage} />
+      <Route path="/adminsystem/defi" component={Admin.AdminDeFiPage} />
       <Route path="/adminsystem/ai" component={Admin.AdminAIManagementPage} />
       <Route path="/adminsystem/api-docs" component={Admin.AdminApiDocsPage} />
       <Route path="/adminsystem/api-docs/*" component={Admin.AdminApiDocsPage} />
