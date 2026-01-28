@@ -19,6 +19,7 @@ import {
     Bell
 } from 'lucide-solid';
 import { VisionLogo } from './VisionLogo';
+import { VisionFullLogo } from './VisionFullLogo';
 
 export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest';
 
@@ -86,13 +87,8 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
             {/* Header */}
             <div class={`${props.isDesktop ? 'h-[88px] pt-4' : 'h-[60px] pt-6'} shrink-0 flex items-center px-8 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl`}>
                 <div class="flex flex-col gap-1">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
-                            <VisionLogo class="w-4.5 h-4.5 text-white" />
-                        </div>
-                        <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 tracking-tight">
-                            Vision Chain
-                        </span>
+                    <div class="flex items-center mb-1">
+                        <VisionFullLogo class="scale-110 origin-left" />
                     </div>
                     <button
                         onClick={() => props.setNetworkMode(props.networkMode === 'mainnet' ? 'testnet' : 'mainnet')}

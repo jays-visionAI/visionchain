@@ -96,6 +96,7 @@ const WalletSend = lazy(() => import('./wallet/WalletSend').then(m => ({ default
 const WalletReceive = lazy(() => import('./wallet/WalletReceive').then(m => ({ default: m.WalletReceive })));
 
 import { VisionLogo } from './wallet/VisionLogo';
+import { VisionFullLogo } from './wallet/VisionFullLogo';
 import { WalletSidebar } from './wallet/WalletSidebar';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 
@@ -2083,11 +2084,8 @@ Format:
                                 <Menu class="w-5 h-5 text-gray-400" />
                             </button>
                             <div class="h-6 w-px bg-white/10" />
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                                    <VisionLogo class="w-4.5 h-4.5 text-white" />
-                                </div>
-                                <span class="font-bold text-white text-[16px] tracking-tight">Vision Chain</span>
+                            <div class="flex items-center">
+                                <VisionFullLogo class="scale-90 origin-left" />
                             </div>
 
                             {/* Top Bar Actions (Notification Bell) */}
