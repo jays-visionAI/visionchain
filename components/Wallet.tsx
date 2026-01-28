@@ -178,6 +178,12 @@ const Sparkline = (props: { data: number[], positive: boolean, width?: number, h
     );
 };
 
+const AiChatIcon = (props: { class?: string }) => (
+    <svg viewBox="0 0 24 24" fill="currentColor" class={props.class} xmlns="http://www.w3.org/2000/svg">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM12 6L13.5 9.5L17 11L13.5 12.5L12 16L10.5 12.5L7 11L10.5 9.5L12 6Z" />
+    </svg>
+);
+
 const Wallet = (): JSX.Element => {
     const navigate = useNavigate();
     const auth = useAuth();
@@ -2087,14 +2093,14 @@ Format:
                     {/* Main Content Area */}
                     <main class={`flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
 
-                        {/* Top Bar */}
-                        <div class="flex items-center gap-4 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-[#0a0a0b]/80 backdrop-blur-xl sticky top-0 z-20 shrink-0">
+                        {/* Top Bar - Fixed on Mobile */}
+                        <div class="lg:hidden fixed top-0 left-0 right-0 z-[35] h-[60px] flex items-center gap-4 px-4 sm:px-5 border-b border-white/[0.06] bg-[#0a0a0b]/90 backdrop-blur-xl">
                             <button
                                 onClick={() => {
                                     if (onboardingStep() === 0) setSidebarOpen(!sidebarOpen());
                                 }}
                                 disabled={onboardingStep() > 0}
-                                class="lg:hidden p-2.5 hover:bg-white/[0.06] rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                                class="p-2.5 hover:bg-white/[0.06] rounded-xl transition-all hover:scale-105 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                                 <Menu class="w-5 h-5 text-gray-400" />
                             </button>
@@ -2114,6 +2120,11 @@ Format:
                                 </button>
                             </div>
                         </div>
+
+                        {/* Spacer for Fixed Header */}
+                        <div class="lg:hidden h-[60px] shrink-0" />
+
+
 
                         {/* Chat View */}
                         <Show when={activeView() === 'chat'}>
@@ -3771,7 +3782,7 @@ Format:
                                 [
                                     { id: 'assets', label: 'Assets', icon: PieChart },
                                     { id: 'nodes', label: 'Nodes', icon: Camera },
-                                    { id: 'chat', label: 'Vision AI', icon: Sparkles, primary: true },
+                                    { id: 'chat', label: 'Vision AI', icon: AiChatIcon, primary: true },
                                     { id: 'referral', label: 'Earn', icon: UserPlus },
                                     { id: 'settings', label: 'Settings', icon: Settings },
                                 ].map((item) => (
@@ -4024,7 +4035,7 @@ Format:
                     </Presence>
                 </Portal>
             </>
-        </Show>
+        </Show >
     );
 };
 

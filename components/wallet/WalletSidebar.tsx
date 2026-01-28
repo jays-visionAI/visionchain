@@ -41,8 +41,14 @@ interface WalletSidebarProps {
 }
 
 export const WalletSidebar = (props: WalletSidebarProps) => {
+    const AiChatIcon = (props: { class?: string }) => (
+        <svg viewBox="0 0 24 24" fill="currentColor" class={props.class} xmlns="http://www.w3.org/2000/svg">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2ZM12 6L13.5 9.5L17 11L13.5 12.5L12 16L10.5 12.5L7 11L10.5 9.5L12 6Z" />
+        </svg>
+    );
+
     const allMenuItems = [
-        { id: 'chat' as ViewType, label: 'Chat', icon: Sparkles },
+        { id: 'chat' as ViewType, label: 'Chat', icon: AiChatIcon },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
