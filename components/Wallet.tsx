@@ -1028,7 +1028,7 @@ const Wallet = (): JSX.Element => {
     createEffect(() => {
         if (!auth.loading()) {
             if (!auth.user()) {
-                window.location.href = 'https://www.visionchain.co';
+                navigate('/login', { replace: true });
             } else {
                 fetchFullProfile();
             }
@@ -4033,7 +4033,12 @@ Format:
                                     { id: 'settings', label: 'Settings', icon: Settings },
                                 ].map((item) => (
                                     <button
-                                        onClick={() => onboardingStep() === 0 && navigate('/wallet/' + item.id)}
+                                        onClick={() => {
+                                            if (onboardingStep() === 0) {
+                                                navigate('/wallet/' + item.id);
+                                                setSidebarOpen(false);
+                                            }
+                                        }}
                                         class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                     >
                                         <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>

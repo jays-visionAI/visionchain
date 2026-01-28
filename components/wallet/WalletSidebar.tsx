@@ -66,12 +66,20 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
     return (
         <Presence>
             <Show when={props.sidebarOpen}>
+                <Motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    onClick={() => props.setSidebarOpen(false)}
+                    class="fixed lg:hidden inset-0 z-40 bg-black/40 backdrop-blur-md"
+                />
                 <Motion.aside
                     initial={{ x: -280, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     exit={{ x: -280, opacity: 0 }}
                     transition={{ duration: 0.4, easing: [0.25, 1, 0.5, 1] }}
-                    class="fixed lg:hidden inset-y-0 left-0 z-40 w-[280px] bg-[#0c0c0e] border-r border-white/10 shadow-2xl safe-area-left flex flex-col"
+                    class="fixed lg:hidden inset-y-0 left-0 z-50 w-[280px] bg-[#0c0c0e] border-r border-white/10 shadow-2xl safe-area-left flex flex-col"
                 >
                     {/* Reuse content for mobile sidebar */}
                     <SidebarContent {...props} menuItems={menuItems()} />
