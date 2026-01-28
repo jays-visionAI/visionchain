@@ -17,7 +17,7 @@ import {
     ArrowLeft,
     Trash2
 } from 'lucide-solid';
-import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
+import { getUserPreset, saveUserPreset, getUserData, updateUserData, resetUserWallet } from '../../services/firebaseService';
 import { useAuth } from '../auth/authContext';
 import { WalletViewHeader } from './WalletViewHeader';
 
