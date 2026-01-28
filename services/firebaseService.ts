@@ -651,7 +651,25 @@ export const uploadProfileImage = async (email: string, imageBlob: Blob): Promis
     }
 };
 
-// ==================== Auth Functions ====================
+// ==================== User Auth Functions (Default App) ====================
+
+export const userLogin = async (email: string, password: string): Promise<User> => {
+    const auth = getFirebaseAuth();
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
+};
+
+export const userLogout = async (): Promise<void> => {
+    const auth = getFirebaseAuth();
+    await signOut(auth);
+};
+
+export const onUserAuthStateChanged = (callback: (user: User | null) => void) => {
+    const auth = getFirebaseAuth();
+    return onAuthStateChanged(auth, callback);
+};
+
+// ==================== Admin Auth Functions (Isolated) ====================
 
 export const adminLogin = async (email: string, password: string): Promise<User> => {
     const auth = getAdminFirebaseAuth();
@@ -659,7 +677,7 @@ export const adminLogin = async (email: string, password: string): Promise<User>
     return userCredential.user;
 };
 
-export const adminRegister = async (email: string, password: string, phone?: string, referralCode?: string): Promise<User> => {
+export const userRegister = async (email: string, password: string, phone?: string, referralCode?: string): Promise<User> => {
     const auth = getFirebaseAuth();
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase().trim();
@@ -723,21 +741,6 @@ export const adminRegister = async (email: string, password: string, phone?: str
             if (saleSnap.exists()) {
                 await setDoc(saleRef, { status: 'Registered' }, { merge: true });
             }
-
-            // AUTO-ADD TO REFERRER'S ADDRESS BOOK
-            if (referrerId) {
-                try {
-                    await saveUserContacts(referrerId, [{
-                        internalName: (userCredential.user as any).displayName || emailLower.split('@')[0],
-                        phone: normalizedPhone || userData.phone || '',
-                        email: emailLower,
-                        vchainUserUid: emailLower,
-                        address: ''
-                    }]);
-                } catch (err) {
-                    console.warn("[Referral] Auto-add failed:", err);
-                }
-            }
         }
     } else {
         // New user signup
@@ -756,21 +759,6 @@ export const adminRegister = async (email: string, password: string, phone?: str
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
-
-        // AUTO-ADD TO REFERRER'S ADDRESS BOOK
-        if (referrerId) {
-            try {
-                await saveUserContacts(referrerId, [{
-                    internalName: emailLower.split('@')[0],
-                    phone: normalizedPhone,
-                    email: emailLower,
-                    vchainUserUid: emailLower,
-                    address: ''
-                }]);
-            } catch (err) {
-                console.warn("[Referral] Auto-add failed:", err);
-            }
-        }
     }
 
     return userCredential.user;
@@ -792,16 +780,10 @@ export const activateAccount = async (email: string, password: string, partnerCo
         throw new Error("Partner code mismatch");
     }
 
-    if (saleData.status === 'Registered' || saleData.status === 'WalletCreated') {
-        // Already registered, assume they might simply want to reset password or login?
-        // For security in this flow, we might allow overwriting or throw error.
-        // Let's assume this flow creates the Auth User if not exists.
-    }
-
     // 2. Create Firebase Auth User
     const auth = getFirebaseAuth();
     const { createUserWithEmailAndPassword } = await import('firebase/auth');
-    await createUserWithEmailAndPassword(auth, email, password);
+    await createUserWithEmailAndPassword(auth, email.toLowerCase(), password);
 
     // 3. Update Status
     await setDoc(saleRef, {
@@ -813,7 +795,7 @@ export const activateAccount = async (email: string, password: string, partnerCo
     await setDoc(userRef, {
         email: email,
         role: 'user', // Default role
-        createdAt: new Date()
+        createdAt: new Date().toISOString()
     }, { merge: true });
 
     return true;
@@ -868,6 +850,7 @@ export const onAdminAuthStateChanged = (callback: (user: User | null) => void) =
     const auth = getAdminFirebaseAuth();
     return onAuthStateChanged(auth, callback);
 };
+
 
 // ==================== User & Role Management ====================
 

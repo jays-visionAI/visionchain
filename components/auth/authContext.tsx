@@ -2,10 +2,10 @@ import { createContext, useContext, createSignal, onMount, onCleanup, JSX } from
 import { User } from 'firebase/auth';
 import {
     getFirebaseAuth,
-    adminLogin,
-    adminRegister,
-    adminLogout,
-    onAdminAuthStateChanged
+    userLogin,
+    userRegister,
+    userLogout,
+    onUserAuthStateChanged
 } from '../../services/firebaseService';
 
 interface AuthContextType {
@@ -23,7 +23,7 @@ export function AuthProvider(props: { children: JSX.Element }) {
     const [loading, setLoading] = createSignal(true);
 
     onMount(() => {
-        const unsubscribe = onAdminAuthStateChanged((firebaseUser) => {
+        const unsubscribe = onUserAuthStateChanged((firebaseUser) => {
             setUser(firebaseUser);
             setLoading(false);
         });
@@ -32,15 +32,15 @@ export function AuthProvider(props: { children: JSX.Element }) {
     });
 
     const login = async (email: string, password: string) => {
-        await adminLogin(email, password);
+        await userLogin(email, password);
     };
 
     const register = async (email: string, password: string, phone?: string, referralCode?: string) => {
-        await adminRegister(email, password, phone, referralCode);
+        await userRegister(email, password, phone, referralCode);
     };
 
     const logout = async () => {
-        await adminLogout();
+        await userLogout();
     };
 
     return (
