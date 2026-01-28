@@ -225,9 +225,9 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                                         </td>
                                                         <td class="px-8 py-5">
                                                             <div class="flex items-center gap-2">
-                                                                <div class={`w-1.5 h-1.5 rounded-full ${ref.isVerified ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-yellow-500'}`} />
-                                                                <span class={`text-[10px] font-black uppercase tracking-widest ${ref.isVerified ? 'text-green-500' : 'text-yellow-500'}`}>
-                                                                    {ref.isVerified ? 'Verified' : 'Pending'}
+                                                                <div class={`w-1.5 h-1.5 rounded-full ${(ref.isVerified || ref.walletAddress) ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-yellow-500'}`} />
+                                                                <span class={`text-[10px] font-black uppercase tracking-widest ${(ref.isVerified || ref.walletAddress) ? 'text-green-500' : 'text-yellow-500'}`}>
+                                                                    {(ref.isVerified || ref.walletAddress) ? 'Verified' : 'Pending'}
                                                                 </span>
                                                             </div>
                                                         </td>

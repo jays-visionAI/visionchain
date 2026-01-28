@@ -1536,6 +1536,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
     await setDoc(userRef, {
         walletReady: true,
         walletAddress: walletAddress,
+        isVerified: true,
         updatedAt: new Date().toISOString()
     }, { merge: true });
 
