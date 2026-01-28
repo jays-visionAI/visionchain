@@ -225,13 +225,17 @@ export default function Signup() {
                         <div>
                             <label class="text-gray-400 text-sm mb-2 block font-medium">Referral Code (Optional)</label>
                             <div class="relative">
-                                <UserPlus class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <UserPlus class={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 ${searchParams.ref ? 'text-purple-500/50' : 'text-gray-500'}`} />
                                 <input
                                     type="text"
                                     value={referralCode()}
                                     onInput={(e) => setReferralCode(e.currentTarget.value)}
                                     placeholder="Enter referral code"
-                                    class="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:bg-white/[0.08] transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border"
+                                    disabled={!!searchParams.ref}
+                                    class={`w-full py-4 pl-14 pr-4 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition-all transition-shadow focus:ring-1 focus:ring-purple-500/20 box-border ${searchParams.ref
+                                        ? 'bg-purple-500/10 cursor-not-allowed opacity-70'
+                                        : 'bg-white/5 focus:bg-white/[0.08]'
+                                        }`}
                                 />
                             </div>
                         </div>
