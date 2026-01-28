@@ -1,56 +1,17 @@
 import { render } from 'solid-js/web';
 import { Router, Route, useLocation } from '@solidjs/router';
-import { createSignal, Show, lazy, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { AuthProvider, useAuth } from './components/auth/authContext';
 
-// Core components (loaded immediately for homepage)
+// Core layout components
 import Navbar from './components/Navbar';
-import Hero from './components/Hero';
-import Stats from './components/Stats';
-import Applications from './components/Applications';
-import Architecture from './components/Architecture';
 import Footer from './components/Footer';
-import { Sparkles } from 'lucide-solid';
 
-// Lazy-loaded components (loaded only when needed)
-const Technology = lazy(() => import('./components/Technology'));
-const Research = lazy(() => import('./components/Research'));
-const Community = lazy(() => import('./components/Community'));
-const Academy = lazy(() => import('./components/Academy'));
-const DeveloperCommunity = lazy(() => import('./components/DeveloperCommunity'));
-const ContactUs = lazy(() => import('./components/ContactUs'));
-const PrivacyPolicy = lazy(() => import('./components/PrivacyPolicy'));
-const TermsOfService = lazy(() => import('./components/TermsOfService'));
-const CookiePolicy = lazy(() => import('./components/CookiePolicy'));
-const Wallet = lazy(() => import('./components/Wallet'));
-const VisionScan = lazy(() => import('./components/VisionScan'));
-const TrafficSimulator = lazy(() => import('./components/TrafficSimulator'));
-const Testnet = lazy(() => import('./components/Testnet'));
-const Bridge = lazy(() => import('./components/Bridge'));
-const Paymaster = lazy(() => import('./components/Paymaster'));
-
-// Auth components
-const Login = lazy(() => import('./components/auth/Login'));
-const Signup = lazy(() => import('./components/auth/Signup'));
-const AdminLogin = lazy(() => import('./components/auth/AdminLogin'));
-const ActivateAccount = lazy(() => import('./components/auth/ActivateAccount'));
-
-// Admin components (lazy-loaded)
-const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
-const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
-const AdminUsers = lazy(() => import('./components/admin/AdminUsers'));
-const AdminSettings = lazy(() => import('./components/admin/AdminSettings'));
-const AdminAIManagement = lazy(() => import('./components/admin/AdminAIManagement'));
-const AdminApiDocs = lazy(() => import('./components/admin/AdminApiDocs'));
-const AdminWallet = lazy(() => import('./components/admin/AdminWallet'));
-const AdminCampaign = lazy(() => import('./components/admin/AdminCampaign'));
-const AdminActivity = lazy(() => import('./components/admin/AdminActivity'));
-const AdminDocuments = lazy(() => import('./components/admin/AdminDocuments'));
-const AdminReferrals = lazy(() => import('./components/admin/AdminReferrals'));
-const AdminVCNDistribution = lazy(() => import('./components/admin/AdminVCNDistribution'));
-const AdminTraffic = lazy(() => import('./components/admin/AdminTraffic'));
-const VcnSettings = lazy(() => import('./components/admin/VcnSettings'));
-const PaymasterAdmin = lazy(() => import('./components/admin/PaymasterAdmin'));
+// Pages
+import HomePage from './pages/HomePage';
+import * as Public from './pages/PublicPages';
+import * as Admin from './pages/AdminPages';
+import * as Auth from './pages/AuthPages';
 
 // Loading spinner component
 function PageLoader() {
@@ -63,7 +24,6 @@ function PageLoader() {
 
 // Layout wrapper for all pages
 function Layout(props: { children?: any }) {
-  const auth = useAuth();
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
@@ -84,261 +44,7 @@ function Layout(props: { children?: any }) {
           <Footer />
         </Show>
       </div>
-
-      {/* Floating Action Button for AI removed - consolidated into wallet */}
     </div>
-  );
-}
-
-// Page components
-function HomePage() {
-  document.title = 'Vision Chain | Network Neutral New Age AI L1';
-  return (
-    <>
-      <Hero />
-      <Stats />
-      <div id="ecosystem"><Applications /></div>
-      <div id="governance"><Architecture /></div>
-    </>
-  );
-}
-
-function ResearchPage() {
-  document.title = 'Research | Vision Chain';
-  return <div id="research"><Research /></div>;
-}
-
-function TechnologyPage() {
-  document.title = 'Technology | Vision Chain';
-  return <div id="technology"><Technology /></div>;
-}
-
-function CommunityPage() {
-  document.title = 'Community | Vision Chain';
-  return <div id="community"><Community /></div>;
-}
-
-function AcademyPage() {
-  document.title = 'Academy | Vision Chain';
-  return <div id="academy"><Academy /></div>;
-}
-
-function DeveloperCommunityPage() {
-  document.title = 'Developer Hub | Vision Chain';
-  return <div id="developer-community"><DeveloperCommunity /></div>;
-}
-
-function ContactPage() {
-  document.title = 'Contact Us | Vision Chain';
-  return <div id="contact"><ContactUs /></div>;
-}
-
-function PrivacyPage() {
-  document.title = 'Privacy Policy | Vision Chain';
-  return <div id="privacy"><PrivacyPolicy /></div>;
-}
-
-function TermsPage() {
-  document.title = 'Terms of Service | Vision Chain';
-  return <div id="terms"><TermsOfService /></div>;
-}
-
-function CookiesPage() {
-  document.title = 'Cookie Policy | Vision Chain';
-  return <div id="cookies"><CookiePolicy /></div>;
-}
-
-function WalletPage() {
-  document.title = 'Wallet | Vision Chain';
-  return <div id="wallet"><Wallet /></div>;
-}
-
-function TrafficSimulatorPage() {
-  document.title = 'Simulation Hub | Vision Chain';
-  return <div id="traffic-sim"><TrafficSimulator /></div>;
-}
-
-function VisionScanPage() {
-  document.title = 'Vision Scan | Accounting-Grade Explorer';
-  return <div id="vision-scan"><VisionScan /></div>;
-}
-
-function TestnetPage() {
-  document.title = 'Testnet Hub | Vision Chain';
-  return <div id="testnet"><Testnet /></div>;
-}
-
-function BridgePage() {
-  document.title = 'Vision Bridge | Cross-chain Asset Migration';
-  return <div id="bridge"><Bridge /></div>;
-}
-
-function PaymasterPage() {
-  document.title = 'Vision Paymaster | Gasless Transaction Hub';
-  return <div id="paymaster"><Paymaster /></div>;
-}
-
-function AdminLoginPage() {
-  document.title = 'Admin HQ | Vision Chain';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLogin />
-    </Suspense>
-  );
-}
-
-// Admin Page wrapper components
-function AdminDashboardPage() {
-  document.title = 'Dashboard | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminDashboard />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminUsersPage() {
-  document.title = 'Users | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminUsers />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminSettingsPage() {
-  document.title = 'Settings | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminSettings />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminAIManagementPage() {
-  document.title = 'AI Management | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminAIManagement />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminApiDocsPage() {
-  document.title = 'API Documentation | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminApiDocs />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminWalletPage() {
-  document.title = 'Wallet Control | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminWallet />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminCampaignsPage() {
-  document.title = 'Campaigns | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminCampaign />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminActivityPage() {
-  document.title = 'Activity Log | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminActivity />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminDocumentsPage() {
-  document.title = 'Documents | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminDocuments />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminReferralsPage() {
-  document.title = 'Referrals | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminReferrals />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminVCNDistributionPage() {
-  document.title = 'VCN Distribution | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminVCNDistribution />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function AdminTrafficPage() {
-  document.title = 'Traffic Control | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <AdminTraffic />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function VcnSettingsPage() {
-  document.title = 'Security Settings | Vision Chain';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <VcnSettings />
-      </AdminLayout>
-    </Suspense>
-  );
-}
-
-function PaymasterAdminPage() {
-  document.title = 'Paymaster Ops | Admin';
-  return (
-    <Suspense fallback={<PageLoader />}>
-      <AdminLayout>
-        <PaymasterAdmin />
-      </AdminLayout>
-    </Suspense>
   );
 }
 
@@ -350,43 +56,47 @@ if (!rootElement) {
 render(() => (
   <AuthProvider>
     <Router root={Layout}>
-      <Route path="/login" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
-      <Route path="/newlogin" component={() => <Suspense fallback={<PageLoader />}><Login /></Suspense>} />
-      <Route path="/signup" component={() => <Suspense fallback={<PageLoader />}><Signup /></Suspense>} />
-      <Route path="/admin-login" component={AdminLoginPage} />
-      <Route path="/activate" component={() => <Suspense fallback={<PageLoader />}><ActivateAccount /></Suspense>} />
+      {/* Auth Routes */}
+      <Route path="/login" component={Auth.LoginPage} />
+      <Route path="/newlogin" component={Auth.LoginPage} />
+      <Route path="/signup" component={Auth.SignupPage} />
+      <Route path="/admin-login" component={Auth.AdminLoginPage} />
+      <Route path="/activate" component={Auth.ActivatePage} />
+
+      {/* Public Routes */}
       <Route path="/" component={HomePage} />
-      <Route path="/research" component={ResearchPage} />
-      <Route path="/technology" component={TechnologyPage} />
-      <Route path="/community" component={CommunityPage} />
-      <Route path="/academy" component={AcademyPage} />
-      <Route path="/developer-community" component={DeveloperCommunityPage} />
-      <Route path="/contact" component={ContactPage} />
-      <Route path="/privacy" component={PrivacyPage} />
-      <Route path="/terms" component={TermsPage} />
-      <Route path="/cookies" component={CookiesPage} />
-      <Route path="/wallet" component={WalletPage} />
-      <Route path="/trafficsim" component={TrafficSimulatorPage} />
-      <Route path="/visionscan" component={VisionScanPage} />
-      <Route path="/testnet" component={TestnetPage} />
-      <Route path="/bridge" component={BridgePage} />
-      <Route path="/paymaster" component={PaymasterPage} />
+      <Route path="/research" component={Public.ResearchPage} />
+      <Route path="/technology" component={Public.TechnologyPage} />
+      <Route path="/community" component={Public.CommunityPage} />
+      <Route path="/academy" component={Public.AcademyPage} />
+      <Route path="/developer-community" component={Public.DeveloperCommunityPage} />
+      <Route path="/contact" component={Public.ContactPage} />
+      <Route path="/privacy" component={Public.PrivacyPage} />
+      <Route path="/terms" component={Public.TermsPage} />
+      <Route path="/cookies" component={Public.CookiesPage} />
+      <Route path="/wallet" component={Public.WalletPage} />
+      <Route path="/trafficsim" component={Public.TrafficSimulatorPage} />
+      <Route path="/visionscan" component={Public.VisionScanPage} />
+      <Route path="/testnet" component={Public.TestnetPage} />
+      <Route path="/bridge" component={Public.BridgePage} />
+      <Route path="/paymaster" component={Public.PaymasterPage} />
+
       {/* Admin Routes */}
-      <Route path="/adminsystem" component={AdminDashboardPage} />
-      <Route path="/adminsystem/users" component={AdminUsersPage} />
-      <Route path="/adminsystem/wallet" component={AdminWalletPage} />
-      <Route path="/adminsystem/campaigns" component={AdminCampaignsPage} />
-      <Route path="/adminsystem/activity" component={AdminActivityPage} />
-      <Route path="/adminsystem/vcn" component={AdminVCNDistributionPage} />
-      <Route path="/adminsystem/vcn-settings" component={AdminSettingsPage} />
-      <Route path="/adminsystem/traffic" component={AdminTrafficPage} />
-      <Route path="/adminsystem/documents" component={AdminDocumentsPage} />
-      <Route path="/adminsystem/referrals" component={AdminReferralsPage} />
-      <Route path="/adminsystem/ai" component={AdminAIManagementPage} />
-      <Route path="/adminsystem/api-docs" component={AdminApiDocsPage} />
-      <Route path="/adminsystem/api-docs/*" component={AdminApiDocsPage} />
-      <Route path="/adminsystem/settings" component={AdminSettingsPage} />
-      <Route path="/adminsystem/paymaster" component={PaymasterAdminPage} />
+      <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
+      <Route path="/adminsystem/users" component={Admin.AdminUsersPage} />
+      <Route path="/adminsystem/wallet" component={Admin.AdminWalletPage} />
+      <Route path="/adminsystem/campaigns" component={Admin.AdminCampaignPage} />
+      <Route path="/adminsystem/activity" component={Admin.AdminActivityPage} />
+      <Route path="/adminsystem/vcn" component={Admin.AdminVCNDistributionPage} />
+      <Route path="/adminsystem/vcn-settings" component={Admin.AdminSettingsPage} />
+      <Route path="/adminsystem/traffic" component={Admin.AdminTrafficPage} />
+      <Route path="/adminsystem/documents" component={Admin.AdminDocumentsPage} />
+      <Route path="/adminsystem/referrals" component={Admin.AdminReferralsPage} />
+      <Route path="/adminsystem/ai" component={Admin.AdminAIManagementPage} />
+      <Route path="/adminsystem/api-docs" component={Admin.AdminApiDocsPage} />
+      <Route path="/adminsystem/api-docs/*" component={Admin.AdminApiDocsPage} />
+      <Route path="/adminsystem/settings" component={Admin.AdminSettingsPage} />
+      <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
     </Router>
   </AuthProvider>
 ), rootElement);
