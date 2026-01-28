@@ -9,6 +9,7 @@ import {
     Send,
     ArrowUpRight,
     ArrowDownLeft,
+    Download,
     RefreshCw,
     TrendingUp,
     ChevronRight,
@@ -375,6 +376,75 @@ const BatchResultsModal = (props: {
         </Presence>
     );
 };
+const BatchReportCard = (props: {
+    data: any,
+    onViewDetail: () => void
+}) => {
+    const downloadReport = () => {
+        let csv = "Date,BatchID,Intent,Recipient,Amount,Symbol,Status,TxHash,Error\n";
+        const timestamp = new Date().toISOString();
+        props.data.results.forEach((r: any) => {
+            csv += `${timestamp},${props.data.agentId},${r.tx.intent},${r.tx.recipient},${r.tx.amount},${r.tx.symbol || 'VCN'},${r.success ? 'SUCCESS' : 'FAILED'},${r.hash || ''},"${r.error || ''}"\n`;
+        });
+        const uri = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+        const link = document.createElement("a");
+        link.setAttribute("href", uri);
+        link.setAttribute("download", `Accounting_Report_${props.data.agentId}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <div class="mt-4 p-6 bg-gradient-to-br from-blue-500/10 to-transparent border border-blue-500/20 rounded-[24px] shadow-2xl">
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                        <FileSpreadsheet class="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-black text-white uppercase tracking-widest">Execution Report</h4>
+                        <p class="text-[10px] text-gray-500 font-bold">BATCH ID: {props.data.agentId}</p>
+                    </div>
+                </div>
+                <div class={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${props.data.failed === 0 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}`}>
+                    {props.data.failed === 0 ? 'Completed' : 'Issues Detected'}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 mb-6">
+                <div class="bg-white/5 rounded-2xl p-3 border border-white/5">
+                    <div class="text-[9px] font-black text-gray-500 uppercase mb-1">Total</div>
+                    <div class="text-lg font-black text-white">{props.data.total}</div>
+                </div>
+                <div class="bg-emerald-500/5 rounded-2xl p-3 border border-emerald-500/10">
+                    <div class="text-[9px] font-black text-emerald-500 uppercase mb-1">Success</div>
+                    <div class="text-lg font-black text-emerald-400">{props.data.success}</div>
+                </div>
+                <div class="bg-red-500/5 rounded-2xl p-3 border border-red-500/10">
+                    <div class="text-[9px] font-black text-red-500 uppercase mb-1">Failed</div>
+                    <div class="text-lg font-black text-red-400">{props.data.failed}</div>
+                </div>
+            </div>
+
+            <div class="flex gap-2">
+                <button
+                    onClick={downloadReport}
+                    class="flex-1 py-3 bg-white text-black hover:bg-gray-200 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                >
+                    <Download class="w-4 h-4" /> Download Accounting CSV
+                </button>
+                <button
+                    onClick={props.onViewDetail}
+                    class="px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all border border-white/10"
+                >
+                    Details
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const MultiBatchDrawer = (props: {
     isOpen: boolean,
     onClose: () => void,
@@ -662,6 +732,16 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     onViewDetail={() => {
                                                         props.setReviewMulti(msg.batchData);
                                                         setIsBatchDrawerOpen(true);
+                                                    }}
+                                                />
+                                            </Show>
+
+                                            {/* Specialized Batch Report UI */}
+                                            <Show when={msg.role === 'assistant' && msg.isBatchReport && msg.batchReportData}>
+                                                <BatchReportCard
+                                                    data={msg.batchReportData!}
+                                                    onViewDetail={() => {
+                                                        setSelectedBatchId(msg.batchReportData!.agentId);
                                                     }}
                                                 />
                                             </Show>

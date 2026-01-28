@@ -926,66 +926,51 @@ const Wallet = (): JSX.Element => {
                     }
 
                     // 10 second interval for stability
+                    // 10 second interval for stability
                     if (i < transactions.length - 1) {
                         await new Promise(resolve => setTimeout(resolve, 10000));
                     }
                 }
 
-                // Final Update
-                setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, results: finalResults } : a));
-
-                // 3. Finalize
-                setFlowSuccess(true);
-                setFlowStep(3);
-                setFlowLoading(false);
-                setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, status: 'SENT' } : a));
-
-                // 4. Generate Report
+                // Calculate final counts for the report
                 const successMsg = finalResults.filter(r => r.success).length;
                 const failMsg = finalResults.filter(r => !r.success).length;
 
-                // 4. Generate Final Accounting Report CSV
-                let accountingCsv = "Date,BatchID,Intent,VID,Recipient,Amount,Symbol,Status,TxHash,Error\n";
-                const timestamp = new Date().toISOString();
-                finalResults.forEach(r => {
-                    accountingCsv += `${timestamp},${agentId},${r.tx.intent},${r.tx.vid || ''},${r.tx.recipient},${r.tx.amount},${r.tx.symbol || 'VCN'},${r.success ? 'SUCCESS' : 'FAILED'},${r.hash || ''},"${r.error || ''}"\n`;
-                });
-                const accountingUri = `data:text/csv;charset=utf-8,${encodeURIComponent(accountingCsv)}`;
+                // Final Update & Finalize
+                setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                    ...a,
+                    results: finalResults,
+                    status: 'SENT',
+                    successCount: successMsg,
+                    failedCount: failMsg
+                } : a));
 
-                let report = lastLocale() === 'ko'
-                    ? `### 📊 최종 전송 결과 보고서 (Batch ID: ${agentId})\n\n`
-                    : `### 📊 Final Execution Report (Batch ID: ${agentId})\n\n`;
+                setFlowSuccess(true);
+                setFlowStep(3);
+                setFlowLoading(false);
 
-                report += lastLocale() === 'ko'
-                    ? `- **기업 재무용 레포트**: [📥 전송결과_회계보고서_${agentId}.csv 다운로드](${accountingUri})\n`
-                    : `- **Accounting Report**: [📥 Execution_Report_${agentId}.csv Download](${accountingUri})\n`;
+                // 4. Send specialized report message
+                const report = lastLocale() === 'ko'
+                    ? `### 📊 최종 전송 결과 보고서 (Batch ID: ${agentId})\n\n모든 요청의 처리가 완료되었습니다. 상세 내역 및 회계용 자료는 아래 리포트를 확인해 주세요.`
+                    : `### 📊 Final Execution Report (Batch ID: ${agentId})\n\nAll requests have been processed. Please check the report below for details and accounting records.`;
 
-                report += lastLocale() === 'ko'
-                    ? `- **총 요청 건수**: ${transactions.length}건\n- **성공**: ${successMsg}건\n- **실패**: ${failMsg}건\n\n`
-                    : `- **Total Requests**: ${transactions.length}\n- **Success**: ${successMsg}\n- **Failed**: ${failMsg}\n\n`;
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: report,
+                    isBatchReport: true,
+                    batchReportData: {
+                        agentId: agentId,
+                        total: transactions.length,
+                        success: successMsg,
+                        failed: failMsg,
+                        results: finalResults
+                    }
+                }]);
 
-                if (failMsg > 0) {
-                    const failedTXs = finalResults.filter(r => !r.success);
-                    report += lastLocale() === 'ko'
-                        ? `⚠️ **실패 내역 조치**\n일부 전송이 실패했습니다. 아래의 복구용 CSV를 다운로드하여 사유 확인 후 다시 시도해 주세요.\n`
-                        : `⚠️ **Action Required**\nSome transactions failed. Download the remediation CSV to review reasons and retry.\n`;
-
-                    let failCsv = "VID,Recipient,Amount,Symbol,Error\n";
-                    failedTXs.forEach(f => {
-                        failCsv += `${f.tx.vid || 'N/A'},${f.tx.recipient},${f.tx.amount},${f.tx.symbol || 'VCN'},"${f.error}"\n`;
-                    });
-                    const failUri = `data:text/csv;charset=utf-8,${encodeURIComponent(failCsv)}`;
-                    report += lastLocale() === 'ko'
-                        ? `\n[📥 실패 리스트_복구용.csv 다운로드](${failUri})\n\n`
-                        : `\n[📥 Remediation_List.csv Download](${failUri})\n\n`;
-                }
-
-                setMessages(prev => [...prev, { role: 'assistant', content: report }]);
-
-                // 5. Remove from Queue with delay
+                // 5. Remove from Queue after 60s to allow report viewing
                 setTimeout(() => {
                     setBatchAgents(prev => prev.filter(a => a.id !== agentId));
-                }, 5000);
+                }, 60000);
 
                 setTimeout(fetchPortfolioData, 1000);
 
