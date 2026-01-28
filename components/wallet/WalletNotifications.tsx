@@ -174,8 +174,8 @@ export function WalletNotifications() {
             <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <WalletViewHeader
                     tag="Network Alerts"
-                    title="PUSH"
-                    titleAccent="SYSTEM"
+                    title="NOTIFICATION"
+                    titleAccent=""
                     description="Real-time updates on your account activity, network status, and governance."
                     rightElement={
                         <div class="flex gap-1.5 p-1 bg-black/20 rounded-xl">
