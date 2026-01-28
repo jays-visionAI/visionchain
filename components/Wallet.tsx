@@ -1971,17 +1971,23 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                     const resolveSingle = async (rec: string) => {
                         if (!rec) return { address: '', name: 'New Recipient' };
 
+                        const allContacts = contacts() || [];
+
                         // If it's already an address, check if it's in contacts to get a name
                         if (ethers.isAddress(rec)) {
-                            const local = contacts().find((c: any) => c.address.toLowerCase() === rec.toLowerCase());
-                            return { address: rec, name: local ? local.name : 'New Recipient' };
+                            const local = allContacts.find((c: any) => c.address?.toLowerCase() === rec.toLowerCase());
+                            return { address: rec, name: (local?.internalName || local?.name) || 'New Recipient' };
                         }
 
                         // 1st: Check local contacts by name
                         const nameToResolve = String(rec || '');
                         const cleanName = nameToResolve.replace('@', '').toLowerCase();
-                        const local = contacts().find((c: any) => c.name.toLowerCase() === cleanName);
-                        if (local) return { address: local.address, name: local.name };
+                        const local = allContacts.find((c: any) =>
+                            (c.internalName?.toLowerCase() === cleanName) ||
+                            (c.name?.toLowerCase() === cleanName) ||
+                            (c.alias?.toLowerCase() === cleanName)
+                        );
+                        if (local) return { address: local.address, name: local.internalName || local.name };
 
                         // 2nd: Check global registry (VNS)
                         const global = await resolveRecipient(rec, userProfile().email);

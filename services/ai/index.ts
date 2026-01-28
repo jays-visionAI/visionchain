@@ -220,21 +220,7 @@ ${localeInfo}
             finalResultText = typeof currentResult === 'string' ? currentResult : "I encountered an issue processing the data.";
         }
 
-        const finalResult = finalResultText || "I encountered an issue processing the data.";
-
-        // Async log
-        saveConversation({
-            userId,
-            botType,
-            messages: [
-                { role: 'user', text: prompt, timestamp: new Date().toISOString() },
-                { role: 'assistant', text: finalResult, timestamp: new Date().toISOString() }
-            ],
-            lastMessage: finalResult.substring(0, 100),
-            status: 'completed'
-        }).catch(e => console.warn("[AIService] Log failed:", e));
-
-        return finalResult;
+        return finalResultText || "I encountered an issue processing the data.";
     } catch (e: any) {
         console.error("[AIService] GenerateText Error:", e);
         return e.message || "An error occurred with the AI service.";
