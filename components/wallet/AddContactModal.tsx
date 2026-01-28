@@ -10,10 +10,14 @@ import {
     CheckCircle,
     AlertCircle,
     UserPlus,
-    Loader2
+    Loader2,
+    Search,
+    ChevronDown,
+    Check
 } from 'lucide-solid';
 import Papa from 'papaparse';
 import { saveUserContacts, Contact, getUserContacts } from '../../services/firebaseService';
+import { countries, Country } from './CountryData';
 
 interface AddContactModalProps {
     isOpen: boolean;
@@ -26,11 +30,23 @@ interface NewContactEntry {
     internalName: string;
     alias: string;
     phone: string;
+    countryCode: string;
 }
 
 export const AddContactModal = (props: AddContactModalProps) => {
+    const getDefaultCountry = () => {
+        const locale = typeof navigator !== 'undefined' ? navigator.language : 'ko-KR';
+        const code = (locale.split('-')[1] || '').toUpperCase();
+        return countries.find(c => c.code === code) || countries.find(c => c.code === 'KR') || countries[0];
+    };
+
     const [entries, setEntries] = createSignal<NewContactEntry[]>(
-        Array(5).fill(null).map(() => ({ internalName: '', alias: '', phone: '' }))
+        Array(5).fill(null).map(() => ({
+            internalName: '',
+            alias: '',
+            phone: '',
+            countryCode: getDefaultCountry().code
+        }))
     );
     const [existingContacts, setExistingContacts] = createSignal<Contact[]>([]);
     const [isSaving, setIsSaving] = createSignal(false);
@@ -59,7 +75,12 @@ export const AddContactModal = (props: AddContactModalProps) => {
     };
 
     const addRow = () => {
-        setEntries([...entries(), { internalName: '', alias: '', phone: '' }]);
+        setEntries([...entries(), {
+            internalName: '',
+            alias: '',
+            phone: '',
+            countryCode: getDefaultCountry().code
+        }]);
     };
 
     const removeRow = (index: number) => {
@@ -71,6 +92,87 @@ export const AddContactModal = (props: AddContactModalProps) => {
         const newEntries = [...entries()];
         newEntries[index] = { ...newEntries[index], [field]: value };
         setEntries(newEntries);
+    };
+
+    const CountrySelector = (props: {
+        selectedCountry: string,
+        onSelect: (code: string) => void
+    }) => {
+        const [isOpen, setIsOpen] = createSignal(false);
+        const [searchTerm, setSearchTerm] = createSignal("");
+
+        const selected = () => countries.find(c => c.code === props.selectedCountry) || countries[0];
+
+        const filteredCountries = () => countries
+            .filter(c =>
+                c.name.toLowerCase().includes(searchTerm().toLowerCase()) ||
+                c.dialCode.includes(searchTerm()) ||
+                c.code.toLowerCase().includes(searchTerm().toLowerCase())
+            )
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        return (
+            <div class="relative w-full">
+                <button
+                    onClick={() => setIsOpen(!isOpen())}
+                    class="w-full flex items-center justify-between bg-white/[0.03] border border-white/[0.06] hover:border-white/20 hover:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white transition-all text-left"
+                >
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <span class="text-sm font-bold truncate">{selected().name}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-black text-gray-500">{selected().dialCode}</span>
+                        <ChevronDown class={`w-3 h-3 text-gray-500 transition-transform ${isOpen() ? 'rotate-180' : ''}`} />
+                    </div>
+                </button>
+
+                {isOpen() && (
+                    <>
+                        <div class="fixed inset-0 z-[110]" onClick={() => setIsOpen(false)} />
+                        <Motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            class="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1c] border border-white/10 rounded-2xl shadow-2xl z-[120] overflow-hidden"
+                        >
+                            <div class="p-3 border-b border-white/10 flex items-center gap-2 bg-white/[0.02]">
+                                <Search class="w-3.5 h-3.5 text-gray-500" />
+                                <input
+                                    type="text"
+                                    placeholder="Search country..."
+                                    onInput={(e) => setSearchTerm(e.currentTarget.value)}
+                                    class="w-full bg-transparent text-xs outline-none text-white"
+                                    autofocus
+                                />
+                            </div>
+                            <div class="max-h-[240px] overflow-y-auto custom-scrollbar">
+                                <For each={filteredCountries()}>
+                                    {(c) => (
+                                        <button
+                                            onClick={() => {
+                                                props.onSelect(c.code);
+                                                setIsOpen(false);
+                                            }}
+                                            class={`w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors ${c.code === props.selectedCountry ? 'bg-blue-500/10' : ''}`}
+                                        >
+                                            <div class="flex items-center gap-3">
+                                                <img src={c.flag} class="w-5 h-3.5 object-cover rounded-sm border border-white/10" alt="" />
+                                                <span class="text-[13px] font-medium text-gray-200">{c.name}</span>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-[11px] font-mono text-gray-500">{c.dialCode}</span>
+                                                <Show when={c.code === props.selectedCountry}>
+                                                    <Check class="w-3.5 h-3.5 text-blue-500" />
+                                                </Show>
+                                            </div>
+                                        </button>
+                                    )}
+                                </For>
+                            </div>
+                        </Motion.div>
+                    </>
+                )}
+            </div>
+        );
     };
 
     const handleFileUpload = (file: File) => {
@@ -87,7 +189,8 @@ export const AddContactModal = (props: AddContactModalProps) => {
                 const newEntries: NewContactEntry[] = parsedData.map(row => ({
                     internalName: row.name || row.Name || row.internalName || '',
                     alias: row.alias || row.Alias || row.note || row.Note || '',
-                    phone: row.phone || row.Phone || row.tel || ''
+                    phone: row.phone || row.Phone || row.tel || '',
+                    countryCode: getDefaultCountry().code
                 })).filter(e => e.internalName || e.phone);
 
                 if (newEntries.length > 0) {
@@ -114,8 +217,21 @@ export const AddContactModal = (props: AddContactModalProps) => {
         const validEntries = entries().filter(e => e.internalName || e.phone);
         if (validEntries.length === 0) return;
 
-        // Check for duplicates for warning/guidance
-        const hasDuplicates = validEntries.some((e, i) => isDuplicateName(e.internalName, i));
+        // Map entries to E.164 format
+        const entriesToSave = validEntries.map(e => {
+            const country = countries.find(c => c.code === e.countryCode) || countries[0];
+            let cleanPhone = e.phone.replace(/\D/g, '');
+            // Remove leading zero for international format if it's there (e.g. 010 -> 10)
+            if (cleanPhone.startsWith('0')) cleanPhone = cleanPhone.slice(1);
+
+            return {
+                ...e,
+                phone: `${country.dialCode}${cleanPhone}`
+            };
+        });
+
+        // Check for duplicates
+        const hasDuplicates = entriesToSave.some((e, i) => isDuplicateName(e.internalName, i));
         if (hasDuplicates) {
             const confirmSave = confirm("Warning: Some names are duplicated. It is highly recommended to use unique names or add an Alias (e.g. John Work) for better AI recognition. Do you still want to save?");
             if (!confirmSave) return;
@@ -123,10 +239,15 @@ export const AddContactModal = (props: AddContactModalProps) => {
 
         setIsSaving(true);
         try {
-            await saveUserContacts(props.userEmail, validEntries);
+            await saveUserContacts(props.userEmail, entriesToSave);
             props.onSuccess();
             props.onClose();
-            setEntries(Array(5).fill(null).map(() => ({ internalName: '', alias: '', phone: '' })));
+            setEntries(Array(5).fill(null).map(() => ({
+                internalName: '',
+                alias: '',
+                phone: '',
+                countryCode: getDefaultCountry().code
+            })));
         } catch (e) {
             setUploadStatus({ type: 'error', message: 'Failed to save contacts to server.' });
         } finally {
@@ -247,17 +368,18 @@ export const AddContactModal = (props: AddContactModalProps) => {
                             {/* Input Grid */}
                             <div class="space-y-4">
                                 <div class="grid grid-cols-12 gap-6 px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                    <div class="col-span-4">Internal Name</div>
-                                    <div class="col-span-3">Alias / Tags</div>
-                                    <div class="col-span-4">Phone Number</div>
+                                    <div class="col-span-3">Name</div>
+                                    <div class="col-span-1">Flag</div>
+                                    <div class="col-span-4">Country Name</div>
+                                    <div class="col-span-3">Phone Number</div>
                                     <div class="col-span-1"></div>
                                 </div>
 
                                 <div class="space-y-1">
                                     <Index each={entries()}>
                                         {(entry, index) => (
-                                            <div class="grid grid-cols-12 gap-6 items-center group/row py-1.5 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
-                                                <div class="col-span-4 relative">
+                                            <div class="grid grid-cols-12 gap-6 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
+                                                <div class="col-span-3 relative">
                                                     <input
                                                         type="text"
                                                         placeholder="e.g. John Doe"
@@ -274,19 +396,21 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                         </div>
                                                     </Show>
                                                 </div>
-                                                <div class="col-span-3">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="e.g. Work, Family"
-                                                        value={entry().alias}
-                                                        onInput={(e) => updateEntry(index, 'alias', e.currentTarget.value)}
-                                                        class="w-full block bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white text-xs outline-none transition-all"
-                                                    />
+                                                <div class="col-span-1 flex justify-center">
+                                                    <div class="w-10 h-7 rounded border border-white/10 overflow-hidden bg-white/5 flex items-center justify-center">
+                                                        <img src={(countries.find(c => c.code === entry().countryCode) || countries[0]).flag} class="w-full h-full object-cover" alt="" />
+                                                    </div>
                                                 </div>
                                                 <div class="col-span-4">
+                                                    <CountrySelector
+                                                        selectedCountry={entry().countryCode}
+                                                        onSelect={(code) => updateEntry(index, 'countryCode', code)}
+                                                    />
+                                                </div>
+                                                <div class="col-span-3">
                                                     <input
                                                         type="tel"
-                                                        placeholder="010-1234-5678"
+                                                        placeholder="01012345678"
                                                         value={entry().phone}
                                                         onInput={(e) => updateEntry(index, 'phone', e.currentTarget.value)}
                                                         class="w-full block bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm font-mono outline-none transition-all"
