@@ -312,10 +312,10 @@ const Wallet = (): JSX.Element => {
                 name = name.replace(/\*\*|-\s*|>\s*|'\s*/g, '').trim(); // Remove Markdown/Delimiters
 
                 if (recipient) {
-                    const contact = contactList.find(c => c.address?.toLowerCase() === recipient.toLowerCase());
+                    const contact = contactList.find(c => c.address?.toLowerCase() === recipient?.toLowerCase());
                     if (contact && (!name || name === 'Unknown' || name === '')) name = contact.name;
                 } else if (name && name !== 'Unknown') {
-                    const contact = contactList.find(c => c.name?.toLowerCase() === name.toLowerCase() || (name.length > 2 && c.name?.toLowerCase().includes(name.toLowerCase())));
+                    const contact = contactList.find(c => c.name?.toLowerCase() === name?.toLowerCase() || (name && name.length > 2 && c.name?.toLowerCase().includes(name?.toLowerCase())));
                     if (contact && contact.address) recipient = contact.address;
                 }
 

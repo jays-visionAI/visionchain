@@ -604,20 +604,19 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
     const combinedDrawerTasks = createMemo(() => {
         const queueTasks = props.queueTasks();
-        const activeBatch = props.batchAgents()
-            .filter(a => a.status === 'EXECUTING')
+        const batchTasks = props.batchAgents()
             .map(agent => ({
                 id: agent.id,
                 type: 'BATCH',
-                summary: `Processing ${agent.totalCount} Transactions`,
-                status: 'EXECUTING',
+                summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
+                status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
                 timestamp: agent.startTime,
                 recipient: agent.transactions?.[0]?.recipient,
                 amount: `${agent.successCount + agent.failedCount}/${agent.totalCount}`,
                 token: 'TX',
                 progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
             }));
-        return [...queueTasks, ...activeBatch];
+        return [...queueTasks, ...batchTasks];
     });
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
@@ -838,6 +837,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             <Show when={props.isLoading()}>
                                 <TypingIndicator />
                             </Show>
+
+                            {/* Dynamic Spacer for Agent Bay / Input Padding */}
+                            <div class={`transition-all duration-300 ${(activeTimeTasks().length > 0 || props.batchAgents().length > 0) && !isAgentBayCollapsed()
+                                    ? 'h-48'
+                                    : 'h-16'
+                                }`} />
                         </div>
                     </Show>
                 </div>
@@ -891,13 +896,16 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 task={{
                                                                     id: agent.id,
                                                                     type: 'BATCH',
-                                                                    summary: `${agent.currentCount || 0}/${agent.totalCount} Transactions`,
-                                                                    status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'WAITING'),
+                                                                    summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
+                                                                    status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
                                                                     timestamp: agent.startTime,
-                                                                    progress: ((agent.currentCount || 0) / agent.totalCount) * 100
+                                                                    progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
                                                                 }}
                                                                 isCompact={true}
-                                                                onClick={() => setSelectedBatchId(agent.id)}
+                                                                onClick={() => {
+                                                                    setSelectedTaskId(agent.id);
+                                                                    setIsQueueDrawerOpen(true);
+                                                                }}
                                                             />
                                                         )}
                                                     </For>
@@ -1197,7 +1205,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
