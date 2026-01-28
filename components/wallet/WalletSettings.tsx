@@ -16,40 +16,17 @@ import {
     AlertCircle,
     ArrowLeft,
     ChevronDown,
-    LogOut
+    LogOut,
+    Search
 } from 'lucide-solid';
 import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
+import { countries, Country } from './CountryData';
 import { useAuth } from '../auth/authContext';
 import { WalletViewHeader } from './WalletViewHeader';
 
 // Storage key for user settings (using different key than admin)
 const USER_SETTINGS_KEY = 'visionhub_user_settings';
 
-interface Country {
-    code: string;
-    name: string;
-    flag: string;
-    dialCode: string;
-}
-
-const COUNTRIES: Country[] = [
-    { code: 'KR', name: 'South Korea', flag: '🇰🇷', dialCode: '+82' },
-    { code: 'US', name: 'United States', flag: '🇺🇸', dialCode: '+1' },
-    { code: 'CA', name: 'Canada', flag: '🇨🇦', dialCode: '+1' },
-    { code: 'JP', name: 'Japan', flag: '🇯🇵', dialCode: '+81' },
-    { code: 'CN', name: 'China', flag: '🇨🇳', dialCode: '+86' },
-    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', dialCode: '+44' },
-    { code: 'DE', name: 'Germany', flag: '🇩🇪', dialCode: '+49' },
-    { code: 'FR', name: 'France', flag: '🇫🇷', dialCode: '+33' },
-    { code: 'AU', name: 'Australia', flag: '🇦🇺', dialCode: '+61' },
-    { code: 'SG', name: 'Singapore', flag: '🇸🇬', dialCode: '+65' },
-    { code: 'VN', name: 'Vietnam', flag: '🇻🇳', dialCode: '+84' },
-    { code: 'TH', name: 'Thailand', flag: '🇹🇭', dialCode: '+66' },
-    { code: 'ID', name: 'Indonesia', flag: '🇮🇩', dialCode: '+62' },
-    { code: 'MY', name: 'Malaysia', flag: '🇲🇾', dialCode: '+60' },
-    { code: 'PH', name: 'Philippines', flag: '🇵🇭', dialCode: '+63' },
-    { code: 'IN', name: 'India', flag: '🇮🇳', dialCode: '+91' },
-];
 
 interface ToggleProps {
     checked: boolean;
@@ -78,10 +55,11 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
     const [darkMode, setDarkMode] = createSignal(true);
     const [phone, setPhone] = createSignal('');
-    const [selectedCountry, setSelectedCountry] = createSignal<Country>(COUNTRIES[0]);
+    const [selectedCountry, setSelectedCountry] = createSignal<Country>(countries.find(c => c.code === 'KR') || countries[0]);
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
     const [phoneSuccess, setPhoneSuccess] = createSignal(false);
     const [showCountryDropdown, setShowCountryDropdown] = createSignal(false);
+    const [countrySearchTerm, setCountrySearchTerm] = createSignal("");
 
     // Password state
     const [currentPassword, setCurrentPassword] = createSignal('');
@@ -144,7 +122,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
         const userLocale = navigator.language || 'en-US';
         const regionCode = userLocale.split('-')[1] || userLocale.toUpperCase();
 
-        let initialCountry = COUNTRIES.find(c => c.code === regionCode) || COUNTRIES.find(c => c.code === 'US') || COUNTRIES[0];
+        let initialCountry = countries.find(c => c.code === regionCode) || countries.find(c => c.code === 'US') || countries[0];
 
         // 2. Load User Data
         if (auth.user()?.email) {
@@ -160,7 +138,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                 // Parse E.164 format
                 const savedPhone = userData.phone;
                 // Try to find matching country code
-                const matchedCountry = COUNTRIES.find(c => savedPhone.startsWith(c.dialCode));
+                const matchedCountry = countries.find(c => savedPhone.startsWith(c.dialCode));
                 if (matchedCountry) {
                     initialCountry = matchedCountry;
                     setPhone(savedPhone.replace(matchedCountry.dialCode, ''));
@@ -301,42 +279,66 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                                     <div class="mt-4 flex flex-col sm:flex-row gap-3 max-w-lg w-full">
                                         {/* Country Selector */}
-                                        <div class="relative w-full sm:w-[180px]">
+                                        <div class="relative w-full sm:w-[220px]">
                                             <button
                                                 onClick={() => setShowCountryDropdown(!showCountryDropdown())}
                                                 class="w-full flex items-center justify-between px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white hover:bg-white/[0.08] transition-colors"
                                             >
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-lg">{selectedCountry().flag}</span>
-                                                    <span class="text-sm font-medium">{selectedCountry().name.split(' ')[0]}</span>
+                                                <div class="flex items-center gap-3 overflow-hidden">
+                                                    <img src={selectedCountry().flag} class="w-5 h-3.5 object-cover rounded-sm border border-white/10" alt="" />
+                                                    <span class="text-sm font-bold truncate">{selectedCountry().name}</span>
                                                 </div>
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-xs text-gray-400 font-mono">{selectedCountry().dialCode}</span>
-                                                    <ChevronDown class="w-3 h-3 text-gray-500" />
+                                                <div class="flex items-center gap-2 shrink-0">
+                                                    <span class="text-[10px] font-black text-gray-500">{selectedCountry().dialCode}</span>
+                                                    <ChevronDown class={`w-3 h-3 text-gray-500 transition-transform ${showCountryDropdown() ? 'rotate-180' : ''}`} />
                                                 </div>
                                             </button>
 
                                             <Show when={showCountryDropdown()}>
-                                                <div class="absolute top-full left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-[#1a1b26] border border-white/10 rounded-xl shadow-2xl z-50">
-                                                    <For each={COUNTRIES}>
-                                                        {(country) => (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedCountry(country);
-                                                                    setShowCountryDropdown(false);
-                                                                }}
-                                                                class="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
-                                                            >
-                                                                <div class="flex items-center gap-3">
-                                                                    <span class="text-lg">{country.flag}</span>
-                                                                    <span class="text-sm text-gray-300">{country.name}</span>
-                                                                </div>
-                                                                <span class="text-xs text-gray-500 font-mono">{country.dialCode}</span>
-                                                            </button>
-                                                        )}
-                                                    </For>
+                                                <div class="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1c] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden min-w-[280px]">
+                                                    <div class="p-3 border-b border-white/10 flex items-center gap-2 bg-white/[0.02]">
+                                                        <Search class="w-3.5 h-3.5 text-gray-500" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search country..."
+                                                            onInput={(e) => setCountrySearchTerm(e.currentTarget.value)}
+                                                            class="w-full bg-transparent text-xs outline-none text-white"
+                                                            autofocus
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </div>
+                                                    <div class="max-h-[240px] overflow-y-auto custom-scrollbar">
+                                                        <For each={countries
+                                                            .filter(c =>
+                                                                c.name.toLowerCase().includes(countrySearchTerm().toLowerCase()) ||
+                                                                c.dialCode.includes(countrySearchTerm())
+                                                            )
+                                                            .sort((a, b) => a.name.localeCompare(b.name))}>
+                                                            {(country) => (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setSelectedCountry(country);
+                                                                        setShowCountryDropdown(false);
+                                                                        setCountrySearchTerm("");
+                                                                    }}
+                                                                    class={`w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left border-b border-white/[0.03] last:border-0 ${country.code === selectedCountry().code ? 'bg-blue-500/10' : ''}`}
+                                                                >
+                                                                    <div class="flex items-center gap-3">
+                                                                        <img src={country.flag} class="w-5 h-3.5 object-cover rounded-sm border border-white/10" alt="" />
+                                                                        <span class="text-[13px] font-medium text-gray-200">{country.name}</span>
+                                                                    </div>
+                                                                    <div class="flex items-center gap-2">
+                                                                        <span class="text-[11px] font-mono text-gray-500">{country.dialCode}</span>
+                                                                        <Show when={country.code === selectedCountry().code}>
+                                                                            <Check class="w-3.5 h-3.5 text-blue-500" />
+                                                                        </Show>
+                                                                    </div>
+                                                                </button>
+                                                            )}
+                                                        </For>
+                                                    </div>
                                                 </div>
-                                                <div class="fixed inset-0 z-40" onClick={() => setShowCountryDropdown(false)} />
+                                                <div class="fixed inset-0 z-40" onClick={() => { setShowCountryDropdown(false); setCountrySearchTerm(""); }} />
                                             </Show>
                                         </div>
 
