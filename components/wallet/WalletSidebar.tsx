@@ -154,7 +154,50 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                     )}
                 </For>
             </nav>
+            {/* User Info Section */}
+            <div class="p-4 mt-auto border-t border-white/[0.06] bg-gradient-to-t from-black/20 to-transparent">
+                <div class="bg-white/[0.03] rounded-[24px] p-4 border border-white/[0.06] relative overflow-hidden group/card shadow-xl">
+                    {/* Background Glow */}
+                    <div class="absolute -right-4 -top-4 w-16 h-16 bg-cyan-500/10 rounded-full blur-2xl group-hover/card:bg-cyan-500/20 transition-all duration-500" />
 
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-xl bg-[#1a1a1e] border border-white/10 flex items-center justify-center relative overflow-hidden">
+                            <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
+                            <User class="w-5 h-5 text-gray-400 group-hover/card:text-cyan-400 transition-colors" />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-[13px] font-black text-white truncate uppercase italic tracking-tight">
+                                {props.userProfile?.email?.split('@')[0] || 'Visionary'}
+                            </div>
+                            <div class="text-[10px] font-bold text-gray-500 truncate flex items-center gap-1">
+                                <span class="w-1 h-1 rounded-full bg-green-500" /> Secured ID
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            props.copyAddress();
+                        }}
+                        class="w-full h-10 flex items-center justify-between gap-3 px-3.5 bg-black/40 hover:bg-black/60 rounded-xl border border-white/5 transition-all group/btn active:scale-95"
+                    >
+                        <div class="flex items-center gap-2 min-w-0">
+                            <WalletIcon class="w-4 h-4 text-gray-500 group-hover/btn:text-cyan-400 transition-colors" />
+                            <span class="text-[11px] font-mono text-gray-500 group-hover/btn:text-white transition-colors truncate">
+                                {props.shortAddress || '0x000...000'}
+                            </span>
+                        </div>
+                        <div class="shrink-0">
+                            <Show when={props.copied} fallback={
+                                <Copy class="w-3.5 h-3.5 text-gray-600 group-hover/btn:text-white transition-all transform group-hover/btn:rotate-12" />
+                            }>
+                                <Check class="w-3.5 h-3.5 text-cyan-400 scale-110" />
+                            </Show>
+                        </div>
+                    </button>
+                </div>
+            </div>
         </>
     );
 };
