@@ -1436,11 +1436,12 @@ export const subscribeToQueue = (
                 timeLeft: timeLeft,
                 timestamp: data.timestamp || (unlockTime * 1000),
                 executeAt: unlockTime * 1000,
+                completedAt: data.executedAt ? new Date(data.executedAt).getTime() : undefined,
                 recipient: data.recipient,
                 amount: data.amount,
                 token: data.token,
                 scheduleId: data.scheduleId,
-                txHash: data.executedTxHash || data.txHash || data.creationTx,
+                txHash: data.executionTx || data.executedTxHash || data.txHash || data.creationTx,
                 error: data.error
             };
         });

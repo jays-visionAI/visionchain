@@ -592,10 +592,20 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(false);
     let scrollContainerRef: HTMLDivElement | undefined;
 
-    // Memo for active time-lock tasks (to filter SENT out)
-    const activeTimeTasks = createMemo(() =>
-        props.queueTasks().filter(t => ['WAITING', 'EXECUTING', 'FAILED'].includes(t.status))
-    );
+    // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
+    const activeTimeTasks = createMemo(() => {
+        const now = Date.now();
+        return props.queueTasks().filter(t => {
+            // Always show WAITING, EXECUTING, FAILED
+            if (['WAITING', 'EXECUTING', 'FAILED'].includes(t.status)) return true;
+            // Show SENT tasks for 60 seconds after completion
+            if (t.status === 'SENT' && t.completedAt) {
+                const elapsed = now - t.completedAt;
+                return elapsed < 60000; // 60 seconds
+            }
+            return false;
+        });
+    });
     const [isComposing, setIsComposing] = createSignal(false);
     const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
     const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
@@ -840,8 +850,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                             {/* Dynamic Spacer for Agent Bay / Input Padding */}
                             <div class={`transition-all duration-300 ${(activeTimeTasks().length > 0 || props.batchAgents().length > 0) && !isAgentBayCollapsed()
-                                    ? 'h-48'
-                                    : 'h-16'
+                                ? 'h-48'
+                                : 'h-16'
                                 }`} />
                         </div>
                     </Show>
