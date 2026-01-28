@@ -340,19 +340,19 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                             </Show>
                                         </div>
 
-                                        {/* Phone Input */}
-                                        <div class="flex-1 flex gap-2">
+                                        {/* Phone Input Area */}
+                                        <div class="flex flex-col sm:flex-row gap-2 w-full">
                                             <input
                                                 type="tel"
                                                 value={phone()}
                                                 onInput={(e) => setPhone(e.currentTarget.value.replace(/[^0-9]/g, ''))}
                                                 placeholder="01012345678"
-                                                class="flex-1 px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 text-sm font-mono placeholder-gray-600"
+                                                class="flex-1 px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 text-sm font-mono placeholder-gray-600 sm:min-w-0"
                                             />
                                             <button
                                                 onClick={handleSavePhone}
                                                 disabled={isSavingPhone() || !phone()}
-                                                class={`px-6 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${phoneSuccess()
+                                                class={`w-full sm:w-auto h-[46px] sm:h-auto px-4 sm:px-6 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 whitespace-nowrap shrink-0 ${phoneSuccess()
                                                     ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                                                     : 'bg-white/10 text-white hover:bg-white/20'
                                                     }`}
@@ -384,7 +384,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                             window.location.href = 'https://www.visionchain.co';
                                         }
                                     }}
-                                    class="px-5 py-2 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs uppercase tracking-wider transition-all"
+                                    class="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs uppercase tracking-widest transition-all whitespace-nowrap"
                                 >
                                     Logout Session
                                 </button>
@@ -464,7 +464,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                             <button
                                 onClick={handleSavePreset}
                                 disabled={presetLoading()}
-                                class="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50"
+                                class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50 whitespace-nowrap"
                             >
                                 {presetLoading() ? 'Saving...' : <><Save class="w-4 h-4" /> Save Preferences</>}
                             </button>
@@ -633,7 +633,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                         <button
                             type="submit"
-                            class="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all"
+                            class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap"
                         >
                             <Save class="w-4 h-4" />
                             Update Password
