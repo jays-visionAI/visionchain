@@ -80,7 +80,7 @@ import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services
 import { generateText } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
-import { useNavigate } from '@solidjs/router';
+import { useNavigate, useLocation } from '@solidjs/router';
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
 import { WalletSidebar } from './wallet/WalletSidebar';
 import { WalletDashboard } from './wallet/WalletDashboard';
@@ -935,8 +935,6 @@ const Wallet = (): JSX.Element => {
         ETH: 0
     });
 
-    // Expose setActiveView globally for child components
-    (window as any).setActiveView = setActiveView;
 
     const shortAddress = () => {
         const addr = walletAddress();
@@ -1483,7 +1481,7 @@ const Wallet = (): JSX.Element => {
     const finishOnboarding = () => {
         setOnboardingSuccess(false);
         setOnboardingStep(0);
-        setActiveView('assets');
+        navigate('/wallet/assets');
     };
 
     const startVerification = () => {
@@ -2241,7 +2239,7 @@ Format:
                                 getAssetData={getAssetData}
                                 startFlow={(flow) => {
                                     if (flow === 'send' || flow === 'receive') {
-                                        setActiveView(flow as ViewType);
+                                        navigate('/wallet/' + flow);
                                     } else {
                                         setActiveFlow(flow);
                                     }
@@ -3001,7 +2999,7 @@ Format:
                         <Show when={activeView() === 'settings'}>
                             <div class="flex-1 overflow-y-auto p-4 lg:p-8">
                                 <div class="max-w-5xl mx-auto">
-                                    <WalletSettings onBack={() => setActiveView('assets')} />
+                                    <WalletSettings onBack={() => navigate('/wallet/assets')} />
                                 </div>
                             </div>
                         </Show>
@@ -3778,7 +3776,7 @@ Format:
                                     { id: 'settings', label: 'Settings', icon: Settings },
                                 ].map((item) => (
                                     <button
-                                        onClick={() => onboardingStep() === 0 && setActiveView(item.id)}
+                                        onClick={() => onboardingStep() === 0 && navigate('/wallet/' + item.id)}
                                         class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
                                     >
                                         <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>
