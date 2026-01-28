@@ -176,18 +176,19 @@ export const WalletContacts = (props: WalletContactsProps) => {
                         <div class="flex items-center gap-2">
                             <button
                                 onClick={() => setIsModalOpen(true)}
-                                class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-blue-500/20"
+                                class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-blue-500/20 whitespace-nowrap"
                             >
                                 <Plus class="w-3.5 h-3.5" />
-                                Add
+                                Add Contact
                             </button>
                             <button
                                 onClick={handleSync}
                                 disabled={isSyncing()}
-                                class="p-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all"
+                                class="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 whitespace-nowrap"
                                 title="Sync Contacts"
                             >
-                                <RefreshCw class={`w-4 h-4 ${isSyncing() ? 'animate-spin' : ''}`} />
+                                <RefreshCw class={`w-3.5 h-3.5 ${isSyncing() ? 'animate-spin' : ''}`} />
+                                Sync Contact
                             </button>
                         </div>
                     }
