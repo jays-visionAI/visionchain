@@ -367,7 +367,7 @@ const Wallet = (): JSX.Element => {
     const confirmLogout = async () => {
         setShowLogoutConfirm(false);
         await auth.logout();
-        navigate('/', { replace: true });
+        window.location.href = 'https://www.visionchain.co';
     };
 
     const cancelLogout = () => {
@@ -1028,7 +1028,7 @@ const Wallet = (): JSX.Element => {
     createEffect(() => {
         if (!auth.loading()) {
             if (!auth.user()) {
-                navigate('/login', { replace: true });
+                window.location.href = 'https://www.visionchain.co';
             } else {
                 fetchFullProfile();
             }
@@ -2154,9 +2154,10 @@ Format:
                         shortAddress={shortAddress()}
                         copyAddress={copyAddress}
                         copied={copied()}
-                        onLogout={() => {
+                        onLogout={async () => {
                             if (confirm('Are you sure you want to logout?')) {
-                                auth.logout();
+                                await auth.logout();
+                                window.location.href = 'https://www.visionchain.co';
                             }
                         }}
                         networkMode={networkMode()}

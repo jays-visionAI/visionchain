@@ -378,9 +378,10 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     </div>
                                 </div>
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         if (confirm('Are you sure you want to logout?')) {
-                                            auth.logout();
+                                            await auth.logout();
+                                            window.location.href = 'https://www.visionchain.co';
                                         }
                                     }}
                                     class="px-5 py-2 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs uppercase tracking-wider transition-all"
