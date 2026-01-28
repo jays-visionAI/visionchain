@@ -7,7 +7,8 @@ import {
     Globe,
     Shield,
     RefreshCw,
-    Check
+    Check,
+    ArrowLeft
 } from 'lucide-solid';
 
 import { WalletViewHeader } from './WalletViewHeader';
@@ -30,6 +31,7 @@ interface WalletMintProps {
     mintedSuccess: () => boolean;
     setMintedSuccess: (success: boolean) => void;
     mintProgress: () => number;
+    setActiveView: (view: any) => void;
 }
 
 export const WalletMint = (props: WalletMintProps) => {
@@ -39,6 +41,15 @@ export const WalletMint = (props: WalletMintProps) => {
             <div class="absolute top-0 right-[15%] w-[450px] h-[450px] bg-cyan-500/5 rounded-full blur-[130px] pointer-events-none" />
 
             <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative min-h-full flex flex-col">
+                <div class="flex items-center gap-4 mb-2 lg:hidden">
+                    <button
+                        onClick={() => props.setActiveView('assets')}
+                        class="p-2 bg-white/5 rounded-xl text-gray-400 hover:text-white transition-colors"
+                    >
+                        <ArrowLeft class="w-5 h-5" />
+                    </button>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Back to Assets</span>
+                </div>
                 <WalletViewHeader
                     tag="Asset Generation"
                     title="TOKEN"

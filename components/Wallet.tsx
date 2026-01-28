@@ -95,7 +95,10 @@ import { WalletReferral } from './wallet/WalletReferral';
 import { WalletActivity } from './wallet/WalletActivity';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest';
+import { WalletSend } from './wallet/WalletSend';
+import { WalletReceive } from './wallet/WalletReceive';
+
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -2198,6 +2201,7 @@ Format:
                                 mintedSuccess={mintedSuccess}
                                 setMintedSuccess={setMintedSuccess}
                                 mintProgress={mintProgress}
+                                setActiveView={setActiveView}
                             />
                         </Show>
 
@@ -2221,7 +2225,13 @@ Format:
                                 totalValueStr={totalValueStr}
                                 portfolioStats={portfolioStats}
                                 getAssetData={getAssetData}
-                                startFlow={setActiveFlow}
+                                startFlow={(flow) => {
+                                    if (flow === 'send' || flow === 'receive') {
+                                        setActiveView(flow as ViewType);
+                                    } else {
+                                        setActiveFlow(flow);
+                                    }
+                                }}
                                 setActiveView={setActiveView}
                                 vcnPurchases={vcnPurchases}
                                 totalValue={totalValue}
@@ -2233,6 +2243,40 @@ Format:
                                 }}
                                 walletAddress={walletAddress}
                                 contacts={contacts()}
+                            />
+                        </Show>
+
+                        <Show when={activeView() === 'send'}>
+                            <WalletSend
+                                onBack={() => setActiveView('assets')}
+                                getAssetData={getAssetData}
+                                selectedToken={selectedToken}
+                                setSelectedToken={setSelectedToken}
+                                sendAmount={sendAmount}
+                                setSendAmount={setSendAmount}
+                                recipientAddress={recipientAddress}
+                                setRecipientAddress={setRecipientAddress}
+                                handleTransaction={handleTransaction}
+                                flowStep={flowStep}
+                                setFlowStep={setFlowStep}
+                                flowLoading={flowLoading}
+                                resetFlow={() => { resetFlow(); setActiveView('assets'); }}
+                                walletAddress={walletAddress}
+                                lastTxHash={lastTxHash}
+                                contacts={contacts}
+                                isSchedulingTimeLock={isSchedulingTimeLock}
+                                lockDelaySeconds={lockDelaySeconds}
+                            />
+                        </Show>
+
+                        <Show when={activeView() === 'receive'}>
+                            <WalletReceive
+                                onBack={() => setActiveView('assets')}
+                                walletAddress={walletAddress}
+                                receiveNetwork={receiveNetwork}
+                                setReceiveNetwork={setReceiveNetwork}
+                                copyAddress={copyAddress}
+                                copied={copied}
                             />
                         </Show>
 
