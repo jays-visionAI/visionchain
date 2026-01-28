@@ -866,13 +866,18 @@ const Wallet = (): JSX.Element => {
                 try {
                     const isScheduled = isSchedulingTimeLock();
 
+                    // Lookup recipient name from contacts
+                    const contactList = contacts() || [];
+                    const recipientContact = contactList.find((c: any) => c.address?.toLowerCase() === recipient.toLowerCase());
+                    const recipientDisplayName = recipientContact?.name || `${recipient.slice(0, 6)}...${recipient.slice(-4)}`;
+
                     // 1. Notify Sender
                     await createNotification(userProfile().email, {
                         type: isScheduled ? 'transfer_scheduled' : 'alert',
                         title: isScheduled ? 'Transfer Scheduled' : 'Transfer Successful',
                         content: isScheduled
-                            ? `You have scheduled ${amount} ${symbol} to be sent to ${recipient}.`
-                            : `You successfully sent ${amount} ${symbol} to ${recipient}.`,
+                            ? `You have scheduled ${amount} ${symbol} to be sent to ${recipientDisplayName}.`
+                            : `You successfully sent ${amount} ${symbol} to ${recipientDisplayName}.`,
                         data: { amount, symbol, recipient, isScheduled }
                     });
 
@@ -880,12 +885,15 @@ const Wallet = (): JSX.Element => {
                     if (!isScheduled) {
                         const recipientUser = await findUserByAddress(recipient);
                         if (recipientUser?.email) {
-                            const senderName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
+                            // Get sender's name - check recipient's contacts for sender's address
+                            const senderAddress = userProfile().address;
+                            const senderDisplayName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
+
                             await createNotification(recipientUser.email, {
                                 type: 'transfer_received',
                                 title: 'Coins Received',
-                                content: `You received ${amount} ${symbol} from ${senderName}.`,
-                                data: { amount, symbol, sender: userProfile().email, txHash: lastTxHash() }
+                                content: `You received ${amount} ${symbol} from ${senderDisplayName} (${senderAddress?.slice(0, 6)}...${senderAddress?.slice(-4)}).`,
+                                data: { amount, symbol, sender: userProfile().email, senderAddress, txHash: lastTxHash() }
                             });
                         }
                     }
@@ -971,12 +979,13 @@ const Wallet = (): JSX.Element => {
                             try {
                                 const recipientUser = await findUserByAddress(tx.recipient);
                                 if (recipientUser?.email) {
-                                    const senderName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
+                                    const senderAddress = userProfile().address;
+                                    const senderDisplayName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
                                     await createNotification(recipientUser.email, {
                                         type: 'transfer_received',
                                         title: 'Coins Received',
-                                        content: `You received ${tx.amount} ${tx.symbol || 'VCN'} from ${senderName}.`,
-                                        data: { amount: tx.amount, symbol: tx.symbol || 'VCN', sender: userProfile().email, txHash: receipt.hash }
+                                        content: `You received ${tx.amount} ${tx.symbol || 'VCN'} from ${senderDisplayName} (${senderAddress?.slice(0, 6)}...${senderAddress?.slice(-4)}).`,
+                                        data: { amount: tx.amount, symbol: tx.symbol || 'VCN', sender: userProfile().email, senderAddress, txHash: receipt.hash }
                                     });
                                 }
                             } catch (notiErr) {
