@@ -169,8 +169,8 @@ export const WalletContacts = (props: WalletContactsProps) => {
 
                 <WalletViewHeader
                     tag="Network Directory"
-                    title="ADDRESS"
-                    titleAccent="BOOK"
+                    title="CONTACT"
+                    titleAccent="LIST"
                     description="Manage your network and map identifiers to Vision IDs for seamless interaction."
                     rightElement={
                         <div class="flex items-center gap-2">
@@ -282,7 +282,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                     <tr>
                                         <td colspan="5" class="px-8 py-20 text-center">
                                             <Loader2 class="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-                                            <span class="text-sm font-bold text-gray-600 uppercase tracking-widest">Loading Address Book...</span>
+                                            <span class="text-sm font-bold text-gray-600 uppercase tracking-widest">Loading Contact List...</span>
                                         </td>
                                     </tr>
                                 </Show>

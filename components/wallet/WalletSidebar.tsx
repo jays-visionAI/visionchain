@@ -46,7 +46,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'referral' as ViewType, label: 'Referral Engine', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },
         { id: 'mint' as ViewType, label: 'Mint', icon: Plus },
-        { id: 'contacts' as ViewType, label: 'Address Book', icon: Users },
+        { id: 'contacts' as ViewType, label: 'Contact List', icon: Users },
         { id: 'history' as ViewType, label: 'History', icon: Clock },
         { id: 'profile' as ViewType, label: 'Profile', icon: User },
         { id: 'notifications' as ViewType, label: 'Notification', icon: Bell },
