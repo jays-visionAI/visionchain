@@ -50,6 +50,29 @@ exports.updateWalletAddress = onCall(async (request) => {
       });
     }
 
+    // 3. Update Referrer's Contact List (Force Sync)
+    const userSnap = await db.collection("users").doc(emailLower).get();
+    const userData = userSnap.data();
+
+    if (userData && userData.referrerId) {
+      const referrerId = userData.referrerId;
+      console.log(`[Wallet] Updating referrer ${referrerId} contact list...`);
+
+      // Add/Update contact in referrer's list
+      const refContactRef = db.collection("users").doc(referrerId).collection("contacts").doc(emailLower);
+
+      // We use set with merge to ensure it exists or updates
+      await refContactRef.set({
+        email: emailLower,
+        internalName: emailLower.split("@")[0], // Default name if missing
+        address: walletAddress,
+        vchainUserUid: emailLower,
+        syncStatus: "verified",
+        phone: userData.phone || "",
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+
     return { success: true };
   } catch (err) {
     console.error("Update Wallet Failed:", err);

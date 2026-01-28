@@ -1542,6 +1542,27 @@ export const updateWalletStatus = async (email: string, walletAddress: string) =
 
     console.log(`[Firebase] Saved wallet address ${walletAddress} to users/${emailLower}`);
 
+    // 3. Update Referrer's Contact List (Fallback)
+    try {
+        const userSnap = await getDoc(userRef);
+        const userData = userSnap.data();
+        if (userData && userData.referrerId) {
+            const referrerId = userData.referrerId;
+            const refContactRef = doc(db, 'users', referrerId, 'contacts', emailLower);
+            await setDoc(refContactRef, {
+                email: emailLower,
+                internalName: emailLower.split('@')[0],
+                address: walletAddress,
+                vchainUserUid: emailLower,
+                syncStatus: 'verified',
+                phone: userData.phone || '',
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+        }
+    } catch (e) {
+        console.warn("Failed to update referrer contact list in fallback mode (likely permission issue):", e);
+    }
+
     // 4. Auto-Distribute Testnet VCN (10% Rule)
     try {
         const tokenSaleRef = doc(db, 'token_sales', emailLower);
