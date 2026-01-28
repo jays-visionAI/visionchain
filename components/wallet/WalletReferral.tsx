@@ -19,7 +19,7 @@ import {
     Trophy,
     Crosshair
 } from 'lucide-solid';
-import { getUserReferrals, UserData } from '../../services/firebaseService';
+import { getReferralConfig, getUserReferrals, UserData, ReferralConfig, RankInfo, LevelThreshold } from '../../services/firebaseService';
 
 import { WalletViewHeader } from './WalletViewHeader';
 
@@ -27,83 +27,16 @@ interface WalletReferralProps {
     userProfile: () => any;
 }
 
-// --- 1. RPG-Style Level System Configuration ---
-// 10 Major Ranks, spanning 100 Levels.
-const RANKS = [
-    { name: 'Novice', minLvl: 1, color: 'text-gray-400', bg: 'bg-gray-500', gradient: 'from-gray-600 to-gray-500', icon: Users },         // Lvl 1-9
-    { name: 'Scout', minLvl: 10, color: 'text-blue-400', bg: 'bg-blue-500', gradient: 'from-blue-600 to-cyan-500', icon: ExternalLink },    // Lvl 10-19
-    { name: 'Ranger', minLvl: 20, color: 'text-emerald-400', bg: 'bg-emerald-500', gradient: 'from-emerald-600 to-green-500', icon: TrendingUp }, // Lvl 20-29
-    { name: 'Guardian', minLvl: 30, color: 'text-cyan-400', bg: 'bg-cyan-500', gradient: 'from-cyan-600 to-sky-500', icon: Shield },       // Lvl 30-39
-    { name: 'Elite', minLvl: 40, color: 'text-indigo-400', bg: 'bg-indigo-500', gradient: 'from-indigo-600 to-blue-600', icon: Zap },       // Lvl 40-49
-    { name: 'Captain', minLvl: 50, color: 'text-violet-400', bg: 'bg-violet-500', gradient: 'from-violet-600 to-purple-600', icon: Award }, // Lvl 50-59
-    { name: 'Commander', minLvl: 60, color: 'text-orange-400', bg: 'bg-orange-500', gradient: 'from-orange-600 to-amber-500', icon: Trophy },// Lvl 60-69
-    { name: 'Warlord', minLvl: 70, color: 'text-red-400', bg: 'bg-red-500', gradient: 'from-red-600 to-orange-600', icon: Crosshair },      // Lvl 70-79
-    { name: 'Titan', minLvl: 80, color: 'text-rose-400', bg: 'bg-rose-500', gradient: 'from-rose-600 to-pink-600', icon: Crown },           // Lvl 80-89
-    { name: 'Visionary', minLvl: 90, color: 'text-yellow-400', bg: 'bg-yellow-500', gradient: 'from-yellow-500 to-amber-300', icon: Star }   // Lvl 90-100
-];
-
-// Helper to determine Level based on Referral Count (Progressive Curve)
-// 1 Ref = 1 Level (up to 20)
-// 2 Refs = 1 Level (20-50) -> Needs 30*2 = 60 more refs. Total 80.
-// 5 Refs = 1 Level (50-80) -> Needs 30*5 = 150 more refs. Total 230.
-// 10 Refs = 1 Level (80-100) -> Needs 20*10 = 200 more refs. Total 430.
-const getLevelData = (count: number) => {
-    let level = 1;
-    let nextLevelRefs = 1; // Total refs needed for next level
-    let currentLevelBaseRefs = 0; // Refs needed to reach current level
-    let refsPerLevel = 1;
-
-    if (count < 20) {
-        level = count + 1;
-        refsPerLevel = 1;
-        currentLevelBaseRefs = count;
-        nextLevelRefs = count + 1;
-    } else if (count < 80) { // 20 + (30 * 2)
-        const surplus = count - 20;
-        const levelGain = Math.floor(surplus / 2);
-        level = 20 + levelGain + 1;
-        refsPerLevel = 2;
-        currentLevelBaseRefs = 20 + (levelGain * 2);
-        nextLevelRefs = currentLevelBaseRefs + 2;
-    } else if (count < 230) { // 80 + (30 * 5)
-        const surplus = count - 80;
-        const levelGain = Math.floor(surplus / 5);
-        level = 50 + levelGain + 1;
-        refsPerLevel = 5;
-        currentLevelBaseRefs = 80 + (levelGain * 5);
-        nextLevelRefs = currentLevelBaseRefs + 5;
-    } else { // 230 + ...
-        const surplus = count - 230;
-        const levelGain = Math.floor(surplus / 10);
-        level = 80 + levelGain + 1;
-        refsPerLevel = 10;
-        currentLevelBaseRefs = 230 + (levelGain * 10);
-        nextLevelRefs = currentLevelBaseRefs + 10;
-    }
-
-    if (level > 100) level = 100;
-
-    // Progress % within current level
-    const progressIntoLevel = count - currentLevelBaseRefs;
-    const progressPercent = Math.min(100, (progressIntoLevel / refsPerLevel) * 100);
-
-    // Find Rank
-    const rank = [...RANKS].reverse().find(r => level >= r.minLvl) || RANKS[0];
-
-    return {
-        level,
-        rank,
-        progressPercent,
-        nextLevelRefs,
-        refsPerLevel,
-        refsToNext: Math.max(0, nextLevelRefs - count)
-    };
+// Helper for dynamic icon mapping
+const ICON_MAP: Record<string, any> = {
+    Users, TrendingUp, DollarSign, Shield, ExternalLink, Award, Star, Crown, Zap, Trophy, Crosshair
 };
 
 export const WalletReferral = (props: WalletReferralProps) => {
     const [referrals, setReferrals] = createSignal<UserData[]>([]);
     const [copied, setCopied] = createSignal(false);
     const [isLoading, setIsLoading] = createSignal(true);
+    const [config, setConfig] = createSignal<ReferralConfig | null>(null);
 
     const referralUrl = () => `${window.location.origin}/signup?ref=${props.userProfile().referralCode}`;
 
@@ -112,10 +45,76 @@ export const WalletReferral = (props: WalletReferralProps) => {
         return `Join Vision Chain\n${url}`;
     };
 
+    const getDynamicLevelData = (count: number, cfg: ReferralConfig) => {
+        let level = 1;
+        let currentLevelBaseRefs = 0;
+        let refsPerLevel = 1;
+        let nextLevelRefs = 1;
+
+        const thresholds = cfg.levelThresholds || [];
+
+        let runningRefs = 0;
+        let runningLevel = 1;
+
+        for (const t of thresholds) {
+            const levelsInRange = t.maxLevel - t.minLevel + 1;
+            const refsNeededForRange = levelsInRange * t.invitesPerLevel;
+
+            if (count >= runningRefs + refsNeededForRange) {
+                runningRefs += refsNeededForRange;
+                runningLevel = t.maxLevel;
+            } else {
+                const surplusInRange = count - runningRefs;
+                const levelsGainedInRange = Math.floor(surplusInRange / t.invitesPerLevel);
+                runningLevel = t.minLevel + levelsGainedInRange;
+                refsPerLevel = t.invitesPerLevel;
+                currentLevelBaseRefs = runningRefs + (levelsGainedInRange * t.invitesPerLevel);
+                nextLevelRefs = currentLevelBaseRefs + t.invitesPerLevel;
+                break;
+            }
+        }
+
+        level = Math.min(100, runningLevel);
+        if (level === 100) {
+            nextLevelRefs = currentLevelBaseRefs;
+            refsPerLevel = 1;
+        }
+
+        const progressIntoLevel = count - currentLevelBaseRefs;
+        const progressPercent = level >= 100 ? 100 : Math.min(100, (progressIntoLevel / refsPerLevel) * 100);
+
+        const ranks = cfg.ranks || [];
+        const rankInfo = [...ranks].reverse().find(r => level >= r.minLvl) || (ranks.length > 0 ? ranks[0] : { name: 'Novice', color: 'text-gray-400', gradient: 'from-gray-600 to-gray-500', iconName: 'Users', bg: 'bg-gray-500' });
+
+        const rank = {
+            ...rankInfo,
+            icon: ICON_MAP[rankInfo.iconName] || Users
+        };
+
+        const xpMultiplier = (cfg.baseXpMultiplier || 1.0) + (level * (cfg.xpMultiplierPerLevel || 0.05));
+
+        return {
+            level,
+            rank,
+            progressPercent,
+            nextLevelRefs,
+            refsPerLevel,
+            refsToNext: Math.max(0, nextLevelRefs - count),
+            xpMultiplier
+        };
+    };
+
     onMount(async () => {
-        if (props.userProfile().email) {
-            const list = await getUserReferrals(props.userProfile().email);
+        try {
+            const [list, cfg] = await Promise.all([
+                getUserReferrals(props.userProfile().email),
+                getReferralConfig()
+            ]);
             setReferrals(list);
+            setConfig(cfg);
+        } catch (e) {
+            console.error(e);
+        } finally {
             setIsLoading(false);
         }
     });
@@ -133,7 +132,22 @@ export const WalletReferral = (props: WalletReferralProps) => {
     };
 
     const currentReferralCount = () => props.userProfile().referralCount || 0;
-    const stats = () => getLevelData(currentReferralCount());
+
+    const stats = () => {
+        const cfg = config();
+        if (!cfg) {
+            return {
+                level: 1,
+                rank: { name: 'Novice', color: 'text-gray-400', gradient: 'from-gray-600 to-gray-500', icon: Users },
+                progressPercent: 0,
+                nextLevelRefs: 1,
+                refsPerLevel: 1,
+                refsToNext: 1,
+                xpMultiplier: 1.0
+            };
+        }
+        return getDynamicLevelData(currentReferralCount(), cfg);
+    };
 
     return (
         <div class="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
@@ -285,7 +299,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                             <Show when={stats().level < 100}>
                                 <div class="mt-4 p-3 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center">
                                     <p class="text-[10px] text-gray-400">
-                                        Next Major Rank: <span class="font-bold text-white">{RANKS.find(r => r.minLvl > stats().level)?.name || 'Max'}</span>
+                                        Next Major Rank: <span class="font-bold text-white">{(config()?.ranks || []).find(r => r.minLvl > stats().level)?.name || 'Max'}</span>
                                     </p>
                                 </div>
                             </Show>

@@ -1,5 +1,5 @@
 import { createSignal, createEffect, For, Show } from 'solid-js';
-import { Users, TrendingUp, DollarSign, Calendar, Search, ArrowRight, UserPlus, Calculator } from 'lucide-solid';
+import { Users, TrendingUp, DollarSign, Calendar, Search, ArrowRight, UserPlus, Calculator, Trophy } from 'lucide-solid';
 import { getFirebaseDb, UserData, ReferralConfig, getReferralConfig } from '../../services/firebaseService';
 import { collection, query, getDocs, limit, where, orderBy, doc, updateDoc, setDoc } from 'firebase/firestore';
 
@@ -10,8 +10,15 @@ export default function AdminReferrals() {
     const [loading, setLoading] = createSignal(true);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [showConfigModal, setShowConfigModal] = createSignal(false);
+    const [configTab, setConfigTab] = createSignal<'general' | 'levels' | 'ranks'>('general');
+
+    // Form States
     const [newTier1, setNewTier1] = createSignal(0.10);
     const [newTier2, setNewTier2] = createSignal(0.02);
+    const [newBaseXp, setNewBaseXp] = createSignal(1.0);
+    const [newXpPerLevel, setNewXpPerLevel] = createSignal(0.05);
+    const [lvlThresholds, setLvlThresholds] = createSignal<any[]>([]);
+    const [ranks, setRanks] = createSignal<any[]>([]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -35,6 +42,10 @@ export default function AdminReferrals() {
             setConfig(cfg);
             setNewTier1(cfg.tier1Rate);
             setNewTier2(cfg.tier2Rate);
+            setNewBaseXp(cfg.baseXpMultiplier || 1.0);
+            setNewXpPerLevel(cfg.xpMultiplierPerLevel || 0.05);
+            setLvlThresholds(JSON.parse(JSON.stringify(cfg.levelThresholds || [])));
+            setRanks(JSON.parse(JSON.stringify(cfg.ranks || [])));
 
         } catch (e) {
             console.error("Failed to fetch referral data:", e);
@@ -54,15 +65,31 @@ export default function AdminReferrals() {
             const newCfg = {
                 tier1Rate: newTier1(),
                 tier2Rate: newTier2(),
-                enabledEvents: config()?.enabledEvents || ['subscription', 'token_sale', 'staking']
+                enabledEvents: config()?.enabledEvents || ['subscription', 'token_sale', 'staking'],
+                baseXpMultiplier: newBaseXp(),
+                xpMultiplierPerLevel: newXpPerLevel(),
+                levelThresholds: lvlThresholds(),
+                ranks: ranks()
             };
             await setDoc(cfgRef, newCfg);
-            setConfig(newCfg);
+            setConfig(newCfg as any);
             setShowConfigModal(false);
             alert("Referral configuration updated successfully!");
         } catch (e) {
             alert("Failed to update config");
         }
+    };
+
+    const handleThresholdChange = (index: number, field: string, value: number) => {
+        const next = [...lvlThresholds()];
+        next[index] = { ...next[index], [field]: value };
+        setLvlThresholds(next);
+    };
+
+    const handleRankChange = (index: number, field: string, value: string | number) => {
+        const next = [...ranks()];
+        next[index] = { ...next[index], [field]: value };
+        setRanks(next);
     };
 
     const filteredUsers = () => {
@@ -82,7 +109,7 @@ export default function AdminReferrals() {
                         <UserPlus class="w-8 h-8 text-cyan-400" />
                         Referral <span class="text-cyan-400">Engine</span>
                     </h2>
-                    <p class="text-gray-500 font-medium">Manage multi-tier rewards and network growth</p>
+                    <p class="text-gray-500 font-medium">Manage multi-tier rewards and gamified level system</p>
                 </div>
                 <div class="flex items-center gap-4">
                     <button
@@ -90,7 +117,7 @@ export default function AdminReferrals() {
                         class="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group"
                     >
                         <Calculator class="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
-                        <span class="font-bold text-sm">Reward Settings</span>
+                        <span class="font-bold text-sm">System Settings</span>
                     </button>
                     <button
                         onClick={fetchData}
@@ -113,11 +140,11 @@ export default function AdminReferrals() {
                 </div>
                 <div class="bg-[#111113] border border-white/[0.05] rounded-[32px] p-8 relative overflow-hidden group">
                     <div class="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                        <Users class="w-16 h-16 text-blue-400" />
+                        <Trophy class="w-16 h-16 text-blue-400" />
                     </div>
-                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 px-1">Network Depth</div>
-                    <div class="text-4xl font-black text-white mb-2">{(config()?.tier2Rate || 0) * 100}%</div>
-                    <div class="text-sm font-medium text-blue-400/80 italic">Tier 2 Grand-Referrer Rate</div>
+                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 px-1">Max Level</div>
+                    <div class="text-4xl font-black text-white mb-2">100</div>
+                    <div class="text-sm font-medium text-blue-400/80 italic">RP System Active</div>
                 </div>
                 <div class="bg-gradient-to-br from-cyan-600/10 to-blue-600/10 border border-cyan-500/20 rounded-[32px] p-8 relative overflow-hidden group">
                     <div class="absolute top-0 right-0 p-6 opacity-20 group-hover:scale-110 transition-transform duration-500">
@@ -231,49 +258,138 @@ export default function AdminReferrals() {
             <Show when={showConfigModal()}>
                 <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div class="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowConfigModal(false)} />
-                    <div class="relative w-full max-w-lg bg-[#111113] border border-white/[0.08] rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95 duration-300">
-                        <div class="flex items-center gap-4 mb-8">
-                            <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                                <Calculator class="w-8 h-8 text-cyan-400" />
+                    <div class="relative w-full max-w-4xl bg-[#111113] border border-white/[0.08] rounded-[40px] p-10 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div class="flex items-center justify-between mb-8">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                                    <Calculator class="w-8 h-8 text-cyan-400" />
+                                </div>
+                                <div>
+                                    <h3 class="text-2xl font-black text-white italic tracking-tight uppercase">Engine <span class="text-cyan-400">Settings</span></h3>
+                                    <p class="text-gray-500 text-xs font-medium">Fine-tune reward rates and level progression</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 class="text-2xl font-black text-white italic tracking-tight">ENGINE <span class="text-cyan-400">CONFIG</span></h3>
-                                <p class="text-gray-500 text-xs font-medium">Fine-tune the reward distribution logic</p>
+
+                            {/* Tabs */}
+                            <div class="flex bg-black/40 p-1 rounded-2xl border border-white/5">
+                                <button
+                                    onClick={() => setConfigTab('general')}
+                                    class={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${configTab() === 'general' ? 'bg-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                    General
+                                </button>
+                                <button
+                                    onClick={() => setConfigTab('levels')}
+                                    class={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${configTab() === 'levels' ? 'bg-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                    Levels
+                                </button>
+                                <button
+                                    onClick={() => setConfigTab('ranks')}
+                                    class={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${configTab() === 'ranks' ? 'bg-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                    Ranks
+                                </button>
                             </div>
                         </div>
 
-                        <div class="space-y-6">
-                            <div class="space-y-3">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 1 Rate (Direct)</label>
-                                <div class="relative">
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={newTier1()}
-                                        onInput={(e) => setNewTier1(parseFloat(e.currentTarget.value))}
-                                        class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-white outline-none focus:border-cyan-500/50 transition-all font-mono"
-                                    />
-                                    <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-600 font-black">%</div>
+                        <div class="space-y-8">
+                            {/* General Tab */}
+                            <Show when={configTab() === 'general'}>
+                                <div class="grid grid-cols-2 gap-8">
+                                    <div class="space-y-3">
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 1 Rate (Direct)</label>
+                                        <input
+                                            type="number" step="0.01" value={newTier1()}
+                                            onInput={(e) => setNewTier1(parseFloat(e.currentTarget.value))}
+                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-white outline-none focus:border-cyan-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 2 Rate (Indirect)</label>
+                                        <input
+                                            type="number" step="0.01" value={newTier2()}
+                                            onInput={(e) => setNewTier2(parseFloat(e.currentTarget.value))}
+                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-blue-400 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Base XP Multiplier</label>
+                                        <input
+                                            type="number" step="0.1" value={newBaseXp()}
+                                            onInput={(e) => setNewBaseXp(parseFloat(e.currentTarget.value))}
+                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-white outline-none focus:border-cyan-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div class="space-y-3">
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Bonus per Level (e.g. 0.05x)</label>
+                                        <input
+                                            type="number" step="0.01" value={newXpPerLevel()}
+                                            onInput={(e) => setNewXpPerLevel(parseFloat(e.currentTarget.value))}
+                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-green-400 outline-none focus:border-green-500/50 transition-all font-mono"
+                                        />
+                                    </div>
                                 </div>
-                                <p class="text-[9px] text-gray-600 font-medium italic px-1">Current: {(config()?.tier1Rate || 0) * 100}%</p>
-                            </div>
+                            </Show>
 
-                            <div class="space-y-3">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 2 Rate (Grand)</label>
-                                <div class="relative">
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={newTier2()}
-                                        onInput={(e) => setNewTier2(parseFloat(e.currentTarget.value))}
-                                        class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-blue-400 outline-none focus:border-blue-500/50 transition-all font-mono"
-                                    />
-                                    <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-600 font-black">%</div>
+                            {/* Levels Tab */}
+                            <Show when={configTab() === 'levels'}>
+                                <div class="bg-black/20 border border-white/5 rounded-[24px] overflow-hidden">
+                                    <table class="w-full text-left">
+                                        <thead>
+                                            <tr class="bg-white/5">
+                                                <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Min Lvl</th>
+                                                <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Max Lvl</th>
+                                                <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Invites Per Lvl</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-white/5">
+                                            <For each={lvlThresholds()}>
+                                                {(row, i) => (
+                                                    <tr>
+                                                        <td class="px-6 py-4"><input type="number" class="bg-transparent text-white font-bold w-full outline-none" value={row.minLevel} onInput={(e) => handleThresholdChange(i(), 'minLevel', parseInt(e.currentTarget.value))} /></td>
+                                                        <td class="px-6 py-4"><input type="number" class="bg-transparent text-white font-bold w-full outline-none" value={row.maxLevel} onInput={(e) => handleThresholdChange(i(), 'maxLevel', parseInt(e.currentTarget.value))} /></td>
+                                                        <td class="px-6 py-4 text-cyan-400"><input type="number" class="bg-transparent text-cyan-400 font-black w-full outline-none" value={row.invitesPerLevel} onInput={(e) => handleThresholdChange(i(), 'invitesPerLevel', parseInt(e.currentTarget.value))} /></td>
+                                                    </tr>
+                                                )}
+                                            </For>
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <p class="text-[9px] text-gray-600 font-medium italic px-1">Current: {(config()?.tier2Rate || 0) * 100}%</p>
-                            </div>
+                                <p class="text-[10px] text-gray-600 italic mt-4">* Example: If "Invites Per Lvl" is 2, user needs 2 successful referrals to advance 1 level in that range.</p>
+                            </Show>
 
-                            <div class="flex gap-4 pt-4">
+                            {/* Ranks Tab */}
+                            <Show when={configTab() === 'ranks'}>
+                                <div class="bg-black/20 border border-white/5 rounded-[24px] overflow-hidden">
+                                    <div class="max-h-[400px] overflow-y-auto custom-scrollbar">
+                                        <table class="w-full text-left">
+                                            <thead>
+                                                <tr class="bg-white/5 sticky top-0 z-10">
+                                                    <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Min Lvl</th>
+                                                    <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Rank Name</th>
+                                                    <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Color Class</th>
+                                                    <th class="px-6 py-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">Icon</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-white/5">
+                                                <For each={ranks()}>
+                                                    {(row, i) => (
+                                                        <tr>
+                                                            <td class="px-6 py-4"><input type="number" class="bg-transparent text-white font-bold w-full outline-none" value={row.minLvl} onInput={(e) => handleRankChange(i(), 'minLvl', parseInt(e.currentTarget.value))} /></td>
+                                                            <td class="px-6 py-4"><input type="text" class="bg-transparent text-white font-bold w-full outline-none uppercase italic" value={row.name} onInput={(e) => handleRankChange(i(), 'name', e.currentTarget.value)} /></td>
+                                                            <td class="px-6 py-4"><input type="text" class="bg-transparent text-gray-400 text-xs w-full outline-none" value={row.color} onInput={(e) => handleRankChange(i(), 'color', e.currentTarget.value)} /></td>
+                                                            <td class="px-6 py-4"><input type="text" class="bg-transparent text-gray-400 text-xs w-full outline-none" value={row.iconName} onInput={(e) => handleRankChange(i(), 'iconName', e.currentTarget.value)} /></td>
+                                                        </tr>
+                                                    )}
+                                                </For>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </Show>
+
+                            <div class="flex gap-4 pt-4 border-t border-white/5">
                                 <button
                                     onClick={() => setShowConfigModal(false)}
                                     class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-2xl transition-all"
@@ -284,7 +400,7 @@ export default function AdminReferrals() {
                                     onClick={updateConfig}
                                     class="flex-[2] py-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black rounded-2xl shadow-xl shadow-cyan-500/20 transition-all uppercase tracking-widest text-xs"
                                 >
-                                    Update Engine
+                                    Save System Configuration
                                 </button>
                             </div>
                         </div>

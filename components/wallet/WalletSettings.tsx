@@ -15,7 +15,8 @@ import {
     Check,
     AlertCircle,
     ArrowLeft,
-    ChevronDown
+    ChevronDown,
+    LogOut
 } from 'lucide-solid';
 import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
 import { useAuth } from '../auth/authContext';
@@ -363,6 +364,29 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Logout Section */}
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                                <div class="flex items-start gap-4">
+                                    <div class="p-2 rounded-lg bg-red-500/10">
+                                        <LogOut class="w-5 h-5 text-red-500" />
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-medium">Session Management</p>
+                                        <p class="text-gray-400 text-sm mt-0.5">Sign out of your account on this device</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        if (confirm('Are you sure you want to logout?')) {
+                                            auth.logout();
+                                        }
+                                    }}
+                                    class="px-5 py-2 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs uppercase tracking-wider transition-all"
+                                >
+                                    Logout Session
+                                </button>
                             </div>
                         </div>
                     </div>

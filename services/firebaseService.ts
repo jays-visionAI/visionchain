@@ -254,10 +254,30 @@ export const searchUserByName = async (name: string): Promise<{ vid: string, ema
 
 // --- Referral System Utilities & Processing ---
 
+export interface RankInfo {
+    name: string;
+    minLvl: number;
+    color: string;
+    bg: string;
+    gradient: string;
+    iconName: string;
+}
+
+export interface LevelThreshold {
+    minLevel: number;
+    maxLevel: number;
+    invitesPerLevel: number;
+}
+
 export interface ReferralConfig {
     tier1Rate: number;
     tier2Rate: number;
     enabledEvents: string[];
+    // RPG Level System Config
+    baseXpMultiplier: number;
+    xpMultiplierPerLevel: number;
+    levelThresholds: LevelThreshold[];
+    ranks: RankInfo[];
 }
 
 /**
@@ -277,9 +297,29 @@ export const getReferralConfig = async (): Promise<ReferralConfig> => {
     return {
         tier1Rate: 0.10, // 10%
         tier2Rate: 0.02, // 2%
-        enabledEvents: ['subscription', 'token_sale', 'staking']
+        enabledEvents: ['subscription', 'token_sale', 'staking'],
+        baseXpMultiplier: 1.0,
+        xpMultiplierPerLevel: 0.05,
+        levelThresholds: [
+            { minLevel: 1, maxLevel: 20, invitesPerLevel: 1 },
+            { minLevel: 21, maxLevel: 50, invitesPerLevel: 2 },
+            { minLevel: 51, maxLevel: 80, invitesPerLevel: 5 },
+            { minLevel: 81, maxLevel: 100, invitesPerLevel: 10 }
+        ],
+        ranks: [
+            { name: 'Novice', minLvl: 1, color: 'text-gray-400', bg: 'bg-gray-500', gradient: 'from-gray-600 to-gray-500', iconName: 'Users' },
+            { name: 'Scout', minLvl: 10, color: 'text-blue-400', bg: 'bg-blue-500', gradient: 'from-blue-600 to-cyan-500', iconName: 'ExternalLink' },
+            { name: 'Ranger', minLvl: 20, color: 'text-emerald-400', bg: 'bg-emerald-500', gradient: 'from-emerald-600 to-green-500', iconName: 'TrendingUp' },
+            { name: 'Guardian', minLvl: 30, color: 'text-cyan-400', bg: 'bg-cyan-500', gradient: 'from-cyan-600 to-sky-500', iconName: 'Shield' },
+            { name: 'Elite', minLvl: 40, color: 'text-indigo-400', bg: 'bg-indigo-500', gradient: 'from-indigo-600 to-blue-600', iconName: 'Zap' },
+            { name: 'Captain', minLvl: 50, color: 'text-violet-400', bg: 'bg-violet-500', gradient: 'from-violet-600 to-purple-600', iconName: 'Award' },
+            { name: 'Commander', minLvl: 60, color: 'text-orange-400', bg: 'bg-orange-500', gradient: 'from-orange-600 to-amber-500', iconName: 'Trophy' },
+            { name: 'Warlord', minLvl: 70, color: 'text-red-400', bg: 'bg-red-500', gradient: 'from-red-600 to-orange-600', iconName: 'Crosshair' },
+            { name: 'Titan', minLvl: 80, color: 'text-rose-400', bg: 'bg-rose-500', gradient: 'from-rose-600 to-pink-600', iconName: 'Crown' },
+            { name: 'Visionary', minLvl: 90, color: 'text-yellow-400', bg: 'bg-yellow-500', gradient: 'from-yellow-500 to-amber-300', iconName: 'Star' }
+        ]
     };
-};
+}
 
 /**
  * Processes referral rewards when a revenue event occurs.

@@ -155,42 +155,6 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                 </For>
             </nav>
 
-            {/* Wallet Card / User Info */}
-            <div class="p-4 border-t border-white/[0.06] mt-auto shrink-0 bg-[#0c0c0e] relative z-20">
-                <div class="relative overflow-hidden p-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-2xl border border-white/[0.06]">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full blur-2xl" />
-                    <div class="relative flex items-center gap-3">
-                        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                            <WalletIcon class="w-5 h-5 text-white" />
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-0.5">Logged in as</div>
-                            <div class="text-[12px] font-bold text-white truncate mb-1" title={props.userProfile.email}>
-                                {props.userProfile.email || 'Loading...'}
-                            </div>
-                            <div class="flex items-center gap-1.5 pt-1.5 border-t border-white/10">
-                                <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                                <span class="text-[11px] text-gray-400 font-mono">{props.shortAddress || 'Not Created'}</span>
-                                <Show when={props.shortAddress}>
-                                    <button onClick={props.copyAddress} class="p-1 hover:bg-white/10 rounded-md transition-colors ml-auto">
-                                        <Show when={props.copied} fallback={<Copy class="w-3 h-3 text-gray-500" />}>
-                                            <Check class="w-3 h-3 text-green-400" />
-                                        </Show>
-                                    </button>
-                                </Show>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={props.onLogout}
-                        class="w-full flex items-center justify-center gap-2 mt-4 px-4 py-2.5 rounded-xl border border-red-500/10 bg-red-500/5 hover:bg-red-500/10 text-red-500/80 hover:text-red-500 transition-all duration-300 group"
-                    >
-                        <LogOut class="w-4 h-4 group-hover:scale-110 transition-transform" />
-                        <span class="font-bold text-[11px] uppercase tracking-wider">Logout Session</span>
-                    </button>
-                </div>
-            </div>
         </>
     );
 };
