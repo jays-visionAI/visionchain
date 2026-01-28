@@ -12,6 +12,7 @@ import {
     Clock,
     Sparkles,
     ChevronDown,
+    AlertCircle,
     LucideIcon
 } from 'lucide-solid';
 import { ethers } from 'ethers';
@@ -149,23 +150,28 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                                 onInput={(e) => props.setRecipientAddress(e.currentTarget.value)}
                                                                 class={`w-full bg-white/[0.03] border rounded-2xl px-5 py-4 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) ? 'border-red-500/50' : 'border-white/[0.06] focus:border-blue-500/30'}`}
                                                             />
-                                                            <Show when={props.recipientAddress().includes(',')}>
+                                                            <Show when={props.recipientAddress().trim() && !ethers.isAddress(props.recipientAddress().trim()) && (props.recipientAddress().includes(',') || props.recipientAddress().includes('&') || props.recipientAddress().includes('+') || (props.recipientAddress().trim().split(/\s+/).length > 1))}>
                                                                 <button
                                                                     onClick={() => {
-                                                                        const addresses = props.recipientAddress().split(',').map(a => a.trim()).filter(Boolean);
-                                                                        // Sanitize amount to remove commas for batch processing
+                                                                        const raw = props.recipientAddress().trim();
+                                                                        let parts = raw.split(/[,\&+]/).map(a => a.trim()).filter(Boolean);
+
+                                                                        if (parts.length <= 1 && raw.split(/\s+/).length > 1) {
+                                                                            parts = raw.split(/\s+/).map(a => a.trim()).filter(Boolean);
+                                                                        }
+
                                                                         const rawAmount = props.sendAmount().replace(/,/g, '');
-                                                                        const batchStr = addresses.map(a => `User, ${a}, ${rawAmount}`).join('\n');
+                                                                        const batchStr = parts.map(p => `${p}, , ${rawAmount}`).join('\n');
                                                                         props.setBatchInput(batchStr);
                                                                         props.setActiveFlow('batch_send');
                                                                     }}
-                                                                    class="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-black px-3 py-1.5 rounded-lg transition-all animate-bounce shadow-lg flex items-center gap-1"
+                                                                    class="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all animate-bounce shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center gap-2 z-20 border border-blue-400/50"
                                                                 >
-                                                                    <Layers class="w-3 h-3" /> Detect Multi! Use Batch Mode &rarr;
+                                                                    <Layers class="w-4 h-4" /> Multi-Detect! Switch to Batch &rarr;
                                                                 </button>
                                                             </Show>
                                                         </div>
-                                                        <Show when={props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) && !props.recipientAddress().includes(',')}>
+                                                        <Show when={props.recipientAddress().trim() && !ethers.isAddress(props.recipientAddress().trim()) && !(props.recipientAddress().includes(',') || props.recipientAddress().includes('&') || props.recipientAddress().includes('+') || (props.recipientAddress().trim().split(/\s+/).length > 1))}>
                                                             <p class="text-[10px] text-red-400 mt-2 ml-1 font-bold uppercase tracking-wider italic animate-pulse">Invalid Address</p>
                                                         </Show>
                                                     </div>
@@ -377,7 +383,11 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                         {(tx, i) => (
                                                             <div class="grid grid-cols-12 gap-2 p-3 border-b border-white/5 hover:bg-white/5 transition-colors text-xs items-center">
                                                                 <div class="col-span-3 text-gray-300 truncate font-medium">{tx.name || `User ${i() + 1}`}</div>
-                                                                <div class="col-span-6 font-mono text-[10px] text-blue-400 truncate" title={tx.recipient}>{tx.recipient}</div>
+                                                                <div class="col-span-6 font-mono text-[10px] truncate" title={tx.recipient || 'Address missing'}>
+                                                                    <Show when={tx.recipient} fallback={<span class="text-amber-500/60 italic font-sans flex items-center gap-1"><AlertCircle class="w-3 h-3" /> Resolve via AI</span>}>
+                                                                        <span class="text-blue-400">{tx.recipient}</span>
+                                                                    </Show>
+                                                                </div>
                                                                 <div class="col-span-3 text-right font-mono font-bold text-white">{parseFloat(tx.amount || '0').toLocaleString()} {tx.symbol || 'VCN'}</div>
                                                             </div>
                                                         )}

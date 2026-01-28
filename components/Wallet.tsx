@@ -268,12 +268,18 @@ const Wallet = (): JSX.Element => {
                     // Name is whatever is left (first non-addr, non-amt part)
                     const namePart = parts.find((p, i) => i !== addrIdx && p.replace(/,/g, '') !== amount);
                     if (namePart) name = namePart;
+                } else {
+                    // No address found, try to find amount and name
+                    const amtPart = parts.find(p => !isNaN(parseFloat(p.replace(/,/g, ''))));
+                    if (amtPart) amount = amtPart.replace(/,/g, '');
+                    const namePart = parts.find(p => p !== amtPart && p.trim().length > 0);
+                    if (namePart) name = namePart;
                 }
 
-                if (!recipient || !ethers.isAddress(recipient)) return null;
+                if (!recipient && !name) return null;
 
                 return {
-                    recipient,
+                    recipient: recipient || '',
                     amount: amount || '0',
                     name: name || 'Unknown',
                     symbol: 'VCN'
