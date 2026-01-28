@@ -875,6 +875,20 @@ const Wallet = (): JSX.Element => {
                             : `You successfully sent ${amount} ${symbol} to ${recipient}.`,
                         data: { amount, symbol, recipient, isScheduled }
                     });
+
+                    // 2. Notify Recipient (if registered user and not scheduled)
+                    if (!isScheduled) {
+                        const recipientUser = await findUserByAddress(recipient);
+                        if (recipientUser?.email) {
+                            const senderName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
+                            await createNotification(recipientUser.email, {
+                                type: 'transfer_received',
+                                title: 'Coins Received',
+                                content: `You received ${amount} ${symbol} from ${senderName}.`,
+                                data: { amount, symbol, sender: userProfile().email, txHash: lastTxHash() }
+                            });
+                        }
+                    }
                 } catch (notiErr) {
                     console.warn("Notification failed:", notiErr);
                 }
@@ -951,6 +965,24 @@ const Wallet = (): JSX.Element => {
 
                         finalResults.push({ success: true, hash: receipt?.hash, tx });
                         setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, successCount: a.successCount + 1 } : a));
+
+                        // Notify recipient for immediate transfers (not scheduled)
+                        if (tx.intent !== 'schedule' && receipt?.hash) {
+                            try {
+                                const recipientUser = await findUserByAddress(tx.recipient);
+                                if (recipientUser?.email) {
+                                    const senderName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
+                                    await createNotification(recipientUser.email, {
+                                        type: 'transfer_received',
+                                        title: 'Coins Received',
+                                        content: `You received ${tx.amount} ${tx.symbol || 'VCN'} from ${senderName}.`,
+                                        data: { amount: tx.amount, symbol: tx.symbol || 'VCN', sender: userProfile().email, txHash: receipt.hash }
+                                    });
+                                }
+                            } catch (notiErr) {
+                                console.warn("Recipient notification failed:", notiErr);
+                            }
+                        }
                     } catch (err: any) {
                         console.error("Batch item failed:", err);
                         finalResults.push({ success: false, error: err.message || "Unknown error", tx });
