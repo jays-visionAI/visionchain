@@ -24,6 +24,7 @@ import {
     Trash2,
     MessageSquare,
     ChevronDown,
+    ChevronUp,
     FileText,
     FileSpreadsheet,
     Bot,
@@ -563,6 +564,9 @@ const MultiBatchDrawer = (props: {
 };
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
+    const [scrolled, setScrolled] = createSignal(false);
+    const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(false);
+    let scrollContainerRef: HTMLDivElement | undefined;
     const [isComposing, setIsComposing] = createSignal(false);
     const [isQueueDrawerOpen, setIsQueueDrawerOpen] = createSignal(false);
     const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
@@ -796,41 +800,72 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         <Presence>
                             {/* Unified Background Agents Bar - Above Input */}
                             <Show when={props.queueTasks().length > 0 || props.batchAgents().length > 0}>
-                                <div class="px-2 mb-2 flex flex-col gap-2">
-                                    {/* Batch Agent Line */}
-                                    <Show when={props.batchAgents().length > 0}>
-                                        <div class="flex gap-3 overflow-x-auto scrollbar-hide py-1">
-                                            <For each={props.batchAgents()}>
-                                                {(agent) => (
-                                                    <AgentChip
-                                                        task={{
-                                                            id: agent.id,
-                                                            type: 'BATCH',
-                                                            summary: `${agent.currentCount || 0}/${agent.totalCount} Transactions`,
-                                                            status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'WAITING'),
-                                                            timestamp: agent.startTime,
-                                                            progress: ((agent.currentCount || 0) / agent.totalCount) * 100
-                                                        }}
-                                                        isCompact={true}
-                                                        onClick={() => setSelectedBatchId(agent.id)}
-                                                    />
-                                                )}
-                                            </For>
-                                        </div>
-                                    </Show>
+                                <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
+                                    {/* Toggle Button for Agent Bay */}
+                                    <div class="absolute -top-4 right-4 z-40">
+                                        <button
+                                            onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
+                                            class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
+                                                ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
+                                                : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
+                                                }`}
+                                        >
+                                            <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
+                                            <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
+                                            <div class="w-3.5 h-3.5 flex items-center justify-center">
+                                                <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
+                                                    <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
+                                                </Show>
+                                            </div>
+                                        </button>
+                                    </div>
 
-                                    {/* Time-lock Agent Line */}
-                                    <Show when={props.queueTasks().length > 0}>
-                                        <ChatQueueLine
-                                            tasks={props.queueTasks()}
-                                            isCompact={true}
-                                            onTaskClick={(id) => {
-                                                setSelectedTaskId(id);
-                                                setIsQueueDrawerOpen(true);
-                                            }}
-                                            onOpenHistory={() => setIsQueueDrawerOpen(true)}
-                                        />
-                                    </Show>
+                                    <Presence>
+                                        <Show when={!isAgentBayCollapsed()}>
+                                            <Motion.div
+                                                initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                                                exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                transition={{ duration: 0.3, easing: 'ease-out' }}
+                                                class="flex flex-col gap-2 overflow-hidden"
+                                            >
+                                                {/* Batch Agent Line */}
+                                                <Show when={props.batchAgents().length > 0}>
+                                                    <div class="flex gap-3 overflow-x-auto scrollbar-hide py-1">
+                                                        <For each={props.batchAgents()}>
+                                                            {(agent) => (
+                                                                <AgentChip
+                                                                    task={{
+                                                                        id: agent.id,
+                                                                        type: 'BATCH',
+                                                                        summary: `${agent.currentCount || 0}/${agent.totalCount} Transactions`,
+                                                                        status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'WAITING'),
+                                                                        timestamp: agent.startTime,
+                                                                        progress: ((agent.currentCount || 0) / agent.totalCount) * 100
+                                                                    }}
+                                                                    isCompact={true}
+                                                                    onClick={() => setSelectedBatchId(agent.id)}
+                                                                />
+                                                            )}
+                                                        </For>
+                                                    </div>
+                                                </Show>
+
+                                                {/* Time-lock Agent Line */}
+                                                <Show when={props.queueTasks().length > 0}>
+                                                    <ChatQueueLine
+                                                        tasks={props.queueTasks()}
+                                                        isCompact={true}
+                                                        onTaskClick={(id) => {
+                                                            setSelectedTaskId(id);
+                                                            setIsQueueDrawerOpen(true);
+                                                        }}
+                                                        onOpenHistory={() => setIsQueueDrawerOpen(true)}
+                                                    />
+                                                </Show>
+                                            </Motion.div>
+                                        </Show>
+                                    </Presence>
                                 </div>
                             </Show>
 

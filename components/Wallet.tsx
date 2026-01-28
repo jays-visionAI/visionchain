@@ -1813,7 +1813,7 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                 { id: '2', label: 'Processing Request...', status: 'loading' }
             ]);
 
-            let response = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email, messages());
+            let response: string = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email, messages());
 
             // --- State-of-the-Art Thinking Process Parsing ---
             const thoughtRegex = /<think>([\s\S]*?)<\/think>/g;
