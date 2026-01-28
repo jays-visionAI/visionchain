@@ -58,8 +58,8 @@ export const WalletSend = (props: WalletSendProps) => {
     };
 
     return (
-        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
-            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-0 sm:p-4 lg:p-8">
+            <div class="max-w-2xl mx-auto p-4 sm:p-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div class="flex items-center gap-4 mb-2 lg:hidden">
                     <button
                         onClick={props.onBack}
@@ -76,16 +76,17 @@ export const WalletSend = (props: WalletSendProps) => {
                     titleAccent="TOKENS"
                     description="Securely send and schedule token transfers across the Vision network and beyond."
                     icon={ArrowUpRight}
+                    maxWidth="max-w-2xl"
                 />
 
-                <div class="max-w-2xl mx-auto">
+                <div class="w-full">
                     <Show when={props.flowStep() === 1}>
                         <div class="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                             {/* Asset Selection */}
                             <div class="space-y-4">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Select Asset</label>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div class="flex items-center justify-between p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl relative group">
+                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Select Asset</label>
+                                <div class="w-full">
+                                    <div class="flex items-center justify-between p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl relative group w-full">
                                         <div class="flex items-center gap-3">
                                             <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
                                                 <span class="font-black text-blue-400 text-sm">V</span>
@@ -105,7 +106,7 @@ export const WalletSend = (props: WalletSendProps) => {
 
                             {/* Recipient */}
                             <div class="space-y-4">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Recipient Address</label>
+                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Recipient Address</label>
                                 <div class="relative group">
                                     <input
                                         type="text"
@@ -156,13 +157,13 @@ export const WalletSend = (props: WalletSendProps) => {
 
                             {/* Amount */}
                             <div class="space-y-4">
-                                <div class="flex justify-between items-end px-1">
+                                <div class="flex flex-col sm:flex-row justify-between items-center sm:items-end px-1 gap-2">
                                     <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Transfer Amount</label>
                                     <button
                                         onClick={() => props.setSendAmount(props.getAssetData('VCN').liquidBalance.toString())}
-                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors"
+                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-1 rounded-full sm:bg-transparent sm:p-0"
                                     >
-                                        Use Max
+                                        Use Max Balance
                                     </button>
                                 </div>
                                 <div class="relative">
