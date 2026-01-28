@@ -179,7 +179,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                             <div class="flex items-center justify-between gap-2">
                                                 <div class="flex items-center gap-1.5 min-w-0">
                                                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
-                                                        {task.type || 'TIME AGENT'}
+                                                        {task.type === 'BATCH' ? 'BATCH AGENT' : 'TIME LOCK AGENT'}
                                                     </span>
                                                     <div class="w-1 h-1 rounded-full bg-gray-700 shrink-0" />
                                                     <span class="text-xs font-bold text-gray-200 truncate">

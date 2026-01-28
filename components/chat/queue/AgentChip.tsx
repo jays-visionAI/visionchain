@@ -126,8 +126,28 @@ const AgentChip = (props: AgentChipProps) => {
 
         const diff = props.task.executeAt - currentTime();
         if (diff > 0) {
-            if (diff > 3600000) return `In ${Math.ceil(diff / 3600000)}h`;
-            return `In ${Math.ceil(diff / 60000)}m`;
+            // Format remaining time: show only largest necessary units
+            const totalSeconds = Math.floor(diff / 1000);
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            let parts: string[] = [];
+            if (days > 0) parts.push(`${days}일`);
+            if (hours > 0 || days > 0) parts.push(`${hours}시간`);
+            if (minutes > 0 || hours > 0 || days > 0) parts.push(`${minutes}분`);
+            parts.push(`${seconds}초`);
+
+            // Remove leading zeros for cleaner display
+            if (days === 0) {
+                parts = parts.filter(p => !p.startsWith('0'));
+                if (hours === 0) {
+                    parts = parts.filter(p => !p.includes('시간'));
+                }
+            }
+
+            return parts.join(' ');
         } else {
             // Overdue logic
             const overdueSecs = Math.abs(Math.floor(diff / 1000));
@@ -152,7 +172,7 @@ const AgentChip = (props: AgentChipProps) => {
                         <Dynamic component={DisplayIcon()} class={`w-3.5 h-3.5 ${config().color} ${props.task.status === 'EXECUTING' ? 'animate-spin' : ''}`} />
                     </div>
                     <span class="text-[10px] font-black text-white uppercase tracking-widest opacity-80">
-                        {props.task.type === 'TIMELOCK' ? 'Time Agent' : 'Batch Agent'}
+                        {props.task.type === 'TIMELOCK' ? 'Time Lock Agent' : 'Batch Agent'}
                     </span>
                 </div>
                 <div class={`px-1.5 py-0.5 rounded-md border ${config().border} bg-black/20`}>
