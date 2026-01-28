@@ -178,14 +178,14 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                     const contact = props.contacts?.find((c: any) =>
                                                         c.address?.toLowerCase() === counterpartyAddr?.toLowerCase()
                                                     );
-                                                    const shortAddr = counterpartyAddr ? `${counterpartyAddr.slice(0, 6)}...${counterpartyAddr.slice(-4)}` : 'Unknown';
-                                                    const displayName = contact ? (contact.internalName || contact.name) : 'Unknown';
+                                                    const shortAddr = counterpartyAddr ? `${counterpartyAddr.slice(0, 6)}...${counterpartyAddr.slice(-4)}` : 'unknown';
+                                                    const displayName = contact ? (contact.internalName || contact.name) : 'unknown';
                                                     const prefix = isIncoming ? 'Received from' : 'Sent to';
 
                                                     return (
                                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                                             <span class="text-gray-400 font-bold shrink-0">{prefix}</span>
-                                                            <span class={`font-black italic uppercase tracking-tight truncate max-w-[140px] sm:max-w-none ${contact ? 'text-blue-400' : 'text-gray-500 text-[11px]'}`}>
+                                                            <span class={`font-black italic tracking-tight truncate max-w-[140px] sm:max-w-none pr-1.5 ${contact ? 'text-blue-400 uppercase' : 'text-gray-500 text-[11px]'}`}>
                                                                 {displayName}
                                                             </span>
                                                             <span class="text-[10px] text-gray-600 font-mono shrink-0">({shortAddr})</span>
