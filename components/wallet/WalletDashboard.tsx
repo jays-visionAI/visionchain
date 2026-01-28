@@ -441,8 +441,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <Sparkles class="w-4 h-4 text-blue-400 animate-pulse" />
                                     <span class="text-[11px] font-black text-blue-400 uppercase tracking-[0.25em]">Vision Architect v0.8</span>
                                 </div>
-                                <h1 class="text-4xl md:text-6xl font-black text-white mb-6 tracking-tight">
-                                    Ready to <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Transform</span> your assets?
+                                <h1 class="text-4xl md:text-6xl font-black italic text-white mb-6 tracking-tight uppercase">
+                                    Orchestrate your <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">On-Chain Vision</span>?
                                 </h1>
                                 <p class="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto mb-16 leading-relaxed">
                                     AI-powered orchestration for on-chain assets. Seamless, secure, and intelligent.
