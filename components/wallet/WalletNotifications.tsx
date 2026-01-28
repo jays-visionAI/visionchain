@@ -156,50 +156,52 @@ export function WalletNotifications() {
     return (
         <div class="flex-1 h-full flex flex-col overflow-hidden bg-[#0A0A0B]">
             {/* Header Area */}
-            <div class="p-6 lg:p-8 shrink-0">
-                <WalletViewHeader
-                    tag="Communication Hub"
-                    title="NOTIFICATION"
-                    titleAccent=""
-                    description="Stay informed with real-time updates on your assets, security signals, and ecosystem alerts."
-                    icon={Bell}
-                />
+            <div class="shrink-0">
+                <div class="max-w-5xl mx-auto p-4 lg:p-8 pb-0">
+                    <WalletViewHeader
+                        tag="Communication Hub"
+                        title="NOTIFICATION"
+                        titleAccent=""
+                        description="Stay informed with real-time updates on your assets, security signals, and ecosystem alerts."
+                        icon={Bell}
+                    />
 
-                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
-                    {/* Filter Chips */}
-                    <div class="flex bg-white/[0.03] p-1 rounded-2xl border border-white/5 w-full sm:w-auto">
-                        <button
-                            onClick={() => setFilter('all')}
-                            class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                        >
-                            All Logs
-                        </button>
-                        <button
-                            onClick={() => setFilter('unread')}
-                            class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                        >
-                            Unread
-                            <Show when={notifications().some(n => !n.read)}>
-                                <span class="absolute top-1 right-2 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-                            </Show>
-                        </button>
-                    </div>
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
+                        {/* Filter Chips */}
+                        <div class="flex bg-white/[0.03] p-1 rounded-2xl border border-white/5 w-full sm:w-auto">
+                            <button
+                                onClick={() => setFilter('all')}
+                                class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                            >
+                                All Logs
+                            </button>
+                            <button
+                                onClick={() => setFilter('unread')}
+                                class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                            >
+                                Unread
+                                <Show when={notifications().some(n => !n.read)}>
+                                    <span class="absolute top-1 right-2 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                                </Show>
+                            </button>
+                        </div>
 
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <button
-                            onClick={markAllRead}
-                            disabled={!notifications().some(n => !n.read)}
-                            class="flex-1 sm:flex-none px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all disabled:opacity-0"
-                        >
-                            Mark All Read
-                        </button>
-                        <button
-                            onClick={clearAll}
-                            disabled={notifications().length === 0}
-                            class="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 transition-all disabled:opacity-0"
-                        >
-                            Purge All
-                        </button>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <button
+                                onClick={markAllRead}
+                                disabled={!notifications().some(n => !n.read)}
+                                class="flex-1 sm:flex-none px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all disabled:opacity-0"
+                            >
+                                Mark All Read
+                            </button>
+                            <button
+                                onClick={clearAll}
+                                disabled={notifications().length === 0}
+                                class="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 transition-all disabled:opacity-0"
+                            >
+                                Purge All
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -210,7 +212,7 @@ export function WalletNotifications() {
                 <div
                     class={`flex-1 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${selectedId() ? 'hidden lg:flex' : 'flex'}`}
                 >
-                    <div class="p-6 lg:p-8 pt-0 space-y-3 pb-32">
+                    <div class="max-w-5xl mx-auto w-full p-4 lg:p-8 pt-0 space-y-3 pb-32">
                         <Show when={!isLoading()} fallback={
                             <div class="flex flex-col items-center justify-center py-20 gap-4">
                                 <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />

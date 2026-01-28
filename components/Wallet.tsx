@@ -2164,7 +2164,7 @@ Format:
                         {/* History View */}
                         <Show when={activeView() === 'history'}>
                             <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32 custom-scrollbar">
-                                <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                                     <WalletViewHeader
                                         tag="Blockchain Ledger"
                                         title="TRANSACTION"
@@ -2281,8 +2281,8 @@ Format:
                         </Show>
 
                         <Show when={activeView() === 'profile'}>
-                            <div class="flex-1 overflow-y-auto p-4 lg:p-6 pb-32">
-                                <div class="max-w-4xl mx-auto space-y-6">
+                            <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32">
+                                <div class="max-w-5xl mx-auto space-y-6">
 
                                     {/* Onboarding Header (Progress Stepper) - Redesigned to match image */}
                                     <Show when={onboardingStep() > 0}>
@@ -2985,7 +2985,7 @@ Format:
 
                         <Show when={activeView() === 'settings'}>
                             <div class="flex-1 overflow-y-auto p-4 lg:p-8">
-                                <div class="max-w-4xl mx-auto">
+                                <div class="max-w-5xl mx-auto">
                                     <WalletSettings onBack={() => setActiveView('assets')} />
                                 </div>
                             </div>

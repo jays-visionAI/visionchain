@@ -21,8 +21,8 @@ interface WalletReceiveProps {
 
 export const WalletReceive = (props: WalletReceiveProps) => {
     return (
-        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-0 sm:p-4 lg:p-8">
-            <div class="max-w-2xl mx-auto p-4 sm:p-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div class="flex items-center gap-4 mb-2 lg:hidden">
                     <button
                         onClick={props.onBack}
@@ -39,7 +39,6 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                     titleAccent="ASSETS"
                     description="Your permanent on-chain identity. Scan or copy your address to receive tokens from any network."
                     icon={ArrowDownLeft}
-                    maxWidth="max-w-2xl"
                 />
 
                 <div class="w-full space-y-8">

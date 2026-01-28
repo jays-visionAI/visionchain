@@ -35,7 +35,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
-            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <WalletViewHeader
                     tag="Portfolio Overview"
                     title="MY"
@@ -93,7 +93,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
 
             {/* Main Content */}
-            <div class="max-w-[1440px] mx-auto px-4 sm:px-8 py-6 md:py-10">
+            <div class="max-w-5xl mx-auto px-4 lg:px-0 py-6 md:py-10">
                 {/* Wallet Out-of-Sync / Missing Local Data Warning */}
                 <Show when={props.isLocalWalletMissing}>
                     <div class="mb-8 p-6 bg-amber-500/10 border border-amber-500/30 rounded-[24px] flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-md shadow-2xl">

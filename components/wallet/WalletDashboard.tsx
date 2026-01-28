@@ -274,7 +274,7 @@ const MultiBatchDrawer = (props: {
                         animate={{ y: 0 }}
                         exit={{ y: '100%' }}
                         transition={{ duration: 0.5, easing: [0.16, 1, 0.3, 1] }}
-                        class="relative w-full max-w-4xl h-[85vh] bg-[#0d0d0f] border-t border-white/10 rounded-t-[40px] shadow-3xl flex flex-col overflow-hidden"
+                        class="relative w-full max-w-5xl h-[85vh] bg-[#0d0d0f] border-t border-white/10 rounded-t-[40px] shadow-3xl flex flex-col overflow-hidden"
                     >
                         <div class="p-8 flex items-center justify-between border-b border-white/5 bg-gradient-to-br from-blue-500/5 to-transparent">
                             <div>
@@ -403,7 +403,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Top Queue Monitor: unified view for all background agents */}
                 <div class="absolute top-4 left-0 right-0 z-[40] pointer-events-none px-6">
-                    <div class="max-w-4xl mx-auto flex flex-col items-end gap-3 pointer-events-auto">
+                    <div class="max-w-5xl mx-auto flex flex-col items-end gap-3 pointer-events-auto">
                         <For each={props.batchAgents()}>
                             {(agent) => (
                                 <AgentChip
@@ -449,7 +449,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 </p>
 
                                 {/* Quick Actions Bento */}
-                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto overflow-visible">
+                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto overflow-visible">
                                     <div
                                         onClick={() => props.setActiveFlow('send')}
                                         class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-blue-500/40 hover:bg-blue-500/[0.02] transition-all group cursor-pointer"
@@ -577,7 +577,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Modern Floating Input Area */}
                 <div class={`absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none ${!props.onboardingStep() ? 'bottom-[68px] lg:bottom-0' : 'bottom-0'}`}>
-                    <div class="max-w-4xl mx-auto pointer-events-auto">
+                    <div class="max-w-5xl mx-auto pointer-events-auto">
                         <Presence>
                             {/* Active Queue Bar (Time-lock Agent) - Above Input */}
                             <Show when={props.queueTasks().length > 0}>

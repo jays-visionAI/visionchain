@@ -36,11 +36,11 @@ interface WalletMintProps {
 
 export const WalletMint = (props: WalletMintProps) => {
     return (
-        <div class="flex-1 overflow-y-auto relative h-full custom-scrollbar p-0 sm:p-4 lg:p-8">
+        <div class="flex-1 overflow-y-auto relative h-full custom-scrollbar p-4 lg:p-8">
             {/* Decorative Background Blur */}
             <div class="absolute top-0 right-[15%] w-[450px] h-[450px] bg-cyan-500/5 rounded-full blur-[130px] pointer-events-none" />
 
-            <div class="max-w-4xl mx-auto p-4 sm:p-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative min-h-full flex flex-col">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative min-h-full flex flex-col">
                 <div class="flex items-center gap-4 mb-2 lg:hidden">
                     <button
                         onClick={() => props.setActiveView('assets')}

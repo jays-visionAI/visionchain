@@ -165,7 +165,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
 
     return (
         <div class="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
-            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 <WalletViewHeader
                     tag="Network Directory"

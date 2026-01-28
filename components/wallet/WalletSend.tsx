@@ -58,8 +58,8 @@ export const WalletSend = (props: WalletSendProps) => {
     };
 
     return (
-        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-0 sm:p-4 lg:p-8">
-            <div class="max-w-2xl mx-auto p-4 sm:p-0 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div class="flex items-center gap-4 mb-2 lg:hidden">
                     <button
                         onClick={props.onBack}
@@ -71,12 +71,11 @@ export const WalletSend = (props: WalletSendProps) => {
                 </div>
 
                 <WalletViewHeader
-                    tag="Transfer Funds"
+                    tag="Transfer Protocol"
                     title="SEND"
-                    titleAccent="TOKENS"
-                    description="Securely send and schedule token transfers across the Vision network and beyond."
+                    titleAccent="ASSETS"
+                    description="Securely transfer your digital assets across the Vision network with near-instant settlement."
                     icon={ArrowUpRight}
-                    maxWidth="max-w-2xl"
                 />
 
                 <div class="w-full">

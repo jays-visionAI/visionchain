@@ -23,7 +23,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
             {/* Decorative Background Blur */}
             <div class="absolute top-0 right-[25%] w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[160px] pointer-events-none" />
 
-            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative">
                 <WalletViewHeader
                     tag="Network Infrastructure"
                     title="COMPUTE"

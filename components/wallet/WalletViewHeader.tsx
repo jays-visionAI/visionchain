@@ -13,7 +13,7 @@ interface WalletViewHeaderProps {
 
 export const WalletViewHeader = (props: WalletViewHeaderProps) => {
     return (
-        <div class={`flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 ${props.maxWidth || 'max-w-4xl'} mx-auto w-full`}>
+        <div class={`flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 ${props.maxWidth || 'max-w-5xl'} mx-auto w-full`}>
             <div class="flex-1 flex flex-col items-center md:items-start text-center md:text-left">
                 <Show when={props.tag}>
                     <div class="flex items-center gap-2 mb-2">
