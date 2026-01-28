@@ -18,7 +18,7 @@ const ChatQueueLine = (props: ChatQueueLineProps) => {
     // CANCELLED/EXPIRED are usually hidden or moved to history.
 
     const activeTasks = createMemo(() =>
-        props.tasks.filter(t => ['WAITING', 'EXECUTING', 'SENT', 'FAILED'].includes(t.status))
+        props.tasks.filter(t => ['WAITING', 'EXECUTING', 'FAILED'].includes(t.status))
     );
 
     const waitingCount = createMemo(() =>
