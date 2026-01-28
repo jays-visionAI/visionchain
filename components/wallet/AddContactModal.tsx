@@ -246,7 +246,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
 
                             {/* Input Grid */}
                             <div class="space-y-4">
-                                <div class="grid grid-cols-12 gap-4 px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                <div class="grid grid-cols-12 gap-6 px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                     <div class="col-span-4">Internal Name</div>
                                     <div class="col-span-3">Alias / Tags</div>
                                     <div class="col-span-4">Phone Number</div>
@@ -256,25 +256,23 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                 <div class="space-y-1">
                                     <Index each={entries()}>
                                         {(entry, index) => (
-                                            <div class="grid grid-cols-12 gap-3 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
-                                                <div class="col-span-4">
-                                                    <div class="relative">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="e.g. John Doe"
-                                                            value={entry().internalName}
-                                                            onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
-                                                            class={`w-full bg-white/[0.03] border rounded-xl px-4 py-3 text-sm outline-none transition-all ${isDuplicateName(entry().internalName, index)
-                                                                ? 'border-red-500/50 text-red-400 focus:bg-red-500/5'
-                                                                : 'border-white/[0.06] text-white focus:border-blue-500/50 focus:bg-white/[0.08]'
-                                                                }`}
-                                                        />
-                                                        <Show when={isDuplicateName(entry().internalName, index)}>
-                                                            <div class="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                                                                <AlertCircle class="w-3 h-3 text-white" />
-                                                            </div>
-                                                        </Show>
-                                                    </div>
+                                            <div class="grid grid-cols-12 gap-6 items-center group/row py-1.5 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
+                                                <div class="col-span-4 relative">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. John Doe"
+                                                        value={entry().internalName}
+                                                        onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
+                                                        class={`w-full block bg-white/[0.03] border rounded-xl px-4 py-2.5 text-sm outline-none transition-all ${isDuplicateName(entry().internalName, index)
+                                                            ? 'border-red-500/50 text-red-400 focus:bg-red-500/5'
+                                                            : 'border-white/[0.06] text-white focus:border-blue-500/50 focus:bg-white/[0.08]'
+                                                            }`}
+                                                    />
+                                                    <Show when={isDuplicateName(entry().internalName, index)}>
+                                                        <div class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center shadow-lg animate-bounce z-10">
+                                                            <AlertCircle class="w-3 h-3 text-white" />
+                                                        </div>
+                                                    </Show>
                                                 </div>
                                                 <div class="col-span-3">
                                                     <input
@@ -282,7 +280,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                         placeholder="e.g. Work, Family"
                                                         value={entry().alias}
                                                         onInput={(e) => updateEntry(index, 'alias', e.currentTarget.value)}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-xs outline-none transition-all"
+                                                        class="w-full block bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white text-xs outline-none transition-all"
                                                     />
                                                 </div>
                                                 <div class="col-span-4">
@@ -291,7 +289,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                         placeholder="010-1234-5678"
                                                         value={entry().phone}
                                                         onInput={(e) => updateEntry(index, 'phone', e.currentTarget.value)}
-                                                        class="w-full bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-3 text-white text-sm font-mono outline-none transition-all"
+                                                        class="w-full block bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm font-mono outline-none transition-all"
                                                     />
                                                 </div>
                                                 <div class="col-span-1 flex justify-end">
