@@ -182,7 +182,14 @@ const Wallet = (): JSX.Element => {
     const navigate = useNavigate();
     const auth = useAuth();
     // State Declarations
-    const [activeView, setActiveView] = createSignal('assets');
+    const location = useLocation();
+
+    // Replaced Signal with Derived State from URL
+    const activeView = () => {
+        const path = location.pathname.split('/');
+        // default to 'assets' if no sub-route provided
+        return (path[2] as ViewType) || 'assets';
+    };
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
@@ -481,13 +488,13 @@ const Wallet = (): JSX.Element => {
             role: m.role as 'user' | 'assistant',
             content: m.text
         })));
-        setActiveView('chat');
+        navigate('/wallet/chat');
     };
 
     const startNewChat = () => {
         setCurrentSessionId(null);
         setMessages([{ role: 'assistant', content: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }]);
-        setActiveView('chat');
+        navigate('/wallet/chat');
     };
 
     const handleDeleteConversation = async (id: string) => {
@@ -558,7 +565,7 @@ const Wallet = (): JSX.Element => {
         // Direct to setup if no wallet exists
         if (!WalletService.hasWallet(userProfile().email)) {
             alert('Please create or import a wallet first to purchase nodes.');
-            setActiveView('profile');
+            navigate('/wallet/profile');
             return;
         }
 
@@ -1036,7 +1043,7 @@ const Wallet = (): JSX.Element => {
                 } else {
                     // Force onboarding if no wallet exists - Redirect to mnemonic generation flow
                     setOnboardingStep(1);
-                    setActiveView('profile');
+                    navigate('/wallet/profile');
                 }
             } else {
                 // No profile data found in database, but maybe user exists in Auth
@@ -1047,7 +1054,7 @@ const Wallet = (): JSX.Element => {
                     setUserProfile(prev => ({ ...prev, isVerified: true, address: localAddress || '' }));
                 } else {
                     setOnboardingStep(1);
-                    setActiveView('profile');
+                    navigate('/wallet/profile');
                 }
             }
         } catch (error) {
@@ -1066,7 +1073,7 @@ const Wallet = (): JSX.Element => {
     // Enforce Onboarding View Integrity
     createEffect(() => {
         if (onboardingStep() > 0 && activeView() !== 'profile') {
-            setActiveView('profile');
+            navigate('/wallet/profile');
         }
     });
 
@@ -2067,7 +2074,7 @@ Format:
                         sidebarOpen={sidebarOpen()}
                         setSidebarOpen={setSidebarOpen}
                         activeView={activeView()}
-                        setActiveView={setActiveView}
+                        setActiveView={(v: string) => navigate(`/wallet/${v}`)}
                         onboardingStep={onboardingStep()}
                         userProfile={userProfile()}
                         shortAddress={shortAddress()}
@@ -2097,7 +2104,7 @@ Format:
                             {/* Top Bar Actions (Notification Bell) */}
                             <div class="ml-auto flex items-center gap-3">
                                 <button
-                                    onClick={() => setActiveView('notifications')}
+                                    onClick={() => navigate('/wallet/notifications')}
                                     class="relative p-2.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95"
                                 >
                                     <Bell class={`w-5 h-5 transition-colors ${unreadNotificationsCount() > 0 ? 'text-cyan-400' : 'text-gray-400 group-hover:text-white'}`} />
@@ -2119,7 +2126,7 @@ Format:
                                 input={input}
                                 setInput={setInput}
                                 handleSend={handleSend}
-                                setActiveView={setActiveView}
+                                setActiveView={(v: string) => navigate(`/wallet/${v}`)}
                                 setActiveFlow={setActiveFlow}
                                 totalValueStr={totalValueStr}
                                 getAssetData={getAssetData}
@@ -2208,7 +2215,7 @@ Format:
                                 mintedSuccess={mintedSuccess}
                                 setMintedSuccess={setMintedSuccess}
                                 mintProgress={mintProgress}
-                                setActiveView={setActiveView}
+                                setActiveView={(v: string) => navigate(`/wallet/${v}`)}
                             />
                         </Show>
 
@@ -2239,13 +2246,13 @@ Format:
                                         setActiveFlow(flow);
                                     }
                                 }}
-                                setActiveView={setActiveView}
+                                setActiveView={(v: string) => navigate(`/wallet/${v}`)}
                                 vcnPurchases={vcnPurchases}
                                 totalValue={totalValue}
                                 networkMode={networkMode()}
                                 isLocalWalletMissing={isLocalWalletMissing()}
                                 onRestoreWallet={() => {
-                                    setActiveView('profile');
+                                    navigate('/wallet/profile');
                                     setOnboardingStep(2);
                                 }}
                                 walletAddress={walletAddress}
@@ -2255,7 +2262,7 @@ Format:
 
                         <Show when={activeView() === 'send'}>
                             <WalletSend
-                                onBack={() => setActiveView('assets')}
+                                onBack={() => navigate('/wallet/assets')}
                                 getAssetData={getAssetData}
                                 selectedToken={selectedToken}
                                 setSelectedToken={setSelectedToken}
@@ -2267,7 +2274,7 @@ Format:
                                 flowStep={flowStep}
                                 setFlowStep={setFlowStep}
                                 flowLoading={flowLoading}
-                                resetFlow={() => { resetFlow(); setActiveView('assets'); }}
+                                resetFlow={() => { resetFlow(); navigate('/wallet/assets'); }}
                                 walletAddress={walletAddress}
                                 lastTxHash={lastTxHash}
                                 contacts={contacts}
@@ -2278,7 +2285,7 @@ Format:
 
                         <Show when={activeView() === 'receive'}>
                             <WalletReceive
-                                onBack={() => setActiveView('assets')}
+                                onBack={() => navigate('/wallet/assets')}
                                 walletAddress={walletAddress}
                                 receiveNetwork={receiveNetwork}
                                 setReceiveNetwork={setReceiveNetwork}

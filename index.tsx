@@ -74,7 +74,7 @@ render(() => (
       <Route path="/privacy" component={Public.PrivacyPage} />
       <Route path="/terms" component={Public.TermsPage} />
       <Route path="/cookies" component={Public.CookiesPage} />
-      <Route path="/wallet" component={Public.WalletPage} />
+      <Route path="/wallet/*" component={Public.WalletPage} />
       <Route path="/trafficsim" component={Public.TrafficSimulatorPage} />
       <Route path="/visionscan" component={Public.VisionScanPage} />
       <Route path="/testnet" component={Public.TestnetPage} />
