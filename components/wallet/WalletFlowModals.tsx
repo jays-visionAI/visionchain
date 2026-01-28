@@ -1,4 +1,4 @@
-import { Show, For, Switch, Match, createSignal } from 'solid-js';
+import { Show, For, Switch, Match, createSignal, createMemo } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
     ArrowUpRight,
@@ -16,6 +16,7 @@ import {
     LucideIcon
 } from 'lucide-solid';
 import { ethers } from 'ethers';
+import { saveUserContacts } from '../../services/firebaseService';
 
 interface WalletFlowModalsProps {
     activeFlow: () => string | null;
@@ -49,11 +50,22 @@ interface WalletFlowModalsProps {
     copyToClipboard: (text: string) => Promise<boolean>;
     isSchedulingTimeLock: () => boolean;
     lockDelaySeconds: () => number;
+    userProfile: () => any;
+    contacts: () => any[];
+    onContactAdded?: () => void;
 }
 
 export const WalletFlowModals = (props: WalletFlowModalsProps) => {
     const [receiveNetwork, setReceiveNetwork] = createSignal('Vision Chain');
     const [copied, setCopied] = createSignal(false);
+    const [isAddingContact, setIsAddingContact] = createSignal(false);
+
+    const resolvedRecipientName = createMemo(() => {
+        const addr = props.recipientAddress().toLowerCase();
+        if (!addr || !ethers.isAddress(addr)) return null;
+        const contact = props.contacts().find(c => c.address?.toLowerCase() === addr);
+        return contact?.internalName || null;
+    });
 
     return (
         <Show when={props.activeFlow()}>
@@ -231,7 +243,22 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                     <div class="space-y-3">
                                                         <div class="flex justify-between text-sm">
                                                             <span class="text-gray-500">To</span>
-                                                            <span class="text-white font-mono">{props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-4)}</span>
+                                                            <div class="flex flex-col items-end">
+                                                                <Show when={resolvedRecipientName()} fallback={
+                                                                    <button
+                                                                        onClick={() => setIsAddingContact(true)}
+                                                                        class="flex items-center gap-1.5 group/save"
+                                                                    >
+                                                                        <span class="text-xs font-black text-amber-400 uppercase italic tracking-tighter group-hover/save:text-amber-300 transition-colors">New Recipient</span>
+                                                                        <Plus class="w-3 h-3 text-amber-400" />
+                                                                    </button>
+                                                                }>
+                                                                    <span class="text-white font-black italic tracking-tight">{resolvedRecipientName()}</span>
+                                                                </Show>
+                                                                <span class="text-[10px] font-mono text-gray-600 opacity-60">
+                                                                    {props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-4)}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                         <div class="flex justify-between text-sm">
                                                             <span class="text-gray-500">Network Fee</span>
@@ -821,6 +848,96 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                 </Match>
                             </Switch>
                         </div>
+                    </div>
+                </Motion.div>
+            </div>
+            <NewContactModal
+                isOpen={isAddingContact()}
+                onClose={() => setIsAddingContact(false)}
+                address={props.recipientAddress()}
+                userEmail={props.userProfile().email}
+                onSuccess={() => {
+                    setIsAddingContact(false);
+                    props.onContactAdded?.();
+                }}
+            />
+        </Show>
+    );
+};
+
+const NewContactModal = (props: { isOpen: boolean, onClose: () => void, address: string, userEmail: string, onSuccess: () => void }) => {
+    const [name, setName] = createSignal('');
+    const [isSaving, setIsSaving] = createSignal(false);
+
+    const handleSave = async () => {
+        if (!name().trim()) return;
+        setIsSaving(true);
+        try {
+            await saveUserContacts(props.userEmail, [{
+                internalName: name(),
+                address: props.address,
+                phone: '',
+                isFavorite: false,
+                syncStatus: 'verified'
+            }]);
+            props.onSuccess();
+        } catch (e) {
+            console.error("Failed to save contact:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Show when={props.isOpen}>
+            <div class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                <Motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                    onClick={props.onClose}
+                />
+                <Motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    class="relative w-full max-w-sm bg-[#0d0d0f] border border-white/[0.08] rounded-[32px] p-8 shadow-3xl text-center"
+                >
+                    <div class="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mx-auto mb-6 text-blue-400">
+                        <Plus class="w-8 h-8" />
+                    </div>
+                    <h3 class="text-xl font-black text-white italic uppercase tracking-tight mb-2">Save to Contacts</h3>
+                    <p class="text-xs text-gray-500 mb-8 whitespace-pre-wrap">Assign a name to this address for easier identification in the future.</p>
+
+                    <div class="space-y-4 mb-8">
+                        <div class="text-left">
+                            <label class="text-[9px] font-black text-gray-600 uppercase tracking-widest px-2 mb-2 block">Display Name</label>
+                            <input
+                                type="text"
+                                autofocus
+                                placeholder="e.g. Park Ji-hyun"
+                                value={name()}
+                                onInput={(e) => setName(e.currentTarget.value)}
+                                class="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-blue-500/30 transition-all font-bold"
+                            />
+                        </div>
+                        <div class="text-left">
+                            <label class="text-[9px] font-black text-gray-600 uppercase tracking-widest px-2 mb-2 block">Wallet Address</label>
+                            <div class="px-5 py-4 bg-black/40 border border-white/5 rounded-2xl text-[11px] font-mono text-gray-500 truncate italic">
+                                {props.address}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button onClick={props.onClose} class="flex-1 py-4 text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest">Cancel</button>
+                        <button
+                            onClick={handleSave}
+                            disabled={!name().trim() || isSaving()}
+                            class="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-500/20 transition-all uppercase tracking-widest text-xs active:scale-95 disabled:opacity-30"
+                        >
+                            {isSaving() ? 'Saving...' : 'Save Contact'}
+                        </button>
                     </div>
                 </Motion.div>
             </div>

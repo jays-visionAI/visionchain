@@ -1115,16 +1115,20 @@ const Wallet = (): JSX.Element => {
         return () => clearInterval(interval);
     });
 
-    createEffect(async () => {
+    const loadContacts = async () => {
         const email = auth.user()?.email;
         if (email) {
             try {
                 const data = await getUserContacts(email);
                 setContacts(data);
             } catch (e) {
-                console.warn("Failed to pre-load contacts", e);
+                console.warn("Failed to load contacts", e);
             }
         }
+    };
+
+    createEffect(() => {
+        loadContacts();
     });
 
     const fetchFullProfile = async () => {
@@ -2401,6 +2405,8 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                                 walletAddress={walletAddress}
                                 lastTxHash={lastTxHash}
                                 contacts={contacts}
+                                userProfile={userProfile}
+                                onContactAdded={loadContacts}
                                 isSchedulingTimeLock={isSchedulingTimeLock}
                                 lockDelaySeconds={lockDelaySeconds}
                             />
@@ -3391,6 +3397,9 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                                 copyToClipboard={copyToClipboard}
                                 isSchedulingTimeLock={isSchedulingTimeLock}
                                 lockDelaySeconds={lockDelaySeconds}
+                                userProfile={userProfile}
+                                contacts={contacts}
+                                onContactAdded={loadContacts}
                             />
                         </Presence>
                         {/* Mobile Bottom Navigation */}
