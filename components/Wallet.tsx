@@ -2181,8 +2181,16 @@ Format:
                             }}
                             onClick={() => setSidebarOpen(true)}
                         >
-                            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-20 bg-gradient-to-b from-white/5 via-white/10 to-white/5 rounded-r-full border-r border-t border-b border-white/10 backdrop-blur-md shadow-[4px_0_20px_rgba(0,0,0,0.5)] transition-all duration-300 group-hover:w-2.5 group-hover:h-28 group-hover:from-cyan-500/20 group-hover:to-blue-600/20 group-hover:border-cyan-500/30 group-hover:shadow-[4px_0_15px_rgba(6,182,212,0.2)] flex items-center justify-center">
-                                <ChevronRight class="w-2.5 h-2.5 text-gray-500 group-hover:text-cyan-400 transition-colors ml-0.5" />
+                            <div
+                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[25px] h-[50px] bg-[#1a1a1e]/90 border border-white/10 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] flex items-center justify-center transition-all duration-300 group-hover:w-[32px] group-hover:bg-[#232328] group-hover:border-cyan-500/30 group-hover:shadow-[4px_0_20px_rgba(6,182,212,0.15)]"
+                                style="box-shadow: 4px 0 15px rgba(0,0,0,0.5);"
+                            >
+                                <div class="flex flex-col gap-1 items-center">
+                                    <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-cyan-400 group-hover:scale-110 transition-all duration-300" />
+                                    <div class="w-1 h-3 rounded-full bg-white/40 group-hover:bg-cyan-400 group-hover:h-4 transition-all duration-300" />
+                                    <div class="w-1 h-1 rounded-full bg-white/20 group-hover:bg-cyan-400 group-hover:scale-110 transition-all duration-300" />
+                                </div>
+                                <ChevronRight class="w-3 h-3 text-white/40 group-hover:text-cyan-400 transition-colors ml-0.5" />
                             </div>
                         </div>
                     </Show>
