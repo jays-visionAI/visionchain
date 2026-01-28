@@ -213,6 +213,35 @@ const Wallet = (): JSX.Element => {
     const [sendMode, setSendMode] = createSignal<'single' | 'batch'>('single');
     const [batchInput, setBatchInput] = createSignal('');
 
+    // PWA Install State
+    const [deferredPrompt, setDeferredPrompt] = createSignal<any>(null);
+    const [isIOS, setIsIOS] = createSignal(false);
+    const [showIOSInstallModal, setShowIOSInstallModal] = createSignal(false);
+
+    onMount(() => {
+        // Check for iOS
+        const isDeviceIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+        setIsIOS(isDeviceIOS);
+
+        // Listen for install prompt (Android/Desktop)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        });
+    });
+
+    const handleInstallClick = async () => {
+        if (isIOS()) {
+            setShowIOSInstallModal(true);
+        } else if (deferredPrompt()) {
+            deferredPrompt().prompt();
+            const { outcome } = await deferredPrompt().userChoice;
+            if (outcome === 'accepted') {
+                setDeferredPrompt(null);
+            }
+        }
+    };
+
     // Batch Parsing Logic
     const parsedBatchTransactions = createMemo(() => {
         if (!batchInput().trim()) return [];
@@ -2603,23 +2632,35 @@ Format:
                                                 </div>
 
                                                 {/* Action Buttons */}
-                                                <div class="flex gap-3 mb-6">
+                                                <div class="grid grid-cols-2 gap-3 mb-6">
                                                     <button
                                                         onClick={() => navigate('/wallet/referral-rules')}
-                                                        class="w-full py-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-white/10 rounded-2xl flex items-center justify-center gap-3 hover:border-white/20 transition-all group"
+                                                        class="w-full py-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-white/20 transition-all group"
                                                     >
                                                         <div class="w-8 h-8 rounded-full bg-yellow-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
                                                             <Trophy class="w-4 h-4 text-yellow-400" />
                                                         </div>
-                                                        <div class="text-left">
-                                                            <div class="text-xs font-bold text-white uppercase tracking-wider">Unlock Higher Rewards</div>
-                                                            <div class="text-[10px] text-gray-400">View Rank Benefits & Dual-Layer Logic</div>
+                                                        <div class="text-center">
+                                                            <div class="text-xs font-bold text-white uppercase tracking-wider">Reward Logic</div>
+                                                            <div class="text-[9px] text-gray-400">View Rank Benefits</div>
                                                         </div>
-                                                        <ArrowRight class="w-4 h-4 text-gray-500 group-hover:translate-x-1 transition-transform ml-auto mr-2" />
                                                     </button>
+
+                                                    <Show when={deferredPrompt() || isIOS()}>
+                                                        <button
+                                                            onClick={handleInstallClick}
+                                                            class="w-full py-4 bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-white/20 transition-all group"
+                                                        >
+                                                            <div class="w-8 h-8 rounded-full bg-emerald-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                <Download class="w-4 h-4 text-emerald-400" />
+                                                            </div>
+                                                            <div class="text-center">
+                                                                <div class="text-xs font-bold text-white uppercase tracking-wider">Install App</div>
+                                                                <div class="text-[9px] text-gray-400">Add to Home Screen</div>
+                                                            </div>
+                                                        </button>
+                                                    </Show>
                                                 </div>
-
-
 
                                                 {/* Security & Stats */}
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -4231,6 +4272,54 @@ Format:
                                             class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
                                         >
                                             Go to Wallet
+                                        </button>
+                                    </div>
+                                </Motion.div>
+                            </div>
+                        </Show>
+
+
+                        {/* iOS PWA Install Instructions Modal */}
+                        <Show when={showIOSInstallModal()}>
+                            <div class="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-4">
+                                <Motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    class="absolute inset-0 bg-black/80 backdrop-blur-md"
+                                    onClick={() => setShowIOSInstallModal(false)}
+                                />
+                                <Motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                                    class="relative w-full max-w-sm bg-[#111113] border border-white/10 rounded-[32px] p-8 overflow-hidden shadow-2xl"
+                                >
+                                    <div class="flex flex-col items-center text-center gap-6">
+                                        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-xl">
+                                            <VisionLogo class="w-10 h-10 text-white" />
+                                        </div>
+                                        <div>
+                                            <h3 class="text-xl font-bold text-white mb-2">Install Vision Wallet</h3>
+                                            <p class="text-gray-400 text-sm">Follow these steps to add Vision Wallet to your home screen:</p>
+                                        </div>
+
+                                        <div class="w-full space-y-4 bg-white/[0.03] rounded-2xl p-5 text-left border border-white/[0.06]">
+                                            <div class="flex items-center gap-4">
+                                                <div class="w-8 h-8 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-black">1</div>
+                                                <div class="text-sm text-gray-300 italic">Tap the <span class="text-white font-bold not-italic">"Share"</span> button at the bottom of Safari</div>
+                                            </div>
+                                            <div class="flex items-center gap-4">
+                                                <div class="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-sm font-black">2</div>
+                                                <div class="text-sm text-gray-300 italic">Select <span class="text-white font-bold not-italic">"Add to Home Screen"</span> from the list</div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => setShowIOSInstallModal(false)}
+                                            class="w-full py-4 bg-white text-black font-black rounded-2xl hover:bg-gray-200 transition-colors shadow-lg active:scale-95 transition-all"
+                                        >
+                                            Got it
                                         </button>
                                     </div>
                                 </Motion.div>
