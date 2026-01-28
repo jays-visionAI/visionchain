@@ -117,7 +117,7 @@ export default function AdminReferrals() {
                         class="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group"
                     >
                         <Calculator class="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
-                        <span class="font-bold text-sm">System Settings</span>
+                        <span class="font-bold text-sm text-white">System Settings</span>
                     </button>
                     <button
                         onClick={fetchData}
