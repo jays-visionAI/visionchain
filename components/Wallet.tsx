@@ -256,8 +256,8 @@ const Wallet = (): JSX.Element => {
                 // Convert "30,50" to "30.50" before splitting if it's not a delimiter
                 let sanitizedLine = line.replace(/(\d),(\d)/g, '$1.$2');
 
-                // Support Comma or Tab separated
-                const parts = sanitizedLine.split(/[,\t]+/).map(p => p.trim());
+                // Support Comma or Tab separated, filter out empty parts from leading/trailing delimiters
+                const parts = sanitizedLine.split(/[,\t]+/).map(p => p.trim()).filter(p => p.length > 0);
                 let recipient = '';
                 let amount = '';
                 let name = '';
@@ -282,11 +282,11 @@ const Wallet = (): JSX.Element => {
                     if (namePart) name = namePart;
                 }
 
-                // Contact Lookup: If we have an address but no name, or if the name matches a contact, sync them
+                // Contact Lookup: Resolve names from our contact list
                 if (recipient) {
                     const contact = contactList.find(c => c.address?.toLowerCase() === recipient.toLowerCase());
-                    if (contact) name = contact.name;
-                } else if (name) {
+                    if (contact && (!name || name === 'Unknown')) name = contact.name;
+                } else if (name && name !== 'Unknown') {
                     const contact = contactList.find(c => c.name?.toLowerCase() === name.toLowerCase());
                     if (contact && contact.address) recipient = contact.address;
                 }
@@ -853,8 +853,11 @@ const Wallet = (): JSX.Element => {
 
             } else if (action.type === 'multi_transactions') {
                 const { transactions } = action.data;
-                setFlowLoading(true);
-                setFlowStep(1); // Ensure we show processing UI
+                setIsLoading(false); // Do not block UI for batch
+                setFlowLoading(false);
+                setFlowStep(0);
+                setActiveFlow(null); // Close the modal
+
                 // 1. Initialize Batch Agent
                 const agentId = Math.random().toString(36).substring(7);
                 const newAgent = {
@@ -876,12 +879,10 @@ const Wallet = (): JSX.Element => {
                 const { privateKey } = WalletService.deriveEOA(mnemonic);
                 await contractService.connectInternalWallet(privateKey);
 
-                const finalResults = [];
+                const finalResults: any[] = [];
                 for (let i = 0; i < transactions.length; i++) {
                     const tx = transactions[i];
-                    // Update Agent progress: 3/n Transactions
-                    const progressMsg = `AGENT: PROCESSING ${i + 1}/${transactions.length}...`;
-                    setLoadingMessage(progressMsg);
+                    // Update Agent progress: 3/n Transactions - Update Background Agent, not global loader
                     setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, currentCount: i + 1 } : a));
 
                     try {
@@ -926,7 +927,6 @@ const Wallet = (): JSX.Element => {
 
                     // 10 second interval for stability
                     if (i < transactions.length - 1) {
-                        setLoadingMessage(`AGENT: WAITING 10S INTERVAL (${i + 1}/${transactions.length})...`);
                         await new Promise(resolve => setTimeout(resolve, 10000));
                     }
                 }
