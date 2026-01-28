@@ -48,7 +48,12 @@ import {
     Play,
     Layers,
     UserPlus,
-    History as HistoryIcon
+    History as HistoryIcon,
+    Award,
+    Crown,
+    Crosshair,
+    Trophy,
+    ExternalLink
 } from 'lucide-solid';
 import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
@@ -96,13 +101,14 @@ import { WalletActivity } from './wallet/WalletActivity';
 import { WalletSend } from './wallet/WalletSend';
 import { WalletReceive } from './wallet/WalletReceive';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
+import { WalletReferralDocs } from './wallet/WalletReferralDocs';
 
 import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -2422,23 +2428,164 @@ Format:
                                                                 <Camera class="w-4 h-4" />
                                                             </button>
                                                         </div>
-                                                        <div class="flex-1 text-center md:text-left">
-                                                            <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-2">
-                                                                <h2 class="text-3xl font-bold text-white">{userProfile().displayName}</h2>
+
+                                                        <div class="flex-1">
+                                                            <div class="flex items-center gap-3 mb-1">
+                                                                <h3 class="text-2xl font-black text-white">{userProfile().displayName}</h3>
                                                                 <Show when={userProfile().isVerified}>
-                                                                    <div class="flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                                                        <CheckCircle class="w-3 h-3" />
-                                                                        Verified Tier {userProfile().tier}
+                                                                    <div class="p-1 bg-cyan-500/20 rounded-full border border-cyan-500/50">
+                                                                        <Check class="w-3 h-3 text-cyan-400" />
                                                                     </div>
                                                                 </Show>
-                                                                <Show when={!userProfile().isVerified}>
-                                                                    <div class="flex items-center gap-1.5 px-3 py-1 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-full text-[10px] font-black uppercase tracking-widest">
-                                                                        <AlertCircle class="w-3 h-3" />
-                                                                        Pending Setup
-                                                                    </div>
-                                                                </Show>
+                                                                {/* Rank Badge */}
+                                                                <div class={`px-2 py-0.5 rounded-lg border flex items-center gap-1.5 ${(() => {
+                                                                    const count = userProfile().referralCount || 0;
+                                                                    const RANKS = [
+                                                                        { minLvl: 1, bg: 'bg-gray-500', border: 'border-gray-500/30' },
+                                                                        { minLvl: 10, bg: 'bg-blue-500', border: 'border-blue-500/30' },
+                                                                        { minLvl: 20, bg: 'bg-emerald-500', border: 'border-emerald-500/30' },
+                                                                        { minLvl: 30, bg: 'bg-cyan-500', border: 'border-cyan-500/30' },
+                                                                        { minLvl: 40, bg: 'bg-indigo-500', border: 'border-indigo-500/30' },
+                                                                        { minLvl: 50, bg: 'bg-violet-500', border: 'border-violet-500/30' },
+                                                                        { minLvl: 60, bg: 'bg-orange-500', border: 'border-orange-500/30' },
+                                                                        { minLvl: 70, bg: 'bg-red-500', border: 'border-red-500/30' },
+                                                                        { minLvl: 80, bg: 'bg-rose-500', border: 'border-rose-500/30' },
+                                                                        { minLvl: 90, bg: 'bg-yellow-500', border: 'border-yellow-500/30' }
+                                                                    ];
+                                                                    let level = 1;
+                                                                    // Level Calc Logic
+                                                                    if (count < 20) { level = count + 1; }
+                                                                    else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
+                                                                    else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
+                                                                    else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                    if (level > 100) level = 100;
+
+                                                                    const rank = RANKS.slice().reverse().find(r => level >= r.minLvl) || RANKS[0];
+                                                                    return `${rank.bg}/10 ${rank.border}`;
+                                                                })()
+                                                                    }`}>
+                                                                    <Trophy class="w-3 h-3 text-white" />
+                                                                    <span class="text-[10px] font-black text-white uppercase tracking-widest">
+                                                                        {(() => {
+                                                                            const count = userProfile().referralCount || 0;
+                                                                            let level = 1;
+                                                                            // Level Calc Logic
+                                                                            if (count < 20) { level = count + 1; }
+                                                                            else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
+                                                                            else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
+                                                                            else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                            if (level > 100) level = 100;
+
+                                                                            const names = ['Novice', 'Scout', 'Ranger', 'Guardian', 'Elite', 'Captain', 'Commander', 'Warlord', 'Titan', 'Visionary'];
+                                                                            const idx = Math.min(9, Math.floor((level - 1) / 10)); // Correct logic: Lvl 1-9=0 (Novice), Lvl 10-19=1 (Scout)...
+                                                                            const rankName = (level >= 10 && level < 20) ? 'Scout' :
+                                                                                (level >= 20 && level < 30) ? 'Ranger' :
+                                                                                    names.find((_, i) => level >= (i * 10) && level < ((i + 1) * 10)) || (level === 100 ? 'Visionary' : names[Math.min(9, Math.floor(level / 10))]);
+
+                                                                            // Simpler logic for name mapping
+                                                                            const getRankName = (lvl: number) => {
+                                                                                if (lvl >= 90) return 'Visionary';
+                                                                                if (lvl >= 80) return 'Titan';
+                                                                                if (lvl >= 70) return 'Warlord';
+                                                                                if (lvl >= 60) return 'Commander';
+                                                                                if (lvl >= 50) return 'Captain';
+                                                                                if (lvl >= 40) return 'Elite';
+                                                                                if (lvl >= 30) return 'Guardian';
+                                                                                if (lvl >= 20) return 'Ranger';
+                                                                                if (lvl >= 10) return 'Scout';
+                                                                                return 'Novice';
+                                                                            };
+
+                                                                            return `${getRankName(level)} LVL.${level}`;
+                                                                        })()}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                            <p class="text-gray-500 max-w-md">{userProfile().bio || "No bio added yet. Vision Chain pioneer."}</p>
+                                                            <div class="flex items-center gap-4 text-sm text-gray-400 font-mono mb-4">
+                                                                <span>{userProfile().email}</span>
+                                                                <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                                                <span>{userProfile().phone || 'No phone linked'}</span>
+                                                            </div>
+
+                                                            {/* XP / Level Progress Bar */}
+                                                            {(() => {
+                                                                const count = userProfile().referralCount || 0;
+                                                                // Logic duplication for isolated calculation
+                                                                let level = 1;
+                                                                let nextLevelRefs = 1;
+                                                                let currentLevelBaseRefs = 0;
+                                                                let refsPerLevel = 1;
+
+                                                                if (count < 20) {
+                                                                    level = count + 1;
+                                                                    refsPerLevel = 1;
+                                                                    currentLevelBaseRefs = count;
+                                                                    nextLevelRefs = count + 1;
+                                                                } else if (count < 80) {
+                                                                    const surplus = count - 20;
+                                                                    const levelGain = Math.floor(surplus / 2);
+                                                                    level = 20 + levelGain + 1;
+                                                                    refsPerLevel = 2;
+                                                                    currentLevelBaseRefs = 20 + (levelGain * 2);
+                                                                    nextLevelRefs = currentLevelBaseRefs + 2;
+                                                                } else if (count < 230) {
+                                                                    const surplus = count - 80;
+                                                                    const levelGain = Math.floor(surplus / 5);
+                                                                    level = 50 + levelGain + 1;
+                                                                    refsPerLevel = 5;
+                                                                    currentLevelBaseRefs = 80 + (levelGain * 5);
+                                                                    nextLevelRefs = currentLevelBaseRefs + 5;
+                                                                } else {
+                                                                    const surplus = count - 230;
+                                                                    const levelGain = Math.floor(surplus / 10);
+                                                                    level = 80 + levelGain + 1;
+                                                                    refsPerLevel = 10;
+                                                                    currentLevelBaseRefs = 230 + (levelGain * 10);
+                                                                    nextLevelRefs = currentLevelBaseRefs + 10;
+                                                                }
+                                                                if (level > 100) level = 100;
+                                                                const progressIntoLevel = count - currentLevelBaseRefs;
+                                                                const progressPercent = Math.min(100, Math.max(0, (progressIntoLevel / refsPerLevel) * 100));
+                                                                const refsToNext = Math.max(0, nextLevelRefs - count);
+
+                                                                // Rank Gradient Helper
+                                                                const getGradient = (lvl: number) => {
+                                                                    if (lvl >= 90) return 'from-yellow-500 to-amber-300';
+                                                                    if (lvl >= 80) return 'from-rose-600 to-pink-600';
+                                                                    if (lvl >= 70) return 'from-red-600 to-orange-600';
+                                                                    if (lvl >= 60) return 'from-orange-600 to-amber-500';
+                                                                    if (lvl >= 50) return 'from-violet-600 to-purple-600';
+                                                                    if (lvl >= 40) return 'from-indigo-600 to-blue-600';
+                                                                    if (lvl >= 30) return 'from-cyan-600 to-sky-500';
+                                                                    if (lvl >= 20) return 'from-emerald-600 to-green-500';
+                                                                    if (lvl >= 10) return 'from-blue-600 to-cyan-500';
+                                                                    return 'from-gray-600 to-gray-500';
+                                                                };
+
+                                                                return (
+                                                                    <div class="bg-black/20 rounded-xl p-3 border border-white/5 w-full max-w-md">
+                                                                        <div class="flex justify-between items-center mb-2">
+                                                                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                                                                                XP Progress
+                                                                            </span>
+                                                                            <span class="text-[9px] font-bold text-gray-400">
+                                                                                <span class="text-white">{refsToNext}</span> INVITES TO LVL {level + 1}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
+                                                                            <div
+                                                                                class={`h-full bg-gradient-to-r ${getGradient(level)} relative shadow-[0_0_15px_rgba(255,255,255,0.2)]`}
+                                                                                style={{ width: `${progressPercent}%` }}
+                                                                            >
+                                                                                <div class="absolute inset-0 bg-white/20" />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="flex justify-end mt-1">
+                                                                            <span class="text-[9px] font-mono font-bold text-gray-600">{progressPercent.toFixed(0)}%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </div>
                                                         <Show when={!userProfile().isVerified}>
                                                             <button
@@ -2454,6 +2601,25 @@ Format:
                                                         </Show>
                                                     </div>
                                                 </div>
+
+                                                {/* Action Buttons */}
+                                                <div class="flex gap-3 mb-6">
+                                                    <button
+                                                        onClick={() => navigate('/wallet/referral-rules')}
+                                                        class="w-full py-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-white/10 rounded-2xl flex items-center justify-center gap-3 hover:border-white/20 transition-all group"
+                                                    >
+                                                        <div class="w-8 h-8 rounded-full bg-yellow-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                            <Trophy class="w-4 h-4 text-yellow-400" />
+                                                        </div>
+                                                        <div class="text-left">
+                                                            <div class="text-xs font-bold text-white uppercase tracking-wider">Unlock Higher Rewards</div>
+                                                            <div class="text-[10px] text-gray-400">View Rank Benefits & Dual-Layer Logic</div>
+                                                        </div>
+                                                        <ArrowRight class="w-4 h-4 text-gray-500 group-hover:translate-x-1 transition-transform ml-auto mr-2" />
+                                                    </button>
+                                                </div>
+
+
 
                                                 {/* Security & Stats */}
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
