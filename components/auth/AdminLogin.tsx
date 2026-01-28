@@ -93,7 +93,7 @@ export default function AdminLogin() {
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} class="space-y-6">
+                    <form onSubmit={handleSubmit} class="space-y-6 px-4">
                         <div class="space-y-4">
                             {/* Admin ID (Email) */}
                             <div class="space-y-2">
