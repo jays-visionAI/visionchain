@@ -80,7 +80,7 @@ import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services
 import { generateText } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
-import { useNavigate, useLocation } from '@solidjs/router';
+import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
 import { WalletSidebar } from './wallet/WalletSidebar';
 import { WalletDashboard } from './wallet/WalletDashboard';
@@ -306,6 +306,40 @@ const Wallet = (): JSX.Element => {
     const [isImporting, setIsImporting] = createSignal(false);
     const [importStep, setImportStep] = createSignal(0);
     const [searchQuery, setSearchQuery] = createSignal('');
+    const [showLogoutConfirm, setShowLogoutConfirm] = createSignal(false);
+    const [pendingLogout, setPendingLogout] = createSignal<(() => void) | null>(null);
+
+    // Prompt before leaving the wallet entirely
+    useBeforeLeave((e: any) => {
+        // e.to might be a string (path) or an object with pathname
+        const destination = e.to;
+        const path = typeof destination === 'string'
+            ? destination
+            : (typeof destination === 'object' && destination !== null && 'pathname' in destination ? destination.pathname : '');
+
+        // If we are navigating to a path that does NOT start with /wallet
+        // AND we are logged in (onboardingStep === 0 or userProfile exists)
+        // AND we haven't already confirmed the logout
+        if (typeof path === 'string' && !path.startsWith('/wallet') && onboardingStep() === 0 && !e.defaultPrevented && !e.options?.ignore) {
+            e.preventDefault();
+            setShowLogoutConfirm(true);
+            setPendingLogout(() => () => {
+                e.retry(true); // Retry with force/ignore
+            });
+        }
+    });
+
+    const confirmLogout = async () => {
+        setShowLogoutConfirm(false);
+        await auth.logout();
+        navigate('/', { replace: true });
+    };
+
+    const cancelLogout = () => {
+        setShowLogoutConfirm(false);
+        setPendingLogout(null);
+    };
+
     const [copied, setCopied] = createSignal(false);
     const [copiedSeed, setCopiedSeed] = createSignal(false);
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
@@ -2084,7 +2118,11 @@ Format:
                         shortAddress={shortAddress()}
                         copyAddress={copyAddress}
                         copied={copied()}
-                        onLogout={() => auth.logout()}
+                        onLogout={() => {
+                            if (confirm('Are you sure you want to logout?')) {
+                                auth.logout();
+                            }
+                        }}
                         networkMode={networkMode()}
                         setNetworkMode={setNetworkMode}
                         unreadCount={unreadNotificationsCount()}
@@ -4027,6 +4065,47 @@ Format:
                                             class="w-full py-5 bg-white text-black font-black text-xl rounded-2xl hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-white/10"
                                         >
                                             Go to Wallet
+                                        </button>
+                                    </div>
+                                </Motion.div>
+                            </div>
+                        </Show>
+
+                        {/* Logout Confirmation Modal */}
+                        <Show when={showLogoutConfirm()}>
+                            <div class="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                                <Motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    class="absolute inset-0 bg-black/80 backdrop-blur-md"
+                                    onClick={cancelLogout}
+                                />
+                                <Motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    class="relative w-[90vw] max-w-[400px] bg-[#1a1a1e] border border-white/10 rounded-[30px] p-8 shadow-2xl text-center"
+                                >
+                                    <div class="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-5 border border-red-500/20">
+                                        <LogOut class="w-8 h-8 text-red-500" />
+                                    </div>
+                                    <h3 class="text-xl font-bold text-white mb-2">Are you sure to logout?</h3>
+                                    <p class="text-sm text-gray-400 mb-8 leading-relaxed">
+                                        Your session will be closed and you will be returned to the home page.
+                                    </p>
+                                    <div class="flex gap-3">
+                                        <button
+                                            onClick={cancelLogout}
+                                            class="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/5"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={confirmLogout}
+                                            class="flex-1 py-3.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+                                        >
+                                            Logout
                                         </button>
                                     </div>
                                 </Motion.div>
