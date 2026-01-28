@@ -484,6 +484,7 @@ const Wallet = (): JSX.Element => {
     };
     const [contacts, setContacts] = createSignal([]);
     const [sidebarOpen, setSidebarOpen] = createSignal(false);
+    const [touchStartX, setTouchStartX] = createSignal(0);
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
     const [lastLocale, setLastLocale] = createSignal<string>('en');
@@ -2162,6 +2163,29 @@ Format:
                         setNetworkMode={setNetworkMode}
                         unreadCount={unreadNotificationsCount()}
                     />
+
+                    {/* Edge Swipe Handle / Sidebar Toggle Handle */}
+                    <Show when={onboardingStep() === 0}>
+                        <div
+                            class={`lg:hidden fixed left-0 top-[60px] bottom-[68px] w-8 z-[34] group touch-none transition-all duration-300 ${sidebarOpen() ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                            onTouchStart={(e) => {
+                                setTouchStartX(e.touches[0].clientX);
+                            }}
+                            onTouchMove={(e) => {
+                                const currentX = e.touches[0].clientX;
+                                const deltaX = currentX - touchStartX();
+                                // Threshold for swipe opening
+                                if (deltaX > 30 && !sidebarOpen()) {
+                                    setSidebarOpen(true);
+                                }
+                            }}
+                            onClick={() => setSidebarOpen(true)}
+                        >
+                            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-20 bg-gradient-to-b from-white/5 via-white/10 to-white/5 rounded-r-full border-r border-t border-b border-white/10 backdrop-blur-md shadow-[4px_0_20px_rgba(0,0,0,0.5)] transition-all duration-300 group-hover:w-2.5 group-hover:h-28 group-hover:from-cyan-500/20 group-hover:to-blue-600/20 group-hover:border-cyan-500/30 group-hover:shadow-[4px_0_15px_rgba(6,182,212,0.2)] flex items-center justify-center">
+                                <ChevronRight class="w-2.5 h-2.5 text-gray-500 group-hover:text-cyan-400 transition-colors ml-0.5" />
+                            </div>
+                        </div>
+                    </Show>
 
                     {/* Main Content Area */}
                     <main class={`flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
