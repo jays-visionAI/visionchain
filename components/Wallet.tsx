@@ -1809,15 +1809,28 @@ IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address 
 If the user wants to execute a transaction (Send, Swap, Schedule, etc.), you MUST append a JSON block to the end of your response.
 For multiple transactions or complex batch sends, use the "multi" intent with a "transactions" array.
 
-Format (Single):
+Format (Single - Immediate Transfer):
 \`\`\`json
 {
-  "intent": "send" | "swap" | "schedule" | "stake",
+  "intent": "send",
   "recipient": "0x..." (or name),
   "amount": "100",
   "symbol": "VCN"
 }
 \`\`\`
+
+Format (Single - Scheduled Transfer):
+If the user mentions a delay/time (e.g., "8분 뒤에", "in 10 minutes", "after 1 hour"), use:
+\`\`\`json
+{
+  "intent": "schedule",
+  "recipient": "0x..." (or name),
+  "amount": "100",
+  "symbol": "VCN",
+  "scheduleTime": "8m"
+}
+\`\`\`
+IMPORTANT: scheduleTime format: use the EXACT number the user specified. Examples: "8m" for 8 minutes, "1h" for 1 hour, "30s" for 30 seconds.
 
 Format (Multi/Batch):
 \`\`\`json
@@ -2045,13 +2058,23 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
 
                     if (hasSchedule) {
                         setIsSchedulingTimeLock(true);
-                        // Parse delay
-                        let delay = 300;
-                        const timeStr = String((intentData as any).scheduleTime || (intentData as any).time || '5m').toLowerCase();
-                        const num = parseInt(timeStr) || 5;
-                        if (timeStr.includes('h')) delay = num * 3600;
-                        else if (timeStr.includes('s')) delay = num;
-                        else delay = num * 60;
+                        // Parse delay - improved extraction
+                        let delay = 300; // default 5 minutes
+                        const rawTimeValue = (intentData as any).scheduleTime || (intentData as any).time || (intentData as any).delay || '';
+                        const timeStr = String(rawTimeValue).toLowerCase();
+
+                        // Extract numeric value using regex (handles "8분", "8m", "8 minutes", "30초", "1시간", etc.)
+                        const numMatch = timeStr.match(/(\d+)/);
+                        const num = numMatch ? parseInt(numMatch[1]) : 5;
+
+                        // Determine time unit
+                        if (timeStr.includes('h') || timeStr.includes('시간')) {
+                            delay = num * 3600; // hours
+                        } else if (timeStr.includes('s') || timeStr.includes('초')) {
+                            delay = num; // seconds
+                        } else {
+                            delay = num * 60; // default to minutes (분, m, min, minutes)
+                        }
                         setLockDelaySeconds(delay);
                     } else {
                         setIsSchedulingTimeLock(false);
