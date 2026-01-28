@@ -34,7 +34,9 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
             stats: [
                 { label: 'Top Reward', value: '100x VCN' },
                 { label: 'Participants', value: '2.4K+' }
-            ]
+            ],
+            footerTag: 'Season 1',
+            footerIcon: Sparkles
         },
         {
             id: 'staking',
@@ -48,7 +50,9 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
             stats: [
                 { label: 'Current APY', value: '12%' },
                 { label: 'Total Staked', value: '45.2M' }
-            ]
+            ],
+            footerTag: 'Early Access',
+            footerIcon: Target
         },
         {
             id: 'airdrop',
@@ -59,7 +63,9 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
             icon: Sparkles,
             accent: 'purple',
             btnText: 'View Missions',
-            progress: 5
+            progress: 5,
+            footerTag: 'New Era',
+            footerIcon: TrendingUp
         },
         {
             id: 'vns',
@@ -73,7 +79,9 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
             stats: [
                 { label: 'Handles Claimed', value: '8.1K' },
                 { label: 'Rarity Bonus', value: 'Up to 5x' }
-            ]
+            ],
+            footerTag: 'Limited',
+            footerIcon: Award
         }
     ];
 
@@ -163,10 +171,12 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
                                 {(quest) => (
                                     <div
                                         onClick={() => setSelectedQuest(quest.id)}
-                                        class={`bg-[#111113] border border-white/[0.06] rounded-[32px] p-8 hover:border-${quest.accent}-500/30 transition-all group flex flex-col h-full cursor-pointer relative overflow-hidden`}
+                                        class={`bg-[#111113] border border-white/[0.06] rounded-[32px] p-8 pb-10 hover:border-${quest.accent}-500/30 transition-all group flex flex-col h-full cursor-pointer relative`}
                                     >
-                                        {/* Hover Glow */}
-                                        <div class={`absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-0 group-hover:opacity-20 transition-opacity bg-${quest.accent}-500 -mr-16 -mt-16`} />
+                                        {/* Hover Glow - Moved to inner container to prevent clipping of button shadow */}
+                                        <div class="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
+                                            <div class={`absolute top-0 right-0 w-32 h-32 blur-[60px] opacity-0 group-hover:opacity-20 transition-opacity bg-${quest.accent}-500 -mr-16 -mt-16`} />
+                                        </div>
 
                                         <div class="flex items-center justify-between mb-8 relative z-10">
                                             <div class={`px-3 py-1 ${quest.tagColor} border rounded-full text-[9px] font-black uppercase tracking-widest`}>
@@ -212,16 +222,25 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
                                             </Show>
                                         </div>
 
-                                        <button
-                                            class={`w-full py-4 mt-auto rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${quest.accent === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20 shadow-xl' :
+                                        <div class="space-y-6 mt-auto pr-1 pb-1">
+                                            <button
+                                                class={`w-full py-4 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${quest.accent === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20 shadow-xl' :
                                                     quest.accent === 'emerald' ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20 shadow-xl' :
                                                         quest.accent === 'purple' ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-purple-500/20 shadow-xl' :
                                                             'bg-white/5 text-gray-500 hover:bg-white/10'
-                                                }`}
-                                        >
-                                            {quest.btnText}
-                                            <ChevronRight class="w-4 h-4" />
-                                        </button>
+                                                    }`}
+                                            >
+                                                {quest.btnText}
+                                                <ChevronRight class="w-4 h-4" />
+                                            </button>
+
+                                            <div class="flex items-center justify-between pt-2">
+                                                <div class="flex items-center gap-2 px-2 py-1 bg-white/[0.03] border border-white/[0.05] rounded-lg">
+                                                    <span class="text-[8px] font-black text-gray-600 uppercase tracking-widest">{quest.footerTag}</span>
+                                                </div>
+                                                <quest.footerIcon class="w-3.5 h-3.5 text-gray-700" />
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </For>
