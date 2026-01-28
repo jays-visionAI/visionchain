@@ -167,7 +167,7 @@ export const normalizePhoneNumber = (phone: string): string => {
     return `+${countryCode}-${processedDigits}`;
 };
 
-export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, email: string, address: string }[]> => {
+export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, email: string, name: string, address: string }[]> => {
     try {
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
@@ -188,6 +188,7 @@ export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, 
             return {
                 vid: doc.id,
                 email: data.email,
+                name: data.displayName || data.name || data.email?.split('@')[0] || 'New User',
                 address: data.walletAddress || data.address || ''
             };
         });
@@ -203,7 +204,7 @@ export const searchUserByPhone = async (phone: string) => {
     return results.length > 0 ? results[0] : null;
 };
 
-export const searchUserByEmail = async (email: string): Promise<{ vid: string, email: string, address: string } | null> => {
+export const searchUserByEmail = async (email: string): Promise<{ vid: string, email: string, name: string, address: string } | null> => {
     try {
         const db = getFirebaseDb();
         const emailLower = email.toLowerCase().trim();
@@ -215,6 +216,7 @@ export const searchUserByEmail = async (email: string): Promise<{ vid: string, e
             return {
                 vid: snapshot.id,
                 email: data.email,
+                name: data.displayName || data.name || data.email?.split('@')[0],
                 address: data.walletAddress
             };
         }
@@ -225,7 +227,7 @@ export const searchUserByEmail = async (email: string): Promise<{ vid: string, e
     }
 };
 
-export const searchUserByName = async (name: string): Promise<{ vid: string, email: string, address: string } | null> => {
+export const searchUserByName = async (name: string): Promise<{ vid: string, email: string, name: string, address: string } | null> => {
     try {
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
@@ -235,7 +237,12 @@ export const searchUserByName = async (name: string): Promise<{ vid: string, ema
         if (!snapshot.empty) {
             const docResult = snapshot.docs[0];
             const data = docResult.data();
-            return { vid: docResult.id, email: data.email, address: data.walletAddress };
+            return {
+                vid: docResult.id,
+                email: data.email,
+                name: data.displayName || data.name || data.email?.split('@')[0],
+                address: data.walletAddress
+            };
         }
 
         const q2 = query(usersRef, where('name', '==', name), limit(1));
@@ -243,7 +250,12 @@ export const searchUserByName = async (name: string): Promise<{ vid: string, ema
         if (!snapshot2.empty) {
             const docResult = snapshot2.docs[0];
             const data = docResult.data();
-            return { vid: docResult.id, email: data.email, address: data.walletAddress };
+            return {
+                vid: docResult.id,
+                email: data.email,
+                name: data.displayName || data.name || data.email?.split('@')[0],
+                address: data.walletAddress
+            };
         }
         return null;
     } catch (e) {
@@ -532,12 +544,12 @@ export const getReferralLeaderboard = async (limitCount: number = 50): Promise<a
 /**
  * Resolves a recipient identifier (phone, email, name, handle) to a VID and Address.
  */
-export const resolveRecipient = async (identifier: string, currentUserEmail?: string): Promise<{ vid: string, email: string, address: string } | null> => {
+export const resolveRecipient = async (identifier: string, currentUserEmail?: string): Promise<{ vid: string, email: string, name: string, address: string } | null> => {
     if (!identifier) return null;
 
     // 1. If it's already a valid address
     if (identifier.startsWith('0x') && identifier.length === 42) {
-        return { vid: 'Address', email: '', address: identifier };
+        return { vid: 'Address', email: '', name: 'New Recipient', address: identifier };
     }
 
     const cleanId = identifier.startsWith('@') ? identifier.slice(1) : identifier;
@@ -570,6 +582,7 @@ export const resolveRecipient = async (identifier: string, currentUserEmail?: st
                 return {
                     vid: contact.vchainUserUid || contact.internalName,
                     email: contact.email,
+                    name: contact.internalName || contact.alias,
                     address: contact.address
                 };
             }

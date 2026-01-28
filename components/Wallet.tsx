@@ -1943,22 +1943,39 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                 // Helper: Resolve all names to addresses (Check Contacts + VNS)
                 const resolveAllRecipients = async (data: any) => {
                     const resolveSingle = async (rec: string) => {
-                        if (!rec || ethers.isAddress(rec)) return rec;
-                        // 1st: Check local contacts
-                        const cleanName = rec.replace('@', '').toLowerCase();
+                        if (!rec) return { address: '', name: 'New Recipient' };
+
+                        // If it's already an address, check if it's in contacts to get a name
+                        if (ethers.isAddress(rec)) {
+                            const local = contacts().find((c: any) => c.address.toLowerCase() === rec.toLowerCase());
+                            return { address: rec, name: local ? local.name : 'New Recipient' };
+                        }
+
+                        // 1st: Check local contacts by name
+                        const nameToResolve = String(rec || '');
+                        const cleanName = nameToResolve.replace('@', '').toLowerCase();
                         const local = contacts().find((c: any) => c.name.toLowerCase() === cleanName);
-                        if (local) return local.address;
+                        if (local) return { address: local.address, name: local.name };
+
                         // 2nd: Check global registry (VNS)
                         const global = await resolveRecipient(rec, userProfile().email);
-                        return global?.address || rec;
+                        if (global && global.address) {
+                            return { address: global.address, name: global.name || rec };
+                        }
+
+                        return { address: rec, name: 'New Recipient' };
                     };
 
                     if (intentData.intent === 'multi' && Array.isArray(intentData.transactions)) {
                         for (let tx of intentData.transactions) {
-                            tx.recipient = await resolveSingle(tx.recipient);
+                            const resolved = await resolveSingle(tx.recipient);
+                            tx.recipient = resolved.address;
+                            if (!tx.name || tx.name === 'New Recipient') tx.name = resolved.name;
                         }
                     } else if (intentData.recipient) {
-                        intentData.recipient = await resolveSingle(intentData.recipient);
+                        const resolved = await resolveSingle(intentData.recipient);
+                        intentData.recipient = resolved.address;
+                        intentData.name = resolved.name;
                     }
                 };
 
@@ -1978,8 +1995,8 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                     setMessages(prev => [...prev, {
                         role: 'assistant',
                         content: lastLocale() === 'ko'
-                            ? `요청하신 ${results.length}건의 대량 전송 리벨을 구성했습니다. 내용을 확인해 주세요.`
-                            : `I've prepared a batch of ${results.length} transfers for you. Please review the details.`,
+                            ? `요청하신 ${results.length}건의 Batch Transaction 내역을 정리했습니다. 전송계획을 확인해주세요.`
+                            : `I've organized the ${results.length} Batch Transactions for you. Please check the transfer plan.`,
                         isMultiReview: true,
                         batchData: results
                     }]);
@@ -1990,15 +2007,15 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                     // Determine if it's a scheduled transfer
                     const hasSchedule = intentData.intent === 'schedule' || intentData.scheduleTime || intentData.time;
 
-                    setRecipientAddress(intentData.recipient || '');
-                    setSendAmount(String(intentData.amount || '0').replace(/[^0-9.]/g, ''));
-                    setSelectedToken(intentData.symbol || 'VCN');
+                    setRecipientAddress((intentData as any).recipient || '');
+                    setSendAmount(String((intentData as any).amount || '0').replace(/[^0-9.]/g, ''));
+                    setSelectedToken((intentData as any).symbol || 'VCN');
 
                     if (hasSchedule) {
                         setIsSchedulingTimeLock(true);
                         // Parse delay
                         let delay = 300;
-                        const timeStr = String(intentData.scheduleTime || intentData.time || '5m').toLowerCase();
+                        const timeStr = String((intentData as any).scheduleTime || (intentData as any).time || '5m').toLowerCase();
                         const num = parseInt(timeStr) || 5;
                         if (timeStr.includes('h')) delay = num * 3600;
                         else if (timeStr.includes('s')) delay = num;
