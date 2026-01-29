@@ -327,8 +327,9 @@ export class ContractService {
     }
 
     /**
-     * ERC-20 VCN Token transfer using Admin Private Key.
-     * Sends VCN tokens (not native ETH) to the specified address.
+     * Native VCN transfer using Admin Private Key.
+     * Sends VCN (native currency) to the specified address for gas/transactions.
+     * Note: Vision Chain uses VCN as native currency, not an ERC-20 token.
      */
     async adminSendVCN(toAddress: string, amountStr: string) {
         if (!toAddress || !toAddress.startsWith('0x')) {
@@ -339,12 +340,14 @@ export class ContractService {
         const rpcProvider = await this.getRobustProvider();
         const wallet = new ethers.Wallet(adminPK, rpcProvider);
 
-        // ERC-20 VCN Token Transfer
-        const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, wallet);
-        const amountWei = ethers.parseUnits(amountStr, 18);
+        // Native VCN Transfer (Vision Chain's native currency)
+        const amountWei = ethers.parseEther(amountStr);
 
-        const tx = await vcnContract.transfer(toAddress, amountWei);
-        console.log(`[Admin] VCN Token Transfer sent: ${tx.hash}`);
+        const tx = await wallet.sendTransaction({
+            to: toAddress,
+            value: amountWei
+        });
+        console.log(`[Admin] Native VCN Transfer sent: ${tx.hash}`);
 
         return await tx.wait();
     }
