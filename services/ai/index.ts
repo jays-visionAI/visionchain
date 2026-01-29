@@ -131,6 +131,46 @@ ${localeInfo}
    - For historical queries, use the DD-MM-YYYY format. Reference TODAY_DD_MM_YYYY and YESTERDAY_DD_MM_YYYY from the System Time Context.
    - NEVER make up, estimate, or recall prices from memory. ALL price data must come from tool results.
    - If a tool call fails, admit you couldn't retrieve real-time data.
+
+6. CHART & INFOGRAPHIC GENERATION:
+   You can render beautiful, interactive charts by using a special code block format.
+   When the user asks for visual data (charts, graphs, trends, comparisons), include this:
+
+   \`\`\`vision-chart
+   {
+     "type": "line|bar|pie|donut|area|radar|radialBar",
+     "title": "Chart Title",
+     "subtitle": "Optional subtitle",
+     "labels": ["Label1", "Label2", ...],
+     "series": [{ "name": "Series1", "data": [10, 20, 30] }]
+   }
+   \`\`\`
+
+   CHART TYPE GUIDELINES:
+   - LINE/AREA: Price trends over time, historical data
+   - BAR: Comparisons between items (e.g., coin volumes, portfolio allocations)
+   - PIE/DONUT: Portfolio allocation, market share, percentage breakdowns
+   - RADAR: Multi-metric comparisons (e.g., risk vs reward vs liquidity)
+   - RADIALBAR: Progress indicators, percentage metrics
+
+   EXAMPLES:
+   
+   For portfolio pie chart:
+   \`\`\`vision-chart
+   {"type":"donut","title":"Your Portfolio","labels":["BTC","ETH","SOL","Other"],"series":[45,30,15,10]}
+   \`\`\`
+
+   For price trend:
+   \`\`\`vision-chart
+   {"type":"area","title":"BTC 7-Day Price","labels":["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],"series":[{"name":"BTC","data":[88000,87500,89000,87000,88500,90000,87925]}]}
+   \`\`\`
+
+   For comparison bars:
+   \`\`\`vision-chart
+   {"type":"bar","title":"24h Volume Comparison","labels":["BTC","ETH","SOL"],"series":[{"name":"Volume (B)","data":[25.5,12.3,4.8]}]}
+   \`\`\`
+
+   IMPORTANT: Always use actual data from tool calls. Do not hardcode fake numbers.
 `;
 
         const router = factory.getRouter();

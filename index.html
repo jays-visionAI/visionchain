@@ -239,6 +239,53 @@
       background: transparent;
       padding: 0;
     }
+
+    /* VisionChart Container Styling */
+    .vision-chart-container {
+      animation: chartFadeIn 0.5s ease-out;
+    }
+
+    @keyframes chartFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .vision-chart-container .apexcharts-canvas {
+      background: transparent !important;
+    }
+
+    .vision-chart-container .apexcharts-legend-text {
+      color: #9ca3af !important;
+    }
+
+    .vision-chart-container .apexcharts-tooltip {
+      border-radius: 12px !important;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .vision-chart-container .apexcharts-xaxistooltip,
+    .vision-chart-container .apexcharts-yaxistooltip {
+      background: #18181b !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      border-radius: 8px !important;
+    }
+
+    .vision-chart-container .apexcharts-menu {
+      background: #18181b !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      border-radius: 8px !important;
+    }
+
+    .vision-chart-container .apexcharts-menu-item:hover {
+      background: rgba(255, 255, 255, 0.1) !important;
+    }
   </style>
 </head>
 
