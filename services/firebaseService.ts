@@ -1518,7 +1518,25 @@ export const syncUserContacts = async (userEmail: string): Promise<{ updated: nu
                     updateCount++;
                 }
             } else if (results.length > 1) {
-                // Flag as ambiguous for manual selection
+                // Multiple accounts found - but respect user's prior selection
+                if (data.syncStatus === 'verified' && data.vchainUserUid) {
+                    // User already selected an account, check if it still exists in results
+                    const stillValid = results.some(r => r.vid === data.vchainUserUid);
+                    if (stillValid) {
+                        // Update address in case it changed, but keep the selection
+                        const selectedMatch = results.find(r => r.vid === data.vchainUserUid);
+                        if (selectedMatch && selectedMatch.address !== data.address) {
+                            batch.update(docSnap.ref, {
+                                address: selectedMatch.address,
+                                updatedAt: new Date().toISOString()
+                            });
+                            updateCount++;
+                        }
+                        // Skip - user's selection is preserved
+                        continue;
+                    }
+                }
+                // Only flag as ambiguous if not already resolved
                 batch.update(docSnap.ref, {
                     syncStatus: 'ambiguous',
                     potentialMatches: results,
