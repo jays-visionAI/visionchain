@@ -601,6 +601,25 @@ const Wallet = (): JSX.Element => {
     const [showResponseTime, setShowResponseTime] = createSignal(
         localStorage.getItem('visionhub_show_response_time') === 'true'
     );
+
+    // Sync showResponseTime when localStorage changes (from Settings) or when window regains focus
+    onMount(() => {
+        const syncResponseTimeSetting = () => {
+            setShowResponseTime(localStorage.getItem('visionhub_show_response_time') === 'true');
+        };
+
+        // Listen for storage changes (when Settings updates localStorage)
+        window.addEventListener('storage', syncResponseTimeSetting);
+
+        // Also sync when window regains focus (for same-tab navigation)
+        window.addEventListener('focus', syncResponseTimeSetting);
+
+        onCleanup(() => {
+            window.removeEventListener('storage', syncResponseTimeSetting);
+            window.removeEventListener('focus', syncResponseTimeSetting);
+        });
+    });
+
     const detectLanguage = (text: string): string => {
         // Simple heuristic for demo; in production use a library or AI-based detection
         if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) return 'ko';

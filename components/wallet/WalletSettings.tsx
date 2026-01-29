@@ -163,6 +163,11 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const handleShowResponseTimeChange = (value: boolean) => {
         setShowResponseTime(value);
         localStorage.setItem('visionhub_show_response_time', String(value));
+        // Dispatch storage event to sync with other components (like Wallet)
+        window.dispatchEvent(new StorageEvent('storage', {
+            key: 'visionhub_show_response_time',
+            newValue: String(value)
+        }));
     };
 
     const handleSavePhone = async () => {
