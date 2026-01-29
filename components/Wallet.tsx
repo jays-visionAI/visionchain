@@ -1134,6 +1134,13 @@ const Wallet = (): JSX.Element => {
                 const finalResults: any[] = [];
                 for (let i = 0; i < transactions.length; i++) {
                     const tx = transactions[i];
+                    // Normalize recipient field (support both 'recipient' and 'address' for backwards compat)
+                    const recipientAddr = tx.recipient || tx.address;
+                    if (!recipientAddr) {
+                        console.error('Transaction missing recipient address:', tx);
+                        setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, failedCount: a.failedCount + 1 } : a));
+                        continue;
+                    }
                     // Update Agent progress: 3/n Transactions - Update Background Agent, not global loader
                     setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, currentCount: i + 1 } : a));
 
@@ -1141,25 +1148,27 @@ const Wallet = (): JSX.Element => {
                         let receipt;
                         const symbol = tx.symbol || 'VCN';
 
-                        if (tx.intent === 'send') {
+                        // Default to 'send' if no intent specified
+                        const intent = tx.intent || 'send';
+                        if (intent === 'send') {
                             if (symbol === 'VCN') {
                                 try {
-                                    const result = await contractService.sendGaslessTokens(tx.recipient, tx.amount);
+                                    const result = await contractService.sendGaslessTokens(recipientAddr, tx.amount);
                                     receipt = { hash: result.txHashes?.transfer || result.txHashes?.permit || '0x...' };
                                 } catch (gcError) {
                                     console.warn("Batch gasless failed, trying standard...", gcError);
-                                    receipt = await contractService.sendTokens(tx.recipient, tx.amount, symbol);
+                                    receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
                                 }
                             } else {
-                                receipt = await contractService.sendTokens(tx.recipient, tx.amount, symbol);
+                                receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
                             }
                         } else if (tx.intent === 'schedule') {
                             const delay = tx.executeAt ? Math.max(60, Math.floor((tx.executeAt - Date.now()) / 1000)) : 300;
-                            const scheduleRes = await contractService.scheduleTransferNative(tx.recipient, tx.amount, delay);
+                            const scheduleRes = await contractService.scheduleTransferNative(recipientAddr, tx.amount, delay);
                             receipt = scheduleRes.receipt;
                             await saveScheduledTransfer({
                                 userEmail: userProfile().email,
-                                recipient: tx.recipient,
+                                recipient: recipientAddr,
                                 amount: tx.amount,
                                 token: tx.symbol || 'VCN',
                                 unlockTime: Math.floor(Date.now() / 1000) + delay,
@@ -1175,7 +1184,7 @@ const Wallet = (): JSX.Element => {
                         // Notify recipient for immediate transfers (not scheduled)
                         if (tx.intent !== 'schedule' && receipt?.hash) {
                             try {
-                                const recipientUser = await findUserByAddress(tx.recipient);
+                                const recipientUser = await findUserByAddress(recipientAddr);
                                 if (recipientUser?.email) {
                                     const senderAddress = userProfile().address;
                                     const senderDisplayName = userProfile().displayName || userProfile().email?.split('@')[0] || 'Someone';
@@ -1742,9 +1751,11 @@ const Wallet = (): JSX.Element => {
     const handleMultiTransaction = (recipients: { address: string; amount: string; name: string }[]) => {
         // Convert recipients to multi-transaction format and trigger password flow
         const transactions = recipients.map(r => ({
-            address: r.address,
+            recipient: r.address, // Use 'recipient' to match handler expectations
             amount: r.amount,
-            symbol: selectedToken()
+            symbol: selectedToken(),
+            name: r.name,
+            intent: 'send' // Default to immediate send
         }));
         setMultiTransactions(transactions);
         setPasswordMode('verify');
