@@ -10,6 +10,7 @@ import {
     Coins,
     Activity,
     Sparkles,
+    Brain,
 } from 'lucide-solid';
 import {
     getChatbotSettings,
@@ -37,6 +38,7 @@ import { EcosystemTab } from './tabs/EcosystemTab';
 import { SimulatorTab } from './tabs/SimulatorTab';
 import { PromptsTab } from './tabs/PromptsTab';
 import { QuickActionsTab } from './tabs/QuickActionsTab';
+import ProactiveAITab from './tabs/ProactiveAITab';
 
 // Tabs configuration
 const tabs = [
@@ -49,6 +51,7 @@ const tabs = [
     { id: 'quickactions', label: 'Quick Actions', icon: Sparkles },
     { id: 'eco', label: 'Ecosystem', icon: Coins },
     { id: 'simulator', label: 'Simulator', icon: Activity },
+    { id: 'proactive', label: 'Proactive AI', icon: Brain },
 ];
 
 const mockStats = {
@@ -303,6 +306,10 @@ export default function AdminAIManagement() {
 
                 <Show when={activeTab() === 'quickactions'}>
                     <QuickActionsTab />
+                </Show>
+
+                <Show when={activeTab() === 'proactive'}>
+                    <ProactiveAITab />
                 </Show>
             </div>
         </div>

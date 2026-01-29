@@ -2604,3 +2604,180 @@ export const findUserByAddress = async (address: string): Promise<User | null> =
     }
     return null;
 };
+
+// ============================================================================
+// PROACTIVE AI ORCHESTRATOR
+// ============================================================================
+
+export interface AIModuleConfig {
+    enabled: boolean;
+    prompt: string;
+    updateFrequency?: 'realtime' | 'daily' | 'weekly';
+    triggerOn?: 'chat_start' | 'on_demand' | 'scheduled';
+    maxItems?: number;
+    priorityRules?: string[];
+    style?: string;
+    templateVars?: string[];
+    updatedAt: string;
+}
+
+export interface ProactiveAISettings {
+    masterEnabled: boolean;
+    profileAnalyzer: AIModuleConfig;
+    contextEngine: AIModuleConfig;
+    actionGenerator: AIModuleConfig;
+    greetingGenerator: AIModuleConfig;
+    updatedAt: string;
+    updatedBy?: string;
+}
+
+export interface UserAISummary {
+    lastUpdated: string;
+    preferredTopics: string[];
+    frequentActions: string[];
+    personalityType: string;
+    lastConversationSummary: string;
+    unansweredQuestions: string[];
+    pendingTasksCount: number;
+    lowBalanceWarning: boolean;
+    totalConversations: number;
+}
+
+const DEFAULT_AI_SETTINGS: ProactiveAISettings = {
+    masterEnabled: true,
+    profileAnalyzer: {
+        enabled: true,
+        prompt: `Analyze the user's conversation history and behavior patterns. Extract:
+- Frequently discussed topics
+- Common actions performed
+- Communication style preference
+- Potential unmet needs
+Return a JSON object with keys: preferredTopics, frequentActions, personalityType.`,
+        updateFrequency: 'daily',
+        updatedAt: new Date().toISOString()
+    },
+    contextEngine: {
+        enabled: true,
+        prompt: `Given the user's profile summary and current state, determine:
+1. What is most relevant to them right now?
+2. Are there any urgent matters to address?
+3. What conversation would be most valuable?
+Consider: pending transfers, low balance, recent activity, time of day.`,
+        triggerOn: 'chat_start',
+        updatedAt: new Date().toISOString()
+    },
+    actionGenerator: {
+        enabled: true,
+        prompt: `Generate personalized quick actions for the user based on their context.`,
+        maxItems: 5,
+        priorityRules: [
+            'Pending time-lock transfers (highest priority)',
+            'Low balance warnings (< 10 VCN)',
+            'Unclaimed rewards (if available)',
+            'User\'s most frequent action',
+            'Continue previous conversation (if incomplete)'
+        ],
+        updatedAt: new Date().toISOString()
+    },
+    greetingGenerator: {
+        enabled: true,
+        prompt: `Generate a warm, personalized greeting for the user.
+Use these variables: {name}, {time_of_day}, {pending_count}, {last_topic}, {balance}
+Keep it under 50 words. Be friendly but professional.`,
+        style: 'friendly_professional',
+        templateVars: ['name', 'time_of_day', 'pending_count', 'last_topic', 'balance'],
+        updatedAt: new Date().toISOString()
+    },
+    updatedAt: new Date().toISOString()
+};
+
+const DEFAULT_USER_AI_SUMMARY: UserAISummary = {
+    lastUpdated: new Date().toISOString(),
+    preferredTopics: [],
+    frequentActions: [],
+    personalityType: 'new_user',
+    lastConversationSummary: '',
+    unansweredQuestions: [],
+    pendingTasksCount: 0,
+    lowBalanceWarning: false,
+    totalConversations: 0
+};
+
+// Get Proactive AI settings (admin)
+export const getProactiveAISettings = async (): Promise<ProactiveAISettings> => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'admin', 'ai_orchestrator');
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+            return { ...DEFAULT_AI_SETTINGS, ...snapshot.data() } as ProactiveAISettings;
+        }
+        // Initialize with defaults if not exists
+        await setDoc(docRef, DEFAULT_AI_SETTINGS);
+        return DEFAULT_AI_SETTINGS;
+    } catch (e) {
+        console.error('[ProactiveAI] Error fetching settings:', e);
+        return DEFAULT_AI_SETTINGS;
+    }
+};
+
+// Update Proactive AI settings (admin)
+export const updateProactiveAISettings = async (settings: Partial<ProactiveAISettings>): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'admin', 'ai_orchestrator');
+        await setDoc(docRef, {
+            ...settings,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log('[ProactiveAI] Settings updated');
+    } catch (e) {
+        console.error('[ProactiveAI] Error updating settings:', e);
+        throw e;
+    }
+};
+
+// Get user AI summary (for quick loading on chat start)
+export const getUserAISummary = async (userEmail: string): Promise<UserAISummary> => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'users', userEmail.toLowerCase(), 'ai_context', 'summary');
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+            return { ...DEFAULT_USER_AI_SUMMARY, ...snapshot.data() } as UserAISummary;
+        }
+        return DEFAULT_USER_AI_SUMMARY;
+    } catch (e) {
+        console.error('[ProactiveAI] Error fetching user summary:', e);
+        return DEFAULT_USER_AI_SUMMARY;
+    }
+};
+
+// Update user AI summary (after analysis)
+export const updateUserAISummary = async (userEmail: string, summary: Partial<UserAISummary>): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = doc(db, 'users', userEmail.toLowerCase(), 'ai_context', 'summary');
+        await setDoc(docRef, {
+            ...summary,
+            lastUpdated: new Date().toISOString()
+        }, { merge: true });
+        console.log(`[ProactiveAI] Updated AI summary for ${userEmail}`);
+    } catch (e) {
+        console.error('[ProactiveAI] Error updating user summary:', e);
+        throw e;
+    }
+};
+
+// Subscribe to AI settings changes (real-time)
+export const subscribeToProactiveAISettings = (callback: (settings: ProactiveAISettings) => void) => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'admin', 'ai_orchestrator');
+    return onSnapshot(docRef, (snapshot) => {
+        if (snapshot.exists()) {
+            callback({ ...DEFAULT_AI_SETTINGS, ...snapshot.data() } as ProactiveAISettings);
+        } else {
+            callback(DEFAULT_AI_SETTINGS);
+        }
+    });
+};
