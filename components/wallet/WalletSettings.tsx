@@ -163,10 +163,13 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const handleShowResponseTimeChange = (value: boolean) => {
         setShowResponseTime(value);
         localStorage.setItem('visionhub_show_response_time', String(value));
-        // Dispatch storage event to sync with other components (like Wallet)
-        window.dispatchEvent(new StorageEvent('storage', {
-            key: 'visionhub_show_response_time',
-            newValue: String(value)
+
+        // Dispatch custom event for same-tab sync (StorageEvent only works cross-tab)
+        window.dispatchEvent(new CustomEvent('settingsChanged', {
+            detail: {
+                key: 'visionhub_show_response_time',
+                value: String(value)
+            }
         }));
     };
 

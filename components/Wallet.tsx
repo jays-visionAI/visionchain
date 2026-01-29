@@ -608,14 +608,26 @@ const Wallet = (): JSX.Element => {
             setShowResponseTime(localStorage.getItem('visionhub_show_response_time') === 'true');
         };
 
-        // Listen for storage changes (when Settings updates localStorage)
+        // Custom event for same-tab settings changes
+        const handleSettingsChange = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            if (detail?.key === 'visionhub_show_response_time') {
+                setShowResponseTime(detail.value === 'true');
+            }
+        };
+
+        // Listen for storage changes (cross-tab)
         window.addEventListener('storage', syncResponseTimeSetting);
 
-        // Also sync when window regains focus (for same-tab navigation)
+        // Listen for custom settings event (same-tab)
+        window.addEventListener('settingsChanged', handleSettingsChange);
+
+        // Also sync when window regains focus
         window.addEventListener('focus', syncResponseTimeSetting);
 
         onCleanup(() => {
             window.removeEventListener('storage', syncResponseTimeSetting);
+            window.removeEventListener('settingsChanged', handleSettingsChange);
             window.removeEventListener('focus', syncResponseTimeSetting);
         });
     });
