@@ -31,8 +31,8 @@ const ADDRESSES = {
     ],
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
-    // Paymaster API (Cloud Run Function)
-    PAYMASTER_URL: "https://paymastertimelock-sapjcm3s5a-uc.a.run.app",
+    // Paymaster API (Cloud Functions)
+    PAYMASTER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymasterTimeLock",
 
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
