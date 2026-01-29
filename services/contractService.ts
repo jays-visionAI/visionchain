@@ -32,7 +32,7 @@ const ADDRESSES = {
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
     // Paymaster API (Firebase Functions)
-    PAYMASTER_URL: "https://us-central1-visionchain-cb5cc.cloudfunctions.net",
+    PAYMASTER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net",
 
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
