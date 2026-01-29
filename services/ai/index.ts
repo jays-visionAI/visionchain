@@ -151,6 +151,35 @@ ${localeInfo}
                         } else if (name === 'get_current_price') {
                             const { marketDataService } = await import('../marketDataService');
                             toolResult = await marketDataService.getCurrentPrice(args.symbol);
+                        } else if (name === 'get_chart_data') {
+                            const { marketDataService } = await import('../marketDataService');
+                            const chartData = await marketDataService.getChartData(args.symbol, args.days || 7);
+                            // Return summarized data for AI consumption
+                            if (chartData.length > 0) {
+                                const first = chartData[0];
+                                const last = chartData[chartData.length - 1];
+                                const change = ((last.price - first.price) / first.price * 100).toFixed(2);
+                                const high = Math.max(...chartData.map(d => d.price));
+                                const low = Math.min(...chartData.map(d => d.price));
+                                toolResult = {
+                                    symbol: args.symbol.toUpperCase(),
+                                    period: `${args.days || 7} days`,
+                                    startPrice: first.price.toFixed(4),
+                                    endPrice: last.price.toFixed(4),
+                                    changePercent: `${change}%`,
+                                    high: high.toFixed(4),
+                                    low: low.toFixed(4),
+                                    dataPoints: chartData.length
+                                };
+                            } else {
+                                toolResult = "No chart data available.";
+                            }
+                        } else if (name === 'get_trending_coins') {
+                            const { marketDataService } = await import('../marketDataService');
+                            toolResult = await marketDataService.getTrendingCoins();
+                        } else if (name === 'get_global_market') {
+                            const { marketDataService } = await import('../marketDataService');
+                            toolResult = await marketDataService.getGlobalMarketData();
                         } else if (name === 'search_defi_pools') {
                             const { defiService } = await import('../defiService');
                             toolResult = await defiService.getTopYields(args);
