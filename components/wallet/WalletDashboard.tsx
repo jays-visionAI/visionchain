@@ -91,12 +91,12 @@ const TypingIndicator = () => (
     <Motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        class="flex gap-4 items-start"
+        class="flex flex-col md:flex-row gap-2 md:gap-4 items-start"
     >
         <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-400/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
             <Bot class="w-4 h-4 text-blue-400" />
         </div>
-        <div class="bg-white/[0.03] border border-white/[0.06] px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-1.5 min-w-[60px]">
+        <div class="bg-white/[0.03] border border-white/[0.06] px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-1.5 w-fit">
             <span class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
             <span class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
             <span class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style={{ "animation-delay": "0.3s" }} />
@@ -804,7 +804,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         initial={{ opacity: 0, scale: 0.98, y: 10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         transition={{ duration: 0.4 }}
-                                        class={`flex gap-5 ${msg.role === 'user' ? 'justify-end' : ''}`}
+                                        class={`flex flex-col md:flex-row gap-2 md:gap-5 ${msg.role === 'user' ? 'items-end md:justify-end' : 'items-start'}`}
                                     >
                                         <Show when={msg.role === 'assistant'}>
                                             <div class="w-10 h-10 rounded-2xl bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 shadow-2xl mt-1">
@@ -813,7 +813,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 </div>
                                             </div>
                                         </Show>
-                                        <div class={`max-w-[85%] ${msg.role === 'user' ? 'order-first' : ''}`}>
+                                        <div class={`w-full md:max-w-[85%] ${msg.role === 'user' ? 'md:order-first' : ''}`}>
                                             <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all ${msg.role === 'user'
                                                 ? 'bg-[#007AFF] text-white rounded-tr-sm shadow-[0_10px_30px_-5px_rgba(0,122,255,0.3)]'
                                                 : 'bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm'
