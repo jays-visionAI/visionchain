@@ -134,16 +134,16 @@ const AgentChip = (props: AgentChipProps) => {
             const seconds = totalSeconds % 60;
 
             let parts: string[] = [];
-            if (days > 0) parts.push(`${days}일`);
-            if (hours > 0 || days > 0) parts.push(`${hours}시간`);
-            if (minutes > 0 || hours > 0 || days > 0) parts.push(`${minutes}분`);
-            parts.push(`${seconds}초`);
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0 || days > 0) parts.push(`${hours}h`);
+            if (minutes > 0 || hours > 0 || days > 0) parts.push(`${minutes}m`);
+            parts.push(`${seconds}s`);
 
             // Remove leading zeros for cleaner display
             if (days === 0) {
                 parts = parts.filter(p => !p.startsWith('0'));
                 if (hours === 0) {
-                    parts = parts.filter(p => !p.includes('시간'));
+                    parts = parts.filter(p => !p.includes('h'));
                 }
             }
 

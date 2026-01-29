@@ -1,4 +1,4 @@
-import { createSignal, Show, For, createEffect, createMemo } from 'solid-js';
+import { createSignal, Show, For, createEffect, createMemo, onMount } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
@@ -590,7 +590,16 @@ const MultiBatchDrawer = (props: {
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+    const [showWelcomeActions, setShowWelcomeActions] = createSignal(false);
     let scrollContainerRef: HTMLDivElement | undefined;
+
+    onMount(() => {
+        if (window.innerWidth < 768) {
+            setShowWelcomeActions(true);
+        } else {
+            setTimeout(() => setShowWelcomeActions(true), 2000);
+        }
+    });
 
     // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
     const activeTimeTasks = createMemo(() => {
@@ -696,69 +705,94 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="hidden md:flex flex-col items-center justify-start px-6 md:px-20 py-12 md:py-24">
-                            <Motion.div
-                                initial={{ opacity: 0, y: 30 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.8, easing: [0.22, 1, 0.36, 1] }}
-                                class="w-full max-w-5xl text-center"
-                            >
-                                <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full mb-8">
-                                    <Sparkles class="w-4 h-4 text-blue-400 animate-pulse" />
-                                    <span class="text-[11px] font-black text-blue-400 uppercase tracking-[0.25em]">Vision AI V1.0</span>
-                                </div>
-                                <h1 class="text-4xl md:text-6xl font-black italic text-white mb-6 tracking-tight uppercase pr-2">
-                                    Orchestrate your <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">On-Chain Vision</span>?
-                                </h1>
-                                <p class="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto mb-16 leading-relaxed">
-                                    AI-powered orchestration for on-chain assets. Seamless, secure, and intelligent.
-                                </p>
+                        <div class="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-2xl mx-auto z-10">
+                            {/* PC Intro Title - Shows for 2s then fades out */}
+                            <Show when={!showWelcomeActions()}>
+                                <Motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
+                                    transition={{ duration: 0.8 }}
+                                    class="hidden md:flex flex-col items-center text-center"
+                                >
+                                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full mb-8">
+                                        <Sparkles class="w-4 h-4 text-blue-400 animate-pulse" />
+                                        <span class="text-[11px] font-black text-blue-400 uppercase tracking-[0.25em]">Vision AI V1.0</span>
+                                    </div>
+                                    <h1 class="text-6xl font-black italic text-white mb-6 tracking-tight uppercase">
+                                        Orchestrate your <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">On-Chain Vision</span>?
+                                    </h1>
+                                </Motion.div>
+                            </Show>
 
-                                {/* Quick Actions Bento */}
-                                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto overflow-visible">
-                                    <div
-                                        onClick={() => props.setActiveFlow('send')}
-                                        class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-blue-500/40 hover:bg-blue-500/[0.02] transition-all group cursor-pointer"
-                                    >
-                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            <ArrowUpRight class="w-5 h-5 text-blue-400" />
-                                        </div>
-                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Send</div>
-                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Transfer Assets</div>
-                                    </div>
-                                    <div
-                                        onClick={() => props.setActiveFlow('swap')}
-                                        class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-purple-500/40 hover:bg-purple-500/[0.02] transition-all group cursor-pointer"
-                                    >
-                                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            <RefreshCw class="w-5 h-5 text-purple-400" />
-                                        </div>
-                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Swap</div>
-                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Exchange Tokens</div>
-                                    </div>
-                                    <div
-                                        onClick={() => props.setActiveView('nodes')}
-                                        class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-emerald-500/40 hover:bg-emerald-500/[0.02] transition-all group cursor-pointer"
-                                    >
-                                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            <Zap class="w-5 h-5 text-emerald-400" />
-                                        </div>
-                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Nodes</div>
-                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Stake & Reward</div>
-                                    </div>
-                                    <div
-                                        onClick={() => props.setActiveView('mint')}
-                                        class="p-6 bg-white/[0.02] border border-white/[0.06] rounded-[28px] hover:border-cyan-500/40 hover:bg-cyan-500/[0.02] transition-all group cursor-pointer"
-                                    >
-                                        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                            <FileText class="w-5 h-5 text-cyan-400" />
-                                        </div>
-                                        <div class="text-[14px] md:text-sm font-bold text-white mb-1">Mint</div>
-                                        <div class="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest font-black">Generate NFTs</div>
+                            {/* Action Chips - Greeting & Suggestions */}
+                            <Show when={showWelcomeActions()}>
+                                <Motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5 }}
+                                    class="w-full max-w-sm flex flex-col gap-8 self-center"
+                                >
+                                    <div class="flex flex-col gap-2">
+                                        <h2 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
+                                            Hello, {props.userProfile()?.name || 'Jay'}
+                                        </h2>
+                                        <p class="text-2xl text-gray-500 font-medium">How can I help you today?</p>
                                     </div>
 
-                                </div>
-                            </Motion.div>
+                                    <div class="flex flex-col gap-3 w-full">
+                                        <button
+                                            onClick={() => { props.setInput("Tell me about Vision Chain"); props.handleSend(); }}
+                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                        >
+                                            <div class="w-6 h-6 text-yellow-500 group-hover:scale-110 transition-transform">
+                                                <BookOpen class="w-full h-full" />
+                                            </div>
+                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Learn about Vision Chain</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => { props.setInput("I want to receive VCN airdrop"); props.handleSend(); }}
+                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                        >
+                                            <div class="w-6 h-6 text-purple-400 group-hover:scale-110 transition-transform">
+                                                <Sparkles class="w-full h-full" />
+                                            </div>
+                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Receive VCN Gift</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => { props.setInput("How do I invite friends?"); props.handleSend(); }}
+                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                        >
+                                            <div class="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform">
+                                                <UserPlus class="w-full h-full" />
+                                            </div>
+                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Invite Friends</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => { props.setActiveFlow('send'); }}
+                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                        >
+                                            <div class="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform">
+                                                <Send class="w-full h-full" />
+                                            </div>
+                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Send VCN</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => { props.setInput("Show me the current crypto market prices"); props.handleSend(); }}
+                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                        >
+                                            <div class="w-6 h-6 text-red-400 group-hover:scale-110 transition-transform">
+                                                <TrendingUp class="w-full h-full" />
+                                            </div>
+                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Check Crypto Prices</span>
+                                        </button>
+                                    </div>
+                                </Motion.div>
+                            </Show>
                         </div>
                     </Show>
 
@@ -858,7 +892,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 </div>
 
                 {/* Modern Floating Input Area */}
-                <div class={`absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none ${!props.onboardingStep() ? 'bottom-[68px] lg:bottom-0' : 'bottom-0'}`}>
+                <div class={`fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none ${!props.onboardingStep() ? 'bottom-[68px] lg:bottom-0' : 'bottom-0'}`}>
                     <div class="max-w-5xl mx-auto pointer-events-auto">
                         <Presence>
                             {/* Unified Background Agents Bar - Above Input */}
