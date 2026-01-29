@@ -20,7 +20,7 @@ import {
 } from 'lucide-solid';
 import { Motion, Presence } from 'solid-motionone';
 import { useAuth } from '../auth/authContext';
-import { getFirebaseDb } from '../../services/firebaseService';
+import { getFirebaseDb, Contact } from '../../services/firebaseService';
 import {
     collection,
     query,
@@ -28,7 +28,8 @@ import {
     updateDoc,
     doc,
     deleteDoc,
-    writeBatch
+    writeBatch,
+    getDocs
 } from 'firebase/firestore';
 
 import { WalletViewHeader } from './WalletViewHeader';
@@ -46,9 +47,52 @@ export interface Notification {
 export function WalletNotifications() {
     const auth = useAuth();
     const [notifications, setNotifications] = createSignal<Notification[]>([]);
+    const [contacts, setContacts] = createSignal<Contact[]>([]);
     const [isLoading, setIsLoading] = createSignal(true);
     const [filter, setFilter] = createSignal<'all' | 'unread'>('all');
     const [selectedId, setSelectedId] = createSignal<string | null>(null);
+
+    // Helper: Resolve wallet address to contact name
+    const getContactName = (address: string): string | null => {
+        if (!address || !address.startsWith('0x')) return null;
+        const contact = contacts().find(c => c.address?.toLowerCase() === address.toLowerCase());
+        return contact?.internalName || contact?.email?.split('@')[0] || null;
+    };
+
+    // Format value with contact name if available
+    const formatWithContactName = (value: string): string => {
+        if (!value) return value;
+        // Check if value contains an address
+        const addressMatch = value.match(/0x[a-fA-F0-9]{40}/);
+        if (addressMatch) {
+            const address = addressMatch[0];
+            const name = getContactName(address);
+            if (name) {
+                const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
+                return value.replace(address, `${name} (${shortAddr})`);
+            }
+        }
+        return value;
+    };
+
+    // Load contacts
+    createEffect(() => {
+        const email = auth.user()?.email;
+        if (!email) return;
+
+        const db = getFirebaseDb();
+        const contactsRef = collection(db, 'users', email.toLowerCase(), 'contacts');
+
+        const unsubscribe = onSnapshot(query(contactsRef), (snapshot) => {
+            const list: Contact[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Contact));
+            setContacts(list);
+        });
+
+        return () => unsubscribe();
+    });
 
     // Sync Notifications from Firebase
     createEffect(() => {
@@ -247,7 +291,7 @@ export function WalletNotifications() {
                                                 <h4 class={`text-sm font-black truncate uppercase tracking-tight ${item.read ? 'text-gray-500' : 'text-white italic'}`}>
                                                     {item.title}
                                                 </h4>
-                                                <p class="text-[11px] text-gray-600 font-medium truncate mt-0.5">{item.content}</p>
+                                                <p class="text-[11px] text-gray-600 font-medium truncate mt-0.5">{formatWithContactName(item.content)}</p>
                                             </div>
                                             <div class="shrink-0 transition-transform group-hover:translate-x-1">
                                                 <ChevronRight class={`w-4 h-4 ${selectedId() === item.id ? 'text-blue-400' : 'text-gray-800'}`} />
@@ -329,7 +373,7 @@ export function WalletNotifications() {
 
                                         <div class="prose prose-invert max-w-none">
                                             <p class="text-lg lg:text-xl text-gray-400 font-medium leading-[1.6]">
-                                                {item().content}
+                                                {formatWithContactName(item().content)}
                                             </p>
                                         </div>
 
@@ -343,7 +387,7 @@ export function WalletNotifications() {
                                                         {([key, val]) => (
                                                             <div class="space-y-1">
                                                                 <p class="text-[9px] font-black text-gray-700 uppercase tracking-widest">{key}</p>
-                                                                <p class="text-sm font-bold text-white font-mono break-all">{String(val)}</p>
+                                                                <p class="text-sm font-bold text-white font-mono break-all">{formatWithContactName(String(val))}</p>
                                                             </div>
                                                         )}
                                                     </For>
