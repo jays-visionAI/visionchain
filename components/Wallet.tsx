@@ -114,6 +114,7 @@ type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings'
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    responseTime?: number; // Response time in milliseconds
 }
 
 interface Token {
@@ -597,6 +598,9 @@ const Wallet = (): JSX.Element => {
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
     const [lastLocale, setLastLocale] = createSignal<string>('en');
+    const [showResponseTime, setShowResponseTime] = createSignal(
+        localStorage.getItem('visionhub_show_response_time') === 'true'
+    );
     const detectLanguage = (text: string): string => {
         // Simple heuristic for demo; in production use a library or AI-based detection
         if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text)) return 'ko';
@@ -1982,7 +1986,13 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 { id: '2', label: 'Processing Request...', status: 'loading' }
             ]);
 
+            // Start timing the AI response
+            const startTime = performance.now();
+
             let response: string = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email, messages());
+
+            // Calculate response time
+            const responseTime = Math.round(performance.now() - startTime);
 
             // --- State-of-the-Art Thinking Process Parsing ---
             const thoughtRegex = /<think>([\s\S]*?)<\/think>/g;
@@ -2252,7 +2262,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     : `I've prepared the ${localized} for you. Please check your screen.`;
             }
 
-            setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse, responseTime }]);
 
             // SAVE CONVERSATION
             if (userProfile().email) {
@@ -2465,6 +2475,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 setReviewMulti={setReviewMulti}
                                 unreadCount={0}
                                 contacts={contacts}
+                                showResponseTime={showResponseTime()}
                                 onStartBatch={(txs, interval) => {
                                     console.log("Starting batch with txs:", txs, "interval:", interval);
                                     setPendingAction({

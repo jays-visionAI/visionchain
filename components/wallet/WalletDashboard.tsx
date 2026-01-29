@@ -88,6 +88,7 @@ interface WalletDashboardProps {
     onStartBatch: (txs: any[], interval?: number) => void;
     unreadCount: number;
     contacts: () => any[];
+    showResponseTime?: boolean;
 }
 
 const TypingIndicator = () => (
@@ -888,6 +889,19 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                         setSelectedBatchId(msg.batchReportData!.agentId);
                                                     }}
                                                 />
+                                            </Show>
+
+                                            {/* Response Time Display */}
+                                            <Show when={msg.role === 'assistant' && msg.responseTime && props.showResponseTime}>
+                                                <div class="mt-1.5 px-2 text-[10px] text-gray-500 font-mono flex items-center gap-1">
+                                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <polyline points="12,6 12,12 16,14" />
+                                                    </svg>
+                                                    {msg.responseTime >= 1000
+                                                        ? `${(msg.responseTime / 1000).toFixed(1)}s`
+                                                        : `${msg.responseTime}ms`}
+                                                </div>
                                             </Show>
                                         </div>
                                         <Show when={msg.role === 'user'}>

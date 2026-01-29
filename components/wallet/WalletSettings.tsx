@@ -17,7 +17,8 @@ import {
     ArrowLeft,
     ChevronDown,
     LogOut,
-    Search
+    Search,
+    Clock
 } from 'lucide-solid';
 import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
 import { countries, Country } from './CountryData';
@@ -54,6 +55,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [pushNotifications, setPushNotifications] = createSignal(false);
     const [twoFactorAuth, setTwoFactorAuth] = createSignal(true);
     const [darkMode, setDarkMode] = createSignal(true);
+    const [showResponseTime, setShowResponseTime] = createSignal(false); // Default Off
     const [phone, setPhone] = createSignal('');
     const [selectedCountry, setSelectedCountry] = createSignal<Country>(countries.find(c => c.code === 'KR') || countries[0]);
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
@@ -118,6 +120,12 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
     // Load preset on mount
     onMount(async () => {
+        // Load showResponseTime from localStorage (default: false)
+        const savedShowResponseTime = localStorage.getItem('visionhub_show_response_time');
+        if (savedShowResponseTime !== null) {
+            setShowResponseTime(savedShowResponseTime === 'true');
+        }
+
         // 1. Detect Country from Locale
         const userLocale = navigator.language || 'en-US';
         const regionCode = userLocale.split('-')[1] || userLocale.toUpperCase();
@@ -150,6 +158,12 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
         setSelectedCountry(initialCountry);
     });
+
+    // Save showResponseTime to localStorage when changed
+    const handleShowResponseTimeChange = (value: boolean) => {
+        setShowResponseTime(value);
+        localStorage.setItem('visionhub_show_response_time', String(value));
+    };
 
     const handleSavePhone = async () => {
         if (!auth.user()?.email) return;
@@ -250,6 +264,18 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 </div>
                             </div>
                             <Toggle checked={darkMode()} onChange={setDarkMode} />
+                        </div>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex items-start gap-4">
+                                <div class="p-2 rounded-lg bg-white/5">
+                                    <Clock class="w-5 h-5 text-gray-400" />
+                                </div>
+                                <div>
+                                    <p class="text-white font-medium">Show Response Time</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">Display AI response time below chat messages</p>
+                                </div>
+                            </div>
+                            <Toggle checked={showResponseTime()} onChange={handleShowResponseTimeChange} />
                         </div>
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
                             <div class="flex items-start gap-4">
