@@ -608,12 +608,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     let scrollContainerRef: HTMLDivElement | undefined;
 
     onMount(() => {
-        // Show welcome actions immediately on mobile, 2s delay on desktop
-        if (window.innerWidth < 768) {
-            setShowWelcomeActions(true);
-        } else {
-            setTimeout(() => setShowWelcomeActions(true), 2000);
-        }
+        // Show welcome actions immediately on all devices
+        setShowWelcomeActions(true);
 
         // Load Quick Actions async (non-blocking)
         getQuickActions()
