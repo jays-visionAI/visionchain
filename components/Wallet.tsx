@@ -684,13 +684,21 @@ const Wallet = (): JSX.Element => {
         }
     };
 
+    // Flag to prevent repeated history loading
+    const [historyLoaded, setHistoryLoaded] = createSignal(false);
+
     createEffect(() => {
-        if (userProfile().email) {
+        const email = userProfile().email;
+        // Only fetch history once when email becomes available
+        if (email && !historyLoaded()) {
+            setHistoryLoaded(true);
             fetchHistory();
         }
     });
     const [chatLoading, setChatLoading] = createSignal(false); // Dedicated loading for chat
-    const [messages, setMessages] = createSignal<Message[]>([]);
+    const [messages, setMessages] = createSignal<Message[]>([
+        { role: 'assistant', content: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }
+    ]);
     const [marketData, setMarketData] = createSignal<Map<string, CoinGeckoToken>>(new Map());
     const [marketLoading, setMarketLoading] = createSignal(true);
     const [vcnPurchases, setVcnPurchases] = createSignal<VcnPurchase[]>([]);
