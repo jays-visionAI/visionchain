@@ -1,4 +1,4 @@
-import { createSignal, Show, onMount } from 'solid-js';
+import { createSignal, Show, onMount, lazy, Suspense } from 'solid-js';
 import {
     Database,
     MessageSquare,
@@ -28,17 +28,26 @@ import {
 } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
 
-// Sub-components for better performance and modularity
-import { ApiKeysTab } from './tabs/ApiKeysTab';
-import { KnowledgeTab } from './tabs/KnowledgeTab';
-import { ConversationsTab } from './tabs/ConversationsTab';
-import { ModelSettingsTab } from './tabs/ModelSettingsTab';
-import { UsageStatsTab } from './tabs/UsageStatsTab';
-import { EcosystemTab } from './tabs/EcosystemTab';
-import { SimulatorTab } from './tabs/SimulatorTab';
-import { PromptsTab } from './tabs/PromptsTab';
-import { QuickActionsTab } from './tabs/QuickActionsTab';
-import ProactiveAITab from './tabs/ProactiveAITab';
+// Lazy-loaded tab components for better code-splitting
+const ApiKeysTab = lazy(() => import('./tabs/ApiKeysTab').then(m => ({ default: m.ApiKeysTab })));
+const KnowledgeTab = lazy(() => import('./tabs/KnowledgeTab').then(m => ({ default: m.KnowledgeTab })));
+const ConversationsTab = lazy(() => import('./tabs/ConversationsTab').then(m => ({ default: m.ConversationsTab })));
+const ModelSettingsTab = lazy(() => import('./tabs/ModelSettingsTab').then(m => ({ default: m.ModelSettingsTab })));
+const UsageStatsTab = lazy(() => import('./tabs/UsageStatsTab').then(m => ({ default: m.UsageStatsTab })));
+const EcosystemTab = lazy(() => import('./tabs/EcosystemTab').then(m => ({ default: m.EcosystemTab })));
+const SimulatorTab = lazy(() => import('./tabs/SimulatorTab').then(m => ({ default: m.SimulatorTab })));
+const PromptsTab = lazy(() => import('./tabs/PromptsTab').then(m => ({ default: m.PromptsTab })));
+const QuickActionsTab = lazy(() => import('./tabs/QuickActionsTab').then(m => ({ default: m.default })));
+const ProactiveAITab = lazy(() => import('./tabs/ProactiveAITab'));
+
+// Tab loading spinner
+function TabLoader() {
+    return (
+        <div class="flex items-center justify-center py-20">
+            <div class="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+        </div>
+    );
+}
 
 // Tabs configuration
 const tabs = [
@@ -244,73 +253,75 @@ export default function AdminAIManagement() {
 
             {/* Tab Content Area */}
             <div class="p-8 min-h-[600px] relative">
-                <Show when={activeTab() === 'apikeys'}>
-                    <ApiKeysTab
-                        apiKeys={apiKeys}
-                        onAddKey={handleAddKey}
-                        onDeleteKey={(id) => handleDeleteKey(id)}
-                        onToggleActive={(id, _, active) => handleToggleKey(id, active)}
-                    />
-                </Show>
+                <Suspense fallback={<TabLoader />}>
+                    <Show when={activeTab() === 'apikeys'}>
+                        <ApiKeysTab
+                            apiKeys={apiKeys}
+                            onAddKey={(name: string, key: string, provider: string) => handleAddKey(name, key, provider)}
+                            onDeleteKey={(id) => handleDeleteKey(id)}
+                            onToggleActive={(id, _, active) => handleToggleKey(id, active)}
+                        />
+                    </Show>
 
-                <Show when={activeTab() === 'knowledge'}>
-                    <KnowledgeTab
-                        content={knowledgeContent}
-                        setContent={setKnowledgeContent}
-                        onSave={handleSave}
-                        isSaving={isSaving}
-                        saveSuccess={saveSuccess}
-                    />
-                </Show>
+                    <Show when={activeTab() === 'knowledge'}>
+                        <KnowledgeTab
+                            content={knowledgeContent}
+                            setContent={setKnowledgeContent}
+                            onSave={handleSave}
+                            isSaving={isSaving}
+                            saveSuccess={saveSuccess}
+                        />
+                    </Show>
 
-                <Show when={activeTab() === 'conversations'}>
-                    <ConversationsTab conversations={realConversations} />
-                </Show>
+                    <Show when={activeTab() === 'conversations'}>
+                        <ConversationsTab conversations={realConversations} />
+                    </Show>
 
-                <Show when={activeTab() === 'models'}>
-                    <ModelSettingsTab
-                        intentBot={intentBot} setIntentBot={setIntentBot}
-                        helpdeskBot={helpdeskBot} setHelpdeskBot={setHelpdeskBot}
-                        imageSettings={imageSettings} setImageSettings={setImageSettings}
-                        voiceSettings={voiceSettings} setVoiceSettings={setVoiceSettings}
-                        onSave={handleSave} isSaving={isSaving} saveSuccess={saveSuccess}
-                    />
-                </Show>
+                    <Show when={activeTab() === 'models'}>
+                        <ModelSettingsTab
+                            intentBot={intentBot} setIntentBot={setIntentBot}
+                            helpdeskBot={helpdeskBot} setHelpdeskBot={setHelpdeskBot}
+                            imageSettings={imageSettings} setImageSettings={setImageSettings}
+                            voiceSettings={voiceSettings} setVoiceSettings={setVoiceSettings}
+                            onSave={handleSave} isSaving={isSaving} saveSuccess={saveSuccess}
+                        />
+                    </Show>
 
-                <Show when={activeTab() === 'stats'}>
-                    <UsageStatsTab stats={mockStats} />
-                </Show>
+                    <Show when={activeTab() === 'stats'}>
+                        <UsageStatsTab stats={mockStats} />
+                    </Show>
 
-                <Show when={activeTab() === 'eco'}>
-                    <EcosystemTab
-                        purchases={allPurchases}
-                        isDistributing={isDistributing}
-                        onDistribute={handleDistributeTestnet}
-                        txHashes={distTxHashes}
-                    />
-                </Show>
+                    <Show when={activeTab() === 'eco'}>
+                        <EcosystemTab
+                            purchases={allPurchases}
+                            isDistributing={isDistributing}
+                            onDistribute={handleDistributeTestnet}
+                            txHashes={distTxHashes}
+                        />
+                    </Show>
 
-                <Show when={activeTab() === 'simulator'}>
-                    <SimulatorTab />
-                </Show>
+                    <Show when={activeTab() === 'simulator'}>
+                        <SimulatorTab />
+                    </Show>
 
-                <Show when={activeTab() === 'prompts'}>
-                    <PromptsTab
-                        settings={promptTuning}
-                        setSettings={setPromptTuning}
-                        onSave={handleSave}
-                        isSaving={isSaving}
-                        saveSuccess={saveSuccess}
-                    />
-                </Show>
+                    <Show when={activeTab() === 'prompts'}>
+                        <PromptsTab
+                            settings={promptTuning}
+                            setSettings={setPromptTuning}
+                            onSave={handleSave}
+                            isSaving={isSaving}
+                            saveSuccess={saveSuccess}
+                        />
+                    </Show>
 
-                <Show when={activeTab() === 'quickactions'}>
-                    <QuickActionsTab />
-                </Show>
+                    <Show when={activeTab() === 'quickactions'}>
+                        <QuickActionsTab />
+                    </Show>
 
-                <Show when={activeTab() === 'proactive'}>
-                    <ProactiveAITab />
-                </Show>
+                    <Show when={activeTab() === 'proactive'}>
+                        <ProactiveAITab />
+                    </Show>
+                </Suspense>
             </div>
         </div>
     );

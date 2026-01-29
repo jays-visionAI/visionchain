@@ -19,6 +19,64 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       }
+    },
+    build: {
+      chunkSizeWarningLimit: 400,
+      rollupOptions: {
+        output: {
+          manualChunks: (id) => {
+            // Vendor chunks - split large npm dependencies
+            if (id.includes('node_modules')) {
+              if (id.includes('ethers')) return 'vendor-ethers';
+              if (id.includes('firebase')) return 'vendor-firebase';
+              if (id.includes('solid')) return 'vendor-solid';
+              if (id.includes('lucide')) return 'vendor-icons';
+              if (id.includes('@google/generative-ai')) return 'vendor-gemini';
+              if (id.includes('axios')) return 'vendor-axios';
+              if (id.includes('marked') || id.includes('highlight')) return 'vendor-markdown';
+              // Split remaining vendor by first-level package name
+              const match = id.match(/node_modules\/([^\/]+)/);
+              if (match) {
+                const pkg = match[1];
+                if (['@noble', '@scure', 'bn.js', 'hash.js'].some(p => pkg.includes(p))) {
+                  return 'vendor-crypto';
+                }
+              }
+              return 'vendor';
+            }
+
+            // Admin tabs - lazy loaded, separate chunk
+            if (id.includes('/components/admin/tabs/')) {
+              return 'admin-tabs';
+            }
+
+            // Admin main components
+            if (id.includes('/components/admin/')) {
+              return 'admin';
+            }
+
+            // Wallet components - separate chunk
+            if (id.includes('/components/wallet/')) {
+              return 'wallet';
+            }
+
+            // Main Wallet.tsx - separate chunk
+            if (id.includes('Wallet.tsx')) {
+              return 'wallet-main';
+            }
+
+            // Chat components
+            if (id.includes('/components/chat/')) {
+              return 'chat';
+            }
+
+            // All services bundled together to avoid circular deps
+            if (id.includes('/services/')) {
+              return 'services';
+            }
+          }
+        }
+      }
     }
   };
 });
