@@ -106,8 +106,8 @@ export const WalletSend = (props: WalletSendProps) => {
                                             <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
                                                 <span class="font-black text-blue-400 text-sm">V</span>
                                             </div>
-                                            <div>
-                                                <div class="text-sm font-bold text-white uppercase tracking-tight">Vision Coin</div>
+                                            <div class="flex-1 min-w-0 text-left">
+                                                <div class="text-sm font-bold text-white uppercase tracking-tight truncate">Vision Coin</div>
                                                 <div class="text-[10px] font-bold text-blue-400/70 uppercase">VCN</div>
                                             </div>
                                         </div>
@@ -131,7 +131,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                             props.setRecipientAddress(e.currentTarget.value);
                                             setSearchQuery(e.currentTarget.value);
                                         }}
-                                        class={`w-full bg-[#111113] border rounded-[22px] px-6 py-5 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm ${props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) ? 'border-red-500/30 focus:border-red-500/50' : 'border-white/10 focus:border-blue-500/30'}`}
+                                        class={`w-full bg-[#111113] border rounded-[22px] px-4 md:px-6 py-4 md:py-5 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm box-border min-w-0 ${props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) ? 'border-red-500/30 focus:border-red-500/50' : 'border-white/10 focus:border-blue-500/30'}`}
                                     />
                                     <div class="absolute right-4 top-1/2 -translate-y-1/2">
                                         <Search class="w-5 h-5 text-gray-700" />
@@ -194,7 +194,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                                 props.setSendAmount(parts.join('.'));
                                             }
                                         }}
-                                        class="w-full bg-[#111113] border border-white/10 rounded-[22px] p-6 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-3xl font-bold font-mono"
+                                        class="w-full bg-[#111113] border border-white/10 rounded-[22px] p-4 md:p-6 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-3xl font-bold font-mono box-border min-w-0"
                                     />
                                     <div class="absolute right-6 top-1/2 -translate-y-1/2 text-lg font-black text-gray-600 tracking-tighter">VCN</div>
                                 </div>

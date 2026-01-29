@@ -740,10 +740,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <p class="text-2xl text-gray-500 font-medium">How can I help you today?</p>
                                     </div>
 
-                                    <div class="flex flex-col gap-3 w-full">
+                                    <div class="flex flex-col gap-3 w-full items-start">
                                         <button
                                             onClick={() => { props.setInput("Tell me about Vision Chain"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
                                         >
                                             <div class="w-6 h-6 text-yellow-500 group-hover:scale-110 transition-transform">
                                                 <BookOpen class="w-full h-full" />
@@ -753,7 +753,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                         <button
                                             onClick={() => { props.setInput("I want to receive VCN airdrop"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
                                         >
                                             <div class="w-6 h-6 text-purple-400 group-hover:scale-110 transition-transform">
                                                 <Sparkles class="w-full h-full" />
@@ -763,7 +763,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                         <button
                                             onClick={() => { props.setInput("How do I invite friends?"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
                                         >
                                             <div class="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform">
                                                 <UserPlus class="w-full h-full" />
@@ -773,7 +773,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                         <button
                                             onClick={() => { props.setActiveFlow('send'); }}
-                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
                                         >
                                             <div class="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform">
                                                 <Send class="w-full h-full" />
@@ -783,7 +783,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                         <button
                                             onClick={() => { props.setInput("Show me the current crypto market prices"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left w-full"
+                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
                                         >
                                             <div class="w-6 h-6 text-red-400 group-hover:scale-110 transition-transform">
                                                 <TrendingUp class="w-full h-full" />
