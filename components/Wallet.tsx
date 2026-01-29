@@ -219,6 +219,47 @@ const Wallet = (): JSX.Element => {
     const [isIOS, setIsIOS] = createSignal(false);
     const [showIOSInstallModal, setShowIOSInstallModal] = createSignal(false);
 
+    // --- Mobile Back Button Protection ---
+    // Track wallet view history for proper back navigation
+    const [viewHistory, setViewHistory] = createSignal<string[]>(['assets']);
+
+    // Handle browser popstate (back/forward button)
+    const handlePopState = (e: PopStateEvent) => {
+        // If the user pressed back and we're still in wallet
+        if (window.location.pathname.startsWith('/wallet')) {
+            const history = viewHistory();
+            if (history.length > 1) {
+                // Go to previous view in our internal history
+                const newHistory = [...history];
+                newHistory.pop();
+                setViewHistory(newHistory);
+                const prevView = newHistory[newHistory.length - 1] || 'assets';
+                navigate(`/wallet/${prevView}`, { replace: true });
+            }
+        } else {
+            // User is trying to leave wallet - push them back
+            if (onboardingStep() === 0) {
+                // Prevent leaving by pushing wallet state back
+                window.history.pushState({ wallet: true }, '', '/wallet/assets');
+                setShowLogoutConfirm(true);
+            }
+        }
+    };
+
+    // Track view changes and update history
+    createEffect(() => {
+        const current = activeView();
+        const history = viewHistory();
+        // Only add to history if it's a new view (not going back)
+        if (history[history.length - 1] !== current) {
+            setViewHistory([...history, current]);
+            // Push state to browser history for back button to work
+            if (typeof window !== 'undefined') {
+                window.history.pushState({ walletView: current }, '', `/wallet/${current}`);
+            }
+        }
+    });
+
     onMount(() => {
         // Check for iOS
         const isDeviceIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
@@ -229,6 +270,16 @@ const Wallet = (): JSX.Element => {
             e.preventDefault();
             setDeferredPrompt(e);
         });
+
+        // Add popstate listener for mobile back button
+        window.addEventListener('popstate', handlePopState);
+
+        // Push initial wallet state to protect against immediate back press
+        window.history.pushState({ wallet: true, walletView: activeView() }, '', window.location.pathname);
+    });
+
+    onCleanup(() => {
+        window.removeEventListener('popstate', handlePopState);
     });
 
     const handleInstallClick = async () => {
