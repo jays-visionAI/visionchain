@@ -341,6 +341,7 @@ export class ContractService {
         const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
         const rpcProvider = await this.getRobustProvider();
         const wallet = new ethers.Wallet(adminPK, rpcProvider);
+        const adminAddress = await wallet.getAddress();
 
         // Native VCN Transfer (Vision Chain's native currency)
         const amountWei = ethers.parseEther(amountStr);
@@ -351,7 +352,36 @@ export class ContractService {
         });
         console.log(`[Admin] Native VCN Transfer sent: ${tx.hash}`);
 
-        return await tx.wait();
+        const receipt = await tx.wait();
+
+        // Index transaction for VisionScan visibility
+        try {
+            const indexResponse = await fetch('https://api.visionchain.co/api/transactions/index', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    hash: tx.hash,
+                    from: adminAddress,
+                    to: toAddress,
+                    value: amountStr,
+                    type: 'Transfer',
+                    metadata: {
+                        method: 'Admin Transfer',
+                        counterparty: toAddress.slice(0, 10) + '...',
+                        confidence: 100,
+                        trustStatus: 'verified',
+                        source: 'admin_panel'
+                    }
+                })
+            });
+            if (indexResponse.ok) {
+                console.log(`[Admin] Transaction indexed for VisionScan: ${tx.hash}`);
+            }
+        } catch (indexErr) {
+            console.warn('[Admin] VisionScan indexing failed (non-critical):', indexErr);
+        }
+
+        return receipt;
     }
 
     /**

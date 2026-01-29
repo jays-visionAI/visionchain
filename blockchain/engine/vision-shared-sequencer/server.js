@@ -3,8 +3,17 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { Kafka } = require('kafkajs');
-const sqlite3 = require('sqlite3').verbose();
+const admin = require('firebase-admin');
 const path = require('path');
+
+// Firebase Admin SDK Setup
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.applicationDefault(),
+        projectId: 'visionchain-5bd81'
+    });
+}
+const db = admin.firestore();
 
 const app = express();
 app.use(cors());
@@ -83,10 +92,6 @@ app.get('/debug-rpc', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 const KAFKA_BROKERS = [process.env.KAFKA_BROKER || '46.224.221.201:9092'];
-
-// SQLite Setup (Reader)
-const dbPath = path.resolve(__dirname, 'sequencer.db');
-const db = new sqlite3.Database(dbPath);
 
 const kafka = new Kafka({
     clientId: 'vision-shared-sequencer-api',
@@ -263,19 +268,18 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
             ]
         };
 
-        const stmt = db.prepare(`INSERT OR REPLACE INTO transactions (hash, chainId, type, from_addr, to_addr, value, timestamp, metadata_json, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        stmt.run(
-            txTransfer1.hash,
-            1337,
-            'Transfer',
-            user,
-            recipient,
-            vcnAmount,
-            Date.now(),
-            JSON.stringify(metadata),
-            'sequenced'
-        );
-        stmt.finalize();
+        // Store in Firestore
+        await db.collection('transactions').doc(txTransfer1.hash).set({
+            hash: txTransfer1.hash,
+            chainId: 1337,
+            type: 'Transfer',
+            from_addr: user,
+            to_addr: recipient,
+            value: vcnAmount,
+            timestamp: Date.now(),
+            metadata: metadata,
+            status: 'sequenced'
+        });
 
         res.json({
             status: 'success',
@@ -299,11 +303,9 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
 /**
  * Endpoint: Get Transactions (VisionScan Explorer)
  */
-/**
- * Endpoint: Get Transactions (VisionScan Explorer)
- */
 app.get('/api/transactions', async (req, res) => {
-    const { limit, type, from, to, hash, address } = req.query;
+    const { limit: queryLimit, type, from, to, hash, address } = req.query;
+    const resultLimit = parseInt(queryLimit) || 50;
 
     // Feature: Direct RPC Balance Lookup
     let rpcBalance = null;
@@ -321,44 +323,57 @@ app.get('/api/transactions', async (req, res) => {
         }
     }
 
-    let sql = `SELECT * FROM transactions WHERE 1=1`;
-    const params = [];
+    try {
+        let query = db.collection('transactions');
 
-    if (type && type !== 'All') {
-        sql += ` AND type = ?`;
-        params.push(type);
-    }
-    if (from) {
-        sql += ` AND from_addr LIKE ?`;
-        params.push(`%${from}%`);
-    }
-    if (to) {
-        sql += ` AND to_addr LIKE ?`;
-        params.push(`%${to}%`);
-    }
-    if (hash) {
-        sql += ` AND hash = ?`;
-        params.push(hash);
-    }
-    if (address) {
-        sql += ` AND (from_addr LIKE ? OR to_addr LIKE ?)`;
-        params.push(`%${address}%`, `%${address}%`);
-    }
-
-    sql += ` ORDER BY timestamp DESC LIMIT ?`;
-    params.push(limit || 50);
-
-    db.all(sql, params, async (err, rows) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: err.message });
+        // Apply filters
+        if (hash) {
+            // Direct document lookup by hash
+            const doc = await db.collection('transactions').doc(hash).get();
+            if (doc.exists) {
+                const data = doc.data();
+                return res.json({
+                    transactions: [{
+                        ...data,
+                        onChainVerified: true
+                    }],
+                    liveBalance: rpcBalance,
+                    source: 'Firestore'
+                });
+            }
         }
 
-        let results = rows.map(r => ({
-            ...r,
-            metadata: JSON.parse(r.metadata_json || '{}'),
-            onChainVerified: true
-        }));
+        if (type && type !== 'All') {
+            query = query.where('type', '==', type);
+        }
+        if (from) {
+            query = query.where('from_addr', '==', from);
+        }
+        if (to) {
+            query = query.where('to_addr', '==', to);
+        }
+
+        // Order and limit
+        query = query.orderBy('timestamp', 'desc').limit(resultLimit);
+
+        const snapshot = await query.get();
+        let results = [];
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // Filter by address if specified (from or to)
+            if (address) {
+                const addrLower = address.toLowerCase();
+                if (data.from_addr?.toLowerCase() !== addrLower &&
+                    data.to_addr?.toLowerCase() !== addrLower) {
+                    return;
+                }
+            }
+            results.push({
+                ...data,
+                onChainVerified: true
+            });
+        });
 
         // Feature: RPC Fallback for specific hash search
         if (hash && results.length === 0) {
@@ -374,7 +389,7 @@ app.get('/api/transactions', async (req, res) => {
                         from_addr: tx.from,
                         to_addr: tx.to,
                         value: ethers.formatEther(tx.value),
-                        timestamp: Date.now(), // Fallback as Geth might not have it instantly without block fetch
+                        timestamp: Date.now(),
                         type: 'Transfer',
                         status: 'sequenced',
                         onChainVerified: true,
@@ -393,9 +408,64 @@ app.get('/api/transactions', async (req, res) => {
         res.json({
             transactions: results,
             liveBalance: rpcBalance,
-            source: rpcBalance ? 'Vision Node RPC' : 'Database'
+            source: 'Firestore'
         });
-    });
+
+    } catch (error) {
+        console.error('Firestore query error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+/**
+ * Endpoint: Index a Transaction (For External Indexing - Admin, Direct Transfers)
+ * This allows services like Admin Panel to register transactions in VisionScan DB
+ */
+app.post('/api/transactions/index', async (req, res) => {
+    const { hash, from, to, value, type, metadata } = req.body;
+
+    if (!hash || !from || !to) {
+        return res.status(400).json({ error: 'Missing required fields: hash, from, to' });
+    }
+
+    try {
+        const txMetadata = metadata || {
+            method: 'Transfer (Direct)',
+            counterparty: to.slice(0, 10) + '...',
+            confidence: 100,
+            trustStatus: 'verified',
+            accountingBasis: 'Accrual',
+            taxCategory: 'Transfer',
+            netEffect: [
+                { type: 'debit', amount: value || '0', asset: 'VCN' },
+                { type: 'credit', amount: value || '0', asset: 'VCN' }
+            ]
+        };
+
+        // Store in Firestore
+        await db.collection('transactions').doc(hash).set({
+            hash,
+            chainId: 1337,
+            type: type || 'Transfer',
+            from_addr: from,
+            to_addr: to,
+            value: value || '0',
+            timestamp: Date.now(),
+            metadata: txMetadata,
+            status: 'indexed'
+        });
+
+        console.log(`📝 [Index] Transaction indexed to Firestore: ${hash.slice(0, 10)}... (${from.slice(0, 6)} -> ${to.slice(0, 6)})`);
+
+        res.json({
+            status: 'indexed',
+            hash,
+            message: 'Transaction indexed for VisionScan'
+        });
+
+    } catch (error) {
+        console.error("❌ Indexing Error:", error);
+        res.status(500).json({ error: 'Failed to index transaction', details: error.message });
+    }
 });
 
 app.get('/health', (req, res) => {
