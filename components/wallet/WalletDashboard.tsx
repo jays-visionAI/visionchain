@@ -617,8 +617,32 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
         // Load Quick Actions async (non-blocking)
         getQuickActions()
-            .then(actions => setQuickActions(actions.filter(a => a.enabled).sort((a, b) => a.order - b.order)))
-            .catch(e => console.error('Failed to load quick actions:', e));
+            .then(actions => {
+                const enabledActions = actions.filter(a => a.enabled).sort((a, b) => a.order - b.order);
+                // If no actions from Firebase, use defaults
+                if (enabledActions.length === 0) {
+                    setQuickActions([
+                        { id: '1', label: 'Learn about Vision Chain', prompt: 'Tell me about Vision Chain', icon: 'BookOpen', iconColor: 'text-yellow-500', actionType: 'chat', order: 1, enabled: true },
+                        { id: '2', label: 'Receive VCN Gift', prompt: 'I want to receive VCN airdrop', icon: 'Sparkles', iconColor: 'text-purple-400', actionType: 'chat', order: 2, enabled: true },
+                        { id: '3', label: 'Invite Friends', prompt: 'How do I invite friends?', icon: 'UserPlus', iconColor: 'text-emerald-400', actionType: 'chat', order: 3, enabled: true },
+                        { id: '4', label: 'Send VCN', prompt: '', icon: 'Send', iconColor: 'text-blue-400', actionType: 'flow', flowName: 'send', order: 4, enabled: true },
+                        { id: '5', label: 'Check Crypto Prices', prompt: 'Show me the current crypto market prices', icon: 'TrendingUp', iconColor: 'text-red-400', actionType: 'chat', order: 5, enabled: true }
+                    ]);
+                } else {
+                    setQuickActions(enabledActions);
+                }
+            })
+            .catch(e => {
+                console.error('Failed to load quick actions:', e);
+                // On error, use defaults
+                setQuickActions([
+                    { id: '1', label: 'Learn about Vision Chain', prompt: 'Tell me about Vision Chain', icon: 'BookOpen', iconColor: 'text-yellow-500', actionType: 'chat', order: 1, enabled: true },
+                    { id: '2', label: 'Receive VCN Gift', prompt: 'I want to receive VCN airdrop', icon: 'Sparkles', iconColor: 'text-purple-400', actionType: 'chat', order: 2, enabled: true },
+                    { id: '3', label: 'Invite Friends', prompt: 'How do I invite friends?', icon: 'UserPlus', iconColor: 'text-emerald-400', actionType: 'chat', order: 3, enabled: true },
+                    { id: '4', label: 'Send VCN', prompt: '', icon: 'Send', iconColor: 'text-blue-400', actionType: 'flow', flowName: 'send', order: 4, enabled: true },
+                    { id: '5', label: 'Check Crypto Prices', prompt: 'Show me the current crypto market prices', icon: 'TrendingUp', iconColor: 'text-red-400', actionType: 'chat', order: 5, enabled: true }
+                ]);
+            });
     });
 
     // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
