@@ -189,10 +189,18 @@ export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, 
             searchVariants.add('0' + numericOnly.slice(2));  // 01066509865
             searchVariants.add(numericOnly.slice(2));         // 1066509865
             searchVariants.add('+82' + numericOnly.slice(2)); // +821066509865
+            searchVariants.add('+82-' + numericOnly.slice(2)); // +82-1066509865
         }
         if (numericOnly.startsWith('0')) {
             searchVariants.add('+82' + numericOnly.slice(1)); // +821066509865 from 01066509865
             searchVariants.add('82' + numericOnly.slice(1));  // 821066509865 from 01066509865
+        }
+        // Common legacy formats with dashes
+        if (numericOnly.length >= 10) {
+            const last8 = numericOnly.slice(-8);
+            const last9 = numericOnly.slice(-9);
+            searchVariants.add('010-' + last8.slice(0, 4) + '-' + last8.slice(4)); // 010-6650-9865
+            searchVariants.add('010' + last8); // 0106650 9865
         }
 
         // Firestore 'in' query limited to 30 values, so we take unique subset
@@ -203,15 +211,49 @@ export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, 
         const q = query(usersRef, where('phone', 'in', uniqueVariants));
         const snapshot = await getDocs(q);
 
-        return snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                vid: doc.id,
-                email: data.email,
-                name: data.displayName || data.name || data.email?.split('@')[0] || 'New User',
-                address: data.walletAddress || data.address || ''
-            };
-        });
+        // Phase 1: Exact match found
+        if (snapshot.docs.length > 0) {
+            return snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    vid: doc.id,
+                    email: data.email,
+                    name: data.displayName || data.name || data.email?.split('@')[0] || 'New User',
+                    address: data.walletAddress || data.address || ''
+                };
+            });
+        }
+
+        // Phase 2: Suffix-based fuzzy match for legacy formats
+        // Get last 8 digits and scan all users (less efficient but handles edge cases)
+        const phoneSuffix = numericOnly.slice(-8);
+        if (phoneSuffix.length === 8) {
+            console.log('[searchUsersByPhone] No exact match, trying suffix match:', phoneSuffix);
+            const allUsersSnap = await getDocs(usersRef);
+            const fuzzyMatches: { vid: string, email: string, name: string, address: string }[] = [];
+
+            for (const doc of allUsersSnap.docs) {
+                const userData = doc.data();
+                const userPhone = (userData.phone || '').replace(/\D/g, '');
+
+                // Match if last 8 digits are the same
+                if (userPhone.length >= 8 && userPhone.slice(-8) === phoneSuffix) {
+                    fuzzyMatches.push({
+                        vid: doc.id,
+                        email: userData.email,
+                        name: userData.displayName || userData.name || userData.email?.split('@')[0] || 'New User',
+                        address: userData.walletAddress || userData.address || ''
+                    });
+                }
+            }
+
+            if (fuzzyMatches.length > 0) {
+                console.log('[searchUsersByPhone] Found via suffix match:', fuzzyMatches.length);
+                return fuzzyMatches;
+            }
+        }
+
+        return [];
     } catch (e) {
         console.error("User search failed:", e);
         return [];
