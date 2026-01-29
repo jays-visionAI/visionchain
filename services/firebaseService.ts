@@ -1738,6 +1738,7 @@ export const updateWalletStatus = async (email: string, walletAddress: string, i
     const updateData: any = {
         walletReady: true,
         walletAddress: walletAddress,
+        status: 'WalletCreated', // Ensure status is synced
         updatedAt: new Date().toISOString()
     };
     if (isVerified !== undefined) updateData.isVerified = isVerified;

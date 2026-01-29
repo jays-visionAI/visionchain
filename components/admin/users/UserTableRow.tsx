@@ -24,8 +24,8 @@ interface UserTableRowProps {
 }
 
 export const UserTableRow: Component<UserTableRowProps> = (props) => {
-    const isRegistered = () => props.user.status === 'Registered' || props.user.status === 'WalletCreated' || props.user.status === 'VestingDeployed';
-    const hasWallet = () => (props.user.walletAddress && props.user.walletAddress.length > 20) || props.user.status === 'WalletCreated' || props.user.status === 'VestingDeployed';
+    const isRegistered = () => props.user.status === 'Registered' || props.user.status === 'WalletCreated' || props.user.status === 'VestingDeployed' || (props.user.walletAddress && props.user.walletAddress.startsWith('0x'));
+    const hasWallet = () => (props.user.walletAddress && props.user.walletAddress.length > 20 && props.user.walletAddress.startsWith('0x')) || props.user.status === 'WalletCreated' || props.user.status === 'VestingDeployed';
 
     return (
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 hover:bg-white/[0.03] transition-colors items-center">
