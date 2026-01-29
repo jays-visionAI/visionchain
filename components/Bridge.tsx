@@ -20,9 +20,11 @@ interface Transaction {
     to: string;
     amount: string;
     asset: string;
-    status: 'Pending' | 'Success' | 'Processing';
+    status: 'Pending' | 'Challenged' | 'Finalized' | 'Reverted' | 'Processing' | 'Success';
     time: string;
     hash: string;
+    timeRemaining?: number;  // seconds remaining in challenge period
+    intentHash?: string;
 }
 
 const Bridge: Component = () => {
@@ -239,28 +241,54 @@ const Bridge: Component = () => {
                             </div>
                             <div class="space-y-6">
                                 <For each={transactions()}>
-                                    {(tx) => (
-                                        <div class="flex items-start gap-4 group">
-                                            <div class={`w-1 h-10 rounded-full ${tx.status === 'Success' ? 'bg-green-500' : 'bg-blue-500 animate-pulse'}`} />
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex justify-between items-start mb-1">
-                                                    <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
-                                                    <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${tx.status === 'Success' ? 'bg-green-500/10 text-green-500' : 'bg-blue-500/10 text-blue-400'}`}>
-                                                        {tx.status}
-                                                    </span>
-                                                </div>
-                                                <div class="text-[10px] text-slate-500 font-medium truncate mb-1">
-                                                    {tx.from} ➔ {tx.to}
-                                                </div>
-                                                <div class="flex items-center gap-3 text-[10px] text-slate-600">
-                                                    <span>{tx.time}</span>
-                                                    <a href="#" class="hover:text-blue-400 flex items-center gap-1">
-                                                        {tx.hash} <ExternalLink class="w-2.5 h-2.5" />
-                                                    </a>
+                                    {(tx) => {
+                                        const statusColors: Record<string, string> = {
+                                            'Pending': 'bg-yellow-500/10 text-yellow-400',
+                                            'Challenged': 'bg-red-500/10 text-red-400',
+                                            'Finalized': 'bg-green-500/10 text-green-400',
+                                            'Reverted': 'bg-red-500/10 text-red-400',
+                                            'Processing': 'bg-blue-500/10 text-blue-400',
+                                            'Success': 'bg-green-500/10 text-green-500'
+                                        };
+                                        const barColors: Record<string, string> = {
+                                            'Pending': 'bg-yellow-500 animate-pulse',
+                                            'Challenged': 'bg-red-500 animate-pulse',
+                                            'Finalized': 'bg-green-500',
+                                            'Reverted': 'bg-red-500',
+                                            'Processing': 'bg-blue-500 animate-pulse',
+                                            'Success': 'bg-green-500'
+                                        };
+                                        return (
+                                            <div class="flex items-start gap-4 group">
+                                                <div class={`w-1 h-10 rounded-full ${barColors[tx.status] || 'bg-gray-500'}`} />
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex justify-between items-start mb-1">
+                                                        <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
+                                                        <div class="flex items-center gap-2">
+                                                            <Show when={tx.status === 'Pending' && tx.timeRemaining}>
+                                                                <span class="text-[9px] font-mono text-yellow-400">
+                                                                    <Clock class="w-3 h-3 inline mr-1" />
+                                                                    {Math.floor((tx.timeRemaining || 0) / 60)}m {(tx.timeRemaining || 0) % 60}s
+                                                                </span>
+                                                            </Show>
+                                                            <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${statusColors[tx.status]}`}>
+                                                                {tx.status}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-[10px] text-slate-500 font-medium truncate mb-1">
+                                                        {tx.from} ➔ {tx.to}
+                                                    </div>
+                                                    <div class="flex items-center gap-3 text-[10px] text-slate-600">
+                                                        <span>{tx.time}</span>
+                                                        <a href="#" class="hover:text-blue-400 flex items-center gap-1">
+                                                            {tx.hash} <ExternalLink class="w-2.5 h-2.5" />
+                                                        </a>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    }}
                                 </For>
                             </div>
                         </div>
