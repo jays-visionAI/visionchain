@@ -2247,7 +2247,7 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
             </div>
         }>
             <>
-                <section class="bg-[#0a0a0b] min-h-screen flex overflow-hidden">
+                <section class="bg-[#0a0a0b] h-[100dvh] flex overflow-hidden">
 
                     {/* Ambient Background */}
                     <div class="fixed inset-0 pointer-events-none overflow-hidden">
@@ -2309,7 +2309,7 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                     </Show>
 
                     {/* Main Content Area */}
-                    <main class={`flex-1 flex flex-col h-screen transition-all duration-300 relative ml-0 lg:ml-[280px] w-full overflow-x-hidden ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
+                    <main class={`flex-1 flex flex-col h-[100dvh] overflow-hidden transition-all duration-300 relative ml-0 lg:ml-[280px] w-full ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
 
 
                         {/* Chat View */}

@@ -589,7 +589,7 @@ const MultiBatchDrawer = (props: {
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
-    const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(false);
+    const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     let scrollContainerRef: HTMLDivElement | undefined;
 
     // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
