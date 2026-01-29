@@ -1201,8 +1201,15 @@ const Wallet = (): JSX.Element => {
                         }
                     } catch (err: any) {
                         console.error("Batch item failed:", err);
-                        finalResults.push({ success: false, error: err.message || "Unknown error", tx });
-                        setBatchAgents(prev => prev.map(a => a.id === agentId ? { ...a, failedCount: a.failedCount + 1 } : a));
+                        const errorMsg = err.message || "Unknown error";
+                        finalResults.push({ success: false, error: errorMsg, tx });
+                        // Store error message in agent for UI display
+                        setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                            ...a,
+                            failedCount: a.failedCount + 1,
+                            error: errorMsg,
+                            lastError: { recipient: recipientAddr, amount: tx.amount, message: errorMsg }
+                        } : a));
                     }
 
                     // 10 second interval for stability

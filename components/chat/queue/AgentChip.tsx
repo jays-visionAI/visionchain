@@ -15,6 +15,7 @@ export interface AgentTask {
     timestamp: number;
     executeAt?: number;
     progress?: number;
+    error?: string; // Error message for failed tasks
 }
 
 interface AgentChipProps {
@@ -163,9 +164,9 @@ const AgentChip = (props: AgentChipProps) => {
         return props.task.executeAt < currentTime();
     });
 
-    // Show dismiss button for FAILED or overdue WAITING tasks
+    // Show dismiss button for FAILED, SENT, or overdue WAITING tasks
     const canDismiss = createMemo(() => {
-        return props.task.status === 'FAILED' || isOverdue();
+        return props.task.status === 'FAILED' || props.task.status === 'SENT' || isOverdue();
     });
 
     return (
@@ -216,6 +217,15 @@ const AgentChip = (props: AgentChipProps) => {
                 <span class={`text-[12px] font-bold leading-tight truncate ${config().textColor}`}>
                     {props.task.summary}
                 </span>
+                {/* Error Reason Display */}
+                <Show when={props.task.status === 'FAILED' && props.task.error}>
+                    <div class="mt-1 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                        <span class="text-[9px] font-bold text-red-300 uppercase tracking-wide block mb-0.5">Error Reason:</span>
+                        <span class="text-[10px] text-red-200 break-words leading-tight">
+                            {props.task.error}
+                        </span>
+                    </div>
+                </Show>
             </div>
 
             {/* Timeline Section (Hidden in compact) */}

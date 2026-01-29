@@ -1008,7 +1008,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                         summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
                                                                         status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
                                                                         timestamp: agent.startTime,
-                                                                        progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
+                                                                        progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100,
+                                                                        error: agent.error // Pass error message to display in UI
                                                                     }}
                                                                     isCompact={true}
                                                                     onClick={() => {
