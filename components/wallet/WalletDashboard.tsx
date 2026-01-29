@@ -942,7 +942,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
                                         <button
                                             onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
-                                            class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
+                                            class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
                                                 ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
                                                 : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
                                                 }`}
@@ -961,7 +961,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="absolute -top-4 right-4 z-40 md:hidden">
                                         <button
                                             onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
-                                            class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
+                                            class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
                                                 ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
                                                 : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
                                                 }`}
