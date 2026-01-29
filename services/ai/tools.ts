@@ -19,16 +19,50 @@ export const AI_TOOLS = [
     },
     {
         name: "get_current_price",
-        description: "Get the current price of a cryptocurrency in USD.",
+        description: "Get the REAL-TIME current price of a cryptocurrency in USD from CoinGecko. ALWAYS use this tool when the user asks for 'current', 'now', 'today', or 'live' price. Returns price, 24h change, volume, market cap, and rank.",
+        parameters: {
+            type: "object",
+            properties: {
+                symbol: {
+                    type: "string",
+                    description: "The cryptocurrency symbol (e.g., 'btc', 'eth', 'sol', 'xrp', 'doge')."
+                }
+            },
+            required: ["symbol"]
+        }
+    },
+    {
+        name: "get_chart_data",
+        description: "Get historical price chart data for a cryptocurrency over a specified period. Use this for showing price trends or generating graphs.",
         parameters: {
             type: "object",
             properties: {
                 symbol: {
                     type: "string",
                     description: "The cryptocurrency symbol (e.g., 'btc', 'eth')."
+                },
+                days: {
+                    type: "number",
+                    description: "Number of days of historical data (e.g., 7, 14, 30, 90, 365). Default is 7."
                 }
             },
             required: ["symbol"]
+        }
+    },
+    {
+        name: "get_trending_coins",
+        description: "Get the top 10 trending cryptocurrencies on CoinGecko right now. Use when user asks about 'hot', 'trending', or 'popular' coins.",
+        parameters: {
+            type: "object",
+            properties: {}
+        }
+    },
+    {
+        name: "get_global_market",
+        description: "Get global cryptocurrency market statistics including total market cap, 24h volume, BTC dominance, and number of active cryptocurrencies.",
+        parameters: {
+            type: "object",
+            properties: {}
         }
     },
     {

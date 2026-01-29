@@ -70,14 +70,38 @@ export const generateText = async (
 
         const provider = factory.getProvider(config.providerId);
 
-        // --- Locale & Time Injection ---
+        // --- Locale & Time Injection (Enhanced for precise date calculations) ---
         const now = new Date();
-        const localeInfo = `[System Time Context]
+        const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const userLocale = navigator.language;
+
+        // Calculate dates in user's locale for API calls
+        const formatDateForCoinGecko = (date: Date): string => {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`; // DD-MM-YYYY format required by CoinGecko
+        };
+
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const oneWeekAgo = new Date(now);
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        const localeInfo = `[System Time Context - Use this for ALL date/time calculations]
 CURRENT_UTC_TIME: ${now.toISOString()}
 CURRENT_TIMESTAMP_MS: ${Date.now()}
-TIMEZONE: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
-USER_LOCALE: ${navigator.language}
-LOCALE_TODAY: ${now.toLocaleDateString(navigator.language, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+TIMEZONE: ${userTimezone}
+USER_LOCALE: ${userLocale}
+TODAY_LOCAL: ${now.toLocaleDateString(userLocale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+TODAY_DD_MM_YYYY: ${formatDateForCoinGecko(now)}
+YESTERDAY_DD_MM_YYYY: ${formatDateForCoinGecko(yesterday)}
+ONE_WEEK_AGO_DD_MM_YYYY: ${formatDateForCoinGecko(oneWeekAgo)}
+
+IMPORTANT: When user asks for "current" or "now" price, use get_current_price tool.
+When user asks for historical price (past dates), use get_historical_price with the date in DD-MM-YYYY format.
+For "yesterday", use YESTERDAY_DD_MM_YYYY. For "a week ago", use ONE_WEEK_AGO_DD_MM_YYYY.`;
 
         const pt = (config as any).promptTuning;
         const tuningInfo = pt ? `
@@ -101,9 +125,12 @@ ${localeInfo}
 4. RECOMMENDED QUESTIONS: If the user asks about market data, prices, or DeFi, YOU MUST provide 3 follow-up questions.
    Format: Append "[RECOMMENDED_QUESTIONS] Question 1 | Question 2 | Question 3" at the very end.
 
-5. REAL-TIME DATA POLICY (STRICT):
-   - **DO NOT HALLUCINATE PRICES.** If the user asks for a price, YOU MUST use 'get_current_price' or 'get_historical_price'.
-   - NEVER provide a price from your internal knowledge base. 
+5. REAL-TIME DATA POLICY (MANDATORY - NO EXCEPTIONS):
+   - You MUST call 'get_current_price' tool for ANY current/live/today price query.
+   - You MUST call 'get_historical_price' tool for ANY past/historical price query.
+   - For historical queries, use the DD-MM-YYYY format. Reference TODAY_DD_MM_YYYY and YESTERDAY_DD_MM_YYYY from the System Time Context.
+   - NEVER make up, estimate, or recall prices from memory. ALL price data must come from tool results.
+   - If a tool call fails, admit you couldn't retrieve real-time data.
 `;
 
         const router = factory.getRouter();
