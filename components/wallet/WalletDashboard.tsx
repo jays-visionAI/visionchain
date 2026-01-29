@@ -978,61 +978,66 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                     <Presence>
                                         <Show when={!isAgentBayCollapsed()}>
-                                            <Motion.div
-                                                initial={{ opacity: 0, height: 0, scale: 0.95 }}
-                                                animate={{ opacity: 1, height: 'auto', scale: 1 }}
-                                                exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                                                transition={{ duration: 0.3, easing: 'ease-out' }}
-                                                class="flex items-center gap-3 overflow-hidden bg-[#0d0d0f]/60 backdrop-blur-md rounded-[24px] border border-white/5 p-1.5 pr-3 shadow-2xl"
-                                            >
-                                                {/* Unified Scrollable Row */}
-                                                <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5 pl-2">
-                                                    {/* Batch Agents */}
-                                                    <For each={props.batchAgents()}>
-                                                        {(agent) => (
-                                                            <AgentChip
-                                                                task={{
-                                                                    id: agent.id,
-                                                                    type: 'BATCH',
-                                                                    summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
-                                                                    status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
-                                                                    timestamp: agent.startTime,
-                                                                    progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
-                                                                }}
-                                                                isCompact={true}
-                                                                onClick={() => {
-                                                                    setSelectedTaskId(agent.id);
-                                                                    setIsQueueDrawerOpen(true);
-                                                                }}
-                                                                onDismiss={(id) => props.onDismissTask?.(id)}
-                                                            />
-                                                        )}
-                                                    </For>
-
-                                                    {/* Time-lock Agents */}
-                                                    <For each={activeTimeTasks()}>
-                                                        {(task) => (
-                                                            <AgentChip
-                                                                task={task}
-                                                                isCompact={true}
-                                                                onClick={() => {
-                                                                    setSelectedTaskId(task.id);
-                                                                    setIsQueueDrawerOpen(true);
-                                                                }}
-                                                                onDismiss={(id) => props.onDismissTask?.(id)}
-                                                            />
-                                                        )}
-                                                    </For>
-                                                </div>
-
-                                                {/* History Button */}
-                                                <button
-                                                    onClick={() => setIsQueueDrawerOpen(true)}
-                                                    class="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-gray-500 hover:text-white transition-all border border-white/5"
+                                            <div class="flex items-center gap-3">
+                                                <Motion.div
+                                                    initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                    animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                                                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                    transition={{ duration: 0.3, easing: 'ease-out' }}
+                                                    class="flex-1 flex items-center gap-3 overflow-hidden bg-[#0d0d0f]/60 backdrop-blur-md rounded-[24px] border border-white/5 p-1.5 pr-3 shadow-2xl"
                                                 >
-                                                    <List class="w-4 h-4" />
+                                                    {/* Unified Scrollable Row */}
+                                                    <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5 pl-2">
+                                                        {/* Batch Agents */}
+                                                        <For each={props.batchAgents()}>
+                                                            {(agent) => (
+                                                                <AgentChip
+                                                                    task={{
+                                                                        id: agent.id,
+                                                                        type: 'BATCH',
+                                                                        summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
+                                                                        status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
+                                                                        timestamp: agent.startTime,
+                                                                        progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
+                                                                    }}
+                                                                    isCompact={true}
+                                                                    onClick={() => {
+                                                                        setSelectedTaskId(agent.id);
+                                                                        setIsQueueDrawerOpen(true);
+                                                                    }}
+                                                                    onDismiss={(id) => props.onDismissTask?.(id)}
+                                                                />
+                                                            )}
+                                                        </For>
+
+                                                        {/* Time-lock Agents */}
+                                                        <For each={activeTimeTasks()}>
+                                                            {(task) => (
+                                                                <AgentChip
+                                                                    task={task}
+                                                                    isCompact={true}
+                                                                    onClick={() => {
+                                                                        setSelectedTaskId(task.id);
+                                                                        setIsQueueDrawerOpen(true);
+                                                                    }}
+                                                                    onDismiss={(id) => props.onDismissTask?.(id)}
+                                                                />
+                                                            )}
+                                                        </For>
+                                                    </div>
+                                                </Motion.div>
+
+                                                {/* History Button - Outside Motion.div for reliable clicks */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setIsQueueDrawerOpen(true);
+                                                    }}
+                                                    class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
+                                                >
+                                                    <List class="w-5 h-5" />
                                                 </button>
-                                            </Motion.div>
+                                            </div>
                                         </Show>
                                     </Presence>
                                 </div>
