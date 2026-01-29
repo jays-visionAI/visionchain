@@ -172,15 +172,35 @@ export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, 
         const db = getFirebaseDb();
         const usersRef = collection(db, 'users');
         const normalized = normalizePhoneNumber(phone);
-        const numeric = normalized.replace(/\D/g, '');
-        const compact = normalized.startsWith('+') ? `+${numeric}` : numeric;
+        const numericOnly = phone.replace(/\D/g, '');
+        const compact = normalized.replace(/-/g, ''); // Remove dashes from normalized
 
-        // Search by multiple potential formats in Firestore
-        // Note: Firestore doesn't support 'OR' queries on the same field easily with 'where' 
-        // without 'in' operator, but 'in' is limited to 10-30 values.
-        const searchVariants = Array.from(new Set([normalized, numeric, compact, phone]));
+        // Generate multiple search variants to handle different storage formats
+        const searchVariants = new Set<string>([
+            normalized,                         // +82-10-6650-9865
+            compact,                            // +821066509865
+            numericOnly,                        // 821066509865
+            phone,                              // original input
+            phone.replace(/\D/g, ''),           // digits only from original
+        ]);
 
-        const q = query(usersRef, where('phone', 'in', searchVariants));
+        // Add variants with/without leading country code
+        if (numericOnly.startsWith('82')) {
+            searchVariants.add('0' + numericOnly.slice(2));  // 01066509865
+            searchVariants.add(numericOnly.slice(2));         // 1066509865
+            searchVariants.add('+82' + numericOnly.slice(2)); // +821066509865
+        }
+        if (numericOnly.startsWith('0')) {
+            searchVariants.add('+82' + numericOnly.slice(1)); // +821066509865 from 01066509865
+            searchVariants.add('82' + numericOnly.slice(1));  // 821066509865 from 01066509865
+        }
+
+        // Firestore 'in' query limited to 30 values, so we take unique subset
+        const uniqueVariants = Array.from(searchVariants).slice(0, 10);
+
+        console.log('[searchUsersByPhone] Searching with variants:', uniqueVariants);
+
+        const q = query(usersRef, where('phone', 'in', uniqueVariants));
         const snapshot = await getDocs(q);
 
         return snapshot.docs.map(doc => {
@@ -1154,15 +1174,18 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
             const joinDateStr = formatJoinDate(userDoc?.createdAt || saleDoc?.date || saleDoc?.createdAt);
 
             mergedUsers.push({
-                email: email,
+                email: userDoc?.email || saleDoc?.email || email,
                 role: userDoc?.role || 'user',
-                name: userDoc?.name || userDoc?.displayName || email.split('@')[0],
+                name: userDoc?.name || userDoc?.displayName || saleDoc?.name || (email.includes('@') ? email.split('@')[0] : email),
+                phone: userDoc?.phone || saleDoc?.phone || '',
                 walletAddress: finalWallet,
                 status: status,
                 joinDate: joinDateStr,
                 isVerified: !!saleDoc,
                 tier: saleDoc?.tier || 0,
-                amountToken: saleDoc?.amountToken || saleDoc?.amount || 0
+                amountToken: saleDoc?.amountToken || saleDoc?.amount || 0,
+                referralCode: userDoc?.referralCode || saleDoc?.referralCode || '',
+                referrerId: userDoc?.referrerId || saleDoc?.referrerId || ''
             });
         });
 
