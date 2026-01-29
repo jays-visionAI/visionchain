@@ -1090,14 +1090,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             </div>
                         </div>
 
-                        {/* Footer Info */}
-                        <div class="mt-4 flex items-center justify-between px-6 opacity-30">
-                            <div class="flex items-center gap-2">
-                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                <span class="text-[9px] font-black text-white uppercase tracking-[0.3em]">Neural Interface Active</span>
-                            </div>
-                            <span class="text-[9px] font-bold text-gray-500 italic uppercase">Secure End-to-End Orchestration</span>
-                        </div>
+
                     </div>
                 </div>
             </div >
