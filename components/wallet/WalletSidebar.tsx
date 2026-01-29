@@ -185,7 +185,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                                 {props.userProfile?.email?.split('@')[0] || 'Visionary'}
                             </div>
                             <div class="text-[10px] font-bold text-gray-500 truncate flex items-center gap-1">
-                                <span class="w-1 h-1 rounded-full bg-green-500" /> Secured ID
+                                <span class="w-1 h-1 rounded-full bg-green-500" /> Secured VID
                             </div>
                         </div>
                     </div>
