@@ -1,0 +1,9 @@
+# Ignore Firebase Functions folder (not Cloudflare Pages Functions)
+functions/
+
+# Other files to ignore
+node_modules/
+.git/
+*.log
+.env
+.env.local
