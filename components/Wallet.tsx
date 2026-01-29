@@ -3764,7 +3764,6 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     class="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                                    onClick={() => setShowPasswordModal(false)}
                                 />
                                 <Motion.div
                                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -3876,7 +3875,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 exit={{ opacity: 0 }}
                                 class="fixed inset-0 z-[100] flex items-center justify-center px-4"
                             >
-                                <div class="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => !isUploadingImage() && setIsCropping(false)} />
+                                <div class="absolute inset-0 bg-black/90 backdrop-blur-md" />
 
                                 <Motion.div
                                     initial={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -3993,7 +3992,6 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     class="absolute inset-0 bg-black/80 backdrop-blur-md"
-                                    onClick={() => setShowIOSInstallModal(false)}
                                 />
                                 <Motion.div
                                     initial={{ opacity: 0, scale: 0.9, y: 30 }}

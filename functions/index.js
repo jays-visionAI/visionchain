@@ -1,7 +1,5 @@
-
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const { ethers } = require("ethers");
 
@@ -10,10 +8,9 @@ const db = admin.firestore();
 
 // Configuration
 const RPC_URL = "http://46.224.221.201:8545"; // Testnet
-// Secret for Executor Private Key (set via: firebase functions:secrets:set EXECUTOR_PK)
-const executorPkSecret = defineSecret("EXECUTOR_PK");
-// Fallback key for testnet (Hardhat default account #0)
-const TESTNET_EXECUTOR_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+// Executor key - in production, use environment config or Secret Manager
+const EXECUTOR_PRIVATE_KEY = process.env.EXECUTOR_PK ||
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Hardhat default #0
 const TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
 const TIMELOCK_ABI = [
   "function executeTransfer(uint256 scheduleId) external",
@@ -22,7 +19,7 @@ const TIMELOCK_ABI = [
 ];
 
 // --- Paymaster TimeLock (Gasless Scheduled Transfers) ---
-exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: [executorPkSecret] }, async (req, res) => {
+exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -44,10 +41,8 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: 
     console.log(`[Paymaster] Recipient: ${recipient}, Amount: ${amount}, UnlockTime: ${unlockTime}`);
 
     // Setup Blockchain Connection with Admin Wallet
-    // Use secret if available, otherwise fallback to testnet key
-    const executorKey = executorPkSecret.value() || TESTNET_EXECUTOR_KEY;
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const adminWallet = new ethers.Wallet(executorKey, provider);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
     const contract = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, adminWallet);
 
     // Execute TimeLock Schedule on behalf of user
@@ -72,25 +67,33 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: 
       }
     }
 
-    // Save to Firestore for scheduler to execute later
-    const jobRef = await db.collection("scheduledTransfers").add({
-      scheduleId: scheduleId,
-      from: user,
-      to: recipient,
-      amount: amount,
-      unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
-      status: "WAITING",
-      createdAt: admin.firestore.Timestamp.now(),
-      txHash: tx.hash,
-      fee: fee || "0",
-      type: "TIMELOCK_PAYMASTER",
-    });
+    // Save to Firestore for scheduler to execute later (non-blocking)
+    let jobId = null;
+    try {
+      const jobRef = await db.collection("scheduledTransfers").add({
+        scheduleId: scheduleId,
+        from: user,
+        to: recipient,
+        amount: amount,
+        unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
+        status: "WAITING",
+        createdAt: admin.firestore.Timestamp.now(),
+        txHash: tx.hash,
+        fee: fee || "0",
+        type: "TIMELOCK_PAYMASTER",
+      });
+      jobId = jobRef.id;
+      console.log(`[Paymaster] Firestore job created: ${jobId}`);
+    } catch (firestoreErr) {
+      // Log but don't fail - blockchain tx already succeeded
+      console.warn("[Paymaster] Firestore write failed (non-critical):", firestoreErr.message);
+    }
 
     return res.status(200).json({
       success: true,
       txHash: tx.hash,
       scheduleId: scheduleId,
-      jobId: jobRef.id,
+      jobId: jobId,
     });
   } catch (err) {
     console.error("[Paymaster] TimeLock Error:", err);
@@ -250,7 +253,7 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
 
     // 3. Setup Blockchain Connection
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const wallet = new ethers.Wallet(TESTNET_EXECUTOR_KEY, provider);
+    const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
     const contract = new ethers.Contract(TIMELOCK_ADDRESS,
       TIMELOCK_ABI, wallet);
 
