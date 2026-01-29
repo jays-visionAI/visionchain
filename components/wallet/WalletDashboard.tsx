@@ -1,5 +1,6 @@
 import { createSignal, Show, For, createEffect, createMemo, onMount } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
+import { marked } from 'marked';
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
 import QueueDrawer from '../chat/queue/QueueDrawer';
@@ -822,12 +823,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             </div>
                                         </Show>
                                         <div class={`w-full md:max-w-[85%] ${msg.role === 'user' ? 'md:order-first' : ''}`}>
-                                            <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all ${msg.role === 'user'
+                                            <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all markdown-body ${msg.role === 'user'
                                                 ? 'bg-[#007AFF] text-white rounded-tr-sm shadow-[0_10px_30px_-5px_rgba(0,122,255,0.3)]'
                                                 : 'bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm'
-                                                }`}>
-                                                {msg.content.split('[RECOMMENDED_QUESTIONS]')[0]}
-                                            </div>
+                                                }`}
+                                                innerHTML={marked.parse(msg.content.split('[RECOMMENDED_QUESTIONS]')[0]) as string}
+                                            />
 
                                             <Show when={msg.role === 'assistant' && msg.content.includes('[RECOMMENDED_QUESTIONS]')}>
                                                 <div class="flex flex-wrap gap-2 mt-3 px-1 animate-in fade-in slide-in-from-top-2 duration-500 delay-300">
