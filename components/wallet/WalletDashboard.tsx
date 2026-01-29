@@ -989,9 +989,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             />
                             <div class="absolute -inset-[1px] bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
 
-                            <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-[#27272a] rounded-[28px] p-2 flex flex-col md:flex-row items-stretch md:items-end gap-2 group-focus-within:bg-[#0d0d0f] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
+                            <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-[#27272a] rounded-[28px] p-2 flex flex-col md:flex-row items-stretch md:items-end gap-1 group-focus-within:bg-[#0d0d0f] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
                                 {/* Text area - Top on mobile, Center on desktop */}
-                                <div class="flex-1 px-1 border border-[#27272a] rounded-xl self-stretch my-1 order-1 md:order-2">
+                                <div class="flex-1 px-1 border border-[#27272a] rounded-xl self-stretch mt-1 mb-0 order-1 md:order-2">
                                     <textarea
                                         class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
                                         placeholder={props.isRecording() ? "Listening..." : "Tell Vision AI what to do..."}
