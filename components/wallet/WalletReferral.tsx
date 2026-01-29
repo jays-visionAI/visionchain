@@ -333,6 +333,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                         <thead>
                                             <tr class="border-b border-white/5 bg-white/[0.02]">
                                                 <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Identity</th>
+                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Info</th>
                                                 <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
                                                 <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Rewards Generated</th>
                                                 <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Join Date</th>
@@ -351,6 +352,14 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                                                     <div class="text-sm font-bold text-white uppercase tracking-tight">{ref.name || ref.email.split('@')[0]}</div>
                                                                     <div class="text-[9px] font-bold text-gray-600 truncate max-w-[120px]">{ref.email}</div>
                                                                 </div>
+                                                            </div>
+                                                        </td>
+                                                        <td class="px-8 py-5">
+                                                            <div class="space-y-1">
+                                                                <Show when={ref.phone}>
+                                                                    <div class="text-[10px] font-mono text-gray-400">{ref.phone}</div>
+                                                                </Show>
+                                                                <div class="text-[9px] font-mono text-gray-600 truncate max-w-[160px]">{ref.email}</div>
                                                             </div>
                                                         </td>
                                                         <td class="px-8 py-5">

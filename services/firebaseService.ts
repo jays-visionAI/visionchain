@@ -896,17 +896,33 @@ export const userRegister = async (email: string, password: string, phone?: stri
                 referralCount: (referrer.referralCount || 0) + 1
             });
 
-            // 1. Add new user to referrer's contact list (Automatic Networking)
-            const referrerContactsRef = doc(db, 'users', referrerId.toLowerCase(), 'contacts', emailLower);
-            await setDoc(referrerContactsRef, {
-                internalName: emailLower.split('@')[0],
-                email: emailLower,
-                phone: normalizedPhone,
-                vchainUserUid: emailLower,
-                syncStatus: 'verified',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            });
+            // 1. Add new user to referrer's contact list (or update existing pending contact)
+            const existingContact = await findContactByPhone(referrerId.toLowerCase(), normalizedPhone);
+
+            if (existingContact) {
+                // Update existing pending contact with verified info
+                const existingContactRef = doc(db, 'users', referrerId.toLowerCase(), 'contacts', existingContact.id);
+                await setDoc(existingContactRef, {
+                    email: emailLower,
+                    vchainUserUid: emailLower,
+                    syncStatus: 'verified',
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                console.log(`[Referral] Updated existing contact ${existingContact.id} for ${emailLower}`);
+            } else {
+                // Create new contact
+                const referrerContactsRef = doc(db, 'users', referrerId.toLowerCase(), 'contacts', emailLower);
+                await setDoc(referrerContactsRef, {
+                    internalName: emailLower.split('@')[0],
+                    email: emailLower,
+                    phone: normalizedPhone,
+                    vchainUserUid: emailLower,
+                    syncStatus: 'verified',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
+                console.log(`[Referral] Created new contact for ${emailLower}`);
+            }
 
             // 2. Add referrer to new user's contact list (Bi-directional)
             const newUserContactsRef = doc(db, 'users', emailLower, 'contacts', referrerId.toLowerCase());
@@ -1330,6 +1346,45 @@ export const toggleContactFavorite = async (userEmail: string, contactId: string
     } catch (e) {
         console.error("Error toggling favorite:", e);
         throw e;
+    }
+};
+
+/**
+ * Find an existing contact by phone number in a user's contact list.
+ * Used to check if a pending contact exists before creating a new one.
+ */
+export const findContactByPhone = async (
+    ownerEmail: string,
+    phone: string
+): Promise<{ id: string, data: any } | null> => {
+    if (!phone) return null;
+
+    try {
+        const db = getFirebaseDb();
+        const ownerEmailLower = ownerEmail.toLowerCase().trim();
+        const normalizedPhone = normalizePhoneNumber(phone);
+        const phoneDigits = normalizedPhone.replace(/\D/g, '');
+
+        const contactsRef = collection(db, 'users', ownerEmailLower, 'contacts');
+        const contactsSnap = await getDocs(contactsRef);
+
+        for (const contactDoc of contactsSnap.docs) {
+            const contactData = contactDoc.data();
+            const contactPhone = (contactData.phone || '').replace(/\D/g, '');
+
+            // Match by normalized phone digits
+            if (contactPhone && (
+                contactPhone === phoneDigits ||
+                contactPhone.endsWith(phoneDigits.slice(-8)) ||
+                phoneDigits.endsWith(contactPhone.slice(-8))
+            )) {
+                return { id: contactDoc.id, data: contactData };
+            }
+        }
+        return null;
+    } catch (e) {
+        console.warn('[findContactByPhone] Error:', e);
+        return null;
     }
 };
 
