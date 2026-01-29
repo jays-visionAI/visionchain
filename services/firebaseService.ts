@@ -1763,9 +1763,48 @@ export const updateWalletStatus = async (email: string, walletAddress: string, i
                 phone: userData.phone || '',
                 updatedAt: new Date().toISOString()
             }, { merge: true });
+            console.log(`[Contact Sync] Updated referrer ${referrerId}'s contact for ${emailLower}`);
+        }
+
+        // 3b. Reverse Sync: Find all users who have this user (by phone or email) in their contacts
+        // and update their contact entries with the new wallet address
+        const phone = userData?.phone;
+        if (phone) {
+            const normalizedPhone = phone.replace(/[\s\-\(\)]/g, '');
+            // Query all users' contacts where phone matches
+            const usersRef = collection(db, 'users');
+            const usersSnap = await getDocs(usersRef);
+
+            for (const userDoc of usersSnap.docs) {
+                if (userDoc.id === emailLower) continue; // Skip self
+
+                const contactsRef = collection(db, 'users', userDoc.id, 'contacts');
+                const contactsSnap = await getDocs(contactsRef);
+
+                for (const contactDoc of contactsSnap.docs) {
+                    const contactData = contactDoc.data();
+                    const contactPhone = (contactData.phone || '').replace(/[\s\-\(\)]/g, '');
+
+                    // Match by phone or email/vchainUserUid
+                    if (
+                        (contactPhone && contactPhone === normalizedPhone) ||
+                        contactData.email === emailLower ||
+                        contactData.vchainUserUid === emailLower
+                    ) {
+                        // Update this contact with the new wallet address
+                        await setDoc(contactDoc.ref, {
+                            address: walletAddress,
+                            vchainUserUid: emailLower,
+                            syncStatus: 'verified',
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
+                        console.log(`[Contact Sync] Updated ${userDoc.id}'s contact for ${emailLower} with wallet ${walletAddress}`);
+                    }
+                }
+            }
         }
     } catch (e) {
-        console.warn("Failed to update referrer contact list in fallback mode (likely permission issue):", e);
+        console.warn("[Contact Sync] Failed to update contacts (likely permission issue):", e);
     }
 
     // 4. Auto-Distribute Testnet VCN (10% Rule)
