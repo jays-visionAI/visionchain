@@ -917,7 +917,7 @@ const Wallet = (): JSX.Element => {
                             try {
                                 const onChainBal = await contractService.getNativeBalance(address);
                                 const numericAmount = parseFloat(amount.replace(/,/g, ''));
-                                const gasBuffer = 10; // Increased buffer for safety
+                                const gasBuffer = 1; // Actual gas is ~0.0001 VCN, so 1 VCN is 10000x buffer
 
                                 // TEMPORARY: Always seed if balance is insufficient (for testnet demo only)
                                 if (parseFloat(onChainBal) < (numericAmount + gasBuffer)) {
@@ -956,7 +956,7 @@ const Wallet = (): JSX.Element => {
 
                             // All system messages in English only
                             const errorMsg = isInsufficientFunds
-                                ? 'Insufficient balance. You need the transfer amount plus gas fees (~10 VCN).'
+                                ? 'Insufficient balance. You need the transfer amount plus gas fees (~1 VCN).'
                                 : `Time-lock scheduling failed: ${legacyErr.shortMessage || legacyErr.message || 'Unknown error'}`;
 
                             alert(errorMsg);
