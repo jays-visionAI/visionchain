@@ -1829,6 +1829,10 @@ ${activeContacts.length > 0
 
 Holdings:
 ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n')}
+
+[Referral Info]
+Referral Code: ${userProfile().referralCode || 'N/A'}
+Referral Link: https://www.visionchain.co/wallet?ref=${userProfile().referralCode || ''}
 `;
 
             // Excel/CSV Context
@@ -1847,7 +1851,7 @@ Identify the intent and provide a friendly response following the established ar
 IF the recipient is found in the [ADDRESS BOOK] above, auto-resolve the address and proceed to confirmation.
 
 [CRITICAL: ACTION FORMAT]
-If the user wants to execute a transaction (Send, Swap, Schedule, etc.), you MUST append a JSON block to the end of your response.
+If the user wants to execute a transaction (Send, Swap, Schedule, etc.) or navigate to a specific page, you MUST append a JSON block to the end of your response.
 For multiple transactions or complex batch sends, use the "multi" intent with a "transactions" array.
 
 Format (Single - Immediate Transfer):
@@ -1857,6 +1861,15 @@ Format (Single - Immediate Transfer):
   "recipient": "0x..." (or name),
   "amount": "100",
   "symbol": "VCN"
+}
+\`\`\`
+
+Format (Navigation):
+If the user wants to go to a specific page or says "Yes" to your suggestion of moving to a screen (like Referral, Assets, etc.):
+\`\`\`json
+{
+  "intent": "navigate",
+  "page": "referral" (or "assets", "nodes", "quest", "mint", "settings", "profile")
 }
 \`\`\`
 
@@ -1885,6 +1898,11 @@ Format (Multi/Batch):
 }
 \`\`\`
 If you detect multiple recipients in one request, ALWAYS use the "multi" format.
+
+[REFERRAL GUIDELINE]
+If the user asks about inviting friends, missions, or rewards, explain that they can share their referral link to earn rewards. 
+Ask: "Would you like to move to the referral page now to check your link and rewards?"
+If they say "Yes", output the navigate intent JSON for "referral".
 \`\`
 `;
 
@@ -2067,7 +2085,28 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
 
                 await resolveAllRecipients(intentData);
 
-                // FLOW ROUTING: Single vs Scheduled vs Multi
+                // FLOW ROUTING: Single vs Scheduled vs Multi vs Navigate
+                if (intentData.intent === 'navigate' && intentData.page) {
+                    const targetPage = intentData.page.toLowerCase();
+                    const validPages = ['referral', 'assets', 'nodes', 'quest', 'campaign', 'mint', 'settings', 'profile', 'history', 'contacts'];
+
+                    if (validPages.includes(targetPage)) {
+                        const displayPage = targetPage === 'campaign' ? 'quest' : targetPage;
+                        navigate(`/wallet/${displayPage}`);
+
+                        const msg = lastLocale() === 'ko'
+                            ? `${displayPage} 화면으로 이동합니다.`
+                            : `Moving you to the ${displayPage} page.`;
+
+                        setMessages(prev => [...prev, {
+                            role: 'assistant',
+                            content: msg
+                        }]);
+                        setChatLoading(false);
+                        return;
+                    }
+                }
+
                 if (intentData.intent === 'multi' && Array.isArray(intentData.transactions)) {
                     // Route to Enterprise Batch Transfer Agent
                     const results = intentData.transactions.map((tx: any) => ({
