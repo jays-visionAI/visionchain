@@ -59,7 +59,7 @@ exports.paymasterTimeLock = onRequest({ cors: true }, async (req, res) => {
     for (const log of receipt.logs || []) {
       try {
         const parsed = contract.interface.parseLog(log);
-        if (parsed?.name === "TransferScheduled") {
+        if (parsed && parsed.name === "TransferScheduled") {
           scheduleId = parsed.args.scheduleId.toString();
           break;
         }
