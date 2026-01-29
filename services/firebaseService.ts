@@ -1448,7 +1448,18 @@ export const syncUserContacts = async (userEmail: string): Promise<{ updated: nu
             const data = docSnap.data() as Contact;
             // Re-sync all contacts to check for new/multiple accounts
             const normalizedPhone = normalizePhoneNumber(data.phone);
-            const results = await searchUsersByPhone(normalizedPhone);
+
+            // 1. Try phone search first
+            let results = await searchUsersByPhone(normalizedPhone);
+
+            // 2. Fallback to email search if phone not found and contact has email
+            if (results.length === 0 && data.email) {
+                const emailResult = await searchUserByEmail(data.email);
+                if (emailResult) {
+                    results = [emailResult];
+                    console.log(`[Sync] Phone search failed, found by email: ${data.email}`);
+                }
+            }
 
             if (results.length === 1) {
                 const resolved = results[0];
