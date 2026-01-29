@@ -1104,6 +1104,7 @@ const Wallet = (): JSX.Element => {
                 setFlowLoading(false);
                 setFlowStep(0);
                 setActiveFlow(null); // Close the modal
+                navigate('/wallet/dashboard'); // Redirect to Vision AI to see Agent Desk progress
 
                 // 1. Initialize Batch Agent
                 const agentId = Math.random().toString(36).substring(7);
@@ -1707,7 +1708,8 @@ const Wallet = (): JSX.Element => {
     };
 
     const handleTransaction = async () => {
-        if (activeFlow() === 'send') {
+        // Check for send flow - either via modal (activeFlow) or via route (activeView)
+        if (activeFlow() === 'send' || activeView() === 'send') {
             setPasswordMode('verify');
             setPendingAction({
                 type: 'send_tokens',
