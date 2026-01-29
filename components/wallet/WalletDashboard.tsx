@@ -1108,7 +1108,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                 {/* Bottom controls for mobile / side for desktop */}
                                 <div class="flex items-center justify-between md:justify-end gap-1.5 pb-0.5 pr-1.5 order-2 md:order-3">
-                                    <div class="flex items-center gap-1.5">
+                                    {/* Mobile: horizontal row */}
+                                    <div class="flex md:hidden items-center gap-1.5">
                                         {/* Tools / Plus Button */}
                                         <button
                                             onClick={() => fileInputRef?.click()}
@@ -1153,29 +1154,98 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         >
                                             <Mic class="w-5 h-5" />
                                         </button>
+
+                                        {/* Send/Stop Button */}
+                                        <button
+                                            onClick={() => {
+                                                if (props.isLoading()) {
+                                                    props.onStop?.();
+                                                } else {
+                                                    props.handleSend();
+                                                }
+                                            }}
+                                            disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
+                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
+                                                ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
+                                                : (!props.input().trim() && props.attachments().length === 0)
+                                                    ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
+                                                    : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
+                                                }`}
+                                        >
+                                            <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
+                                                <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
+                                            </Show>
+                                        </button>
                                     </div>
 
-                                    {/* Send/Stop Button */}
-                                    <button
-                                        onClick={() => {
-                                            if (props.isLoading()) {
-                                                props.onStop?.();
-                                            } else {
-                                                props.handleSend();
-                                            }
-                                        }}
-                                        disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
-                                        class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
-                                            ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100' // Stop state
-                                            : (!props.input().trim() && props.attachments().length === 0)
-                                                ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
-                                                : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
-                                            }`}
-                                    >
-                                        <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
-                                            <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
-                                        </Show>
-                                    </button>
+                                    {/* Desktop: 2x2 grid on right side */}
+                                    <div class="hidden md:grid grid-cols-2 gap-1">
+                                        {/* Row 1: Plus + Language */}
+                                        <button
+                                            onClick={() => fileInputRef?.click()}
+                                            class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                                        >
+                                            <Plus class="w-5 h-5" />
+                                        </button>
+                                        <input
+                                            type="file"
+                                            multiple
+                                            ref={fileInputRef}
+                                            class="hidden"
+                                            onChange={props.handleFileSelect}
+                                        />
+
+                                        {/* Language Selection Popover */}
+                                        <div class="relative group/lang">
+                                            <button class="w-11 h-11 flex items-center justify-center gap-1 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
+                                                <span>{props.voiceLang().split('-')[0]}</span>
+                                                <ChevronDown class="w-2.5 h-2.5" />
+                                            </button>
+                                            <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
+                                                    <For each={LANGUAGES}>
+                                                        {(lang) => (
+                                                            <button
+                                                                onClick={() => props.setVoiceLang(lang.code)}
+                                                                class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
+                                                            >
+                                                                {lang.label}
+                                                            </button>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Row 2: Mic + Send */}
+                                        <button
+                                            onClick={props.toggleRecording}
+                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            <Mic class="w-5 h-5" />
+                                        </button>
+
+                                        <button
+                                            onClick={() => {
+                                                if (props.isLoading()) {
+                                                    props.onStop?.();
+                                                } else {
+                                                    props.handleSend();
+                                                }
+                                            }}
+                                            disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
+                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
+                                                ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
+                                                : (!props.input().trim() && props.attachments().length === 0)
+                                                    ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
+                                                    : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
+                                                }`}
+                                        >
+                                            <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
+                                                <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
+                                            </Show>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
