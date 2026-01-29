@@ -21,6 +21,7 @@ interface AgentChipProps {
     task: AgentTask;
     isCompact?: boolean;
     onClick?: () => void;
+    onDismiss?: (taskId: string) => void;
 }
 
 const STATUS_CONFIG: Record<TaskStatus, any> = {
@@ -156,6 +157,17 @@ const AgentChip = (props: AgentChipProps) => {
         }
     });
 
+    // Check if task is overdue (for dismiss button visibility)
+    const isOverdue = createMemo(() => {
+        if (props.task.status !== 'WAITING' || !props.task.executeAt) return false;
+        return props.task.executeAt < currentTime();
+    });
+
+    // Show dismiss button for FAILED or overdue WAITING tasks
+    const canDismiss = createMemo(() => {
+        return props.task.status === 'FAILED' || isOverdue();
+    });
+
     return (
         <Motion.button
             class={`relative flex flex-col group rounded-2xl border backdrop-blur-xl transition-all active:scale-[0.98] text-left overflow-hidden
@@ -175,10 +187,25 @@ const AgentChip = (props: AgentChipProps) => {
                         {props.task.type === 'TIMELOCK' ? 'Time Lock Agent' : 'Batch Agent'}
                     </span>
                 </div>
-                <div class={`px-1.5 py-0.5 rounded-md border ${config().border} bg-black/20`}>
-                    <span class={`text-[8px] font-black uppercase tracking-tighter ${config().color}`}>
-                        {config().label}
-                    </span>
+                <div class="flex items-center gap-1">
+                    <div class={`px-1.5 py-0.5 rounded-md border ${config().border} bg-black/20`}>
+                        <span class={`text-[8px] font-black uppercase tracking-tighter ${config().color}`}>
+                            {config().label}
+                        </span>
+                    </div>
+                    {/* Dismiss Button for FAILED or Overdue tasks */}
+                    <Show when={canDismiss() && props.onDismiss}>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                props.onDismiss?.(props.task.id);
+                            }}
+                            class="w-5 h-5 rounded-md bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center text-red-400 transition-all"
+                            title="Dismiss task"
+                        >
+                            <X class="w-3 h-3" />
+                        </button>
+                    </Show>
                 </div>
             </div>
 

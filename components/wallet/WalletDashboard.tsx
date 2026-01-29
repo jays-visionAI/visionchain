@@ -75,6 +75,7 @@ interface WalletDashboardProps {
     // Queue Integration
     queueTasks: () => any[];
     onCancelTask: (taskId: string) => void;
+    onDismissTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
     isScheduling: boolean;
 
@@ -691,6 +692,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     contacts={props.contacts()}
                     focusedTaskId={selectedTaskId()}
                     onCancelTask={props.onCancelTask}
+                    onDismissTask={props.onDismissTask}
                     onForceExecute={props.onForceExecute}
                 />
 
@@ -973,6 +975,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                     setSelectedTaskId(agent.id);
                                                                     setIsQueueDrawerOpen(true);
                                                                 }}
+                                                                onDismiss={(id) => props.onDismissTask?.(id)}
                                                             />
                                                         )}
                                                     </For>
@@ -987,6 +990,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                     setSelectedTaskId(task.id);
                                                                     setIsQueueDrawerOpen(true);
                                                                 }}
+                                                                onDismiss={(id) => props.onDismissTask?.(id)}
                                                             />
                                                         )}
                                                     </For>

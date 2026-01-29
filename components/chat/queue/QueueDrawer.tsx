@@ -22,6 +22,7 @@ interface QueueDrawerProps {
     contacts?: any[];
     focusedTaskId?: string | null;
     onCancelTask?: (taskId: string) => void;
+    onDismissTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
 }
 
@@ -313,11 +314,23 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                 </Show>
 
                                                 <Show when={!['WAITING', 'EXECUTING'].includes(task.status)}>
+                                                    <Show when={task.txHash}>
+                                                        <button
+                                                            onClick={() => window.open(`https://visionscan.org/tx/${task.txHash}`, '_blank')}
+                                                            class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                                                        >
+                                                            <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
+                                                        </button>
+                                                    </Show>
                                                     <button
-                                                        onClick={() => window.open(`https://visionscan.org/tx/${task.txHash}`, '_blank')}
-                                                        class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            props.onDismissTask?.(task.id);
+                                                        }}
+                                                        class="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                                                        title="Dismiss this task"
                                                     >
-                                                        <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
+                                                        <X class="w-3.5 h-3.5" /> Dismiss
                                                     </button>
                                                 </Show>
                                             </div>
