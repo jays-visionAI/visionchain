@@ -892,7 +892,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 </div>
 
                 {/* Modern Floating Input Area */}
-                <div class={`fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none ${!props.onboardingStep() ? 'bottom-[68px] lg:bottom-0' : 'bottom-0'}`}>
+                <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
                     <div class="max-w-5xl mx-auto pointer-events-auto">
                         <Presence>
                             {/* Unified Background Agents Bar - Above Input */}

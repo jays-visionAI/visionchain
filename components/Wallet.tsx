@@ -3472,36 +3472,38 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
                                 onContactAdded={loadContacts}
                             />
                         </Presence>
-                        {/* Mobile Bottom Navigation */}
-                        <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[68px]">
-                            {
-                                [
-                                    { id: 'assets', label: 'Assets', icon: PieChart },
-                                    { id: 'nodes', label: 'Nodes', icon: Camera },
-                                    { id: 'chat', label: 'Vision AI', icon: AiChatIcon, primary: true },
-                                    { id: 'referral', label: 'Earn', icon: UserPlus },
-                                    { id: 'settings', label: 'Settings', icon: Settings },
-                                ].map((item) => (
-                                    <button
-                                        onClick={() => {
-                                            if (onboardingStep() === 0) {
-                                                navigate('/wallet/' + item.id);
-                                                setSidebarOpen(false);
-                                            }
-                                        }}
-                                        class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                                    >
-                                        <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>
-                                            <item.icon class={`${item.primary ? 'w-5 h-5' : 'w-4.5 h-4.5'}`} />
-                                        </div>
-                                        <span class={`text-[8px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
-                                        {activeView() === item.id && !item.primary && (
-                                            <div class="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
-                                        )}
-                                    </button>
-                                ))
-                            }
-                        </div>
+                        {/* Mobile Bottom Navigation - Hidden in Chat */}
+                        <Show when={activeView() !== 'chat'}>
+                            <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[68px]">
+                                {
+                                    [
+                                        { id: 'assets', label: 'Assets', icon: PieChart },
+                                        { id: 'nodes', label: 'Nodes', icon: Camera },
+                                        { id: 'chat', label: 'Vision AI', icon: AiChatIcon, primary: true },
+                                        { id: 'referral', label: 'Earn', icon: UserPlus },
+                                        { id: 'settings', label: 'Settings', icon: Settings },
+                                    ].map((item) => (
+                                        <button
+                                            onClick={() => {
+                                                if (onboardingStep() === 0) {
+                                                    navigate('/wallet/' + item.id);
+                                                    setSidebarOpen(false);
+                                                }
+                                            }}
+                                            class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                        >
+                                            <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>
+                                                <item.icon class={`${item.primary ? 'w-5 h-5' : 'w-4.5 h-4.5'}`} />
+                                            </div>
+                                            <span class={`text-[8px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
+                                            {activeView() === item.id && !item.primary && (
+                                                <div class="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
+                                            )}
+                                        </button>
+                                    ))
+                                }
+                            </div>
+                        </Show>
                     </main>
                 </section>
                 <canvas ref={cropCanvasRef} class="hidden" />
