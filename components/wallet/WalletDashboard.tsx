@@ -744,7 +744,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 >
                                     <div class="flex flex-col gap-2">
                                         <h2 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
-                                            Hello, {props.userProfile()?.name || 'Jay'}
+                                            Hello, {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || 'Vision User'}
                                         </h2>
                                         <p class="text-2xl text-gray-500 font-medium">How can I help you today?</p>
                                     </div>

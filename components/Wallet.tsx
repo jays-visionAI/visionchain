@@ -1816,6 +1816,10 @@ const Wallet = (): JSX.Element => {
 
             // Construct context from wallet state with ENFORCED Contact List
             const context = `
+[User Identity]
+Name: ${userProfile().displayName || userProfile().username || 'Vision User'}
+ID: ${userProfile().email}
+
 [Live Context]
 Network: ${networkMode().toUpperCase()}
 Wallet Address: ${walletAddress()}
