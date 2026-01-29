@@ -1,3 +1,4 @@
+
 import { createSignal, Show, For, createMemo } from 'solid-js';
 import {
     ArrowUpRight,
@@ -229,6 +230,21 @@ export const WalletSend = (props: WalletSendProps) => {
                                                                 placeholder="0.00"
                                                                 value={recipient.amount}
                                                                 onInput={(e) => {
+                                                                    // Only validate, don't update state on every keystroke
+                                                                    const raw = e.currentTarget.value.replace(/,/g, '');
+                                                                    if (isNaN(Number(raw)) && raw !== '' && raw !== '.') {
+                                                                        e.currentTarget.value = recipient.amount;
+                                                                    }
+                                                                }}
+                                                                onBlur={(e) => {
+                                                                    const raw = e.currentTarget.value.replace(/,/g, '');
+                                                                    if (!isNaN(Number(raw)) || raw === '' || raw === '.') {
+                                                                        setMultiRecipients(prev => prev.map((r, i) =>
+                                                                            i === index() ? { ...r, amount: raw } : r
+                                                                        ));
+                                                                    }
+                                                                }}
+                                                                onChange={(e) => {
                                                                     const raw = e.currentTarget.value.replace(/,/g, '');
                                                                     if (!isNaN(Number(raw)) || raw === '' || raw === '.') {
                                                                         setMultiRecipients(prev => prev.map((r, i) =>
