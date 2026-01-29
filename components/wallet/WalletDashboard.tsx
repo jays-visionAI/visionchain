@@ -937,8 +937,28 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             {/* Unified Background Agents Bar - Above Input */}
                             <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0}>
                                 <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
-                                    {/* Toggle Button for Agent Bay */}
-                                    <div class="absolute -top-4 right-4 z-40">
+                                    {/* Header Row: Agent Desk Label (left) + Toggle Button (right) */}
+                                    <div class="hidden md:flex items-center justify-between mb-1">
+                                        <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
+                                        <button
+                                            onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
+                                            class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
+                                                ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
+                                                : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
+                                                }`}
+                                        >
+                                            <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
+                                            <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
+                                            <div class="w-3.5 h-3.5 flex items-center justify-center">
+                                                <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
+                                                    <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
+                                                </Show>
+                                            </div>
+                                        </button>
+                                    </div>
+
+                                    {/* Mobile Toggle Button (absolute positioned) */}
+                                    <div class="absolute -top-4 right-4 z-40 md:hidden">
                                         <button
                                             onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
                                             class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
@@ -965,13 +985,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 transition={{ duration: 0.3, easing: 'ease-out' }}
                                                 class="flex items-center gap-3 overflow-hidden bg-[#0d0d0f]/60 backdrop-blur-md rounded-[24px] border border-white/5 p-1.5 pr-3 shadow-2xl"
                                             >
-                                                {/* Label */}
-                                                <div class="px-3 shrink-0 hidden md:block border-r border-white/5 mr-1">
-                                                    <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Active Agents</span>
-                                                </div>
-
                                                 {/* Unified Scrollable Row */}
-                                                <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5">
+                                                <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5 pl-2">
                                                     {/* Batch Agents */}
                                                     <For each={props.batchAgents()}>
                                                         {(agent) => (
