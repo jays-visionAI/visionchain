@@ -74,8 +74,8 @@ export const WalletSend = (props: WalletSendProps) => {
     };
 
     return (
-        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
-            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden pb-32 custom-scrollbar px-4 py-4 lg:p-8">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
                 <div class="flex items-center gap-4 mb-2 lg:hidden">
                     <button
                         onClick={props.onBack}
@@ -101,19 +101,19 @@ export const WalletSend = (props: WalletSendProps) => {
                             <div class="space-y-4">
                                 <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Select Asset</label>
                                 <div class="w-full">
-                                    <div class="flex items-center justify-between p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl relative group w-full">
+                                    <div class="flex items-center justify-between p-4 md:p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl relative group w-full overflow-hidden">
                                         <div class="flex items-center gap-3">
                                             <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
                                                 <span class="font-black text-blue-400 text-sm">V</span>
                                             </div>
                                             <div class="flex-1 min-w-0 text-left">
-                                                <div class="text-sm font-bold text-white uppercase tracking-tight truncate">Vision Coin</div>
+                                                <div class="text-sm font-bold text-white uppercase tracking-tight truncate">Vision Chain</div>
                                                 <div class="text-[10px] font-bold text-blue-400/70 uppercase">VCN</div>
                                             </div>
                                         </div>
-                                        <div class="text-right">
+                                        <div class="text-right shrink-0">
                                             <div class="text-sm font-black text-white tabular-nums">{props.getAssetData('VCN').liquidBalance.toLocaleString()}</div>
-                                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
+                                            <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
                                         </div>
                                     </div>
                                 </div>

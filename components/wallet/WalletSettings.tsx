@@ -453,7 +453,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     onChange={(e) => setPrimaryAsset(e.currentTarget.value)}
                                     class="w-full px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                                 >
-                                    <option value="VCN">VCN (Vision Coin)</option>
+                                    <option value="VCN">VCN (Vision Chain)</option>
                                     <option value="USDC">USDC</option>
                                     <option value="USDT">USDT</option>
                                     <option value="ETH">Ethereum</option>
@@ -470,7 +470,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     class="w-full px-4 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                                 >
                                     <option value="USDC">USDC</option>
-                                    <option value="VCN">VCN (Vision Coin)</option>
+                                    <option value="VCN">VCN (Vision Chain)</option>
                                     <option value="USDT">USDT</option>
                                     <option value="ETH">Ethereum</option>
                                 </select>
