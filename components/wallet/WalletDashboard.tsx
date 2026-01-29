@@ -89,14 +89,17 @@ interface WalletDashboardProps {
 
 const TypingIndicator = () => (
     <Motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        class="flex flex-col md:flex-row gap-2 md:gap-4 items-start"
+        initial={{ opacity: 0, scale: 0.98, y: 5 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        class="flex flex-col md:flex-row gap-2 md:gap-5 items-start mt-4"
     >
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-400/20 flex items-center justify-center flex-shrink-0 border border-blue-500/30">
-            <Bot class="w-4 h-4 text-blue-400" />
+        {/* Helper Icon (Matches Assistant Icon Layout) */}
+        <div class="w-10 h-10 rounded-2xl bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 shadow-2xl mt-1">
+            <Bot class="w-5 h-5 text-blue-400" />
         </div>
-        <div class="bg-white/[0.03] border border-white/[0.06] px-5 py-4 rounded-2xl rounded-tl-sm flex items-center gap-1.5 w-fit">
+
+        {/* Typing Bubble (Matches Assistant Bubble Styles) */}
+        <div class="bg-[#18181b]/50 backdrop-blur-3xl border border-white/[0.08] px-6 py-4 rounded-[24px] rounded-tl-sm flex items-center gap-2 w-fit">
             <span class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
             <span class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
             <span class="w-1.5 h-1.5 bg-blue-500/60 rounded-full animate-bounce" style={{ "animation-delay": "0.3s" }} />
@@ -105,7 +108,7 @@ const TypingIndicator = () => (
 );
 
 const ThinkingDisplay = (props: { steps: any[] }) => {
-    const [isExpanded, setIsExpanded] = createSignal(false);
+    const [isExpanded, setIsExpanded] = createSignal(true);
 
     // Auto-expand if error occurs
     createEffect(() => {
@@ -115,22 +118,27 @@ const ThinkingDisplay = (props: { steps: any[] }) => {
     });
 
     return (
-        <div class="max-w-3xl mx-auto px-6 mb-6 w-full z-20 relative">
-            <Motion.div
-                class="bg-[#0d0d0f]/90 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl transition-all duration-300"
-            >
-                {/* Header / Summary View */}
-                <div
-                    class="p-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.02]"
-                    onClick={() => setIsExpanded(!isExpanded())}
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
-                            <Bot class="w-4 h-4 text-purple-400 animate-pulse" />
-                        </div>
+        <Motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            class="flex flex-col md:flex-row gap-2 md:gap-5 items-start mt-4 mb-8"
+        >
+            {/* Thinking Icon (Matches Assistant Icon Layout) */}
+            <div class="w-10 h-10 rounded-2xl bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 shadow-2xl mt-1">
+                <Bot class="w-5 h-5 text-purple-400 animate-pulse" />
+            </div>
+
+            {/* Thinking Content Box (Matches Assistant Bubble Styles) */}
+            <div class="w-full md:max-w-[85%]">
+                <div class="bg-[#18181b]/50 backdrop-blur-3xl border border-white/[0.08] rounded-[24px] rounded-tl-sm overflow-hidden shadow-2xl transition-all duration-300">
+                    {/* Header / Summary View */}
+                    <div
+                        class="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.02]"
+                        onClick={() => setIsExpanded(!isExpanded())}
+                    >
                         <div class="flex flex-col">
                             <div class="flex items-center gap-2">
-                                <span class="text-[13px] font-bold text-gray-100">AI Architect Thinking</span>
+                                <span class="text-[13px] font-bold text-gray-100 uppercase tracking-wider">Vision AI Thinking</span>
                                 <div class="flex gap-0.5 items-end h-3 pb-0.5">
                                     <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
                                     <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
@@ -138,48 +146,48 @@ const ThinkingDisplay = (props: { steps: any[] }) => {
                                 </div>
                             </div>
                             <span class="text-[10px] text-gray-500 font-medium truncate max-w-[200px]">
-                                {props.steps[props.steps.length - 1]?.label || "Processing..."}
+                                {props.steps[props.steps.length - 1]?.label || "Processing Request..."}
                             </span>
                         </div>
+
+                        <button class="text-gray-500 hover:text-white transition-colors p-1">
+                            <ChevronDown class={`w-4 h-4 transition-transform duration-300 ${isExpanded() ? 'rotate-180' : ''}`} />
+                        </button>
                     </div>
 
-                    <button class="text-gray-500 hover:text-white transition-colors p-1">
-                        <ChevronDown class={`w-4 h-4 transition-transform duration-300 ${isExpanded() ? 'rotate-180' : ''}`} />
-                    </button>
-                </div>
-
-                {/* Expanded Details */}
-                <Show when={isExpanded()}>
-                    <div class="border-t border-white/5 bg-black/20 p-4 space-y-3">
-                        <For each={props.steps}>
-                            {(step) => (
-                                <div class="flex items-start gap-3 group animate-in fade-in slide-in-from-top-1 duration-300">
-                                    <div class="mt-1 relative">
-                                        <Show when={step.status === 'loading'} fallback={
-                                            <div class={`w-2 h-2 rounded-full ${step.status === 'completed' ? 'bg-green-500' : 'bg-red-500'}`} />
-                                        }>
-                                            <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
-                                        </Show>
+                    {/* Expanded Details */}
+                    <Show when={isExpanded()}>
+                        <div class="border-t border-white/5 bg-black/20 px-6 py-5 space-y-4">
+                            <For each={props.steps}>
+                                {(step) => (
+                                    <div class="flex items-start gap-3 group animate-in fade-in slide-in-from-top-1 duration-300">
+                                        <div class="mt-1 relative flex-shrink-0">
+                                            <Show when={step.status === 'loading'} fallback={
+                                                <div class={`w-2 h-2 rounded-full ${step.status === 'completed' ? 'bg-green-500' : 'bg-red-500'}`} />
+                                            }>
+                                                <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+                                            </Show>
+                                            <Show when={step.status === 'completed'}>
+                                                <div class="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20" />
+                                            </Show>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-[12px] font-bold text-gray-200">{step.label}</div>
+                                            <Show when={step.detail}>
+                                                <div class="text-[10px] text-gray-500 mt-1 leading-relaxed">{step.detail}</div>
+                                            </Show>
+                                        </div>
                                         <Show when={step.status === 'completed'}>
-                                            <div class="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20" />
+                                            <Check class="w-3.5 h-3.5 text-green-500/50 flex-shrink-0" />
                                         </Show>
                                     </div>
-                                    <div class="flex-1 min-w-0">
-                                        <div class="text-[12px] font-bold text-gray-300">{step.label}</div>
-                                        <Show when={step.detail}>
-                                            <div class="text-[10px] text-gray-500 mt-0.5 truncate">{step.detail}</div>
-                                        </Show>
-                                    </div>
-                                    <Show when={step.status === 'completed'}>
-                                        <Check class="w-3 h-3 text-green-500/50" />
-                                    </Show>
-                                </div>
-                            )}
-                        </For>
-                    </div>
-                </Show>
-            </Motion.div>
-        </div>
+                                )}
+                            </For>
+                        </div>
+                    </Show>
+                </div>
+            </div>
+        </Motion.div>
     );
 };
 
@@ -893,7 +901,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Modern Floating Input Area */}
                 <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
-                    <div class="max-w-5xl mx-auto pointer-events-auto">
+                    <div class="max-w-3xl mx-auto pointer-events-auto">
                         <Presence>
                             {/* Unified Background Agents Bar - Above Input */}
                             <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0}>
