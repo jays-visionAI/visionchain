@@ -1,6 +1,8 @@
 import { createSignal, createMemo, onMount, Show } from 'solid-js';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice } from '../services/vcnPriceService';
+import { getFirebaseDb } from '../services/firebaseService';
+import { collection, query, where, orderBy, limit as fbLimit, getDocs, doc, getDoc } from 'firebase/firestore';
 
 // Sub-Components (Phase 1 Refactor)
 import VisionScanHome from './VisionScanHome';
@@ -51,27 +53,67 @@ export default function VisionScan() {
         console.log(`🌐 VisionScan: Fetching for "${termToSearch}" with limit ${limit()} and page ${page()}`);
 
         try {
-            const params = new URLSearchParams();
-            // Basic filters (Phase 1: minimal)
+            let data: any[] = [];
+            let liveBalance: string | undefined;
 
-            if (termToSearch) {
-                if (termToSearch.length > 50) {
-                    params.append('hash', termToSearch);
+            // Try Firestore first
+            try {
+                const db = getFirebaseDb();
+                const txCollection = collection(db, 'transactions');
+                let firestoreQuery;
+
+                if (termToSearch) {
+                    if (termToSearch.length > 50) {
+                        // Hash lookup - direct document
+                        const docSnap = await getDoc(doc(db, 'transactions', termToSearch));
+                        if (docSnap.exists()) {
+                            data = [docSnap.data()];
+                        }
+                    } else {
+                        // Address lookup - query from_addr or to_addr
+                        const fromQuery = query(txCollection, where('from_addr', '==', termToSearch), orderBy('timestamp', 'desc'), fbLimit(limit()));
+                        const toQuery = query(txCollection, where('to_addr', '==', termToSearch), orderBy('timestamp', 'desc'), fbLimit(limit()));
+
+                        const [fromSnap, toSnap] = await Promise.all([getDocs(fromQuery), getDocs(toQuery)]);
+
+                        const txMap = new Map();
+                        fromSnap.docs.forEach(d => txMap.set(d.id, d.data()));
+                        toSnap.docs.forEach(d => txMap.set(d.id, d.data()));
+                        data = Array.from(txMap.values());
+                    }
                 } else {
-                    params.append('address', termToSearch);
+                    // Latest transactions
+                    firestoreQuery = query(txCollection, orderBy('timestamp', 'desc'), fbLimit(limit()));
+                    const snap = await getDocs(firestoreQuery);
+                    data = snap.docs.map(d => d.data());
                 }
+
+                console.log(`🔥 Firestore: Found ${data.length} transactions`);
+            } catch (fsErr) {
+                console.warn('Firestore query failed, falling back to API:', fsErr);
             }
 
-            // Apply pagination and limit
-            params.append('limit', limit().toString());
-            params.append('offset', ((page() - 1) * limit()).toString());
+            // Fallback to API if Firestore returned nothing
+            if (data.length === 0) {
+                const params = new URLSearchParams();
+                if (termToSearch) {
+                    if (termToSearch.length > 50) {
+                        params.append('hash', termToSearch);
+                    } else {
+                        params.append('address', termToSearch);
+                    }
+                }
+                params.append('limit', limit().toString());
+                params.append('offset', ((page() - 1) * limit()).toString());
 
-            const response = await fetch(`${API_URL}?${params.toString()}`);
-            const rawData = await response.json();
-            const data = rawData.transactions || [];
+                const response = await fetch(`${API_URL}?${params.toString()}`);
+                const rawData = await response.json();
+                data = rawData.transactions || [];
+                liveBalance = rawData.liveBalance;
+            }
 
-            if (rawData.liveBalance !== undefined) {
-                setAddressBalance(rawData.liveBalance);
+            if (liveBalance !== undefined) {
+                setAddressBalance(liveBalance);
             }
 
             const formatted = data.map((tx: any) => {
@@ -108,6 +150,7 @@ export default function VisionScan() {
                     time: new Date().toLocaleTimeString(),
                     status: 'completed',
                     asset: 'VCN',
+                    direction: 'in',
                     counterparty: (overrides.to?.slice(0, 10) + '...') || 'Unknown',
                     timestamp: Date.now(),
                     confidence: 100,
@@ -131,7 +174,7 @@ export default function VisionScan() {
                 setCurrentAddress(termToSearch);
 
                 // NEW: Logic to check if address exists (has balance or transactions)
-                const hasBalance = rawData.liveBalance !== undefined && parseFloat(rawData.liveBalance) > 0;
+                const hasBalance = liveBalance !== undefined && parseFloat(liveBalance) > 0;
                 const hasTransactions = formatted.length > 0;
 
                 if (!hasBalance && !hasTransactions) {

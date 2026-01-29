@@ -5,6 +5,8 @@ import VCNTokenABI from './abi/VCNToken.json';
 import VCNVestingABI from './abi/VCNVesting.json';
 import VisionEqualizerABI from './abi/VisionEqualizer.json';
 import VisionVaultABI from './abi/VisionVault.json';
+import { getFirebaseDb } from './firebaseService';
+import { doc, setDoc } from 'firebase/firestore';
 
 const ADDRESSES = {
     // Vision Chain Custom Testnet v2 (Chain ID: 1337)
@@ -354,31 +356,29 @@ export class ContractService {
 
         const receipt = await tx.wait();
 
-        // Index transaction for VisionScan visibility
+        // Index transaction directly to Firestore for VisionScan visibility
         try {
-            const indexResponse = await fetch('https://api.visionchain.co/api/transactions/index', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    hash: tx.hash,
-                    from: adminAddress,
-                    to: toAddress,
-                    value: amountStr,
-                    type: 'Transfer',
-                    metadata: {
-                        method: 'Admin Transfer',
-                        counterparty: toAddress.slice(0, 10) + '...',
-                        confidence: 100,
-                        trustStatus: 'verified',
-                        source: 'admin_panel'
-                    }
-                })
+            const db = getFirebaseDb();
+            await setDoc(doc(db, 'transactions', tx.hash), {
+                hash: tx.hash,
+                chainId: 1337,
+                type: 'Transfer',
+                from_addr: adminAddress,
+                to_addr: toAddress,
+                value: amountStr,
+                timestamp: Date.now(),
+                status: 'indexed',
+                metadata: {
+                    method: 'Admin Transfer',
+                    counterparty: toAddress.slice(0, 10) + '...',
+                    confidence: 100,
+                    trustStatus: 'verified',
+                    source: 'admin_panel'
+                }
             });
-            if (indexResponse.ok) {
-                console.log(`[Admin] Transaction indexed for VisionScan: ${tx.hash}`);
-            }
+            console.log(`[Admin] Transaction indexed to Firestore: ${tx.hash}`);
         } catch (indexErr) {
-            console.warn('[Admin] VisionScan indexing failed (non-critical):', indexErr);
+            console.warn('[Admin] Firestore indexing failed (non-critical):', indexErr);
         }
 
         return receipt;
