@@ -3,6 +3,7 @@ import { Wand2, Users, User, Share2, Save, Check, Shield, Cpu } from 'lucide-sol
 
 interface PromptsTabProps {
     settings: () => {
+        systemRules: string;
         recipientIntent: string;
         senderIntent: string;
         processingRoute: string;
@@ -15,6 +16,12 @@ interface PromptsTabProps {
 
 export const DEFAULT_PROMPTS = {
     // UPDATED: Forced Thinking Process Instructions
+    systemRules: `[General System Rules]
+1. Respond like a professional blockchain architect.
+2. Maintain a premium and helpful tone.
+3. Always verify recipient details before recommending a transfer.
+4. Use SVG icons for visual feedback if possible.`,
+
     recipientIntent: `System Prompt: Recipient Resolver (Vision Chain Wallet)
 
 You are the Recipient Resolver for the Vision Chain Wallet. Your job is to deterministically resolve the intended recipient from the user’s input.
@@ -89,8 +96,9 @@ export function PromptsTab(props: PromptsTabProps) {
     onMount(() => {
         // Initialize with defaults if empty
         const current = props.settings();
-        if (!current.recipientIntent || !current.senderIntent || !current.processingRoute) {
+        if (!current.recipientIntent || !current.senderIntent || !current.processingRoute || !current.systemRules) {
             props.setSettings({
+                systemRules: current.systemRules || DEFAULT_PROMPTS.systemRules,
                 recipientIntent: current.recipientIntent || DEFAULT_PROMPTS.recipientIntent,
                 senderIntent: current.senderIntent || DEFAULT_PROMPTS.senderIntent,
                 processingRoute: current.processingRoute || DEFAULT_PROMPTS.processingRoute
@@ -150,14 +158,33 @@ export function PromptsTab(props: PromptsTabProps) {
             </div>
 
             <div class="grid grid-cols-1 gap-6">
-                {/* 1. Recipient's Intent */}
+                {/* 1. Rules */}
+                <div class="rounded-3xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 rounded-xl bg-cyan-500/20">
+                            <Shield class="w-5 h-5 text-cyan-400" />
+                        </div>
+                        <div>
+                            <h3 class="text-white font-bold">1. Rules</h3>
+                            <p class="text-gray-500 text-xs text-balance">General system rules and behavioral constraints for the AI agent.</p>
+                        </div>
+                    </div>
+                    <textarea
+                        value={props.settings().systemRules}
+                        onInput={(e) => props.setSettings({ ...props.settings(), systemRules: e.currentTarget.value })}
+                        class="w-full h-32 p-4 bg-black/40 border border-white/10 rounded-2xl text-sm font-mono text-gray-300 focus:outline-none focus:border-cyan-500/50 resize-none transition-all"
+                        placeholder="Enter general system rules..."
+                    />
+                </div>
+
+                {/* 2. Recipient's Intent */}
                 <div class="rounded-3xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
                     <div class="flex items-center gap-3">
                         <div class="p-2 rounded-xl bg-blue-500/20">
                             <Users class="w-5 h-5 text-blue-400" />
                         </div>
                         <div>
-                            <h3 class="text-white font-bold">1. Recipient's Intent</h3>
+                            <h3 class="text-white font-bold">2. Recipient's Intent</h3>
                             <p class="text-gray-500 text-xs text-balance">Rules for resolving who is receiving the funds. Focus on Contact List optimization.</p>
                         </div>
                     </div>
@@ -169,14 +196,14 @@ export function PromptsTab(props: PromptsTabProps) {
                     />
                 </div>
 
-                {/* 2. Sender's Intent */}
+                {/* 3. Sender's Intent */}
                 <div class="rounded-3xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
                     <div class="flex items-center gap-3">
                         <div class="p-2 rounded-xl bg-purple-500/20">
                             <User class="w-5 h-5 text-purple-400" />
                         </div>
                         <div>
-                            <h3 class="text-white font-bold">2. Sender's Intent</h3>
+                            <h3 class="text-white font-bold">3. Sender's Intent</h3>
                             <p class="text-gray-500 text-xs">Rules for identifying user context, portfolio state, and emotional tone.</p>
                         </div>
                     </div>
@@ -188,14 +215,14 @@ export function PromptsTab(props: PromptsTabProps) {
                     />
                 </div>
 
-                {/* 3. Processing Route */}
+                {/* 4. Processing Route */}
                 <div class="rounded-3xl bg-white/[0.02] border border-white/10 p-6 space-y-4">
                     <div class="flex items-center gap-3">
                         <div class="p-2 rounded-xl bg-amber-500/20">
                             <Share2 class="w-5 h-5 text-amber-400" />
                         </div>
                         <div>
-                            <h3 class="text-white font-bold">3. Processing Route</h3>
+                            <h3 class="text-white font-bold">4. Processing Route</h3>
                             <p class="text-gray-500 text-xs text-balance">Decision logic for Bridge, Swap, Transfer, or Schedule. Includes market context injection.</p>
                         </div>
                     </div>

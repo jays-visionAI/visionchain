@@ -1895,6 +1895,7 @@ export interface ChatbotSettings {
         sttModel: string;
     };
     promptTuning?: {
+        systemRules: string;
         recipientIntent: string;
         senderIntent: string;
         processingRoute: string;

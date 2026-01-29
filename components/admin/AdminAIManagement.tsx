@@ -86,6 +86,7 @@ export default function AdminAIManagement() {
     const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-1.5-pro', size: '1k', quality: 'standard' });
     const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'whisper-1' });
     const [promptTuning, setPromptTuning] = createSignal({
+        systemRules: '',
         recipientIntent: '',
         senderIntent: '',
         processingRoute: ''
@@ -113,7 +114,12 @@ export default function AdminAIManagement() {
                 setHelpdeskBot(settings.helpdeskBot || helpdeskBot());
                 if (settings.imageSettings) setImageSettings(settings.imageSettings);
                 if (settings.voiceSettings) setVoiceSettings(settings.voiceSettings);
-                if (settings.promptTuning) setPromptTuning(settings.promptTuning);
+                if (settings.promptTuning) setPromptTuning({
+                    systemRules: settings.promptTuning.systemRules || '',
+                    recipientIntent: settings.promptTuning.recipientIntent || '',
+                    senderIntent: settings.promptTuning.senderIntent || '',
+                    processingRoute: settings.promptTuning.processingRoute || ''
+                });
             }
 
             setApiKeys(keys);

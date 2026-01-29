@@ -81,10 +81,13 @@ LOCALE_TODAY: ${now.toLocaleDateString(navigator.language, { weekday: 'long', ye
 
         const pt = (config as any).promptTuning;
         const tuningInfo = pt ? `
+[AI Behavioral Rules]
+${pt.systemRules || ''}
+
 [Intent Resolution Guidelines]
-1. Recipient Identification: ${pt.recipientIntent}
-2. Sender Context: ${pt.senderIntent}
-3. Execution Route: ${pt.processingRoute}
+2. Recipient Identification: ${pt.recipientIntent}
+3. Sender Context: ${pt.senderIntent}
+4. Execution Route: ${pt.processingRoute}
 ` : '';
 
         const dynamicSystemPrompt = `${config.systemPrompt}
