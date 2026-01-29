@@ -917,7 +917,7 @@ const Wallet = (): JSX.Element => {
                             try {
                                 const onChainBal = await contractService.getNativeBalance(address);
                                 const numericAmount = parseFloat(amount.replace(/,/g, ''));
-                                const gasBuffer = 1; // Actual gas is ~0.0001 VCN, so 1 VCN is 10000x buffer
+                                const gasBuffer = 3; // Increased buffer for time-lock transactions
 
                                 // TEMPORARY: Always seed if balance is insufficient (for testnet demo only)
                                 if (parseFloat(onChainBal) < (numericAmount + gasBuffer)) {
@@ -929,10 +929,25 @@ const Wallet = (): JSX.Element => {
                                     console.log("[Legacy] Airdrop confirmed. Hash:", seedReceipt.hash);
 
                                     setLoadingMessage('AGENT: FINALIZING SYNC...');
-                                    await new Promise(r => setTimeout(r, 4000)); // Increased wait time
+                                    await new Promise(r => setTimeout(r, 8000)); // Increased from 4s to 8s
 
-                                    const newBal = await contractService.getNativeBalance(address);
+                                    // Poll for balance update (max 3 attempts)
+                                    let newBal = '0';
+                                    for (let i = 0; i < 3; i++) {
+                                        newBal = await contractService.getNativeBalance(address);
+                                        if (parseFloat(newBal) >= (numericAmount + gasBuffer)) {
+                                            break;
+                                        }
+                                        console.log(`[Legacy] Balance check ${i + 1}/3: ${newBal}, waiting...`);
+                                        await new Promise(r => setTimeout(r, 3000));
+                                    }
+
                                     console.log("[Legacy] Verified post-airdrop balance:", newBal);
+
+                                    // Final check
+                                    if (parseFloat(newBal) < (numericAmount + gasBuffer)) {
+                                        throw new Error(`Balance still insufficient after airdrop. Have: ${newBal}, Need: ${numericAmount + gasBuffer}`);
+                                    }
                                 }
                             } catch (seedErr) {
                                 console.error("[Legacy] Auto-seed failed:", seedErr);
