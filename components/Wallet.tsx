@@ -1737,6 +1737,23 @@ const Wallet = (): JSX.Element => {
         }
     };
 
+    const handleMultiTransaction = (recipients: { address: string; amount: string; name: string }[]) => {
+        // Convert recipients to multi-transaction format and trigger password flow
+        const transactions = recipients.map(r => ({
+            address: r.address,
+            amount: r.amount,
+            symbol: selectedToken()
+        }));
+        setMultiTransactions(transactions);
+        setPasswordMode('verify');
+        setPendingAction({
+            type: 'multi_transactions',
+            data: { transactions }
+        });
+        setWalletPassword('');
+        setShowPasswordModal(true);
+    };
+
     const importMobileContacts = () => {
         setIsImporting(true);
         setImportStep(1);
@@ -2716,6 +2733,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 recipientAddress={recipientAddress}
                                 setRecipientAddress={setRecipientAddress}
                                 handleTransaction={handleTransaction}
+                                onMultiTransaction={handleMultiTransaction}
                                 flowStep={flowStep}
                                 setFlowStep={setFlowStep}
                                 flowLoading={flowLoading}

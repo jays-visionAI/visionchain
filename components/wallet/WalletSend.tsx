@@ -8,14 +8,22 @@ import {
     ChevronRight,
     Search,
     User,
+    Users,
     ArrowLeft,
     Plus,
-    UserPlus
+    UserPlus,
+    X,
+    Trash2
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { ethers } from 'ethers';
 import { saveUserContacts } from '../../services/firebaseService';
 import { Motion } from 'solid-motionone';
+
+interface Recipient {
+    contact: any;
+    amount: string;
+}
 
 interface WalletSendProps {
     onBack: () => void;
@@ -27,6 +35,7 @@ interface WalletSendProps {
     recipientAddress: () => string;
     setRecipientAddress: (addr: string) => void;
     handleTransaction: () => void;
+    onMultiTransaction?: (recipients: { address: string; amount: string; name: string }[]) => void;
     flowStep: () => number;
     setFlowStep: (step: number) => void;
     flowLoading: () => boolean;
@@ -44,6 +53,10 @@ export const WalletSend = (props: WalletSendProps) => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [copied, setCopied] = createSignal(false);
     const [isAddingContact, setIsAddingContact] = createSignal(false);
+    const [showContactPicker, setShowContactPicker] = createSignal(false);
+    const [multiRecipients, setMultiRecipients] = createSignal<Recipient[]>([]);
+    const [selectedContacts, setSelectedContacts] = createSignal<Set<string>>(new Set());
+    const [contactSearchQuery, setContactSearchQuery] = createSignal('');
 
     const resolvedRecipientName = createMemo(() => {
         const addr = props.recipientAddress().toLowerCase();
@@ -99,7 +112,7 @@ export const WalletSend = (props: WalletSendProps) => {
                         <div class="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                             {/* Asset Selection */}
                             <div class="space-y-4">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Select Asset</label>
+                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-left">Select Asset</label>
                                 <div class="w-full">
                                     <div class="flex items-center justify-between p-4 md:p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl relative group w-full overflow-hidden">
                                         <div class="flex items-center gap-3">
@@ -121,146 +134,318 @@ export const WalletSend = (props: WalletSendProps) => {
 
                             {/* Recipient */}
                             <div class="space-y-4">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Recipient Address</label>
-                                <div class="relative group">
-                                    <input
-                                        type="text"
-                                        placeholder="0x... or Search Contacts"
-                                        value={props.recipientAddress()}
-                                        onInput={(e) => {
-                                            props.setRecipientAddress(e.currentTarget.value);
-                                            setSearchQuery(e.currentTarget.value);
-                                        }}
-                                        class={`w-full bg-[#111113] border rounded-[22px] px-4 md:px-6 py-4 md:py-5 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm box-border min-w-0 ${props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) ? 'border-red-500/30 focus:border-red-500/50' : 'border-white/10 focus:border-blue-500/30'}`}
-                                    />
-                                    <div class="absolute right-4 top-1/2 -translate-y-1/2">
-                                        <Search class="w-5 h-5 text-gray-700" />
-                                    </div>
+                                <div class="flex items-center justify-between px-1">
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block text-left">
+                                        {multiRecipients().length > 0 ? 'Recipients' : 'Recipient Address'}
+                                    </label>
+                                    <button
+                                        onClick={() => setShowContactPicker(true)}
+                                        class="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest border border-blue-500/20"
+                                    >
+                                        <Users class="w-3.5 h-3.5" />
+                                        Contact List
+                                    </button>
                                 </div>
 
-                                {/* Contact Suggestions */}
-                                <Show when={searchQuery() && !ethers.isAddress(props.recipientAddress())}>
-                                    <div class="bg-[#111113] border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                                        <For each={filteredContacts()}>
-                                            {(contact) => (
-                                                <button
-                                                    onClick={() => {
-                                                        props.setRecipientAddress(contact.address);
-                                                        setSearchQuery('');
-                                                    }}
-                                                    class="w-full flex items-center justify-between p-4 hover:bg-white/[0.03] border-b border-white/[0.03] last:border-0 transition-colors"
-                                                >
-                                                    <div class="flex items-center gap-3 text-left">
-                                                        <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
-                                                            <User class="w-4 h-4 text-gray-400" />
+                                {/* Single Recipient Mode */}
+                                <Show when={multiRecipients().length === 0}>
+                                    <div class="relative group">
+                                        <input
+                                            type="text"
+                                            placeholder="0x... or Search Contacts"
+                                            value={props.recipientAddress()}
+                                            onInput={(e) => {
+                                                props.setRecipientAddress(e.currentTarget.value);
+                                                setSearchQuery(e.currentTarget.value);
+                                            }}
+                                            class={`w-full bg-[#111113] border rounded-[22px] px-4 md:px-6 py-4 md:py-5 text-white placeholder:text-gray-600 outline-none transition-all font-mono text-sm box-border min-w-0 ${props.recipientAddress() && !ethers.isAddress(props.recipientAddress()) ? 'border-red-500/30 focus:border-red-500/50' : 'border-white/10 focus:border-blue-500/30'}`}
+                                        />
+                                        <div class="absolute right-4 top-1/2 -translate-y-1/2">
+                                            <Search class="w-5 h-5 text-gray-700" />
+                                        </div>
+                                    </div>
+
+                                    {/* Contact Suggestions */}
+                                    <Show when={searchQuery() && !ethers.isAddress(props.recipientAddress())}>
+                                        <div class="bg-[#111113] border border-white/10 rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <For each={filteredContacts()}>
+                                                {(contact) => (
+                                                    <button
+                                                        onClick={() => {
+                                                            props.setRecipientAddress(contact.address);
+                                                            setSearchQuery('');
+                                                        }}
+                                                        class="w-full flex items-center justify-between p-4 hover:bg-white/[0.03] border-b border-white/[0.03] last:border-0 transition-colors"
+                                                    >
+                                                        <div class="flex items-center gap-3 text-left">
+                                                            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                                                                <User class="w-4 h-4 text-gray-400" />
+                                                            </div>
+                                                            <div>
+                                                                <div class="text-sm font-bold text-white">{contact.internalName}</div>
+                                                                <div class="text-[10px] font-mono text-gray-500 truncate max-w-[150px]">{contact.address}</div>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <div class="text-sm font-bold text-white">{contact.internalName}</div>
-                                                            <div class="text-[10px] font-mono text-gray-500 truncate max-w-[150px]">{contact.address}</div>
+                                                        <ChevronRight class="w-4 h-4 text-gray-700" />
+                                                    </button>
+                                                )}
+                                            </For>
+                                            <Show when={filteredContacts().length === 0}>
+                                                <div class="p-4 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest italic">No contacts found</div>
+                                            </Show>
+                                        </div>
+                                    </Show>
+                                </Show>
+
+                                {/* Multi-Recipient Mode */}
+                                <Show when={multiRecipients().length > 0}>
+                                    <div class="space-y-3">
+                                        <For each={multiRecipients()}>
+                                            {(recipient, index) => (
+                                                <div class="bg-[#111113] border border-white/10 rounded-2xl p-4 space-y-3 animate-in fade-in slide-in-from-left-2 duration-300">
+                                                    <div class="flex items-center justify-between">
+                                                        <div class="flex items-center gap-3">
+                                                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center text-blue-400 font-black text-sm border border-blue-500/20">
+                                                                {recipient.contact.internalName?.charAt(0) || '?'}
+                                                            </div>
+                                                            <div>
+                                                                <div class="text-sm font-bold text-white">{recipient.contact.internalName}</div>
+                                                                <div class="text-[10px] font-mono text-gray-500">{recipient.contact.address?.slice(0, 10)}...{recipient.contact.address?.slice(-6)}</div>
+                                                            </div>
                                                         </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setMultiRecipients(prev => prev.filter((_, i) => i !== index()));
+                                                            }}
+                                                            class="p-2 hover:bg-red-500/10 text-gray-500 hover:text-red-400 rounded-xl transition-all"
+                                                        >
+                                                            <Trash2 class="w-4 h-4" />
+                                                        </button>
                                                     </div>
-                                                    <ChevronRight class="w-4 h-4 text-gray-700" />
-                                                </button>
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="flex-1 relative">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="0.00"
+                                                                value={recipient.amount}
+                                                                onInput={(e) => {
+                                                                    const raw = e.currentTarget.value.replace(/,/g, '');
+                                                                    if (!isNaN(Number(raw)) || raw === '' || raw === '.') {
+                                                                        setMultiRecipients(prev => prev.map((r, i) =>
+                                                                            i === index() ? { ...r, amount: raw } : r
+                                                                        ));
+                                                                    }
+                                                                }}
+                                                                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-lg font-bold font-mono"
+                                                            />
+                                                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-600">VCN</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                const maxPerRecipient = Math.floor(props.getAssetData('VCN').liquidBalance / multiRecipients().length);
+                                                                setMultiRecipients(prev => prev.map((r, i) =>
+                                                                    i === index() ? { ...r, amount: maxPerRecipient.toString() } : r
+                                                                ));
+                                                            }}
+                                                            class="text-[9px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-2 rounded-lg whitespace-nowrap"
+                                                        >
+                                                            Max
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             )}
                                         </For>
-                                        <Show when={filteredContacts().length === 0}>
-                                            <div class="p-4 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest italic">No contacts found</div>
-                                        </Show>
+
+                                        <button
+                                            onClick={() => setShowContactPicker(true)}
+                                            class="w-full py-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl text-gray-500 hover:text-blue-400 transition-all flex items-center justify-center gap-2 group"
+                                        >
+                                            <Plus class="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                                            <span class="text-[10px] font-black uppercase tracking-widest">Add More Recipients</span>
+                                        </button>
+
+                                        <div class="flex items-center justify-between px-2 pt-2 border-t border-white/5">
+                                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Amount</span>
+                                            <span class="text-lg font-black text-white">
+                                                {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-400">VCN</span>
+                                            </span>
+                                        </div>
                                     </div>
                                 </Show>
                             </div>
 
-                            {/* Amount */}
-                            <div class="space-y-4">
-                                <div class="flex flex-col sm:flex-row justify-between items-center sm:items-end px-1 gap-2">
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Transfer Amount</label>
-                                    <button
-                                        onClick={() => props.setSendAmount(props.getAssetData('VCN').liquidBalance.toString())}
-                                        class="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-1 rounded-full sm:bg-transparent sm:p-0"
-                                    >
-                                        Use Max Balance
-                                    </button>
+                            {/* Amount - Single Recipient Mode Only */}
+                            <Show when={multiRecipients().length === 0}>
+                                <div class="space-y-4">
+                                    <div class="flex flex-col sm:flex-row justify-between items-center sm:items-end px-1 gap-2">
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Transfer Amount</label>
+                                        <button
+                                            onClick={() => props.setSendAmount(props.getAssetData('VCN').liquidBalance.toString())}
+                                            class="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-1 rounded-full sm:bg-transparent sm:p-0"
+                                        >
+                                            Use Max Balance
+                                        </button>
+                                    </div>
+                                    <div class="relative">
+                                        <input
+                                            type="text"
+                                            placeholder="0.00"
+                                            value={props.sendAmount()}
+                                            onInput={(e) => {
+                                                const raw = e.currentTarget.value.replace(/,/g, '');
+                                                if (!isNaN(Number(raw)) || raw === '.') {
+                                                    const parts = raw.split('.');
+                                                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                    props.setSendAmount(parts.join('.'));
+                                                }
+                                            }}
+                                            class="w-full bg-[#111113] border border-white/10 rounded-[22px] p-4 md:p-6 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-3xl font-bold font-mono box-border min-w-0"
+                                        />
+                                        <div class="absolute right-6 top-1/2 -translate-y-1/2 text-lg font-black text-gray-600 tracking-tighter">VCN</div>
+                                    </div>
                                 </div>
-                                <div class="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="0.00"
-                                        value={props.sendAmount()}
-                                        onInput={(e) => {
-                                            const raw = e.currentTarget.value.replace(/,/g, '');
-                                            if (!isNaN(Number(raw)) || raw === '.') {
-                                                const parts = raw.split('.');
-                                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                                props.setSendAmount(parts.join('.'));
-                                            }
-                                        }}
-                                        class="w-full bg-[#111113] border border-white/10 rounded-[22px] p-4 md:p-6 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-3xl font-bold font-mono box-border min-w-0"
-                                    />
-                                    <div class="absolute right-6 top-1/2 -translate-y-1/2 text-lg font-black text-gray-600 tracking-tighter">VCN</div>
-                                </div>
-                            </div>
+                            </Show>
 
-                            <button
-                                disabled={!ethers.isAddress(props.recipientAddress()) || !props.sendAmount() || Number(props.sendAmount().replace(/,/g, '')) <= 0}
-                                onClick={() => props.setFlowStep(2)}
-                                class="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-2xl shadow-blue-500/20 active:scale-[0.98] disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed uppercase tracking-widest"
-                            >
-                                Review Transaction
-                            </button>
+                            {/* Review Transaction Button */}
+                            <Show when={multiRecipients().length === 0} fallback={
+                                <button
+                                    disabled={multiRecipients().some(r => !r.amount || parseFloat(r.amount) <= 0)}
+                                    onClick={() => props.setFlowStep(2)}
+                                    class="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-2xl shadow-blue-500/20 active:scale-[0.98] disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed uppercase tracking-widest"
+                                >
+                                    Review {multiRecipients().length} Transactions
+                                </button>
+                            }>
+                                <button
+                                    disabled={!ethers.isAddress(props.recipientAddress()) || !props.sendAmount() || Number(props.sendAmount().replace(/,/g, '')) <= 0}
+                                    onClick={() => props.setFlowStep(2)}
+                                    class="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-2xl shadow-blue-500/20 active:scale-[0.98] disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed uppercase tracking-widest"
+                                >
+                                    Review Transaction
+                                </button>
+                            </Show>
                         </div>
                     </Show>
 
                     <Show when={props.flowStep() === 2}>
                         <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div class="bg-gradient-to-br from-[#1c1c21] to-[#111113] border border-white/10 rounded-[32px] p-8 text-center shadow-3xl">
-                                <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">You are sending</div>
-                                <div class="text-5xl font-black text-white mb-2 tracking-tighter drop-shadow-sm">{props.sendAmount()} <span class="text-blue-500">VCN</span></div>
-                                <div class="text-sm font-bold text-gray-500">≈ ${(Number(props.sendAmount().replace(/,/g, '')) * props.getAssetData('VCN').price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>
+                            {/* Single Recipient Review */}
+                            <Show when={multiRecipients().length === 0}>
+                                <div class="bg-gradient-to-br from-[#1c1c21] to-[#111113] border border-white/10 rounded-[32px] p-8 text-center shadow-3xl">
+                                    <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">You are sending</div>
+                                    <div class="text-5xl font-black text-white mb-2 tracking-tighter drop-shadow-sm">{props.sendAmount()} <span class="text-blue-500">VCN</span></div>
+                                    <div class="text-sm font-bold text-gray-500">≈ ${(Number(props.sendAmount().replace(/,/g, '')) * props.getAssetData('VCN').price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>
 
-                                <div class="mt-8 pt-8 border-t border-white/[0.04] space-y-4">
-                                    <div class="flex justify-between items-center px-2">
-                                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Recipient</span>
-                                        <div class="flex flex-col items-end">
-                                            <Show when={resolvedRecipientName()} fallback={
-                                                <button
-                                                    onClick={() => setIsAddingContact(true)}
-                                                    class="flex items-center gap-2 group/save"
-                                                >
-                                                    <span class="text-sm font-black text-amber-400 uppercase italic tracking-tighter group-hover/save:text-amber-300 transition-colors">New Recipient</span>
-                                                    <div class="w-5 h-5 rounded-md bg-amber-400/10 flex items-center justify-center group-hover/save:bg-amber-400/20 transition-all">
-                                                        <Plus class="w-3 h-3 text-amber-400" />
-                                                    </div>
-                                                </button>
-                                            }>
-                                                <span class="text-sm font-black text-white italic tracking-tight">{resolvedRecipientName()}</span>
-                                            </Show>
-                                            <span class="text-[10px] font-mono text-gray-500 mt-0.5 opacity-60">
-                                                {props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-4)}
+                                    <div class="mt-8 pt-8 border-t border-white/[0.04] space-y-4">
+                                        <div class="flex justify-between items-center px-2">
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Recipient</span>
+                                            <div class="flex flex-col items-end">
+                                                <Show when={resolvedRecipientName()} fallback={
+                                                    <button
+                                                        onClick={() => setIsAddingContact(true)}
+                                                        class="flex items-center gap-2 group/save"
+                                                    >
+                                                        <span class="text-sm font-black text-amber-400 uppercase italic tracking-tighter group-hover/save:text-amber-300 transition-colors">New Recipient</span>
+                                                        <div class="w-5 h-5 rounded-md bg-amber-400/10 flex items-center justify-center group-hover/save:bg-amber-400/20 transition-all">
+                                                            <Plus class="w-3 h-3 text-amber-400" />
+                                                        </div>
+                                                    </button>
+                                                }>
+                                                    <span class="text-sm font-black text-white italic tracking-tight">{resolvedRecipientName()}</span>
+                                                </Show>
+                                                <span class="text-[10px] font-mono text-gray-500 mt-0.5 opacity-60">
+                                                    {props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-4)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-between items-center px-2">
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Network Fee</span>
+                                            <span class="text-sm font-bold text-green-400">0.00021 VCN <span class="text-[10px] text-gray-500 ml-1">($0.45)</span></span>
+                                        </div>
+                                        <div class="flex justify-between items-center px-2">
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Estimated Time</span>
+                                            <span class="text-sm font-bold text-white flex items-center gap-2">
+                                                <Clock class="w-3.5 h-3.5 text-blue-400" />
+                                                ~12 Seconds
                                             </span>
                                         </div>
                                     </div>
-                                    <div class="flex justify-between items-center px-2">
-                                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Network Fee</span>
-                                        <span class="text-sm font-bold text-green-400">0.00021 VCN <span class="text-[10px] text-gray-500 ml-1">($0.45)</span></span>
+                                </div>
+                            </Show>
+
+                            {/* Multi-Recipient Review */}
+                            <Show when={multiRecipients().length > 0}>
+                                <div class="bg-gradient-to-br from-[#1c1c21] to-[#111113] border border-white/10 rounded-[32px] p-6 md:p-8 shadow-3xl">
+                                    <div class="text-center mb-6">
+                                        <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-2">Batch Transfer</div>
+                                        <div class="text-3xl font-black text-white tracking-tighter">
+                                            {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-500">VCN</span>
+                                        </div>
+                                        <div class="text-sm font-bold text-gray-500 mt-1">
+                                            to {multiRecipients().length} recipients
+                                        </div>
                                     </div>
-                                    <div class="flex justify-between items-center px-2">
-                                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Estimated Time</span>
-                                        <span class="text-sm font-bold text-white flex items-center gap-2">
-                                            <Clock class="w-3.5 h-3.5 text-blue-400" />
-                                            ~12 Seconds
-                                        </span>
+
+                                    <div class="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+                                        <For each={multiRecipients()}>
+                                            {(recipient) => (
+                                                <div class="flex items-center justify-between p-4 bg-white/[0.02] rounded-2xl border border-white/5">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center text-blue-400 font-black text-sm border border-blue-500/20">
+                                                            {recipient.contact.internalName?.charAt(0) || '?'}
+                                                        </div>
+                                                        <div>
+                                                            <div class="text-sm font-bold text-white">{recipient.contact.internalName}</div>
+                                                            <div class="text-[10px] font-mono text-gray-500">{recipient.contact.address?.slice(0, 8)}...</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-right">
+                                                        <div class="text-sm font-black text-white">{parseFloat(recipient.amount).toLocaleString()} <span class="text-blue-400">VCN</span></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </For>
+                                    </div>
+
+                                    <div class="mt-6 pt-6 border-t border-white/5 space-y-3">
+                                        <div class="flex justify-between items-center px-2">
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Est. Total Fee</span>
+                                            <span class="text-sm font-bold text-green-400">{(0.00021 * multiRecipients().length).toFixed(5)} VCN</span>
+                                        </div>
+                                        <div class="flex justify-between items-center px-2">
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Est. Time</span>
+                                            <span class="text-sm font-bold text-white flex items-center gap-2">
+                                                <Clock class="w-3.5 h-3.5 text-blue-400" />
+                                                ~{multiRecipients().length * 12} Seconds
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </Show>
 
                             <div class="flex flex-col sm:flex-row gap-4">
                                 <button onClick={() => props.setFlowStep(1)} class="flex-1 py-5 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-2xl transition-all border border-white/5 uppercase tracking-widest text-xs">Modify Details</button>
                                 <button
-                                    onClick={props.handleTransaction}
+                                    onClick={() => {
+                                        if (multiRecipients().length > 0 && props.onMultiTransaction) {
+                                            // Multi-recipient batch transaction
+                                            const recipients = multiRecipients().map(r => ({
+                                                address: r.contact.address,
+                                                amount: r.amount,
+                                                name: r.contact.internalName || 'Unknown'
+                                            }));
+                                            props.onMultiTransaction(recipients);
+                                        } else {
+                                            // Single recipient transaction
+                                            props.handleTransaction();
+                                        }
+                                    }}
                                     disabled={props.flowLoading()}
                                     class="flex-[2] py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-500/30 flex items-center justify-center gap-3 uppercase tracking-widest"
                                 >
-                                    <Show when={props.flowLoading()} fallback="Confirm & Send Tokens">
+                                    <Show when={props.flowLoading()} fallback={
+                                        multiRecipients().length > 0 ? `Send to ${multiRecipients().length} Recipients` : "Confirm & Send Tokens"
+                                    }>
                                         <RefreshCw class="w-5 h-5 animate-spin" />
                                         Processing...
                                     </Show>
@@ -343,6 +528,33 @@ export const WalletSend = (props: WalletSendProps) => {
                     props.onContactAdded?.();
                 }}
             />
+
+            <ContactPickerModal
+                isOpen={showContactPicker()}
+                onClose={() => {
+                    setShowContactPicker(false);
+                    setContactSearchQuery('');
+                }}
+                contacts={props.contacts()}
+                selectedContacts={selectedContacts()}
+                setSelectedContacts={setSelectedContacts}
+                searchQuery={contactSearchQuery()}
+                setSearchQuery={setContactSearchQuery}
+                onConfirm={(selected) => {
+                    if (selected.length === 1 && multiRecipients().length === 0) {
+                        // Single selection: use existing single-recipient mode
+                        props.setRecipientAddress(selected[0].address);
+                    } else {
+                        // Multiple selection: add to multi-recipients
+                        const existingAddresses = new Set(multiRecipients().map(r => r.contact.address));
+                        const newRecipients = selected
+                            .filter(c => !existingAddresses.has(c.address))
+                            .map(c => ({ contact: c, amount: '' }));
+                        setMultiRecipients(prev => [...prev, ...newRecipients]);
+                    }
+                    setSelectedContacts(new Set<string>());
+                }}
+            />
         </div>
     );
 };
@@ -419,6 +631,161 @@ const NewContactModal = (props: { isOpen: boolean, onClose: () => void, address:
                         >
                             {isSaving() ? 'Saving...' : 'Save Contact'}
                         </button>
+                    </div>
+                </Motion.div>
+            </div>
+        </Show>
+    );
+};
+
+interface ContactPickerModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    contacts: any[];
+    selectedContacts: Set<string>;
+    setSelectedContacts: (set: Set<string>) => void;
+    onConfirm: (selected: any[]) => void;
+    searchQuery: string;
+    setSearchQuery: (q: string) => void;
+}
+
+const ContactPickerModal = (props: ContactPickerModalProps) => {
+    const availableContacts = () => {
+        const query = props.searchQuery.toLowerCase().trim();
+        const withWallet = props.contacts.filter(c => c.address && c.address.startsWith('0x'));
+        if (!query) return withWallet;
+        return withWallet.filter(c =>
+            c.internalName?.toLowerCase().includes(query) ||
+            c.address?.toLowerCase().includes(query)
+        );
+    };
+
+    const toggleContact = (contactId: string) => {
+        const newSet = new Set(props.selectedContacts);
+        if (newSet.has(contactId)) {
+            newSet.delete(contactId);
+        } else {
+            newSet.add(contactId);
+        }
+        props.setSelectedContacts(newSet);
+    };
+
+    const handleConfirm = () => {
+        const selected = props.contacts.filter(c => props.selectedContacts.has(c.id || c.address));
+        props.onConfirm(selected);
+        props.onClose();
+    };
+
+    return (
+        <Show when={props.isOpen}>
+            <div class="fixed inset-0 z-[150] flex items-center justify-center p-4">
+                <Motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    class="absolute inset-0 bg-black/90 backdrop-blur-md"
+                />
+                <Motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    class="relative w-full max-w-lg bg-[#0d0d0f] border border-white/[0.08] rounded-[32px] overflow-hidden shadow-3xl max-h-[80vh] flex flex-col"
+                >
+                    {/* Header */}
+                    <div class="p-6 border-b border-white/5">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="text-xl font-black text-white uppercase tracking-tight">Select Recipients</h3>
+                                <p class="text-xs text-gray-500 mt-1">Choose contacts to send tokens to</p>
+                            </div>
+                            <button
+                                onClick={props.onClose}
+                                class="p-2 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all"
+                            >
+                                <X class="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Search */}
+                        <div class="relative">
+                            <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                            <input
+                                type="text"
+                                placeholder="Search contacts..."
+                                value={props.searchQuery}
+                                onInput={(e) => props.setSearchQuery(e.currentTarget.value)}
+                                class="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm text-white outline-none focus:border-blue-500/30 transition-all placeholder:text-gray-600"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Contact List */}
+                    <div class="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                        <Show when={availableContacts().length === 0}>
+                            <div class="py-12 text-center">
+                                <User class="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                <p class="text-sm text-gray-500">No contacts with wallet addresses found</p>
+                            </div>
+                        </Show>
+
+                        <For each={availableContacts()}>
+                            {(contact) => {
+                                const id = contact.id || contact.address;
+                                const isSelected = () => props.selectedContacts.has(id);
+
+                                return (
+                                    <button
+                                        onClick={() => toggleContact(id)}
+                                        class={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${isSelected()
+                                            ? 'bg-blue-500/10 border-2 border-blue-500/50'
+                                            : 'bg-white/[0.02] border-2 border-transparent hover:border-white/10'
+                                            }`}
+                                    >
+                                        <div class={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isSelected() ? 'bg-blue-500' : 'bg-white/10 border border-white/20'
+                                            }`}>
+                                            <Show when={isSelected()}>
+                                                <Check class="w-4 h-4 text-white" />
+                                            </Show>
+                                        </div>
+                                        <div class={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black ${isSelected()
+                                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white'
+                                            : 'bg-white/5 text-gray-400'
+                                            }`}>
+                                            {contact.internalName?.charAt(0) || '?'}
+                                        </div>
+                                        <div class="flex-1 text-left">
+                                            <div class={`text-sm font-bold ${isSelected() ? 'text-white' : 'text-gray-300'}`}>
+                                                {contact.internalName}
+                                            </div>
+                                            <div class="text-[10px] font-mono text-gray-500">
+                                                {contact.address?.slice(0, 10)}...{contact.address?.slice(-6)}
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            }}
+                        </For>
+                    </div>
+
+                    {/* Footer */}
+                    <div class="p-6 border-t border-white/5 flex items-center justify-between gap-4">
+                        <div class="text-sm text-gray-400">
+                            <span class="font-black text-white">{props.selectedContacts.size}</span> selected
+                        </div>
+                        <div class="flex gap-3">
+                            <button
+                                onClick={props.onClose}
+                                class="px-6 py-3 text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                disabled={props.selectedContacts.size === 0}
+                                class="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all uppercase tracking-widest text-xs active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                Confirm Selection
+                            </button>
+                        </div>
                     </div>
                 </Motion.div>
             </div>
