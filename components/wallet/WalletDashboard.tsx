@@ -1066,13 +1066,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             </Show>
                         </Presence>
 
-                        <div class="relative group">
+                        <div class="relative group overflow-hidden rounded-[30px]">
                             {/* Agent Activated Glow Effect */}
-                            <div class={`absolute -inset-[3px] rounded-[30px] blur-2xl transition-all duration-700 ${props.isScheduling
+                            <div class={`absolute inset-0 rounded-[28px] blur-xl transition-all duration-700 ${props.isScheduling
                                 ? 'bg-gradient-to-r from-orange-600 via-amber-400 to-orange-600 opacity-60'
                                 : 'bg-gradient-to-r from-blue-600 via-cyan-400 to-purple-600 opacity-20 group-focus-within:opacity-50'}`}
                             />
-                            <div class="absolute -inset-[1px] bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
+                            <div class="absolute inset-0 bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
 
                             <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-[#1a1a1c] rounded-[28px] p-2 flex flex-col md:flex-row items-stretch md:items-end gap-1 group-focus-within:bg-[#0d0d0f] group-focus-within:border-[#2a2a2e] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
                                 {/* Text area - Top on mobile, Center on desktop */}
@@ -1102,55 +1102,61 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 </div>
 
                                 {/* Bottom controls for mobile / side for desktop */}
-                                <div class="flex items-center justify-between md:justify-end gap-1.5 pb-0.5 pr-1.5 order-2 md:order-3">
-                                    {/* Mobile: horizontal row */}
-                                    <div class="flex md:hidden items-center gap-1.5">
-                                        {/* Tools / Plus Button */}
-                                        <button
-                                            onClick={() => fileInputRef?.click()}
-                                            class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
-                                        >
-                                            <Plus class="w-5 h-5" />
-                                        </button>
-                                        <input
-                                            type="file"
-                                            multiple
-                                            ref={fileInputRef}
-                                            class="hidden"
-                                            onChange={props.handleFileSelect}
-                                        />
-
-                                        {/* Language Selection Popover */}
-                                        <div class="relative group/lang">
-                                            <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
-                                                <span>{props.voiceLang().split('-')[0]}</span>
-                                                <ChevronDown class="w-3 h-3" />
+                                <div class="flex items-center gap-1.5 pb-0.5 pr-1.5 order-2 md:order-3">
+                                    {/* Mobile: horizontal row with left tools and right-aligned send button */}
+                                    <div class="flex md:hidden items-center gap-1.5 w-full">
+                                        {/* Left side tools */}
+                                        <div class="flex items-center gap-1.5">
+                                            {/* Tools / Plus Button */}
+                                            <button
+                                                onClick={() => fileInputRef?.click()}
+                                                class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                                            >
+                                                <Plus class="w-5 h-5" />
                                             </button>
-                                            <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                                <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
-                                                    <For each={LANGUAGES}>
-                                                        {(lang) => (
-                                                            <button
-                                                                onClick={() => props.setVoiceLang(lang.code)}
-                                                                class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
-                                                            >
-                                                                {lang.label}
-                                                            </button>
-                                                        )}
-                                                    </For>
+                                            <input
+                                                type="file"
+                                                multiple
+                                                ref={fileInputRef}
+                                                class="hidden"
+                                                onChange={props.handleFileSelect}
+                                            />
+
+                                            {/* Language Selection Popover */}
+                                            <div class="relative group/lang">
+                                                <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
+                                                    <span>{props.voiceLang().split('-')[0]}</span>
+                                                    <ChevronDown class="w-3 h-3" />
+                                                </button>
+                                                <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                    <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
+                                                        <For each={LANGUAGES}>
+                                                            {(lang) => (
+                                                                <button
+                                                                    onClick={() => props.setVoiceLang(lang.code)}
+                                                                    class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
+                                                                >
+                                                                    {lang.label}
+                                                                </button>
+                                                            )}
+                                                        </For>
+                                                    </div>
                                                 </div>
                                             </div>
+
+                                            {/* Voice Button */}
+                                            <button
+                                                onClick={props.toggleRecording}
+                                                class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                            >
+                                                <Mic class="w-5 h-5" />
+                                            </button>
                                         </div>
 
-                                        {/* Voice Button */}
-                                        <button
-                                            onClick={props.toggleRecording}
-                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                                        >
-                                            <Mic class="w-5 h-5" />
-                                        </button>
+                                        {/* Spacer to push send button to right */}
+                                        <div class="flex-1" />
 
-                                        {/* Send/Stop Button */}
+                                        {/* Send/Stop Button - Right aligned */}
                                         <button
                                             onClick={() => {
                                                 if (props.isLoading()) {
@@ -1160,7 +1166,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 }
                                             }}
                                             disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
-                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
+                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 flex-shrink-0 ${props.isLoading()
                                                 ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
                                                 : (!props.input().trim() && props.attachments().length === 0)
                                                     ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
@@ -1168,7 +1174,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 }`}
                                         >
                                             <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
-                                                <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
+                                                <Square class="w-4 h-4 fill-current" />
                                             </Show>
                                         </button>
                                     </div>
@@ -1247,7 +1253,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
 
                     </div>
-                </div>
+                </div >
             </div >
 
             {/* Right Sidebar - Portfolio & Analytics (Always Fixed for Wallet context) */}
