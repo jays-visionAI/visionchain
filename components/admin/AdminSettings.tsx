@@ -38,6 +38,8 @@ export default function AdminSettings() {
         period: '60',
         range: '5'
     });
+    const [isSavingPrice, setIsSavingPrice] = createSignal(false);
+    const [priceSaveStatus, setPriceSaveStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
 
     const PriceChart = () => {
         const history = getVcnPriceHistory();
@@ -116,17 +118,29 @@ export default function AdminSettings() {
         const rangePerc = parseFloat(priceInput().range);
 
         if (isNaN(min) || isNaN(max) || isNaN(period) || isNaN(rangePerc)) {
-            alert("Please enter valid numeric values");
+            setPriceSaveStatus('error');
+            setTimeout(() => setPriceSaveStatus('idle'), 3000);
             return;
         }
 
-        await updateVcnPriceSettings({
-            minPrice: min,
-            maxPrice: max,
-            volatilityPeriod: period,
-            volatilityRange: rangePerc
-        });
-        alert("VCN Price Strategy Updated Successfully");
+        setIsSavingPrice(true);
+        setPriceSaveStatus('idle');
+        try {
+            await updateVcnPriceSettings({
+                minPrice: min,
+                maxPrice: max,
+                volatilityPeriod: period,
+                volatilityRange: rangePerc
+            });
+            setPriceSaveStatus('success');
+            setTimeout(() => setPriceSaveStatus('idle'), 3000);
+        } catch (e) {
+            console.error('Failed to update VCN price settings:', e);
+            setPriceSaveStatus('error');
+            setTimeout(() => setPriceSaveStatus('idle'), 3000);
+        } finally {
+            setIsSavingPrice(false);
+        }
     };
 
     return (
@@ -309,9 +323,24 @@ export default function AdminSettings() {
 
                                     <button
                                         onClick={handleUpdatePriceRange}
-                                        class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-600/20 active:scale-95"
+                                        disabled={isSavingPrice()}
+                                        class={`w-full py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 ${priceSaveStatus() === 'success'
+                                                ? 'bg-green-600 shadow-green-600/20'
+                                                : priceSaveStatus() === 'error'
+                                                    ? 'bg-red-600 shadow-red-600/20'
+                                                    : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20'
+                                            } text-white disabled:opacity-50`}
                                     >
-                                        Update Volatility Bounds
+                                        <Show when={isSavingPrice()}>
+                                            <RefreshCw class="w-4 h-4 animate-spin" />
+                                        </Show>
+                                        {priceSaveStatus() === 'success'
+                                            ? 'Saved Successfully!'
+                                            : priceSaveStatus() === 'error'
+                                                ? 'Error - Check Values'
+                                                : isSavingPrice()
+                                                    ? 'Saving...'
+                                                    : 'Update Volatility Bounds'}
                                     </button>
                                 </div>
 
