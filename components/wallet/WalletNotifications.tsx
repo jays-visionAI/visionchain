@@ -154,7 +154,7 @@ export function WalletNotifications() {
     };
 
     return (
-        <div class="flex-1 h-full flex flex-col overflow-hidden bg-[#0A0A0B]">
+        <div class="flex-1 h-full flex flex-col overflow-hidden bg-[#0A0A0B] max-h-[100dvh]">
             {/* Header Area */}
             <div class="shrink-0">
                 <div class="max-w-5xl mx-auto p-4 lg:p-8 pb-0">
@@ -210,9 +210,10 @@ export function WalletNotifications() {
             <div class="flex-1 flex overflow-hidden relative">
                 {/* List View */}
                 <div
-                    class={`flex-1 flex flex-col overflow-y-auto custom-scrollbar transition-all duration-500 ${selectedId() ? 'hidden lg:flex' : 'flex'}`}
+                    class={`flex-1 flex flex-col overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch transition-all duration-500 ${selectedId() ? 'hidden lg:flex' : 'flex'}`}
+                    style="-webkit-overflow-scrolling: touch;"
                 >
-                    <div class="max-w-5xl mx-auto w-full p-4 lg:p-8 pt-0 space-y-3 pb-32">
+                    <div class="max-w-5xl mx-auto w-full p-4 lg:p-8 pt-4 space-y-3 pb-32">
                         <Show when={!isLoading()} fallback={
                             <div class="flex flex-col items-center justify-center py-20 gap-4">
                                 <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -273,7 +274,8 @@ export function WalletNotifications() {
 
                 {/* Detail View Pane */}
                 <div
-                    class={`flex-[1.2] lg:static absolute inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform ${selectedId() ? 'translate-x-0' : 'translate-x-full lg:translate-x-0 lg:opacity-30'}`}
+                    class={`flex-[1.2] lg:static fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform overflow-y-auto overscroll-contain ${selectedId() ? 'translate-x-0' : 'translate-x-full pointer-events-none lg:translate-x-0 lg:opacity-30 lg:pointer-events-auto'}`}
+                    style="-webkit-overflow-scrolling: touch;"
                 >
                     <Show when={selectedItem()} fallback={
                         <div class="hidden lg:flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30">
@@ -284,7 +286,7 @@ export function WalletNotifications() {
                         {(item) => {
                             const meta = getMeta(item().type);
                             return (
-                                <div class="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative">
+                                <div class="flex flex-col min-h-full relative">
                                     {/* Mobile Back Button */}
                                     <div class="lg:hidden p-6 absolute top-0 left-0 bg-gradient-to-b from-[#0A0A0B] to-transparent w-full z-10">
                                         <button
