@@ -1,6 +1,6 @@
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { ethers } = require("ethers");
 
@@ -13,7 +13,87 @@ const RPC_URL = "http://46.224.221.201:8545"; // Testnet
 const EXECUTOR_PRIVATE_KEY = process.env.VITE_EXECUTOR_PK ||
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
-const TIMELOCK_ABI = ["function executeTransfer(uint256 scheduleId) external"];
+const TIMELOCK_ABI = [
+  "function executeTransfer(uint256 scheduleId) external",
+  "function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)",
+  "event TransferScheduled(uint256 indexed scheduleId, address indexed creator, address indexed to, uint256 amount, uint256 unlockTime)"
+];
+
+// --- Paymaster TimeLock (Gasless Scheduled Transfers) ---
+exports.paymasterTimeLock = onRequest({ cors: true }, async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { user, recipient, amount, unlockTime, fee, deadline, signature } = req.body;
+
+    // Validation
+    if (!user || !recipient || !amount || !unlockTime) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Verify deadline
+    if (deadline && Math.floor(Date.now() / 1000) > deadline) {
+      return res.status(400).json({ error: "Request expired" });
+    }
+
+    console.log(`[Paymaster] TimeLock request from ${user}`);
+    console.log(`[Paymaster] Recipient: ${recipient}, Amount: ${amount}, UnlockTime: ${unlockTime}`);
+
+    // Setup Blockchain Connection with Admin Wallet
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+    const contract = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, adminWallet);
+
+    // Execute TimeLock Schedule on behalf of user
+    const amountWei = BigInt(amount);
+    const tx = await contract.scheduleTransferNative(recipient, unlockTime, { value: amountWei });
+    console.log(`[Paymaster] TX sent: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    console.log(`[Paymaster] TX confirmed in block ${receipt.blockNumber}`);
+
+    // Parse scheduleId from event
+    let scheduleId = null;
+    for (const log of receipt.logs || []) {
+      try {
+        const parsed = contract.interface.parseLog(log);
+        if (parsed?.name === "TransferScheduled") {
+          scheduleId = parsed.args.scheduleId.toString();
+          break;
+        }
+      } catch (e) {
+        // Not our event
+      }
+    }
+
+    // Save to Firestore for scheduler to execute later
+    const jobRef = await db.collection("scheduledTransfers").add({
+      scheduleId: scheduleId,
+      from: user,
+      to: recipient,
+      amount: amount,
+      unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
+      status: "WAITING",
+      createdAt: admin.firestore.Timestamp.now(),
+      txHash: tx.hash,
+      fee: fee || "0",
+      type: "TIMELOCK_PAYMASTER"
+    });
+
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      scheduleId: scheduleId,
+      jobId: jobRef.id
+    });
+
+  } catch (err) {
+    console.error("[Paymaster] TimeLock Error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
 
 // --- Secure Wallet Update ---
 exports.updateWalletAddress = onCall(async (request) => {
