@@ -917,7 +917,7 @@ const Wallet = (): JSX.Element => {
                             try {
                                 const onChainBal = await contractService.getNativeBalance(address);
                                 const numericAmount = parseFloat(amount.replace(/,/g, ''));
-                                const gasBuffer = 3; // Increased buffer for time-lock transactions
+                                const gasBuffer = 1; // Actual gas is ~0.0001 VCN, 1 VCN is already 10000x buffer
 
                                 // TEMPORARY: Always seed if balance is insufficient (for testnet demo only)
                                 if (parseFloat(onChainBal) < (numericAmount + gasBuffer)) {
