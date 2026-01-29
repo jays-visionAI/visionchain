@@ -449,6 +449,385 @@ export class ContractService {
         return ethers.formatEther(balance);
     }
 
+    // ============================================
+    // GAS ESTIMATION FUNCTIONS
+    // ============================================
+
+    /**
+     * Estimates gas for a VCN transfer
+     */
+    async estimateTransferGas(to: string, amount: string): Promise<{
+        gasLimit: bigint;
+        gasPrice: bigint;
+        totalCostVCN: string;
+        serviceFee: string;
+        totalFee: string;
+    }> {
+        const provider = await this.getRobustProvider();
+        const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, provider);
+        const amountWei = ethers.parseUnits(amount, 18);
+
+        try {
+            // Estimate gas using admin address as sender (for simulation)
+            const gasLimit = await provider.estimateGas({
+                to: ADDRESSES.VCN_TOKEN,
+                data: vcnContract.interface.encodeFunctionData('transfer', [to, amountWei]),
+                from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Admin for estimation
+            });
+
+            const feeData = await provider.getFeeData();
+            const gasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
+
+            const gasCostWei = gasLimit * gasPrice;
+            const totalCostVCN = ethers.formatEther(gasCostWei);
+            const serviceFee = "1.0"; // Fixed 1 VCN service fee
+            const totalFee = (parseFloat(totalCostVCN) + parseFloat(serviceFee)).toFixed(4);
+
+            return { gasLimit, gasPrice, totalCostVCN, serviceFee, totalFee };
+        } catch (error) {
+            console.warn("Gas estimation failed, using fallback:", error);
+            return {
+                gasLimit: BigInt(100000),
+                gasPrice: ethers.parseUnits("1", "gwei"),
+                totalCostVCN: "0.0001",
+                serviceFee: "1.0",
+                totalFee: "1.0001"
+            };
+        }
+    }
+
+    /**
+     * Estimates gas for a Time-lock schedule transaction
+     */
+    async estimateTimeLockGas(recipient: string, amount: string, delaySeconds: number): Promise<{
+        gasLimit: bigint;
+        gasPrice: bigint;
+        totalCostVCN: string;
+        serviceFee: string;
+        totalFee: string;
+    }> {
+        const provider = await this.getRobustProvider();
+        const timelockAddress = ADDRESSES.TIME_LOCK_AGENT;
+        const abi = ["function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)"];
+        const contract = new ethers.Contract(timelockAddress, abi, provider);
+
+        const amountWei = ethers.parseEther(amount);
+        const unlockTime = Math.floor(Date.now() / 1000) + delaySeconds;
+
+        try {
+            const gasLimit = await provider.estimateGas({
+                to: timelockAddress,
+                data: contract.interface.encodeFunctionData('scheduleTransferNative', [recipient, unlockTime]),
+                value: amountWei,
+                from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Admin for estimation
+            });
+
+            const feeData = await provider.getFeeData();
+            const gasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
+
+            const gasCostWei = gasLimit * gasPrice;
+            const totalCostVCN = ethers.formatEther(gasCostWei);
+            const serviceFee = "1.0"; // Fixed 1 VCN service fee
+            const totalFee = (parseFloat(totalCostVCN) + parseFloat(serviceFee)).toFixed(4);
+
+            return { gasLimit, gasPrice, totalCostVCN, serviceFee, totalFee };
+        } catch (error) {
+            console.warn("TimeLock gas estimation failed, using fallback:", error);
+            return {
+                gasLimit: BigInt(150000),
+                gasPrice: ethers.parseUnits("1", "gwei"),
+                totalCostVCN: "0.00015",
+                serviceFee: "1.0",
+                totalFee: "1.00015"
+            };
+        }
+    }
+
+    /**
+     * Estimates gas for a batch of transactions
+     */
+    async estimateBatchGas(transactions: Array<{ recipient: string; amount: string }>): Promise<{
+        perTxGas: string;
+        totalGasVCN: string;
+        serviceFee: string;
+        totalFee: string;
+        breakdown: Array<{ recipient: string; amount: string; estimatedGas: string }>;
+    }> {
+        const provider = await this.getRobustProvider();
+        const vcnContract = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, provider);
+        const feeData = await provider.getFeeData();
+        const gasPrice = feeData.gasPrice || ethers.parseUnits("1", "gwei");
+
+        let totalGasLimit = BigInt(0);
+        const breakdown: Array<{ recipient: string; amount: string; estimatedGas: string }> = [];
+
+        for (const tx of transactions) {
+            try {
+                const amountWei = ethers.parseUnits(tx.amount, 18);
+                const gasLimit = await provider.estimateGas({
+                    to: ADDRESSES.VCN_TOKEN,
+                    data: vcnContract.interface.encodeFunctionData('transfer', [tx.recipient, amountWei]),
+                    from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+                });
+                totalGasLimit += gasLimit;
+                breakdown.push({
+                    recipient: tx.recipient,
+                    amount: tx.amount,
+                    estimatedGas: ethers.formatEther(gasLimit * gasPrice)
+                });
+            } catch (error) {
+                // Use fallback for failed estimates
+                totalGasLimit += BigInt(100000);
+                breakdown.push({
+                    recipient: tx.recipient,
+                    amount: tx.amount,
+                    estimatedGas: "0.0001"
+                });
+            }
+        }
+
+        const totalGasVCN = ethers.formatEther(totalGasLimit * gasPrice);
+        const perTxGas = (parseFloat(totalGasVCN) / transactions.length).toFixed(6);
+        const serviceFee = (transactions.length * 0.5).toFixed(1); // 0.5 VCN per tx in batch
+        const totalFee = (parseFloat(totalGasVCN) + parseFloat(serviceFee)).toFixed(4);
+
+        return { perTxGas, totalGasVCN, serviceFee, totalFee, breakdown };
+    }
+
+    // ============================================
+    // GASLESS PAYMASTER FUNCTIONS
+    // ============================================
+
+    /**
+     * Gasless Time-lock scheduling via Paymaster
+     * The admin wallet pays gas, user pays service fee in VCN
+     */
+    async scheduleTimeLockGasless(
+        recipient: string,
+        amount: string,
+        delaySeconds: number
+    ): Promise<{ receipt: any; scheduleId: string; txHash: string }> {
+        if (!this.signer) throw new Error("Wallet not connected");
+
+        const userAddress = await this.signer.getAddress();
+        const amountWei = ethers.parseEther(amount);
+        const unlockTime = Math.floor(Date.now() / 1000) + delaySeconds;
+
+        // 1. Estimate gas and calculate fee
+        const gasEstimate = await this.estimateTimeLockGas(recipient, amount, delaySeconds);
+        const totalFeeWei = ethers.parseUnits(gasEstimate.totalFee, 18);
+        const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+        // 2. Sign EIP-712 Permit for fee collection
+        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const vcnContract = this.vcnToken || new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, rpcProvider);
+        const contract = vcnContract.connect(this.signer);
+
+        const tokenName = await (contract as any).name();
+        const nonce = await (contract as any).nonces(userAddress);
+
+        const domain = {
+            name: tokenName,
+            version: "1",
+            chainId: 1337,
+            verifyingContract: ADDRESSES.VCN_TOKEN
+        };
+
+        const types = {
+            Permit: [
+                { name: "owner", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "value", type: "uint256" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" }
+            ]
+        };
+
+        const values = {
+            owner: userAddress,
+            spender: ADDRESSES.VCN_PAYMASTER,
+            value: totalFeeWei,
+            nonce: nonce,
+            deadline: deadline
+        };
+
+        const signature = await this.signer.signTypedData(domain, types, values);
+
+        // 3. Submit to Paymaster API
+        const response = await fetch(`${ADDRESSES.SEQUENCER_URL.replace('/submit', '')}/paymaster/timelock`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: userAddress,
+                recipient,
+                amount: amountWei.toString(),
+                unlockTime,
+                fee: totalFeeWei.toString(),
+                deadline,
+                signature,
+                gasEstimate: {
+                    gasLimit: gasEstimate.gasLimit.toString(),
+                    gasPrice: gasEstimate.gasPrice.toString()
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(`TimeLock Paymaster Failed: ${error.error || response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log("Gasless TimeLock Scheduled:", result);
+        return result;
+    }
+
+    /**
+     * Gasless Batch transfer via Paymaster
+     * Executes multiple transfers with admin paying gas
+     */
+    async sendBatchGasless(
+        transactions: Array<{ recipient: string; amount: string; name?: string }>
+    ): Promise<{ results: Array<{ recipient: string; status: string; txHash?: string }>; totalFee: string }> {
+        if (!this.signer) throw new Error("Wallet not connected");
+
+        const userAddress = await this.signer.getAddress();
+
+        // 1. Estimate total gas
+        const gasEstimate = await this.estimateBatchGas(transactions);
+        const totalFeeWei = ethers.parseUnits(gasEstimate.totalFee, 18);
+        const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+        // 2. Sign EIP-712 Permit for fee collection
+        const rpcProvider = new ethers.JsonRpcProvider(ADDRESSES.RPC_URL);
+        const vcnContract = this.vcnToken || new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, rpcProvider);
+        const contract = vcnContract.connect(this.signer);
+
+        const tokenName = await (contract as any).name();
+        const nonce = await (contract as any).nonces(userAddress);
+
+        const domain = {
+            name: tokenName,
+            version: "1",
+            chainId: 1337,
+            verifyingContract: ADDRESSES.VCN_TOKEN
+        };
+
+        const types = {
+            Permit: [
+                { name: "owner", type: "address" },
+                { name: "spender", type: "address" },
+                { name: "value", type: "uint256" },
+                { name: "nonce", type: "uint256" },
+                { name: "deadline", type: "uint256" }
+            ]
+        };
+
+        const values = {
+            owner: userAddress,
+            spender: ADDRESSES.VCN_PAYMASTER,
+            value: totalFeeWei,
+            nonce: nonce,
+            deadline: deadline
+        };
+
+        const signature = await this.signer.signTypedData(domain, types, values);
+
+        // 3. Calculate total transfer amount
+        const totalTransferAmount = transactions.reduce((sum, tx) => {
+            return sum + ethers.parseUnits(tx.amount, 18);
+        }, BigInt(0));
+
+        // 4. Submit to Paymaster API
+        const response = await fetch(`${ADDRESSES.SEQUENCER_URL.replace('/submit', '')}/paymaster/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user: userAddress,
+                transactions: transactions.map(tx => ({
+                    recipient: tx.recipient,
+                    amount: ethers.parseUnits(tx.amount, 18).toString(),
+                    name: tx.name
+                })),
+                totalTransferAmount: totalTransferAmount.toString(),
+                fee: totalFeeWei.toString(),
+                deadline,
+                signature,
+                gasEstimate: {
+                    totalGas: gasEstimate.totalGasVCN,
+                    breakdown: gasEstimate.breakdown
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(`Batch Paymaster Failed: ${error.error || response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log("Gasless Batch Transfer Complete:", result);
+        return result;
+    }
+
+    /**
+     * Gets fee quote for any transfer type
+     */
+    async getFeeQuote(type: 'single' | 'timelock' | 'batch', params: {
+        amount?: string;
+        recipient?: string;
+        delaySeconds?: number;
+        transactions?: Array<{ recipient: string; amount: string }>;
+    }): Promise<{
+        type: string;
+        gasCostVCN: string;
+        serviceFee: string;
+        totalFee: string;
+        breakdown?: any;
+    }> {
+        switch (type) {
+            case 'single': {
+                const estimate = await this.estimateTransferGas(
+                    params.recipient || ethers.ZeroAddress,
+                    params.amount || "1"
+                );
+                return {
+                    type: 'single',
+                    gasCostVCN: estimate.totalCostVCN,
+                    serviceFee: estimate.serviceFee,
+                    totalFee: estimate.totalFee
+                };
+            }
+            case 'timelock': {
+                const estimate = await this.estimateTimeLockGas(
+                    params.recipient || ethers.ZeroAddress,
+                    params.amount || "1",
+                    params.delaySeconds || 60
+                );
+                return {
+                    type: 'timelock',
+                    gasCostVCN: estimate.totalCostVCN,
+                    serviceFee: estimate.serviceFee,
+                    totalFee: estimate.totalFee
+                };
+            }
+            case 'batch': {
+                const estimate = await this.estimateBatchGas(
+                    params.transactions || []
+                );
+                return {
+                    type: 'batch',
+                    gasCostVCN: estimate.totalGasVCN,
+                    serviceFee: estimate.serviceFee,
+                    totalFee: estimate.totalFee,
+                    breakdown: estimate.breakdown
+                };
+            }
+            default:
+                throw new Error(`Unknown transfer type: ${type}`);
+        }
+    }
+
     // --- TimeLock Agent Functions ---
     async scheduleTransferNative(recipient: string, amount: string, delaySeconds: number) {
         if (!this.signer) throw new Error("Wallet not connected");

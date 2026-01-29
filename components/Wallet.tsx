@@ -869,67 +869,98 @@ const Wallet = (): JSX.Element => {
 
                 // 3. Execute Send or Local Time-lock Schedule
                 if (isSchedulingTimeLock()) {
-                    setLoadingMessage('AGENT: SYNCING BALANCE...');
+                    let timeLockSuccess = false;
+                    let timeLockTxHash = '';
+                    let timeLockScheduleId = '';
 
-                    // --- Auto-Seed Logic for Demo ---
-                    // If user has purchased VCN but 0 on-chain VCN, silent airdrop to make it work
+                    // --- STRATEGY 1: Try Gasless Paymaster (Production Ready) ---
                     try {
-                        const onChainBal = await contractService.getNativeBalance(address);
-                        const numericAmount = parseFloat(amount.replace(/,/g, ''));
-                        const gasBuffer = 5; // VCN buffer for gas fees
+                        setLoadingMessage('AGENT: ESTIMATING GAS...');
+                        const feeQuote = await contractService.getFeeQuote('timelock', {
+                            recipient,
+                            amount,
+                            delaySeconds: lockDelaySeconds()
+                        });
+                        console.log("[Paymaster] Fee Quote:", feeQuote);
 
-                        // Check if wallet needs seeding (not enough for amount + gas)
-                        if (parseFloat(onChainBal) < (numericAmount + gasBuffer) && purchasedVcn() >= numericAmount) {
-                            setLoadingMessage('AGENT: AIRDROPPING VCN...');
-                            console.log("[Demo] Auto-seeding wallet from admin...");
-                            const seedAmount = numericAmount + gasBuffer; // Amount + 5 VCN for gas
-                            const seedReceipt = await contractService.adminSendVCN(address, seedAmount.toString());
-                            console.log("[Demo] Airdrop confirmed. Hash:", seedReceipt.hash);
+                        setLoadingMessage(`AGENT: SCHEDULING (Fee: ${feeQuote.totalFee} VCN)...`);
+                        const result = await contractService.scheduleTimeLockGasless(recipient, amount, lockDelaySeconds());
+                        console.log("[Paymaster] Time-lock Scheduled:", result);
 
-                            // Give RPC a moment to update state
-                            setLoadingMessage('AGENT: FINALIZING SYNC...');
-                            await new Promise(r => setTimeout(r, 3000)); // Increased wait time
+                        timeLockTxHash = result.txHash;
+                        timeLockScheduleId = result.scheduleId;
+                        timeLockSuccess = true;
 
-                            const newBal = await contractService.getNativeBalance(address);
-                            console.log("[Demo] Verified post-airdrop balance:", newBal);
+                    } catch (paymasterErr: any) {
+                        console.warn("[Paymaster] Failed, trying legacy method:", paymasterErr.message);
+
+                        // --- STRATEGY 2: Fallback to Legacy Auto-Seed (Testnet Only) ---
+                        try {
+                            setLoadingMessage('AGENT: SYNCING BALANCE...');
+
+                            // Auto-Seed Logic for Demo
+                            try {
+                                const onChainBal = await contractService.getNativeBalance(address);
+                                const numericAmount = parseFloat(amount.replace(/,/g, ''));
+                                const gasBuffer = 5;
+
+                                if (parseFloat(onChainBal) < (numericAmount + gasBuffer) && purchasedVcn() >= numericAmount) {
+                                    setLoadingMessage('AGENT: AIRDROPPING VCN...');
+                                    console.log("[Legacy] Auto-seeding wallet from admin...");
+                                    const seedAmount = numericAmount + gasBuffer;
+                                    const seedReceipt = await contractService.adminSendVCN(address, seedAmount.toString());
+                                    console.log("[Legacy] Airdrop confirmed. Hash:", seedReceipt.hash);
+
+                                    setLoadingMessage('AGENT: FINALIZING SYNC...');
+                                    await new Promise(r => setTimeout(r, 3000));
+
+                                    const newBal = await contractService.getNativeBalance(address);
+                                    console.log("[Legacy] Verified post-airdrop balance:", newBal);
+                                }
+                            } catch (seedErr) {
+                                console.warn("[Legacy] Auto-seed failed, proceeding anyway...", seedErr);
+                            }
+
+                            setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
+                            const { receipt, scheduleId } = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
+                            console.log("[Legacy] Time-lock Schedule Successful:", receipt.hash);
+
+                            timeLockTxHash = receipt.hash;
+                            timeLockScheduleId = scheduleId;
+                            timeLockSuccess = true;
+
+                        } catch (legacyErr: any) {
+                            console.error("[Legacy] Time-lock scheduling failed:", legacyErr);
+                            const isInsufficientFunds = legacyErr.code === 'INSUFFICIENT_FUNDS'
+                                || legacyErr.message?.includes('insufficient funds')
+                                || legacyErr.message?.includes('-32000');
+
+                            const errorMsg = lastLocale() === 'ko'
+                                ? isInsufficientFunds
+                                    ? '잔액이 부족합니다. 전송 금액과 가스비가 필요합니다.'
+                                    : `예약 전송 실패: ${legacyErr.shortMessage || legacyErr.message || '알 수 없는 오류'}`
+                                : isInsufficientFunds
+                                    ? 'Insufficient balance. You need the transfer amount plus gas fees.'
+                                    : `Time-lock scheduling failed: ${legacyErr.shortMessage || legacyErr.message || 'Unknown error'}`;
+
+                            alert(errorMsg);
+                            throw legacyErr;
                         }
-                    } catch (seedErr) {
-                        console.warn("Auto-seed failed, proceeding anyway...", seedErr);
                     }
 
-                    try {
-                        setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
-                        const { receipt, scheduleId } = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
-                        console.log("Time-lock Schedule Successful:", receipt.hash);
-                        setLastTxHash(receipt.hash);
-
-                        // 4. Register with Global Agent Queue (Firebase)
+                    // Register successful Time-lock with Firebase
+                    if (timeLockSuccess) {
+                        setLastTxHash(timeLockTxHash);
                         await saveScheduledTransfer({
                             userEmail: userProfile().email,
                             recipient: recipient,
                             amount: amount,
                             token: symbol,
                             unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
-                            creationTx: receipt.hash,
-                            scheduleId: scheduleId,
+                            creationTx: timeLockTxHash,
+                            scheduleId: timeLockScheduleId,
                             status: 'WAITING'
                         });
-                    } catch (timeLockErr: any) {
-                        console.error("Time-lock scheduling failed:", timeLockErr);
-                        const isInsufficientFunds = timeLockErr.code === 'INSUFFICIENT_FUNDS'
-                            || timeLockErr.message?.includes('insufficient funds')
-                            || timeLockErr.message?.includes('-32000');
-
-                        const errorMsg = lastLocale() === 'ko'
-                            ? isInsufficientFunds
-                                ? '잔액이 부족합니다. 전송 금액과 가스비(약 5 VCN)가 필요합니다.'
-                                : `예약 전송 실패: ${timeLockErr.shortMessage || timeLockErr.message || '알 수 없는 오류'}`
-                            : isInsufficientFunds
-                                ? 'Insufficient balance. You need the transfer amount plus gas fees (~5 VCN).'
-                                : `Time-lock scheduling failed: ${timeLockErr.shortMessage || timeLockErr.message || 'Unknown error'}`;
-
-                        alert(errorMsg);
-                        throw timeLockErr;
                     }
 
                 } else if (symbol === 'VCN') {

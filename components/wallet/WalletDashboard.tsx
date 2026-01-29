@@ -1184,7 +1184,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     </div>
 
                                     {/* Desktop: 2x2 grid on right side */}
-                                    <div class="hidden md:grid grid-cols-2 gap-1 ml-1.5">
+                                    <div class="hidden md:grid grid-cols-2 gap-1 ml-2.5">
                                         {/* Row 1: Plus + Language */}
                                         <button
                                             onClick={() => fileInputRef?.click()}
