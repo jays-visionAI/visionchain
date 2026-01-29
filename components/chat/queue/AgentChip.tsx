@@ -177,40 +177,42 @@ const AgentChip = (props: AgentChipProps) => {
             transition={{ duration: 2, repeat: Infinity }}
             onClick={props.onClick}
         >
-            {/* Top Bar: Icon + Status */}
-            <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                    <div class={`w-7 h-7 rounded-lg flex items-center justify-center border ${config().border} bg-black/40`}>
+            {/* Top Bar: Icon + Agent Name + Dismiss Button */}
+            <div class="flex items-start justify-between gap-2 mb-1">
+                <div class="flex items-center gap-2 min-w-0">
+                    <div class={`w-7 h-7 rounded-lg flex items-center justify-center border ${config().border} bg-black/40 flex-shrink-0`}>
                         <Dynamic component={DisplayIcon()} class={`w-3.5 h-3.5 ${config().color} ${props.task.status === 'EXECUTING' ? 'animate-spin' : ''}`} />
                     </div>
-                    <span class="text-[10px] font-black text-white uppercase tracking-widest opacity-80">
+                    <span class="text-[10px] font-black text-white uppercase tracking-widest opacity-80 truncate">
                         {props.task.type === 'TIMELOCK' ? 'Time Lock Agent' : 'Batch Agent'}
                     </span>
                 </div>
-                <div class="flex items-center gap-1">
-                    <div class={`px-1.5 py-0.5 rounded-md border ${config().border} bg-black/20`}>
-                        <span class={`text-[8px] font-black uppercase tracking-tighter ${config().color}`}>
-                            {config().label}
-                        </span>
-                    </div>
-                    {/* Dismiss Button for FAILED or Overdue tasks */}
-                    <Show when={canDismiss() && props.onDismiss}>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                props.onDismiss?.(props.task.id);
-                            }}
-                            class="w-5 h-5 rounded-md bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center text-red-400 transition-all"
-                            title="Dismiss task"
-                        >
-                            <X class="w-3 h-3" />
-                        </button>
-                    </Show>
+                {/* Dismiss Button - Top Right */}
+                <Show when={canDismiss() && props.onDismiss}>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            props.onDismiss?.(props.task.id);
+                        }}
+                        class="w-5 h-5 rounded-md bg-red-500/20 hover:bg-red-500/40 border border-red-500/30 flex items-center justify-center text-red-400 transition-all flex-shrink-0"
+                        title="Dismiss task"
+                    >
+                        <X class="w-3 h-3" />
+                    </button>
+                </Show>
+            </div>
+
+            {/* Status Chip - Below Agent Name */}
+            <div class="mb-1.5">
+                <div class={`inline-flex px-1.5 py-0.5 rounded-md border ${config().border} bg-black/20`}>
+                    <span class={`text-[8px] font-black uppercase tracking-tighter ${config().color}`}>
+                        {config().label}
+                    </span>
                 </div>
             </div>
 
             {/* Content Section */}
-            <div class="flex flex-col gap-1 my-1">
+            <div class="flex flex-col gap-1">
                 <span class={`text-[12px] font-bold leading-tight truncate ${config().textColor}`}>
                     {props.task.summary}
                 </span>
