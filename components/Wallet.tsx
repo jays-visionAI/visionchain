@@ -876,16 +876,19 @@ const Wallet = (): JSX.Element => {
                     try {
                         const onChainBal = await contractService.getNativeBalance(address);
                         const numericAmount = parseFloat(amount.replace(/,/g, ''));
+                        const gasBuffer = 5; // VCN buffer for gas fees
 
-                        if (parseFloat(onChainBal) < numericAmount && purchasedVcn() >= numericAmount) {
+                        // Check if wallet needs seeding (not enough for amount + gas)
+                        if (parseFloat(onChainBal) < (numericAmount + gasBuffer) && purchasedVcn() >= numericAmount) {
                             setLoadingMessage('AGENT: AIRDROPPING VCN...');
                             console.log("[Demo] Auto-seeding wallet from admin...");
-                            const seedReceipt = await contractService.adminSendVCN(address, (numericAmount + 1).toString()); // amount + 1 for gas
+                            const seedAmount = numericAmount + gasBuffer; // Amount + 5 VCN for gas
+                            const seedReceipt = await contractService.adminSendVCN(address, seedAmount.toString());
                             console.log("[Demo] Airdrop confirmed. Hash:", seedReceipt.hash);
 
                             // Give RPC a moment to update state
                             setLoadingMessage('AGENT: FINALIZING SYNC...');
-                            await new Promise(r => setTimeout(r, 2000));
+                            await new Promise(r => setTimeout(r, 3000)); // Increased wait time
 
                             const newBal = await contractService.getNativeBalance(address);
                             console.log("[Demo] Verified post-airdrop balance:", newBal);
@@ -894,22 +897,40 @@ const Wallet = (): JSX.Element => {
                         console.warn("Auto-seed failed, proceeding anyway...", seedErr);
                     }
 
-                    setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
-                    const { receipt, scheduleId } = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
-                    console.log("Time-lock Schedule Successful:", receipt.hash);
-                    setLastTxHash(receipt.hash);
+                    try {
+                        setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
+                        const { receipt, scheduleId } = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
+                        console.log("Time-lock Schedule Successful:", receipt.hash);
+                        setLastTxHash(receipt.hash);
 
-                    // 4. Register with Global Agent Queue (Firebase)
-                    await saveScheduledTransfer({
-                        userEmail: userProfile().email,
-                        recipient: recipient,
-                        amount: amount,
-                        token: symbol,
-                        unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
-                        creationTx: receipt.hash,
-                        scheduleId: scheduleId,
-                        status: 'WAITING'
-                    });
+                        // 4. Register with Global Agent Queue (Firebase)
+                        await saveScheduledTransfer({
+                            userEmail: userProfile().email,
+                            recipient: recipient,
+                            amount: amount,
+                            token: symbol,
+                            unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
+                            creationTx: receipt.hash,
+                            scheduleId: scheduleId,
+                            status: 'WAITING'
+                        });
+                    } catch (timeLockErr: any) {
+                        console.error("Time-lock scheduling failed:", timeLockErr);
+                        const isInsufficientFunds = timeLockErr.code === 'INSUFFICIENT_FUNDS'
+                            || timeLockErr.message?.includes('insufficient funds')
+                            || timeLockErr.message?.includes('-32000');
+
+                        const errorMsg = lastLocale() === 'ko'
+                            ? isInsufficientFunds
+                                ? '잔액이 부족합니다. 전송 금액과 가스비(약 5 VCN)가 필요합니다.'
+                                : `예약 전송 실패: ${timeLockErr.shortMessage || timeLockErr.message || '알 수 없는 오류'}`
+                            : isInsufficientFunds
+                                ? 'Insufficient balance. You need the transfer amount plus gas fees (~5 VCN).'
+                                : `Time-lock scheduling failed: ${timeLockErr.shortMessage || timeLockErr.message || 'Unknown error'}`;
+
+                        alert(errorMsg);
+                        throw timeLockErr;
+                    }
 
                 } else if (symbol === 'VCN') {
                     try {
@@ -922,23 +943,28 @@ const Wallet = (): JSX.Element => {
                         if (result.txHashes) {
                             setLastTxHash(result.txHashes.transfer || result.txHashes.permit);
                         }
-                    } catch (error) {
+                    } catch (error: any) {
                         console.warn("Paymaster failed, attempting standard transfer...", error);
                         try {
                             // Fallback to Standard Send
                             const receipt = await contractService.sendTokens(recipient, amount, symbol);
                             console.log("Standard Send Successful (Fallback):", receipt.hash);
                             setLastTxHash(receipt.hash);
-                            alert(`Transfer Successful (Fallback): ${receipt.hash}`);
                         } catch (fallbackError: any) {
                             console.error("Fallback Failed:", fallbackError);
-                            if (fallbackError.code === 'INSUFFICIENT_FUNDS' || fallbackError.message?.includes('insufficient funds')) {
-                                // Show detailed Paymaster error if available
-                                const paymasterError = (error as any).message || "Unknown Paymaster Error";
-                                alert(`Transaction Failed. \n\nPaymaster Error: ${paymasterError}\n\nFallback Error: Insufficient ETH for gas.`);
-                            } else {
-                                alert(`Transfer Failed: ${fallbackError.message || "Unknown Error"}`);
-                            }
+                            const isInsufficientFunds = fallbackError.code === 'INSUFFICIENT_FUNDS'
+                                || fallbackError.message?.includes('insufficient funds')
+                                || fallbackError.message?.includes('-32000');
+
+                            const errorMsg = lastLocale() === 'ko'
+                                ? isInsufficientFunds
+                                    ? '잔액이 부족합니다. 전송 금액과 가스비가 필요합니다.'
+                                    : `전송 실패: ${fallbackError.shortMessage || fallbackError.reason || '알 수 없는 오류'}`
+                                : isInsufficientFunds
+                                    ? 'Insufficient balance. You need the transfer amount plus gas fees.'
+                                    : `Transfer failed: ${fallbackError.shortMessage || fallbackError.reason || 'Unknown error'}`;
+
+                            alert(errorMsg);
                             throw fallbackError; // Stop flow
                         }
                     }
