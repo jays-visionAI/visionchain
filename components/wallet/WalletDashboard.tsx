@@ -607,20 +607,18 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>([]);
     let scrollContainerRef: HTMLDivElement | undefined;
 
-    onMount(async () => {
-        // Load Quick Actions from Firebase
-        try {
-            const actions = await getQuickActions();
-            setQuickActions(actions.filter(a => a.enabled).sort((a, b) => a.order - b.order));
-        } catch (e) {
-            console.error('Failed to load quick actions:', e);
-        }
-
+    onMount(() => {
+        // Show welcome actions immediately on mobile, 2s delay on desktop
         if (window.innerWidth < 768) {
             setShowWelcomeActions(true);
         } else {
             setTimeout(() => setShowWelcomeActions(true), 2000);
         }
+
+        // Load Quick Actions async (non-blocking)
+        getQuickActions()
+            .then(actions => setQuickActions(actions.filter(a => a.enabled).sort((a, b) => a.order - b.order)))
+            .catch(e => console.error('Failed to load quick actions:', e));
     });
 
     // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
@@ -967,9 +965,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         </button>
                                     </div>
 
-                                    <Presence>
-                                        <Show when={!isAgentBayCollapsed()}>
-                                            <div class="flex items-center gap-3">
+                                    {/* Agent Bay + History Button Row */}
+                                    <div class="flex items-center gap-3">
+                                        <Presence>
+                                            <Show when={!isAgentBayCollapsed()}>
                                                 <Motion.div
                                                     initial={{ opacity: 0, height: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, height: 'auto', scale: 1 }}
@@ -1017,20 +1016,20 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                         </For>
                                                     </div>
                                                 </Motion.div>
+                                            </Show>
+                                        </Presence>
 
-                                                {/* History Button - Outside Motion.div for reliable clicks */}
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setIsQueueDrawerOpen(true);
-                                                    }}
-                                                    class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
-                                                >
-                                                    <List class="w-5 h-5" />
-                                                </button>
-                                            </div>
-                                        </Show>
-                                    </Presence>
+                                        {/* History Button - Always visible */}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setIsQueueDrawerOpen(true);
+                                            }}
+                                            class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
+                                        >
+                                            <List class="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </div>
                             </Show>
 
