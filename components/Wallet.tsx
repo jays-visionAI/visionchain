@@ -991,6 +991,28 @@ const Wallet = (): JSX.Element => {
                     console.warn("Notification failed:", notiErr);
                 }
 
+                // --- Add Chat Completion Message ---
+                try {
+                    const isScheduled = isSchedulingTimeLock();
+                    const contactList = contacts() || [];
+                    const recipientContact = contactList.find((c: any) => c.address?.toLowerCase() === recipient.toLowerCase());
+                    const recipientName = recipientContact?.name || `${recipient.slice(0, 6)}...${recipient.slice(-4)}`;
+                    const txHash = lastTxHash();
+                    const txLink = txHash ? `https://visionscan.org/tx/${txHash}` : '';
+
+                    const completionMessage = lastLocale() === 'ko'
+                        ? isScheduled
+                            ? `**예약 전송 완료**\n\n${recipientName}님에게 **${amount} ${symbol}** 전송이 예약되었습니다.\n\n예약된 시간에 자동으로 전송됩니다.`
+                            : `**전송 완료**\n\n${recipientName}님에게 **${amount} ${symbol}** 전송이 성공적으로 완료되었습니다.${txLink ? `\n\n[Vision Scan에서 확인](${txLink})` : ''}`
+                        : isScheduled
+                            ? `**Transfer Scheduled**\n\n**${amount} ${symbol}** has been scheduled to be sent to ${recipientName}.\n\nIt will be automatically transferred at the scheduled time.`
+                            : `**Transfer Complete**\n\n**${amount} ${symbol}** has been successfully sent to ${recipientName}.${txLink ? `\n\n[View on Vision Scan](${txLink})` : ''}`;
+
+                    setMessages(prev => [...prev, { role: 'assistant', content: completionMessage }]);
+                } catch (msgErr) {
+                    console.warn("Chat completion message failed:", msgErr);
+                }
+
             } else if (action.type === 'multi_transactions') {
                 const { transactions } = action.data;
                 setIsLoading(false); // Do not block UI for batch
