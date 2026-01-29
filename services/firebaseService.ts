@@ -323,6 +323,57 @@ export interface DefiConfig {
     totalSVcnIssued: number;
 }
 
+// --- Quick Actions Configuration ---
+export interface QuickAction {
+    id: string;
+    label: string;          // Display text (e.g., "Learn about Vision Chain")
+    prompt: string;         // Chat prompt to send (e.g., "Tell me about Vision Chain")
+    icon: string;           // Icon name (e.g., "BookOpen", "Sparkles", "UserPlus", "Send", "TrendingUp")
+    iconColor: string;      // Tailwind color (e.g., "text-yellow-500", "text-purple-400")
+    actionType: 'chat' | 'flow';  // 'chat' sends prompt, 'flow' opens a flow
+    flowName?: string;      // Flow name if actionType is 'flow' (e.g., "send")
+    order: number;          // Display order
+    enabled: boolean;       // Whether this action is shown
+}
+
+/**
+ * Fetches Quick Actions configuration from Firestore.
+ */
+export const getQuickActions = async (): Promise<QuickAction[]> => {
+    try {
+        const db = getFirebaseDb();
+        const configSnap = await getDoc(doc(db, 'settings', 'quickActions'));
+        if (configSnap.exists()) {
+            const data = configSnap.data();
+            return (data.actions || []) as QuickAction[];
+        }
+    } catch (e) {
+        console.error("Error fetching quick actions:", e);
+    }
+    // Default Quick Actions
+    return [
+        { id: '1', label: 'Learn about Vision Chain', prompt: 'Tell me about Vision Chain', icon: 'BookOpen', iconColor: 'text-yellow-500', actionType: 'chat', order: 1, enabled: true },
+        { id: '2', label: 'Receive VCN Gift', prompt: 'I want to receive VCN airdrop', icon: 'Sparkles', iconColor: 'text-purple-400', actionType: 'chat', order: 2, enabled: true },
+        { id: '3', label: 'Invite Friends', prompt: 'How do I invite friends?', icon: 'UserPlus', iconColor: 'text-emerald-400', actionType: 'chat', order: 3, enabled: true },
+        { id: '4', label: 'Send VCN', prompt: '', icon: 'Send', iconColor: 'text-blue-400', actionType: 'flow', flowName: 'send', order: 4, enabled: true },
+        { id: '5', label: 'Check Crypto Prices', prompt: 'Show me the current crypto market prices', icon: 'TrendingUp', iconColor: 'text-red-400', actionType: 'chat', order: 5, enabled: true }
+    ];
+};
+
+/**
+ * Saves Quick Actions configuration to Firestore.
+ */
+export const saveQuickActions = async (actions: QuickAction[]): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        const configRef = doc(db, 'settings', 'quickActions');
+        await setDoc(configRef, { actions, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (e) {
+        console.error("Error saving quick actions:", e);
+        throw e;
+    }
+};
+
 export interface StakingPosition {
     id?: string;
     email: string;

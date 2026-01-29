@@ -5,6 +5,7 @@ import { VisionChart, parseChartBlocks } from './VisionChart';
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
 import QueueDrawer from '../chat/queue/QueueDrawer';
+import { getQuickActions, QuickAction } from '../../services/firebaseService';
 import {
     Sparkles,
     User,
@@ -603,9 +604,18 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [showWelcomeActions, setShowWelcomeActions] = createSignal(false);
+    const [quickActions, setQuickActions] = createSignal<QuickAction[]>([]);
     let scrollContainerRef: HTMLDivElement | undefined;
 
-    onMount(() => {
+    onMount(async () => {
+        // Load Quick Actions from Firebase
+        try {
+            const actions = await getQuickActions();
+            setQuickActions(actions.filter(a => a.enabled).sort((a, b) => a.order - b.order));
+        } catch (e) {
+            console.error('Failed to load quick actions:', e);
+        }
+
         if (window.innerWidth < 768) {
             setShowWelcomeActions(true);
         } else {
@@ -754,55 +764,36 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     </div>
 
                                     <div class="flex flex-col gap-3 w-full items-start">
-                                        <button
-                                            onClick={() => { props.setInput("Tell me about Vision Chain"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
-                                        >
-                                            <div class="w-6 h-6 text-yellow-500 group-hover:scale-110 transition-transform">
-                                                <BookOpen class="w-full h-full" />
-                                            </div>
-                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Learn about Vision Chain</span>
-                                        </button>
+                                        <For each={quickActions()}>
+                                            {(action) => {
+                                                // Icon mapping
+                                                const iconMap: Record<string, any> = {
+                                                    BookOpen, Sparkles, UserPlus, Send, TrendingUp, Zap, Download, Clock, MessageSquare, Search, Lock, Layers
+                                                };
+                                                const IconComponent = iconMap[action.icon] || Sparkles;
 
-                                        <button
-                                            onClick={() => { props.setInput("I want to receive VCN airdrop"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
-                                        >
-                                            <div class="w-6 h-6 text-purple-400 group-hover:scale-110 transition-transform">
-                                                <Sparkles class="w-full h-full" />
-                                            </div>
-                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Receive VCN Gift</span>
-                                        </button>
+                                                const handleClick = () => {
+                                                    if (action.actionType === 'flow' && action.flowName) {
+                                                        props.setActiveFlow(action.flowName);
+                                                    } else if (action.prompt) {
+                                                        props.setInput(action.prompt);
+                                                        props.handleSend();
+                                                    }
+                                                };
 
-                                        <button
-                                            onClick={() => { props.setInput("How do I invite friends?"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
-                                        >
-                                            <div class="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform">
-                                                <UserPlus class="w-full h-full" />
-                                            </div>
-                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Invite Friends</span>
-                                        </button>
-
-                                        <button
-                                            onClick={() => { props.setActiveFlow('send'); }}
-                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
-                                        >
-                                            <div class="w-6 h-6 text-blue-400 group-hover:scale-110 transition-transform">
-                                                <Send class="w-full h-full" />
-                                            </div>
-                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Send VCN</span>
-                                        </button>
-
-                                        <button
-                                            onClick={() => { props.setInput("Show me the current crypto market prices"); props.handleSend(); }}
-                                            class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
-                                        >
-                                            <div class="w-6 h-6 text-red-400 group-hover:scale-110 transition-transform">
-                                                <TrendingUp class="w-full h-full" />
-                                            </div>
-                                            <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">Check Crypto Prices</span>
-                                        </button>
+                                                return (
+                                                    <button
+                                                        onClick={handleClick}
+                                                        class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
+                                                    >
+                                                        <div class={`w-6 h-6 ${action.iconColor} group-hover:scale-110 transition-transform`}>
+                                                            <IconComponent class="w-full h-full" />
+                                                        </div>
+                                                        <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">{action.label}</span>
+                                                    </button>
+                                                );
+                                            }}
+                                        </For>
                                     </div>
                                 </Motion.div>
                             </Show>

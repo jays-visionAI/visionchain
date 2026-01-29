@@ -9,6 +9,7 @@ import {
     Key,
     Coins,
     Activity,
+    Sparkles,
 } from 'lucide-solid';
 import {
     getChatbotSettings,
@@ -35,6 +36,7 @@ import { UsageStatsTab } from './tabs/UsageStatsTab';
 import { EcosystemTab } from './tabs/EcosystemTab';
 import { SimulatorTab } from './tabs/SimulatorTab';
 import { PromptsTab } from './tabs/PromptsTab';
+import { QuickActionsTab } from './tabs/QuickActionsTab';
 
 // Tabs configuration
 const tabs = [
@@ -44,6 +46,7 @@ const tabs = [
     { id: 'models', label: 'Model Settings', icon: Settings2 },
     { id: 'stats', label: 'Usage Stats', icon: BarChart3 },
     { id: 'prompts', label: 'Prompt Tuning', icon: Wand2 },
+    { id: 'quickactions', label: 'Quick Actions', icon: Sparkles },
     { id: 'eco', label: 'Ecosystem', icon: Coins },
     { id: 'simulator', label: 'Simulator', icon: Activity },
 ];
@@ -296,6 +299,10 @@ export default function AdminAIManagement() {
                         isSaving={isSaving}
                         saveSuccess={saveSuccess}
                     />
+                </Show>
+
+                <Show when={activeTab() === 'quickactions'}>
+                    <QuickActionsTab />
                 </Show>
             </div>
         </div>
