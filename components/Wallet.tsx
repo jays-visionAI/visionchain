@@ -910,27 +910,34 @@ const Wallet = (): JSX.Element => {
                         try {
                             setLoadingMessage('AGENT: SYNCING BALANCE...');
 
-                            // Auto-Seed Logic for Demo
+                            // Auto-Seed Logic for Demo/Testnet
+                            // TODO: In production, restore purchasedVcn() check:
+                            //       if (parseFloat(onChainBal) < (numericAmount + gasBuffer) && purchasedVcn() >= numericAmount)
+                            // TEMPORARY: Allow airdrop without VCN purchase check for testing
                             try {
                                 const onChainBal = await contractService.getNativeBalance(address);
                                 const numericAmount = parseFloat(amount.replace(/,/g, ''));
-                                const gasBuffer = 5;
+                                const gasBuffer = 10; // Increased buffer for safety
 
-                                if (parseFloat(onChainBal) < (numericAmount + gasBuffer) && purchasedVcn() >= numericAmount) {
+                                // TEMPORARY: Always seed if balance is insufficient (for testnet demo only)
+                                if (parseFloat(onChainBal) < (numericAmount + gasBuffer)) {
                                     setLoadingMessage('AGENT: AIRDROPPING VCN...');
                                     console.log("[Legacy] Auto-seeding wallet from admin...");
+                                    console.log("[Legacy] Current balance:", onChainBal, "Required:", numericAmount + gasBuffer);
                                     const seedAmount = numericAmount + gasBuffer;
                                     const seedReceipt = await contractService.adminSendVCN(address, seedAmount.toString());
                                     console.log("[Legacy] Airdrop confirmed. Hash:", seedReceipt.hash);
 
                                     setLoadingMessage('AGENT: FINALIZING SYNC...');
-                                    await new Promise(r => setTimeout(r, 3000));
+                                    await new Promise(r => setTimeout(r, 4000)); // Increased wait time
 
                                     const newBal = await contractService.getNativeBalance(address);
                                     console.log("[Legacy] Verified post-airdrop balance:", newBal);
                                 }
                             } catch (seedErr) {
-                                console.warn("[Legacy] Auto-seed failed, proceeding anyway...", seedErr);
+                                console.error("[Legacy] Auto-seed failed:", seedErr);
+                                // Don't proceed if seed failed - throw to show error
+                                throw new Error("Auto-seed failed. Please try again.");
                             }
 
                             setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
@@ -947,13 +954,10 @@ const Wallet = (): JSX.Element => {
                                 || legacyErr.message?.includes('insufficient funds')
                                 || legacyErr.message?.includes('-32000');
 
-                            const errorMsg = lastLocale() === 'ko'
-                                ? isInsufficientFunds
-                                    ? '잔액이 부족합니다. 전송 금액과 가스비가 필요합니다.'
-                                    : `예약 전송 실패: ${legacyErr.shortMessage || legacyErr.message || '알 수 없는 오류'}`
-                                : isInsufficientFunds
-                                    ? 'Insufficient balance. You need the transfer amount plus gas fees.'
-                                    : `Time-lock scheduling failed: ${legacyErr.shortMessage || legacyErr.message || 'Unknown error'}`;
+                            // All system messages in English only
+                            const errorMsg = isInsufficientFunds
+                                ? 'Insufficient balance. You need the transfer amount plus gas fees (~10 VCN).'
+                                : `Time-lock scheduling failed: ${legacyErr.shortMessage || legacyErr.message || 'Unknown error'}`;
 
                             alert(errorMsg);
                             throw legacyErr;
@@ -999,13 +1003,10 @@ const Wallet = (): JSX.Element => {
                                 || fallbackError.message?.includes('insufficient funds')
                                 || fallbackError.message?.includes('-32000');
 
-                            const errorMsg = lastLocale() === 'ko'
-                                ? isInsufficientFunds
-                                    ? '잔액이 부족합니다. 전송 금액과 가스비가 필요합니다.'
-                                    : `전송 실패: ${fallbackError.shortMessage || fallbackError.reason || '알 수 없는 오류'}`
-                                : isInsufficientFunds
-                                    ? 'Insufficient balance. You need the transfer amount plus gas fees.'
-                                    : `Transfer failed: ${fallbackError.shortMessage || fallbackError.reason || 'Unknown error'}`;
+                            // All system messages in English only
+                            const errorMsg = isInsufficientFunds
+                                ? 'Insufficient balance. You need the transfer amount plus gas fees.'
+                                : `Transfer failed: ${fallbackError.shortMessage || fallbackError.reason || 'Unknown error'}`;
 
                             alert(errorMsg);
                             throw fallbackError; // Stop flow
