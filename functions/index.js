@@ -18,6 +18,24 @@ const TIMELOCK_ABI = [
   "event TransferScheduled(uint256 indexed scheduleId, address indexed creator, address indexed to, uint256 amount, uint256 unlockTime)",
 ];
 
+// --- BridgeStaking Contract Config ---
+const BRIDGE_STAKING_ADDRESS = "0x21915b79E1d334499272521a3508061354D13FF0";
+const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+const BRIDGE_STAKING_ABI = [
+  "function addSubsidy(uint256 amount, uint256 duration) external",
+  "function withdrawSubsidy() external",
+  // eslint-disable-next-line max-len
+  "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
+  "function owner() external view returns (address)",
+];
+
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function balanceOf(address account) external view returns (uint256)",
+];
+
 // --- Paymaster TimeLock (Gasless Scheduled Transfers) ---
 exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   if (req.method !== "POST") {
@@ -97,6 +115,90 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
     });
   } catch (err) {
     console.error("[Paymaster] TimeLock Error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// --- Admin Add Subsidy (Server-Side, No MetaMask) ---
+exports.adminAddSubsidy = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { amount, durationDays, adminSecret } = req.body;
+
+    // Basic validation
+    if (!amount || !durationDays) {
+      return res.status(400).json({ error: "Missing required fields: amount, durationDays" });
+    }
+
+    // Admin secret check (simple security - can enhance with Firebase Auth later)
+    const expectedSecret = process.env.ADMIN_SECRET || "vision-admin-2026";
+    if (adminSecret !== expectedSecret) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    console.log(`[Admin] Adding subsidy: ${amount} VCN for ${durationDays} days`);
+
+    // Setup Blockchain Connection with Admin Wallet
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+    const vcnToken = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, adminWallet);
+    const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+
+    const amountWei = ethers.parseEther(amount.toString());
+    const durationSeconds = BigInt(durationDays) * 24n * 60n * 60n;
+
+    // Check admin VCN balance
+    const balance = await vcnToken.balanceOf(adminWallet.address);
+    console.log(`[Admin] Wallet balance: ${ethers.formatEther(balance)} VCN`);
+
+    if (balance < amountWei) {
+      return res.status(400).json({
+        error: `Insufficient VCN balance. Have: ${ethers.formatEther(balance)}, Need: ${amount}`,
+      });
+    }
+
+    // Check and approve if needed
+    const currentAllowance = await vcnToken.allowance(adminWallet.address, BRIDGE_STAKING_ADDRESS);
+    console.log(`[Admin] Current allowance: ${ethers.formatEther(currentAllowance)} VCN`);
+
+    if (currentAllowance < amountWei) {
+      console.log(`[Admin] Approving ${amount} VCN...`);
+      const approveTx = await vcnToken.approve(BRIDGE_STAKING_ADDRESS, amountWei);
+      await approveTx.wait();
+      console.log(`[Admin] Approval confirmed: ${approveTx.hash}`);
+    }
+
+    // Add subsidy
+    console.log(`[Admin] Calling addSubsidy(${amountWei}, ${durationSeconds})...`);
+    const tx = await staking.addSubsidy(amountWei, durationSeconds);
+    console.log(`[Admin] TX sent: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    console.log(`[Admin] TX confirmed in block ${receipt.blockNumber}`);
+
+    // Log to Firestore
+    await db.collection("admin_subsidy_logs").add({
+      amount: amount.toString(),
+      durationDays: durationDays,
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+      createdAt: admin.firestore.Timestamp.now(),
+      adminAddress: adminWallet.address,
+    });
+
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+      amount: amount,
+      durationDays: durationDays,
+    });
+  } catch (err) {
+    console.error("[Admin] Add Subsidy Error:", err);
     return res.status(500).json({ error: err.message || "Internal server error" });
   }
 });

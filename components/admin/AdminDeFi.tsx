@@ -155,8 +155,20 @@ export default function AdminDeFi() {
             setSubsidyEndTime(Number(rewardInfo[3]) * 1000);
             setTotalRewardsPaid(ethers.formatEther(rewardInfo[4]));
 
-            // Check if current user is admin
-            if (walletAddress() && owner.toLowerCase() === walletAddress().toLowerCase()) {
+            // Admin whitelist - these addresses can manage subsidies
+            const ADMIN_ADDRESSES = [
+                '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266', // Contract Owner (Hardhat #0)
+                '0x6605acc98e5f9de16d82885ad84a25d95c94f794', // SangJae Wallet
+                '0xaff852ee7df3c036719e7b5461840aa2c66ac0ae', // SangJae Wallet 2
+            ];
+
+            // Check if current user is admin (owner or whitelisted)
+            const isOwner = walletAddress() && owner.toLowerCase() === walletAddress().toLowerCase();
+            const isWhitelisted = walletAddress() && ADMIN_ADDRESSES.some(
+                addr => addr.toLowerCase() === walletAddress().toLowerCase()
+            );
+
+            if (isOwner || isWhitelisted) {
                 setIsAdmin(true);
                 // Get admin VCN balance
                 const balance = await vcn.balanceOf(walletAddress());
@@ -237,7 +249,7 @@ export default function AdminDeFi() {
         }
     };
 
-    // Handle Add Subsidy (Foundation Funding)
+    // Handle Add Subsidy (Server-Side API - No MetaMask needed)
     const handleAddSubsidy = async () => {
         const amount = parseFloat(subsidyAmount());
         if (!amount || amount <= 0) {
@@ -247,30 +259,28 @@ export default function AdminDeFi() {
 
         setIsAddingSubsidy(true);
         try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
-            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_ABI, signer);
-            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
+            // Call server-side API instead of MetaMask
+            const response = await fetch('https://us-central1-visionchain-d19ed.cloudfunctions.net/adminAddSubsidy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: subsidyAmount(),
+                    durationDays: subsidyDuration(),
+                    adminSecret: 'vision-admin-2026'
+                })
+            });
 
-            const amountWei = ethers.parseEther(subsidyAmount());
-            const durationSeconds = subsidyDuration() * 24 * 60 * 60; // days to seconds
+            const result = await response.json();
 
-            // Check allowance and approve if needed
-            const allowance = await vcn.allowance(walletAddress(), BRIDGE_STAKING_ADDRESS);
-            if (allowance < amountWei) {
-                const approveTx = await vcn.approve(BRIDGE_STAKING_ADDRESS, amountWei);
-                await approveTx.wait();
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to add subsidy');
             }
 
-            // Add subsidy
-            const tx = await staking.addSubsidy(amountWei, durationSeconds);
-            await tx.wait();
-
-            alert(`Successfully added ${amount.toLocaleString()} VCN subsidy for ${subsidyDuration()} days!`);
+            alert(`Successfully added ${amount.toLocaleString()} VCN subsidy for ${subsidyDuration()} days!\n\nTX: ${result.txHash}`);
             setSubsidyAmount('');
             await fetchBridgeData();
         } catch (err: any) {
-            alert(err.reason || err.message || 'Failed to add subsidy');
+            alert(err.message || 'Failed to add subsidy');
         } finally {
             setIsAddingSubsidy(false);
         }
@@ -708,67 +718,56 @@ export default function AdminDeFi() {
                                 </div>
                             </div>
 
-                            <Show when={isAdmin()} fallback={
-                                <div class="p-4 bg-white/5 border border-white/10 rounded-xl text-center">
-                                    <p class="text-gray-500 text-xs">Admin wallet required to add subsidy</p>
-                                    <button
-                                        onClick={connectWallet}
-                                        class="mt-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-bold rounded-lg"
-                                    >
-                                        Connect Admin Wallet
-                                    </button>
+                            {/* Subsidy Form - No wallet needed (uses server API) */}
+                            <div class="space-y-4">
+                                <div class="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center">
+                                    <p class="text-[10px] text-green-400 font-bold uppercase tracking-widest">Server-Side Execution</p>
+                                    <p class="text-[9px] text-gray-500">No MetaMask required - managed by backend</p>
                                 </div>
-                            }>
-                                <div class="space-y-4">
-                                    <div class="p-3 bg-white/5 rounded-lg flex justify-between items-center">
-                                        <span class="text-[10px] text-gray-500">Your VCN Balance</span>
-                                        <span class="text-sm font-bold text-white">{Number(adminVcnBalance()).toLocaleString()} VCN</span>
+                                <div>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Subsidy Amount (VCN)</label>
+                                    <input
+                                        type="number"
+                                        value={subsidyAmount()}
+                                        onInput={(e) => setSubsidyAmount(e.currentTarget.value)}
+                                        placeholder="100000"
+                                        class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-green-500/50"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Distribution Period (Days)</label>
+                                    <div class="flex gap-2">
+                                        {[7, 14, 30, 60, 90].map((days) => (
+                                            <button
+                                                onClick={() => setSubsidyDuration(days)}
+                                                class={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subsidyDuration() === days
+                                                    ? 'bg-green-500 text-black'
+                                                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                                                    }`}
+                                            >
+                                                {days}d
+                                            </button>
+                                        ))}
                                     </div>
-                                    <div>
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Subsidy Amount (VCN)</label>
-                                        <input
-                                            type="number"
-                                            value={subsidyAmount()}
-                                            onInput={(e) => setSubsidyAmount(e.currentTarget.value)}
-                                            placeholder="100000"
-                                            class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-green-500/50"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Distribution Period (Days)</label>
-                                        <div class="flex gap-2">
-                                            {[7, 14, 30, 60, 90].map((days) => (
-                                                <button
-                                                    onClick={() => setSubsidyDuration(days)}
-                                                    class={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subsidyDuration() === days
-                                                        ? 'bg-green-500 text-black'
-                                                        : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                                                        }`}
-                                                >
-                                                    {days}d
-                                                </button>
-                                            ))}
+                                </div>
+                                <Show when={subsidyAmount()}>
+                                    <div class="p-3 bg-green-500/5 border border-green-500/10 rounded-lg">
+                                        <div class="text-[10px] text-gray-500 mb-1">Estimated APY (if 100K VCN staked)</div>
+                                        <div class="text-lg font-black text-green-400">
+                                            {((parseFloat(subsidyAmount() || '0') / 100000) * (365 / subsidyDuration()) * 100).toFixed(1)}%
                                         </div>
                                     </div>
-                                    <Show when={subsidyAmount()}>
-                                        <div class="p-3 bg-green-500/5 border border-green-500/10 rounded-lg">
-                                            <div class="text-[10px] text-gray-500 mb-1">Estimated APY (if 100K VCN staked)</div>
-                                            <div class="text-lg font-black text-green-400">
-                                                {((parseFloat(subsidyAmount() || '0') / 100000) * (365 / subsidyDuration()) * 100).toFixed(1)}%
-                                            </div>
-                                        </div>
+                                </Show>
+                                <button
+                                    onClick={handleAddSubsidy}
+                                    disabled={isAddingSubsidy() || !subsidyAmount()}
+                                    class="w-full py-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                                >
+                                    <Show when={isAddingSubsidy()} fallback={<><DollarSign class="w-4 h-4" /> Add Subsidy</>}>
+                                        <RefreshCw class="w-4 h-4 animate-spin" /> Adding...
                                     </Show>
-                                    <button
-                                        onClick={handleAddSubsidy}
-                                        disabled={isAddingSubsidy() || !subsidyAmount()}
-                                        class="w-full py-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2"
-                                    >
-                                        <Show when={isAddingSubsidy()} fallback={<><DollarSign class="w-4 h-4" /> Add Subsidy</>}>
-                                            <RefreshCw class="w-4 h-4 animate-spin" /> Adding...
-                                        </Show>
-                                    </button>
-                                </div>
-                            </Show>
+                                </button>
+                            </div>
                         </div>
 
                         {/* Slash Validator */}
