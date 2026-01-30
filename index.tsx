@@ -12,6 +12,7 @@ import HomePage from './pages/HomePage';
 import * as Public from './pages/PublicPages';
 import * as Admin from './pages/AdminPages';
 import * as Auth from './pages/AuthPages';
+import ValidatorStaking from './components/ValidatorStaking';
 
 // Loading spinner component
 function PageLoader() {
@@ -79,6 +80,7 @@ render(() => (
       <Route path="/visionscan" component={Public.VisionScanPage} />
       <Route path="/testnet" component={Public.TestnetPage} />
       <Route path="/bridge" component={Public.BridgePage} />
+      <Route path="/staking" component={ValidatorStaking} />
       <Route path="/paymaster" component={Public.PaymasterPage} />
 
       {/* Admin Routes */}
