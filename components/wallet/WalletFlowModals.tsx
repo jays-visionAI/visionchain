@@ -290,94 +290,192 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                             </Match>
 
                                             <Match when={props.flowStep() === 3}>
-                                                <div class="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
-                                                    <div class="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/30 mb-4">
-                                                        <Show when={props.isSchedulingTimeLock()} fallback={<Clock class="w-8 h-8 text-white" />}>
-                                                            <Clock class="w-8 h-8 text-white" />
-                                                        </Show>
-                                                    </div>
-                                                    <h4 class="text-xl font-bold text-white mb-1">
-                                                        {props.isSchedulingTimeLock() ? 'Agent Scheduled!' : 'Transaction Pending'}
-                                                    </h4>
-                                                    <p class="text-xs text-gray-500 mb-4">Challenge period in progress for security</p>
-                                                    <div class="mb-4 text-2xl font-black text-blue-400">
-                                                        {props.sendAmount()} {props.selectedToken()}
-                                                    </div>
+                                                {/* Differentiate: Time Lock vs Standard Transfer Success */}
+                                                <Show when={props.isSchedulingTimeLock()} fallback={
+                                                    /* Standard Transfer - Immediate Success */
+                                                    <div class="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+                                                        <div class="w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/30 mb-4">
+                                                            <Check class="w-8 h-8 text-white" />
+                                                        </div>
+                                                        <h4 class="text-xl font-bold text-white mb-1">Transfer Complete</h4>
+                                                        <p class="text-xs text-gray-500 mb-4">Your tokens have been successfully transferred</p>
+                                                        <div class="mb-4 text-2xl font-black text-emerald-400">
+                                                            {props.sendAmount()} {props.selectedToken()}
+                                                        </div>
 
-                                                    {/* Challenge Period Status */}
-                                                    <div class="w-full bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4">
-                                                        <div class="flex items-center justify-between mb-2">
+                                                        {/* Success Status Card */}
+                                                        <div class="w-full bg-gradient-to-br from-emerald-500/10 to-green-500/10 border border-emerald-500/30 rounded-2xl p-4 mb-4">
                                                             <div class="flex items-center gap-2">
-                                                                <div class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-                                                                <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Challenge Period</span>
+                                                                <div class="w-2 h-2 bg-emerald-400 rounded-full" />
+                                                                <span class="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Confirmed</span>
                                                             </div>
-                                                            <span class="text-sm font-black text-white tabular-nums">15:00</span>
                                                         </div>
-                                                        <div class="h-1.5 bg-black/30 rounded-full overflow-hidden">
-                                                            <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full" style="width: 0%" />
-                                                        </div>
-                                                    </div>
 
-                                                    <div class="mb-4 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
-                                                        <div class="px-4 py-3 space-y-2">
-                                                            <div class="flex items-center justify-between text-xs">
-                                                                <span class="text-gray-500 font-bold uppercase tracking-wider">Status</span>
-                                                                <span class="text-amber-400 font-bold flex items-center gap-1.5">
-                                                                    <span class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                                                                    Pending Finalization
-                                                                </span>
-                                                            </div>
-                                                            <div class="flex items-center justify-between text-xs">
-                                                                <span class="text-gray-500 font-bold uppercase tracking-wider">From</span>
-                                                                <span class="text-blue-400 font-mono tracking-tight">{props.walletAddress().slice(0, 6)}...{props.walletAddress().slice(-6)}</span>
-                                                            </div>
-                                                            <div class="flex items-center justify-between text-xs">
-                                                                <span class="text-gray-500 font-bold uppercase tracking-wider">To</span>
-                                                                <span class="text-blue-400 font-mono tracking-tight">{props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-6)}</span>
-                                                            </div>
-
-                                                            <div class="h-px bg-white/5 w-full my-1"></div>
-
-                                                            <div class="space-y-1.5 text-left">
-                                                                <div class="flex items-center justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                                                    <div class="flex items-center gap-2">
-                                                                        <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                                                                        Transaction ID
-                                                                    </div>
-                                                                    <button
-                                                                        onClick={async () => {
-                                                                            const success = await props.copyToClipboard(props.lastTxHash());
-                                                                            if (success) {
-                                                                                setCopied(true);
-                                                                                setTimeout(() => setCopied(false), 2000);
-                                                                            }
-                                                                        }}
-                                                                        class="hover:text-white text-gray-500 transition-colors flex items-center gap-1.5 group cursor-pointer"
-                                                                    >
-                                                                        {copied() ? 'Copied!' : 'Copy'}
-                                                                        <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
-                                                                    </button>
+                                                        <div class="mb-4 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
+                                                            <div class="px-4 py-3 space-y-2">
+                                                                <div class="flex items-center justify-between text-xs">
+                                                                    <span class="text-gray-500 font-bold uppercase tracking-wider">Status</span>
+                                                                    <span class="text-emerald-400 font-bold flex items-center gap-1.5">
+                                                                        <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                                                                        Completed
+                                                                    </span>
                                                                 </div>
-                                                                <div class="text-[11px] font-mono text-gray-400 break-all leading-relaxed select-all hover:text-white transition-colors">{props.lastTxHash()}</div>
+                                                                <div class="flex items-center justify-between text-xs">
+                                                                    <span class="text-gray-500 font-bold uppercase tracking-wider">From</span>
+                                                                    <span class="text-blue-400 font-mono tracking-tight">{props.walletAddress().slice(0, 6)}...{props.walletAddress().slice(-6)}</span>
+                                                                </div>
+                                                                <div class="flex items-center justify-between text-xs">
+                                                                    <span class="text-gray-500 font-bold uppercase tracking-wider">To</span>
+                                                                    <span class="text-blue-400 font-mono tracking-tight">{props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-6)}</span>
+                                                                </div>
+
+                                                                <div class="h-px bg-white/5 w-full my-1"></div>
+
+                                                                <div class="space-y-1.5 text-left">
+                                                                    <div class="flex items-center justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                                                            Transaction Hash
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                const success = await props.copyToClipboard(props.lastTxHash());
+                                                                                if (success) {
+                                                                                    setCopied(true);
+                                                                                    setTimeout(() => setCopied(false), 2000);
+                                                                                }
+                                                                            }}
+                                                                            class="hover:text-white text-gray-500 transition-colors flex items-center gap-1.5 group cursor-pointer"
+                                                                        >
+                                                                            {copied() ? 'Copied!' : 'Copy'}
+                                                                            <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div class="text-[11px] font-mono text-gray-400 break-all leading-relaxed select-all hover:text-white transition-colors">{props.lastTxHash()}</div>
+                                                                </div>
                                                             </div>
                                                         </div>
+                                                        <div class="w-full space-y-3">
+                                                            <a
+                                                                href={`/visionscan?tx=${props.lastTxHash()}`}
+                                                                target="_blank"
+                                                                class="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none text-sm"
+                                                            >
+                                                                Track on VisionScan
+                                                            </a>
+                                                            <button
+                                                                onClick={props.resetFlow}
+                                                                class="w-full py-3 bg-white text-black font-black rounded-2xl transition-all hover:bg-white/90 text-sm uppercase tracking-widest"
+                                                            >
+                                                                Done
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <div class="w-full space-y-3">
-                                                        <a
-                                                            href={`/visionscan?tx=${props.lastTxHash()}`}
-                                                            target="_blank"
-                                                            class="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none text-sm"
-                                                        >
-                                                            Track on VisionScan
-                                                        </a>
-                                                        <button
-                                                            onClick={props.resetFlow}
-                                                            class="w-full py-3 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90 text-sm"
-                                                        >
-                                                            Done
-                                                        </button>
+                                                }>
+                                                    {/* Time Lock Transfer - Pending UI */}
+                                                    <div class="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+                                                        <div class="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/30 mb-4">
+                                                            <Clock class="w-8 h-8 text-white" />
+                                                        </div>
+                                                        <h4 class="text-xl font-bold text-white mb-1">Time Lock Scheduled</h4>
+                                                        <p class="text-xs text-gray-500 mb-4">Your scheduled transfer is in the challenge period</p>
+                                                        <div class="mb-4 text-2xl font-black text-amber-400">
+                                                            {props.sendAmount()} {props.selectedToken()}
+                                                        </div>
+
+                                                        {/* Challenge Period Status */}
+                                                        <div class="w-full bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4">
+                                                            <div class="flex items-center justify-between mb-2">
+                                                                <div class="flex items-center gap-2">
+                                                                    <div class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                                                                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Challenge Period</span>
+                                                                </div>
+                                                                <span class="text-sm font-black text-white tabular-nums">15:00</span>
+                                                            </div>
+                                                            <div class="h-1.5 bg-black/30 rounded-full overflow-hidden">
+                                                                <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full" style="width: 0%" />
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="mb-4 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
+                                                            <div class="px-4 py-3 space-y-2">
+                                                                <div class="flex items-center justify-between text-xs">
+                                                                    <span class="text-gray-500 font-bold uppercase tracking-wider">Status</span>
+                                                                    <span class="text-amber-400 font-bold flex items-center gap-1.5">
+                                                                        <span class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                                                                        Pending Finalization
+                                                                    </span>
+                                                                </div>
+                                                                <div class="flex items-center justify-between text-xs">
+                                                                    <span class="text-gray-500 font-bold uppercase tracking-wider">From</span>
+                                                                    <span class="text-blue-400 font-mono tracking-tight">{props.walletAddress().slice(0, 6)}...{props.walletAddress().slice(-6)}</span>
+                                                                </div>
+                                                                <div class="flex items-center justify-between text-xs">
+                                                                    <span class="text-gray-500 font-bold uppercase tracking-wider">To</span>
+                                                                    <span class="text-blue-400 font-mono tracking-tight">{props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-6)}</span>
+                                                                </div>
+
+                                                                <div class="h-px bg-white/5 w-full my-1"></div>
+
+                                                                <div class="space-y-1.5 text-left">
+                                                                    <div class="flex items-center justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                                                            Transaction ID
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                const success = await props.copyToClipboard(props.lastTxHash());
+                                                                                if (success) {
+                                                                                    setCopied(true);
+                                                                                    setTimeout(() => setCopied(false), 2000);
+                                                                                }
+                                                                            }}
+                                                                            class="hover:text-white text-gray-500 transition-colors flex items-center gap-1.5 group cursor-pointer"
+                                                                        >
+                                                                            {copied() ? 'Copied!' : 'Copy'}
+                                                                            <Copy class="w-3 h-3 group-hover:scale-110 transition-transform" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div class="text-[11px] font-mono text-gray-400 break-all leading-relaxed select-all hover:text-white transition-colors">{props.lastTxHash()}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Info Box */}
+                                                        <div class="w-full bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 mb-4 text-left">
+                                                            <div class="flex items-start gap-2">
+                                                                <div class="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                                                                    <svg class="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                                    </svg>
+                                                                </div>
+                                                                <div>
+                                                                    <div class="text-[10px] font-bold text-white mb-0.5">Time Lock Agent Active</div>
+                                                                    <p class="text-[9px] text-gray-500 leading-relaxed">
+                                                                        Your scheduled transfer is managed by the Time Lock Agent. Track status in the Agent Desk.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="w-full space-y-3">
+                                                            <a
+                                                                href={`/visionscan?tx=${props.lastTxHash()}`}
+                                                                target="_blank"
+                                                                class="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none text-sm"
+                                                            >
+                                                                Track on VisionScan
+                                                            </a>
+                                                            <button
+                                                                onClick={props.resetFlow}
+                                                                class="w-full py-3 bg-white text-black font-black rounded-2xl transition-all hover:bg-white/90 text-sm uppercase tracking-widest"
+                                                            >
+                                                                Done
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                </Show>
                                             </Match>
                                         </Switch>
                                     </div>
