@@ -336,38 +336,114 @@ export default function AdminReferrals() {
                         <div class="space-y-8">
                             {/* General Tab */}
                             <Show when={configTab() === 'general'}>
-                                <div class="grid grid-cols-2 gap-8">
-                                    <div class="space-y-3">
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 1 Rate (Direct)</label>
-                                        <input
-                                            type="number" step="0.01" value={newTier1()}
-                                            onInput={(e) => setNewTier1(parseFloat(e.currentTarget.value))}
-                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-white outline-none focus:border-cyan-500/50 transition-all font-mono"
-                                        />
+                                <div class="space-y-8">
+                                    {/* Category 1: Token Consumption */}
+                                    <div class="space-y-4">
+                                        <div class="flex items-center gap-3 mb-4">
+                                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                                                <DollarSign class="w-4 h-4 text-cyan-400" />
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-black text-white uppercase tracking-wide">Token Consumption</h4>
+                                                <p class="text-[10px] text-gray-500">Rewards from Token Sale purchases</p>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-6 p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                                            <div class="space-y-2">
+                                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 1 Rate (Direct Referral)</label>
+                                                <div class="relative">
+                                                    <input
+                                                        type="number" step="1" min="0" max="100"
+                                                        value={Math.round(newTier1() * 100)}
+                                                        onInput={(e) => setNewTier1(parseFloat(e.currentTarget.value) / 100)}
+                                                        class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pr-12 text-2xl font-black text-cyan-400 outline-none focus:border-cyan-500/50 transition-all font-mono"
+                                                    />
+                                                    <span class="absolute right-5 top-1/2 -translate-y-1/2 text-xl font-black text-gray-500">%</span>
+                                                </div>
+                                                <p class="text-[9px] text-gray-600 px-1">Reward % on direct referral's token purchases</p>
+                                            </div>
+                                            <div class="space-y-2">
+                                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 2 Rate (Indirect Referral)</label>
+                                                <div class="relative">
+                                                    <input
+                                                        type="number" step="1" min="0" max="100"
+                                                        value={Math.round(newTier2() * 100)}
+                                                        onInput={(e) => setNewTier2(parseFloat(e.currentTarget.value) / 100)}
+                                                        class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pr-12 text-2xl font-black text-blue-400 outline-none focus:border-blue-500/50 transition-all font-mono"
+                                                    />
+                                                    <span class="absolute right-5 top-1/2 -translate-y-1/2 text-xl font-black text-gray-500">%</span>
+                                                </div>
+                                                <div class="flex items-center gap-2 px-1">
+                                                    <span class="text-[9px] text-gray-600">Effective Rate:</span>
+                                                    <span class="text-[10px] font-black text-green-400">{(newTier1() * newTier2() * 100).toFixed(2)}%</span>
+                                                    <span class="text-[8px] text-gray-700">(T1 {Math.round(newTier1() * 100)}% × T2 {Math.round(newTier2() * 100)}%)</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="space-y-3">
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Tier 2 Rate (Indirect)</label>
-                                        <input
-                                            type="number" step="0.01" value={newTier2()}
-                                            onInput={(e) => setNewTier2(parseFloat(e.currentTarget.value))}
-                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-blue-400 outline-none focus:border-blue-500/50 transition-all font-mono"
-                                        />
+
+                                    {/* Category 2: De-Fi */}
+                                    <div class="space-y-4">
+                                        <div class="flex items-center gap-3 mb-4">
+                                            <div class="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                                                <TrendingUp class="w-4 h-4 text-purple-400" />
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-black text-white uppercase tracking-wide">De-Fi Rewards</h4>
+                                                <p class="text-[10px] text-gray-500">Rewards from Staking & Liquid Staking yields</p>
+                                            </div>
+                                        </div>
+                                        <div class="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                                            <div class="flex items-center justify-between p-3 bg-purple-500/5 border border-purple-500/10 rounded-xl">
+                                                <div>
+                                                    <p class="text-xs font-bold text-white">Same rates apply to De-Fi yields</p>
+                                                    <p class="text-[9px] text-gray-500 mt-1">If referral earns 20% staking yield → You get {Math.round(newTier1() * 100)}% of that = {(20 * newTier1()).toFixed(1)}%</p>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-lg font-black text-purple-400">{Math.round(newTier1() * 100)}%</div>
+                                                    <div class="text-[9px] text-gray-600">of yield earnings</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="space-y-3">
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Base XP Multiplier</label>
-                                        <input
-                                            type="number" step="0.1" value={newBaseXp()}
-                                            onInput={(e) => setNewBaseXp(parseFloat(e.currentTarget.value))}
-                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-white outline-none focus:border-cyan-500/50 transition-all font-mono"
-                                        />
-                                    </div>
-                                    <div class="space-y-3">
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Bonus per Level (e.g. 0.05x)</label>
-                                        <input
-                                            type="number" step="0.01" value={newXpPerLevel()}
-                                            onInput={(e) => setNewXpPerLevel(parseFloat(e.currentTarget.value))}
-                                            class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-2xl font-black text-green-400 outline-none focus:border-green-500/50 transition-all font-mono"
-                                        />
+
+                                    {/* XP Multipliers */}
+                                    <div class="space-y-4">
+                                        <div class="flex items-center gap-3 mb-4">
+                                            <div class="w-8 h-8 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                                                <Trophy class="w-4 h-4 text-green-400" />
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-black text-white uppercase tracking-wide">XP Multipliers</h4>
+                                                <p class="text-[10px] text-gray-500">Level-based reward scaling</p>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-6 p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                                            <div class="space-y-2">
+                                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Base XP Multiplier</label>
+                                                <div class="relative">
+                                                    <input
+                                                        type="number" step="0.1" value={newBaseXp()}
+                                                        onInput={(e) => setNewBaseXp(parseFloat(e.currentTarget.value))}
+                                                        class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pr-12 text-2xl font-black text-white outline-none focus:border-cyan-500/50 transition-all font-mono"
+                                                    />
+                                                    <span class="absolute right-5 top-1/2 -translate-y-1/2 text-xl font-black text-gray-500">x</span>
+                                                </div>
+                                                <p class="text-[9px] text-gray-600 px-1">Starting multiplier at Level 1</p>
+                                            </div>
+                                            <div class="space-y-2">
+                                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-1">Bonus per Level</label>
+                                                <div class="relative">
+                                                    <input
+                                                        type="number" step="0.01" value={newXpPerLevel()}
+                                                        onInput={(e) => setNewXpPerLevel(parseFloat(e.currentTarget.value))}
+                                                        class="w-full bg-white/5 border border-white/10 rounded-2xl p-5 pr-12 text-2xl font-black text-green-400 outline-none focus:border-green-500/50 transition-all font-mono"
+                                                    />
+                                                    <span class="absolute right-5 top-1/2 -translate-y-1/2 text-xl font-black text-gray-500">x</span>
+                                                </div>
+                                                <p class="text-[9px] text-gray-600 px-1">Level 10 → {(newBaseXp() + 9 * newXpPerLevel()).toFixed(2)}x multiplier</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </Show>

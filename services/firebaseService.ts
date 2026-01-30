@@ -2081,7 +2081,21 @@ export const getActiveGlobalApiKey = async (provider: string = 'gemini'): Promis
         return null;
     } catch (error) {
         console.error(`[Firebase] Error fetching active global key for ${provider}:`, error);
-        // If it's a permission error, we might want to return null instead of throwing
+
+        // Environment variable fallback when Firebase permissions fail
+        const envKeyMap: Record<string, string | undefined> = {
+            'deepseek': import.meta.env.VITE_DEEPSEEK_API_KEY,
+            'gemini': import.meta.env.VITE_GEMINI_API_KEY,
+            'openai': import.meta.env.VITE_OPENAI_API_KEY,
+            'anthropic': import.meta.env.VITE_ANTHROPIC_API_KEY
+        };
+
+        const envKey = envKeyMap[provider];
+        if (envKey) {
+            console.log(`[Firebase] Using environment variable fallback for ${provider}`);
+            return envKey;
+        }
+
         return null;
     }
 };
@@ -2193,10 +2207,10 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
         // Fallback robustly
         return {
             knowledgeBase: '',
-            intentBot: { systemPrompt: '', model: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
-            helpdeskBot: { systemPrompt: '', model: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
+            intentBot: { systemPrompt: '', model: 'deepseek-chat', temperature: 0.7, maxTokens: 2048 },
+            helpdeskBot: { systemPrompt: '', model: 'deepseek-chat', temperature: 0.7, maxTokens: 2048 },
             imageSettings: { model: 'imagen-3.0-generate-001', quality: 'standard', size: '1024x1024' },
-            voiceSettings: { model: 'gemini-2.0-flash-exp', ttsVoice: 'Kore', sttModel: 'gemini-2.0-flash-exp' }
+            voiceSettings: { model: 'deepseek-chat', ttsVoice: 'Kore', sttModel: 'deepseek-chat' }
         };
     }
 };

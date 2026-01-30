@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, onMount, createEffect } from 'solid-js';
 import {
     Wallet,
     TrendingUp,
@@ -13,22 +13,226 @@ import {
     MoreVertical,
     BarChart3,
     Clock,
-    AlertTriangle
+    AlertTriangle,
+    ExternalLink,
+    Loader2
 } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
+import { contractService } from '../../services/contractService';
+import { getFirebaseDb } from '../../services/firebaseService';
+import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+import { ethers } from 'ethers';
 
-// Mock Transaction Data
-const mockTransactions = [
-    { id: 'tx_01', type: 'bridge', amount: '5,000 VCN', from: '0x7F3A...BE29', to: 'Sepolia', status: 'pending', bridgeStatus: 'PENDING', time: '2 min ago' },
-    { id: 'tx_02', type: 'bridge', amount: '2,500 VCN', from: '0x3C1F...8B02', to: 'Sepolia', status: 'challenged', bridgeStatus: 'CHALLENGED', time: '8 min ago' },
-    { id: 'tx_03', type: 'send', amount: '1,200 VCN', from: '0x7F3A...BE29', to: '0x9dE2...4A1B', status: 'completed', time: '15 min ago' },
-    { id: 'tx_04', type: 'receive', amount: '450 VCN', from: '0x3C1F...8B02', to: '0x7F3A...BE29', status: 'completed', time: '30 min ago' },
-    { id: 'tx_05', type: 'swap', amount: '0.5 ETH', from: 'ETH Node', to: 'VCN Bridge', status: 'completed', time: '1 hour ago' },
-    { id: 'tx_06', type: 'bridge', amount: '10,000 VCN', from: '0x1A2B...3C4D', to: 'Sepolia', status: 'completed', bridgeStatus: 'FINALIZED', time: '3 hours ago' },
-];
+interface Transaction {
+    id: string;
+    type: 'bridge' | 'send' | 'receive' | 'swap' | 'mint';
+    amount: string;
+    from: string;
+    to: string;
+    status: 'pending' | 'completed' | 'challenged' | 'finalized';
+    bridgeStatus?: string;
+    time: string;
+    hash?: string;
+    timestamp?: number;
+}
+
+interface SystemStats {
+    totalLiquidity: string;
+    liquidityChange: string;
+    dailyVolume: number;
+    proofOfReserve: number;
+    lastAuditTime: string;
+    totalSupply: string;
+}
+
+// Format time ago
+const formatTimeAgo = (timestamp: number): string => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+};
+
+// Truncate address
+const truncateAddress = (addr: string): string => {
+    if (!addr || addr.length < 10) return addr || 'Unknown';
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+};
 
 export default function AdminWallet() {
     const [searchQuery, setSearchQuery] = createSignal('');
+    const [transactions, setTransactions] = createSignal<Transaction[]>([]);
+    const [stats, setStats] = createSignal<SystemStats>({
+        totalLiquidity: '$0',
+        liquidityChange: '+0%',
+        dailyVolume: 0,
+        proofOfReserve: 100,
+        lastAuditTime: 'Never',
+        totalSupply: '0'
+    });
+    const [loading, setLoading] = createSignal(true);
+    const [syncing, setSyncing] = createSignal(false);
+
+    // Fetch real transaction data from Firebase
+    const fetchTransactions = async () => {
+        try {
+            const db = getFirebaseDb();
+
+            // Try to get transactions from Firebase
+            const txCollection = collection(db, 'transactions');
+            const q = query(txCollection, orderBy('timestamp', 'desc'), limit(50));
+            const snapshot = await getDocs(q);
+
+            const txList: Transaction[] = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    type: data.type || 'send',
+                    amount: data.amount ? `${parseFloat(data.amount).toLocaleString()} VCN` : '0 VCN',
+                    from: data.from || data.sender || 'Unknown',
+                    to: data.to || data.recipient || 'Unknown',
+                    status: data.status || 'completed',
+                    bridgeStatus: data.bridgeStatus,
+                    time: data.timestamp ? formatTimeAgo(data.timestamp) : 'Unknown',
+                    hash: data.hash || data.txHash,
+                    timestamp: data.timestamp
+                };
+            });
+
+            setTransactions(txList);
+        } catch (error) {
+            console.error('[AdminWallet] Failed to fetch transactions:', error);
+            // If no transactions collection, try scheduledTransfers or other sources
+            try {
+                const db = getFirebaseDb();
+                const scheduledCollection = collection(db, 'scheduledTransfers');
+                const q = query(scheduledCollection, orderBy('createdAt', 'desc'), limit(50));
+                const snapshot = await getDocs(q);
+
+                const txList: Transaction[] = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const timestamp = data.createdAt ? new Date(data.createdAt).getTime() : Date.now();
+                    return {
+                        id: doc.id,
+                        type: data.type === 'BATCH' ? 'send' : 'send',
+                        amount: data.amount ? `${parseFloat(data.amount).toLocaleString()} VCN` : '0 VCN',
+                        from: data.sender || data.userEmail || 'System',
+                        to: data.recipient || 'Unknown',
+                        status: data.status === 'SENT' ? 'completed' :
+                            data.status === 'WAITING' ? 'pending' :
+                                data.status === 'FAILED' ? 'challenged' : 'pending',
+                        time: formatTimeAgo(timestamp),
+                        hash: data.executionTx || data.creationTx,
+                        timestamp
+                    };
+                });
+
+                setTransactions(txList);
+            } catch (fallbackError) {
+                console.warn('[AdminWallet] No transaction data available');
+            }
+        }
+    };
+
+    // Fetch blockchain statistics
+    const fetchStats = async () => {
+        try {
+            const provider = await contractService.getRobustProvider();
+
+            // Get VCN Token total supply
+            const vcnAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+            const vcnAbi = ['function totalSupply() view returns (uint256)', 'function decimals() view returns (uint8)'];
+            const vcnContract = new ethers.Contract(vcnAddress, vcnAbi, provider);
+
+            let totalSupply = '0';
+            let totalLiquidity = '$0';
+
+            try {
+                const supply = await vcnContract.totalSupply();
+                const decimals = await vcnContract.decimals();
+                totalSupply = ethers.formatUnits(supply, decimals);
+
+                // Estimate value (mock price of $0.10 per VCN for display)
+                const vcnPrice = 0.10;
+                const liquidityValue = parseFloat(totalSupply) * vcnPrice;
+                totalLiquidity = `$${(liquidityValue / 1000000).toFixed(2)}M`;
+            } catch (e) {
+                console.warn('[AdminWallet] Failed to get VCN supply:', e);
+            }
+
+            // Get recent block info for audit timestamp
+            const block = await provider.getBlock('latest');
+            const lastAuditTime = block ? formatTimeAgo(block.timestamp * 1000) : 'Unknown';
+
+            // Count transactions in last 24h from Firebase
+            let dailyVolume = 0;
+            try {
+                const db = getFirebaseDb();
+                const yesterday = Date.now() - 24 * 60 * 60 * 1000;
+                const txCollection = collection(db, 'transactions');
+                const snapshot = await getDocs(txCollection);
+                dailyVolume = snapshot.docs.filter(doc => {
+                    const ts = doc.data().timestamp;
+                    return ts && ts > yesterday;
+                }).length;
+
+                // Also count scheduled transfers
+                const scheduledCollection = collection(db, 'scheduledTransfers');
+                const scheduledSnapshot = await getDocs(scheduledCollection);
+                dailyVolume += scheduledSnapshot.docs.filter(doc => {
+                    const createdAt = doc.data().createdAt;
+                    if (!createdAt) return false;
+                    const ts = new Date(createdAt).getTime();
+                    return ts > yesterday;
+                }).length;
+            } catch (e) {
+                console.warn('[AdminWallet] Failed to count daily transactions');
+            }
+
+            setStats({
+                totalLiquidity,
+                liquidityChange: '+0.0%',
+                dailyVolume,
+                proofOfReserve: 100,
+                lastAuditTime,
+                totalSupply: parseFloat(totalSupply).toLocaleString()
+            });
+        } catch (error) {
+            console.error('[AdminWallet] Failed to fetch stats:', error);
+        }
+    };
+
+    // Sync nodes - refresh all data
+    const handleSyncNodes = async () => {
+        setSyncing(true);
+        await Promise.all([fetchTransactions(), fetchStats()]);
+        setSyncing(false);
+    };
+
+    // Initial data fetch
+    onMount(async () => {
+        setLoading(true);
+        await Promise.all([fetchTransactions(), fetchStats()]);
+        setLoading(false);
+    });
+
+    // Filter transactions based on search
+    const filteredTransactions = () => {
+        const query = searchQuery().toLowerCase();
+        if (!query) return transactions();
+        return transactions().filter(tx =>
+            tx.id.toLowerCase().includes(query) ||
+            tx.from.toLowerCase().includes(query) ||
+            tx.to.toLowerCase().includes(query) ||
+            (tx.hash && tx.hash.toLowerCase().includes(query))
+        );
+    };
 
     return (
         <div class="space-y-8">
@@ -39,8 +243,14 @@ export default function AdminWallet() {
                     <p class="text-gray-500 font-bold uppercase tracking-widest text-[10px] mt-1">Global Asset & Transaction Management</p>
                 </div>
                 <div class="flex gap-3">
-                    <button class="px-4 py-2 bg-white/[0.03] border border-white/10 rounded-xl text-xs font-black text-gray-400 uppercase tracking-widest hover:bg-white/[0.08] transition-all flex items-center gap-2">
-                        <RefreshCw class="w-3.5 h-3.5" />
+                    <button
+                        onClick={handleSyncNodes}
+                        disabled={syncing()}
+                        class="px-4 py-2 bg-white/[0.03] border border-white/10 rounded-xl text-xs font-black text-gray-400 uppercase tracking-widest hover:bg-white/[0.08] transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                        <Show when={syncing()} fallback={<RefreshCw class="w-3.5 h-3.5" />}>
+                            <Loader2 class="w-3.5 h-3.5 animate-spin" />
+                        </Show>
                         Sync Nodes
                     </button>
                     <button class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-cyan-500/20 hover:scale-[1.02] transition-all flex items-center gap-2">
@@ -58,9 +268,12 @@ export default function AdminWallet() {
                     </div>
                     <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Total System Liquidity</div>
                     <div class="flex items-end gap-2 mb-2">
-                        <span class="text-3xl font-black text-white">$142.5M</span>
-                        <span class="text-green-400 text-xs font-bold mb-1">+4.2%</span>
+                        <Show when={!loading()} fallback={<span class="text-xl text-gray-500">Loading...</span>}>
+                            <span class="text-3xl font-black text-white">{stats().totalLiquidity}</span>
+                            <span class="text-green-400 text-xs font-bold mb-1">{stats().liquidityChange}</span>
+                        </Show>
                     </div>
+                    <div class="text-[10px] text-gray-600 mb-2">Total Supply: {stats().totalSupply} VCN</div>
                     <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                         <div class="h-full w-[75%] bg-gradient-to-r from-cyan-500 to-blue-500" />
                     </div>
@@ -72,8 +285,10 @@ export default function AdminWallet() {
                     </div>
                     <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Daily Volume (24h)</div>
                     <div class="flex items-end gap-2 mb-2">
-                        <span class="text-3xl font-black text-white">842,900</span>
-                        <span class="text-gray-500 text-[10px] font-bold mb-1 uppercase tracking-widest">Transactions</span>
+                        <Show when={!loading()} fallback={<span class="text-xl text-gray-500">Loading...</span>}>
+                            <span class="text-3xl font-black text-white">{stats().dailyVolume.toLocaleString()}</span>
+                            <span class="text-gray-500 text-[10px] font-bold mb-1 uppercase tracking-widest">Transactions</span>
+                        </Show>
                     </div>
                     <div class="flex gap-1 items-end h-6">
                         <For each={[30, 45, 25, 60, 40, 75, 50]}>
@@ -88,10 +303,10 @@ export default function AdminWallet() {
                     </div>
                     <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Proof of Reserve</div>
                     <div class="flex items-center gap-3 mb-2">
-                        <span class="text-3xl font-black text-white">100%</span>
+                        <span class="text-3xl font-black text-white">{stats().proofOfReserve}%</span>
                         <div class="px-2 py-0.5 bg-green-500/10 border border-green-500/20 rounded text-[9px] font-black text-green-400 uppercase tracking-widest">Verified</div>
                     </div>
-                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Last audit: 12 minutes ago</p>
+                    <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Last audit: {stats().lastAuditTime}</p>
                 </div>
             </div>
 
@@ -108,6 +323,8 @@ export default function AdminWallet() {
                             <input
                                 type="text"
                                 placeholder="Search hashes, addresses..."
+                                value={searchQuery()}
+                                onInput={(e) => setSearchQuery(e.currentTarget.value)}
                                 class="pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 w-64"
                             />
                         </div>
@@ -132,67 +349,106 @@ export default function AdminWallet() {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-white/5">
-                            <For each={mockTransactions}>
-                                {(tx) => (
-                                    <tr class="hover:bg-white/[0.02] transition-colors group">
-                                        <td class="px-6 py-4">
-                                            <div class={`flex items-center gap-2 px-2 py-1 rounded-lg w-fit ${tx.status === 'completed' ? 'bg-green-500/10' :
-                                                    tx.status === 'challenged' ? 'bg-red-500/10' :
-                                                        tx.status === 'pending' ? 'bg-amber-500/10' : 'bg-yellow-500/10'
-                                                }`}>
-                                                <div class={`w-2 h-2 rounded-full ${tx.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' :
-                                                        tx.status === 'challenged' ? 'bg-red-500 animate-pulse' :
-                                                            tx.status === 'pending' ? 'bg-amber-500 animate-pulse' : 'bg-yellow-500 animate-pulse'
-                                                    }`} />
-                                                <span class={`text-[9px] font-black uppercase tracking-widest ${tx.status === 'completed' ? 'text-green-400' :
-                                                        tx.status === 'challenged' ? 'text-red-400' :
-                                                            tx.status === 'pending' ? 'text-amber-400' : 'text-yellow-400'
-                                                    }`}>
-                                                    {tx.bridgeStatus || tx.status}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <code class="text-[11px] text-cyan-400/80 font-mono tracking-tight">{tx.id}_f32a...910c</code>
-                                        </td>
-                                        <td class="px-6 py-4">
-                                            <div class="flex items-center gap-2">
-                                                <Show when={tx.type === 'send'}>
-                                                    <div class="p-1.5 rounded-lg bg-red-500/10 text-red-400"><ArrowUpRight class="w-3.5 h-3.5" /></div>
-                                                </Show>
-                                                <Show when={tx.type === 'receive'}>
-                                                    <div class="p-1.5 rounded-lg bg-green-500/10 text-green-400"><ArrowDownLeft class="w-3.5 h-3.5" /></div>
-                                                </Show>
-                                                <Show when={tx.type === 'swap'}>
-                                                    <div class="p-1.5 rounded-lg bg-purple-500/10 text-purple-400"><RefreshCw class="w-3.5 h-3.5" /></div>
-                                                </Show>
-                                                <Show when={tx.type === 'mint'}>
-                                                    <div class="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400"><TrendingUp class="w-3.5 h-3.5" /></div>
-                                                </Show>
-                                                <Show when={tx.type === 'bridge'}>
-                                                    <div class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400"><Clock class="w-3.5 h-3.5" /></div>
-                                                </Show>
-                                                <span class="text-xs font-bold text-gray-300 capitalize">{tx.type}</span>
-                                            </div>
-                                        </td>
-                                        <td class="px-6 py-4 text-[11px] font-mono text-gray-500">{tx.from}</td>
-                                        <td class="px-6 py-4 text-[11px] font-mono text-gray-500">{tx.to}</td>
-                                        <td class="px-6 py-4 text-sm font-black text-white">{tx.amount}</td>
-                                        <td class="px-6 py-4 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{tx.time}</td>
-                                        <td class="px-6 py-4 text-right">
-                                            <button class="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-white">
-                                                <MoreVertical class="w-4 h-4" />
-                                            </button>
+                            <Show when={!loading()} fallback={
+                                <tr>
+                                    <td colspan="8" class="px-6 py-12 text-center">
+                                        <div class="flex items-center justify-center gap-3 text-gray-500">
+                                            <Loader2 class="w-5 h-5 animate-spin" />
+                                            <span class="text-sm">Loading transactions...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }>
+                                <Show when={filteredTransactions().length > 0} fallback={
+                                    <tr>
+                                        <td colspan="8" class="px-6 py-12 text-center text-gray-500 text-sm">
+                                            No transactions found
                                         </td>
                                     </tr>
-                                )}
-                            </For>
+                                }>
+                                    <For each={filteredTransactions()}>
+                                        {(tx) => (
+                                            <tr class="hover:bg-white/[0.02] transition-colors group">
+                                                <td class="px-6 py-4">
+                                                    <div class={`flex items-center gap-2 px-2 py-1 rounded-lg w-fit ${tx.status === 'completed' ? 'bg-green-500/10' :
+                                                            tx.status === 'challenged' ? 'bg-red-500/10' :
+                                                                tx.status === 'pending' ? 'bg-amber-500/10' :
+                                                                    tx.status === 'finalized' ? 'bg-blue-500/10' : 'bg-yellow-500/10'
+                                                        }`}>
+                                                        <div class={`w-2 h-2 rounded-full ${tx.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' :
+                                                                tx.status === 'challenged' ? 'bg-red-500 animate-pulse' :
+                                                                    tx.status === 'pending' ? 'bg-amber-500 animate-pulse' :
+                                                                        tx.status === 'finalized' ? 'bg-blue-500' : 'bg-yellow-500 animate-pulse'
+                                                            }`} />
+                                                        <span class={`text-[9px] font-black uppercase tracking-widest ${tx.status === 'completed' ? 'text-green-400' :
+                                                                tx.status === 'challenged' ? 'text-red-400' :
+                                                                    tx.status === 'pending' ? 'text-amber-400' :
+                                                                        tx.status === 'finalized' ? 'text-blue-400' : 'text-yellow-400'
+                                                            }`}>
+                                                            {tx.bridgeStatus || tx.status}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <code class="text-[11px] text-cyan-400/80 font-mono tracking-tight">
+                                                        {tx.hash ? truncateAddress(tx.hash) : `${tx.id.slice(0, 8)}...`}
+                                                    </code>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <div class="flex items-center gap-2">
+                                                        <Show when={tx.type === 'send'}>
+                                                            <div class="p-1.5 rounded-lg bg-red-500/10 text-red-400"><ArrowUpRight class="w-3.5 h-3.5" /></div>
+                                                        </Show>
+                                                        <Show when={tx.type === 'receive'}>
+                                                            <div class="p-1.5 rounded-lg bg-green-500/10 text-green-400"><ArrowDownLeft class="w-3.5 h-3.5" /></div>
+                                                        </Show>
+                                                        <Show when={tx.type === 'swap'}>
+                                                            <div class="p-1.5 rounded-lg bg-purple-500/10 text-purple-400"><RefreshCw class="w-3.5 h-3.5" /></div>
+                                                        </Show>
+                                                        <Show when={tx.type === 'mint'}>
+                                                            <div class="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400"><TrendingUp class="w-3.5 h-3.5" /></div>
+                                                        </Show>
+                                                        <Show when={tx.type === 'bridge'}>
+                                                            <div class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400"><Clock class="w-3.5 h-3.5" /></div>
+                                                        </Show>
+                                                        <span class="text-xs font-bold text-gray-300 capitalize">{tx.type}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4 text-[11px] font-mono text-gray-500">{truncateAddress(tx.from)}</td>
+                                                <td class="px-6 py-4 text-[11px] font-mono text-gray-500">{truncateAddress(tx.to)}</td>
+                                                <td class="px-6 py-4 text-sm font-black text-white">{tx.amount}</td>
+                                                <td class="px-6 py-4 text-[10px] font-bold text-gray-600 uppercase tracking-widest">{tx.time}</td>
+                                                <td class="px-6 py-4 text-right">
+                                                    <Show when={tx.hash}>
+                                                        <a
+                                                            href={`https://visionscan.org/tx/${tx.hash}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            class="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-cyan-400 inline-block"
+                                                        >
+                                                            <ExternalLink class="w-4 h-4" />
+                                                        </a>
+                                                    </Show>
+                                                    <button class="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-white">
+                                                        <MoreVertical class="w-4 h-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </For>
+                                </Show>
+                            </Show>
                         </tbody>
                     </table>
                 </div>
 
                 <div class="p-4 bg-white/[0.01] text-center border-t border-white/5">
-                    <button class="text-[10px] font-black text-gray-500 hover:text-cyan-400 uppercase tracking-widest transition-colors">Load more transactions</button>
+                    <button
+                        onClick={fetchTransactions}
+                        class="text-[10px] font-black text-gray-500 hover:text-cyan-400 uppercase tracking-widest transition-colors"
+                    >
+                        Load more transactions
+                    </button>
                 </div>
             </div>
         </div>

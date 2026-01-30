@@ -412,7 +412,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-2">Earning Opportunities</div>
                             <div class="grid grid-cols-1 gap-3">
                                 <button
-                                    onClick={() => props.startFlow('stake')}
+                                    onClick={() => props.setActiveView('staking')}
                                     class="w-full flex items-center justify-between p-5 bg-gradient-to-r from-blue-500/5 to-transparent hover:from-blue-500/10 border border-white/[0.06] rounded-[24px] transition-all duration-300 text-left group active:scale-95"
                                     style={{ background: 'linear-gradient(to right, rgba(59,130,246,0.05), transparent)' }}
                                 >

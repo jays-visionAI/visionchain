@@ -4,7 +4,6 @@ import {
     ArrowUpRight,
     ArrowDownLeft,
     RefreshCw,
-    TrendingUp,
     Layers,
     Plus,
     Check,
@@ -34,8 +33,6 @@ interface WalletFlowModalsProps {
     setSwapAmount: (a: string) => void;
     recipientAddress: () => string;
     setRecipientAddress: (a: string) => void;
-    stakeAmount: () => string;
-    setStakeAmount: (a: string) => void;
     batchInput: () => string;
     setBatchInput: (i: string) => void;
     parsedBatchTransactions: () => any[];
@@ -96,9 +93,7 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                     <Match when={props.activeFlow() === 'swap'}>
                                         <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><RefreshCw class="w-5 h-5 text-purple-400" /></div>Swap Assets
                                     </Match>
-                                    <Match when={props.activeFlow() === 'stake'}>
-                                        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center"><TrendingUp class="w-5 h-5 text-indigo-400" /></div>Stake VCN
-                                    </Match>
+
                                     <Match when={props.activeFlow() === 'multi' || props.activeFlow() === 'batch_send'}>
                                         <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center"><Layers class="w-5 h-5 text-purple-400" /></div>Batch Transfer
                                     </Match>
@@ -624,66 +619,7 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                     </div>
                                 </Match>
 
-                                {/* STAKE FLOW */}
-                                <Match when={props.activeFlow() === 'stake'}>
-                                    <div class="space-y-4">
-                                        <Show when={props.flowStep() === 1}>
-                                            <div class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                                                <div>
-                                                    <div class="flex items-center justify-between mb-2"><label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Stake Amount</label><span class="text-[10px] font-bold text-blue-400">Balance: {props.getAssetData('VCN').liquidBalance.toLocaleString()} VCN</span></div>
-                                                    <div class="relative">
-                                                        <input type="number" placeholder="0.00" value={props.stakeAmount()} onInput={(e) => props.setStakeAmount(e.currentTarget.value)} class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl p-5 text-2xl font-bold text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all font-mono" />
-                                                        <div class="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">VCN</div>
-                                                    </div>
-                                                </div>
-                                                <div class="space-y-3">
-                                                    <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block px-1">Choose Yield Tier</label>
-                                                    <div class="grid grid-cols-3 gap-3">
-                                                        {[
-                                                            { d: 30, a: '4.5%', l: 'Flex' },
-                                                            { d: 90, a: '8.2%', l: 'Std' },
-                                                            { d: 180, a: '12.5%', l: 'Pro' }
-                                                        ].map((o) => (
-                                                            <button class="flex flex-col items-center gap-1 p-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:border-blue-500/30 hover:bg-blue-500/5 transition-all group">
-                                                                <div class="text-[10px] font-black text-gray-600 uppercase mb-1">{o.l}</div>
-                                                                <div class="text-xs font-bold text-white uppercase">{o.d} Days</div>
-                                                                <div class="text-[10px] font-black text-green-400">{o.a} APY</div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
 
-                                                <div class="p-5 bg-blue-500/5 border border-blue-500/10 rounded-2xl relative overflow-hidden group">
-                                                    <div class="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                    <div class="flex items-center justify-between mb-1 relative z-10">
-                                                        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Est. Rewards</span>
-                                                        <span class="text-lg font-bold text-green-400">
-                                                            +{props.stakeAmount() ? (Number(props.stakeAmount()) * 0.125).toFixed(2) : '0.00'} VCN
-                                                        </span>
-                                                    </div>
-                                                    <div class="text-[10px] text-gray-500 italic relative z-10">Rewards calculated based on Premium Tier (12.5% APY)</div>
-                                                </div>
-
-                                                <button
-                                                    disabled={!props.stakeAmount() || Number(props.stakeAmount()) <= 0}
-                                                    onClick={() => props.setFlowStep(2)}
-                                                    class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] uppercase tracking-widest text-sm"
-                                                >
-                                                    Review Stake
-                                                </button>
-                                            </div>
-                                        </Show>
-                                        <Show when={props.flowStep() === 2}>
-                                            <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                                                <div class="flex flex-col items-center text-center py-4"><div class="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4"><TrendingUp class="w-8 h-8" /></div><h4 class="text-xl font-bold text-white">Confirm Staking</h4><p class="text-gray-500 text-sm mt-1">You are locking {props.stakeAmount()} VCN for 180 days</p></div>
-                                                <div class="flex gap-3"><button onClick={() => props.setFlowStep(1)} class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl transition-all">Back</button><button onClick={props.handleTransaction} disabled={props.flowLoading()} class="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl flex items-center justify-center gap-2"><Show when={props.flowLoading()} fallback="Confirm Stake"><RefreshCw class="w-4 h-4 animate-spin" />Staking...</Show></button></div>
-                                            </div>
-                                        </Show>
-                                        <Show when={props.flowStep() === 3}>
-                                            <div class="flex flex-col items-center py-8 text-center animate-in zoom-in-95 duration-500"><div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl mb-6"><Check class="w-10 h-10 text-white" /></div><h4 class="text-2xl font-bold text-white mb-2">Staking Successful!</h4><button onClick={props.resetFlow} class="w-full py-4 bg-white text-black font-bold rounded-2xl">Done</button></div>
-                                        </Show>
-                                    </div>
-                                </Match>
 
                                 {/* SWAP FLOW */}
                                 <Match when={props.activeFlow() === 'swap'}>
