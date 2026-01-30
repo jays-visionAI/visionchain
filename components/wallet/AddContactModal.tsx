@@ -115,13 +115,14 @@ export const AddContactModal = (props: AddContactModalProps) => {
             <div class="relative w-full">
                 <button
                     onClick={() => setIsOpen(!isOpen())}
-                    class="w-full flex items-center justify-between bg-white/[0.03] border border-white/[0.06] hover:border-white/20 hover:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white transition-all text-left"
+                    class="w-full flex items-center justify-between bg-white/[0.03] border border-white/[0.06] hover:border-white/20 hover:bg-white/[0.08] rounded-xl px-3 md:px-4 py-2.5 text-white transition-all text-left"
                 >
-                    <div class="flex items-center gap-3 overflow-hidden">
-                        <span class="text-sm font-bold truncate">{selected().name}</span>
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="text-sm font-bold text-gray-300 md:hidden">{selected().dialCode}</span>
+                        <span class="text-sm font-bold truncate hidden md:block">{selected().name}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <span class="text-[10px] font-black text-gray-500">{selected().dialCode}</span>
+                        <span class="text-[10px] font-black text-gray-500 hidden md:block">{selected().dialCode}</span>
                         <ChevronDown class={`w-3 h-3 text-gray-500 transition-transform ${isOpen() ? 'rotate-180' : ''}`} />
                     </div>
                 </button>
@@ -367,25 +368,25 @@ export const AddContactModal = (props: AddContactModalProps) => {
 
                             {/* Input Grid */}
                             <div class="space-y-4">
-                                <div class="grid grid-cols-12 gap-6 px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                    <div class="col-span-3">Name</div>
-                                    <div class="col-span-1">Flag</div>
-                                    <div class="col-span-4">Country Name</div>
-                                    <div class="col-span-3">Phone Number</div>
+                                <div class="grid grid-cols-12 gap-2 md:gap-6 px-2 md:px-4 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                    <div class="col-span-4 md:col-span-3">Name</div>
+                                    <div class="col-span-1 hidden md:block">Flag</div>
+                                    <div class="col-span-4"><span class="hidden md:inline">Country Name</span><span class="md:hidden">Country</span></div>
+                                    <div class="col-span-3">Phone</div>
                                     <div class="col-span-1"></div>
                                 </div>
 
                                 <div class="space-y-1">
                                     <Index each={entries()}>
                                         {(entry, index) => (
-                                            <div class="grid grid-cols-12 gap-6 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-2">
-                                                <div class="col-span-3 relative">
+                                            <div class="grid grid-cols-12 gap-2 md:gap-6 items-center group/row py-1 transition-colors hover:bg-white/[0.01] rounded-xl px-1 md:px-2">
+                                                <div class="col-span-4 md:col-span-3 relative">
                                                     <input
                                                         type="text"
                                                         placeholder="e.g. John Doe"
                                                         value={entry().internalName}
                                                         onInput={(e) => updateEntry(index, 'internalName', e.currentTarget.value)}
-                                                        class={`w-full block bg-white/[0.03] border rounded-xl px-4 py-2.5 text-sm outline-none transition-all ${isDuplicateName(entry().internalName, index)
+                                                        class={`w-full block bg-white/[0.03] border rounded-xl px-2 md:px-4 py-2.5 text-xs md:text-sm outline-none transition-all ${isDuplicateName(entry().internalName, index)
                                                             ? 'border-red-500/50 text-red-400 focus:bg-red-500/5'
                                                             : 'border-white/[0.06] text-white focus:border-blue-500/50 focus:bg-white/[0.08]'
                                                             }`}
@@ -396,7 +397,7 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                         </div>
                                                     </Show>
                                                 </div>
-                                                <div class="col-span-1 flex justify-center">
+                                                <div class="col-span-1 hidden md:flex justify-center">
                                                     <div class="w-10 h-7 rounded border border-white/10 overflow-hidden bg-white/5 flex items-center justify-center">
                                                         <img src={(countries.find(c => c.code === entry().countryCode) || countries[0]).flag} class="w-full h-full object-cover" alt="" />
                                                     </div>
@@ -410,18 +411,18 @@ export const AddContactModal = (props: AddContactModalProps) => {
                                                 <div class="col-span-3">
                                                     <input
                                                         type="tel"
-                                                        placeholder="01012345678"
+                                                        placeholder="010123"
                                                         value={entry().phone}
                                                         onInput={(e) => updateEntry(index, 'phone', e.currentTarget.value)}
-                                                        class="w-full block bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm font-mono outline-none transition-all"
+                                                        class="w-full block bg-white/[0.03] border border-white/[0.06] focus:border-blue-500/50 focus:bg-white/[0.08] rounded-xl px-2 md:px-4 py-2.5 text-white text-xs md:text-sm font-mono outline-none transition-all"
                                                     />
                                                 </div>
                                                 <div class="col-span-1 flex justify-end">
                                                     <button
                                                         onClick={() => removeRow(index)}
-                                                        class="p-2 text-gray-700 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover/row:opacity-100"
+                                                        class="p-1.5 md:p-2 text-gray-700 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-50 md:opacity-0 group-hover/row:opacity-100"
                                                     >
-                                                        <Trash2 class="w-4 h-4" />
+                                                        <Trash2 class="w-3.5 md:w-4 h-3.5 md:h-4" />
                                                     </button>
                                                 </div>
                                             </div>
