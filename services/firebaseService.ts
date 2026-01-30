@@ -654,7 +654,235 @@ export const getReferralLeaderboard = async (limitCount: number = 50): Promise<a
     }
 };
 
+// ==================== Referral Rush Round System ====================
+
+export interface ReferralRound {
+    roundId: number;
+    startTime: string;
+    endTime: string;
+    status: 'active' | 'completed';
+    totalNewUsers: number;
+    totalRewardPool: number;
+    rankings?: RoundRanking[];
+}
+
+export interface RoundRanking {
+    userId: string;
+    name: string;
+    invites: number;
+    contributionRate: number;
+    reward: number;
+    nftAwarded?: 'gold' | 'silver' | 'bronze';
+}
+
+export interface RoundParticipant {
+    roundId: number;
+    referrerId: string;
+    invitedUsers: string[];
+    inviteCount: number;
+    contributionRate: number;
+    estimatedReward: number;
+    claimed: boolean;
+}
+
 /**
+ * Calculates the current round number based on UTC time.
+ * Rounds start at 0, 4, 8, 12, 16, 20 UTC.
+ */
+export const calculateCurrentRoundId = (): number => {
+    const now = new Date();
+    const epoch = new Date('2024-01-01T00:00:00Z').getTime();
+    const msPerRound = 4 * 60 * 60 * 1000; // 4 hours
+    return Math.floor((now.getTime() - epoch) / msPerRound);
+};
+
+/**
+ * Gets the start and end time for a given round.
+ */
+export const getRoundTimeRange = (roundId: number): { start: Date; end: Date } => {
+    const epoch = new Date('2024-01-01T00:00:00Z').getTime();
+    const msPerRound = 4 * 60 * 60 * 1000;
+    const start = new Date(epoch + roundId * msPerRound);
+    const end = new Date(epoch + (roundId + 1) * msPerRound);
+    return { start, end };
+};
+
+/**
+ * Gets or creates the current round document.
+ */
+export const getCurrentRound = async (): Promise<ReferralRound> => {
+    const db = getFirebaseDb();
+    const roundId = calculateCurrentRoundId();
+    const roundRef = doc(db, 'referral_rounds', roundId.toString());
+    const roundSnap = await getDoc(roundRef);
+
+    if (roundSnap.exists()) {
+        return { roundId, ...roundSnap.data() } as ReferralRound;
+    }
+
+    // Create new round
+    const { start, end } = getRoundTimeRange(roundId);
+    const newRound: ReferralRound = {
+        roundId,
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+        status: 'active',
+        totalNewUsers: 0,
+        totalRewardPool: 10000 // Base pool: 10,000 VCN per round
+    };
+
+    await setDoc(roundRef, newRound);
+    return newRound;
+};
+
+/**
+ * Gets leaderboard for a specific round with contribution rates.
+ */
+export const getRoundLeaderboard = async (roundId?: number): Promise<{
+    round: ReferralRound;
+    participants: RoundParticipant[];
+}> => {
+    const db = getFirebaseDb();
+    const targetRoundId = roundId ?? calculateCurrentRoundId();
+
+    // Get round info
+    const roundRef = doc(db, 'referral_rounds', targetRoundId.toString());
+    const roundSnap = await getDoc(roundRef);
+
+    let round: ReferralRound;
+    if (roundSnap.exists()) {
+        round = { roundId: targetRoundId, ...roundSnap.data() } as ReferralRound;
+    } else {
+        round = await getCurrentRound();
+    }
+
+    // Get participants for this round
+    const participantsRef = collection(db, 'referral_round_participants');
+    const q = query(
+        participantsRef,
+        where('roundId', '==', targetRoundId),
+        orderBy('inviteCount', 'desc'),
+        limit(50)
+    );
+    const snapshot = await getDocs(q);
+
+    const participants: RoundParticipant[] = snapshot.docs.map(doc => doc.data() as RoundParticipant);
+
+    // Recalculate contribution rates based on current total
+    const totalInvites = participants.reduce((sum, p) => sum + p.inviteCount, 0);
+    if (totalInvites > 0) {
+        participants.forEach(p => {
+            p.contributionRate = p.inviteCount / totalInvites;
+            p.estimatedReward = Math.floor(round.totalRewardPool * p.contributionRate);
+        });
+    }
+
+    return { round, participants };
+};
+
+/**
+ * Records a new referral for the current round.
+ */
+export const recordRoundReferral = async (referrerId: string, newUserEmail: string): Promise<void> => {
+    const db = getFirebaseDb();
+    const roundId = calculateCurrentRoundId();
+
+    // Update round total
+    const roundRef = doc(db, 'referral_rounds', roundId.toString());
+    const roundSnap = await getDoc(roundRef);
+
+    if (!roundSnap.exists()) {
+        await getCurrentRound(); // Create if not exists
+    }
+
+    await updateDoc(roundRef, {
+        totalNewUsers: (roundSnap.data()?.totalNewUsers || 0) + 1
+    });
+
+    // Update participant record
+    const participantId = `${roundId}_${referrerId.toLowerCase()}`;
+    const participantRef = doc(db, 'referral_round_participants', participantId);
+    const participantSnap = await getDoc(participantRef);
+
+    if (participantSnap.exists()) {
+        const data = participantSnap.data();
+        await updateDoc(participantRef, {
+            invitedUsers: [...(data.invitedUsers || []), newUserEmail.toLowerCase()],
+            inviteCount: (data.inviteCount || 0) + 1
+        });
+    } else {
+        const newParticipant: RoundParticipant = {
+            roundId,
+            referrerId: referrerId.toLowerCase(),
+            invitedUsers: [newUserEmail.toLowerCase()],
+            inviteCount: 1,
+            contributionRate: 0,
+            estimatedReward: 0,
+            claimed: false
+        };
+        await setDoc(participantRef, newParticipant);
+    }
+
+    console.log(`[Referral Round] Recorded referral in round ${roundId}: ${referrerId} -> ${newUserEmail}`);
+};
+
+/**
+ * Gets past round history.
+ */
+export const getRoundHistory = async (limitCount: number = 10): Promise<ReferralRound[]> => {
+    try {
+        const db = getFirebaseDb();
+        const roundsRef = collection(db, 'referral_rounds');
+        const q = query(roundsRef, where('status', '==', 'completed'), orderBy('roundId', 'desc'), limit(limitCount));
+        const snapshot = await getDocs(q);
+
+        return snapshot.docs.map(doc => ({ roundId: parseInt(doc.id), ...doc.data() } as ReferralRound));
+    } catch (e) {
+        console.error("Error fetching round history:", e);
+        return [];
+    }
+};
+
+/**
+ * Gets user's claimable rewards across all completed rounds.
+ */
+export const getUserClaimableRewards = async (email: string): Promise<{
+    totalClaimable: number;
+    rounds: { roundId: number; reward: number }[];
+}> => {
+    try {
+        const db = getFirebaseDb();
+        const participantsRef = collection(db, 'referral_round_participants');
+        const q = query(
+            participantsRef,
+            where('referrerId', '==', email.toLowerCase()),
+            where('claimed', '==', false)
+        );
+        const snapshot = await getDocs(q);
+
+        let totalClaimable = 0;
+        const rounds: { roundId: number; reward: number }[] = [];
+
+        for (const docSnap of snapshot.docs) {
+            const data = docSnap.data() as RoundParticipant;
+            // Only count completed rounds
+            const roundRef = doc(db, 'referral_rounds', data.roundId.toString());
+            const roundSnap = await getDoc(roundRef);
+            if (roundSnap.exists() && roundSnap.data()?.status === 'completed') {
+                totalClaimable += data.estimatedReward;
+                rounds.push({ roundId: data.roundId, reward: data.estimatedReward });
+            }
+        }
+
+        return { totalClaimable, rounds };
+    } catch (e) {
+        console.error("Error fetching claimable rewards:", e);
+        return { totalClaimable: 0, rounds: [] };
+    }
+};
+
+/**
+
  * Resolves a recipient identifier (phone, email, name, handle) to a VID and Address.
  */
 export const resolveRecipient = async (identifier: string, currentUserEmail?: string): Promise<{ vid: string, email: string, name: string, address: string } | null> => {
@@ -937,6 +1165,9 @@ export const userRegister = async (email: string, password: string, phone?: stri
             await updateDoc(rRef, {
                 referralCount: (referrer.referralCount || 0) + 1
             });
+
+            // Record referral for current round (Referral Rush)
+            await recordRoundReferral(referrerId, emailLower);
 
             // 1. Add new user to referrer's contact list (or update existing pending contact)
             const existingContact = await findContactByPhone(referrerId.toLowerCase(), normalizedPhone);
@@ -2672,6 +2903,9 @@ export const activateAccountWithToken = async (token: string, password: string) 
                 referralCount: (referrer.referralCount || 0) + 1
             });
             console.log(`[Referral] User ${email.toLowerCase()} invited by ${referrer.email}`);
+
+            // Record referral for current round (Referral Rush)
+            await recordRoundReferral(referrer.email, email.toLowerCase());
         }
     }
 

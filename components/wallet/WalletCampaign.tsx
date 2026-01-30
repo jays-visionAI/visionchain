@@ -68,10 +68,10 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
             id: 'staking',
             title: 'Validator Staking',
             tag: 'Active Now',
-            tagColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            tagColor: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
             description: 'Earn min 12% APR up to 20% by staking your VCN tokens. Secure bridge network and grow your holdings.',
             icon: TrendingUp,
-            accent: 'emerald',
+            accent: 'orange',
             btnText: 'Stake Now',
             stats: [
                 { label: 'Current APY', value: '12~20%' },
@@ -259,7 +259,8 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                                 class={`w-full py-4 rounded-2xl font-black uppercase italic tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${quest.accent === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20 shadow-xl' :
                                                     quest.accent === 'emerald' ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-500/20 shadow-xl' :
                                                         quest.accent === 'purple' ? 'bg-purple-600 text-white hover:bg-purple-500 shadow-purple-500/20 shadow-xl' :
-                                                            'bg-white/5 text-gray-500 hover:bg-white/10'
+                                                            quest.accent === 'orange' ? 'bg-orange-600 text-white hover:bg-orange-500 shadow-orange-500/20 shadow-xl' :
+                                                                'bg-white/5 text-gray-500 hover:bg-white/10'
                                                     }`}
                                             >
                                                 {quest.btnText}
