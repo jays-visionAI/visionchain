@@ -10,10 +10,8 @@ import {
     CheckCircle2,
     AlertCircle,
     Wallet,
-    Loader2,
     RefreshCw
 } from 'lucide-solid';
-import { Motion } from 'solid-motionone';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 
@@ -24,23 +22,19 @@ declare global {
     }
 }
 
-// Contract Addresses (Vision Testnet)
-const VISION_RPC = 'https://api.visionchain.co/rpc-proxy';
-const VISION_VAULT_ADDRESS = '0x8464135c8F25Da09e49BC8782676a84730C318bC'; // VisionVault on Sepolia
-const VCN_TOKEN_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'; // VCN on Vision Testnet
+// Contract Addresses
+const VISION_VAULT_ADDRESS = '0x8464135c8F25Da09e49BC8782676a84730C318bC';
+const VCN_TOKEN_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 
 const VISION_VAULT_ABI = [
     'function depositToVision(uint256 amount, uint256 destinationChainId) external',
-    'function withdrawFromVision(uint256 amount, bytes calldata proof) external',
-    'event DepositInitiated(address indexed sender, uint256 amount, uint256 destinationChainId, bytes32 depositHash)'
+    'function withdrawFromVision(uint256 amount, bytes calldata proof) external'
 ];
 
 const ERC20_ABI = [
     'function approve(address spender, uint256 amount) external returns (bool)',
     'function allowance(address owner, address spender) external view returns (uint256)',
-    'function balanceOf(address account) external view returns (uint256)',
-    'function symbol() external view returns (string)',
-    'function decimals() external view returns (uint8)'
+    'function balanceOf(address account) external view returns (uint256)'
 ];
 
 interface Transaction {
@@ -49,29 +43,32 @@ interface Transaction {
     to: string;
     amount: string;
     asset: string;
-    status: 'Pending' | 'Challenged' | 'Finalized' | 'Reverted' | 'Processing' | 'Success';
+    status: 'Pending' | 'Processing' | 'Success';
     time: string;
     hash: string;
-    timeRemaining?: number;
-    intentHash?: string;
 }
 
 interface NetworkConfig {
     name: string;
     chainId: number;
-    rpcUrl: string;
-    color: string;
 }
 
 const NETWORKS: NetworkConfig[] = [
-    { name: 'Ethereum Sepolia', chainId: 11155111, rpcUrl: 'https://sepolia.infura.io/v3/...', color: 'blue' },
-    { name: 'Vision Testnet', chainId: 20261337, rpcUrl: VISION_RPC, color: 'purple' }
+    { name: 'Ethereum Sepolia', chainId: 11155111 },
+    { name: 'Vision Testnet', chainId: 20261337 }
 ];
 
-const Bridge: Component = () => {
-    // Connection state
-    const [isConnected, setIsConnected] = createSignal(false);
-    const [walletAddress, setWalletAddress] = createSignal('');
+// Props interface
+interface BridgeProps {
+    walletAddress?: () => string;
+}
+
+const Bridge: Component<BridgeProps> = (props) => {
+    // Connection state - derived from prop
+    const isConnected = () => !!(props.walletAddress?.() || '');
+    const walletAddress = () => props.walletAddress?.() || '';
+
+    // Chain state
     const [currentChainId, setCurrentChainId] = createSignal<number>(0);
 
     // Bridge state
@@ -89,34 +86,18 @@ const Bridge: Component = () => {
     const [errorMsg, setErrorMsg] = createSignal('');
     const [transactions, setTransactions] = createSignal<Transaction[]>([]);
 
-    // Connect wallet
-    const connectWallet = async () => {
-        if (typeof window.ethereum === 'undefined') {
-            setErrorMsg('Please install MetaMask');
-            return;
-        }
-
-        try {
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            setWalletAddress(accounts[0]);
-            setCurrentChainId(parseInt(chainId, 16));
-            setIsConnected(true);
-            await loadBalance();
-        } catch (err: any) {
-            setErrorMsg(err.message || 'Failed to connect wallet');
-        }
-    };
-
-    // Load token balance
+    // Load balance
     const loadBalance = async () => {
-        if (!walletAddress()) return;
+        if (!walletAddress() || !window.ethereum) return;
 
         try {
             const provider = new ethers.BrowserProvider(window.ethereum);
             const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
             const bal = await vcn.balanceOf(walletAddress());
             setBalance(ethers.formatEther(bal));
+
+            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+            setCurrentChainId(parseInt(chainId, 16));
         } catch (err) {
             console.error('Failed to load balance:', err);
             setBalance('0');
@@ -141,12 +122,7 @@ const Bridge: Component = () => {
             setCurrentChainId(chainId);
             await loadBalance();
         } catch (err: any) {
-            if (err.code === 4902) {
-                // Network not added, try to add it
-                setErrorMsg('Please add this network to MetaMask');
-            } else {
-                setErrorMsg(err.message || 'Failed to switch network');
-            }
+            setErrorMsg(err.message || 'Failed to switch network');
         }
     };
 
@@ -188,7 +164,7 @@ const Bridge: Component = () => {
             const tx = await vault.depositToVision(amountWei, toNetwork().chainId);
             setTxHash(tx.hash);
 
-            const receipt = await tx.wait();
+            await tx.wait();
 
             // Add to transaction history
             const newTx: Transaction = {
@@ -215,43 +191,29 @@ const Bridge: Component = () => {
         }
     };
 
-    // Set max amount
-    const setMaxAmount = () => {
-        setAmount(balance());
-    };
-
     // Set percentage amount
     const setPercentage = (percent: number) => {
         const val = (parseFloat(balance()) * percent / 100).toFixed(4);
         setAmount(val);
     };
 
-    // Check wallet on mount
+    // Load data on mount and when wallet changes
     onMount(async () => {
-        if (typeof window.ethereum !== 'undefined') {
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-            if (accounts.length > 0) {
-                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-                setWalletAddress(accounts[0]);
-                setCurrentChainId(parseInt(chainId, 16));
-                setIsConnected(true);
-                await loadBalance();
-            }
+        if (walletAddress()) {
+            await loadBalance();
+        }
 
-            // Listen for account/chain changes
-            window.ethereum.on('accountsChanged', (accounts: string[]) => {
-                if (accounts.length > 0) {
-                    setWalletAddress(accounts[0]);
-                    loadBalance();
-                } else {
-                    setIsConnected(false);
-                }
-            });
-
+        if (window.ethereum) {
             window.ethereum.on('chainChanged', (chainId: string) => {
                 setCurrentChainId(parseInt(chainId, 16));
                 loadBalance();
             });
+        }
+    });
+
+    createEffect(() => {
+        if (walletAddress()) {
+            loadBalance();
         }
     });
 
@@ -268,7 +230,17 @@ const Bridge: Component = () => {
                     icon={ArrowRightLeft}
                 />
 
-                <Show when={!isConnected()} fallback={
+                <Show when={isConnected()} fallback={
+                    <div class="max-w-md mx-auto">
+                        <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-8 text-center">
+                            <Wallet class="w-16 h-16 text-gray-600 mx-auto mb-6" />
+                            <h3 class="text-xl font-black text-white mb-2">Loading Wallet...</h3>
+                            <p class="text-gray-500 text-sm">
+                                Please wait while we connect to your wallet.
+                            </p>
+                        </div>
+                    </div>
+                }>
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
 
                         {/* Main Bridge UI */}
@@ -336,7 +308,7 @@ const Bridge: Component = () => {
                                                 <div class="flex gap-2">
                                                     <button onClick={() => setPercentage(25)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">25%</button>
                                                     <button onClick={() => setPercentage(50)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">50%</button>
-                                                    <button onClick={setMaxAmount} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">MAX</button>
+                                                    <button onClick={() => setPercentage(100)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">MAX</button>
                                                 </div>
                                             </div>
                                             <div class="flex items-center gap-4">
@@ -399,11 +371,6 @@ const Bridge: Component = () => {
                                                 ? 'Please confirm the approval transaction in your wallet.'
                                                 : 'Please confirm the bridge transaction in your wallet.'}
                                         </p>
-                                        <Show when={txHash()}>
-                                            <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 max-w-xs mx-auto text-xs font-mono text-blue-400 break-all">
-                                                Tx: {txHash().slice(0, 10)}...{txHash().slice(-8)}
-                                            </div>
-                                        </Show>
                                     </div>
                                 </Show>
 
@@ -498,57 +465,30 @@ const Bridge: Component = () => {
                                 }>
                                     <div class="space-y-4">
                                         <For each={transactions()}>
-                                            {(tx) => {
-                                                const statusColors: Record<string, string> = {
-                                                    'Pending': 'bg-yellow-500/10 text-yellow-400',
-                                                    'Processing': 'bg-blue-500/10 text-blue-400',
-                                                    'Success': 'bg-green-500/10 text-green-500'
-                                                };
-                                                return (
-                                                    <div class="flex items-start gap-4 group">
-                                                        <div class={`w-1 h-10 rounded-full ${tx.status === 'Processing' ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`} />
-                                                        <div class="flex-1 min-w-0">
-                                                            <div class="flex justify-between items-start mb-1">
-                                                                <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
-                                                                <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${statusColors[tx.status]}`}>
-                                                                    {tx.status}
-                                                                </span>
-                                                            </div>
-                                                            <div class="text-[10px] text-gray-500 font-medium truncate mb-1">
-                                                                {tx.from} → {tx.to}
-                                                            </div>
-                                                            <div class="text-[10px] text-gray-600">
-                                                                {tx.time} • {tx.hash}
-                                                            </div>
+                                            {(tx) => (
+                                                <div class="flex items-start gap-4 group">
+                                                    <div class={`w-1 h-10 rounded-full ${tx.status === 'Processing' ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`} />
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="flex justify-between items-start mb-1">
+                                                            <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
+                                                            <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${tx.status === 'Processing' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-500'
+                                                                }`}>
+                                                                {tx.status}
+                                                            </span>
+                                                        </div>
+                                                        <div class="text-[10px] text-gray-500 font-medium truncate mb-1">
+                                                            {tx.from} → {tx.to}
+                                                        </div>
+                                                        <div class="text-[10px] text-gray-600">
+                                                            {tx.time} | {tx.hash}
                                                         </div>
                                                     </div>
-                                                );
-                                            }}
+                                                </div>
+                                            )}
                                         </For>
                                     </div>
                                 </Show>
                             </div>
-                        </div>
-                    </div>
-                }>
-                    {/* Connect Wallet */}
-                    <div class="max-w-md mx-auto">
-                        <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[32px] p-8 text-center">
-                            <Wallet class="w-16 h-16 text-gray-600 mx-auto mb-6" />
-                            <h3 class="text-xl font-black text-white mb-2">Connect Your Wallet</h3>
-                            <p class="text-gray-500 text-sm mb-6">
-                                Connect your wallet to bridge assets between Ethereum and Vision Chain.
-                            </p>
-                            <button
-                                onClick={connectWallet}
-                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2"
-                            >
-                                <Wallet class="w-4 h-4" />
-                                Connect Wallet
-                            </button>
-                            <Show when={errorMsg()}>
-                                <p class="text-red-400 text-xs mt-4">{errorMsg()}</p>
-                            </Show>
                         </div>
                     </div>
                 </Show>
