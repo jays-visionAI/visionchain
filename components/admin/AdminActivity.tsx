@@ -16,12 +16,12 @@ import {
 
 // Mock Audit Log Data
 const auditLogs = [
-    { id: 'log_01', user: 'Admin (jipark)', action: 'Updated Genesis Referral Rewards', target: 'Campaigns', level: 'info', time: '2 min ago' },
-    { id: 'log_02', user: 'System', action: 'Automated Wallet Sync Completed', target: 'Liquidity', level: 'success', time: '15 min ago' },
-    { id: 'log_03', user: 'Moderator (sarah)', action: 'Tier Override: User #1247 -> Tier 2', target: 'Users', level: 'warning', time: '1 hour ago' },
-    { id: 'log_04', user: 'Admin (jipark)', action: 'Emergency Shutdown Bridge Node #2', target: 'Network', level: 'danger', time: '3 hours ago' },
-    { id: 'log_05', user: 'System', action: 'New User Onboarding Completed', target: 'Users', level: 'info', time: '5 hours ago' },
-    { id: 'log_06', user: 'Moderator (mike)', action: 'Approved Reward Payout: $2,400', target: 'Campaigns', level: 'success', time: '1 day ago' },
+    { id: 'log_01', user: 'System', action: 'Bridge Challenge Raised: TX 0x7f3a...be29', target: 'Bridge', level: 'danger', time: '1 min ago' },
+    { id: 'log_02', user: 'Admin (jipark)', action: 'Bridge Transfer Finalized: 5,000 VCN to Sepolia', target: 'Bridge', level: 'success', time: '5 min ago' },
+    { id: 'log_03', user: 'System', action: 'Automated Wallet Sync Completed', target: 'Liquidity', level: 'success', time: '15 min ago' },
+    { id: 'log_04', user: 'Moderator (sarah)', action: 'Bridge Challenge Period Extended: TX 0x3c1f...8b02', target: 'Bridge', level: 'warning', time: '1 hour ago' },
+    { id: 'log_05', user: 'Admin (jipark)', action: 'Emergency Shutdown Bridge Node #2', target: 'Network', level: 'danger', time: '3 hours ago' },
+    { id: 'log_06', user: 'System', action: 'Bridge Transfer Reverted: Invalid Merkle Proof', target: 'Bridge', level: 'danger', time: '5 hours ago' },
 ];
 
 export default function AdminActivity() {

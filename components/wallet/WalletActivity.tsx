@@ -16,9 +16,11 @@ interface Transaction {
     value: string;
     timestamp: number;
     type: string;
-    status: string;
+    status: 'success' | 'pending' | 'challenged' | 'reverted';
     metadata?: any;
     blockNumber: number;
+    bridgeStatus?: 'PENDING' | 'CHALLENGED' | 'FINALIZED' | 'REVERTED';
+    challengeEndTime?: number;
 }
 
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
@@ -50,8 +52,10 @@ export const WalletActivity = (props: WalletActivityProps) => {
                 value: tx.value,
                 timestamp: tx.timestamp,
                 type: tx.type || 'Transfer',
-                status: 'success',
-                blockNumber: tx.block_number || 0
+                status: 'success' as const,
+                blockNumber: tx.block_number || 0,
+                bridgeStatus: tx.bridgeStatus || undefined,
+                challengeEndTime: tx.challengeEndTime || undefined
             }));
 
             setTransactions(mapped);
@@ -208,6 +212,18 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                         >
                                             {shortHash} <ExternalLink class="w-2.5 h-2.5" />
                                         </a>
+                                        {/* Bridge Status Badge */}
+                                        <Show when={tx.bridgeStatus && tx.bridgeStatus !== 'FINALIZED'}>
+                                            <div class={`mt-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ${tx.bridgeStatus === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                                tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                    'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                                                }`}>
+                                                <span class={`w-1.5 h-1.5 rounded-full animate-pulse ${tx.bridgeStatus === 'PENDING' ? 'bg-amber-400' :
+                                                    tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-400' : 'bg-gray-400'
+                                                    }`} />
+                                                {tx.bridgeStatus === 'PENDING' ? 'Pending' : tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : tx.bridgeStatus}
+                                            </div>
+                                        </Show>
                                     </div>
                                 </div>
                             );

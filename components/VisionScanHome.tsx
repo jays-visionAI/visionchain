@@ -315,7 +315,7 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                             if (t === 'Transfer') return { label: 'Asset', color: 'bg-green-500/10 text-green-400 border-green-500/20' };
                                             if (m?.toLowerCase().includes('swap')) return { label: 'Swap', color: 'bg-orange-500/10 text-orange-400 border-orange-500/20' };
                                             if (m?.toLowerCase().includes('stake')) return { label: 'Stake', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
-                                            if (m?.toLowerCase().includes('bridge')) return { label: 'Bridge', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' };
+                                            if (m?.toLowerCase().includes('bridge')) return { label: 'Bridge', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20', isBridge: true };
                                             if (m?.toLowerCase().includes('journal')) return { label: 'Accounting', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
                                             return { label: 'Protocol', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' };
                                         };
@@ -334,6 +334,15 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                                     <span class={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${typeInfo.color}`}>
                                                         {typeInfo.label}
                                                     </span>
+                                                    {/* Bridge Pending Status */}
+                                                    <Show when={(typeInfo as any).isBridge && tx.bridgeStatus !== 'FINALIZED'}>
+                                                        <div class={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'
+                                                            }`}>
+                                                            <span class={`w-1.5 h-1.5 rounded-full animate-pulse ${tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-400' : 'bg-amber-400'
+                                                                }`} />
+                                                            {tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : 'Pending'}
+                                                        </div>
+                                                    </Show>
                                                 </td>
                                                 <td class="p-4 hidden lg:table-cell">
                                                     <div class="flex items-center gap-2 text-[10px] font-mono text-gray-500">

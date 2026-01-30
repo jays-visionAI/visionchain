@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./MessageInbox.sol";
+import "../BridgeStaking.sol";
 
 /**
  * @title ChallengeManager
@@ -43,6 +44,9 @@ contract ChallengeManager is AccessControl, ReentrancyGuard {
     // Reference to MessageInbox
     MessageInbox public messageInbox;
     
+    // Reference to BridgeStaking
+    BridgeStaking public bridgeStaking;
+    
     // ChallengeId => Challenge
     mapping(bytes32 => Challenge) public challenges;
     
@@ -57,6 +61,9 @@ contract ChallengeManager is AccessControl, ReentrancyGuard {
     
     // Reward percentage for valid challenges (30%)
     uint256 public challengeRewardBps = 3000;
+    
+    // MessageHash => Validator who submitted
+    mapping(bytes32 => address) public messageValidators;
 
     // Events
     event ChallengeSubmitted(
@@ -75,6 +82,7 @@ contract ChallengeManager is AccessControl, ReentrancyGuard {
     event DepositReceived(address indexed challenger, uint256 amount);
     event DepositWithdrawn(address indexed challenger, uint256 amount);
     event RewardPaid(address indexed challenger, uint256 amount);
+    event ValidatorSlashed(address indexed validator, address indexed challenger, uint256 slashedAmount);
 
     constructor(address _messageInbox) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -173,6 +181,13 @@ contract ChallengeManager is AccessControl, ReentrancyGuard {
             require(success, "Reward transfer failed");
             
             emit RewardPaid(c.challenger, totalPayout);
+            
+            // Slash validator if exists
+            address validator = messageValidators[c.messageHash];
+            if (validator != address(0) && address(bridgeStaking) != address(0)) {
+                uint256 slashed = bridgeStaking.slash(validator, c.challenger);
+                emit ValidatorSlashed(validator, c.challenger, slashed);
+            }
         } else {
             c.status = ChallengeStatus.RESOLVED_INVALID;
             
@@ -211,6 +226,18 @@ contract ChallengeManager is AccessControl, ReentrancyGuard {
 
     function setMessageInbox(address _inbox) external onlyRole(DEFAULT_ADMIN_ROLE) {
         messageInbox = MessageInbox(_inbox);
+    }
+
+    function setBridgeStaking(address _staking) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        bridgeStaking = BridgeStaking(_staking);
+    }
+
+    /**
+     * @dev Register which validator submitted a message (called by MessageInbox)
+     */
+    function registerMessageValidator(bytes32 messageHash, address validator) external {
+        require(msg.sender == address(messageInbox), "Only inbox");
+        messageValidators[messageHash] = validator;
     }
 
     // --- Treasury ---

@@ -21,11 +21,11 @@ const AdminAlertsIncidents: Component = () => {
 
     onMount(async () => {
         setAlerts([
-            { alertId: 'a_001', severity: 'CRITICAL', status: 'ACTIVE', title: 'Pool Balance Critical', description: 'Ethereum pool below minBalance (0.8 ETH)', chainId: 1, createdAt: '2026-01-15 19:55:00' },
-            { alertId: 'a_002', severity: 'WARNING', status: 'ACKNOWLEDGED', title: 'Gas Spike Detected', description: 'Polygon gas price +45% in 10 min', chainId: 137, acknowledgedBy: 'admin_jay', createdAt: '2026-01-15 19:50:00' },
-            { alertId: 'a_003', severity: 'WARNING', status: 'ACTIVE', title: 'dApp Cap Breach', description: 'Vision Swap reached 80% daily cap', dappId: 'dapp_001', createdAt: '2026-01-15 19:45:00' },
-            { alertId: 'a_004', severity: 'INFO', status: 'RESOLVED', title: 'Rebalance Completed', description: 'Scheduled 6h rebalance successful', createdAt: '2026-01-15 18:00:00' },
-            { alertId: 'a_005', severity: 'CRITICAL', status: 'RESOLVED', title: 'TSS Signer Down', description: 'Node TSS-3 unreachable for 5 minutes', createdAt: '2026-01-15 17:30:00' },
+            { alertId: 'a_001', severity: 'CRITICAL', status: 'ACTIVE', title: 'Bridge Challenge Raised', description: 'TX 0x7f3a...be29 challenged by validator 0x9de2', chainId: 11155111, createdAt: '2026-01-30 09:50:00' },
+            { alertId: 'a_002', severity: 'WARNING', status: 'ACKNOWLEDGED', title: 'Challenge Period Expiring', description: '3 bridge transfers finalizing in next 5 minutes', acknowledgedBy: 'admin_jay', createdAt: '2026-01-30 09:45:00' },
+            { alertId: 'a_003', severity: 'CRITICAL', status: 'ACTIVE', title: 'Pool Balance Critical', description: 'Sepolia pool below minBalance (0.8 ETH)', chainId: 11155111, createdAt: '2026-01-30 09:40:00' },
+            { alertId: 'a_004', severity: 'WARNING', status: 'ACTIVE', title: 'Multiple Pending Bridges', description: '15 transfers pending in challenge period', createdAt: '2026-01-30 09:35:00' },
+            { alertId: 'a_005', severity: 'INFO', status: 'RESOLVED', title: 'Bridge Finalization Complete', description: 'Batch of 8 transfers finalized successfully', createdAt: '2026-01-30 09:00:00' },
         ]);
     });
 

@@ -290,31 +290,50 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                             </Match>
 
                                             <Match when={props.flowStep() === 3}>
-                                                <div class="py-8 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
-                                                    <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30 mb-6">
-                                                        <Show when={props.isSchedulingTimeLock()} fallback={<Check class="w-10 h-10 text-white" />}>
-                                                            <Clock class="w-10 h-10 text-white" />
+                                                <div class="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+                                                    <div class="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/30 mb-4">
+                                                        <Show when={props.isSchedulingTimeLock()} fallback={<Clock class="w-8 h-8 text-white" />}>
+                                                            <Clock class="w-8 h-8 text-white" />
                                                         </Show>
                                                     </div>
-                                                    <h4 class="text-2xl font-bold text-white mb-2">
-                                                        {props.isSchedulingTimeLock() ? 'Agent Scheduled!' : 'Transaction Sent!'}
+                                                    <h4 class="text-xl font-bold text-white mb-1">
+                                                        {props.isSchedulingTimeLock() ? 'Agent Scheduled!' : 'Transaction Pending'}
                                                     </h4>
-                                                    <div class="mb-4 text-3xl font-black text-blue-400">
+                                                    <p class="text-xs text-gray-500 mb-4">Challenge period in progress for security</p>
+                                                    <div class="mb-4 text-2xl font-black text-blue-400">
                                                         {props.sendAmount()} {props.selectedToken()}
                                                     </div>
-                                                    <div class="mb-6 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
-                                                        <div class="px-4 py-4 space-y-3">
+
+                                                    {/* Challenge Period Status */}
+                                                    <div class="w-full bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <div class="flex items-center gap-2">
+                                                                <div class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                                                                <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Challenge Period</span>
+                                                            </div>
+                                                            <span class="text-sm font-black text-white tabular-nums">15:00</span>
+                                                        </div>
+                                                        <div class="h-1.5 bg-black/30 rounded-full overflow-hidden">
+                                                            <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full" style="width: 0%" />
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="mb-4 w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl overflow-hidden">
+                                                        <div class="px-4 py-3 space-y-2">
                                                             <div class="flex items-center justify-between text-xs">
-                                                                <span class="text-gray-500 font-bold uppercase tracking-wider">Time</span>
-                                                                <span class="text-gray-300 font-mono tracking-tight">{new Date().toLocaleString()}</span>
+                                                                <span class="text-gray-500 font-bold uppercase tracking-wider">Status</span>
+                                                                <span class="text-amber-400 font-bold flex items-center gap-1.5">
+                                                                    <span class="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                                                                    Pending Finalization
+                                                                </span>
                                                             </div>
                                                             <div class="flex items-center justify-between text-xs">
                                                                 <span class="text-gray-500 font-bold uppercase tracking-wider">From</span>
-                                                                <span class="text-blue-400 font-mono tracking-tight">{props.walletAddress().slice(0, 8)}...{props.walletAddress().slice(-8)}</span>
+                                                                <span class="text-blue-400 font-mono tracking-tight">{props.walletAddress().slice(0, 6)}...{props.walletAddress().slice(-6)}</span>
                                                             </div>
                                                             <div class="flex items-center justify-between text-xs">
                                                                 <span class="text-gray-500 font-bold uppercase tracking-wider">To</span>
-                                                                <span class="text-blue-400 font-mono tracking-tight">{props.recipientAddress().slice(0, 8)}...{props.recipientAddress().slice(-8)}</span>
+                                                                <span class="text-blue-400 font-mono tracking-tight">{props.recipientAddress().slice(0, 6)}...{props.recipientAddress().slice(-6)}</span>
                                                             </div>
 
                                                             <div class="h-px bg-white/5 w-full my-1"></div>
@@ -347,13 +366,13 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                         <a
                                                             href={`/visionscan?tx=${props.lastTxHash()}`}
                                                             target="_blank"
-                                                            class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none"
+                                                            class="w-full py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center decoration-none text-sm"
                                                         >
-                                                            View on Explorer
+                                                            Track on VisionScan
                                                         </a>
                                                         <button
                                                             onClick={props.resetFlow}
-                                                            class="w-full py-4 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90"
+                                                            class="w-full py-3 bg-white text-black font-bold rounded-2xl transition-all hover:bg-white/90 text-sm"
                                                         >
                                                             Done
                                                         </button>

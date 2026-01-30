@@ -36,7 +36,7 @@ import { WalletViewHeader } from './WalletViewHeader';
 
 export interface Notification {
     id: string;
-    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert';
+    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert' | 'challenge_raised' | 'bridge_finalized' | 'bridge_pending';
     title: string;
     content: string;
     timestamp: any;
@@ -193,6 +193,9 @@ export function WalletNotifications() {
             case 'transfer_scheduled': return { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Scheduled' };
             case 'system_announcement': return { icon: Megaphone, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'System' };
             case 'alert': return { icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Alert' };
+            case 'challenge_raised': return { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Challenge' };
+            case 'bridge_finalized': return { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Bridge' };
+            case 'bridge_pending': return { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Pending' };
             default: return { icon: Info, color: 'text-gray-400', bg: 'bg-gray-400/10', label: 'Info' };
         }
     };

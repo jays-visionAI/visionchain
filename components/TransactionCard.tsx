@@ -145,6 +145,13 @@ const TransactionCard = (props: TransactionCardProps) => {
                                     <ArrowRight class="w-3 h-3" />
                                     <span>{viz()?.toChain}</span>
                                 </div>
+                                <div class="mt-2 p-2 bg-amber-500/10 rounded-lg border border-amber-500/20 text-[10px] text-amber-400">
+                                    <div class="flex items-center gap-1.5">
+                                        <Clock class="w-3 h-3" />
+                                        <span class="font-bold">15-min Challenge Period</span>
+                                    </div>
+                                    <p class="text-amber-400/60 mt-1">Transfer will be pending for security verification.</p>
+                                </div>
                             </Show>
                         </div>
                     }>

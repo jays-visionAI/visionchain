@@ -473,26 +473,48 @@ export const WalletSend = (props: WalletSendProps) => {
                     <Show when={props.flowStep() === 3}>
                         <div class="py-12 flex flex-col items-center text-center animate-in zoom-in-95 duration-500 space-y-8">
                             <div class="relative">
-                                <div class="absolute inset-0 bg-green-500/20 rounded-full blur-3xl animate-pulse" />
-                                <div class="relative w-24 h-24 bg-green-500 rounded-full flex items-center justify-center shadow-2xl shadow-green-500/40">
-                                    <Check class="w-12 h-12 text-white" />
+                                <div class="absolute inset-0 bg-amber-500/20 rounded-full blur-3xl animate-pulse" />
+                                <div class="relative w-24 h-24 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center shadow-2xl shadow-amber-500/40">
+                                    <Clock class="w-12 h-12 text-white" />
                                 </div>
                             </div>
 
                             <div>
-                                <h4 class="text-3xl font-black text-white italic tracking-tighter uppercase mb-2">Transaction Sent!</h4>
-                                <p class="text-gray-500 font-medium">Your assets are being moved across the Vision ledger.</p>
+                                <h4 class="text-3xl font-black text-white italic tracking-tighter uppercase mb-2">Transaction Pending</h4>
+                                <p class="text-gray-500 font-medium">Your transfer is in the challenge period for security verification.</p>
                             </div>
 
-                            <div class="w-full bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden shadow-3xl">
-                                <div class="p-8 space-y-4 text-left">
+                            {/* Bridge Status Card */}
+                            <div class="w-full bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-[32px] overflow-hidden shadow-3xl">
+                                <div class="p-6 border-b border-amber-500/20">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
+                                            <span class="text-sm font-black text-amber-400 uppercase tracking-widest">Challenge Period</span>
+                                        </div>
+                                        <span class="text-lg font-black text-white tabular-nums">15:00</span>
+                                    </div>
+                                    <div class="mt-3 h-2 bg-black/30 rounded-full overflow-hidden">
+                                        <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full w-0 animate-[progress_900s_linear]" style="width: 0%" />
+                                    </div>
+                                    <p class="text-[10px] text-amber-400/60 mt-2 uppercase tracking-widest">Finalization after challenge period ends</p>
+                                </div>
+
+                                <div class="p-6 space-y-4 text-left">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Amount Sent</span>
+                                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Amount</span>
                                         <span class="text-lg font-black text-white italic">{props.sendAmount()} VCN</span>
                                     </div>
                                     <div class="flex justify-between items-center">
                                         <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">To Address</span>
-                                        <span class="text-xs font-mono text-blue-400">{props.recipientAddress().slice(0, 12)}...{props.recipientAddress().slice(-12)}</span>
+                                        <span class="text-xs font-mono text-blue-400">{props.recipientAddress().slice(0, 12)}...{props.recipientAddress().slice(-8)}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Status</span>
+                                        <span class="text-xs font-black text-amber-400 uppercase flex items-center gap-2">
+                                            <span class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                                            Pending Finalization
+                                        </span>
                                     </div>
                                     <div class="h-px bg-white/[0.04] w-full my-2" />
                                     <div class="space-y-2">
@@ -514,13 +536,31 @@ export const WalletSend = (props: WalletSendProps) => {
                                 </div>
                             </div>
 
+                            {/* Info Box */}
+                            <div class="w-full bg-blue-500/5 border border-blue-500/20 rounded-2xl p-4 text-left">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs font-bold text-white mb-1">Optimistic Finality</div>
+                                        <p class="text-[11px] text-gray-500 leading-relaxed">
+                                            Transfers are held for a 15-minute challenge period to ensure security.
+                                            If no challenges are raised, your transfer will be automatically finalized.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <a
                                     href={`/visionscan?tx=${props.lastTxHash()}`}
                                     target="_blank"
                                     class="py-5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center gap-2"
                                 >
-                                    VisionScan Explorer
+                                    Track on VisionScan
                                 </a>
                                 <button
                                     onClick={props.resetFlow}

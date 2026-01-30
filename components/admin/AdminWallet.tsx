@@ -11,17 +11,20 @@ import {
     Search,
     Filter,
     MoreVertical,
-    BarChart3
+    BarChart3,
+    Clock,
+    AlertTriangle
 } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
 
 // Mock Transaction Data
 const mockTransactions = [
-    { id: 'tx_01', type: 'send', amount: '1,200 VCN', from: '0x7F3A...BE29', to: '0x9dE2...4A1B', status: 'completed', time: '2 min ago' },
-    { id: 'tx_02', type: 'receive', amount: '450 VCN', from: '0x3C1F...8B02', to: '0x7F3A...BE29', status: 'completed', time: '15 min ago' },
-    { id: 'tx_03', type: 'swap', amount: '0.5 ETH', from: 'ETH Node', to: 'VCN Bridge', status: 'processing', time: '1 hour ago' },
-    { id: 'tx_04', type: 'send', amount: '3,000 VCN', from: '0x7F3A...BE29', to: '0x1A2B...3C4D', status: 'completed', time: '3 hours ago' },
-    { id: 'tx_05', type: 'mint', amount: 'NFT #2841', from: 'Vision Mint', to: '0x5E6F...7G8H', status: 'completed', time: '5 hours ago' },
+    { id: 'tx_01', type: 'bridge', amount: '5,000 VCN', from: '0x7F3A...BE29', to: 'Sepolia', status: 'pending', bridgeStatus: 'PENDING', time: '2 min ago' },
+    { id: 'tx_02', type: 'bridge', amount: '2,500 VCN', from: '0x3C1F...8B02', to: 'Sepolia', status: 'challenged', bridgeStatus: 'CHALLENGED', time: '8 min ago' },
+    { id: 'tx_03', type: 'send', amount: '1,200 VCN', from: '0x7F3A...BE29', to: '0x9dE2...4A1B', status: 'completed', time: '15 min ago' },
+    { id: 'tx_04', type: 'receive', amount: '450 VCN', from: '0x3C1F...8B02', to: '0x7F3A...BE29', status: 'completed', time: '30 min ago' },
+    { id: 'tx_05', type: 'swap', amount: '0.5 ETH', from: 'ETH Node', to: 'VCN Bridge', status: 'completed', time: '1 hour ago' },
+    { id: 'tx_06', type: 'bridge', amount: '10,000 VCN', from: '0x1A2B...3C4D', to: 'Sepolia', status: 'completed', bridgeStatus: 'FINALIZED', time: '3 hours ago' },
 ];
 
 export default function AdminWallet() {
@@ -133,7 +136,21 @@ export default function AdminWallet() {
                                 {(tx) => (
                                     <tr class="hover:bg-white/[0.02] transition-colors group">
                                         <td class="px-6 py-4">
-                                            <div class={`w-2 h-2 rounded-full ${tx.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-yellow-500 animate-pulse'}`} />
+                                            <div class={`flex items-center gap-2 px-2 py-1 rounded-lg w-fit ${tx.status === 'completed' ? 'bg-green-500/10' :
+                                                    tx.status === 'challenged' ? 'bg-red-500/10' :
+                                                        tx.status === 'pending' ? 'bg-amber-500/10' : 'bg-yellow-500/10'
+                                                }`}>
+                                                <div class={`w-2 h-2 rounded-full ${tx.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' :
+                                                        tx.status === 'challenged' ? 'bg-red-500 animate-pulse' :
+                                                            tx.status === 'pending' ? 'bg-amber-500 animate-pulse' : 'bg-yellow-500 animate-pulse'
+                                                    }`} />
+                                                <span class={`text-[9px] font-black uppercase tracking-widest ${tx.status === 'completed' ? 'text-green-400' :
+                                                        tx.status === 'challenged' ? 'text-red-400' :
+                                                            tx.status === 'pending' ? 'text-amber-400' : 'text-yellow-400'
+                                                    }`}>
+                                                    {tx.bridgeStatus || tx.status}
+                                                </span>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4">
                                             <code class="text-[11px] text-cyan-400/80 font-mono tracking-tight">{tx.id}_f32a...910c</code>
@@ -151,6 +168,9 @@ export default function AdminWallet() {
                                                 </Show>
                                                 <Show when={tx.type === 'mint'}>
                                                     <div class="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400"><TrendingUp class="w-3.5 h-3.5" /></div>
+                                                </Show>
+                                                <Show when={tx.type === 'bridge'}>
+                                                    <div class="p-1.5 rounded-lg bg-amber-500/10 text-amber-400"><Clock class="w-3.5 h-3.5" /></div>
                                                 </Show>
                                                 <span class="text-xs font-bold text-gray-300 capitalize">{tx.type}</span>
                                             </div>
