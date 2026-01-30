@@ -43,8 +43,9 @@ module.exports = {
         },
         // Ethereum Sepolia Testnet
         sepolia: {
-            url: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
+            url: process.env.SEPOLIA_RPC_URL || "https://rpc.ankr.com/eth_sepolia",
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 11155111
         }
     },
 };
