@@ -711,6 +711,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     // --- Mobile Input Minimize on Scroll ---
     onMount(() => {
         let lastScrollY = 0;
+        let scrollTimeout: any = null;
 
         const handleScroll = () => {
             if (!messagesContainerRef || typeof window === 'undefined') return;
@@ -722,16 +723,23 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             }
 
             const currentScrollY = messagesContainerRef.scrollTop;
-            const scrollingUp = currentScrollY > lastScrollY;
             const containerHeight = messagesContainerRef.clientHeight;
             const scrollHeight = messagesContainerRef.scrollHeight;
-            const notAtBottom = currentScrollY + containerHeight < scrollHeight - 100;
+            const distanceFromBottom = scrollHeight - currentScrollY - containerHeight;
+            const scrollingDown = currentScrollY < lastScrollY; // Actually scrolling toward top of messages
 
-            // Minimize when scrolling up and not at bottom
-            // Auto-expand when at bottom
-            if (notAtBottom && scrollingUp && currentScrollY > 200) {
-                setIsInputMinimized(true);
-            } else if (!notAtBottom) {
+            // Clear previous timeout
+            if (scrollTimeout) clearTimeout(scrollTimeout);
+
+            // Minimize when: not at bottom (reading older messages)
+            // Expand when: at bottom OR scrolling down (toward newer messages)
+            if (distanceFromBottom > 50 && currentScrollY > 10) {
+                // Not at bottom - minimize after small delay
+                scrollTimeout = setTimeout(() => {
+                    setIsInputMinimized(true);
+                }, 150);
+            } else if (distanceFromBottom < 30 || scrollingDown) {
+                // At bottom or scrolling toward bottom - expand
                 setIsInputMinimized(false);
             }
 
