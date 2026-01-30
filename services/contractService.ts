@@ -296,17 +296,54 @@ export class ContractService {
         if (!this.signer) throw new Error("Signer not initialized. Please connect wallet.");
 
         const amountWei = ethers.parseUnits(amount, 18);
+        const fromAddress = await this.signer.getAddress();
 
         if (tokenSymbol === 'ETH') {
             const tx = await this.signer.sendTransaction({
                 to,
                 value: amountWei
             });
-            return await tx.wait();
+            const receipt = await tx.wait();
+
+            // Index ETH transfer to Firestore
+            try {
+                const db = getFirebaseDb();
+                await setDoc(doc(db, 'transactions', tx.hash), {
+                    hash: tx.hash,
+                    chainId: 1337,
+                    type: 'Transfer',
+                    from_addr: fromAddress.toLowerCase(),
+                    to_addr: to.toLowerCase(),
+                    value: amount,
+                    timestamp: Date.now(),
+                    status: 'indexed',
+                    metadata: { method: 'ETH Transfer', source: 'user_wallet' }
+                });
+            } catch (e) { console.warn('[Indexing] ETH transfer indexing failed:', e); }
+
+            return receipt;
         } else if (tokenSymbol === 'VCN') {
             const vcnContract = this.getVcnTokenContract().connect(this.signer);
             const tx = await (vcnContract as any).transfer(to, amountWei);
-            return await tx.wait();
+            const receipt = await tx.wait();
+
+            // Index VCN transfer to Firestore
+            try {
+                const db = getFirebaseDb();
+                await setDoc(doc(db, 'transactions', tx.hash), {
+                    hash: tx.hash,
+                    chainId: 1337,
+                    type: 'Transfer',
+                    from_addr: fromAddress.toLowerCase(),
+                    to_addr: to.toLowerCase(),
+                    value: amount,
+                    timestamp: Date.now(),
+                    status: 'indexed',
+                    metadata: { method: 'VCN Token Transfer', source: 'user_wallet' }
+                });
+            } catch (e) { console.warn('[Indexing] VCN transfer indexing failed:', e); }
+
+            return receipt;
         } else {
             throw new Error(`Token ${tokenSymbol} transfer not implemented in this demo.`);
         }
@@ -469,6 +506,23 @@ export class ContractService {
 
         const result = await response.json();
         console.log("Gasless Transfer Successful:", result);
+
+        // Index gasless transfer to Firestore
+        try {
+            const db = getFirebaseDb();
+            await setDoc(doc(db, 'transactions', result.txHash || `gasless-${Date.now()}`), {
+                hash: result.txHash || `gasless-${Date.now()}`,
+                chainId: 1337,
+                type: 'Transfer',
+                from_addr: userAddress.toLowerCase(),
+                to_addr: to.toLowerCase(),
+                value: amount,
+                timestamp: Date.now(),
+                status: 'indexed',
+                metadata: { method: 'Gasless Transfer', source: 'user_wallet', fee: '1.0' }
+            });
+        } catch (e) { console.warn('[Indexing] Gasless transfer indexing failed:', e); }
+
         return result;
     }
 
