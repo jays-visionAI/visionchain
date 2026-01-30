@@ -2,6 +2,8 @@ import { Show, For, createSignal, onMount, createEffect } from 'solid-js';
 import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { contractService } from '../../services/contractService';
+import { getFirebaseDb } from '../../services/firebaseService';
+import { collection, query, where, orderBy, limit, getDocs, or } from 'firebase/firestore';
 
 interface WalletActivityProps {
     purchases: () => any[];
@@ -32,7 +34,6 @@ export const WalletActivity = (props: WalletActivityProps) => {
     const [page, setPage] = createSignal(1);
     const [hasMore, setHasMore] = createSignal(true);
     const PAGE_SIZE = 20;
-    const API_URL = "https://api.visionchain.co/api/transactions";
 
     const fetchHistory = async (p: number = 1) => {
         if (!props.walletAddress) return;
@@ -40,12 +41,25 @@ export const WalletActivity = (props: WalletActivityProps) => {
         try {
             setLoading(true);
             setPage(p);
-            // Using offset/limit for best compatibility if server supports it, or just query params
-            // Normalize address to lowercase for case-insensitive matching
             const normalizedAddress = props.walletAddress.toLowerCase();
-            const response = await fetch(`${API_URL}?address=${normalizedAddress}&limit=${PAGE_SIZE}&offset=${(p - 1) * PAGE_SIZE}`);
-            const rawData = await response.json();
-            const data = (rawData.transactions || []) as any[];
+
+            // Query Firestore directly instead of server API
+            const db = getFirebaseDb();
+            const txRef = collection(db, 'transactions');
+
+            // Query for transactions where user is sender or receiver
+            const q = query(
+                txRef,
+                or(
+                    where('from_addr', '==', normalizedAddress),
+                    where('to_addr', '==', normalizedAddress)
+                ),
+                orderBy('timestamp', 'desc'),
+                limit(PAGE_SIZE)
+            );
+
+            const snapshot = await getDocs(q);
+            const data = snapshot.docs.map(doc => doc.data());
 
             const mapped = data.map(tx => ({
                 hash: tx.hash,
@@ -63,7 +77,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
             setTransactions(mapped);
             setHasMore(data.length === PAGE_SIZE);
         } catch (error) {
-            console.error("Failed to fetch transaction history from API:", error);
+            console.error("Failed to fetch transaction history from Firestore:", error);
         } finally {
             setLoading(false);
         }
