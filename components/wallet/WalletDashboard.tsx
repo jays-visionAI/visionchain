@@ -611,8 +611,6 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-    // Show welcome actions immediately - no delay
-    const [showWelcomeActions, setShowWelcomeActions] = createSignal(true);
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
     let scrollContainerRef: HTMLDivElement | undefined;
@@ -739,74 +737,53 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 >
                     <Show when={props.messages().length === 0}>
                         <div class="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-2xl mx-auto z-10">
-                            {/* PC Intro Title - Shows for 2s then fades out */}
-                            <Show when={!showWelcomeActions()}>
-                                <Motion.div
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 1.05, filter: "blur(10px)" }}
-                                    transition={{ duration: 0.8 }}
-                                    class="hidden md:flex flex-col items-center text-center"
-                                >
-                                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full mb-8">
-                                        <Sparkles class="w-4 h-4 text-blue-400 animate-pulse" />
-                                        <span class="text-[11px] font-black text-blue-400 uppercase tracking-[0.25em]">Vision AI V1.0</span>
-                                    </div>
-                                    <h1 class="text-6xl font-black italic text-white mb-6 tracking-tight uppercase">
-                                        Orchestrate your <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">On-Chain Vision</span>?
-                                    </h1>
-                                </Motion.div>
-                            </Show>
+                            {/* Welcome & Quick Actions */}
+                            <Motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.5 }}
+                                class="w-full max-w-sm flex flex-col gap-6 self-center"
+                            >
+                                <div class="flex flex-col gap-1">
+                                    <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
+                                        Hello, {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || 'Vision User'}
+                                    </h2>
+                                    <p class="text-lg text-gray-500 font-medium">How can I help you today?</p>
+                                </div>
 
-                            {/* Action Chips - Greeting & Suggestions */}
-                            <Show when={showWelcomeActions()}>
-                                <Motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.5 }}
-                                    class="w-full max-w-sm flex flex-col gap-8 self-center"
-                                >
-                                    <div class="flex flex-col gap-2">
-                                        <h2 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
-                                            Hello, {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || 'Vision User'}
-                                        </h2>
-                                        <p class="text-2xl text-gray-500 font-medium">How can I help you today?</p>
-                                    </div>
+                                <div class="flex flex-col gap-2 w-full items-start">
+                                    <For each={quickActions()}>
+                                        {(action) => {
+                                            // Icon mapping
+                                            const iconMap: Record<string, any> = {
+                                                BookOpen, Sparkles, UserPlus, Send, TrendingUp, Zap, Download, Clock, MessageSquare, Search, Lock, Layers
+                                            };
+                                            const IconComponent = iconMap[action.icon] || Sparkles;
 
-                                    <div class="flex flex-col gap-3 w-full items-start">
-                                        <For each={quickActions()}>
-                                            {(action) => {
-                                                // Icon mapping
-                                                const iconMap: Record<string, any> = {
-                                                    BookOpen, Sparkles, UserPlus, Send, TrendingUp, Zap, Download, Clock, MessageSquare, Search, Lock, Layers
-                                                };
-                                                const IconComponent = iconMap[action.icon] || Sparkles;
+                                            const handleClick = () => {
+                                                if (action.actionType === 'flow' && action.flowName) {
+                                                    props.setActiveFlow(action.flowName);
+                                                } else if (action.prompt) {
+                                                    props.setInput(action.prompt);
+                                                    props.handleSend();
+                                                }
+                                            };
 
-                                                const handleClick = () => {
-                                                    if (action.actionType === 'flow' && action.flowName) {
-                                                        props.setActiveFlow(action.flowName);
-                                                    } else if (action.prompt) {
-                                                        props.setInput(action.prompt);
-                                                        props.handleSend();
-                                                    }
-                                                };
-
-                                                return (
-                                                    <button
-                                                        onClick={handleClick}
-                                                        class="flex items-center gap-4 p-4 pl-5 pr-8 rounded-[24px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
-                                                    >
-                                                        <div class={`w-6 h-6 ${action.iconColor} group-hover:scale-110 transition-transform`}>
-                                                            <IconComponent class="w-full h-full" />
-                                                        </div>
-                                                        <span class="text-[15px] font-medium text-gray-200 group-hover:text-white">{action.label}</span>
-                                                    </button>
-                                                );
-                                            }}
-                                        </For>
-                                    </div>
-                                </Motion.div>
-                            </Show>
+                                            return (
+                                                <button
+                                                    onClick={handleClick}
+                                                    class="flex items-center gap-3 py-3 px-4 rounded-[20px] bg-[#1a1a1c] border border-white/5 hover:bg-[#252528] transition-all group text-left"
+                                                >
+                                                    <div class={`w-5 h-5 ${action.iconColor} group-hover:scale-110 transition-transform`}>
+                                                        <IconComponent class="w-full h-full" />
+                                                    </div>
+                                                    <span class="text-[13px] font-medium text-gray-200 group-hover:text-white">{action.label}</span>
+                                                </button>
+                                            );
+                                        }}
+                                    </For>
+                                </div>
+                            </Motion.div>
                         </div>
                     </Show>
 

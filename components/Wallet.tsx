@@ -716,7 +716,7 @@ const Wallet = (): JSX.Element => {
 
     const startNewChat = () => {
         setCurrentSessionId(null);
-        setMessages([{ role: 'assistant', content: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }]);
+        setMessages([]);  // Empty messages to show Quick Actions
         navigate('/wallet/chat');
     };
 
@@ -742,9 +742,7 @@ const Wallet = (): JSX.Element => {
         }
     });
     const [chatLoading, setChatLoading] = createSignal(false); // Dedicated loading for chat
-    const [messages, setMessages] = createSignal<Message[]>([
-        { role: 'assistant', content: 'Hello. I am the Vision Chain AI Architect. I can help you transfer assets, bridge tokens, or optimize your portfolio.' }
-    ]);
+    const [messages, setMessages] = createSignal<Message[]>([]);  // Start empty to show Quick Actions
     const [marketData, setMarketData] = createSignal<Map<string, CoinGeckoToken>>(new Map());
     const [marketLoading, setMarketLoading] = createSignal(true);
     const [vcnPurchases, setVcnPurchases] = createSignal<VcnPurchase[]>([]);
