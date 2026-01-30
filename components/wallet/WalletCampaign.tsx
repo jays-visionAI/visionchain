@@ -18,7 +18,7 @@ import { Motion } from 'solid-motionone';
 import { WalletViewHeader } from './WalletViewHeader';
 import { ReferralLeaderboard } from './ReferralLeaderboard';
 
-export const WalletCampaign = (props: { userProfile: () => any }) => {
+export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (view: string) => void }) => {
     const [selectedQuest, setSelectedQuest] = createSignal<string | null>(null);
 
     const quests = [
@@ -170,7 +170,13 @@ export const WalletCampaign = (props: { userProfile: () => any }) => {
                             <For each={quests}>
                                 {(quest) => (
                                     <div
-                                        onClick={() => setSelectedQuest(quest.id)}
+                                        onClick={() => {
+                                            if (quest.id === 'staking' && props.onNavigate) {
+                                                props.onNavigate('staking');
+                                            } else {
+                                                setSelectedQuest(quest.id);
+                                            }
+                                        }}
                                         class={`bg-[#111113] border border-white/[0.06] rounded-[32px] p-8 pb-10 hover:border-${quest.accent}-500/30 transition-all group flex flex-col h-full cursor-pointer relative`}
                                     >
                                         {/* Hover Glow - Moved to inner container to prevent clipping of button shadow */}

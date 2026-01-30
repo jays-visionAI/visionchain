@@ -2656,7 +2656,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                         {/* Quest (formerly Campaign) View */}
                         <Show when={activeView() === 'campaign' || activeView() === 'quest'}>
-                            <WalletCampaign userProfile={userProfile} />
+                            <WalletCampaign userProfile={userProfile} onNavigate={(view: string) => navigate(`/wallet/${view}`)} />
                         </Show>
 
                         {/* History View */}
