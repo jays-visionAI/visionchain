@@ -48,8 +48,9 @@ export class GeminiProvider implements AIProvider {
             return response;
         } catch (e: any) {
             const errorMsg = JSON.stringify(e).toLowerCase();
-            if ((errorMsg.includes('404') || errorMsg.includes('429') || errorMsg.includes('400')) && model !== 'gemini-1.5-pro-latest') {
-                return await executeRequest('gemini-1.5-pro-latest');
+            // Fallback to Nano Banana (gemini-2.0-flash-exp) - Only use gemini-1.5-pro via DeepSeek router fallback
+            if ((errorMsg.includes('404') || errorMsg.includes('429') || errorMsg.includes('400')) && model !== 'gemini-2.0-flash-exp') {
+                return await executeRequest('gemini-2.0-flash-exp');
             }
             throw e;
         }

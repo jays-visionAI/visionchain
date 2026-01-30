@@ -1009,16 +1009,18 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             </Show>
                                         </Presence>
 
-                                        {/* History Button - Always visible */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsQueueDrawerOpen(true);
-                                            }}
-                                            class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
-                                        >
-                                            <List class="w-5 h-5" />
-                                        </button>
+                                        {/* History Button - Only visible when Agent Desk is expanded */}
+                                        <Show when={!isAgentBayCollapsed()}>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsQueueDrawerOpen(true);
+                                                }}
+                                                class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
+                                            >
+                                                <List class="w-5 h-5" />
+                                            </button>
+                                        </Show>
                                     </div>
                                 </div>
                             </Show>
