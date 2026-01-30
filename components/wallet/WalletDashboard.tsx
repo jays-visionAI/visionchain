@@ -788,7 +788,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
 
                     <Show when={props.messages().length > 0}>
-                        <div class="max-w-3xl mx-auto px-4 md:px-6 pt-16 md:pt-32 pb-64 space-y-8 md:space-y-12">
+                        <div class="max-w-3xl mx-auto px-4 md:px-6 pt-4 md:pt-16 pb-72 md:pb-56 space-y-6 md:space-y-12">
                             <For each={props.messages()}>
                                 {(msg) => (
                                     <Motion.div
