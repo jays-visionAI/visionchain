@@ -287,14 +287,33 @@ export default function AdminDeFi() {
 
     // Connect wallet for admin functions
     const connectWallet = async () => {
-        if (!window.ethereum) return;
+        console.log('[Admin] connectWallet called');
+
+        if (!window.ethereum) {
+            alert('MetaMask not detected. Please install MetaMask extension.');
+            console.error('[Admin] window.ethereum not found');
+            return;
+        }
 
         try {
+            console.log('[Admin] Requesting accounts...');
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            setWalletAddress(accounts[0]);
-            await fetchBridgeData();
-        } catch (err) {
-            console.error('Failed to connect wallet:', err);
+            console.log('[Admin] Accounts received:', accounts);
+
+            if (accounts && accounts.length > 0) {
+                setWalletAddress(accounts[0]);
+                console.log('[Admin] Wallet connected:', accounts[0]);
+                await fetchBridgeData();
+            } else {
+                alert('No accounts found. Please unlock MetaMask.');
+            }
+        } catch (err: any) {
+            console.error('[Admin] Failed to connect wallet:', err);
+            if (err.code === 4001) {
+                alert('Connection rejected. Please approve the MetaMask request.');
+            } else {
+                alert(`Failed to connect: ${err.message || 'Unknown error'}`);
+            }
         }
     };
 
@@ -722,8 +741,8 @@ export default function AdminDeFi() {
                                                 <button
                                                     onClick={() => setSubsidyDuration(days)}
                                                     class={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subsidyDuration() === days
-                                                            ? 'bg-green-500 text-black'
-                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                                                        ? 'bg-green-500 text-black'
+                                                        : 'bg-white/5 text-gray-400 hover:bg-white/10'
                                                         }`}
                                                 >
                                                     {days}d

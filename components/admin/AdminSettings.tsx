@@ -228,7 +228,67 @@ export default function AdminSettings() {
                             </div>
                         </div>
 
-                        {/* Section 3: Ecosystem */}
+                        {/* Section 3: Deployed Contracts Reference */}
+                        <div class="space-y-3">
+                            <h2 class="text-xs font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Deployed Contracts</h2>
+                            <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-5 overflow-hidden">
+                                <div class="flex items-center gap-4 mb-4">
+                                    <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                                        <Shield class="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <div class="font-bold text-white">Vision Chain Testnet</div>
+                                        <div class="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">Chain ID: 1337</div>
+                                    </div>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead>
+                                            <tr class="border-b border-white/5">
+                                                <th class="text-left py-2 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contract</th>
+                                                <th class="text-left py-2 px-3 text-[10px] font-black text-gray-500 uppercase tracking-widest">Address</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-white/5">
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">VCN Token</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x5FbDB2315678afecb367f032d93F642f64180aa3</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">Node License</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">Mining Pool</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">VCN Vesting</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">Vision Equalizer</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x610178dA211FEF7D417bC0e6FeD39F05609AD788</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">VCN Paymaster</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">Time Lock Agent</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb</td>
+                                            </tr>
+                                            <tr class="hover:bg-white/[0.02]">
+                                                <td class="py-2.5 px-3 font-bold text-white">Profile Registry</td>
+                                                <td class="py-2.5 px-3 font-mono text-xs text-cyan-400 select-all">0x3Aa5ebB10DC797CAC828524e59A333d0A371443c</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 4: Ecosystem */}
                         <div class="space-y-3">
                             <h2 class="text-xs font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Ecosystem & Governance</h2>
                             <div class="grid gap-3">
@@ -325,10 +385,10 @@ export default function AdminSettings() {
                                         onClick={handleUpdatePriceRange}
                                         disabled={isSavingPrice()}
                                         class={`w-full py-4 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 ${priceSaveStatus() === 'success'
-                                                ? 'bg-green-600 shadow-green-600/20'
-                                                : priceSaveStatus() === 'error'
-                                                    ? 'bg-red-600 shadow-red-600/20'
-                                                    : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20'
+                                            ? 'bg-green-600 shadow-green-600/20'
+                                            : priceSaveStatus() === 'error'
+                                                ? 'bg-red-600 shadow-red-600/20'
+                                                : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20'
                                             } text-white disabled:opacity-50`}
                                     >
                                         <Show when={isSavingPrice()}>
