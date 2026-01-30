@@ -1,4 +1,4 @@
-import { Component, createSignal, For, Show } from 'solid-js';
+import { Component, createSignal, createEffect, For, Show, onMount } from 'solid-js';
 import {
     ArrowRightLeft,
     ArrowDown,
@@ -7,12 +7,41 @@ import {
     Clock,
     ExternalLink,
     History,
-    Settings2,
-    Info,
     CheckCircle2,
-    AlertCircle
+    AlertCircle,
+    Wallet,
+    Loader2,
+    RefreshCw
 } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
+import { ethers } from 'ethers';
+import { WalletViewHeader } from './wallet/WalletViewHeader';
+
+// Extend Window interface for ethereum
+declare global {
+    interface Window {
+        ethereum?: any;
+    }
+}
+
+// Contract Addresses (Vision Testnet)
+const VISION_RPC = 'https://api.visionchain.co/rpc-proxy';
+const VISION_VAULT_ADDRESS = '0x8464135c8F25Da09e49BC8782676a84730C318bC'; // VisionVault on Sepolia
+const VCN_TOKEN_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'; // VCN on Vision Testnet
+
+const VISION_VAULT_ABI = [
+    'function depositToVision(uint256 amount, uint256 destinationChainId) external',
+    'function withdrawFromVision(uint256 amount, bytes calldata proof) external',
+    'event DepositInitiated(address indexed sender, uint256 amount, uint256 destinationChainId, bytes32 depositHash)'
+];
+
+const ERC20_ABI = [
+    'function approve(address spender, uint256 amount) external returns (bool)',
+    'function allowance(address owner, address spender) external view returns (uint256)',
+    'function balanceOf(address account) external view returns (uint256)',
+    'function symbol() external view returns (string)',
+    'function decimals() external view returns (uint8)'
+];
 
 interface Transaction {
     id: string;
@@ -23,278 +52,507 @@ interface Transaction {
     status: 'Pending' | 'Challenged' | 'Finalized' | 'Reverted' | 'Processing' | 'Success';
     time: string;
     hash: string;
-    timeRemaining?: number;  // seconds remaining in challenge period
+    timeRemaining?: number;
     intentHash?: string;
 }
 
+interface NetworkConfig {
+    name: string;
+    chainId: number;
+    rpcUrl: string;
+    color: string;
+}
+
+const NETWORKS: NetworkConfig[] = [
+    { name: 'Ethereum Sepolia', chainId: 11155111, rpcUrl: 'https://sepolia.infura.io/v3/...', color: 'blue' },
+    { name: 'Vision Testnet', chainId: 20261337, rpcUrl: VISION_RPC, color: 'purple' }
+];
+
 const Bridge: Component = () => {
-    const [fromNetwork, setFromNetwork] = createSignal('Ethereum Sepolia');
-    const [toNetwork, setToNetwork] = createSignal('Vision Testnet v2');
+    // Connection state
+    const [isConnected, setIsConnected] = createSignal(false);
+    const [walletAddress, setWalletAddress] = createSignal('');
+    const [currentChainId, setCurrentChainId] = createSignal<number>(0);
+
+    // Bridge state
+    const [fromNetwork, setFromNetwork] = createSignal(NETWORKS[0]);
+    const [toNetwork, setToNetwork] = createSignal(NETWORKS[1]);
     const [amount, setAmount] = createSignal('');
     const [selectedAsset, setSelectedAsset] = createSignal('VCN');
+    const [balance, setBalance] = createSignal('0');
     const [isBridging, setIsBridging] = createSignal(false);
-    const [step, setStep] = createSignal(1); // 1: Input, 2: Review, 3: Success
+    const [isApproving, setIsApproving] = createSignal(false);
+    const [step, setStep] = createSignal(1); // 1: Input, 2: Processing, 3: Success
 
-    const [transactions] = createSignal<Transaction[]>([
-        { id: '1', from: 'Ethereum Sepolia', to: 'Vision Testnet v2', amount: '250.00', asset: 'VCN', status: 'Success', time: '10 mins ago', hash: '0x3a...f42' },
-        { id: '2', from: 'Vision Testnet v2', to: 'Ethereum Sepolia', amount: '12.50', asset: 'ETH', status: 'Processing', time: '2 mins ago', hash: '0x1c...a9b' },
-    ]);
+    // Transaction state
+    const [txHash, setTxHash] = createSignal('');
+    const [errorMsg, setErrorMsg] = createSignal('');
+    const [transactions, setTransactions] = createSignal<Transaction[]>([]);
 
+    // Connect wallet
+    const connectWallet = async () => {
+        if (typeof window.ethereum === 'undefined') {
+            setErrorMsg('Please install MetaMask');
+            return;
+        }
+
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+            setWalletAddress(accounts[0]);
+            setCurrentChainId(parseInt(chainId, 16));
+            setIsConnected(true);
+            await loadBalance();
+        } catch (err: any) {
+            setErrorMsg(err.message || 'Failed to connect wallet');
+        }
+    };
+
+    // Load token balance
+    const loadBalance = async () => {
+        if (!walletAddress()) return;
+
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+            const bal = await vcn.balanceOf(walletAddress());
+            setBalance(ethers.formatEther(bal));
+        } catch (err) {
+            console.error('Failed to load balance:', err);
+            setBalance('0');
+        }
+    };
+
+    // Switch networks
     const handleSwitch = () => {
         const temp = fromNetwork();
         setFromNetwork(toNetwork());
         setToNetwork(temp);
+        loadBalance();
     };
 
-    const handleBridge = async () => {
-        setIsBridging(true);
-        // Simulate bridge delay
-        setTimeout(() => {
-            setIsBridging(false);
-            setStep(3);
-        }, 3000);
+    // Switch to correct network
+    const switchNetwork = async (chainId: number) => {
+        try {
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: `0x${chainId.toString(16)}` }]
+            });
+            setCurrentChainId(chainId);
+            await loadBalance();
+        } catch (err: any) {
+            if (err.code === 4902) {
+                // Network not added, try to add it
+                setErrorMsg('Please add this network to MetaMask');
+            } else {
+                setErrorMsg(err.message || 'Failed to switch network');
+            }
+        }
     };
+
+    // Handle bridge transfer
+    const handleBridge = async () => {
+        if (!amount() || parseFloat(amount()) <= 0) {
+            setErrorMsg('Please enter a valid amount');
+            return;
+        }
+
+        if (parseFloat(amount()) > parseFloat(balance())) {
+            setErrorMsg('Insufficient balance');
+            return;
+        }
+
+        try {
+            setIsBridging(true);
+            setIsApproving(true);
+            setErrorMsg('');
+            setStep(2);
+
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
+            const vault = new ethers.Contract(VISION_VAULT_ADDRESS, VISION_VAULT_ABI, signer);
+
+            const amountWei = ethers.parseEther(amount());
+
+            // Check and approve if needed
+            const allowance = await vcn.allowance(walletAddress(), VISION_VAULT_ADDRESS);
+            if (allowance < amountWei) {
+                const approveTx = await vcn.approve(VISION_VAULT_ADDRESS, amountWei);
+                await approveTx.wait();
+            }
+
+            setIsApproving(false);
+
+            // Execute bridge deposit
+            const tx = await vault.depositToVision(amountWei, toNetwork().chainId);
+            setTxHash(tx.hash);
+
+            const receipt = await tx.wait();
+
+            // Add to transaction history
+            const newTx: Transaction = {
+                id: Date.now().toString(),
+                from: fromNetwork().name,
+                to: toNetwork().name,
+                amount: amount(),
+                asset: selectedAsset(),
+                status: 'Processing',
+                time: 'Just now',
+                hash: tx.hash.slice(0, 6) + '...' + tx.hash.slice(-4)
+            };
+            setTransactions(prev => [newTx, ...prev]);
+
+            setStep(3);
+            await loadBalance();
+
+        } catch (err: any) {
+            setErrorMsg(err.reason || err.message || 'Bridge transfer failed');
+            setStep(1);
+        } finally {
+            setIsBridging(false);
+            setIsApproving(false);
+        }
+    };
+
+    // Set max amount
+    const setMaxAmount = () => {
+        setAmount(balance());
+    };
+
+    // Set percentage amount
+    const setPercentage = (percent: number) => {
+        const val = (parseFloat(balance()) * percent / 100).toFixed(4);
+        setAmount(val);
+    };
+
+    // Check wallet on mount
+    onMount(async () => {
+        if (typeof window.ethereum !== 'undefined') {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts.length > 0) {
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                setWalletAddress(accounts[0]);
+                setCurrentChainId(parseInt(chainId, 16));
+                setIsConnected(true);
+                await loadBalance();
+            }
+
+            // Listen for account/chain changes
+            window.ethereum.on('accountsChanged', (accounts: string[]) => {
+                if (accounts.length > 0) {
+                    setWalletAddress(accounts[0]);
+                    loadBalance();
+                } else {
+                    setIsConnected(false);
+                }
+            });
+
+            window.ethereum.on('chainChanged', (chainId: string) => {
+                setCurrentChainId(parseInt(chainId, 16));
+                loadBalance();
+            });
+        }
+    });
 
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
-                <div class="text-center mb-12">
-                    <Motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        <h1 class="text-4xl md:text-6xl font-black italic tracking-tighter mb-4">VISION BRIDGE</h1>
-                        <p class="text-slate-400 font-medium uppercase tracking-[0.2em] text-[10px]">
-                            Seamless Asset Migration • High-Throughput Liquidity
-                        </p>
-                    </Motion.div>
-                </div>
+                <WalletViewHeader
+                    tag="Cross-Chain Transfer"
+                    title="VISION"
+                    titleAccent="BRIDGE"
+                    description="Transfer assets between Ethereum and Vision Chain with optimistic finality security."
+                    icon={ArrowRightLeft}
+                />
 
-                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <Show when={!isConnected()} fallback={
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
 
-                    {/* Main Bridge UI */}
-                    <div class="lg:col-span-3 space-y-6">
-                        <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[32px] p-8 shadow-2xl relative overflow-hidden group">
-                            <div class="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                        {/* Main Bridge UI */}
+                        <div class="lg:col-span-3 space-y-6">
+                            <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[32px] p-8 shadow-2xl relative overflow-hidden group">
+                                <div class="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
 
-                            <Show when={step() === 1 || step() === 2}>
-                                {/* Swap Interface */}
-                                <div class="relative z-10 space-y-4">
+                                <Show when={step() === 1}>
+                                    {/* Input Interface */}
+                                    <div class="relative z-10 space-y-4">
 
-                                    {/* From Network */}
-                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all focus-within:border-blue-500/50">
-                                        <div class="flex justify-between items-center mb-3">
-                                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">From Network</span>
-                                            <span class="text-[10px] font-bold text-blue-400">Balance: 12,450.00 {selectedAsset()}</span>
-                                        </div>
-                                        <div class="flex items-center gap-4">
-                                            <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center border border-blue-500/20">
-                                                <Zap class="w-5 h-5 text-blue-400" />
+                                        {/* From Network */}
+                                        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all focus-within:border-blue-500/50">
+                                            <div class="flex justify-between items-center mb-3">
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">From Network</span>
+                                                <span class="text-[10px] font-bold text-blue-400">Balance: {Number(balance()).toLocaleString()} {selectedAsset()}</span>
                                             </div>
-                                            <div class="flex-1">
-                                                <div class="text-lg font-black italic uppercase tracking-tight">{fromNetwork()}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Switch Button */}
-                                    <div class="flex justify-center -my-6 relative z-20">
-                                        <button
-                                            onClick={handleSwitch}
-                                            class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 hover:scale-110 active:scale-95 transition-all border-4 border-[#0c0c0c]"
-                                        >
-                                            <ArrowDown class="w-5 h-5 text-white" />
-                                        </button>
-                                    </div>
-
-                                    {/* To Network */}
-                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all">
-                                        <div class="flex justify-between items-center mb-3">
-                                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">To Network</span>
-                                        </div>
-                                        <div class="flex items-center gap-4">
-                                            <div class="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center border border-purple-500/20">
-                                                <Zap class="w-5 h-5 text-purple-400" />
-                                            </div>
-                                            <div class="flex-1">
-                                                <div class="text-lg font-black italic uppercase tracking-tight">{toNetwork()}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Asset & Amount */}
-                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 mt-4">
-                                        <div class="flex justify-between items-center mb-4">
-                                            <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount to Bridge</span>
-                                            <div class="flex gap-2">
-                                                <button class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">25%</button>
-                                                <button class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">50%</button>
-                                                <button class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">MAX</button>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-4">
-                                            <input
-                                                type="number"
-                                                placeholder="0.00"
-                                                value={amount()}
-                                                onInput={(e) => setAmount(e.currentTarget.value)}
-                                                class="bg-transparent border-none text-3xl font-black focus:outline-none w-full placeholder-slate-700"
-                                            />
-                                            <div class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10">
-                                                <div class="w-5 h-5 rounded-full bg-blue-500" />
-                                                <span class="font-bold text-sm tracking-tight">{selectedAsset()}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Summary & Action */}
-                                    <div class="pt-4 space-y-4">
-                                        <div class="flex justify-between items-center text-[11px] text-slate-500 font-medium px-2">
-                                            <span>Bridge Fee (Est.)</span>
-                                            <span class="text-slate-300">0.0001 ETH</span>
-                                        </div>
-                                        <div class="flex justify-between items-center text-[11px] text-slate-500 font-medium px-2">
-                                            <span>Estimated Arrival</span>
-                                            <span class="text-slate-300">~2-3 Minutes</span>
-                                        </div>
-
-                                        <button
-                                            onClick={handleBridge}
-                                            disabled={!amount() || isBridging()}
-                                            class="w-full py-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 active:scale-[0.98]"
-                                        >
-                                            <Show when={isBridging()} fallback={<ArrowRightLeft class="w-4 h-4" />}>
-                                                <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            </Show>
-                                            {isBridging() ? 'INITIATING BRIDGE...' : 'START BRIDGE TRANSFER'}
-                                        </button>
-                                    </div>
-                                </div>
-                            </Show>
-
-                            <Show when={step() === 3}>
-                                {/* Success Interface */}
-                                <div class="relative z-10 py-12 text-center space-y-6">
-                                    <div class="w-20 h-20 bg-green-500/20 border border-green-500/50 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <CheckCircle2 class="w-10 h-10 text-green-500" />
-                                    </div>
-                                    <h2 class="text-3xl font-black italic tracking-tight">TRANSFER INITIATED!</h2>
-                                    <p class="text-slate-400 text-sm leading-relaxed max-w-sm mx-auto">
-                                        Your {amount()} {selectedAsset()} is on its way to {toNetwork()}. You can track the status below.
-                                    </p>
-                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 max-w-xs mx-auto text-xs font-mono text-blue-400 break-all">
-                                        Tx: 0x4f...a82d
-                                    </div>
-                                    <button
-                                        onClick={() => setStep(1)}
-                                        class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 transition-all"
-                                    >
-                                        New Transfer
-                                    </button>
-                                </div>
-                            </Show>
-                        </div>
-
-                        {/* Info Section */}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="bg-white/[0.03] border border-white/5 p-6 rounded-2xl space-y-3">
-                                <div class="flex items-center gap-3 text-cyan-400">
-                                    <ShieldCheck class="w-5 h-5" />
-                                    <span class="text-[11px] font-black uppercase tracking-widest">Secure Lock-and-Mint</span>
-                                </div>
-                                <p class="text-[11px] text-slate-500 leading-relaxed font-medium">Assets are cryptographically locked on the source chain and minted as canonical tokens on Vision v2.</p>
-                            </div>
-                            <div class="bg-white/[0.03] border border-white/5 p-6 rounded-2xl space-y-3">
-                                <div class="flex items-center gap-3 text-purple-400">
-                                    <Zap class="w-5 h-5" />
-                                    <span class="text-[11px] font-black uppercase tracking-widest">Instant Finality</span>
-                                </div>
-                                <p class="text-[11px] text-slate-500 leading-relaxed font-medium">Powered by Kafka Engine v2, cross-chain verification happens inside the sequencer enclave for micro-second proof.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Sidebar: History & Activity */}
-                    <div class="lg:col-span-2 space-y-6">
-
-                        {/* Status Card */}
-                        <div class="bg-blue-600/10 border border-blue-500/20 rounded-[32px] p-8">
-                            <div class="flex items-center gap-3 mb-4">
-                                <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                                <span class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Network Status</span>
-                            </div>
-                            <div class="text-2xl font-black italic mb-2 tracking-tight">BRIDGE OPERATIONAL</div>
-                            <p class="text-xs text-blue-400/60 font-medium">L1-L2 Relay sync is healthy. Current average latency: 134ms.</p>
-                        </div>
-
-                        {/* Recent History */}
-                        <div class="bg-[#0c0c0c] border border-white/10 rounded-[32px] p-8">
-                            <div class="flex items-center justify-between mb-8">
-                                <div class="flex items-center gap-3">
-                                    <History class="w-5 h-5 text-slate-400" />
-                                    <h3 class="text-sm font-black italic tracking-widest uppercase">Your Activity</h3>
-                                </div>
-                                <button class="text-[10px] font-bold text-slate-500 hover:text-white transition-colors">Clear</button>
-                            </div>
-                            <div class="space-y-6">
-                                <For each={transactions()}>
-                                    {(tx) => {
-                                        const statusColors: Record<string, string> = {
-                                            'Pending': 'bg-yellow-500/10 text-yellow-400',
-                                            'Challenged': 'bg-red-500/10 text-red-400',
-                                            'Finalized': 'bg-green-500/10 text-green-400',
-                                            'Reverted': 'bg-red-500/10 text-red-400',
-                                            'Processing': 'bg-blue-500/10 text-blue-400',
-                                            'Success': 'bg-green-500/10 text-green-500'
-                                        };
-                                        const barColors: Record<string, string> = {
-                                            'Pending': 'bg-yellow-500 animate-pulse',
-                                            'Challenged': 'bg-red-500 animate-pulse',
-                                            'Finalized': 'bg-green-500',
-                                            'Reverted': 'bg-red-500',
-                                            'Processing': 'bg-blue-500 animate-pulse',
-                                            'Success': 'bg-green-500'
-                                        };
-                                        return (
-                                            <div class="flex items-start gap-4 group">
-                                                <div class={`w-1 h-10 rounded-full ${barColors[tx.status] || 'bg-gray-500'}`} />
-                                                <div class="flex-1 min-w-0">
-                                                    <div class="flex justify-between items-start mb-1">
-                                                        <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
-                                                        <div class="flex items-center gap-2">
-                                                            <Show when={tx.status === 'Pending' && tx.timeRemaining}>
-                                                                <span class="text-[9px] font-mono text-yellow-400">
-                                                                    <Clock class="w-3 h-3 inline mr-1" />
-                                                                    {Math.floor((tx.timeRemaining || 0) / 60)}m {(tx.timeRemaining || 0) % 60}s
-                                                                </span>
-                                                            </Show>
-                                                            <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${statusColors[tx.status]}`}>
-                                                                {tx.status}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="text-[10px] text-slate-500 font-medium truncate mb-1">
-                                                        {tx.from} ➔ {tx.to}
-                                                    </div>
-                                                    <div class="flex items-center gap-3 text-[10px] text-slate-600">
-                                                        <span>{tx.time}</span>
-                                                        <a href="#" class="hover:text-blue-400 flex items-center gap-1">
-                                                            {tx.hash} <ExternalLink class="w-2.5 h-2.5" />
-                                                        </a>
-                                                    </div>
+                                            <div class="flex items-center gap-4">
+                                                <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center border border-blue-500/20">
+                                                    <Zap class="w-5 h-5 text-blue-400" />
+                                                </div>
+                                                <div class="flex-1">
+                                                    <div class="text-lg font-black italic uppercase tracking-tight">{fromNetwork().name}</div>
+                                                    <Show when={currentChainId() !== fromNetwork().chainId}>
+                                                        <button
+                                                            onClick={() => switchNetwork(fromNetwork().chainId)}
+                                                            class="text-[10px] text-amber-400 hover:text-amber-300 font-bold"
+                                                        >
+                                                            Switch Network
+                                                        </button>
+                                                    </Show>
                                                 </div>
                                             </div>
-                                        );
-                                    }}
-                                </For>
+                                        </div>
+
+                                        {/* Switch Button */}
+                                        <div class="flex justify-center -my-6 relative z-20">
+                                            <button
+                                                onClick={handleSwitch}
+                                                class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20 hover:scale-110 active:scale-95 transition-all border-4 border-[#111113]"
+                                            >
+                                                <ArrowDown class="w-5 h-5 text-white" />
+                                            </button>
+                                        </div>
+
+                                        {/* To Network */}
+                                        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all">
+                                            <div class="flex justify-between items-center mb-3">
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">To Network</span>
+                                            </div>
+                                            <div class="flex items-center gap-4">
+                                                <div class="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center border border-purple-500/20">
+                                                    <Zap class="w-5 h-5 text-purple-400" />
+                                                </div>
+                                                <div class="flex-1">
+                                                    <div class="text-lg font-black italic uppercase tracking-tight">{toNetwork().name}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Asset & Amount */}
+                                        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 mt-4">
+                                            <div class="flex justify-between items-center mb-4">
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Amount to Bridge</span>
+                                                <div class="flex gap-2">
+                                                    <button onClick={() => setPercentage(25)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">25%</button>
+                                                    <button onClick={() => setPercentage(50)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">50%</button>
+                                                    <button onClick={setMaxAmount} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">MAX</button>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-4">
+                                                <input
+                                                    type="number"
+                                                    placeholder="0.00"
+                                                    value={amount()}
+                                                    onInput={(e) => setAmount(e.currentTarget.value)}
+                                                    class="bg-transparent border-none text-3xl font-black focus:outline-none w-full placeholder-gray-700"
+                                                />
+                                                <div class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10">
+                                                    <div class="w-5 h-5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500" />
+                                                    <span class="font-bold text-sm tracking-tight">{selectedAsset()}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Error Message */}
+                                        <Show when={errorMsg()}>
+                                            <div class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3">
+                                                <AlertCircle class="w-5 h-5 text-red-400" />
+                                                <span class="text-red-400 text-xs font-bold">{errorMsg()}</span>
+                                            </div>
+                                        </Show>
+
+                                        {/* Summary & Action */}
+                                        <div class="pt-4 space-y-4">
+                                            <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
+                                                <span>Bridge Fee (Est.)</span>
+                                                <span class="text-gray-300">0.1% + Gas</span>
+                                            </div>
+                                            <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
+                                                <span>Estimated Arrival</span>
+                                                <span class="text-gray-300">~15 Minutes (Challenge Period)</span>
+                                            </div>
+
+                                            <button
+                                                onClick={handleBridge}
+                                                disabled={!amount() || isBridging() || currentChainId() !== fromNetwork().chainId}
+                                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:cursor-not-allowed"
+                                            >
+                                                <ArrowRightLeft class="w-4 h-4" />
+                                                {currentChainId() !== fromNetwork().chainId ? 'WRONG NETWORK' : 'START BRIDGE TRANSFER'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </Show>
+
+                                <Show when={step() === 2}>
+                                    {/* Processing Interface */}
+                                    <div class="relative z-10 py-12 text-center space-y-6">
+                                        <div class="w-20 h-20 bg-blue-500/20 border border-blue-500/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <div class="w-10 h-10 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+                                        </div>
+                                        <h2 class="text-2xl font-black italic tracking-tight">
+                                            {isApproving() ? 'APPROVING TOKEN...' : 'INITIATING BRIDGE...'}
+                                        </h2>
+                                        <p class="text-gray-400 text-sm max-w-sm mx-auto">
+                                            {isApproving()
+                                                ? 'Please confirm the approval transaction in your wallet.'
+                                                : 'Please confirm the bridge transaction in your wallet.'}
+                                        </p>
+                                        <Show when={txHash()}>
+                                            <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 max-w-xs mx-auto text-xs font-mono text-blue-400 break-all">
+                                                Tx: {txHash().slice(0, 10)}...{txHash().slice(-8)}
+                                            </div>
+                                        </Show>
+                                    </div>
+                                </Show>
+
+                                <Show when={step() === 3}>
+                                    {/* Success Interface */}
+                                    <div class="relative z-10 py-12 text-center space-y-6">
+                                        <div class="w-20 h-20 bg-green-500/20 border border-green-500/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                            <CheckCircle2 class="w-10 h-10 text-green-500" />
+                                        </div>
+                                        <h2 class="text-3xl font-black italic tracking-tight">TRANSFER INITIATED!</h2>
+                                        <p class="text-gray-400 text-sm leading-relaxed max-w-sm mx-auto">
+                                            Your {amount()} {selectedAsset()} is being bridged to {toNetwork().name}.
+                                            It will be available after the 15-minute challenge period.
+                                        </p>
+                                        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 max-w-xs mx-auto">
+                                            <div class="text-xs font-mono text-blue-400 break-all mb-2">
+                                                Tx: {txHash().slice(0, 10)}...{txHash().slice(-8)}
+                                            </div>
+                                            <a
+                                                href={`https://sepolia.etherscan.io/tx/${txHash()}`}
+                                                target="_blank"
+                                                class="text-[10px] text-gray-500 hover:text-blue-400 flex items-center justify-center gap-1"
+                                            >
+                                                View on Explorer <ExternalLink class="w-3 h-3" />
+                                            </a>
+                                        </div>
+                                        <button
+                                            onClick={() => { setStep(1); setAmount(''); setTxHash(''); }}
+                                            class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-300 transition-all"
+                                        >
+                                            New Transfer
+                                        </button>
+                                    </div>
+                                </Show>
+                            </div>
+
+                            {/* Info Section */}
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-white/[0.03] border border-white/[0.06] p-6 rounded-2xl space-y-3">
+                                    <div class="flex items-center gap-3 text-cyan-400">
+                                        <ShieldCheck class="w-5 h-5" />
+                                        <span class="text-[11px] font-black uppercase tracking-widest">Optimistic Security</span>
+                                    </div>
+                                    <p class="text-[11px] text-gray-500 leading-relaxed font-medium">
+                                        Transfers are secured by a 15-minute challenge period. Validators stake VCN to attest to transfers.
+                                    </p>
+                                </div>
+                                <div class="bg-white/[0.03] border border-white/[0.06] p-6 rounded-2xl space-y-3">
+                                    <div class="flex items-center gap-3 text-purple-400">
+                                        <Clock class="w-5 h-5" />
+                                        <span class="text-[11px] font-black uppercase tracking-widest">Challenge Period</span>
+                                    </div>
+                                    <p class="text-[11px] text-gray-500 leading-relaxed font-medium">
+                                        Funds are released after 15 minutes if no valid challenge is submitted.
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
+                        {/* Sidebar: History & Activity */}
+                        <div class="lg:col-span-2 space-y-6">
+
+                            {/* Status Card */}
+                            <div class="bg-blue-600/10 border border-blue-500/20 rounded-[24px] p-6">
+                                <div class="flex items-center gap-3 mb-4">
+                                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                    <span class="text-[10px] font-black text-green-400 uppercase tracking-widest">Bridge Operational</span>
+                                </div>
+                                <div class="text-lg font-black italic mb-2 tracking-tight">Connected: {walletAddress().slice(0, 6)}...{walletAddress().slice(-4)}</div>
+                                <p class="text-xs text-blue-400/60 font-medium">Chain ID: {currentChainId()}</p>
+                            </div>
+
+                            {/* Recent History */}
+                            <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[24px] p-6">
+                                <div class="flex items-center justify-between mb-6">
+                                    <div class="flex items-center gap-3">
+                                        <History class="w-5 h-5 text-gray-400" />
+                                        <h3 class="text-sm font-black italic tracking-widest uppercase">Your Activity</h3>
+                                    </div>
+                                    <button
+                                        onClick={loadBalance}
+                                        class="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                                    >
+                                        <RefreshCw class="w-4 h-4 text-gray-500" />
+                                    </button>
+                                </div>
+                                <Show when={transactions().length > 0} fallback={
+                                    <div class="py-8 text-center">
+                                        <History class="w-10 h-10 text-gray-700 mx-auto mb-3" />
+                                        <p class="text-gray-600 text-xs">No transfers yet</p>
+                                    </div>
+                                }>
+                                    <div class="space-y-4">
+                                        <For each={transactions()}>
+                                            {(tx) => {
+                                                const statusColors: Record<string, string> = {
+                                                    'Pending': 'bg-yellow-500/10 text-yellow-400',
+                                                    'Processing': 'bg-blue-500/10 text-blue-400',
+                                                    'Success': 'bg-green-500/10 text-green-500'
+                                                };
+                                                return (
+                                                    <div class="flex items-start gap-4 group">
+                                                        <div class={`w-1 h-10 rounded-full ${tx.status === 'Processing' ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`} />
+                                                        <div class="flex-1 min-w-0">
+                                                            <div class="flex justify-between items-start mb-1">
+                                                                <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
+                                                                <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${statusColors[tx.status]}`}>
+                                                                    {tx.status}
+                                                                </span>
+                                                            </div>
+                                                            <div class="text-[10px] text-gray-500 font-medium truncate mb-1">
+                                                                {tx.from} → {tx.to}
+                                                            </div>
+                                                            <div class="text-[10px] text-gray-600">
+                                                                {tx.time} • {tx.hash}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        </For>
+                                    </div>
+                                </Show>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                }>
+                    {/* Connect Wallet */}
+                    <div class="max-w-md mx-auto">
+                        <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[32px] p-8 text-center">
+                            <Wallet class="w-16 h-16 text-gray-600 mx-auto mb-6" />
+                            <h3 class="text-xl font-black text-white mb-2">Connect Your Wallet</h3>
+                            <p class="text-gray-500 text-sm mb-6">
+                                Connect your wallet to bridge assets between Ethereum and Vision Chain.
+                            </p>
+                            <button
+                                onClick={connectWallet}
+                                class="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-2"
+                            >
+                                <Wallet class="w-4 h-4" />
+                                Connect Wallet
+                            </button>
+                            <Show when={errorMsg()}>
+                                <p class="text-red-400 text-xs mt-4">{errorMsg()}</p>
+                            </Show>
+                        </div>
+                    </div>
+                </Show>
+
             </div>
         </div>
     );

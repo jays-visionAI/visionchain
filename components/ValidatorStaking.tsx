@@ -16,6 +16,7 @@ import {
     ExternalLink
 } from 'lucide-solid';
 import { ethers } from 'ethers';
+import { WalletViewHeader } from './wallet/WalletViewHeader';
 
 // Extend Window interface for ethereum
 declare global {
@@ -311,18 +312,13 @@ export default function ValidatorStaking() {
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
-                <div class="text-center space-y-4">
-                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full">
-                        <Shield class="w-4 h-4 text-amber-400" />
-                        <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Bridge Security</span>
-                    </div>
-                    <h1 class="text-4xl lg:text-5xl font-black italic uppercase tracking-tighter">
-                        VALIDATOR <span class="text-amber-400">STAKING</span>
-                    </h1>
-                    <p class="text-gray-500 text-sm max-w-xl mx-auto">
-                        Stake VCN to become a bridge validator. Secure cross-chain transfers and earn rewards.
-                    </p>
-                </div>
+                <WalletViewHeader
+                    tag="Bridge Security"
+                    title="VALIDATOR"
+                    titleAccent="STAKING"
+                    description="Stake VCN to become a bridge validator. Secure cross-chain transfers and earn rewards."
+                    icon={Shield}
+                />
 
                 {/* Rewards & Conditions Card - NEW */}
                 <div class="bg-gradient-to-r from-green-500/5 via-amber-500/5 to-orange-500/5 border border-amber-500/20 rounded-2xl p-6">
