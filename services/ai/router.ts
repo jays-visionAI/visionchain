@@ -8,38 +8,45 @@ export interface RouterResult {
     apiKey: string;
 }
 
+export interface RouterConfig {
+    providerId: AIProviderID;
+    model: string;
+    apiKey: string;
+    visionModel?: string;  // Separate model for image analysis
+}
+
 export class LLMRouter {
     constructor(private factory: any) { }
 
     async generateText(
         prompt: string,
-        config: { providerId: AIProviderID; model: string; apiKey: string },
+        config: RouterConfig,
         options: TextGenerationOptions
     ): Promise<RouterResult> {
         const isDeepSeekPrimary = config.providerId === 'deepseek';
         const hasImage = !!options.imageBase64;
 
-        // Requirement 1: If image is present, DeepSeek (current impl) can't handle it, use Gemini
-        if (hasImage && isDeepSeekPrimary) {
+        // Route 1: Image present - Use visionModel (Gemini Nano Banana variants)
+        if (hasImage) {
+            const visionModel = config.visionModel || 'gemini-2.0-flash-exp';
             const geminiKey = await getActiveGlobalApiKey('gemini');
+
             if (geminiKey) {
-                console.log("[LLMRouter] Image detected. Routing to Gemini.");
+                console.log(`[LLMRouter] Image detected. Routing to vision model: ${visionModel}`);
                 const result = await this.factory.getProvider('gemini').generateText(
                     prompt,
-                    'gemini-1.5-pro-latest',
+                    visionModel,
                     geminiKey,
                     options
                 );
-                return { result, providerId: 'gemini', model: 'gemini-1.5-pro-latest', apiKey: geminiKey };
+                return { result, providerId: 'gemini', model: visionModel, apiKey: geminiKey };
             }
         }
 
-        // Requirement 2: Try primary provider
+        // Route 2: Text only - Use primary model (DeepSeek variants)
         try {
             const provider = this.factory.getProvider(config.providerId);
             const result = await provider.generateText(prompt, config.model, config.apiKey, options);
-
-            // If result is empty or error-like (though provider should throw), we might want to fallback
             return { result, providerId: config.providerId, model: config.model, apiKey: config.apiKey };
         } catch (error) {
             console.error(`[LLMRouter] ${config.providerId} failed:`, error);
@@ -48,14 +55,15 @@ export class LLMRouter {
             if (isDeepSeekPrimary) {
                 const geminiKey = await getActiveGlobalApiKey('gemini');
                 if (geminiKey) {
-                    console.log("[LLMRouter] Falling back to Gemini...");
+                    const fallbackModel = config.visionModel || 'gemini-2.0-flash-exp';
+                    console.log(`[LLMRouter] Falling back to Gemini (${fallbackModel})...`);
                     const result = await this.factory.getProvider('gemini').generateText(
                         prompt,
-                        'gemini-1.5-pro-latest',
+                        fallbackModel,
                         geminiKey,
                         options
                     );
-                    return { result, providerId: 'gemini', model: 'gemini-1.5-pro-latest', apiKey: geminiKey };
+                    return { result, providerId: 'gemini', model: fallbackModel, apiKey: geminiKey };
                 }
             }
             throw error;

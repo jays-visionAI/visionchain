@@ -52,17 +52,28 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                         </div>
                     </div>
                     <div class="space-y-4 pt-2">
+                        {/* Text Chat Model - DeepSeek */}
                         <div class="space-y-1.5">
-                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">AI Model Provider</label>
+                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Text Chat Model</label>
                             <select
                                 value={props.intentBot().model}
                                 onChange={(e) => props.setIntentBot({ ...props.intentBot(), model: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-blue-500/50"
                             >
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
-                                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Powerful)</option>
                                 <option value="deepseek-chat">DeepSeek Chat (V3)</option>
                                 <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+                            </select>
+                        </div>
+                        {/* Vision Model - Gemini Nano Banana */}
+                        <div class="space-y-1.5">
+                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Vision / Image Analysis</label>
+                            <select
+                                value={props.intentBot().visionModel || 'gemini-2.0-flash-exp'}
+                                onChange={(e) => props.setIntentBot({ ...props.intentBot(), visionModel: e.currentTarget.value })}
+                                class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
+                            >
+                                <option value="gemini-2.0-flash-exp">Nano Banana (gemini-2.0-flash-exp)</option>
+                                <option value="gemini-2.5-pro-preview-06-05">Nano Banana Pro (gemini-2.5-pro)</option>
                             </select>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl">
@@ -86,17 +97,28 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                         </div>
                     </div>
                     <div class="space-y-4 pt-2">
+                        {/* Text Chat Model - DeepSeek */}
                         <div class="space-y-1.5">
-                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">AI Model Provider</label>
+                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Text Chat Model</label>
                             <select
                                 value={props.helpdeskBot().model}
                                 onChange={(e) => props.setHelpdeskBot({ ...props.helpdeskBot(), model: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-purple-500/50"
                             >
-                                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                                 <option value="deepseek-chat">DeepSeek Chat (V3)</option>
                                 <option value="deepseek-reasoner">DeepSeek Reasoner (R1)</option>
+                            </select>
+                        </div>
+                        {/* Vision Model - Gemini Nano Banana */}
+                        <div class="space-y-1.5">
+                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Vision / Image Analysis</label>
+                            <select
+                                value={props.helpdeskBot().visionModel || 'gemini-2.0-flash-exp'}
+                                onChange={(e) => props.setHelpdeskBot({ ...props.helpdeskBot(), visionModel: e.currentTarget.value })}
+                                class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
+                            >
+                                <option value="gemini-2.0-flash-exp">Nano Banana (gemini-2.0-flash-exp)</option>
+                                <option value="gemini-2.5-pro-preview-06-05">Nano Banana Pro (gemini-2.5-pro)</option>
                             </select>
                         </div>
                         <div class="flex items-center justify-between p-3 bg-white/5 rounded-xl">

@@ -2337,7 +2337,8 @@ export const getActiveApiKey = getActiveGlobalApiKey;
 // Chatbot Settings
 export interface BotConfig {
     systemPrompt: string;
-    model: string;
+    model: string;           // Text chat model (DeepSeek variants)
+    visionModel?: string;    // Image analysis model (Gemini Nano Banana variants)
     temperature: number;
     maxTokens: number;
 }
@@ -2391,12 +2392,14 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
             intentBot: {
                 systemPrompt: 'You are Vision AI, an advanced blockchain assistant capable of executing transactions and analyzing chain data.',
                 model: 'deepseek-chat',
+                visionModel: 'gemini-2.0-flash-exp',
                 temperature: 0.7,
                 maxTokens: 2048
             },
             helpdeskBot: {
                 systemPrompt: 'You are a helpful support agent for Vision Chain.',
                 model: 'deepseek-chat',
+                visionModel: 'gemini-2.0-flash-exp',
                 temperature: 0.7,
                 maxTokens: 2048
             },
@@ -2438,8 +2441,8 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
         // Fallback robustly
         return {
             knowledgeBase: '',
-            intentBot: { systemPrompt: '', model: 'deepseek-chat', temperature: 0.7, maxTokens: 2048 },
-            helpdeskBot: { systemPrompt: '', model: 'deepseek-chat', temperature: 0.7, maxTokens: 2048 },
+            intentBot: { systemPrompt: '', model: 'deepseek-chat', visionModel: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
+            helpdeskBot: { systemPrompt: '', model: 'deepseek-chat', visionModel: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
             imageSettings: { model: 'imagen-3.0-generate-001', quality: 'standard', size: '1024x1024' },
             voiceSettings: { model: 'deepseek-chat', ttsVoice: 'Kore', sttModel: 'deepseek-chat' }
         };

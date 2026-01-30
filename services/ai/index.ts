@@ -32,6 +32,7 @@ class ProviderFactory {
 
         const botConfig = botType === 'helpdesk' ? settings.helpdeskBot : settings.intentBot;
         const model = botConfig?.model || 'deepseek-chat';
+        const visionModel = botConfig?.visionModel || 'gemini-2.0-flash-exp';
         const providerId = getProviderFromModel(model) as AIProviderID;
         const apiKey = await getActiveGlobalApiKey(providerId);
 
@@ -40,6 +41,7 @@ class ProviderFactory {
         return {
             providerId,
             model,
+            visionModel,
             apiKey,
             systemPrompt: botConfig?.systemPrompt || '',
             temperature: botConfig?.temperature || 0.7,
@@ -176,7 +178,7 @@ ${localeInfo}
         const router = factory.getRouter();
         const { result, providerId: finalProviderId, apiKey: finalApiKey, model: finalModel } = await router.generateText(
             fullPrompt,
-            { providerId: config.providerId, model: config.model, apiKey: config.apiKey },
+            { providerId: config.providerId, model: config.model, apiKey: config.apiKey, visionModel: config.visionModel },
             {
                 systemPrompt: dynamicSystemPrompt,
                 temperature: config.temperature,
