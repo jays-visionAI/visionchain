@@ -31,9 +31,21 @@ const BRIDGE_STAKING_ABI = [
     'function MINIMUM_STAKE() external view returns (uint256)',
     'function COOLDOWN_PERIOD() external view returns (uint256)',
     'function SLASH_PERCENTAGE() external view returns (uint256)',
-    'function validators(address) external view returns (uint256 stakedAmount, uint256 unstakeRequestTime, uint256 unstakeAmount, bool isActive)',
-    'function slashValidator(address validator, bytes32 intentHash) external',
-    'function owner() external view returns (address)'
+    'function validators(address) external view returns (uint256 stakedAmount, uint256 unstakeRequestTime, uint256 unstakeAmount, uint256 rewardDebt, uint256 pendingRewards, bool isActive)',
+    'function slash(address validator, address challenger) external returns (uint256)',
+    'function owner() external view returns (address)',
+    'function addSubsidy(uint256 amount, uint256 duration) external',
+    'function withdrawSubsidy() external',
+    'function currentAPY() external view returns (uint256)',
+    'function getRewardInfo() external view returns (uint256 subsidyPool, uint256 feePool, uint256 subsidyRatePerSecond, uint256 subsidyEndTime, uint256 totalRewardsPaid)',
+    'function totalRewardsPaid() external view returns (uint256)'
+];
+
+const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+const VCN_ABI = [
+    'function approve(address spender, uint256 amount) external returns (bool)',
+    'function allowance(address owner, address spender) external view returns (uint256)',
+    'function balanceOf(address account) external view returns (uint256)'
 ];
 
 // Extend Window interface
@@ -80,6 +92,19 @@ export default function AdminDeFi() {
     const [slashIntentHash, setSlashIntentHash] = createSignal('');
     const [isSlashing, setIsSlashing] = createSignal(false);
 
+    // Reward Pool State
+    const [subsidyPool, setSubsidyPool] = createSignal('0');
+    const [feePool, setFeePool] = createSignal('0');
+    const [currentAPY, setCurrentAPY] = createSignal('0');
+    const [subsidyEndTime, setSubsidyEndTime] = createSignal(0);
+    const [totalRewardsPaid, setTotalRewardsPaid] = createSignal('0');
+
+    // Add Subsidy Form
+    const [subsidyAmount, setSubsidyAmount] = createSignal('');
+    const [subsidyDuration, setSubsidyDuration] = createSignal(30); // days
+    const [isAddingSubsidy, setIsAddingSubsidy] = createSignal(false);
+    const [adminVcnBalance, setAdminVcnBalance] = createSignal('0');
+
     // Fetch Liquid Staking Data
     const fetchData = async () => {
         setLoading(true);
@@ -106,13 +131,16 @@ export default function AdminDeFi() {
             // Use JsonRpcProvider for read-only access - no wallet needed
             const provider = new ethers.JsonRpcProvider('https://api.visionchain.co/rpc-proxy');
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, provider);
+            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_ABI, provider);
 
-            const [total, minStakeWei, cooldown, slash, owner] = await Promise.all([
+            const [total, minStakeWei, cooldown, slash, owner, apy, rewardInfo] = await Promise.all([
                 staking.totalStaked(),
                 staking.MINIMUM_STAKE(),
                 staking.COOLDOWN_PERIOD(),
                 staking.SLASH_PERCENTAGE(),
-                staking.owner()
+                staking.owner(),
+                staking.currentAPY().catch(() => 0n),
+                staking.getRewardInfo().catch(() => [0n, 0n, 0n, 0n, 0n])
             ]);
 
             setBridgeTotalStaked(ethers.formatEther(total));
@@ -120,9 +148,19 @@ export default function AdminDeFi() {
             setBridgeCooldown(Number(cooldown) / (24 * 60 * 60));
             setBridgeSlashPercent(Number(slash));
 
+            // Set reward info
+            setSubsidyPool(ethers.formatEther(rewardInfo[0]));
+            setFeePool(ethers.formatEther(rewardInfo[1]));
+            setCurrentAPY((Number(apy) / 100).toFixed(2));
+            setSubsidyEndTime(Number(rewardInfo[3]) * 1000);
+            setTotalRewardsPaid(ethers.formatEther(rewardInfo[4]));
+
             // Check if current user is admin
             if (walletAddress() && owner.toLowerCase() === walletAddress().toLowerCase()) {
                 setIsAdmin(true);
+                // Get admin VCN balance
+                const balance = await vcn.balanceOf(walletAddress());
+                setAdminVcnBalance(ethers.formatEther(balance));
             }
 
             // Get validators
@@ -185,7 +223,7 @@ export default function AdminDeFi() {
             const signer = await provider.getSigner();
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
-            const tx = await staking.slashValidator(slashAddress(), slashIntentHash());
+            const tx = await staking.slash(slashAddress(), slashIntentHash());
             await tx.wait();
 
             alert('Validator slashed successfully!');
@@ -197,6 +235,54 @@ export default function AdminDeFi() {
         } finally {
             setIsSlashing(false);
         }
+    };
+
+    // Handle Add Subsidy (Foundation Funding)
+    const handleAddSubsidy = async () => {
+        const amount = parseFloat(subsidyAmount());
+        if (!amount || amount <= 0) {
+            alert('Please enter a valid subsidy amount');
+            return;
+        }
+
+        setIsAddingSubsidy(true);
+        try {
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_ABI, signer);
+            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
+
+            const amountWei = ethers.parseEther(subsidyAmount());
+            const durationSeconds = subsidyDuration() * 24 * 60 * 60; // days to seconds
+
+            // Check allowance and approve if needed
+            const allowance = await vcn.allowance(walletAddress(), BRIDGE_STAKING_ADDRESS);
+            if (allowance < amountWei) {
+                const approveTx = await vcn.approve(BRIDGE_STAKING_ADDRESS, amountWei);
+                await approveTx.wait();
+            }
+
+            // Add subsidy
+            const tx = await staking.addSubsidy(amountWei, durationSeconds);
+            await tx.wait();
+
+            alert(`Successfully added ${amount.toLocaleString()} VCN subsidy for ${subsidyDuration()} days!`);
+            setSubsidyAmount('');
+            await fetchBridgeData();
+        } catch (err: any) {
+            alert(err.reason || err.message || 'Failed to add subsidy');
+        } finally {
+            setIsAddingSubsidy(false);
+        }
+    };
+
+    // Format subsidy end time
+    const formatSubsidyEndTime = () => {
+        if (subsidyEndTime() <= Date.now()) return 'Ended';
+        const remaining = subsidyEndTime() - Date.now();
+        const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
+        const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+        return `${days}d ${hours}h remaining`;
     };
 
     // Connect wallet for admin functions
@@ -551,6 +637,121 @@ export default function AdminDeFi() {
 
                     {/* Admin Controls */}
                     <div class="space-y-6">
+                        {/* Foundation Funding - Subsidy Management */}
+                        <div class="bg-gradient-to-br from-green-900/20 to-black border border-green-500/20 rounded-[32px] p-8">
+                            <div class="flex items-center gap-3 mb-6">
+                                <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                                    <DollarSign class="w-5 h-5 text-green-400" />
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-black text-white italic uppercase tracking-tight">Foundation <span class="text-green-400">Funding</span></h4>
+                                    <p class="text-[10px] text-gray-500">Add VCN subsidies to incentivize validator staking</p>
+                                </div>
+                            </div>
+
+                            {/* Funding Guide */}
+                            <div class="mb-6 p-4 bg-green-500/5 border border-green-500/10 rounded-xl">
+                                <h5 class="text-[11px] font-black text-green-400 uppercase tracking-widest mb-3">How Validator Rewards Work</h5>
+                                <div class="space-y-2 text-[10px] text-gray-400">
+                                    <p>1. <strong class="text-white">Subsidy Pool</strong> - Foundation deposits VCN as initial incentives</p>
+                                    <p>2. <strong class="text-white">Fee Pool</strong> - Bridge transaction fees (0.1%) accumulate automatically</p>
+                                    <p>3. <strong class="text-white">Distribution</strong> - Rewards distributed proportionally to staked amount</p>
+                                    <p>4. <strong class="text-white">APY Calculation</strong> - (Annual Rewards / Total Staked) x 100</p>
+                                </div>
+                                <div class="mt-3 pt-3 border-t border-green-500/10">
+                                    <p class="text-[10px] text-green-400/80">
+                                        Recommended: Start with 100,000 VCN for 30 days to achieve ~12% APY target
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Current Reward Pool Status */}
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div class="bg-white/5 rounded-xl p-4">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Subsidy Pool</div>
+                                    <div class="text-lg font-black text-green-400">{Number(subsidyPool()).toLocaleString()} VCN</div>
+                                    <div class="text-[9px] text-gray-600">{formatSubsidyEndTime()}</div>
+                                </div>
+                                <div class="bg-white/5 rounded-xl p-4">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Fee Pool</div>
+                                    <div class="text-lg font-black text-blue-400">{Number(feePool()).toLocaleString()} VCN</div>
+                                    <div class="text-[9px] text-gray-600">From bridge fees</div>
+                                </div>
+                                <div class="bg-white/5 rounded-xl p-4">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Current APY</div>
+                                    <div class="text-lg font-black text-amber-400">{currentAPY()}%</div>
+                                    <div class="text-[9px] text-gray-600">Validator reward rate</div>
+                                </div>
+                                <div class="bg-white/5 rounded-xl p-4">
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Paid</div>
+                                    <div class="text-lg font-black text-white">{Number(totalRewardsPaid()).toLocaleString()} VCN</div>
+                                    <div class="text-[9px] text-gray-600">Rewards distributed</div>
+                                </div>
+                            </div>
+
+                            <Show when={isAdmin()} fallback={
+                                <div class="p-4 bg-white/5 border border-white/10 rounded-xl text-center">
+                                    <p class="text-gray-500 text-xs">Admin wallet required to add subsidy</p>
+                                    <button
+                                        onClick={connectWallet}
+                                        class="mt-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs font-bold rounded-lg"
+                                    >
+                                        Connect Admin Wallet
+                                    </button>
+                                </div>
+                            }>
+                                <div class="space-y-4">
+                                    <div class="p-3 bg-white/5 rounded-lg flex justify-between items-center">
+                                        <span class="text-[10px] text-gray-500">Your VCN Balance</span>
+                                        <span class="text-sm font-bold text-white">{Number(adminVcnBalance()).toLocaleString()} VCN</span>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Subsidy Amount (VCN)</label>
+                                        <input
+                                            type="number"
+                                            value={subsidyAmount()}
+                                            onInput={(e) => setSubsidyAmount(e.currentTarget.value)}
+                                            placeholder="100000"
+                                            class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-green-500/50"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Distribution Period (Days)</label>
+                                        <div class="flex gap-2">
+                                            {[7, 14, 30, 60, 90].map((days) => (
+                                                <button
+                                                    onClick={() => setSubsidyDuration(days)}
+                                                    class={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subsidyDuration() === days
+                                                            ? 'bg-green-500 text-black'
+                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                                                        }`}
+                                                >
+                                                    {days}d
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <Show when={subsidyAmount()}>
+                                        <div class="p-3 bg-green-500/5 border border-green-500/10 rounded-lg">
+                                            <div class="text-[10px] text-gray-500 mb-1">Estimated APY (if 100K VCN staked)</div>
+                                            <div class="text-lg font-black text-green-400">
+                                                {((parseFloat(subsidyAmount() || '0') / 100000) * (365 / subsidyDuration()) * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </Show>
+                                    <button
+                                        onClick={handleAddSubsidy}
+                                        disabled={isAddingSubsidy() || !subsidyAmount()}
+                                        class="w-full py-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                                    >
+                                        <Show when={isAddingSubsidy()} fallback={<><DollarSign class="w-4 h-4" /> Add Subsidy</>}>
+                                            <RefreshCw class="w-4 h-4 animate-spin" /> Adding...
+                                        </Show>
+                                    </button>
+                                </div>
+                            </Show>
+                        </div>
+
                         {/* Slash Validator */}
                         <div class="bg-gradient-to-br from-red-900/20 to-black border border-red-500/20 rounded-[32px] p-8">
                             <div class="flex items-center gap-3 mb-6">
@@ -580,7 +781,7 @@ export default function AdminDeFi() {
                                         />
                                     </div>
                                     <div>
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Intent Hash</label>
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Challenger Address</label>
                                         <input
                                             type="text"
                                             value={slashIntentHash()}
