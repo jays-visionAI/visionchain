@@ -260,7 +260,7 @@ export default function AdminDeFi() {
         setIsAddingSubsidy(true);
         try {
             // Call server-side API instead of MetaMask
-            const response = await fetch('https://us-central1-visionchain-d19ed.cloudfunctions.net/adminAddSubsidy', {
+            const response = await fetch('https://adminaddsubsidy-sapjcm3s5a-uc.a.run.app', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
