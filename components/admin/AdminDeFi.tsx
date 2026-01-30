@@ -23,7 +23,7 @@ import { collection, query, getDocs, limit, orderBy, doc, getDoc } from 'firebas
 import { ethers } from 'ethers';
 
 // ============ Bridge Staking Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x21915b79E1d334499272521a3508061354D13FF0';
+const BRIDGE_STAKING_ADDRESS = '0x6345e50859b0Ce82D8A495ba9894C6C81de385F3';
 
 const BRIDGE_STAKING_ABI = [
     'function totalStaked() external view returns (uint256)',
@@ -92,17 +92,18 @@ export default function AdminDeFi() {
     const [slashIntentHash, setSlashIntentHash] = createSignal('');
     const [isSlashing, setIsSlashing] = createSignal(false);
 
-    // Reward Pool State
-    const [subsidyPool, setSubsidyPool] = createSignal('0');
+    // Fixed APY Reward Pool State
+    const [rewardPool, setRewardPool] = createSignal('0');
     const [feePool, setFeePool] = createSignal('0');
-    const [currentAPY, setCurrentAPY] = createSignal('0');
-    const [subsidyEndTime, setSubsidyEndTime] = createSignal(0);
+    const [targetAPY, setTargetAPY] = createSignal(1200); // basis points (1200 = 12%)
+    const [totalStaked, setTotalStaked] = createSignal('0');
     const [totalRewardsPaid, setTotalRewardsPaid] = createSignal('0');
 
-    // Add Subsidy Form
-    const [subsidyAmount, setSubsidyAmount] = createSignal('');
-    const [subsidyDuration, setSubsidyDuration] = createSignal(30); // days
-    const [isAddingSubsidy, setIsAddingSubsidy] = createSignal(false);
+    // Fixed APY Admin Form
+    const [newTargetAPY, setNewTargetAPY] = createSignal(12); // percentage (12 = 12%)
+    const [fundAmount, setFundAmount] = createSignal('');
+    const [isSettingAPY, setIsSettingAPY] = createSignal(false);
+    const [isFundingPool, setIsFundingPool] = createSignal(false);
     const [adminVcnBalance, setAdminVcnBalance] = createSignal('0');
 
     // Fetch Liquid Staking Data
@@ -148,11 +149,11 @@ export default function AdminDeFi() {
             setBridgeCooldown(Number(cooldown) / (24 * 60 * 60));
             setBridgeSlashPercent(Number(slash));
 
-            // Set reward info
-            setSubsidyPool(ethers.formatEther(rewardInfo[0]));
+            // Set reward info (Fixed APY format: rewardPool, feePool, targetAPY, totalStaked, totalRewardsPaid)
+            setRewardPool(ethers.formatEther(rewardInfo[0]));
             setFeePool(ethers.formatEther(rewardInfo[1]));
-            setCurrentAPY((Number(apy) / 100).toFixed(2));
-            setSubsidyEndTime(Number(rewardInfo[3]) * 1000);
+            setTargetAPY(Number(apy)); // basis points
+            setTotalStaked(ethers.formatEther(rewardInfo[3]));
             setTotalRewardsPaid(ethers.formatEther(rewardInfo[4]));
 
             // Admin whitelist - these addresses can manage subsidies
@@ -249,50 +250,82 @@ export default function AdminDeFi() {
         }
     };
 
-    // Handle Add Subsidy (Server-Side API - No MetaMask needed)
-    const handleAddSubsidy = async () => {
-        const amount = parseFloat(subsidyAmount());
-        if (!amount || amount <= 0) {
-            alert('Please enter a valid subsidy amount');
+    // Handle Set Target APY (Server-Side API)
+    const handleSetAPY = async () => {
+        if (newTargetAPY() <= 0 || newTargetAPY() > 50) {
+            alert('Please enter a valid APY (1-50%)');
             return;
         }
 
-        setIsAddingSubsidy(true);
+        setIsSettingAPY(true);
         try {
-            // Call server-side API instead of MetaMask
-            const response = await fetch('https://adminaddsubsidy-sapjcm3s5a-uc.a.run.app', {
+            const response = await fetch('https://adminsetapy-sapjcm3s5a-uc.a.run.app', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    amount: subsidyAmount(),
-                    durationDays: subsidyDuration(),
+                    apyPercent: newTargetAPY(),
                     adminSecret: 'vision-admin-2026'
                 })
             });
 
             const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to set APY');
 
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to add subsidy');
-            }
-
-            alert(`Successfully added ${amount.toLocaleString()} VCN subsidy for ${subsidyDuration()} days!\n\nTX: ${result.txHash}`);
-            setSubsidyAmount('');
+            alert(`Successfully set target APY to ${newTargetAPY()}%!\n\nTX: ${result.txHash}`);
             await fetchBridgeData();
         } catch (err: any) {
-            alert(err.message || 'Failed to add subsidy');
+            alert(err.message || 'Failed to set APY');
         } finally {
-            setIsAddingSubsidy(false);
+            setIsSettingAPY(false);
         }
     };
 
-    // Format subsidy end time
-    const formatSubsidyEndTime = () => {
-        if (subsidyEndTime() <= Date.now()) return 'Ended';
-        const remaining = subsidyEndTime() - Date.now();
-        const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
-        const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-        return `${days}d ${hours}h remaining`;
+    // Handle Fund Reward Pool (Server-Side API)
+    const handleFundPool = async () => {
+        const amount = parseFloat(fundAmount());
+        if (!amount || amount <= 0) {
+            alert('Please enter a valid amount');
+            return;
+        }
+
+        setIsFundingPool(true);
+        try {
+            const response = await fetch('https://adminfundpool-sapjcm3s5a-uc.a.run.app', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: fundAmount(),
+                    adminSecret: 'vision-admin-2026'
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to fund pool');
+
+            alert(`Successfully funded ${amount.toLocaleString()} VCN to reward pool!\n\nTX: ${result.txHash}`);
+            setFundAmount('');
+            await fetchBridgeData();
+        } catch (err: any) {
+            alert(err.message || 'Failed to fund pool');
+        } finally {
+            setIsFundingPool(false);
+        }
+    };
+
+    // Calculate estimated runway (how long reward pool will last at current APY)
+    const estimatedRunway = () => {
+        const pool = parseFloat(rewardPool()) || 0;
+        const staked = parseFloat(totalStaked()) || 0;
+        const apy = targetAPY() / 100; // basis points to percent
+        if (!pool || !staked || !apy) return 'N/A';
+
+        // Annual rewards = staked * APY / 100
+        const annualRewards = staked * apy / 100;
+        if (annualRewards <= 0) return 'N/A';
+
+        const years = pool / annualRewards;
+        const days = Math.floor(years * 365);
+        return `${days} days`;
     };
 
     // Connect wallet for admin functions
@@ -666,40 +699,34 @@ export default function AdminDeFi() {
 
                     {/* Admin Controls */}
                     <div class="space-y-6">
-                        {/* Foundation Funding - Subsidy Management */}
+                        {/* Foundation Funding - Fixed APY Management */}
                         <div class="bg-gradient-to-br from-green-900/20 to-black border border-green-500/20 rounded-[32px] p-8">
                             <div class="flex items-center gap-3 mb-6">
                                 <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
                                     <DollarSign class="w-5 h-5 text-green-400" />
                                 </div>
                                 <div>
-                                    <h4 class="text-lg font-black text-white italic uppercase tracking-tight">Foundation <span class="text-green-400">Funding</span></h4>
-                                    <p class="text-[10px] text-gray-500">Add VCN subsidies to incentivize validator staking</p>
+                                    <h4 class="text-lg font-black text-white italic uppercase tracking-tight">Fixed <span class="text-green-400">APY</span> Rewards</h4>
+                                    <p class="text-[10px] text-gray-500">Guaranteed base APY + Fee distribution</p>
                                 </div>
                             </div>
 
-                            {/* Funding Guide */}
+                            {/* How it Works */}
                             <div class="mb-6 p-4 bg-green-500/5 border border-green-500/10 rounded-xl">
-                                <h5 class="text-[11px] font-black text-green-400 uppercase tracking-widest mb-3">How Validator Rewards Work</h5>
+                                <h5 class="text-[11px] font-black text-green-400 uppercase tracking-widest mb-3">Reward Structure</h5>
                                 <div class="space-y-2 text-[10px] text-gray-400">
-                                    <p>1. <strong class="text-white">Subsidy Pool</strong> - Foundation deposits VCN as initial incentives</p>
-                                    <p>2. <strong class="text-white">Fee Pool</strong> - Bridge transaction fees (0.1%) accumulate automatically</p>
-                                    <p>3. <strong class="text-white">Distribution</strong> - Rewards distributed proportionally to staked amount</p>
-                                    <p>4. <strong class="text-white">APY Calculation</strong> - (Annual Rewards / Total Staked) x 100</p>
-                                </div>
-                                <div class="mt-3 pt-3 border-t border-green-500/10">
-                                    <p class="text-[10px] text-green-400/80">
-                                        Recommended: Start with 100,000 VCN for 30 days to achieve ~12% APY target
-                                    </p>
+                                    <p>1. <strong class="text-white">Base APY</strong> - Foundation guaranteed rate (e.g., 12%)</p>
+                                    <p>2. <strong class="text-white">Fee Pool</strong> - Bridge fees (0.1%) distributed as bonus</p>
+                                    <p>3. <strong class="text-white">Total APY</strong> = Base APY + Fee Distribution</p>
                                 </div>
                             </div>
 
-                            {/* Current Reward Pool Status */}
+                            {/* Current Status */}
                             <div class="grid grid-cols-2 gap-4 mb-6">
                                 <div class="bg-white/5 rounded-xl p-4">
-                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Subsidy Pool</div>
-                                    <div class="text-lg font-black text-green-400">{Number(subsidyPool()).toLocaleString()} VCN</div>
-                                    <div class="text-[9px] text-gray-600">{formatSubsidyEndTime()}</div>
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Reward Pool</div>
+                                    <div class="text-lg font-black text-green-400">{Number(rewardPool()).toLocaleString()} VCN</div>
+                                    <div class="text-[9px] text-gray-600">Runway: {estimatedRunway()}</div>
                                 </div>
                                 <div class="bg-white/5 rounded-xl p-4">
                                     <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Fee Pool</div>
@@ -707,9 +734,9 @@ export default function AdminDeFi() {
                                     <div class="text-[9px] text-gray-600">From bridge fees</div>
                                 </div>
                                 <div class="bg-white/5 rounded-xl p-4">
-                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Current APY</div>
-                                    <div class="text-lg font-black text-amber-400">{currentAPY()}%</div>
-                                    <div class="text-[9px] text-gray-600">Validator reward rate</div>
+                                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Base APY</div>
+                                    <div class="text-lg font-black text-amber-400">{(targetAPY() / 100).toFixed(1)}%</div>
+                                    <div class="text-[9px] text-gray-600">Foundation guaranteed</div>
                                 </div>
                                 <div class="bg-white/5 rounded-xl p-4">
                                     <div class="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Total Paid</div>
@@ -718,55 +745,60 @@ export default function AdminDeFi() {
                                 </div>
                             </div>
 
-                            {/* Subsidy Form - No wallet needed (uses server API) */}
+                            {/* Admin Controls */}
                             <div class="space-y-4">
                                 <div class="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center">
                                     <p class="text-[10px] text-green-400 font-bold uppercase tracking-widest">Server-Side Execution</p>
                                     <p class="text-[9px] text-gray-500">No MetaMask required - managed by backend</p>
                                 </div>
+
+                                {/* Set Target APY */}
                                 <div>
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Subsidy Amount (VCN)</label>
-                                    <input
-                                        type="number"
-                                        value={subsidyAmount()}
-                                        onInput={(e) => setSubsidyAmount(e.currentTarget.value)}
-                                        placeholder="100000"
-                                        class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-green-500/50"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Distribution Period (Days)</label>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Set Target APY (%)</label>
                                     <div class="flex gap-2">
-                                        {[7, 14, 30, 60, 90].map((days) => (
+                                        {[5, 8, 12, 15, 20].map((apy) => (
                                             <button
-                                                onClick={() => setSubsidyDuration(days)}
-                                                class={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${subsidyDuration() === days
-                                                    ? 'bg-green-500 text-black'
+                                                onClick={() => setNewTargetAPY(apy)}
+                                                class={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${newTargetAPY() === apy
+                                                    ? 'bg-amber-500 text-black'
                                                     : 'bg-white/5 text-gray-400 hover:bg-white/10'
                                                     }`}
                                             >
-                                                {days}d
+                                                {apy}%
                                             </button>
                                         ))}
                                     </div>
+                                    <button
+                                        onClick={handleSetAPY}
+                                        disabled={isSettingAPY()}
+                                        class="w-full mt-2 py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-black font-black rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                                    >
+                                        <Show when={isSettingAPY()} fallback={<>Set APY to {newTargetAPY()}%</>}>
+                                            <RefreshCw class="w-4 h-4 animate-spin" /> Setting...
+                                        </Show>
+                                    </button>
                                 </div>
-                                <Show when={subsidyAmount()}>
-                                    <div class="p-3 bg-green-500/5 border border-green-500/10 rounded-lg">
-                                        <div class="text-[10px] text-gray-500 mb-1">Estimated APY (if 100K VCN staked)</div>
-                                        <div class="text-lg font-black text-green-400">
-                                            {((parseFloat(subsidyAmount() || '0') / 100000) * (365 / subsidyDuration()) * 100).toFixed(1)}%
-                                        </div>
-                                    </div>
-                                </Show>
-                                <button
-                                    onClick={handleAddSubsidy}
-                                    disabled={isAddingSubsidy() || !subsidyAmount()}
-                                    class="w-full py-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2"
-                                >
-                                    <Show when={isAddingSubsidy()} fallback={<><DollarSign class="w-4 h-4" /> Add Subsidy</>}>
-                                        <RefreshCw class="w-4 h-4 animate-spin" /> Adding...
-                                    </Show>
-                                </button>
+
+                                {/* Fund Reward Pool */}
+                                <div>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Fund Reward Pool (VCN)</label>
+                                    <input
+                                        type="number"
+                                        value={fundAmount()}
+                                        onInput={(e) => setFundAmount(e.currentTarget.value)}
+                                        placeholder="100000"
+                                        class="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-green-500/50"
+                                    />
+                                    <button
+                                        onClick={handleFundPool}
+                                        disabled={isFundingPool() || !fundAmount()}
+                                        class="w-full mt-2 py-4 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-black rounded-xl text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                                    >
+                                        <Show when={isFundingPool()} fallback={<><DollarSign class="w-4 h-4" /> Fund Pool</>}>
+                                            <RefreshCw class="w-4 h-4 animate-spin" /> Funding...
+                                        </Show>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

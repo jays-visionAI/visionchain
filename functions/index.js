@@ -19,12 +19,13 @@ const TIMELOCK_ABI = [
 ];
 
 // --- BridgeStaking Contract Config ---
-const BRIDGE_STAKING_ADDRESS = "0x21915b79E1d334499272521a3508061354D13FF0";
+const BRIDGE_STAKING_ADDRESS = "0x6345e50859b0Ce82D8A495ba9894C6C81de385F3";
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 const BRIDGE_STAKING_ABI = [
-  "function addSubsidy(uint256 amount, uint256 duration) external",
-  "function withdrawSubsidy() external",
+  "function setTargetAPY(uint256 _apyBasisPoints) external",
+  "function fundRewardPool(uint256 amount) external",
+  "function withdrawRewardPool(uint256 amount) external",
   // eslint-disable-next-line max-len
   "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
   "function owner() external view returns (address)",
@@ -119,95 +120,130 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
   }
 });
 
-// --- Admin Add Subsidy (Server-Side, No MetaMask) ---
-exports.adminAddSubsidy = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
-  // Handle CORS preflight
+// --- Admin Set Target APY (Server-Side, Fixed APY) ---
+exports.adminSetAPY = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).send("");
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { amount, durationDays, adminSecret } = req.body;
+    const { apyPercent, adminSecret } = req.body;
 
-    // Basic validation
-    if (!amount || !durationDays) {
-      return res.status(400).json({ error: "Missing required fields: amount, durationDays" });
+    if (!apyPercent || apyPercent <= 0 || apyPercent > 50) {
+      return res.status(400).json({ error: "APY must be between 1 and 50%" });
     }
 
-    // Admin secret check (simple security - can enhance with Firebase Auth later)
     const expectedSecret = process.env.ADMIN_SECRET || "vision-admin-2026";
     if (adminSecret !== expectedSecret) {
       return res.status(403).json({ error: "Unauthorized" });
     }
 
-    console.log(`[Admin] Adding subsidy: ${amount} VCN for ${durationDays} days`);
+    console.log(`[Admin] Setting target APY to ${apyPercent}%`);
 
-    // Setup Blockchain Connection with Admin Wallet
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-
-    const vcnToken = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, adminWallet);
     const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
 
-    const amountWei = ethers.parseEther(amount.toString());
-    const durationSeconds = BigInt(durationDays) * 24n * 60n * 60n;
+    // Convert percent to basis points (12% = 1200 basis points)
+    const apyBasisPoints = BigInt(Math.floor(apyPercent * 100));
 
-    // Check admin VCN balance
-    const balance = await vcnToken.balanceOf(adminWallet.address);
-    console.log(`[Admin] Wallet balance: ${ethers.formatEther(balance)} VCN`);
-
-    if (balance < amountWei) {
-      return res.status(400).json({
-        error: `Insufficient VCN balance. Have: ${ethers.formatEther(balance)}, Need: ${amount}`,
-      });
-    }
-
-    // Check and approve if needed
-    const currentAllowance = await vcnToken.allowance(adminWallet.address, BRIDGE_STAKING_ADDRESS);
-    console.log(`[Admin] Current allowance: ${ethers.formatEther(currentAllowance)} VCN`);
-
-    if (currentAllowance < amountWei) {
-      console.log(`[Admin] Approving ${amount} VCN...`);
-      const approveTx = await vcnToken.approve(BRIDGE_STAKING_ADDRESS, amountWei);
-      await approveTx.wait();
-      console.log(`[Admin] Approval confirmed: ${approveTx.hash}`);
-    }
-
-    // Add subsidy
-    console.log(`[Admin] Calling addSubsidy(${amountWei}, ${durationSeconds})...`);
-    const tx = await staking.addSubsidy(amountWei, durationSeconds);
+    console.log(`[Admin] Calling setTargetAPY(${apyBasisPoints})...`);
+    const tx = await staking.setTargetAPY(apyBasisPoints);
     console.log(`[Admin] TX sent: ${tx.hash}`);
 
     const receipt = await tx.wait();
     console.log(`[Admin] TX confirmed in block ${receipt.blockNumber}`);
 
-    // Log to Firestore
-    await db.collection("admin_subsidy_logs").add({
-      amount: amount.toString(),
-      durationDays: durationDays,
+    await db.collection("admin_apy_logs").add({
+      apyPercent: apyPercent,
+      apyBasisPoints: apyBasisPoints.toString(),
       txHash: tx.hash,
       blockNumber: receipt.blockNumber,
       createdAt: admin.firestore.Timestamp.now(),
-      adminAddress: adminWallet.address,
     });
 
     return res.status(200).json({
       success: true,
       txHash: tx.hash,
-      blockNumber: receipt.blockNumber,
-      amount: amount,
-      durationDays: durationDays,
+      apyPercent: apyPercent,
     });
   } catch (err) {
-    console.error("[Admin] Add Subsidy Error:", err);
+    console.error("[Admin] Set APY Error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// --- Admin Fund Reward Pool (Server-Side, Fixed APY) ---
+exports.adminFundPool = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { amount, adminSecret } = req.body;
+
+    if (!amount || parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
+    }
+
+    const expectedSecret = process.env.ADMIN_SECRET || "vision-admin-2026";
+    if (adminSecret !== expectedSecret) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    console.log(`[Admin] Funding reward pool with ${amount} VCN`);
+
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+    const vcnToken = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, adminWallet);
+    const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+
+    const amountWei = ethers.parseEther(amount.toString());
+
+    // Check balance
+    const balance = await vcnToken.balanceOf(adminWallet.address);
+    if (balance < amountWei) {
+      return res.status(400).json({
+        error: `Insufficient VCN. Have: ${ethers.formatEther(balance)}, Need: ${amount}`,
+      });
+    }
+
+    // Approve if needed
+    const allowance = await vcnToken.allowance(adminWallet.address, BRIDGE_STAKING_ADDRESS);
+    if (allowance < amountWei) {
+      console.log(`[Admin] Approving ${amount} VCN...`);
+      const approveTx = await vcnToken.approve(BRIDGE_STAKING_ADDRESS, amountWei);
+      await approveTx.wait();
+    }
+
+    // Fund pool
+    console.log(`[Admin] Calling fundRewardPool(${amountWei})...`);
+    const tx = await staking.fundRewardPool(amountWei);
+    console.log(`[Admin] TX sent: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    console.log(`[Admin] TX confirmed in block ${receipt.blockNumber}`);
+
+    await db.collection("admin_fund_logs").add({
+      amount: amount.toString(),
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      amount: amount,
+    });
+  } catch (err) {
+    console.error("[Admin] Fund Pool Error:", err);
     return res.status(500).json({ error: err.message || "Internal server error" });
   }
 });

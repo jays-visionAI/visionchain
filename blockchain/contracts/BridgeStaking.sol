@@ -43,15 +43,15 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     uint256 public totalStaked;
 
     // ============ Reward Pools ============
-    uint256 public subsidyPool;           // Foundation incentive pool
+    uint256 public rewardPool;            // Pre-funded reward pool for fixed APY
     uint256 public feePool;               // Bridge fee revenue pool
     uint256 public accRewardPerShare;     // Accumulated rewards per staked token (scaled by PRECISION)
     uint256 public totalRewardsPaid;      // Total rewards distributed
     uint256 public lastRewardTime;        // Last time rewards were calculated
 
-    // Subsidy distribution
-    uint256 public subsidyRatePerSecond;  // VCN per second from subsidy
-    uint256 public subsidyEndTime;        // When subsidy distribution ends
+    // Fixed APY System
+    uint256 public targetAPY;             // Target APY in basis points (1200 = 12%)
+    uint256 public constant MAX_APY = 5000; // Max 50% APY for safety
 
     // ============ Events ============
     event Staked(address indexed validator, uint256 amount, uint256 totalStaked);
@@ -63,7 +63,9 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     event BridgeUpdated(address indexed oldBridge, address indexed newBridge);
     
     // Reward events
-    event SubsidyAdded(uint256 amount, uint256 duration, uint256 ratePerSecond);
+    event TargetAPYSet(uint256 apyBasisPoints);
+    event RewardPoolFunded(uint256 amount, uint256 newBalance);
+    event RewardPoolWithdrawn(uint256 amount, uint256 newBalance);
     event FeesDeposited(uint256 amount);
     event RewardsClaimed(address indexed validator, uint256 amount);
     event RewardsUpdated(uint256 accRewardPerShare, uint256 totalRewardsPaid);
@@ -100,50 +102,45 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Add subsidy to the reward pool (Foundation incentives)
-     * @param amount Amount of VCN to add
-     * @param duration Duration over which to distribute (in seconds)
+     * @notice Set the target APY for staking rewards
+     * @param _apyBasisPoints APY in basis points (1200 = 12%)
      */
-    function addSubsidy(uint256 amount, uint256 duration) external onlyOwner {
-        require(amount > 0, "Amount must be > 0");
-        require(duration > 0, "Duration must be > 0");
+    function setTargetAPY(uint256 _apyBasisPoints) external onlyOwner {
+        require(_apyBasisPoints <= MAX_APY, "APY exceeds maximum");
         
-        // Update rewards before changing rate
+        // Update rewards before changing APY
         _updateRewards();
         
-        // Transfer tokens
-        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-        
-        // If there's remaining subsidy, add it to new amount
-        if (block.timestamp < subsidyEndTime) {
-            uint256 remaining = (subsidyEndTime - block.timestamp) * subsidyRatePerSecond;
-            amount += remaining;
-        }
-        
-        subsidyPool += amount;
-        subsidyRatePerSecond = amount / duration;
-        subsidyEndTime = block.timestamp + duration;
-        
-        emit SubsidyAdded(amount, duration, subsidyRatePerSecond);
+        targetAPY = _apyBasisPoints;
+        emit TargetAPYSet(_apyBasisPoints);
     }
 
     /**
-     * @notice Emergency withdraw remaining subsidy
+     * @notice Fund the reward pool (Foundation pre-funding)
+     * @param amount Amount of VCN to add to reward pool
      */
-    function withdrawSubsidy() external onlyOwner {
+    function fundRewardPool(uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount must be > 0");
+        
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        rewardPool += amount;
+        
+        emit RewardPoolFunded(amount, rewardPool);
+    }
+
+    /**
+     * @notice Withdraw from reward pool
+     * @param amount Amount to withdraw
+     */
+    function withdrawRewardPool(uint256 amount) external onlyOwner {
+        require(amount <= rewardPool, "Insufficient reward pool");
+        
         _updateRewards();
         
-        uint256 remaining = 0;
-        if (block.timestamp < subsidyEndTime) {
-            remaining = (subsidyEndTime - block.timestamp) * subsidyRatePerSecond;
-        }
+        rewardPool -= amount;
+        stakingToken.safeTransfer(owner(), amount);
         
-        if (remaining > 0) {
-            subsidyPool -= remaining;
-            subsidyRatePerSecond = 0;
-            subsidyEndTime = block.timestamp;
-            stakingToken.safeTransfer(owner(), remaining);
-        }
+        emit RewardPoolWithdrawn(amount, rewardPool);
     }
 
     // ============ Bridge Functions ============
@@ -312,7 +309,8 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Update reward accumulator
+     * @notice Update reward accumulator based on fixed APY
+     * @dev Calculates: (totalStaked * targetAPY * timeDelta) / (365 days * 10000)
      */
     function _updateRewards() internal {
         if (block.timestamp <= lastRewardTime) {
@@ -324,23 +322,24 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
             return;
         }
         
-        // Calculate subsidy rewards
-        uint256 subsidyReward = 0;
-        if (subsidyRatePerSecond > 0 && block.timestamp <= subsidyEndTime) {
-            uint256 duration = block.timestamp - lastRewardTime;
-            if (lastRewardTime + duration > subsidyEndTime) {
-                duration = subsidyEndTime - lastRewardTime;
-            }
-            subsidyReward = duration * subsidyRatePerSecond;
-            if (subsidyReward > subsidyPool) {
-                subsidyReward = subsidyPool;
-            }
-            subsidyPool -= subsidyReward;
-        }
+        // Calculate fixed APY rewards
+        uint256 timeDelta = block.timestamp - lastRewardTime;
         
-        // Add subsidy to accumulator
-        if (subsidyReward > 0) {
-            accRewardPerShare += (subsidyReward * PRECISION) / totalStaked;
+        if (targetAPY > 0 && rewardPool > 0) {
+            // Annual reward = totalStaked * APY / 10000
+            // Per-second reward = Annual reward / 365 days
+            // Reward for timeDelta = totalStaked * APY * timeDelta / (365 days * 10000)
+            uint256 apyReward = (totalStaked * targetAPY * timeDelta) / (365 days * 10000);
+            
+            // Cap reward to available pool
+            if (apyReward > rewardPool) {
+                apyReward = rewardPool;
+            }
+            
+            if (apyReward > 0) {
+                rewardPool -= apyReward;
+                accRewardPerShare += (apyReward * PRECISION) / totalStaked;
+            }
         }
         
         lastRewardTime = block.timestamp;
@@ -413,31 +412,25 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
         
         uint256 currentAcc = accRewardPerShare;
         
-        // Add pending subsidy rewards
-        if (totalStaked > 0 && subsidyRatePerSecond > 0 && block.timestamp > lastRewardTime) {
-            uint256 endTime = block.timestamp < subsidyEndTime ? block.timestamp : subsidyEndTime;
-            if (endTime > lastRewardTime) {
-                uint256 subsidyReward = (endTime - lastRewardTime) * subsidyRatePerSecond;
-                if (subsidyReward > subsidyPool) {
-                    subsidyReward = subsidyPool;
-                }
-                currentAcc += (subsidyReward * PRECISION) / totalStaked;
+        // Add pending APY rewards
+        if (totalStaked > 0 && targetAPY > 0 && rewardPool > 0 && block.timestamp > lastRewardTime) {
+            uint256 timeDelta = block.timestamp - lastRewardTime;
+            uint256 apyReward = (totalStaked * targetAPY * timeDelta) / (365 days * 10000);
+            if (apyReward > rewardPool) {
+                apyReward = rewardPool;
             }
+            currentAcc += (apyReward * PRECISION) / totalStaked;
         }
         
         return (validator.stakedAmount * currentAcc) / PRECISION - validator.rewardDebt + validator.pendingRewards;
     }
 
     /**
-     * @notice Get current APY estimate (basis points)
+     * @notice Get current target APY (basis points)
+     * @dev Returns the base APY set by foundation. Actual APY may be higher with fee distribution.
      */
     function currentAPY() external view returns (uint256) {
-        if (totalStaked == 0 || subsidyRatePerSecond == 0) {
-            return 0;
-        }
-        // Annual rewards / total staked * 10000 (basis points)
-        uint256 annualRewards = subsidyRatePerSecond * 365 days;
-        return (annualRewards * 10000) / totalStaked;
+        return targetAPY;
     }
 
     /**
@@ -498,12 +491,12 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
      * @notice Get reward pool info
      */
     function getRewardInfo() external view returns (
-        uint256 _subsidyPool,
+        uint256 _rewardPool,
         uint256 _feePool,
-        uint256 _subsidyRatePerSecond,
-        uint256 _subsidyEndTime,
+        uint256 _targetAPY,
+        uint256 _totalStaked,
         uint256 _totalRewardsPaid
     ) {
-        return (subsidyPool, feePool, subsidyRatePerSecond, subsidyEndTime, totalRewardsPaid);
+        return (rewardPool, feePool, targetAPY, totalStaked, totalRewardsPaid);
     }
 }
