@@ -307,8 +307,8 @@ export default function ValidatorStaking() {
     });
 
     return (
-        <div class="min-h-screen bg-[#0A0A0B] text-white p-6 lg:p-10">
-            <div class="max-w-6xl mx-auto space-y-8">
+        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
                 <div class="text-center space-y-4">

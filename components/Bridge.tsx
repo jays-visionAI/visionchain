@@ -56,8 +56,8 @@ const Bridge: Component = () => {
     };
 
     return (
-        <div class="min-h-screen bg-[#050505] text-white pt-24 pb-20 px-4">
-            <div class="max-w-4xl mx-auto">
+        <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
                 <div class="text-center mb-12">
@@ -77,7 +77,7 @@ const Bridge: Component = () => {
 
                     {/* Main Bridge UI */}
                     <div class="lg:col-span-3 space-y-6">
-                        <div class="bg-[#0c0c0c] border border-white/10 rounded-[32px] p-8 shadow-2xl relative overflow-hidden group">
+                        <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[32px] p-8 shadow-2xl relative overflow-hidden group">
                             <div class="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
 
                             <Show when={step() === 1 || step() === 2}>
@@ -85,7 +85,7 @@ const Bridge: Component = () => {
                                 <div class="relative z-10 space-y-4">
 
                                     {/* From Network */}
-                                    <div class="bg-white/5 border border-white/10 rounded-2xl p-6 transition-all focus-within:border-blue-500/50">
+                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all focus-within:border-blue-500/50">
                                         <div class="flex justify-between items-center mb-3">
                                             <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">From Network</span>
                                             <span class="text-[10px] font-bold text-blue-400">Balance: 12,450.00 {selectedAsset()}</span>
@@ -111,7 +111,7 @@ const Bridge: Component = () => {
                                     </div>
 
                                     {/* To Network */}
-                                    <div class="bg-white/5 border border-white/10 rounded-2xl p-6 transition-all">
+                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all">
                                         <div class="flex justify-between items-center mb-3">
                                             <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">To Network</span>
                                         </div>
@@ -126,7 +126,7 @@ const Bridge: Component = () => {
                                     </div>
 
                                     {/* Asset & Amount */}
-                                    <div class="bg-white/5 border border-white/10 rounded-2xl p-6 mt-4">
+                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 mt-4">
                                         <div class="flex justify-between items-center mb-4">
                                             <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Amount to Bridge</span>
                                             <div class="flex gap-2">
@@ -185,7 +185,7 @@ const Bridge: Component = () => {
                                     <p class="text-slate-400 text-sm leading-relaxed max-w-sm mx-auto">
                                         Your {amount()} {selectedAsset()} is on its way to {toNetwork()}. You can track the status below.
                                     </p>
-                                    <div class="bg-white/5 border border-white/10 rounded-2xl p-4 max-w-xs mx-auto text-xs font-mono text-blue-400 break-all">
+                                    <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 max-w-xs mx-auto text-xs font-mono text-blue-400 break-all">
                                         Tx: 0x4f...a82d
                                     </div>
                                     <button
