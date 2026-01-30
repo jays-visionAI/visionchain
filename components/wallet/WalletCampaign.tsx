@@ -1,4 +1,5 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, Show, For, onMount } from 'solid-js';
+import { ethers } from 'ethers';
 import {
     Zap,
     TrendingUp,
@@ -20,6 +21,31 @@ import { ReferralLeaderboard } from './ReferralLeaderboard';
 
 export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (view: string) => void }) => {
     const [selectedQuest, setSelectedQuest] = createSignal<string | null>(null);
+    const [totalStaked, setTotalStaked] = createSignal('Loading...');
+
+    // Fetch real staking data on mount
+    onMount(async () => {
+        try {
+            const provider = new ethers.JsonRpcProvider('https://api.visionchain.co/rpc-proxy');
+            const stakingContract = new ethers.Contract(
+                '0x746a48E39dC57Ff14B872B8979E20efE5E5100B1',
+                ['function totalStaked() view returns (uint256)'],
+                provider
+            );
+            const staked = await stakingContract.totalStaked();
+            const stakedFormatted = parseFloat(ethers.formatEther(staked));
+            if (stakedFormatted >= 1000000) {
+                setTotalStaked(`${(stakedFormatted / 1000000).toFixed(1)}M VCN`);
+            } else if (stakedFormatted >= 1000) {
+                setTotalStaked(`${(stakedFormatted / 1000).toFixed(1)}K VCN`);
+            } else {
+                setTotalStaked(`${stakedFormatted.toFixed(0)} VCN`);
+            }
+        } catch (e) {
+            console.error('Failed to fetch total staked:', e);
+            setTotalStaked('0 VCN');
+        }
+    });
 
     const quests = [
         {
@@ -40,18 +66,18 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
         },
         {
             id: 'staking',
-            title: 'Staking V1',
-            tag: 'Live High Yield',
-            tagColor: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-            description: 'Earn up to 12% APY by staking your VCN tokens. Secure the network and grow your holdings.',
+            title: 'Validator Staking',
+            tag: 'Active Now',
+            tagColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            description: 'Earn min 12% APR up to 20% by staking your VCN tokens. Secure bridge network and grow your holdings.',
             icon: TrendingUp,
-            accent: 'blue',
+            accent: 'emerald',
             btnText: 'Stake Now',
             stats: [
-                { label: 'Current APY', value: '12%' },
-                { label: 'Total Staked', value: '45.2M' }
+                { label: 'Current APY', value: '12~20%' },
+                { label: 'Total Staked', value: totalStaked() }
             ],
-            footerTag: 'Early Access',
+            footerTag: 'Active Now',
             footerIcon: Target
         },
         {
