@@ -103,13 +103,15 @@ import { WalletSend } from './wallet/WalletSend';
 import { WalletReceive } from './wallet/WalletReceive';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 import { WalletReferralDocs } from './wallet/WalletReferralDocs';
+import Bridge from './Bridge';
+import ValidatorStaking from './ValidatorStaking';
 
 import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -2674,6 +2676,20 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         contacts={contacts()}
                                     />
                                 </div>
+                            </div>
+                        </Show>
+
+                        {/* Bridge View */}
+                        <Show when={activeView() === 'bridge'}>
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <Bridge />
+                            </div>
+                        </Show>
+
+                        {/* Staking View */}
+                        <Show when={activeView() === 'staking'}>
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <ValidatorStaking />
                             </div>
                         </Show>
 

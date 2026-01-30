@@ -16,12 +16,14 @@ import {
     LogOut,
     X,
     Clock,
-    Bell
+    Bell,
+    ArrowLeftRight,
+    Shield
 } from 'lucide-solid';
 import { VisionLogo } from './VisionLogo';
 import { VisionFullLogo } from './VisionFullLogo';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -50,6 +52,8 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
     const allMenuItems = [
         { id: 'chat' as ViewType, label: 'Chat', icon: AiChatIcon },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
+        { id: 'bridge' as ViewType, label: 'Bridge', icon: ArrowLeftRight },
+        { id: 'staking' as ViewType, label: 'Staking', icon: Shield },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },
