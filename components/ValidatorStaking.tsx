@@ -22,7 +22,7 @@ import { contractService } from '../services/contractService';
 // ============ Contract Config ============
 const BRIDGE_STAKING_ADDRESS = '0x746a48E39dC57Ff14B872B8979E20efE5E5100B1'; // Fixed APY Contract
 const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // VCN Token address
-const RPC_URL = 'http://46.224.221.201:8545';
+const RPC_URL = 'https://api.visionchain.co/rpc-proxy'; // HTTPS RPC Proxy
 
 const BRIDGE_STAKING_ABI = [
     'function stake(uint256 amount) external',
