@@ -2689,7 +2689,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         {/* Staking View */}
                         <Show when={activeView() === 'staking'}>
                             <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <ValidatorStaking />
+                                <ValidatorStaking walletAddress={walletAddress} />
                             </div>
                         </Show>
 

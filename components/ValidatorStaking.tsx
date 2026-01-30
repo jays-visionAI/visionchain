@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount } from 'solid-js';
 import {
     Shield,
     Lock,
@@ -68,11 +68,15 @@ interface UserStakingInfo {
     vcnBalance: string;
 }
 
+// ============ Props ============
+interface ValidatorStakingProps {
+    walletAddress?: () => string;
+}
+
 // ============ Component ============
-export default function ValidatorStaking() {
-    // State
-    const [isConnected, setIsConnected] = createSignal(false);
-    const [walletAddress, setWalletAddress] = createSignal('');
+export default function ValidatorStaking(props: ValidatorStakingProps) {
+    // State - Use prop walletAddress if available
+    const isConnected = () => !!(props.walletAddress?.() || '');
     const [totalStaked, setTotalStaked] = createSignal('0');
     const [activeValidatorCount, setActiveValidatorCount] = createSignal(0);
     const [minStake, setMinStake] = createSignal('10,000');
@@ -97,24 +101,8 @@ export default function ValidatorStaking() {
     const [errorMsg, setErrorMsg] = createSignal('');
 
     // Connect wallet
-    const connectWallet = async () => {
-        if (typeof window.ethereum === 'undefined') {
-            setErrorMsg('Please install MetaMask');
-            return;
-        }
-
-        try {
-            setIsLoading(true);
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            setWalletAddress(accounts[0]);
-            setIsConnected(true);
-            await loadContractData();
-        } catch (err: any) {
-            setErrorMsg(err.message || 'Failed to connect wallet');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    // Wallet address from parent
+    const walletAddress = () => props.walletAddress?.() || '';
 
     // Load contract data
     const loadContractData = async () => {
@@ -295,15 +283,17 @@ export default function ValidatorStaking() {
         return `${days}d ${hours}h remaining`;
     };
 
-    // Check wallet on mount
+    // Load data on mount if wallet address is available
     onMount(async () => {
-        if (typeof window.ethereum !== 'undefined') {
-            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-            if (accounts.length > 0) {
-                setWalletAddress(accounts[0]);
-                setIsConnected(true);
-                await loadContractData();
-            }
+        if (walletAddress()) {
+            await loadContractData();
+        }
+    });
+
+    // Also reload when wallet address changes
+    createEffect(() => {
+        if (walletAddress()) {
+            loadContractData();
         }
     });
 
@@ -640,27 +630,14 @@ export default function ValidatorStaking() {
                         </div>
                     </div>
                 }>
-                    {/* Connect Wallet Button */}
+                    {/* No Wallet - Show Loading */}
                     <div class="max-w-md mx-auto">
                         <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-8 text-center">
                             <Wallet class="w-16 h-16 text-gray-600 mx-auto mb-6" />
-                            <h3 class="text-xl font-black text-white mb-2">Connect Your Wallet</h3>
-                            <p class="text-gray-500 text-sm mb-6">
-                                Connect your wallet to stake VCN and become a bridge validator.
+                            <h3 class="text-xl font-black text-white mb-2">Loading Wallet...</h3>
+                            <p class="text-gray-500 text-sm">
+                                Please wait while we connect to your wallet.
                             </p>
-                            <button
-                                onClick={connectWallet}
-                                disabled={isLoading()}
-                                class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-sm uppercase tracking-widest rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                <Show when={isLoading()} fallback={<>
-                                    <Wallet class="w-4 h-4" />
-                                    Connect Wallet
-                                </>}>
-                                    <div class="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                                    Connecting...
-                                </Show>
-                            </button>
                             <Show when={errorMsg()}>
                                 <p class="text-red-400 text-xs mt-4">{errorMsg()}</p>
                             </Show>
