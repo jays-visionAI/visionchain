@@ -62,30 +62,25 @@ export enum ChallengeStatus {
     RESOLVED_INVALID = 2
 }
 
-// Contract addresses (to be updated after deployment)
+// Contract addresses (deployed)
 export const BRIDGE_CONTRACTS = {
-    // Sepolia (Source)
+    // Sepolia (Source Chain)
     sepolia: {
         chainId: 11155111,
-        vault: '0x...', // TBD after deployment
-        intentCommitment: '0x...'
+        rpc: 'https://ethereum-sepolia-rpc.publicnode.com',
+        intentCommitment: '0x26Ad5a840F8828ecDF5563fFcf0A1a9ea318Dc0b',
+        messageInbox: '0xd84967816156F91349c295eF3e61d1aDc3dC7641',
+        challengeManager: '0x2855AfE6CAd2384A51baC518f57B4039FDad8aD6',
+        equalizer: '0x6e6E465594cED9cA33995939b9579a8A29194983'
     },
-    // Vision Testnet (Destination)
+    // Vision Testnet (Destination Chain)
     vision: {
         chainId: 1337,
-        messageInbox: '0x...',
-        challengeManager: '0x...',
-        equalizer: '0x...'
-    },
-    // Polygon Amoy (Future)
-    amoy: {
-        chainId: 80002,
-        vault: '0x...'
-    },
-    // Base Sepolia (Future)
-    baseSepolia: {
-        chainId: 84532,
-        vault: '0x...'
+        rpc: 'https://api.visionchain.co/rpc-proxy',
+        intentCommitment: '0x47c05BCCA7d57c87083EB4e586007530eE4539e9',
+        messageInbox: '0x408F924BAEC71cC3968614Cb2c58E155A35e6890',
+        challengeManager: '0x773330693cb7d5D233348E25809770A32483A940',
+        equalizer: '0x52173b6ac069619c206b9A0e75609fC92860AB2A'
     }
 };
 
