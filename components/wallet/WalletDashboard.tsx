@@ -634,8 +634,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
     // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
     const activeTimeTasks = createMemo(() => {
+        const tasks = props.queueTasks();
+        // Early return for empty queue - performance optimization
+        if (tasks.length === 0) return [];
+
         const now = Date.now();
-        return props.queueTasks().filter(t => {
+        return tasks.filter(t => {
             // Always show WAITING, EXECUTING, FAILED
             if (['WAITING', 'EXECUTING', 'FAILED'].includes(t.status)) return true;
             // Show SENT tasks for 60 seconds after completion
@@ -654,7 +658,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
     const combinedDrawerTasks = createMemo(() => {
         const queueTasks = props.queueTasks();
-        const batchTasks = props.batchAgents()
+        const batchAgents = props.batchAgents();
+
+        // Early return for empty state - performance optimization
+        if (queueTasks.length === 0 && batchAgents.length === 0) return [];
+
+        const batchTasks = batchAgents
             .map(agent => ({
                 id: agent.id,
                 type: 'BATCH',
@@ -681,10 +690,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
     // --- Auto-scroll Logic ---
     createEffect(() => {
-        // Dependencies: Anytime messages, thinking steps, or loading state changes
         const msgs = props.messages();
         const steps = props.thinkingSteps();
         const loading = props.isLoading();
+
+        // Early return if no content - performance optimization
+        if (msgs.length === 0 && steps.length === 0 && !loading) return;
 
         if (messagesContainerRef) {
             // Use requestAnimationFrame to ensure the scroll happens after the browser has painted the new elements
