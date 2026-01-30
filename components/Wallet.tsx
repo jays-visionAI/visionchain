@@ -1431,6 +1431,9 @@ const Wallet = (): JSX.Element => {
                     }
                     setOnboardingStep(0);
 
+                    // *** PERFORMANCE: End loading as soon as wallet address is known ***
+                    setIsLoading(false);
+
                     // Update userProfile with verified status if wallet exists anywhere
                     setUserProfile(prev => ({
                         ...prev,
@@ -1440,6 +1443,7 @@ const Wallet = (): JSX.Element => {
                 } else {
                     // Force onboarding if no wallet exists - Redirect to mnemonic generation flow
                     setOnboardingStep(1);
+                    setIsLoading(false);
                     navigate('/wallet/profile');
                 }
             } else {
@@ -1453,10 +1457,10 @@ const Wallet = (): JSX.Element => {
                     setOnboardingStep(1);
                     navigate('/wallet/profile');
                 }
+                setIsLoading(false);
             }
         } catch (error) {
             console.error('Error fetching profile:', error);
-        } finally {
             setIsLoading(false);
         }
     };
@@ -1571,12 +1575,10 @@ const Wallet = (): JSX.Element => {
         }
     };
 
-    onMount(() => {
-        fetchPortfolioData();
-    });
-
+    // Fetch portfolio data only when wallet address changes (avoid duplicate calls)
     createEffect(() => {
-        if (auth.user() && walletAddress()) {
+        const addr = walletAddress();
+        if (auth.user() && addr) {
             fetchPortfolioData();
         }
     });
