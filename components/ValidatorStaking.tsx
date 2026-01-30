@@ -26,7 +26,7 @@ declare global {
 }
 
 // ============ Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x2f8D338360D095a72680A943A22fE6a0d398a0B4'; // Deployed address
+const BRIDGE_STAKING_ADDRESS = '0x21915b79E1d334499272521a3508061354D13FF0'; // Deployed V2 with rewards
 const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // VCN Token address
 
 const BRIDGE_STAKING_ABI = [
@@ -34,6 +34,7 @@ const BRIDGE_STAKING_ABI = [
     'function requestUnstake(uint256 amount) external',
     'function withdraw() external',
     'function cancelUnstake() external',
+    'function claimRewards() external',
     'function getStake(address account) external view returns (uint256)',
     'function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)',
     'function isActiveValidator(address account) external view returns (bool)',
@@ -42,7 +43,10 @@ const BRIDGE_STAKING_ABI = [
     'function MINIMUM_STAKE() external view returns (uint256)',
     'function COOLDOWN_PERIOD() external view returns (uint256)',
     'function SLASH_PERCENTAGE() external view returns (uint256)',
-    'function validators(address) external view returns (uint256 stakedAmount, uint256 unstakeRequestTime, uint256 unstakeAmount, bool isActive)'
+    'function pendingReward(address account) external view returns (uint256)',
+    'function currentAPY() external view returns (uint256)',
+    'function getRewardInfo() external view returns (uint256 subsidyPool, uint256 feePool, uint256 subsidyRatePerSecond, uint256 subsidyEndTime, uint256 totalRewardsPaid)',
+    'function validators(address) external view returns (uint256 stakedAmount, uint256 unstakeRequestTime, uint256 unstakeAmount, uint256 rewardDebt, uint256 pendingRewards, bool isActive)'
 ];
 
 const ERC20_ABI = [
@@ -66,6 +70,7 @@ interface UserStakingInfo {
     unlockTime: number;
     isActive: boolean;
     vcnBalance: string;
+    pendingRewards: string;
 }
 
 // ============ Props ============
@@ -88,8 +93,13 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         pendingUnstake: '0',
         unlockTime: 0,
         isActive: false,
-        vcnBalance: '0'
+        vcnBalance: '0',
+        pendingRewards: '0'
     });
+
+    const [currentAPY, setCurrentAPY] = createSignal('0');
+    const [subsidyPool, setSubsidyPool] = createSignal('0');
+    const [feePool, setFeePool] = createSignal('0');
 
     const [validators, setValidators] = createSignal<ValidatorInfo[]>([]);
     const [stakeAmount, setStakeAmount] = createSignal('');
@@ -126,12 +136,15 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setCooldownDays(Number(cooldown) / (24 * 60 * 60));
             setSlashPercent(Number(slash));
 
-            // Get user info
-            const [userStake, pendingInfo, isActive, vcnBalance] = await Promise.all([
+            // Get user info and rewards
+            const [userStake, pendingInfo, isActive, vcnBalance, pendingRewards, apy, rewardInfo] = await Promise.all([
                 staking.getStake(walletAddress()),
                 staking.getPendingUnstake(walletAddress()),
                 staking.isActiveValidator(walletAddress()),
-                vcn.balanceOf(walletAddress())
+                vcn.balanceOf(walletAddress()),
+                staking.pendingReward(walletAddress()),
+                staking.currentAPY().catch(() => 0n),
+                staking.getRewardInfo().catch(() => [0n, 0n, 0n, 0n, 0n])
             ]);
 
             setUserInfo({
@@ -139,8 +152,14 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 pendingUnstake: ethers.formatEther(pendingInfo[0]),
                 unlockTime: Number(pendingInfo[1]) * 1000,
                 isActive,
-                vcnBalance: ethers.formatEther(vcnBalance)
+                vcnBalance: ethers.formatEther(vcnBalance),
+                pendingRewards: ethers.formatEther(pendingRewards)
             });
+
+            // APY in basis points (10000 = 100%)
+            setCurrentAPY((Number(apy) / 100).toFixed(2));
+            setSubsidyPool(ethers.formatEther(rewardInfo[0]));
+            setFeePool(ethers.formatEther(rewardInfo[1]));
 
             // Get active validators
             try {
@@ -259,6 +278,39 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
             const tx = await staking.withdraw();
+            setTxHash(tx.hash);
+            await tx.wait();
+
+            setTxStatus('success');
+            await loadContractData();
+
+            setTimeout(() => setTxStatus('idle'), 5000);
+        } catch (err: any) {
+            setTxStatus('error');
+            setErrorMsg(err.reason || err.message || 'Transaction failed');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Handle claim rewards
+    const handleClaimRewards = async () => {
+        const pending = parseFloat(userInfo().pendingRewards);
+        if (pending <= 0) {
+            setErrorMsg('No rewards to claim');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+            setTxStatus('pending');
+            setErrorMsg('');
+
+            const provider = new ethers.BrowserProvider(window.ethereum);
+            const signer = await provider.getSigner();
+            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
+
+            const tx = await staking.claimRewards();
             setTxHash(tx.hash);
             await tx.wait();
 
@@ -407,6 +459,23 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                         </div>
                                     </div>
                                 </Show>
+                                {/* Pending Rewards Section */}
+                                <div class="flex items-center justify-between mt-3 pt-3 border-t border-green-500/20">
+                                    <div>
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pending Rewards</span>
+                                        <span class="text-[9px] text-green-400/60">APY: {currentAPY()}%</span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-lg font-black text-green-400">{Number(userInfo().pendingRewards).toLocaleString(undefined, { maximumFractionDigits: 4 })} VCN</span>
+                                        <button
+                                            onClick={handleClaimRewards}
+                                            disabled={isLoading() || parseFloat(userInfo().pendingRewards) <= 0}
+                                            class="px-3 py-1.5 bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold text-xs rounded-lg transition-all"
+                                        >
+                                            Claim
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Tabs */}

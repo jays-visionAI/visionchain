@@ -8,8 +8,12 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title BridgeStaking
- * @notice Validator staking contract for Vision Bridge security
- * @dev Implements stake, unstake with cooldown, and slashing mechanisms
+ * @notice Validator staking contract for Vision Bridge security with dual-pool rewards
+ * @dev Implements stake, unstake with cooldown, slashing, and reward distribution
+ * 
+ * Reward System:
+ * - Subsidy Pool: Foundation-funded incentives for early validators
+ * - Fee Pool: Bridge transaction fees distributed to validators
  */
 contract BridgeStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -18,21 +22,36 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     uint256 public constant MINIMUM_STAKE = 10_000 * 1e18; // 10,000 VCN
     uint256 public constant COOLDOWN_PERIOD = 7 days;
     uint256 public constant SLASH_PERCENTAGE = 50; // 50%
+    uint256 public constant PRECISION = 1e18;
 
     // ============ State Variables ============
     IERC20 public immutable stakingToken;
     address public bridge;
 
+    // Validator info
     struct ValidatorInfo {
         uint256 stakedAmount;
         uint256 unstakeRequestTime;
         uint256 unstakeAmount;
+        uint256 rewardDebt;      // Used for reward calculation
+        uint256 pendingRewards;  // Unclaimed rewards
         bool isActive;
     }
 
     mapping(address => ValidatorInfo) public validators;
     address[] public validatorList;
     uint256 public totalStaked;
+
+    // ============ Reward Pools ============
+    uint256 public subsidyPool;           // Foundation incentive pool
+    uint256 public feePool;               // Bridge fee revenue pool
+    uint256 public accRewardPerShare;     // Accumulated rewards per staked token (scaled by PRECISION)
+    uint256 public totalRewardsPaid;      // Total rewards distributed
+    uint256 public lastRewardTime;        // Last time rewards were calculated
+
+    // Subsidy distribution
+    uint256 public subsidyRatePerSecond;  // VCN per second from subsidy
+    uint256 public subsidyEndTime;        // When subsidy distribution ends
 
     // ============ Events ============
     event Staked(address indexed validator, uint256 amount, uint256 totalStaked);
@@ -42,6 +61,12 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     event ValidatorActivated(address indexed validator);
     event ValidatorDeactivated(address indexed validator);
     event BridgeUpdated(address indexed oldBridge, address indexed newBridge);
+    
+    // Reward events
+    event SubsidyAdded(uint256 amount, uint256 duration, uint256 ratePerSecond);
+    event FeesDeposited(uint256 amount);
+    event RewardsClaimed(address indexed validator, uint256 amount);
+    event RewardsUpdated(uint256 accRewardPerShare, uint256 totalRewardsPaid);
 
     // ============ Modifiers ============
     modifier onlyBridge() {
@@ -58,6 +83,7 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     constructor(address _stakingToken) Ownable(msg.sender) {
         require(_stakingToken != address(0), "Invalid token address");
         stakingToken = IERC20(_stakingToken);
+        lastRewardTime = block.timestamp;
     }
 
     // ============ Admin Functions ============
@@ -73,6 +99,75 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
         emit BridgeUpdated(oldBridge, _bridge);
     }
 
+    /**
+     * @notice Add subsidy to the reward pool (Foundation incentives)
+     * @param amount Amount of VCN to add
+     * @param duration Duration over which to distribute (in seconds)
+     */
+    function addSubsidy(uint256 amount, uint256 duration) external onlyOwner {
+        require(amount > 0, "Amount must be > 0");
+        require(duration > 0, "Duration must be > 0");
+        
+        // Update rewards before changing rate
+        _updateRewards();
+        
+        // Transfer tokens
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        
+        // If there's remaining subsidy, add it to new amount
+        if (block.timestamp < subsidyEndTime) {
+            uint256 remaining = (subsidyEndTime - block.timestamp) * subsidyRatePerSecond;
+            amount += remaining;
+        }
+        
+        subsidyPool += amount;
+        subsidyRatePerSecond = amount / duration;
+        subsidyEndTime = block.timestamp + duration;
+        
+        emit SubsidyAdded(amount, duration, subsidyRatePerSecond);
+    }
+
+    /**
+     * @notice Emergency withdraw remaining subsidy
+     */
+    function withdrawSubsidy() external onlyOwner {
+        _updateRewards();
+        
+        uint256 remaining = 0;
+        if (block.timestamp < subsidyEndTime) {
+            remaining = (subsidyEndTime - block.timestamp) * subsidyRatePerSecond;
+        }
+        
+        if (remaining > 0) {
+            subsidyPool -= remaining;
+            subsidyRatePerSecond = 0;
+            subsidyEndTime = block.timestamp;
+            stakingToken.safeTransfer(owner(), remaining);
+        }
+    }
+
+    // ============ Bridge Functions ============
+
+    /**
+     * @notice Deposit bridge fees to the reward pool
+     * @param amount Amount of VCN fees collected
+     */
+    function depositFees(uint256 amount) external onlyBridge {
+        require(amount > 0, "Amount must be > 0");
+        
+        _updateRewards();
+        
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        feePool += amount;
+        
+        // Immediately distribute fees to accRewardPerShare if there are stakers
+        if (totalStaked > 0) {
+            accRewardPerShare += (amount * PRECISION) / totalStaked;
+        }
+        
+        emit FeesDeposited(amount);
+    }
+
     // ============ Staking Functions ============
 
     /**
@@ -82,7 +177,18 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     function stake(uint256 amount) external nonReentrant {
         require(amount > 0, "Amount must be > 0");
         
+        _updateRewards();
+        
         ValidatorInfo storage validator = validators[msg.sender];
+        
+        // Claim pending rewards before stake changes
+        if (validator.stakedAmount > 0) {
+            uint256 pending = _calculatePending(msg.sender);
+            if (pending > 0) {
+                validator.pendingRewards += pending;
+            }
+        }
+        
         uint256 newTotal = validator.stakedAmount + amount;
         require(newTotal >= MINIMUM_STAKE, "Below minimum stake");
 
@@ -93,6 +199,7 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
         }
 
         validator.stakedAmount = newTotal;
+        validator.rewardDebt = (newTotal * accRewardPerShare) / PRECISION;
         totalStaked += amount;
 
         // Auto-activate if meeting minimum stake
@@ -109,9 +216,17 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
      * @param amount Amount to unstake
      */
     function requestUnstake(uint256 amount) external onlyActiveValidator nonReentrant {
+        _updateRewards();
+        
         ValidatorInfo storage validator = validators[msg.sender];
         require(amount > 0, "Amount must be > 0");
         require(validator.stakedAmount >= amount, "Insufficient stake");
+
+        // Claim pending rewards before stake changes
+        uint256 pending = _calculatePending(msg.sender);
+        if (pending > 0) {
+            validator.pendingRewards += pending;
+        }
 
         // Check if remaining stake would be below minimum
         uint256 remainingStake = validator.stakedAmount - amount;
@@ -121,6 +236,7 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
 
         validator.unstakeRequestTime = block.timestamp;
         validator.unstakeAmount = amount;
+        validator.rewardDebt = (remainingStake * accRewardPerShare) / PRECISION;
 
         // If fully unstaking, deactivate
         if (remainingStake == 0) {
@@ -157,6 +273,8 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
      * @notice Cancel pending unstake request
      */
     function cancelUnstake() external {
+        _updateRewards();
+        
         ValidatorInfo storage validator = validators[msg.sender];
         require(validator.unstakeAmount > 0, "No pending unstake");
 
@@ -166,8 +284,78 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
             emit ValidatorActivated(msg.sender);
         }
 
+        validator.rewardDebt = (validator.stakedAmount * accRewardPerShare) / PRECISION;
         validator.unstakeAmount = 0;
         validator.unstakeRequestTime = 0;
+    }
+
+    // ============ Reward Functions ============
+
+    /**
+     * @notice Claim pending rewards
+     */
+    function claimRewards() external nonReentrant {
+        _updateRewards();
+        
+        ValidatorInfo storage validator = validators[msg.sender];
+        uint256 pending = _calculatePending(msg.sender) + validator.pendingRewards;
+        
+        require(pending > 0, "No rewards to claim");
+        
+        validator.pendingRewards = 0;
+        validator.rewardDebt = (validator.stakedAmount * accRewardPerShare) / PRECISION;
+        totalRewardsPaid += pending;
+        
+        stakingToken.safeTransfer(msg.sender, pending);
+        
+        emit RewardsClaimed(msg.sender, pending);
+    }
+
+    /**
+     * @notice Update reward accumulator
+     */
+    function _updateRewards() internal {
+        if (block.timestamp <= lastRewardTime) {
+            return;
+        }
+        
+        if (totalStaked == 0) {
+            lastRewardTime = block.timestamp;
+            return;
+        }
+        
+        // Calculate subsidy rewards
+        uint256 subsidyReward = 0;
+        if (subsidyRatePerSecond > 0 && block.timestamp <= subsidyEndTime) {
+            uint256 duration = block.timestamp - lastRewardTime;
+            if (lastRewardTime + duration > subsidyEndTime) {
+                duration = subsidyEndTime - lastRewardTime;
+            }
+            subsidyReward = duration * subsidyRatePerSecond;
+            if (subsidyReward > subsidyPool) {
+                subsidyReward = subsidyPool;
+            }
+            subsidyPool -= subsidyReward;
+        }
+        
+        // Add subsidy to accumulator
+        if (subsidyReward > 0) {
+            accRewardPerShare += (subsidyReward * PRECISION) / totalStaked;
+        }
+        
+        lastRewardTime = block.timestamp;
+        emit RewardsUpdated(accRewardPerShare, totalRewardsPaid);
+    }
+
+    /**
+     * @notice Calculate pending rewards for a validator
+     */
+    function _calculatePending(address account) internal view returns (uint256) {
+        ValidatorInfo storage validator = validators[account];
+        if (validator.stakedAmount == 0) {
+            return 0;
+        }
+        return (validator.stakedAmount * accRewardPerShare) / PRECISION - validator.rewardDebt;
     }
 
     // ============ Slashing Functions ============
@@ -184,11 +372,17 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
         nonReentrant 
         returns (uint256 slashedAmount) 
     {
+        _updateRewards();
+        
         ValidatorInfo storage info = validators[validator];
         require(info.stakedAmount > 0, "No stake to slash");
 
+        // Forfeit pending rewards
+        info.pendingRewards = 0;
+
         slashedAmount = (info.stakedAmount * SLASH_PERCENTAGE) / 100;
         info.stakedAmount -= slashedAmount;
+        info.rewardDebt = (info.stakedAmount * accRewardPerShare) / PRECISION;
         totalStaked -= slashedAmount;
 
         // Deactivate if below minimum
@@ -207,6 +401,44 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     }
 
     // ============ View Functions ============
+
+    /**
+     * @notice Get pending rewards for a validator
+     */
+    function pendingReward(address account) external view returns (uint256) {
+        ValidatorInfo storage validator = validators[account];
+        if (validator.stakedAmount == 0) {
+            return validator.pendingRewards;
+        }
+        
+        uint256 currentAcc = accRewardPerShare;
+        
+        // Add pending subsidy rewards
+        if (totalStaked > 0 && subsidyRatePerSecond > 0 && block.timestamp > lastRewardTime) {
+            uint256 endTime = block.timestamp < subsidyEndTime ? block.timestamp : subsidyEndTime;
+            if (endTime > lastRewardTime) {
+                uint256 subsidyReward = (endTime - lastRewardTime) * subsidyRatePerSecond;
+                if (subsidyReward > subsidyPool) {
+                    subsidyReward = subsidyPool;
+                }
+                currentAcc += (subsidyReward * PRECISION) / totalStaked;
+            }
+        }
+        
+        return (validator.stakedAmount * currentAcc) / PRECISION - validator.rewardDebt + validator.pendingRewards;
+    }
+
+    /**
+     * @notice Get current APY estimate (basis points)
+     */
+    function currentAPY() external view returns (uint256) {
+        if (totalStaked == 0 || subsidyRatePerSecond == 0) {
+            return 0;
+        }
+        // Annual rewards / total staked * 10000 (basis points)
+        uint256 annualRewards = subsidyRatePerSecond * 365 days;
+        return (annualRewards * 10000) / totalStaked;
+    }
 
     /**
      * @notice Check if address is an active validator
@@ -260,5 +492,18 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
             }
         }
         return activeValidators;
+    }
+
+    /**
+     * @notice Get reward pool info
+     */
+    function getRewardInfo() external view returns (
+        uint256 _subsidyPool,
+        uint256 _feePool,
+        uint256 _subsidyRatePerSecond,
+        uint256 _subsidyEndTime,
+        uint256 _totalRewardsPaid
+    ) {
+        return (subsidyPool, feePool, subsidyRatePerSecond, subsidyEndTime, totalRewardsPaid);
     }
 }
