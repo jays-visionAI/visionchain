@@ -2600,8 +2600,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     <main class={`flex-1 flex flex-col h-[100dvh] overflow-hidden transition-all duration-300 relative ml-0 lg:ml-[280px] w-full ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
 
 
-                        {/* Chat View */}
-                        <Show when={activeView() === 'chat'}>
+                        {/* Chat View - Always mounted, CSS-hidden when not active for instant switching */}
+                        <div class={activeView() === 'chat' ? '' : 'hidden'}>
                             <WalletDashboard
                                 messages={messages}
                                 isLoading={chatLoading}
@@ -2655,7 +2655,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     setShowPasswordModal(true);
                                 }}
                             />
-                        </Show>
+                        </div>
 
                         {/* Quest (formerly Campaign) View */}
                         <Show when={activeView() === 'campaign' || activeView() === 'quest'}>
