@@ -17,17 +17,12 @@ import {
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
-
-// Extend Window interface for ethereum
-declare global {
-    interface Window {
-        ethereum?: any;
-    }
-}
+import { contractService } from '../services/contractService';
 
 // ============ Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x21915b79E1d334499272521a3508061354D13FF0'; // Deployed V2 with rewards
+const BRIDGE_STAKING_ADDRESS = '0x746a48E39dC57Ff14B872B8979E20efE5E5100B1'; // Fixed APY Contract
 const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // VCN Token address
+const RPC_URL = 'http://46.224.221.201:8545';
 
 const BRIDGE_STAKING_ABI = [
     'function stake(uint256 amount) external',
@@ -76,6 +71,7 @@ interface UserStakingInfo {
 // ============ Props ============
 interface ValidatorStakingProps {
     walletAddress?: () => string;
+    privateKey?: () => string;
 }
 
 // ============ Component ============
@@ -119,7 +115,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         if (!walletAddress()) return;
 
         try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, provider);
             const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
 
@@ -200,8 +196,13 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('approving');
             setErrorMsg('');
 
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
+            const privateKey = props.privateKey?.();
+            if (!privateKey) {
+                throw new Error('Internal wallet not available');
+            }
+
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const signer = new ethers.Wallet(privateKey, provider);
             const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
@@ -245,8 +246,13 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
+            const privateKey = props.privateKey?.();
+            if (!privateKey) {
+                throw new Error('Internal wallet not available');
+            }
+
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const signer = new ethers.Wallet(privateKey, provider);
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
             const tx = await staking.requestUnstake(ethers.parseEther(unstakeAmount()));
@@ -273,8 +279,13 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
+            const privateKey = props.privateKey?.();
+            if (!privateKey) {
+                throw new Error('Internal wallet not available');
+            }
+
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const signer = new ethers.Wallet(privateKey, provider);
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
             const tx = await staking.withdraw();
@@ -306,8 +317,13 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
+            const privateKey = props.privateKey?.();
+            if (!privateKey) {
+                throw new Error('Internal wallet not available');
+            }
+
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const signer = new ethers.Wallet(privateKey, provider);
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
             const tx = await staking.claimRewards();
@@ -374,7 +390,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                 <Percent class="w-4 h-4 text-green-400" />
                                 <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Annual APY</span>
                             </div>
-                            <div class="text-2xl font-black text-green-400">8-15%</div>
+                            <div class="text-2xl font-black text-green-400">12-20%</div>
                             <p class="text-[10px] text-gray-500 mt-1">Depends on network activity</p>
                         </div>
                         <div class="bg-black/20 rounded-xl p-4 border border-white/5">

@@ -485,6 +485,7 @@ const Wallet = (): JSX.Element => {
     const [passwordMode, setPasswordMode] = createSignal<'setup' | 'verify'>('setup');
     const [pendingAction, setPendingAction] = createSignal<{ type: string, data?: any } | null>(null);
     const [walletPassword, setWalletPassword] = createSignal('');
+    const [currentPrivateKey, setCurrentPrivateKey] = createSignal(''); // For internal wallet operations
     const [confirmWalletPassword, setConfirmWalletPassword] = createSignal('');
     const [showWalletPassword, setShowWalletPassword] = createSignal(false);
     const [onboardingSuccess, setOnboardingSuccess] = createSignal(false);
@@ -877,6 +878,7 @@ const Wallet = (): JSX.Element => {
                 }
                 const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
                 const { privateKey } = WalletService.deriveEOA(mnemonic);
+                setCurrentPrivateKey(privateKey); // Cache for internal wallet operations
 
                 // 2. Connect Internal Wallet
                 const address = await contractService.connectInternalWallet(privateKey);
@@ -1858,7 +1860,8 @@ const Wallet = (): JSX.Element => {
                 console.error("[Wallet] INVALID MNEMONIC DETECTED");
                 throw new Error("Invalid mnemonic during finalization");
             }
-            const { address } = WalletService.deriveEOA(mnemonic);
+            const { address, privateKey } = WalletService.deriveEOA(mnemonic);
+            setCurrentPrivateKey(privateKey); // Cache for internal wallet operations
             console.log("[Wallet] NEW ADDRESS DERIVED:", address);
 
             // 2. Encrypt and Save 
@@ -2689,7 +2692,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         {/* Staking View */}
                         <Show when={activeView() === 'staking'}>
                             <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <ValidatorStaking walletAddress={walletAddress} />
+                                <ValidatorStaking walletAddress={walletAddress} privateKey={currentPrivateKey} />
                             </div>
                         </Show>
 
