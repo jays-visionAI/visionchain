@@ -1,4 +1,4 @@
-import { createSignal, Show, For, createEffect, createMemo, onMount } from 'solid-js';
+import { createSignal, Show, For, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { marked } from 'marked';
 import { VisionChart, parseChartBlocks } from './VisionChart';
@@ -611,6 +611,7 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+    const [isInputMinimized, setIsInputMinimized] = createSignal(false);
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
     let scrollContainerRef: HTMLDivElement | undefined;
@@ -694,6 +695,45 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 });
             });
         }
+    });
+
+    // --- Mobile Input Minimize on Scroll ---
+    onMount(() => {
+        let lastScrollY = 0;
+
+        const handleScroll = () => {
+            if (!messagesContainerRef || typeof window === 'undefined') return;
+
+            // Only on mobile
+            if (window.innerWidth >= 768) {
+                setIsInputMinimized(false);
+                return;
+            }
+
+            const currentScrollY = messagesContainerRef.scrollTop;
+            const scrollingUp = currentScrollY > lastScrollY;
+            const containerHeight = messagesContainerRef.clientHeight;
+            const scrollHeight = messagesContainerRef.scrollHeight;
+            const notAtBottom = currentScrollY + containerHeight < scrollHeight - 100;
+
+            // Minimize when scrolling up and not at bottom
+            // Auto-expand when at bottom
+            if (notAtBottom && scrollingUp && currentScrollY > 200) {
+                setIsInputMinimized(true);
+            } else if (!notAtBottom) {
+                setIsInputMinimized(false);
+            }
+
+            lastScrollY = currentScrollY;
+        };
+
+        if (messagesContainerRef) {
+            messagesContainerRef.addEventListener('scroll', handleScroll);
+        }
+
+        onCleanup(() => {
+            messagesContainerRef?.removeEventListener('scroll', handleScroll);
+        });
     });
 
     return (
@@ -909,198 +949,288 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
                 </div>
 
+                {/* Floating Action Button (FAB) - Minimized Input State */}
+                <Show when={isInputMinimized()}>
+                    <Motion.button
+                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                        onClick={() => setIsInputMinimized(false)}
+                        class="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-transform"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                    </Motion.button>
+                </Show>
+
                 {/* Modern Floating Input Area */}
-                <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
-                    <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
-                        <Presence>
-                            {/* Unified Background Agents Bar - Above Input */}
-                            <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0}>
-                                <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
-                                    {/* Header Row: Agent Desk Label (left) + Toggle Button (right) */}
-                                    <div class="hidden md:flex items-center justify-between mb-1">
-                                        <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
-                                        <button
-                                            onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
-                                            class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
-                                                ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
-                                                : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
-                                                }`}
-                                        >
-                                            <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
-                                            <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
-                                            <div class="w-3.5 h-3.5 flex items-center justify-center">
-                                                <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
-                                                    <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
-                                                </Show>
-                                            </div>
-                                        </button>
-                                    </div>
-
-                                    {/* Mobile Toggle Button (absolute positioned) */}
-                                    <div class="absolute -top-4 right-0 z-40 md:hidden">
-                                        <button
-                                            onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
-                                            class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
-                                                ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
-                                                : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
-                                                }`}
-                                        >
-                                            <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
-                                            <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
-                                            <div class="w-3.5 h-3.5 flex items-center justify-center">
-                                                <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
-                                                    <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
-                                                </Show>
-                                            </div>
-                                        </button>
-                                    </div>
-
-                                    {/* Agent Bay + History Button Row */}
-                                    <div class="flex items-center gap-3">
-                                        <Presence>
-                                            <Show when={!isAgentBayCollapsed()}>
-                                                <Motion.div
-                                                    initial={{ opacity: 0, height: 0, scale: 0.95 }}
-                                                    animate={{ opacity: 1, height: 'auto', scale: 1 }}
-                                                    exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                                                    transition={{ duration: 0.3, easing: 'ease-out' }}
-                                                    class="flex-1 flex items-center gap-3 overflow-hidden bg-[#0d0d0f]/60 backdrop-blur-md rounded-[24px] border border-white/5 p-1.5 pr-3 shadow-2xl"
-                                                >
-                                                    {/* Unified Scrollable Row */}
-                                                    <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5 pl-2">
-                                                        {/* Batch Agents */}
-                                                        <For each={props.batchAgents()}>
-                                                            {(agent) => (
-                                                                <AgentChip
-                                                                    task={{
-                                                                        id: agent.id,
-                                                                        type: 'BATCH',
-                                                                        summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
-                                                                        status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
-                                                                        timestamp: agent.startTime,
-                                                                        progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100,
-                                                                        error: agent.error // Pass error message to display in UI
-                                                                    }}
-                                                                    isCompact={true}
-                                                                    onClick={() => {
-                                                                        setSelectedTaskId(agent.id);
-                                                                        setIsQueueDrawerOpen(true);
-                                                                    }}
-                                                                    onDismiss={(id) => props.onDismissTask?.(id)}
-                                                                />
-                                                            )}
-                                                        </For>
-
-                                                        {/* Time-lock Agents */}
-                                                        <For each={activeTimeTasks()}>
-                                                            {(task) => (
-                                                                <AgentChip
-                                                                    task={task}
-                                                                    isCompact={true}
-                                                                    onClick={() => {
-                                                                        setSelectedTaskId(task.id);
-                                                                        setIsQueueDrawerOpen(true);
-                                                                    }}
-                                                                    onDismiss={(id) => props.onDismissTask?.(id)}
-                                                                />
-                                                            )}
-                                                        </For>
-                                                    </div>
-                                                </Motion.div>
-                                            </Show>
-                                        </Presence>
-
-                                        {/* History Button - Only visible when Agent Desk is expanded */}
-                                        <Show when={!isAgentBayCollapsed()}>
+                <Show when={!isInputMinimized()}>
+                    <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
+                        <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
+                            <Presence>
+                                {/* Unified Background Agents Bar - Above Input */}
+                                <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0}>
+                                    <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
+                                        {/* Header Row: Agent Desk Label (left) + Toggle Button (right) */}
+                                        <div class="hidden md:flex items-center justify-between mb-1">
+                                            <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setIsQueueDrawerOpen(true);
-                                                }}
-                                                class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
+                                                onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
+                                                class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
+                                                    ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
+                                                    : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
+                                                    }`}
                                             >
-                                                <List class="w-5 h-5" />
+                                                <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
+                                                <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
+                                                <div class="w-3.5 h-3.5 flex items-center justify-center">
+                                                    <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
+                                                        <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
+                                                    </Show>
+                                                </div>
                                             </button>
-                                        </Show>
-                                    </div>
-                                </div>
-                            </Show>
+                                        </div>
 
-                            <Show when={props.attachments().length > 0}>
-                                <Motion.div
-                                    initial={{ opacity: 0, y: 10, height: 0 }}
-                                    animate={{ opacity: 1, y: 0, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide px-2"
-                                >
-                                    <For each={props.attachments()}>
-                                        {(att, i) => (
-                                            <div class="relative w-20 h-20 rounded-2xl border border-white/[0.08] bg-[#0d0d0f] flex-shrink-0 group overflow-hidden shadow-2xl">
-                                                <Show when={att.type === 'image'} fallback={
-                                                    <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-600">
-                                                        <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-600" />}>
-                                                            <FileText class="w-7 h-7 text-red-600" />
-                                                        </Show>
-                                                        <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
-                                                    </div>
-                                                }>
-                                                    <img src={att.preview} class="w-full h-full object-cover" />
+                                        {/* Mobile Toggle Button (absolute positioned) */}
+                                        <div class="absolute -top-4 right-0 z-40 md:hidden">
+                                            <button
+                                                onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
+                                                class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
+                                                    ? 'bg-blue-600/90 border-blue-400 text-white hover:bg-blue-600 shadow-blue-900/40'
+                                                    : 'bg-[#121214]/80 border-white/10 text-gray-400 hover:text-white hover:border-white/20'
+                                                    }`}
+                                            >
+                                                <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
+                                                <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
+                                                <div class="w-3.5 h-3.5 flex items-center justify-center">
+                                                    <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
+                                                        <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
+                                                    </Show>
+                                                </div>
+                                            </button>
+                                        </div>
+
+                                        {/* Agent Bay + History Button Row */}
+                                        <div class="flex items-center gap-3">
+                                            <Presence>
+                                                <Show when={!isAgentBayCollapsed()}>
+                                                    <Motion.div
+                                                        initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                                                        exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                                                        transition={{ duration: 0.3, easing: 'ease-out' }}
+                                                        class="flex-1 flex items-center gap-3 overflow-hidden bg-[#0d0d0f]/60 backdrop-blur-md rounded-[24px] border border-white/5 p-1.5 pr-3 shadow-2xl"
+                                                    >
+                                                        {/* Unified Scrollable Row */}
+                                                        <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5 pl-2">
+                                                            {/* Batch Agents */}
+                                                            <For each={props.batchAgents()}>
+                                                                {(agent) => (
+                                                                    <AgentChip
+                                                                        task={{
+                                                                            id: agent.id,
+                                                                            type: 'BATCH',
+                                                                            summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Transactions`,
+                                                                            status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
+                                                                            timestamp: agent.startTime,
+                                                                            progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100,
+                                                                            error: agent.error // Pass error message to display in UI
+                                                                        }}
+                                                                        isCompact={true}
+                                                                        onClick={() => {
+                                                                            setSelectedTaskId(agent.id);
+                                                                            setIsQueueDrawerOpen(true);
+                                                                        }}
+                                                                        onDismiss={(id) => props.onDismissTask?.(id)}
+                                                                    />
+                                                                )}
+                                                            </For>
+
+                                                            {/* Time-lock Agents */}
+                                                            <For each={activeTimeTasks()}>
+                                                                {(task) => (
+                                                                    <AgentChip
+                                                                        task={task}
+                                                                        isCompact={true}
+                                                                        onClick={() => {
+                                                                            setSelectedTaskId(task.id);
+                                                                            setIsQueueDrawerOpen(true);
+                                                                        }}
+                                                                        onDismiss={(id) => props.onDismissTask?.(id)}
+                                                                    />
+                                                                )}
+                                                            </For>
+                                                        </div>
+                                                    </Motion.div>
                                                 </Show>
+                                            </Presence>
+
+                                            {/* History Button - Only visible when Agent Desk is expanded */}
+                                            <Show when={!isAgentBayCollapsed()}>
                                                 <button
-                                                    onClick={() => props.removeAttachment(i())}
-                                                    class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setIsQueueDrawerOpen(true);
+                                                    }}
+                                                    class="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-[#0d0d0f]/80 hover:bg-white/10 text-gray-400 hover:text-white transition-all border border-white/10 shadow-xl"
                                                 >
-                                                    <Trash2 class="w-5 h-5 text-red-400" />
+                                                    <List class="w-5 h-5" />
+                                                </button>
+                                            </Show>
+                                        </div>
+                                    </div>
+                                </Show>
+
+                                <Show when={props.attachments().length > 0}>
+                                    <Motion.div
+                                        initial={{ opacity: 0, y: 10, height: 0 }}
+                                        animate={{ opacity: 1, y: 0, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        class="flex gap-3 overflow-x-auto pb-4 scrollbar-hide px-2"
+                                    >
+                                        <For each={props.attachments()}>
+                                            {(att, i) => (
+                                                <div class="relative w-20 h-20 rounded-2xl border border-white/[0.08] bg-[#0d0d0f] flex-shrink-0 group overflow-hidden shadow-2xl">
+                                                    <Show when={att.type === 'image'} fallback={
+                                                        <div class="w-full h-full flex flex-col items-center justify-center gap-1 text-gray-600">
+                                                            <Show when={att.type === 'pdf'} fallback={<FileSpreadsheet class="w-7 h-7 text-green-600" />}>
+                                                                <FileText class="w-7 h-7 text-red-600" />
+                                                            </Show>
+                                                            <span class="text-[9px] font-bold uppercase tracking-wider">{att.type}</span>
+                                                        </div>
+                                                    }>
+                                                        <img src={att.preview} class="w-full h-full object-cover" />
+                                                    </Show>
+                                                    <button
+                                                        onClick={() => props.removeAttachment(i())}
+                                                        class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                                                    >
+                                                        <Trash2 class="w-5 h-5 text-red-400" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </For>
+                                    </Motion.div>
+                                </Show>
+                            </Presence>
+
+                            <div class="relative group overflow-hidden rounded-[30px]">
+                                {/* Agent Activated Glow Effect */}
+                                <div class={`absolute inset-0 rounded-[28px] blur-xl transition-all duration-700 ${props.isScheduling
+                                    ? 'bg-gradient-to-r from-orange-600 via-amber-400 to-orange-600 opacity-60'
+                                    : 'bg-gradient-to-r from-blue-600 via-cyan-400 to-purple-600 opacity-20 group-focus-within:opacity-50'}`}
+                                />
+                                <div class="absolute inset-0 bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
+
+                                <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-[#1a1a1c] rounded-[28px] p-2 flex flex-col md:flex-row items-stretch md:items-end gap-1 group-focus-within:bg-[#0d0d0f] group-focus-within:border-[#2a2a2e] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
+                                    {/* Text area - Top on mobile, Center on desktop */}
+                                    <div class="flex-1 px-1 border border-[#1a1a1c] group-focus-within:border-[#2a2a2e] rounded-xl self-stretch mt-1 mb-0 order-1 md:order-2 transition-colors">
+                                        <textarea
+                                            class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
+                                            placeholder={props.isRecording() ? "Listening..." : "Tell Vision AI what to do..."}
+                                            rows={1}
+                                            value={props.input()}
+                                            onCompositionStart={() => setIsComposing(true)}
+                                            onCompositionEnd={() => {
+                                                setTimeout(() => setIsComposing(false), 10);
+                                            }}
+                                            onInput={(e) => {
+                                                props.setInput(e.currentTarget.value);
+                                                e.currentTarget.style.height = 'auto';
+                                                e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 220) + 'px';
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.isComposing || isComposing() || e.keyCode === 229) return;
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    props.handleSend();
+                                                }
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Bottom controls for mobile / side for desktop */}
+                                    <div class="flex items-center gap-1.5 pb-0.5 pr-1.5 order-2 md:order-3">
+                                        {/* Mobile: horizontal row with left tools and right-aligned send button */}
+                                        <div class="flex md:hidden items-center gap-1.5 w-full">
+                                            {/* Left side tools */}
+                                            <div class="flex items-center gap-1.5">
+                                                {/* Tools / Plus Button */}
+                                                <button
+                                                    onClick={() => fileInputRef?.click()}
+                                                    class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+                                                >
+                                                    <Plus class="w-5 h-5" />
+                                                </button>
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    ref={fileInputRef}
+                                                    class="hidden"
+                                                    onChange={props.handleFileSelect}
+                                                />
+
+                                                {/* Language Selection Popover */}
+                                                <div class="relative group/lang">
+                                                    <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
+                                                        <span>{props.voiceLang().split('-')[0]}</span>
+                                                        <ChevronDown class="w-3 h-3" />
+                                                    </button>
+                                                    <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                                                        <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
+                                                            <For each={LANGUAGES}>
+                                                                {(lang) => (
+                                                                    <button
+                                                                        onClick={() => props.setVoiceLang(lang.code)}
+                                                                        class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
+                                                                    >
+                                                                        {lang.label}
+                                                                    </button>
+                                                                )}
+                                                            </For>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Voice Button */}
+                                                <button
+                                                    onClick={props.toggleRecording}
+                                                    class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                                >
+                                                    <Mic class="w-5 h-5" />
                                                 </button>
                                             </div>
-                                        )}
-                                    </For>
-                                </Motion.div>
-                            </Show>
-                        </Presence>
 
-                        <div class="relative group overflow-hidden rounded-[30px]">
-                            {/* Agent Activated Glow Effect */}
-                            <div class={`absolute inset-0 rounded-[28px] blur-xl transition-all duration-700 ${props.isScheduling
-                                ? 'bg-gradient-to-r from-orange-600 via-amber-400 to-orange-600 opacity-60'
-                                : 'bg-gradient-to-r from-blue-600 via-cyan-400 to-purple-600 opacity-20 group-focus-within:opacity-50'}`}
-                            />
-                            <div class="absolute inset-0 bg-gradient-to-r from-white/[0.08] to-transparent rounded-[26px] blur-sm opacity-50 group-focus-within:opacity-100 transition-opacity" />
+                                            {/* Spacer to push send button to right */}
+                                            <div class="flex-1" />
 
-                            <div class="relative bg-[#0d0d0f]/90 backdrop-blur-3xl border border-[#1a1a1c] rounded-[28px] p-2 flex flex-col md:flex-row items-stretch md:items-end gap-1 group-focus-within:bg-[#0d0d0f] group-focus-within:border-[#2a2a2e] transition-all duration-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.8)]">
-                                {/* Text area - Top on mobile, Center on desktop */}
-                                <div class="flex-1 px-1 border border-[#1a1a1c] group-focus-within:border-[#2a2a2e] rounded-xl self-stretch mt-1 mb-0 order-1 md:order-2 transition-colors">
-                                    <textarea
-                                        class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
-                                        placeholder={props.isRecording() ? "Listening..." : "Tell Vision AI what to do..."}
-                                        rows={1}
-                                        value={props.input()}
-                                        onCompositionStart={() => setIsComposing(true)}
-                                        onCompositionEnd={() => {
-                                            setTimeout(() => setIsComposing(false), 10);
-                                        }}
-                                        onInput={(e) => {
-                                            props.setInput(e.currentTarget.value);
-                                            e.currentTarget.style.height = 'auto';
-                                            e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 220) + 'px';
-                                        }}
-                                        onKeyDown={(e) => {
-                                            if (e.isComposing || isComposing() || e.keyCode === 229) return;
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                props.handleSend();
-                                            }
-                                        }}
-                                    />
-                                </div>
+                                            {/* Send/Stop Button - Right aligned */}
+                                            <button
+                                                onClick={() => {
+                                                    if (props.isLoading()) {
+                                                        props.onStop?.();
+                                                    } else {
+                                                        props.handleSend();
+                                                    }
+                                                }}
+                                                disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
+                                                class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 flex-shrink-0 ${props.isLoading()
+                                                    ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
+                                                    : (!props.input().trim() && props.attachments().length === 0)
+                                                        ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
+                                                        : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
+                                                    }`}
+                                            >
+                                                <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
+                                                    <Square class="w-4 h-4 fill-current" />
+                                                </Show>
+                                            </button>
+                                        </div>
 
-                                {/* Bottom controls for mobile / side for desktop */}
-                                <div class="flex items-center gap-1.5 pb-0.5 pr-1.5 order-2 md:order-3">
-                                    {/* Mobile: horizontal row with left tools and right-aligned send button */}
-                                    <div class="flex md:hidden items-center gap-1.5 w-full">
-                                        {/* Left side tools */}
-                                        <div class="flex items-center gap-1.5">
-                                            {/* Tools / Plus Button */}
+                                        {/* Desktop: 2x2 grid on right side */}
+                                        <div class="hidden md:grid grid-cols-2 gap-1 ml-2.5">
+                                            {/* Row 1: Plus + Language */}
                                             <button
                                                 onClick={() => fileInputRef?.click()}
                                                 class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
@@ -1117,9 +1247,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                             {/* Language Selection Popover */}
                                             <div class="relative group/lang">
-                                                <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
+                                                <button class="w-11 h-11 flex items-center justify-center gap-1 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
                                                     <span>{props.voiceLang().split('-')[0]}</span>
-                                                    <ChevronDown class="w-3 h-3" />
+                                                    <ChevronDown class="w-2.5 h-2.5" />
                                                 </button>
                                                 <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                                                     <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
@@ -1137,116 +1267,43 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 </div>
                                             </div>
 
-                                            {/* Voice Button */}
+                                            {/* Row 2: Mic + Send */}
                                             <button
                                                 onClick={props.toggleRecording}
                                                 class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
                                             >
                                                 <Mic class="w-5 h-5" />
                                             </button>
-                                        </div>
 
-                                        {/* Spacer to push send button to right */}
-                                        <div class="flex-1" />
-
-                                        {/* Send/Stop Button - Right aligned */}
-                                        <button
-                                            onClick={() => {
-                                                if (props.isLoading()) {
-                                                    props.onStop?.();
-                                                } else {
-                                                    props.handleSend();
-                                                }
-                                            }}
-                                            disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
-                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 flex-shrink-0 ${props.isLoading()
-                                                ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
-                                                : (!props.input().trim() && props.attachments().length === 0)
-                                                    ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
-                                                    : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
-                                                }`}
-                                        >
-                                            <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
-                                                <Square class="w-4 h-4 fill-current" />
-                                            </Show>
-                                        </button>
-                                    </div>
-
-                                    {/* Desktop: 2x2 grid on right side */}
-                                    <div class="hidden md:grid grid-cols-2 gap-1 ml-2.5">
-                                        {/* Row 1: Plus + Language */}
-                                        <button
-                                            onClick={() => fileInputRef?.click()}
-                                            class="w-11 h-11 flex items-center justify-center rounded-2xl text-gray-500 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
-                                        >
-                                            <Plus class="w-5 h-5" />
-                                        </button>
-                                        <input
-                                            type="file"
-                                            multiple
-                                            ref={fileInputRef}
-                                            class="hidden"
-                                            onChange={props.handleFileSelect}
-                                        />
-
-                                        {/* Language Selection Popover */}
-                                        <div class="relative group/lang">
-                                            <button class="w-11 h-11 flex items-center justify-center gap-1 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
-                                                <span>{props.voiceLang().split('-')[0]}</span>
-                                                <ChevronDown class="w-2.5 h-2.5" />
+                                            <button
+                                                onClick={() => {
+                                                    if (props.isLoading()) {
+                                                        props.onStop?.();
+                                                    } else {
+                                                        props.handleSend();
+                                                    }
+                                                }}
+                                                disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
+                                                class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
+                                                    ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
+                                                    : (!props.input().trim() && props.attachments().length === 0)
+                                                        ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
+                                                        : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
+                                                    }`}
+                                            >
+                                                <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
+                                                    <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
+                                                </Show>
                                             </button>
-                                            <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                                <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
-                                                    <For each={LANGUAGES}>
-                                                        {(lang) => (
-                                                            <button
-                                                                onClick={() => props.setVoiceLang(lang.code)}
-                                                                class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
-                                                            >
-                                                                {lang.label}
-                                                            </button>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </div>
                                         </div>
-
-                                        {/* Row 2: Mic + Send */}
-                                        <button
-                                            onClick={props.toggleRecording}
-                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
-                                        >
-                                            <Mic class="w-5 h-5" />
-                                        </button>
-
-                                        <button
-                                            onClick={() => {
-                                                if (props.isLoading()) {
-                                                    props.onStop?.();
-                                                } else {
-                                                    props.handleSend();
-                                                }
-                                            }}
-                                            disabled={!props.isLoading() && (!props.input().trim() && props.attachments().length === 0)}
-                                            class={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-300 ${props.isLoading()
-                                                ? 'bg-red-500 text-white hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.5)] scale-100'
-                                                : (!props.input().trim() && props.attachments().length === 0)
-                                                    ? 'bg-white/5 text-white/5 grayscale cursor-not-allowed'
-                                                    : 'bg-[#007AFF] text-white shadow-[0_10px_30px_-5px_rgba(0,122,255,0.4)] hover:scale-105 active:scale-95'
-                                                }`}
-                                        >
-                                            <Show when={props.isLoading()} fallback={<Send class="w-5 h-5" />}>
-                                                <Square class="w-4 h-4 fill-current animate-in fade-in zoom-in duration-200" />
-                                            </Show>
-                                        </button>
                                     </div>
                                 </div>
                             </div>
+
+
                         </div>
-
-
-                    </div>
-                </div >
+                    </div >
+                </Show>
             </div >
 
             {/* Right Sidebar - Portfolio & Analytics (Always Fixed for Wallet context) */}
