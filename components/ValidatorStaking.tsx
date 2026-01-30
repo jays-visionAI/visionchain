@@ -18,6 +18,7 @@ import {
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 import { contractService } from '../services/contractService';
+import { WalletService } from '../services/walletService';
 
 // ============ Contract Config ============
 const BRIDGE_STAKING_ADDRESS = '0x746a48E39dC57Ff14B872B8979E20efE5E5100B1'; // Fixed APY Contract
@@ -72,6 +73,7 @@ interface UserStakingInfo {
 interface ValidatorStakingProps {
     walletAddress?: () => string;
     privateKey?: () => string;
+    userEmail?: () => string;
 }
 
 // ============ Component ============
@@ -105,6 +107,12 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
     const [txStatus, setTxStatus] = createSignal<'idle' | 'approving' | 'pending' | 'success' | 'error'>('idle');
     const [txHash, setTxHash] = createSignal('');
     const [errorMsg, setErrorMsg] = createSignal('');
+
+    // Password Modal State
+    const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+    const [password, setPassword] = createSignal('');
+    const [unlockedPrivateKey, setUnlockedPrivateKey] = createSignal('');
+    const [pendingAction, setPendingAction] = createSignal<(() => Promise<void>) | null>(null);
 
     // Connect wallet
     // Wallet address from parent
@@ -183,6 +191,58 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         }
     };
 
+    // Get private key - either from prop or unlock with password
+    const getPrivateKeyOrPrompt = async (action: () => Promise<void>): Promise<string | null> => {
+        // First check if we have it from prop
+        const propKey = props.privateKey?.();
+        if (propKey) return propKey;
+
+        // Check if already unlocked
+        if (unlockedPrivateKey()) return unlockedPrivateKey();
+
+        // Need to prompt for password
+        setPendingAction(() => action);
+        setShowPasswordModal(true);
+        return null;
+    };
+
+    // Handle password submit
+    const handlePasswordSubmit = async () => {
+        const userEmail = props.userEmail?.();
+        if (!userEmail) {
+            setErrorMsg('User email not available');
+            return;
+        }
+
+        try {
+            const encrypted = WalletService.getEncryptedWallet(userEmail);
+            if (!encrypted) {
+                setErrorMsg('Wallet not found. Please restore your wallet.');
+                return;
+            }
+
+            const mnemonic = await WalletService.decrypt(encrypted, password());
+            if (!WalletService.validateMnemonic(mnemonic)) {
+                setErrorMsg('Invalid password. Please try again.');
+                return;
+            }
+
+            const { privateKey } = WalletService.deriveEOA(mnemonic);
+            setUnlockedPrivateKey(privateKey);
+            setShowPasswordModal(false);
+            setPassword('');
+
+            // Execute pending action
+            const action = pendingAction();
+            if (action) {
+                setPendingAction(null);
+                await action();
+            }
+        } catch (e: any) {
+            setErrorMsg(e.message || 'Failed to unlock wallet');
+        }
+    };
+
     // Handle stake
     const handleStake = async () => {
         const amount = parseFloat(stakeAmount());
@@ -191,45 +251,53 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             return;
         }
 
-        try {
-            setIsLoading(true);
-            setTxStatus('approving');
-            setErrorMsg('');
+        const executeStake = async () => {
+            try {
+                setIsLoading(true);
+                setTxStatus('approving');
+                setErrorMsg('');
 
-            const privateKey = props.privateKey?.();
-            if (!privateKey) {
-                throw new Error('Internal wallet not available');
+                const privateKey = props.privateKey?.() || unlockedPrivateKey();
+                if (!privateKey) {
+                    throw new Error('Internal wallet not available');
+                }
+
+                const provider = new ethers.JsonRpcProvider(RPC_URL);
+                const signer = new ethers.Wallet(privateKey, provider);
+                const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
+                const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
+
+                const amountWei = ethers.parseEther(stakeAmount());
+
+                // Check allowance
+                const allowance = await vcn.allowance(walletAddress(), BRIDGE_STAKING_ADDRESS);
+                if (allowance < amountWei) {
+                    const approveTx = await vcn.approve(BRIDGE_STAKING_ADDRESS, amountWei);
+                    await approveTx.wait();
+                }
+
+                setTxStatus('pending');
+                const tx = await staking.stake(amountWei);
+                setTxHash(tx.hash);
+                await tx.wait();
+
+                setTxStatus('success');
+                setStakeAmount('');
+                await loadContractData();
+
+                setTimeout(() => setTxStatus('idle'), 5000);
+            } catch (err: any) {
+                setTxStatus('error');
+                setErrorMsg(err.reason || err.message || 'Transaction failed');
+            } finally {
+                setIsLoading(false);
             }
+        };
 
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const signer = new ethers.Wallet(privateKey, provider);
-            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
-            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
-
-            const amountWei = ethers.parseEther(stakeAmount());
-
-            // Check allowance
-            const allowance = await vcn.allowance(walletAddress(), BRIDGE_STAKING_ADDRESS);
-            if (allowance < amountWei) {
-                const approveTx = await vcn.approve(BRIDGE_STAKING_ADDRESS, amountWei);
-                await approveTx.wait();
-            }
-
-            setTxStatus('pending');
-            const tx = await staking.stake(amountWei);
-            setTxHash(tx.hash);
-            await tx.wait();
-
-            setTxStatus('success');
-            setStakeAmount('');
-            await loadContractData();
-
-            setTimeout(() => setTxStatus('idle'), 5000);
-        } catch (err: any) {
-            setTxStatus('error');
-            setErrorMsg(err.reason || err.message || 'Transaction failed');
-        } finally {
-            setIsLoading(false);
+        // Check if we have privateKey, if not prompt for password
+        const key = await getPrivateKeyOrPrompt(executeStake);
+        if (key) {
+            await executeStake();
         }
     };
 
@@ -246,9 +314,9 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const privateKey = props.privateKey?.();
+            const privateKey = props.privateKey?.() || unlockedPrivateKey();
             if (!privateKey) {
-                throw new Error('Internal wallet not available');
+                throw new Error('Please enter your spending password first');
             }
 
             const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -279,9 +347,9 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const privateKey = props.privateKey?.();
+            const privateKey = props.privateKey?.() || unlockedPrivateKey();
             if (!privateKey) {
-                throw new Error('Internal wallet not available');
+                throw new Error('Please enter your spending password first');
             }
 
             const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -317,9 +385,9 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const privateKey = props.privateKey?.();
+            const privateKey = props.privateKey?.() || unlockedPrivateKey();
             if (!privateKey) {
-                throw new Error('Internal wallet not available');
+                throw new Error('Please enter your spending password first');
             }
 
             const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -367,6 +435,45 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
 
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            {/* Password Modal */}
+            <Show when={showPasswordModal()}>
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div class="bg-[#1a1a1c] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4">
+                        <h3 class="text-lg font-black text-white mb-4 flex items-center gap-2">
+                            <Lock class="w-5 h-5 text-amber-400" />
+                            Spending Password Required
+                        </h3>
+                        <p class="text-sm text-gray-400 mb-4">
+                            Enter your spending password to authorize this staking transaction.
+                        </p>
+                        <input
+                            type="password"
+                            value={password()}
+                            onInput={(e) => setPassword(e.currentTarget.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                            placeholder="Enter spending password"
+                            class="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none mb-4"
+                        />
+                        <Show when={errorMsg()}>
+                            <p class="text-red-400 text-sm mb-4">{errorMsg()}</p>
+                        </Show>
+                        <div class="flex gap-3">
+                            <button
+                                onClick={() => { setShowPasswordModal(false); setPassword(''); setErrorMsg(''); }}
+                                class="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 font-bold hover:bg-white/10 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handlePasswordSubmit}
+                                class="flex-1 py-3 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors"
+                            >
+                                Unlock
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
