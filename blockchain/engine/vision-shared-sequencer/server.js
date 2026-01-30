@@ -10,7 +10,7 @@ const path = require('path');
 if (!admin.apps.length) {
     admin.initializeApp({
         credential: admin.credential.applicationDefault(),
-        projectId: 'visionchain-5bd81'
+        projectId: 'visionchain-d19ed'
     });
 }
 const db = admin.firestore();

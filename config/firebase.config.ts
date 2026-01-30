@@ -21,3 +21,14 @@ export const firebaseConfig = {
     appId: "1:451188892027:web:1c5232d790dc32cfee1dde",
     resendApiKey: "re_EY5c8G5T_9cKh8egXdvZTCe5ASeyH1e86"
 };
+
+// Secondary Firebase config for server Firestore (visionchain-5bd81)
+// Used for transaction indexing to match the server's database
+export const serverFirebaseConfig = {
+    apiKey: "AIzaSyDServerFirebaseKey", // Will be updated with actual key
+    authDomain: "visionchain-5bd81.firebaseapp.com",
+    projectId: "visionchain-5bd81",
+    storageBucket: "visionchain-5bd81.firebasestorage.app",
+    messagingSenderId: "",
+    appId: ""
+};

@@ -354,33 +354,28 @@ export class ContractService {
 
         const receipt = await tx.wait();
 
-        // Index transaction via Server API for VisionScan visibility
-        // Note: Server uses different Firebase project, so we must use API
+        // Index transaction directly to Firestore for VisionScan visibility
+        // Using client-side Firebase SDK (same project as client)
         try {
-            const indexResponse = await fetch('https://api.visionchain.co/api/transactions/index', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    hash: tx.hash,
-                    from: adminAddress.toLowerCase(),
-                    to: toAddress.toLowerCase(),
-                    value: amountStr,
-                    type: 'Transfer',
-                    metadata: {
-                        method: 'Admin VCN Token Transfer',
-                        counterparty: toAddress.slice(0, 10) + '...',
-                        confidence: 100,
-                        trustStatus: 'verified',
-                        source: 'admin_panel'
-                    }
-                })
+            const db = getFirebaseDb();
+            await setDoc(doc(db, 'transactions', tx.hash), {
+                hash: tx.hash,
+                chainId: 1337,
+                type: 'Transfer',
+                from_addr: adminAddress.toLowerCase(),
+                to_addr: toAddress.toLowerCase(),
+                value: amountStr,
+                timestamp: Date.now(),
+                status: 'indexed',
+                metadata: {
+                    method: 'Admin VCN Token Transfer',
+                    counterparty: toAddress.slice(0, 10) + '...',
+                    confidence: 100,
+                    trustStatus: 'verified',
+                    source: 'admin_panel'
+                }
             });
-
-            if (indexResponse.ok) {
-                console.log(`[Admin] Transaction indexed via API: ${tx.hash}`);
-            } else {
-                console.warn('[Admin] API indexing failed:', await indexResponse.text());
-            }
+            console.log(`[Admin] Transaction indexed to Firestore: ${tx.hash}`);
         } catch (indexErr) {
             console.warn('[Admin] Transaction indexing failed (non-critical):', indexErr);
         }
