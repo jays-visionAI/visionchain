@@ -82,7 +82,7 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     }
 
     // ============ Constructor ============
-    constructor(address _stakingToken) Ownable(msg.sender) {
+    constructor(address _stakingToken) Ownable() {
         require(_stakingToken != address(0), "Invalid token address");
         stakingToken = IERC20(_stakingToken);
         lastRewardTime = block.timestamp;

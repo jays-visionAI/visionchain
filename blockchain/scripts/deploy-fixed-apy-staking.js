@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 async function main() {
-    // Load contract artifact (artifacts are in project root, not blockchain folder)
-    const artifactPath = path.join(__dirname, '../../artifacts/contracts/BridgeStaking.sol/BridgeStaking.json');
+    // Load contract artifact (artifacts from blockchain folder with --config flag)
+    const artifactPath = path.join(__dirname, '../artifacts/contracts/BridgeStaking.sol/BridgeStaking.json');
     const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
 
     // Connect to network
