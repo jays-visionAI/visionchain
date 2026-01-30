@@ -733,10 +733,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 {/* Messages Area */}
                 <div
                     ref={(el) => messagesContainerRef = el}
-                    class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth"
+                    class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth overscroll-contain"
+                    style="-webkit-overflow-scrolling: touch;"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="min-h-full h-full flex flex-col items-center justify-center p-6 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
+                        <div class="min-h-full h-full flex flex-col items-center justify-center p-6 pt-16 md:pt-6 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -788,7 +789,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
 
                     <Show when={props.messages().length > 0}>
-                        <div class="max-w-3xl mx-auto px-4 md:px-6 pt-4 md:pt-16 pb-72 md:pb-56 space-y-6 md:space-y-12">
+                        <div class="max-w-3xl mx-auto px-4 md:px-6 pt-4 md:pt-16 pb-80 md:pb-56 space-y-6 md:space-y-12">
                             <For each={props.messages()}>
                                 {(msg) => (
                                     <Motion.div
