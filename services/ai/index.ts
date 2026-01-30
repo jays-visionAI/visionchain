@@ -128,11 +128,21 @@ ${localeInfo}
    Format: Append "[RECOMMENDED_QUESTIONS] Question 1 | Question 2 | Question 3" at the very end.
 
 5. REAL-TIME DATA POLICY (MANDATORY - NO EXCEPTIONS):
-   - You MUST call 'get_current_price' tool for ANY current/live/today price query.
-   - You MUST call 'get_historical_price' tool for ANY past/historical price query.
-   - For historical queries, use the DD-MM-YYYY format. Reference TODAY_DD_MM_YYYY and YESTERDAY_DD_MM_YYYY from the System Time Context.
-   - NEVER make up, estimate, or recall prices from memory. ALL price data must come from tool results.
-   - If a tool call fails, admit you couldn't retrieve real-time data.
+   ⚠️ CRITICAL: You have NO KNOWLEDGE of current cryptocurrency prices. Your training data is outdated.
+   
+   - PRICE QUERY TRIGGERS (ANY LANGUAGE):
+     English: "price", "how much", "what's the price", "current price", "now", "today"
+     Korean: "가격", "얼마", "시세", "현재", "지금", "오늘"
+     
+   - MANDATORY TOOL USAGE:
+     * For "현재/current/지금/now/today" → MUST call 'get_current_price'
+     * For "어제/yesterday/과거/past" → MUST call 'get_historical_price'
+     * Example: "비트코인 가격 얼마야?" → MUST call get_current_price(symbol: "btc")
+     
+   - NEVER estimate, recall, or make up prices from memory
+   - If tool call fails, respond: "실시간 데이터를 가져올 수 없습니다" / "Cannot retrieve real-time data"
+   - ALWAYS cite tool results, never your training knowledge
+
 
 6. CHART & INFOGRAPHIC GENERATION:
    You can render beautiful, interactive charts by using a special code block format.
