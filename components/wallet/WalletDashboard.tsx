@@ -736,7 +736,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-2xl mx-auto z-10">
+                        <div class="min-h-full h-full flex flex-col items-center justify-center p-6 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
