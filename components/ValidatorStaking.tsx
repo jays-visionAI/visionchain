@@ -26,8 +26,8 @@ declare global {
 }
 
 // ============ Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Deployed address
-const VCN_TOKEN_ADDRESS = '0xYourVCNTokenAddress'; // VCN Token address
+const BRIDGE_STAKING_ADDRESS = '0x2f8D338360D095a72680A943A22fE6a0d398a0B4'; // Deployed address
+const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // VCN Token address
 
 const BRIDGE_STAKING_ABI = [
     'function stake(uint256 amount) external',

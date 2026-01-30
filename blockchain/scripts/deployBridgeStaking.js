@@ -1,47 +1,48 @@
-// scripts/deployBridgeStaking.js
-// Phase 2: Deploy BridgeStaking contract
-
+// Deploy BridgeStaking using Hardhat's HRE but connect to custom network
 const hre = require("hardhat");
 
 async function main() {
-    const [deployer] = await hre.ethers.getSigners();
-    console.log("Deploying BridgeStaking with:", deployer.address);
-
-    // VCN Token address (from Phase 1 deployment)
-    const VCN_TOKEN = process.env.VCN_TOKEN_ADDRESS || "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-
-    // Deploy BridgeStaking
+    // Get contract factory from HRE (compiles if needed)
     const BridgeStaking = await hre.ethers.getContractFactory("BridgeStaking");
-    const staking = await BridgeStaking.deploy(VCN_TOKEN);
+
+    // Vision Testnet config - connect manually
+    const RPC_URL = "https://api.visionchain.co/rpc-proxy";
+    const PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    const VCN_TOKEN = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+    // Create custom provider and signer
+    const provider = new hre.ethers.JsonRpcProvider(RPC_URL);
+    const wallet = new hre.ethers.Wallet(PRIVATE_KEY, provider);
+
+    console.log("Deployer:", wallet.address);
+    const balance = await provider.getBalance(wallet.address);
+    console.log("Balance:", hre.ethers.formatEther(balance), "VCN");
+
+    // Connect factory to custom signer
+    const connectedFactory = BridgeStaking.connect(wallet);
+
+    console.log("\nDeploying BridgeStaking to Vision Testnet...");
+    const staking = await connectedFactory.deploy(VCN_TOKEN, {
+        gasLimit: 5000000,
+        gasPrice: hre.ethers.parseUnits("1", "gwei")
+    });
+
+    console.log("Tx hash:", staking.deploymentTransaction().hash);
     await staking.waitForDeployment();
 
-    const stakingAddress = await staking.getAddress();
-    console.log("BridgeStaking deployed to:", stakingAddress);
-
-    // Get ChallengeManager address (if deployed)
-    const CHALLENGE_MANAGER = process.env.CHALLENGE_MANAGER_ADDRESS;
-    if (CHALLENGE_MANAGER) {
-        // Set staking in ChallengeManager
-        const ChallengeManager = await hre.ethers.getContractFactory("ChallengeManager");
-        const manager = ChallengeManager.attach(CHALLENGE_MANAGER);
-        await manager.setBridgeStaking(stakingAddress);
-        console.log("BridgeStaking linked to ChallengeManager");
-
-        // Set bridge in BridgeStaking  
-        await staking.setBridge(CHALLENGE_MANAGER);
-        console.log("ChallengeManager set as bridge in BridgeStaking");
-    }
-
-    console.log("\n=== Phase 2 Deployment Complete ===");
-    console.log("BridgeStaking:", stakingAddress);
+    const address = await staking.getAddress();
+    console.log("\n=== Deployment Complete ===");
+    console.log("BridgeStaking:", address);
     console.log("VCN Token:", VCN_TOKEN);
-    console.log("\nParameters:");
-    console.log("- Minimum Stake: 10,000 VCN");
-    console.log("- Cooldown: 7 days");
-    console.log("- Slash %: 50%");
+
+    // Verify deployment
+    const minStake = await staking.MINIMUM_STAKE();
+    console.log("Min Stake:", hre.ethers.formatEther(minStake), "VCN");
 }
 
-main().catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-});
+main()
+    .then(() => process.exit(0))
+    .catch((error) => {
+        console.error(error);
+        process.exit(1);
+    });
