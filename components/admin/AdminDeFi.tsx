@@ -99,13 +99,12 @@ export default function AdminDeFi() {
         }
     };
 
-    // Fetch Bridge Staking Data
+    // Fetch Bridge Staking Data (read-only, no wallet needed)
     const fetchBridgeData = async () => {
-        if (!window.ethereum) return;
-
         setBridgeLoading(true);
         try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
+            // Use JsonRpcProvider for read-only access - no wallet needed
+            const provider = new ethers.JsonRpcProvider('https://api.visionchain.co/rpc-proxy');
             const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, provider);
 
             const [total, minStakeWei, cooldown, slash, owner] = await Promise.all([
@@ -453,24 +452,6 @@ export default function AdminDeFi() {
 
             {/* ========== BRIDGE VALIDATORS TAB ========== */}
             <Show when={activeTab() === 'bridge'}>
-                {/* Connect Wallet for Admin */}
-                <Show when={!walletAddress()}>
-                    <div class="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-6 flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <Wallet class="w-6 h-6 text-amber-400" />
-                            <div>
-                                <div class="text-sm font-bold text-white">Connect wallet for admin functions</div>
-                                <div class="text-xs text-gray-500">View-only mode active</div>
-                            </div>
-                        </div>
-                        <button
-                            onClick={connectWallet}
-                            class="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl text-xs uppercase tracking-widest"
-                        >
-                            Connect
-                        </button>
-                    </div>
-                </Show>
 
                 {/* Bridge Metrics */}
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
