@@ -41,7 +41,9 @@ export const WalletActivity = (props: WalletActivityProps) => {
             setLoading(true);
             setPage(p);
             // Using offset/limit for best compatibility if server supports it, or just query params
-            const response = await fetch(`${API_URL}?address=${props.walletAddress}&limit=${PAGE_SIZE}&offset=${(p - 1) * PAGE_SIZE}`);
+            // Normalize address to lowercase for case-insensitive matching
+            const normalizedAddress = props.walletAddress.toLowerCase();
+            const response = await fetch(`${API_URL}?address=${normalizedAddress}&limit=${PAGE_SIZE}&offset=${(p - 1) * PAGE_SIZE}`);
             const rawData = await response.json();
             const data = (rawData.transactions || []) as any[];
 
