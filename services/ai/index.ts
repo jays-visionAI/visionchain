@@ -135,9 +135,11 @@ ${localeInfo}
      Korean: "가격", "얼마", "시세", "현재", "지금", "오늘"
      
    - MANDATORY TOOL USAGE:
+     * DEFAULT: If NO time specified → MUST call 'get_current_price' (assume user wants NOW/CURRENT price)
      * For "현재/current/지금/now/today" → MUST call 'get_current_price'
      * For "어제/yesterday/과거/past" → MUST call 'get_historical_price'
      * Example: "비트코인 가격 얼마야?" → MUST call get_current_price(symbol: "btc")
+     * Example: "어제 비트코인 가격?" → MUST call get_historical_price(symbol: "btc", date: YESTERDAY_DD_MM_YYYY)
      
    - NEVER estimate, recall, or make up prices from memory
    - If tool call fails, respond: "실시간 데이터를 가져올 수 없습니다" / "Cannot retrieve real-time data"
