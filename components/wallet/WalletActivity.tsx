@@ -3,7 +3,7 @@ import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink } from 'luci
 import { ethers } from 'ethers';
 import { contractService } from '../../services/contractService';
 import { getFirebaseDb } from '../../services/firebaseService';
-import { collection, query, where, orderBy, limit, getDocs, or } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs } from 'firebase/firestore';
 
 interface WalletActivityProps {
     purchases: () => any[];
@@ -47,19 +47,35 @@ export const WalletActivity = (props: WalletActivityProps) => {
             const db = getFirebaseDb();
             const txRef = collection(db, 'transactions');
 
-            // Query for transactions where user is sender or receiver
-            const q = query(
+            // Use two separate queries to avoid composite index requirement
+            // Query 1: Transactions sent by user
+            const sentQuery = query(
                 txRef,
-                or(
-                    where('from_addr', '==', normalizedAddress),
-                    where('to_addr', '==', normalizedAddress)
-                ),
-                orderBy('timestamp', 'desc'),
+                where('from_addr', '==', normalizedAddress),
                 limit(PAGE_SIZE)
             );
 
-            const snapshot = await getDocs(q);
-            const data = snapshot.docs.map(doc => doc.data());
+            // Query 2: Transactions received by user
+            const receivedQuery = query(
+                txRef,
+                where('to_addr', '==', normalizedAddress),
+                limit(PAGE_SIZE)
+            );
+
+            const [sentSnapshot, receivedSnapshot] = await Promise.all([
+                getDocs(sentQuery),
+                getDocs(receivedQuery)
+            ]);
+
+            // Merge and deduplicate by hash
+            const allTxs = new Map();
+            sentSnapshot.docs.forEach(doc => allTxs.set(doc.id, doc.data()));
+            receivedSnapshot.docs.forEach(doc => allTxs.set(doc.id, doc.data()));
+
+            // Sort by timestamp descending
+            const data = Array.from(allTxs.values())
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                .slice(0, PAGE_SIZE);
 
             const mapped = data.map(tx => ({
                 hash: tx.hash,
