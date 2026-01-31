@@ -835,7 +835,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     props.setActiveFlow(action.flowName);
                                                 } else if (action.prompt) {
                                                     props.setInput(action.prompt);
-                                                    props.handleSend();
+                                                    // Use queueMicrotask to ensure input signal is updated
+                                                    queueMicrotask(() => props.handleSend());
                                                 }
                                             };
 
