@@ -2166,26 +2166,89 @@ If they say "Yes", output the navigate intent JSON for "referral".
             // Start timing the AI response
             const startTime = performance.now();
 
-            // --- Streaming Response ---
+            // --- Streaming Response with Typing Effect ---
             // Add placeholder message for streaming
             const streamMsgId = crypto.randomUUID();
             setMessages(prev => [...prev, { role: 'assistant', content: '', id: streamMsgId }]);
 
+            // Buffer for typing effect
+            let fullBuffer = '';
+            let displayedLength = 0;
+            let typingInterval: any = null;
+
+            // Start typing animation at human-like pace (~50 chars/sec)
+            const startTypingEffect = () => {
+                if (typingInterval) return;
+                typingInterval = setInterval(() => {
+                    if (displayedLength < fullBuffer.length) {
+                        // Type 2-4 characters at a time for natural feel
+                        const charsToAdd = Math.min(3, fullBuffer.length - displayedLength);
+                        displayedLength += charsToAdd;
+                        const displayText = fullBuffer.slice(0, displayedLength);
+                        setMessages(prev => prev.map(msg =>
+                            (msg as any).id === streamMsgId
+                                ? { ...msg, content: displayText }
+                                : msg
+                        ));
+                    } else if (displayedLength >= fullBuffer.length && fullBuffer.length > 0) {
+                        // Caught up, wait for more chunks
+                    }
+                }, 25); // ~40 chars per second
+            };
+
+            // Filter out <think> tags from displayed content
+            const filterThinkTags = (text: string): string => {
+                return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            };
+
+            // Parse thinking steps from raw text in real-time
+            const parseThinkingStepsRealtime = (text: string) => {
+                const thoughtRegex = /<think>([\s\S]*?)<\/think>/g;
+                const steps: any[] = [];
+                let match;
+                while ((match = thoughtRegex.exec(text)) !== null) {
+                    const content = match[1];
+                    const parts = content.split(':');
+                    steps.push({
+                        id: crypto.randomUUID(),
+                        label: parts[0]?.trim() || 'Thinking Process',
+                        detail: parts[1]?.trim() || '',
+                        status: 'completed'
+                    });
+                }
+                if (steps.length > 0) {
+                    setThinkingSteps(steps);
+                }
+            };
+
             let response: string = await generateTextStream(
                 fullPrompt,
                 (chunk, fullText) => {
-                    // Update the streaming message in real-time
-                    setMessages(prev => prev.map(msg =>
-                        (msg as any).id === streamMsgId
-                            ? { ...msg, content: fullText }
-                            : msg
-                    ));
+                    // Parse and display thinking steps in real-time
+                    parseThinkingStepsRealtime(fullText);
+
+                    // Buffer filtered content (without think tags) for typing effect
+                    fullBuffer = filterThinkTags(fullText);
+
+                    // Start typing effect on first chunk
+                    if (!typingInterval && fullBuffer.length > 0) startTypingEffect();
                 },
                 imageBase64,
                 'intent',
                 userProfile().email,
                 messages().slice(0, -1) // Exclude the placeholder message
             );
+
+            // Wait for typing to finish displaying
+            await new Promise<void>(resolve => {
+                const finishInterval = setInterval(() => {
+                    if (displayedLength >= fullBuffer.length) {
+                        clearInterval(finishInterval);
+                        if (typingInterval) clearInterval(typingInterval);
+                        resolve();
+                    }
+                }, 50);
+            });
 
             // Remove placeholder and add final message
             setMessages(prev => prev.filter(msg => (msg as any).id !== streamMsgId));
