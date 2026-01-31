@@ -956,38 +956,92 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Bottom Sheet Mobile Input Area */}
                 <div
-                    class={`md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b] to-transparent z-40 transition-all duration-300 ease-out ${bottomSheetExpanded() ? 'h-auto pb-6' : 'h-16'
+                    class={`md:hidden fixed bottom-0 left-0 right-0 bg-[#0a0a0b] z-40 transition-all duration-300 ease-out rounded-t-2xl shadow-2xl ${bottomSheetExpanded() ? '' : ''
                         }`}
-                    onTouchStart={handleBottomSheetTouchStart}
-                    onTouchEnd={handleBottomSheetTouchEnd}
+                    on:touchstart={handleBottomSheetTouchStart}
+                    on:touchend={handleBottomSheetTouchEnd}
                 >
-                    {/* Drag Handle */}
+                    {/* Drag Handle - Always Visible */}
                     <div
-                        class="flex justify-center py-2 cursor-grab active:cursor-grabbing"
+                        class="flex justify-center py-3 cursor-grab active:cursor-grabbing"
                         onClick={() => setBottomSheetExpanded(!bottomSheetExpanded())}
                     >
-                        <div class="w-10 h-1 bg-gray-600 rounded-full" />
+                        <div class={`w-12 h-1.5 rounded-full transition-colors ${bottomSheetExpanded() ? 'bg-gray-500' : 'bg-blue-500'}`} />
                     </div>
 
-                    {/* Collapsed State - Mini Input Bar */}
+                    {/* Collapsed State - Always show mini bar when collapsed */}
                     <Show when={!bottomSheetExpanded()}>
-                        <div class="px-4 flex items-center gap-3">
-                            <div class="flex-1 bg-[#1a1a1c] rounded-full px-4 py-2 text-gray-400 text-sm border border-white/5">
+                        <div
+                            class="px-4 pb-6 flex items-center gap-3"
+                            onClick={() => setBottomSheetExpanded(true)}
+                        >
+                            <div class="flex-1 bg-[#1a1a1c] rounded-2xl px-5 py-3 text-gray-400 text-base border border-white/10">
                                 Tap to type a message...
                             </div>
                             <button
-                                onClick={() => setBottomSheetExpanded(true)}
-                                class="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full flex items-center justify-center"
+                                class="w-12 h-12 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full flex items-center justify-center shadow-lg"
                             >
-                                <ChevronUp class="w-5 h-5 text-white" />
+                                <ChevronUp class="w-6 h-6 text-white" />
                             </button>
+                        </div>
+                    </Show>
+
+                    {/* Expanded State - Full Input */}
+                    <Show when={bottomSheetExpanded()}>
+                        <div class="px-4 pb-6">
+                            {/* Input Container */}
+                            <div class="relative bg-[#121214] rounded-2xl border border-white/10 overflow-hidden">
+                                <textarea
+                                    value={props.input()}
+                                    placeholder="Tell Vision AI what to do..."
+                                    rows="1"
+                                    class="w-full bg-transparent text-white text-base px-4 py-4 pb-14 resize-none focus:outline-none placeholder:text-gray-500"
+                                    style="max-height: 200px;"
+                                    onInput={(e) => {
+                                        props.setInput(e.currentTarget.value);
+                                        e.currentTarget.style.height = 'auto';
+                                        e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px';
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.isComposing || e.keyCode === 229) return;
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            props.handleSend();
+                                        }
+                                    }}
+                                />
+                                {/* Bottom bar with buttons */}
+                                <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                                    <div class="flex items-center gap-1">
+                                        <button
+                                            onClick={() => fileInputRef?.click()}
+                                            class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 hover:text-white hover:bg-white/10"
+                                        >
+                                            <Plus class="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            props.handleSend();
+                                            setBottomSheetExpanded(false);
+                                        }}
+                                        disabled={!props.input().trim() || props.isLoading()}
+                                        class={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${props.input().trim() && !props.isLoading()
+                                                ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white'
+                                                : 'bg-white/5 text-gray-600'
+                                            }`}
+                                    >
+                                        <Send class="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </Show>
                 </div>
 
-                {/* Desktop Input Area - Always visible OR Mobile Bottom Sheet expanded */}
-                <Show when={!isMobile() || bottomSheetExpanded()}>
-                    <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
+                {/* Desktop Input Area - Desktop only */}
+                <Show when={!isMobile()}>
+                    <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
                                 {/* Unified Background Agents Bar - Above Input */}
