@@ -416,8 +416,8 @@ const Wallet = (): JSX.Element => {
 
     const [onboardingStep, setOnboardingStep] = createSignal(0);
     const [userProfile, setUserProfile] = createSignal({
-        username: 'Vision User',
-        displayName: 'Vision User',
+        username: '',
+        displayName: '',
         email: auth.user()?.email || '',
         bio: '',
         twitter: '',

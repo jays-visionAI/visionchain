@@ -787,7 +787,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             >
                                 <div class="flex flex-col gap-1">
                                     <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
-                                        Hello, {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || 'Vision User'}
+                                        Hello, {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || <span class="text-red-400">NO DATA</span>}
                                     </h2>
                                     <p class="text-lg text-gray-500 font-medium">How can I help you today?</p>
                                 </div>
@@ -1027,8 +1027,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         }}
                                         disabled={!props.input().trim() || props.isLoading()}
                                         class={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${props.input().trim() && !props.isLoading()
-                                                ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white'
-                                                : 'bg-white/5 text-gray-600'
+                                            ? 'bg-gradient-to-br from-blue-600 to-cyan-500 text-white'
+                                            : 'bg-white/5 text-gray-600'
                                             }`}
                                     >
                                         <Send class="w-5 h-5" />
