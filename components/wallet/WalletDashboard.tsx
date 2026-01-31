@@ -613,6 +613,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [isInputMinimized, setIsInputMinimized] = createSignal(false);
+    const [isMobile, setIsMobile] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const scrollLockRef = { until: 0 }; // Use object ref to share across closures
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
@@ -632,6 +633,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 console.error('Failed to load quick actions:', e);
                 // Keep defaults - already set
             });
+
+        // Track mobile/desktop for responsive input visibility
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        onCleanup(() => window.removeEventListener('resize', handleResize));
     });
 
     // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
@@ -985,8 +991,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Motion.button>
                 </Show>
 
-                {/* Modern Floating Input Area */}
-                <Show when={!isInputMinimized()}>
+                {/* Modern Floating Input Area - Always show on desktop, conditionally on mobile */}
+                <Show when={!isMobile() || !isInputMinimized()}>
                     <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
