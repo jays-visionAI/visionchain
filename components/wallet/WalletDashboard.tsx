@@ -738,7 +738,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     };
 
     return (
-        <div class="flex-1 flex overflow-hidden relative bg-[#070708]">
+        <div class="flex-1 flex h-full overflow-hidden relative bg-[#070708]">
             {/* Left Sidebar & Toggle Removed - Moved to Right Sidebar */}
 
             {/* Main Chat Area */}

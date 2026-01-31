@@ -2294,7 +2294,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
             if (parsedSteps.length > 0) {
                 setThinkingSteps(parsedSteps);
-                setTimeout(() => setThinkingSteps([]), 8000);
+                // Note: thinkingSteps will be cleared before final message is added
             }
 
             // Clean tags again just in case
@@ -2519,6 +2519,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     : `I've prepared the ${localized} for you. Please check your screen.`;
             }
 
+            // Clear thinking steps BEFORE adding final message
+            // This ensures the message appears AFTER thinking visually completes
+            setThinkingSteps([]);
+
             setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse, responseTime }]);
 
             // SAVE CONVERSATION
@@ -2690,7 +2694,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
 
                         {/* Chat View - Always mounted, CSS-hidden when not active for instant switching */}
-                        <div class={activeView() === 'chat' ? '' : 'hidden'}>
+                        <div class={`h-full ${activeView() === 'chat' ? '' : 'hidden'}`}>
                             <WalletDashboard
                                 messages={messages}
                                 isLoading={chatLoading}
