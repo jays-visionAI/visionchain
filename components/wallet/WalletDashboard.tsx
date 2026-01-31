@@ -717,42 +717,42 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     });
 
     // --- Mobile Input Minimize on Scroll ---
-    onMount(() => {
-        const handleScroll = () => {
-            if (!messagesContainerRef || typeof window === 'undefined') return;
+    // Define scroll handler at component level so it can be attached in ref callback
+    const handleScrollForFAB = () => {
+        if (!messagesContainerRef || typeof window === 'undefined') return;
 
-            // Only on mobile
-            if (window.innerWidth >= 768) {
-                setIsInputMinimized(false);
-                return;
-            }
+        // Only on mobile
+        if (window.innerWidth >= 768) {
+            setIsInputMinimized(false);
+            return;
+        }
 
-            // Skip if scroll is locked (user just clicked FAB)
-            if (Date.now() < scrollLockRef.until) return;
+        // Skip if scroll is locked (user just clicked FAB)
+        if (Date.now() < scrollLockRef.until) return;
 
-            const currentScrollY = messagesContainerRef.scrollTop;
-            const containerHeight = messagesContainerRef.clientHeight;
-            const scrollHeight = messagesContainerRef.scrollHeight;
-            const distanceFromBottom = scrollHeight - currentScrollY - containerHeight;
+        const currentScrollY = messagesContainerRef.scrollTop;
+        const containerHeight = messagesContainerRef.clientHeight;
+        const scrollHeight = messagesContainerRef.scrollHeight;
+        const distanceFromBottom = scrollHeight - currentScrollY - containerHeight;
 
-            // Simple logic: at bottom = show input, not at bottom = FAB
-            if (distanceFromBottom > 80) {
-                setIsInputMinimized(true);
-            } else {
-                setIsInputMinimized(false);
-            }
-        };
+        // Simple logic: at bottom = show input, not at bottom = FAB
+        if (distanceFromBottom > 80) {
+            setIsInputMinimized(true);
+        } else {
+            setIsInputMinimized(false);
+        }
+    };
 
-        // Delay to ensure ref is available after render
-        setTimeout(() => {
-            if (messagesContainerRef) {
-                messagesContainerRef.addEventListener('scroll', handleScroll);
-            }
-        }, 100);
+    // Attach scroll handler when ref is set
+    const setMessagesRef = (el: HTMLDivElement) => {
+        messagesContainerRef = el;
+        if (el) {
+            el.addEventListener('scroll', handleScrollForFAB, { passive: true });
+        }
+    };
 
-        onCleanup(() => {
-            messagesContainerRef?.removeEventListener('scroll', handleScroll);
-        });
+    onCleanup(() => {
+        messagesContainerRef?.removeEventListener('scroll', handleScrollForFAB);
     });
 
     return (
@@ -791,7 +791,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Messages Area */}
                 <div
-                    ref={(el) => messagesContainerRef = el}
+                    ref={setMessagesRef}
                     class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth overscroll-contain"
                     style="-webkit-overflow-scrolling: touch;"
                 >
