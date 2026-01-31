@@ -612,6 +612,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [isInputMinimized, setIsInputMinimized] = createSignal(false);
+    let scrollLockUntil = 0; // Timestamp to lock scroll minimize
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
     let scrollContainerRef: HTMLDivElement | undefined;
@@ -733,10 +734,15 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
             // Minimize when: not at bottom (reading older messages)
             // Expand when: at bottom OR scrolling down (toward newer messages)
+            // Skip if scroll is locked (user just clicked FAB)
+            if (Date.now() < scrollLockUntil) return;
+
             if (distanceFromBottom > 50 && currentScrollY > 10) {
                 // Not at bottom - minimize after small delay
                 scrollTimeout = setTimeout(() => {
-                    setIsInputMinimized(true);
+                    if (Date.now() >= scrollLockUntil) {
+                        setIsInputMinimized(true);
+                    }
                 }, 150);
             } else if (distanceFromBottom < 30 || scrollingDown) {
                 // At bottom or scrolling toward bottom - expand
@@ -974,7 +980,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         initial={{ opacity: 0, scale: 0.8, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.8, y: 20 }}
-                        onClick={() => setIsInputMinimized(false)}
+                        onClick={() => {
+                            scrollLockUntil = Date.now() + 2000; // Lock for 2 seconds
+                            setIsInputMinimized(false);
+                        }}
                         class="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-transform"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
