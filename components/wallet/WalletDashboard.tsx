@@ -773,8 +773,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 {/* Messages Area */}
                 <div
                     ref={(el) => messagesContainerRef = el}
-                    class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth overscroll-contain"
-                    style="-webkit-overflow-scrolling: touch;"
+                    class="flex-1 overflow-y-auto overflow-x-hidden bg-[#070708] scrollbar-hide scroll-smooth overscroll-contain"
+                    style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
                         <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-24 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
@@ -853,10 +853,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 return (
                                                     <>
                                                         <Show when={text.trim().length > 0}>
-                                                            <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all markdown-body ${msg.role === 'user'
+                                                            <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all markdown-body overflow-hidden break-words ${msg.role === 'user'
                                                                 ? 'bg-[#007AFF] text-white rounded-tr-sm shadow-[0_10px_30px_-5px_rgba(0,122,255,0.3)]'
                                                                 : 'bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm'
                                                                 }`}
+                                                                style="max-width: 100%; word-wrap: break-word; overflow-wrap: break-word;"
                                                                 innerHTML={marked.parse(text) as string}
                                                             />
                                                         </Show>

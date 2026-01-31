@@ -231,13 +231,17 @@
       padding: 16px;
       border-radius: 16px;
       overflow-x: auto;
+      max-width: 100%;
       margin: 1.5em 0;
       border: 1px solid rgba(255, 255, 255, 0.08);
+      -webkit-overflow-scrolling: touch;
     }
 
     .markdown-body pre code {
       background: transparent;
       padding: 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
 
     /* VisionChart Container Styling */
