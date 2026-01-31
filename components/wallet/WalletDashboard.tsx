@@ -712,9 +712,6 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
     // --- Mobile Input Minimize on Scroll ---
     onMount(() => {
-        let lastScrollY = 0;
-        let scrollTimeout: any = null;
-
         const handleScroll = () => {
             if (!messagesContainerRef || typeof window === 'undefined') return;
 
@@ -724,33 +721,20 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 return;
             }
 
+            // Skip if scroll is locked (user just clicked FAB)
+            if (Date.now() < scrollLockUntil) return;
+
             const currentScrollY = messagesContainerRef.scrollTop;
             const containerHeight = messagesContainerRef.clientHeight;
             const scrollHeight = messagesContainerRef.scrollHeight;
             const distanceFromBottom = scrollHeight - currentScrollY - containerHeight;
-            const scrollingDown = currentScrollY < lastScrollY; // Actually scrolling toward top of messages
 
-            // Clear previous timeout
-            if (scrollTimeout) clearTimeout(scrollTimeout);
-
-            // Minimize when: not at bottom (reading older messages)
-            // Expand when: at bottom OR scrolling down (toward newer messages)
-            // Skip if scroll is locked (user just clicked FAB)
-            if (Date.now() < scrollLockUntil) return;
-
-            if (distanceFromBottom > 50 && currentScrollY > 10) {
-                // Not at bottom - minimize after small delay
-                scrollTimeout = setTimeout(() => {
-                    if (Date.now() >= scrollLockUntil) {
-                        setIsInputMinimized(true);
-                    }
-                }, 150);
-            } else if (distanceFromBottom < 30 || scrollingDown) {
-                // At bottom or scrolling toward bottom - expand
+            // Simple logic: at bottom = show input, not at bottom = FAB
+            if (distanceFromBottom > 80) {
+                setIsInputMinimized(true);
+            } else {
                 setIsInputMinimized(false);
             }
-
-            lastScrollY = currentScrollY;
         };
 
         // Delay to ensure ref is available after render
