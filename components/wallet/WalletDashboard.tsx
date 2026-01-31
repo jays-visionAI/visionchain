@@ -831,7 +831,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
 
                     <Show when={props.messages().length > 0}>
-                        <div class="max-w-3xl mx-auto px-4 md:px-6 pt-4 md:pt-16 pb-80 md:pb-56 space-y-6 md:space-y-12">
+                        <div class="max-w-3xl mx-auto px-2 md:px-6 pt-4 md:pt-16 pb-80 md:pb-56 space-y-4 md:space-y-12">
                             <For each={props.messages()}>
                                 {(msg) => (
                                     <Motion.div
@@ -847,7 +847,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 </div>
                                             </div>
                                         </Show>
-                                        <div class={`w-full md:max-w-[85%] ${msg.role === 'user' ? 'md:order-first' : ''}`}>
+                                        <div class={`w-full max-w-full md:max-w-[85%] ${msg.role === 'user' ? 'md:order-first' : ''}`}>
                                             {(() => {
                                                 const rawContent = msg.content.split('[RECOMMENDED_QUESTIONS]')[0];
                                                 const { text, charts } = parseChartBlocks(rawContent);
@@ -948,15 +948,15 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 <Motion.div
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    class="flex gap-3 px-4 mt-2"
+                                    class="flex gap-2 md:gap-3 px-2 md:px-4 mt-2"
                                 >
-                                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1 shadow-xl">
-                                        <Sparkles class="w-5 h-5 text-cyan-400" />
+                                    <div class="w-8 h-8 md:w-10 md:h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1 shadow-xl">
+                                        <Sparkles class="w-4 h-4 md:w-5 md:h-5 text-cyan-400" />
                                     </div>
-                                    <div class="flex-1 max-w-[85%]">
+                                    <div class="flex-1 min-w-0">
                                         <div
-                                            class="px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm markdown-body overflow-hidden break-words"
-                                            style="max-width: 100%; word-wrap: break-word; overflow-wrap: break-word;"
+                                            class="px-4 py-3 md:px-6 md:py-4 rounded-[20px] md:rounded-[24px] text-[14px] md:text-[16px] leading-[1.6] bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm markdown-body overflow-hidden"
+                                            style="max-width: 100%; word-wrap: break-word; overflow-wrap: break-word; word-break: break-word;"
                                             innerHTML={marked.parse(props.streamingContent()) as string}
                                         />
                                     </div>
@@ -969,8 +969,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                             {/* Dynamic Spacer for Agent Bay / Input Padding */}
                             <div class={`transition-all duration-300 ${(activeTimeTasks().length > 0 || props.batchAgents().length > 0) && !isAgentBayCollapsed()
-                                ? 'h-48'
-                                : 'h-16'
+                                ? 'h-64'
+                                : 'h-48 md:h-32'
                                 }`} />
                         </div>
                     </Show>
