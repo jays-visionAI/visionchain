@@ -1,7 +1,8 @@
-import { createSignal, Show, For, createEffect, createMemo, onMount, onCleanup } from 'solid-js';
+import { createSignal, Show, For, createEffect, createMemo, onMount, onCleanup, lazy, Suspense } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { marked } from 'marked';
-import { VisionChart, parseChartBlocks } from './VisionChart';
+import { parseChartBlocks } from './VisionChart';
+const VisionChart = lazy(() => import('./VisionChart').then(m => ({ default: m.VisionChart })));
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
 import QueueDrawer from '../chat/queue/QueueDrawer';
@@ -752,9 +753,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             lastScrollY = currentScrollY;
         };
 
-        if (messagesContainerRef) {
-            messagesContainerRef.addEventListener('scroll', handleScroll);
-        }
+        // Delay to ensure ref is available after render
+        setTimeout(() => {
+            if (messagesContainerRef) {
+                messagesContainerRef.addEventListener('scroll', handleScroll);
+            }
+        }, 100);
 
         onCleanup(() => {
             messagesContainerRef?.removeEventListener('scroll', handleScroll);
@@ -885,7 +889,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             />
                                                         </Show>
                                                         <For each={charts}>
-                                                            {(chartData) => <VisionChart data={chartData} />}
+                                                            {(chartData) => (
+                                                                <Suspense fallback={<div class="h-48 flex items-center justify-center text-gray-500 text-sm">Loading chart...</div>}>
+                                                                    <VisionChart data={chartData} />
+                                                                </Suspense>
+                                                            )}
                                                         </For>
                                                     </>
                                                 );

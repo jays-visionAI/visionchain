@@ -22,7 +22,7 @@ export class DeepSeekProvider implements AIProvider {
                     model: model || 'deepseek-chat',
                     messages: messages,
                     temperature: options?.temperature || 0.7,
-                    max_tokens: options?.maxTokens || 2048,
+                    max_tokens: options?.maxTokens || 8192,
                     stream: false
                 })
             });
