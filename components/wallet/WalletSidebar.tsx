@@ -193,7 +193,7 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="text-[13px] font-black text-white truncate uppercase italic tracking-tight">
-                                {props.userProfile?.email?.split('@')[0] || 'Visionary'}
+                                {props.userProfile?.email?.split('@')[0] || 'Vision User'}
                             </div>
                             <div class="text-[10px] font-bold text-gray-500 truncate flex items-center gap-1">
                                 <span class="w-1 h-1 rounded-full bg-green-500" /> Secured VID
