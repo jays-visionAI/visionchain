@@ -1116,7 +1116,7 @@ const Wallet = (): JSX.Element => {
                 setFlowLoading(false);
                 setFlowStep(0);
                 setActiveFlow(null); // Close the modal
-                navigate('/wallet/dashboard'); // Redirect to Vision AI to see Agent Desk progress
+                navigate('/wallet/chat'); // Redirect to Vision AI to see Agent Desk progress
 
                 // 1. Initialize Batch Agent
                 const agentId = Math.random().toString(36).substring(7);
@@ -1135,13 +1135,37 @@ const Wallet = (): JSX.Element => {
                 };
                 setBatchAgents(prev => [...prev, newAgent]);
 
-                // 2. Decrypt Mnemonic for all transactions
-                setLoadingMessage('AGENT: DECRYPTING VAULT...');
-                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
-                if (!encrypted) throw new Error("Wallet not found");
-                const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
-                const { privateKey } = WalletService.deriveEOA(mnemonic);
-                await contractService.connectInternalWallet(privateKey);
+                // 2. Decrypt Mnemonic for all transactions - with error handling
+                let mnemonic: string;
+                let privateKey: string;
+
+                try {
+                    setLoadingMessage('AGENT: DECRYPTING VAULT...');
+                    const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                    if (!encrypted) throw new Error("Wallet not found");
+                    mnemonic = await WalletService.decrypt(encrypted, walletPassword());
+                    const derived = WalletService.deriveEOA(mnemonic);
+                    privateKey = derived.privateKey;
+                    await contractService.connectInternalWallet(privateKey);
+                } catch (initError: any) {
+                    console.error('Batch initialization failed:', initError);
+                    // Mark agent as failed
+                    setBatchAgents(prev => prev.map(a => a.id === agentId ? {
+                        ...a,
+                        status: 'FAILED',
+                        error: initError.message || 'Wallet initialization failed',
+                        failedCount: transactions.length
+                    } : a));
+
+                    // Send error message to chat
+                    setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: lastLocale() === 'ko'
+                            ? `**배치 전송 실패**\n\n지갑 초기화 중 오류가 발생했습니다: ${initError.message}`
+                            : `**Batch Transfer Failed**\n\nWallet initialization error: ${initError.message}`
+                    }]);
+                    return; // Exit early
+                }
 
                 const finalResults: any[] = [];
                 for (let i = 0; i < transactions.length; i++) {
@@ -1166,10 +1190,17 @@ const Wallet = (): JSX.Element => {
                             if (symbol === 'VCN') {
                                 try {
                                     const result = await contractService.sendGaslessTokens(recipientAddr, tx.amount);
-                                    receipt = { hash: result.txHashes?.transfer || result.txHashes?.permit || '0x...' };
-                                } catch (gcError) {
-                                    console.warn("Batch gasless failed, trying standard...", gcError);
-                                    receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
+                                    receipt = { hash: result.txHashes?.transfer || result.txHashes?.permit || result.txHash || '0x...' };
+                                    console.log(`[Batch] Gasless transfer ${i + 1}/${transactions.length} successful:`, receipt.hash);
+                                } catch (gcError: any) {
+                                    console.warn(`[Batch] Gasless failed for tx ${i + 1}, trying standard:`, gcError.message);
+                                    try {
+                                        receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
+                                        console.log(`[Batch] Standard transfer ${i + 1}/${transactions.length} successful:`, receipt?.hash);
+                                    } catch (stdError: any) {
+                                        console.error(`[Batch] Both gasless and standard failed for tx ${i + 1}:`, stdError.message);
+                                        throw new Error(`Transfer failed: ${stdError.message || gcError.message}`);
+                                    }
                                 }
                             } else {
                                 receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
