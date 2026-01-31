@@ -340,6 +340,46 @@ ${localeInfo}
     }
 };
 
+// Streaming version for real-time response display
+export const generateTextStream = async (
+    prompt: string,
+    onChunk: (chunk: string, fullText: string) => void,
+    imageBase64?: string,
+    botType: 'intent' | 'helpdesk' = 'intent',
+    userId: string = 'anonymous',
+    previousHistory: { role: string; content: string }[] = []
+): Promise<string> => {
+    try {
+        const config = await factory.resolveConfig(botType);
+
+        // Build same prompt structure as generateText
+        const historyContext = previousHistory.length > 0
+            ? `[Previous Conversation History]\n${previousHistory.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')}\n\n[Current User Input]\n`
+            : '';
+        const fullPrompt = historyContext + prompt;
+
+        // Use streaming router
+        let accumulatedText = '';
+        const result = await factory.getRouter().generateTextStream(
+            fullPrompt,
+            config,
+            {
+                systemPrompt: "You are Vision AI, a helpful crypto wallet assistant.",
+                imageBase64
+            },
+            (chunk: string) => {
+                accumulatedText += chunk;
+                onChunk(chunk, accumulatedText);
+            }
+        );
+
+        return result.result;
+    } catch (e: any) {
+        console.error("[AIService] GenerateTextStream Error:", e);
+        return e.message || "An error occurred with the AI service.";
+    }
+};
+
 export const generateImage = async (prompt: string, ratio: AspectRatio = AspectRatio.Square): Promise<string | null> => {
     try {
         const settings = await getChatbotSettings();

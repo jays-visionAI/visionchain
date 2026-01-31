@@ -82,7 +82,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services/vcnPriceService';
-import { generateText } from '../services/ai';
+import { generateText, generateTextStream } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
@@ -2157,7 +2157,29 @@ If they say "Yes", output the navigate intent JSON for "referral".
             // Start timing the AI response
             const startTime = performance.now();
 
-            let response: string = await generateText(fullPrompt, imageBase64, 'intent', userProfile().email, messages());
+            // --- Streaming Response ---
+            // Add placeholder message for streaming
+            const streamMsgId = crypto.randomUUID();
+            setMessages(prev => [...prev, { role: 'assistant', content: '', id: streamMsgId }]);
+
+            let response: string = await generateTextStream(
+                fullPrompt,
+                (chunk, fullText) => {
+                    // Update the streaming message in real-time
+                    setMessages(prev => prev.map(msg =>
+                        (msg as any).id === streamMsgId
+                            ? { ...msg, content: fullText }
+                            : msg
+                    ));
+                },
+                imageBase64,
+                'intent',
+                userProfile().email,
+                messages().slice(0, -1) // Exclude the placeholder message
+            );
+
+            // Remove placeholder and add final message
+            setMessages(prev => prev.filter(msg => (msg as any).id !== streamMsgId));
 
             // Calculate response time
             const responseTime = Math.round(performance.now() - startTime);

@@ -69,4 +69,33 @@ export class LLMRouter {
             throw error;
         }
     }
+
+    async generateTextStream(
+        prompt: string,
+        config: RouterConfig,
+        options: TextGenerationOptions,
+        onChunk: (chunk: string) => void
+    ): Promise<RouterResult> {
+        // Streaming only supported for DeepSeek currently
+        if (config.providerId === 'deepseek') {
+            try {
+                const provider = this.factory.getProvider('deepseek');
+                if (provider.generateTextStream) {
+                    const result = await provider.generateTextStream(
+                        prompt,
+                        config.model,
+                        config.apiKey,
+                        options,
+                        onChunk
+                    );
+                    return { result, providerId: 'deepseek', model: config.model, apiKey: config.apiKey };
+                }
+            } catch (error) {
+                console.error('[LLMRouter] DeepSeek stream failed, falling back to non-stream:', error);
+            }
+        }
+
+        // Fallback to non-streaming
+        return this.generateText(prompt, config, options);
+    }
 }

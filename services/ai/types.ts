@@ -18,6 +18,7 @@ export interface ImageGenerationOptions {
 export interface AIProvider {
     id: AIProviderID;
     generateText(prompt: string, model: string, apiKey: string, options?: TextGenerationOptions): Promise<string | any>;
+    generateTextStream?(prompt: string, model: string, apiKey: string, options?: TextGenerationOptions, onChunk?: (chunk: string) => void): Promise<string>;
     generateImage?(prompt: string, model: string, apiKey: string, ratio: AspectRatio, options?: ImageGenerationOptions): Promise<string | null>;
     generateSpeech?(text: string, model: string, apiKey: string, voiceName: string): Promise<string | null>;
 }
