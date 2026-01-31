@@ -107,10 +107,17 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
 
 // Internal Component to avoid duplication between Mobile/Desktop wrapper
 const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDesktop?: boolean }) => {
+    // Check if running as iOS PWA (standalone mode)
+    const isIOSPWA = typeof window !== 'undefined' &&
+        (window.navigator as any).standalone === true;
+
     return (
         <>
-            {/* Header */}
-            <div class={`${props.isDesktop ? 'h-[88px] pt-4' : 'h-[60px] pt-6'} shrink-0 flex items-center px-8 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl`}>
+            {/* Header - Extra padding for iOS PWA safe area */}
+            <div
+                class={`${props.isDesktop ? 'h-[88px] pt-4' : 'h-auto'} shrink-0 flex items-center px-8 border-b border-white/[0.06] relative z-20 bg-[#0c0c0e]/80 backdrop-blur-xl`}
+                style={!props.isDesktop ? { 'padding-top': isIOSPWA ? 'max(env(safe-area-inset-top, 20px), 48px)' : '24px', 'padding-bottom': '16px' } : {}}
+            >
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center mb-1">
                         <VisionFullLogo class="scale-110 origin-left" />
