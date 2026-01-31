@@ -980,8 +980,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.8, y: 20 }}
                         onClick={() => {
-                            scrollLockRef.until = Date.now() + 1500; // Lock for 1.5 seconds
+                            scrollLockRef.until = Date.now() + 3000; // Lock for 3 seconds
                             setIsInputMinimized(false);
+                            // Also scroll to bottom to prevent immediate re-minimization
+                            if (messagesContainerRef) {
+                                messagesContainerRef.scrollTo({ top: messagesContainerRef.scrollHeight, behavior: 'smooth' });
+                            }
                         }}
                         class="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-transform"
                     >
