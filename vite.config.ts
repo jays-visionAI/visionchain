@@ -31,15 +31,21 @@ export default defineConfig(({ mode }) => {
               if (id.includes('firebase')) return 'vendor-firebase';
               if (id.includes('solid')) return 'vendor-solid';
               if (id.includes('lucide')) return 'vendor-icons';
-              if (id.includes('@google/generative-ai')) return 'vendor-gemini';
+              if (id.includes('@google/generative-ai') || id.includes('@google/genai')) return 'vendor-gemini';
               if (id.includes('axios')) return 'vendor-axios';
               if (id.includes('marked') || id.includes('highlight')) return 'vendor-markdown';
+              if (id.includes('apexcharts') || id.includes('chart')) return 'vendor-charts';
+              if (id.includes('qrcode')) return 'vendor-qr';
+              if (id.includes('motion') || id.includes('animate')) return 'vendor-motion';
               // Split remaining vendor by first-level package name
               const match = id.match(/node_modules\/([^\/]+)/);
               if (match) {
                 const pkg = match[1];
-                if (['@noble', '@scure', 'bn.js', 'hash.js'].some(p => pkg.includes(p))) {
+                if (['@noble', '@scure', 'bn.js', 'hash.js', 'elliptic', 'secp256k1'].some(p => pkg.includes(p))) {
                   return 'vendor-crypto';
+                }
+                if (['buffer', 'stream', 'util', 'events', 'process'].some(p => pkg.includes(p))) {
+                  return 'vendor-polyfill';
                 }
               }
               return 'vendor';
