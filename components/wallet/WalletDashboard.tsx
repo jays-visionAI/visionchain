@@ -613,7 +613,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [isInputMinimized, setIsInputMinimized] = createSignal(false);
-    let scrollLockUntil = 0; // Timestamp to lock scroll minimize
+    const scrollLockRef = { until: 0 }; // Use object ref to share across closures
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
     let scrollContainerRef: HTMLDivElement | undefined;
@@ -722,7 +722,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             }
 
             // Skip if scroll is locked (user just clicked FAB)
-            if (Date.now() < scrollLockUntil) return;
+            if (Date.now() < scrollLockRef.until) return;
 
             const currentScrollY = messagesContainerRef.scrollTop;
             const containerHeight = messagesContainerRef.clientHeight;
@@ -974,7 +974,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.8, y: 20 }}
                         onClick={() => {
-                            scrollLockUntil = Date.now() + 2000; // Lock for 2 seconds
+                            scrollLockRef.until = Date.now() + 1500; // Lock for 1.5 seconds
                             setIsInputMinimized(false);
                         }}
                         class="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-transform"
