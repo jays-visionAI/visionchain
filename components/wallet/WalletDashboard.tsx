@@ -777,7 +777,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     style="-webkit-overflow-scrolling: touch;"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="min-h-full h-full flex flex-col items-center justify-center p-6 pt-16 md:pt-6 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
+                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-24 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
