@@ -612,9 +612,10 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
 export const WalletDashboard = (props: WalletDashboardProps) => {
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-    const [isInputMinimized, setIsInputMinimized] = createSignal(false);
     const [isMobile, setIsMobile] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-    const scrollLockRef = { until: 0 }; // Use object ref to share across closures
+    // Bottom Sheet state for mobile input
+    const [bottomSheetExpanded, setBottomSheetExpanded] = createSignal(true);
+    let bottomSheetDragStart = 0;
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
     let scrollContainerRef: HTMLDivElement | undefined;
@@ -716,44 +717,24 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
         }
     });
 
-    // --- Mobile Input Minimize on Scroll ---
-    // Define scroll handler at component level so it can be attached in ref callback
-    const handleScrollForFAB = () => {
-        if (!messagesContainerRef || typeof window === 'undefined') return;
-
-        // Only on mobile
-        if (window.innerWidth >= 768) {
-            setIsInputMinimized(false);
-            return;
-        }
-
-        // Skip if scroll is locked (user just clicked FAB)
-        if (Date.now() < scrollLockRef.until) return;
-
-        const currentScrollY = messagesContainerRef.scrollTop;
-        const containerHeight = messagesContainerRef.clientHeight;
-        const scrollHeight = messagesContainerRef.scrollHeight;
-        const distanceFromBottom = scrollHeight - currentScrollY - containerHeight;
-
-        // Simple logic: at bottom = show input, not at bottom = FAB
-        if (distanceFromBottom > 80) {
-            setIsInputMinimized(true);
-        } else {
-            setIsInputMinimized(false);
-        }
+    // --- Bottom Sheet Touch Handlers for Mobile ---
+    const handleBottomSheetTouchStart = (e: TouchEvent) => {
+        bottomSheetDragStart = e.touches[0].clientY;
     };
 
-    // Attach scroll handler when ref is set
-    const setMessagesRef = (el: HTMLDivElement) => {
-        messagesContainerRef = el;
-        if (el) {
-            el.addEventListener('scroll', handleScrollForFAB, { passive: true });
+    const handleBottomSheetTouchEnd = (e: TouchEvent) => {
+        const dragEnd = e.changedTouches[0].clientY;
+        const dragDistance = bottomSheetDragStart - dragEnd;
+
+        // Swipe up (expand) if dragged more than 30px up
+        if (dragDistance > 30) {
+            setBottomSheetExpanded(true);
+        }
+        // Swipe down (collapse) if dragged more than 30px down
+        else if (dragDistance < -30) {
+            setBottomSheetExpanded(false);
         }
     };
-
-    onCleanup(() => {
-        messagesContainerRef?.removeEventListener('scroll', handleScrollForFAB);
-    });
 
     return (
         <div class="flex-1 flex overflow-hidden relative bg-[#070708]">
@@ -791,7 +772,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                 {/* Messages Area */}
                 <div
-                    ref={setMessagesRef}
+                    ref={(el) => messagesContainerRef = el}
                     class="flex-1 overflow-y-auto bg-[#070708] scrollbar-hide scroll-smooth overscroll-contain"
                     style="-webkit-overflow-scrolling: touch;"
                 >
@@ -973,30 +954,39 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     </Show>
                 </div>
 
-                {/* Floating Action Button (FAB) - Minimized Input State */}
-                <Show when={isInputMinimized()}>
-                    <Motion.button
-                        initial={{ opacity: 0, scale: 0.8, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.8, y: 20 }}
-                        onClick={() => {
-                            scrollLockRef.until = Date.now() + 3000; // Lock for 3 seconds
-                            setIsInputMinimized(false);
-                            // Also scroll to bottom to prevent immediate re-minimization
-                            if (messagesContainerRef) {
-                                messagesContainerRef.scrollTo({ top: messagesContainerRef.scrollHeight, behavior: 'smooth' });
-                            }
-                        }}
-                        class="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full shadow-2xl flex items-center justify-center text-white z-50 hover:scale-110 active:scale-95 transition-transform"
+                {/* Bottom Sheet Mobile Input Area */}
+                <div
+                    class={`md:hidden fixed bottom-0 left-0 right-0 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b] to-transparent z-40 transition-all duration-300 ease-out ${bottomSheetExpanded() ? 'h-auto pb-6' : 'h-16'
+                        }`}
+                    onTouchStart={handleBottomSheetTouchStart}
+                    onTouchEnd={handleBottomSheetTouchEnd}
+                >
+                    {/* Drag Handle */}
+                    <div
+                        class="flex justify-center py-2 cursor-grab active:cursor-grabbing"
+                        onClick={() => setBottomSheetExpanded(!bottomSheetExpanded())}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                        </svg>
-                    </Motion.button>
-                </Show>
+                        <div class="w-10 h-1 bg-gray-600 rounded-full" />
+                    </div>
 
-                {/* Modern Floating Input Area - Always show on desktop, conditionally on mobile */}
-                <Show when={!isMobile() || !isInputMinimized()}>
+                    {/* Collapsed State - Mini Input Bar */}
+                    <Show when={!bottomSheetExpanded()}>
+                        <div class="px-4 flex items-center gap-3">
+                            <div class="flex-1 bg-[#1a1a1c] rounded-full px-4 py-2 text-gray-400 text-sm border border-white/5">
+                                Tap to type a message...
+                            </div>
+                            <button
+                                onClick={() => setBottomSheetExpanded(true)}
+                                class="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-500 rounded-full flex items-center justify-center"
+                            >
+                                <ChevronUp class="w-5 h-5 text-white" />
+                            </button>
+                        </div>
+                    </Show>
+                </div>
+
+                {/* Desktop Input Area - Always visible OR Mobile Bottom Sheet expanded */}
+                <Show when={!isMobile() || bottomSheetExpanded()}>
                     <div class="fixed md:absolute bottom-0 lg:bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t from-[#070708] via-[#070708]/95 to-transparent pt-32 z-30 pointer-events-none">
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
