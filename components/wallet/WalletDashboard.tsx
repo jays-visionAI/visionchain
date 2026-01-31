@@ -69,6 +69,7 @@ interface WalletDashboardProps {
     removeAttachment: (index: number) => void;
     handleFileSelect: (e: Event) => void;
     thinkingSteps: () => any[];
+    streamingContent: () => string;
     voiceLang: () => string;
     setVoiceLang: (lang: string) => void;
     toggleRecording: () => void;
@@ -942,7 +943,27 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 <ThinkingDisplay steps={props.thinkingSteps()} />
                             </Show>
 
-                            <Show when={props.isLoading()}>
+                            {/* Streaming Content - Appears BELOW thinking process */}
+                            <Show when={props.streamingContent().length > 0}>
+                                <Motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    class="flex gap-3 px-4 mt-2"
+                                >
+                                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/20 flex items-center justify-center flex-shrink-0 mt-1 shadow-xl">
+                                        <Sparkles class="w-5 h-5 text-cyan-400" />
+                                    </div>
+                                    <div class="flex-1 max-w-[85%]">
+                                        <div
+                                            class="px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm markdown-body overflow-hidden break-words"
+                                            style="max-width: 100%; word-wrap: break-word; overflow-wrap: break-word;"
+                                            innerHTML={marked.parse(props.streamingContent()) as string}
+                                        />
+                                    </div>
+                                </Motion.div>
+                            </Show>
+
+                            <Show when={props.isLoading() && props.streamingContent().length === 0}>
                                 <TypingIndicator />
                             </Show>
 

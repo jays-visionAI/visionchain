@@ -658,6 +658,7 @@ const Wallet = (): JSX.Element => {
     // --- Advanced AI Features (Synced with Global AI) ---
     const [attachments, setAttachments] = createSignal<any[]>([]);
     const [thinkingSteps, setThinkingSteps] = createSignal<any[]>([]);
+    const [streamingContent, setStreamingContent] = createSignal<string>(''); // Streaming text shown below thinking
     const [voiceLang, setVoiceLang] = createSignal('en-US');
 
     const handleFileChange = (e: Event) => {
@@ -2167,33 +2168,27 @@ If they say "Yes", output the navigate intent JSON for "referral".
             const startTime = performance.now();
 
             // --- Streaming Response with Typing Effect ---
-            // Add placeholder message for streaming
-            const streamMsgId = crypto.randomUUID();
-            setMessages(prev => [...prev, { role: 'assistant', content: '', id: streamMsgId }]);
+            // Use separate streamingContent signal (not in messages array)
+            // This allows Thinking Process to appear ABOVE the streaming content
+            setStreamingContent('');
 
             // Buffer for typing effect
             let fullBuffer = '';
             let displayedLength = 0;
             let typingInterval: any = null;
 
-            // Start typing animation at human-like pace (~50 chars/sec)
+            // Start typing animation at human-like pace (~30 chars/sec for readability)
             const startTypingEffect = () => {
                 if (typingInterval) return;
                 typingInterval = setInterval(() => {
                     if (displayedLength < fullBuffer.length) {
-                        // Type 2-4 characters at a time for natural feel
-                        const charsToAdd = Math.min(3, fullBuffer.length - displayedLength);
+                        // Type 1-2 characters at a time for slower, more natural feel
+                        const charsToAdd = Math.min(2, fullBuffer.length - displayedLength);
                         displayedLength += charsToAdd;
                         const displayText = fullBuffer.slice(0, displayedLength);
-                        setMessages(prev => prev.map(msg =>
-                            (msg as any).id === streamMsgId
-                                ? { ...msg, content: displayText }
-                                : msg
-                        ));
-                    } else if (displayedLength >= fullBuffer.length && fullBuffer.length > 0) {
-                        // Caught up, wait for more chunks
+                        setStreamingContent(displayText);
                     }
-                }, 25); // ~40 chars per second
+                }, 35); // ~30 chars per second - slower, more human-like
             };
 
             // Filter out <think> tags from displayed content
@@ -2250,8 +2245,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 }, 50);
             });
 
-            // Remove placeholder and add final message
-            setMessages(prev => prev.filter(msg => (msg as any).id !== streamMsgId));
+            // Clear streaming content and add final message to messages array
+            setStreamingContent('');
 
             // Calculate response time
             const responseTime = Math.round(performance.now() - startTime);
@@ -2720,6 +2715,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 removeAttachment={removeAttachment}
                                 handleFileSelect={handleFileSelect}
                                 thinkingSteps={thinkingSteps}
+                                streamingContent={streamingContent}
                                 voiceLang={voiceLang}
                                 setVoiceLang={setVoiceLang}
                                 toggleRecording={toggleRecording}
