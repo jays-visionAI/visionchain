@@ -226,8 +226,17 @@ const Wallet = (): JSX.Element => {
     // Track wallet view history for proper back navigation
     const [viewHistory, setViewHistory] = createSignal<string[]>(['assets']);
 
+    // Ignore early popstate events (PWA startup can trigger spurious events)
+    let appStartTime = Date.now();
+
     // Handle browser popstate (back/forward button)
     const handlePopState = (e: PopStateEvent) => {
+        // Ignore popstate within first 1 second of app load (PWA startup issue)
+        if (Date.now() - appStartTime < 1000) {
+            console.log('[Wallet] Ignoring early popstate event (PWA startup)');
+            return;
+        }
+
         // If the user pressed back and we're still in wallet
         if (window.location.pathname.startsWith('/wallet')) {
             const history = viewHistory();
