@@ -381,17 +381,20 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                             {props.sendAmount()} {props.selectedToken()}
                                                         </div>
 
-                                                        {/* Challenge Period Status */}
+
+                                                        {/* Transfer Countdown */}
                                                         <div class="w-full bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-4 mb-4">
                                                             <div class="flex items-center justify-between mb-2">
                                                                 <div class="flex items-center gap-2">
                                                                     <div class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-                                                                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Challenge Period</span>
+                                                                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">전송 예정</span>
                                                                 </div>
-                                                                <span class="text-sm font-black text-white tabular-nums">15:00</span>
+                                                                <span class="text-sm font-black text-white tabular-nums">
+                                                                    {Math.floor(props.lockDelaySeconds() / 60)}분 후
+                                                                </span>
                                                             </div>
                                                             <div class="h-1.5 bg-black/30 rounded-full overflow-hidden">
-                                                                <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full" style="width: 0%" />
+                                                                <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full animate-pulse" style="width: 20%" />
                                                             </div>
                                                         </div>
 

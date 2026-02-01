@@ -1075,7 +1075,7 @@ const Wallet = (): JSX.Element => {
                     // 1. Notify Sender
                     await createNotification(userProfile().email, {
                         type: isScheduled ? 'transfer_scheduled' : 'alert',
-                        title: isScheduled ? 'Transfer Scheduled' : 'Transfer Successful',
+                        title: isScheduled ? 'Time Lock Transfer Scheduled' : 'Transfer Successful',
                         content: isScheduled
                             ? `You have scheduled ${amount} ${symbol} to be sent to ${recipientDisplayName}.`
                             : `You successfully sent ${amount} ${symbol} to ${recipientDisplayName}.`,
@@ -1113,10 +1113,10 @@ const Wallet = (): JSX.Element => {
 
                     const completionMessage = lastLocale() === 'ko'
                         ? isScheduled
-                            ? `**예약 전송 완료**\n\n${recipientName}님에게 **${amount} ${symbol}** 전송이 예약되었습니다.\n\n예약된 시간에 자동으로 전송됩니다.`
+                            ? `**타임락 전송 예약완료**\n\n${recipientName}님에게 **${amount} ${symbol}** 전송이 예약되었습니다.\n\n예약된 시간에 자동으로 전송됩니다.`
                             : `**전송 완료**\n\n${recipientName}님에게 **${amount} ${symbol}** 전송이 성공적으로 완료되었습니다.${txLink ? `\n\n[Vision Scan에서 확인](${txLink})` : ''}`
                         : isScheduled
-                            ? `**Transfer Scheduled**\n\n**${amount} ${symbol}** has been scheduled to be sent to ${recipientName}.\n\nIt will be automatically transferred at the scheduled time.`
+                            ? `**Time Lock Transfer Scheduled**\n\n**${amount} ${symbol}** has been scheduled to be sent to ${recipientName}.\n\nIt will be automatically transferred at the scheduled time.`
                             : `**Transfer Complete**\n\n**${amount} ${symbol}** has been successfully sent to ${recipientName}.${txLink ? `\n\n[View on Vision Scan](${txLink})` : ''}`;
 
                     setMessages(prev => [...prev, { role: 'assistant', content: completionMessage }]);
