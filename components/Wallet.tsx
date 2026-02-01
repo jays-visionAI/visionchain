@@ -1128,9 +1128,9 @@ const Wallet = (): JSX.Element => {
                 const { transactions } = action.data;
                 setIsLoading(false); // Do not block UI for batch
                 setFlowLoading(false);
-                setFlowStep(0);
-                setActiveFlow(null); // Close the modal
-                navigate('/wallet/chat'); // Redirect to Vision AI to see Agent Desk progress
+                // Keep modal open and show batch progress
+                setFlowStep(3); // Step 3 = Batch Progress Screen
+                // DO NOT close modal, DO NOT navigate to chat
 
                 // 1. Initialize Batch Agent
                 const agentId = Math.random().toString(36).substring(7);
@@ -1307,9 +1307,18 @@ const Wallet = (): JSX.Element => {
                     failedCount: failMsg
                 } : a));
 
+                // Set last successful tx hash for modal display
+                const firstSuccess = finalResults.find(r => r.success);
+                if (firstSuccess?.hash) {
+                    setLastTxHash(firstSuccess.hash);
+                }
+
                 setFlowSuccess(true);
-                setFlowStep(3);
+                setFlowStep(2); // Show success screen in modal
                 setFlowLoading(false);
+
+                // Store batch summary for modal display
+                setBatchInput(`Batch Transfer Complete:\n${successMsg} succeeded, ${failMsg} failed`);
 
                 // 4. Send specialized report message
                 const report = lastLocale() === 'ko'
