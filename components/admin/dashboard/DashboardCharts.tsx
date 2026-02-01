@@ -92,26 +92,30 @@ export const NodeHealthChart: Component = () => {
 };
 
 // ==================== Activity Map (Bar Chart) ====================
-export const ActivityMap: Component = () => {
-    const chartData = [
-        { day: 'Mon', value: 400 },
-        { day: 'Tue', value: 550 },
-        { day: 'Wed', value: 480 },
-        { day: 'Thu', value: 890 },
-        { day: 'Fri', value: 1200 },
-        { day: 'Sat', value: 1100 },
-        { day: 'Sun', value: 950 },
+interface ActivityMapProps {
+    data?: { day: string; value: number }[];
+}
+
+export const ActivityMap: Component<ActivityMapProps> = (props) => {
+    const chartData = () => props.data && props.data.length > 0 ? props.data : [
+        { day: 'Mon', value: 0 },
+        { day: 'Tue', value: 0 },
+        { day: 'Wed', value: 0 },
+        { day: 'Thu', value: 0 },
+        { day: 'Fri', value: 0 },
+        { day: 'Sat', value: 0 },
+        { day: 'Sun', value: 0 },
     ];
-    const maxVal = Math.max(...chartData.map(d => d.value));
+    const maxVal = () => Math.max(...chartData().map(d => d.value), 1);
 
     return (
         <div class="flex items-end gap-2 h-full">
-            <For each={chartData}>
+            <For each={chartData()}>
                 {(item) => (
                     <div class="flex-1 flex flex-col items-center gap-2">
                         <div
                             class="w-full bg-indigo-500 rounded-t-lg transition-all duration-300 hover:bg-indigo-400"
-                            style={{ height: `${(item.value / maxVal) * 100}%`, 'min-height': '4px' }}
+                            style={{ height: `${(item.value / maxVal()) * 100}%`, 'min-height': '4px' }}
                         />
                         <span class="text-[10px] font-bold text-slate-500">{item.day}</span>
                     </div>
@@ -122,7 +126,18 @@ export const ActivityMap: Component = () => {
 };
 
 // ==================== TVL Pie Chart (CSS Donut) ====================
-export const TVLPieChart: Component = () => {
+interface TVLPieChartProps {
+    tvlValue?: number; // in millions USD
+}
+
+export const TVLPieChart: Component<TVLPieChartProps> = (props) => {
+    const displayValue = () => {
+        const val = props.tvlValue || 0;
+        if (val >= 1) return `$${val.toFixed(1)}M`;
+        if (val >= 0.001) return `$${(val * 1000).toFixed(0)}K`;
+        return '$0';
+    };
+
     const pieData = [
         { label: 'Liquidity', value: 45, color: '#06b6d4', start: 0 },
         { label: 'Staking', value: 30, color: '#3b82f6', start: 45 },
@@ -151,7 +166,7 @@ export const TVLPieChart: Component = () => {
                     </For>
                 </svg>
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
-                    <span class="text-xl font-black text-white">$100M</span>
+                    <span class="text-xl font-black text-white">{displayValue()}</span>
                     <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Total TVL</span>
                 </div>
             </div>

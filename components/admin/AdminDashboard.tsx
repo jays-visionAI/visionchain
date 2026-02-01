@@ -1,6 +1,7 @@
 import { Component, createSignal, onCleanup, For, Show, onMount } from 'solid-js';
 import { ethers } from 'ethers';
-import { getAllUsers } from '../../services/firebaseService';
+import { getAllUsers, getDefiConfig, getFirebaseDb } from '../../services/firebaseService';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import {
     Activity,
     Server,
@@ -60,6 +61,7 @@ export const AdminDashboard: Component = () => {
     const [vcnDistributed, setVcnDistributed] = createSignal(0);
     const [vcnBurned, setVcnBurned] = createSignal(0);
     const [apr, setApr] = createSignal(0);
+    const [dauData, setDauData] = createSignal<{ day: string; value: number }[]>([]);
     const [nodeData, setNodeData] = createSignal({
         authority: 5, // 5 Nodes in cluster
         consensus: 0,
@@ -132,17 +134,74 @@ export const AdminDashboard: Component = () => {
         }
     };
 
+    const fetchTVLData = async () => {
+        try {
+            const config = await getDefiConfig();
+            // TVL in VCN, convert to millions USD (assuming $0.3 per VCN)
+            const tvlUsd = (config.totalVcnLocked || 0) * 0.3 / 1000000;
+            setTvl(tvlUsd);
+            setApr(config.stakingApr || 0);
+        } catch (e) {
+            console.error("Failed to fetch TVL:", e);
+        }
+    };
+
+    const fetchDAUData = async () => {
+        try {
+            const db = getFirebaseDb();
+            // Get users grouped by creation date (last 7 days)
+            const now = new Date();
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const result: { day: string; value: number }[] = [];
+
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(now);
+                date.setDate(date.getDate() - i);
+                const dayName = days[date.getDay()];
+                const startOfDay = new Date(date.setHours(0, 0, 0, 0)).toISOString();
+                const endOfDay = new Date(date.setHours(23, 59, 59, 999)).toISOString();
+
+                // Query users created on this day
+                const usersRef = collection(db, 'users');
+                const q = query(
+                    usersRef,
+                    where('createdAt', '>=', startOfDay),
+                    where('createdAt', '<=', endOfDay)
+                );
+                const snapshot = await getDocs(q);
+                result.push({ day: dayName, value: snapshot.size });
+            }
+
+            setDauData(result);
+        } catch (e) {
+            console.error("Failed to fetch DAU data:", e);
+            // Fallback to empty data
+            setDauData([
+                { day: 'Mon', value: 0 },
+                { day: 'Tue', value: 0 },
+                { day: 'Wed', value: 0 },
+                { day: 'Thu', value: 0 },
+                { day: 'Fri', value: 0 },
+                { day: 'Sat', value: 0 },
+                { day: 'Sun', value: 0 },
+            ]);
+        }
+    };
+
     // Fetch real data on mount & Simulate TPS
     onMount(() => {
         fetchRecentTransactions();
         fetchPaymasterStats();
         fetchUserStats();
+        fetchTVLData();
+        fetchDAUData();
 
         // Refresh Data every 5s
         const dataInterval = setInterval(() => {
             fetchRecentTransactions();
             fetchPaymasterStats();
             fetchUserStats();
+            fetchTVLData();
         }, 5000);
 
         // Mock TPS Simulation (Fast update)
@@ -284,7 +343,7 @@ export const AdminDashboard: Component = () => {
                             <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Active User Trends (DAU)</h3>
                             <button class="text-xs text-blue-400 hover:text-white transition-colors">View Report</button>
                         </div>
-                        <ActivityMap />
+                        <ActivityMap data={dauData()} />
                     </div>
                 </div>
 
@@ -324,7 +383,7 @@ export const AdminDashboard: Component = () => {
                         class="bg-gradient-to-br from-[#13161F] to-[#1e1b4b]"
                     >
                         <div class="mt-6">
-                            <TVLPieChart />
+                            <TVLPieChart tvlValue={tvl()} />
                         </div>
                     </MetricCard>
 
