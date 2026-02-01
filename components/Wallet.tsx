@@ -2722,12 +2722,12 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             onClick={() => setSidebarOpen(true)}
                         >
                             <div
-                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[28px] h-[56px] bg-blue-950/80 border border-blue-400/30 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[0_0_25px_rgba(59,130,246,0.6)] flex items-center justify-center transition-all duration-300 group-hover:w-[36px] group-hover:bg-blue-900/90 group-hover:border-blue-400/50 group-hover:shadow-[0_0_35px_rgba(59,130,246,0.8)]"
+                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[28px] h-[100px] bg-blue-950/90 border-2 border-blue-400/60 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[0_0_40px_rgba(59,130,246,0.9),0_0_20px_rgba(59,130,246,0.7)] flex items-center justify-center transition-all duration-300 group-hover:w-[36px] group-hover:bg-blue-900 group-hover:border-blue-300/80 group-hover:shadow-[0_0_60px_rgba(59,130,246,1),0_0_30px_rgba(96,165,250,0.9)] animate-pulse"
                             >
-                                <div class="flex flex-col gap-1 items-center">
-                                    <div class="w-1 h-1 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-[0_0_8px_rgba(147,197,253,0.8)]" />
-                                    <div class="w-1 h-3 rounded-full bg-blue-400 group-hover:bg-white group-hover:h-5 transition-all duration-300 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
-                                    <div class="w-1 h-1 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-[0_0_8px_rgba(147,197,253,0.8)]" />
+                                <div class="flex flex-col gap-1.5 items-center">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-125 transition-all duration-300 shadow-[0_0_12px_rgba(147,197,253,1)]" />
+                                    <div class="w-1.5 h-4 rounded-full bg-blue-400 group-hover:bg-white group-hover:h-6 transition-all duration-300 shadow-[0_0_15px_rgba(96,165,250,1)]" />
+                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-125 transition-all duration-300 shadow-[0_0_12px_rgba(147,197,253,1)]" />
                                 </div>
                                 <ChevronRight class="w-3.5 h-3.5 text-blue-200 group-hover:text-white transition-colors ml-0.5 animate-pulse" />
                             </div>
