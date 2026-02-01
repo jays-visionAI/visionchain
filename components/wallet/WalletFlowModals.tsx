@@ -126,23 +126,26 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                 <div class="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                                                     <div>
                                                         <label class="text-[11px] font-bold text-gray-500 uppercase tracking-widest block mb-2 px-1">Select Asset</label>
-                                                        <div class="grid grid-cols-2 gap-2">
-                                                            <For each={['VCN']}>
-                                                                {(symbol) => (
-                                                                    <div class="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/50 rounded-xl relative">
-                                                                        <div class="text-xs font-bold text-white flex-1">{symbol}</div>
-                                                                        <span
-                                                                            onClick={() => {
-                                                                                const max = props.getAssetData(props.selectedToken()).liquidBalance;
-                                                                                props.setSendAmount(max.toLocaleString());
-                                                                            }}
-                                                                            class="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-pointer hover:text-blue-300 transition-colors flex items-center gap-1 bg-blue-500/20 px-2 py-1 rounded-lg"
-                                                                        >
-                                                                            Available: {props.getAssetData(props.selectedToken()).liquidBalance.toLocaleString()} <RefreshCw class="w-3 h-3" />
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                            </For>
+                                                        <div class="flex items-center justify-between p-3 md:p-4 bg-blue-500/10 border border-blue-500/50 rounded-xl md:rounded-2xl">
+                                                            <div class="flex items-center gap-2 md:gap-3">
+                                                                <div class="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-blue-500 flex items-center justify-center text-sm md:text-base font-black text-white">V</div>
+                                                                <div>
+                                                                    <div class="text-xs md:text-sm font-bold text-white">VCN</div>
+                                                                    <div class="text-[9px] md:text-[10px] text-blue-400 font-bold uppercase tracking-wider">Vision Chain</div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="text-right">
+                                                                <div class="text-xs md:text-sm font-black text-white">{props.getAssetData(props.selectedToken()).liquidBalance.toLocaleString()}</div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const max = props.getAssetData(props.selectedToken()).liquidBalance;
+                                                                        props.setSendAmount(max.toLocaleString());
+                                                                    }}
+                                                                    class="text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors flex items-center gap-1 mt-0.5"
+                                                                >
+                                                                    <RefreshCw class="w-2.5 h-2.5 md:w-3 md:h-3" /> Use Max
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
 
