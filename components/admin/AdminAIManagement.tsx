@@ -197,6 +197,12 @@ export default function AdminAIManagement() {
     };
 
     const handleDistributeTestnet = async () => {
+        // CRITICAL: Prevent duplicate execution
+        if (isDistributing()) {
+            console.warn('[AdminAI] Distribution already in progress');
+            return;
+        }
+
         const targets = allPurchases().filter(p => p.walletAddress && p.walletAddress.startsWith('0x'));
         if (targets.length === 0) {
             alert("No ready wallets found for distribution.");

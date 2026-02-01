@@ -4,12 +4,21 @@ import {
 } from '../services/firebaseService';
 import { contractService } from '../services/contractService';
 
+// Track in-flight executions to prevent duplicates
+const executingTasks = new Set<string>();
+
 export const useTimeLockAgent = (
     userEmail: () => string | undefined,
     queueTasks: () => any[]
 ) => {
 
     const handleForceExecute = async (taskId: string) => {
+        // CRITICAL: Prevent duplicate execution
+        if (executingTasks.has(taskId)) {
+            console.warn(`[Agent] Task ${taskId} is already being executed, ignoring duplicate call`);
+            return;
+        }
+
         const email = userEmail();
         if (!email) return;
 
@@ -21,6 +30,9 @@ export const useTimeLockAgent = (
             const confirmRetry = confirm("This task is currently being processed by the Agent. Do you want to force a reset and retry? (Use this only if the process is stuck)");
             if (!confirmRetry) return;
         }
+
+        // Mark as executing
+        executingTasks.add(taskId);
 
         try {
             // New: Try Client-side Execution First if Overdue
@@ -48,6 +60,9 @@ export const useTimeLockAgent = (
         } catch (e: any) {
             console.error("Failed to signal retry:", e);
             alert("Failed to trigger retry. Please try again.");
+        } finally {
+            // Always clear the executing flag
+            executingTasks.delete(taskId);
         }
     };
 

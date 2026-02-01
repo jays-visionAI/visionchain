@@ -22,6 +22,7 @@ const AdminUsers = () => {
     const [isInviteModalOpen, setIsInviteModalOpen] = createSignal(false);
     const [isInviting, setIsInviting] = createSignal(false);
     const [resendingEmail, setResendingEmail] = createSignal<string | null>(null);
+    const [isSending, setIsSending] = createSignal(false);
     const [successModal, setSuccessModal] = createSignal({
         isOpen: false,
         txHash: '',
@@ -80,6 +81,12 @@ const AdminUsers = () => {
     };
 
     const handleSendVCN = async (user: UserData) => {
+        // CRITICAL: Prevent duplicate execution
+        if (isSending()) {
+            console.warn('[AdminUsers] Already sending, ignoring duplicate call');
+            return;
+        }
+
         const defaultAmount = Math.floor((user.amountToken || 1000) * 0.1);
         const input = prompt(`Enter VCN amount to send to [${user.email}]:`, defaultAmount.toString());
 
@@ -92,6 +99,7 @@ const AdminUsers = () => {
             return;
         }
 
+        setIsSending(true);
         try {
             const receipt = await contractService.adminSendVCN(
                 user.walletAddress!,
@@ -107,6 +115,8 @@ const AdminUsers = () => {
         } catch (e: any) {
             console.error(e);
             alert(`Transfer failed: ${e.message}`);
+        } finally {
+            setIsSending(false);
         }
     };
 

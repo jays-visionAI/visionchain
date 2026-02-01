@@ -5,6 +5,7 @@ import { contractService } from '../../services/contractService';
 export const ActivateContract = () => {
     const [participants, { refetch }] = createResource(async () => await getAllUsers(500));
     const [deployingFor, setDeployingFor] = createSignal<string | null>(null);
+    const [sendingFor, setSendingFor] = createSignal<string | null>(null);
 
     // Filter participants who have created a wallet but don't have vesting deployed yet
     const readyParticipants = () => participants()?.filter(
@@ -143,12 +144,20 @@ export const ActivateContract = () => {
                                             <td class="p-4 text-center space-x-2 flex justify-center">
                                                 {/* Testnet Token Button */}
                                                 <button
-                                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-lg transition-all"
+                                                    class={`px-4 py-2 text-white rounded-lg text-xs font-bold shadow-lg transition-all ${sendingFor() === user.email ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
                                                     title="Send 10% Testnet VCN"
+                                                    disabled={sendingFor() === user.email}
                                                     onClick={async () => {
+                                                        // CRITICAL: Prevent duplicate execution
+                                                        if (sendingFor()) {
+                                                            console.warn('[ActivateContract] Already sending');
+                                                            return;
+                                                        }
+
                                                         const amount = Math.floor((user.amountToken || 1000) * 0.1);
                                                         if (!confirm(`Send ${amount.toLocaleString()} VCN (10%) to ${user.email}?`)) return;
 
+                                                        setSendingFor(user.email);
                                                         try {
                                                             await contractService.adminSendVCN(
                                                                 user.walletAddress!,
@@ -158,10 +167,12 @@ export const ActivateContract = () => {
                                                         } catch (e: any) {
                                                             console.error(e);
                                                             alert(`Failed: ${e.message}`);
+                                                        } finally {
+                                                            setSendingFor(null);
                                                         }
                                                     }}
                                                 >
-                                                    Send Token
+                                                    {sendingFor() === user.email ? 'Sending...' : 'Send Token'}
                                                 </button>
 
                                                 {/* Deploy Vesting Button */}
@@ -212,7 +223,7 @@ export const ActivateContract = () => {
                             }>
                                 {(user) => (
                                     <tr class="hover:bg-slate-800/20 border-b border-slate-800/50">
-                                         <td class="p-4 text-slate-300">{user.email}</td>
+                                        <td class="p-4 text-slate-300">{user.email}</td>
                                         <td class="p-4 text-slate-500">{user.partnerCode || 'SELF'}</td>
                                         <td class="p-4 text-right font-mono text-slate-400">{(user.amountToken || 0).toLocaleString()}</td>
                                         <td class="p-4 text-right">
