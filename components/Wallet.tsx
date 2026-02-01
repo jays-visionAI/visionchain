@@ -398,13 +398,27 @@ const Wallet = (): JSX.Element => {
         const txs = parsedBatchTransactions();
         if (txs.length === 0) return;
 
+        // Filter out transactions without recipient addresses and warn user
+        const validTxs = txs.filter(tx => tx.recipient && tx.recipient.length > 0);
+        const invalidCount = txs.length - validTxs.length;
+
+        if (validTxs.length === 0) {
+            alert('No valid transactions found. Please ensure all recipients have valid addresses.');
+            return;
+        }
+
+        if (invalidCount > 0) {
+            console.warn(`[Batch] ${invalidCount} transactions skipped due to missing addresses`);
+        }
+
         setPendingAction({
             type: 'multi_transactions',
             data: {
-                transactions: txs.map(tx => ({
+                transactions: validTxs.map(tx => ({
                     recipient: tx.recipient,
                     amount: tx.amount,
                     symbol: tx.symbol,
+                    name: tx.name, // Include name for tracking
                     intent: 'send',
                     description: `Batch transfer to ${tx.name}`
                 }))
