@@ -95,10 +95,13 @@ export class ContractService {
      * Attempts to connect to the best available RPC node.
      */
     async getRobustProvider(): Promise<ethers.JsonRpcProvider> {
+        const errors: string[] = [];
+
         for (const rpcUrl of ADDRESSES.RPC_NODES) {
             try {
                 // Skip HTTP if we are on HTTPS to avoid Mixed Content errors
                 if (window.location.protocol === 'https:' && rpcUrl.startsWith('http:')) {
+                    errors.push(`${rpcUrl}: Skipped (Mixed Content)`);
                     continue;
                 }
 
@@ -106,19 +109,24 @@ export class ContractService {
                     staticNetwork: true // Speed up by skipping detectNetwork if we know the chain
                 });
 
-                // Quick health check (2s timeout)
+                // Health check with 8s timeout (increased for mobile networks)
                 await Promise.race([
                     provider.getBlockNumber(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000))
                 ]);
 
                 console.log(`[Success] Connected to RPC: ${rpcUrl}`);
                 return provider;
-            } catch (e) {
-                console.warn(`[Failed] RPC Node Failed: ${rpcUrl}. Trying next...`);
+            } catch (e: any) {
+                const errorMsg = e.message || 'Unknown error';
+                errors.push(`${rpcUrl}: ${errorMsg}`);
+                console.warn(`[Failed] RPC Node Failed: ${rpcUrl}. Error: ${errorMsg}`);
             }
         }
-        throw new Error("Critical: All RPC nodes are currently unreachable or blocked by CORS.");
+
+        // If all nodes failed, provide detailed error
+        console.error('[RPC] All nodes failed:', errors);
+        throw new Error(`Unable to connect to blockchain. Please check your internet connection and try again.\n\nTried ${errors.length} node(s).`);
     }
 
     /**
