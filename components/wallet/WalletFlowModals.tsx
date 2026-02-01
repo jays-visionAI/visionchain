@@ -387,7 +387,7 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                                                             <div class="flex items-center justify-between mb-2">
                                                                 <div class="flex items-center gap-2">
                                                                     <div class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-                                                                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">전송 예정</span>
+                                                                    <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Scheduled</span>
                                                                 </div>
                                                                 <span class="text-sm font-black text-white tabular-nums">
                                                                     {Math.floor(props.lockDelaySeconds() / 60)}분 후
