@@ -831,8 +831,17 @@ const Wallet = (): JSX.Element => {
     };
 
     const executePendingAction = async () => {
+        // CRITICAL: Prevent duplicate execution
+        if (isLoading()) {
+            console.warn('[executePendingAction] Already processing, ignoring duplicate call');
+            return;
+        }
+
         const action = pendingAction();
         if (!action) return;
+
+        // Immediately clear pending action to prevent re-execution
+        setPendingAction(null);
 
         try {
             setLoadingMessage('PROCESSING TRANSACTION...');
