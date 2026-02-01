@@ -3991,7 +3991,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                 <input
                                                     type={showWalletPassword() ? "text" : "password"}
                                                     placeholder={passwordMode() === 'setup' ? "Create spending password" : "Enter spending password"}
-                                                    class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
+                                                    class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] text-base"
                                                     value={walletPassword()}
                                                     onInput={(e) => setWalletPassword(e.currentTarget.value)}
                                                     onKeyDown={(e) => e.key === 'Enter' && (passwordMode() === 'setup' ? finalizeWalletCreation() : executePendingAction())}
@@ -4015,7 +4015,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                     <input
                                                         type={showWalletPassword() ? "text" : "password"}
                                                         placeholder="Confirm spending password"
-                                                        class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]"
+                                                        class="flex-1 min-w-0 w-full box-border bg-[#0d0d0f] border border-white/20 rounded-2xl py-4 px-14 text-white placeholder:text-gray-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all font-mono text-center tracking-widest shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)] text-base"
                                                         value={confirmWalletPassword()}
                                                         onInput={(e) => setConfirmWalletPassword(e.currentTarget.value)}
                                                         onKeyDown={(e) => e.key === 'Enter' && finalizeWalletCreation()}
