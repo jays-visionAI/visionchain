@@ -108,6 +108,27 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                         {/* Flow Content */}
                         <div class="space-y-6">
                             <Switch>
+                                {/* STEP 3: BATCH STARTED - Universal for all flows */}
+                                <Match when={props.flowStep() === 3}>
+                                    <div class="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+                                        <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/30 mb-4">
+                                            <Layers class="w-8 h-8 text-white" />
+                                        </div>
+                                        <h4 class="text-xl font-bold text-white mb-1">Batch Transfer Started</h4>
+                                        <p class="text-xs text-gray-400 mb-4 max-w-sm">Your transfer is being processed by the Batch Agent. You can close this window and check progress in Agent Desk.</p>
+
+                                        <div class="w-full max-w-xs bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 mb-4">
+                                            <div class="flex items-center justify-center gap-2 mb-2">
+                                                <div class="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
+                                                <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">Agent Active</span>
+                                            </div>
+                                            <p class="text-[10px] text-gray-500">Processing in background...</p>
+                                        </div>
+
+                                        <p class="text-[9px] text-gray-600 mt-2">This window will close automatically</p>
+                                    </div>
+                                </Match>
+
                                 {/* SEND FLOW */}
                                 <Match when={props.activeFlow() === 'send'}>
                                     <div class="space-y-4">

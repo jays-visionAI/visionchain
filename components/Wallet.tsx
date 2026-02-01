@@ -1128,9 +1128,14 @@ const Wallet = (): JSX.Element => {
                 const { transactions } = action.data;
                 setIsLoading(false); // Do not block UI for batch
                 setFlowLoading(false);
-                // Keep modal open and show batch progress
-                setFlowStep(3); // Step 3 = Batch Progress Screen
-                // DO NOT close modal, DO NOT navigate to chat
+                // Show "Batch Started" message
+                setFlowStep(3); // Step 3 = Batch Started Screen
+
+                // Auto-close modal after 3 seconds
+                setTimeout(() => {
+                    setActiveFlow(null);
+                    setFlowStep(0);
+                }, 3000);
 
                 // 1. Initialize Batch Agent
                 const agentId = Math.random().toString(36).substring(7);
@@ -1307,18 +1312,19 @@ const Wallet = (): JSX.Element => {
                     failedCount: failMsg
                 } : a));
 
-                // Set last successful tx hash for modal display
+                // Set last successful tx hash for notification
                 const firstSuccess = finalResults.find(r => r.success);
                 if (firstSuccess?.hash) {
                     setLastTxHash(firstSuccess.hash);
                 }
 
-                setFlowSuccess(true);
-                setFlowStep(2); // Show success screen in modal
-                setFlowLoading(false);
+                // Send notification to user
+                const notificationMsg = lastLocale() === 'ko'
+                    ? `✓ 배치 전송 완료: ${successMsg}개 성공, ${failMsg}개 실패`
+                    : `✓ Batch transfer complete: ${successMsg} succeeded, ${failMsg} failed`;
 
-                // Store batch summary for modal display
-                setBatchInput(`Batch Transfer Complete:\n${successMsg} succeeded, ${failMsg} failed`);
+                // TODO: Replace with actual notification system
+                console.log('[Notification]', notificationMsg);
 
                 // 4. Send specialized report message
                 const report = lastLocale() === 'ko'
