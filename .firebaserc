@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "visionchain-d19ed"
+    "default": "visionchain-d19ed",
+    "production": "visionchain-d19ed",
+    "staging": "visionchain-staging"
   }
 }

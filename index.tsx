@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './components/auth/authContext';
 // Core layout components
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import EnvironmentBadge from './components/EnvironmentBadge';
 
 // Pages
 import HomePage from './pages/HomePage';
@@ -45,9 +46,12 @@ function Layout(props: { children?: any }) {
           <Footer />
         </Show>
       </div>
+      {/* Environment indicator badge (only shows in staging/dev) */}
+      <EnvironmentBadge />
     </div>
   );
 }
+
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
