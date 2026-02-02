@@ -169,22 +169,11 @@ export default function VisionScan() {
                 setCurrentScreen('tx_detail');
                 window.history.pushState({}, '', `?tx=${formatted[0].hash}`);
             } else if (termToSearch.length === 42 && termToSearch.startsWith('0x')) {
-                // EVM Address
+                // EVM Address - Always show address detail for valid format
                 setChainType('evm');
                 setCurrentAddress(termToSearch);
-
-                // NEW: Logic to check if address exists (has balance or transactions)
-                const hasBalance = liveBalance !== undefined && parseFloat(liveBalance) > 0;
-                const hasTransactions = formatted.length > 0;
-
-                if (!hasBalance && !hasTransactions) {
-                    setNotFoundTerm(termToSearch);
-                    setCurrentScreen('home');
-                    window.history.pushState({}, '', window.location.pathname);
-                } else {
-                    setCurrentScreen('address_detail');
-                    window.history.pushState({}, '', `?address=${termToSearch}&chain=evm`);
-                }
+                setCurrentScreen('address_detail');
+                window.history.pushState({}, '', `?address=${termToSearch}&chain=evm`);
             } else if (termToSearch.startsWith('bc1') || termToSearch.startsWith('1') || termToSearch.startsWith('3')) {
                 // Bitcoin Address (Mock Detection)
                 if (termToSearch.length > 25 && termToSearch.length < 60) {
