@@ -2820,15 +2820,29 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     }
                 } else if (genericMatches && genericMatches.length > 1) {
                     // HEURISTIC: If AI outputted multiple individual JSONs, wrap them into a 'multi' intent automatically
-                    console.log("[AI] Auto-wrapping multiple intents into 'multi'");
+                    console.log("[AI] Found multiple JSON matches, checking for duplicates...");
                     const wrappedTransactions = genericMatches.map(str => {
                         try { return JSON.parse(str); } catch { return null; }
                     }).filter(Boolean);
 
-                    if (wrappedTransactions.length > 0) {
+                    // DEDUPLICATION: Remove identical intents (AI sometimes outputs same JSON twice)
+                    const uniqueTransactions = wrappedTransactions.filter((tx, index, self) => {
+                        const key = `${tx.recipient || tx.address || ''}|${tx.amount || ''}|${tx.intent || ''}`;
+                        return index === self.findIndex(t => {
+                            const tKey = `${t.recipient || t.address || ''}|${t.amount || ''}|${t.intent || ''}`;
+                            return tKey === key;
+                        });
+                    });
+
+                    console.log(`[AI] Deduplicated: ${wrappedTransactions.length} -> ${uniqueTransactions.length} transactions`);
+
+                    if (uniqueTransactions.length === 1) {
+                        // Single unique intent - don't wrap as multi
+                        intentData = uniqueTransactions[0];
+                    } else if (uniqueTransactions.length > 1) {
                         intentData = {
                             intent: 'multi',
-                            transactions: wrappedTransactions,
+                            transactions: uniqueTransactions,
                             description: "Consolidated Batch Transfer"
                         };
                     }
