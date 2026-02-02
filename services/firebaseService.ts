@@ -18,8 +18,10 @@ import {
     addDoc,
     initializeFirestore,
     onSnapshot,
-    Timestamp
+    Timestamp,
+    serverTimestamp
 } from 'firebase/firestore';
+
 import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfig } from '../config/firebase.config';
 
@@ -1971,6 +1973,20 @@ export const retryScheduledTask = async (taskId: string) => {
         return true;
     } catch (e) {
         console.error("Retry failed:", e);
+        throw e;
+    }
+};
+
+// Dismiss (delete) a task from Firebase - for FAILED, SENT, or CANCELLED tasks
+export const dismissScheduledTask = async (taskId: string) => {
+    const db = getFirebaseDb();
+    try {
+        const docRef = doc(db, 'scheduledTransfers', taskId);
+        await deleteDoc(docRef);
+        console.log("[Queue] Task dismissed:", taskId);
+        return true;
+    } catch (e) {
+        console.error("Dismiss failed:", e);
         throw e;
     }
 };

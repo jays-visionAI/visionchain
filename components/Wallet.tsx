@@ -70,6 +70,7 @@ import {
     subscribeToQueue,
     saveScheduledTransfer,
     cancelScheduledTask,
+    dismissScheduledTask,
     createNotification,
     NotificationData,
     getFirebaseDb,
@@ -78,6 +79,7 @@ import {
     findUserByAddress,
     uploadProfileImage
 } from '../services/firebaseService';
+
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { CloudWalletService, calculatePasswordStrength } from '../services/cloudWalletService';
@@ -575,12 +577,20 @@ const Wallet = (): JSX.Element => {
         }
     };
 
-    // Dismiss a failed or overdue task from the UI (removes from local state)
-    const handleDismissTask = (taskId: string) => {
+    // Dismiss a failed or overdue task from the UI and Firebase
+    const handleDismissTask = async (taskId: string) => {
         // Remove from queue tasks (optimistic UI update)
         setQueueTasks(prev => prev.filter(t => t.id !== taskId));
         // Also remove from batch agents if applicable
         setBatchAgents(prev => prev.filter(a => a.id !== taskId));
+
+        // Delete from Firebase
+        try {
+            await dismissScheduledTask(taskId);
+        } catch (e) {
+            console.error('[Wallet] Failed to dismiss task from Firebase:', e);
+            // UI already updated, so just log the error
+        }
     };
 
     // --- Client-side Scheduler for Time-lock Agent (Extracted to Hook) ---
