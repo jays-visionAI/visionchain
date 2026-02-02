@@ -220,6 +220,16 @@ const Wallet = (): JSX.Element => {
     const [sendMode, setSendMode] = createSignal<'single' | 'batch'>('single');
     const [batchInput, setBatchInput] = createSignal('');
 
+    // Cross-Chain Bridge State
+    const [pendingBridge, setPendingBridge] = createSignal<{
+        amount: string;
+        symbol: string;
+        destinationChain: string;
+        intentData?: any;
+    } | null>(null);
+    const [isBridging, setIsBridging] = createSignal(false);
+
+
     // PWA Install State
     const [deferredPrompt, setDeferredPrompt] = createSignal<any>(null);
     const [isIOS, setIsIOS] = createSignal(false);
@@ -2200,7 +2210,134 @@ const Wallet = (): JSX.Element => {
         }]);
     };
 
+    // === Cross-Chain Bridge Execution ===
+    const handleExecuteBridge = async () => {
+        const bridge = pendingBridge();
+        if (!bridge || isBridging()) return;
+
+        setIsBridging(true);
+        try {
+            // Use window.ethereum directly for signing
+            if (!(window as any).ethereum) {
+                throw new Error('No wallet provider found');
+            }
+            const provider = new ethers.BrowserProvider((window as any).ethereum);
+            const signer = await provider.getSigner();
+            const userAddr = await signer.getAddress();
+
+
+            // Vision Chain IntentCommitment contract
+            const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
+            const VISION_CHAIN_ID = 1337;
+            const SEPOLIA_CHAIN_ID = 11155111;
+
+            // Determine destination chain ID
+            const dstChainId = bridge.destinationChain.toUpperCase() === 'ETHEREUM' || bridge.destinationChain.toUpperCase() === 'SEPOLIA'
+                ? SEPOLIA_CHAIN_ID
+                : 137;
+
+            // ABI for IntentCommitment
+            const INTENT_ABI = [
+                "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
+                "function getNextNonce(address user) view returns (uint256)"
+            ];
+
+            const intentContract = new ethers.Contract(VISION_INTENT_COMMITMENT, INTENT_ABI, signer);
+
+            // Get next nonce
+            const nonce = await intentContract.getNextNonce(userAddr);
+            const amountWei = ethers.parseEther(bridge.amount);
+            const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
+
+            // Build intent struct
+            const intent = {
+                user: userAddr,
+                srcChainId: BigInt(VISION_CHAIN_ID),
+                dstChainId: BigInt(dstChainId),
+                token: ethers.ZeroAddress, // Native VCN
+                amount: amountWei,
+                recipient: userAddr, // Same address on destination
+                nonce: nonce,
+                expiry: BigInt(expiry)
+            };
+
+            // EIP-712 Domain
+            const domain = {
+                name: 'VisionBridge',
+                version: '1',
+                chainId: VISION_CHAIN_ID,
+                verifyingContract: VISION_INTENT_COMMITMENT
+            };
+
+            // EIP-712 Types
+            const types = {
+                BridgeIntent: [
+                    { name: 'user', type: 'address' },
+                    { name: 'srcChainId', type: 'uint256' },
+                    { name: 'dstChainId', type: 'uint256' },
+                    { name: 'token', type: 'address' },
+                    { name: 'amount', type: 'uint256' },
+                    { name: 'recipient', type: 'address' },
+                    { name: 'nonce', type: 'uint256' },
+                    { name: 'expiry', type: 'uint256' }
+                ]
+            };
+
+            // Sign with EIP-712
+            console.log('[Bridge] Signing intent with EIP-712...');
+            const signature = await signer.signTypedData(domain, types, intent);
+
+            // Submit commitIntent transaction
+            console.log('[Bridge] Submitting commitIntent...');
+            const tx = await intentContract.commitIntent(intent, signature, { gasLimit: 300000 });
+            console.log(`[Bridge] Tx submitted: ${tx.hash}`);
+
+            const receipt = await tx.wait();
+            console.log(`[Bridge] Confirmed in block ${receipt.blockNumber}`);
+
+            // Success message with Explorer link
+            const chainDisplay = bridge.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridge.destinationChain;
+            const visionScanLink = `https://visionscan.org/tx/${tx.hash}`;
+
+            const successMsg = lastLocale() === 'ko'
+                ? `브릿지 요청이 성공적으로 제출되었습니다!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[VisionScan에서 보기](${visionScanLink})\n\n약 10-30분 후 목적지 체인에서 토큰을 수령할 수 있습니다.`
+                : `Bridge request submitted successfully!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[View on VisionScan](${visionScanLink})\n\nTokens will arrive on the destination chain in approximately 10-30 minutes.`;
+
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: successMsg,
+                bridgeTxHash: tx.hash,
+                bridgeDestination: bridge.destinationChain
+            }]);
+
+            setPendingBridge(null);
+
+
+        } catch (error: any) {
+            console.error('[Bridge] Error:', error);
+            const errMsg = lastLocale() === 'ko'
+                ? `브릿지 실패: ${error.message || '알 수 없는 오류'}`
+                : `Bridge failed: ${error.message || 'Unknown error'}`;
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: errMsg
+            }]);
+        } finally {
+            setIsBridging(false);
+        }
+    };
+
+    const handleCancelBridge = () => {
+        setPendingBridge(null);
+        const msg = lastLocale() === 'ko' ? '브릿지 요청이 취소되었습니다.' : 'Bridge request cancelled.';
+        setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: msg
+        }]);
+    };
+
     const handleSend = async () => {
+
         if (!input().trim() || chatLoading()) return;
 
         const userMessage = input().trim();
@@ -2328,12 +2465,30 @@ Format (Multi/Batch):
 \`\`\`
 If you detect multiple recipients in one request, ALWAYS use the "multi" format.
 
+Format (Cross-Chain Bridge):
+If the user wants to send assets to another blockchain (Ethereum, Sepolia, Polygon, etc.), use the BRIDGE intent.
+Keywords that indicate bridge: "세폴리아", "이더리움", "폴리곤", "Sepolia", "Ethereum", "Polygon", "다른 체인", "브릿지", "bridge", "크로스체인"
+
+IMPORTANT: When user says "세폴리아로 보내줘" or "Sepolia로 전송" WITHOUT specifying a recipient address, this means BRIDGE to their OWN wallet on the destination chain (same address). Do NOT ask for recipient address.
+
+\`\`\`json
+{
+  "intent": "bridge",
+  "amount": "100",
+  "symbol": "VCN",
+  "destinationChain": "SEPOLIA"
+}
+\`\`\`
+Valid destinationChain values: "SEPOLIA", "ETHEREUM", "POLYGON"
+Note: Bridge transfers are from Vision Chain to the user's own wallet on the destination chain.
+
 [REFERRAL GUIDELINE]
 If the user asks about inviting friends, missions, or rewards, explain that they can share their referral link to earn rewards. 
 Ask: "Would you like to move to the referral page now to check your link and rewards?"
 If they say "Yes", output the navigate intent JSON for "referral".
 \`\`
 `;
+
 
             setThinkingSteps(prev => [
                 ...prev.map(s => ({ ...s, status: 'completed' as const })),
@@ -2676,6 +2831,31 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                     startFlow('send');
                     if (intentData.recipient && intentData.amount) setFlowStep(2); // Skip to Confirmation
+
+                } else if (intentData.intent === 'bridge') {
+                    // Cross-Chain Bridge Intent
+                    const bridgeData = {
+                        amount: String(intentData.amount || '0'),
+                        symbol: intentData.symbol || 'VCN',
+                        destinationChain: intentData.destinationChain || 'SEPOLIA',
+                        intentData: intentData
+                    };
+                    setPendingBridge(bridgeData);
+
+                    // Show bridge confirmation in chat
+                    const chainDisplay = bridgeData.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridgeData.destinationChain;
+                    const msg = lastLocale() === 'ko'
+                        ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**로 전송합니다.\n\n처리를 진행하시려면 화면 하단의 **확인** 버튼을 눌러주세요.`
+                        : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**.\n\nPlease click **Confirm** below to proceed.`;
+
+                    setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: msg,
+                        isBridgeReview: true,
+                        bridgeData: bridgeData
+                    }]);
+                    setChatLoading(false);
+                    return;
                 }
             }
 
@@ -2686,8 +2866,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
             if (!cleanResponse && intentData) {
                 const intentMap: any = {
-                    ko: { send: '송금', multi: '대량 송금', schedule: '예약 송금' },
-                    en: { send: 'transfer', multi: 'batch transfer', schedule: 'scheduled transfer' }
+                    ko: { send: '송금', multi: '대량 송금', schedule: '예약 송금', bridge: '크로스체인 브릿지' },
+                    en: { send: 'transfer', multi: 'batch transfer', schedule: 'scheduled transfer', bridge: 'cross-chain bridge' }
                 };
                 const localized = (intentMap[lastLocale()] || intentMap.en)[intentData.intent] || '업무';
                 cleanResponse = lastLocale() === 'ko'
@@ -2926,6 +3106,11 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     setWalletPassword('');
                                     setShowPasswordModal(true);
                                 }}
+                                // Bridge Integration
+                                pendingBridge={pendingBridge}
+                                isBridging={isBridging}
+                                onExecuteBridge={handleExecuteBridge}
+                                onCancelBridge={handleCancelBridge}
                             />
                         </div>
 

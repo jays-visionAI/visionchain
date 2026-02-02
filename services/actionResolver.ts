@@ -201,30 +201,71 @@ export class ActionResolverService {
         const { amount, token, destinationChain } = intent.params;
         if (!amount || !destinationChain) throw new Error("Missing Bridge params");
 
-        // Using VisionEqualizerV2 for bridging
-        // destinationChain (e.g. "ETHEREUM") -> ChainId (e.g. 1 or 101)
-        const targetChainId = destinationChain.toUpperCase() === 'ETHEREUM' ? 101 : 137; // Mock IDs
+        // Vision Chain IntentCommitment contract
+        const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
 
-        // 1. Check Allowance logic would go here
+        // Chain IDs
+        const VISION_CHAIN_ID = 1337;
+        const SEPOLIA_CHAIN_ID = 11155111;
 
-        // 2. Prepare requestTSSMigration call
-        const equalizer = (contractService as any).visionEqualizer;
-        if (!equalizer) throw new Error("Equalizer contract not initialized");
+        // Determine destination chain ID
+        const dstChainId = destinationChain.toUpperCase() === 'ETHEREUM' || destinationChain.toUpperCase() === 'SEPOLIA'
+            ? SEPOLIA_CHAIN_ID
+            : 137; // Polygon placeholder
 
-        const txData = await equalizer.requestTSSMigration.populateTransaction(
-            1337, // Source: Vision
-            targetChainId,
-            token || 'VCN',
-            ethers.parseEther(amount)
-        );
+        // EIP-712 Domain for Vision Chain
+        const eip712Domain = {
+            name: 'VisionBridge',
+            version: '1',
+            chainId: VISION_CHAIN_ID,
+            verifyingContract: VISION_INTENT_COMMITMENT
+        };
+
+        // EIP-712 Types
+        const eip712Types = {
+            BridgeIntent: [
+                { name: 'user', type: 'address' },
+                { name: 'srcChainId', type: 'uint256' },
+                { name: 'dstChainId', type: 'uint256' },
+                { name: 'token', type: 'address' },
+                { name: 'amount', type: 'uint256' },
+                { name: 'recipient', type: 'address' },
+                { name: 'nonce', type: 'uint256' },
+                { name: 'expiry', type: 'uint256' }
+            ]
+        };
+
+        // Build intent data (nonce will be fetched on execution)
+        const amountWei = ethers.parseEther(amount);
+        const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
+
+        // Intent data for signing
+        const intentData = {
+            user: userAddress,
+            srcChainId: VISION_CHAIN_ID,
+            dstChainId: dstChainId,
+            token: ethers.ZeroAddress, // Native VCN
+            amount: amountWei.toString(),
+            recipient: userAddress, // Same address on destination
+            expiry: expiry
+        };
+
+        // ABI for commitIntent
+        const INTENT_ABI = [
+            "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
+            "function getNextNonce(address user) view returns (uint256)"
+        ];
 
         return {
             type: 'TRANSACTION',
-            summary: `Bridge ${amount} ${token} to ${destinationChain}`,
+            summary: `Bridge ${amount} VCN from Vision Chain to ${destinationChain}`,
             data: {
-                to: txData.to,
-                data: txData.data,
-                value: "0"
+                bridgeType: 'INTENT_COMMITMENT',
+                contractAddress: VISION_INTENT_COMMITMENT,
+                abi: INTENT_ABI,
+                intentData: intentData,
+                eip712Domain: eip712Domain,
+                eip712Types: eip712Types
             },
             visualization: {
                 type: 'BRIDGE',

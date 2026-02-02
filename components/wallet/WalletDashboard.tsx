@@ -95,7 +95,19 @@ interface WalletDashboardProps {
     unreadCount: number;
     contacts: () => any[];
     showResponseTime?: boolean;
+
+    // Cross-Chain Bridge
+    pendingBridge?: () => {
+        amount: string;
+        symbol: string;
+        destinationChain: string;
+        intentData?: any;
+    } | null;
+    isBridging?: () => boolean;
+    onExecuteBridge?: () => void;
+    onCancelBridge?: () => void;
 }
+
 
 const TypingIndicator = () => (
     <Motion.div
@@ -1010,6 +1022,50 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 />
                                             </Show>
 
+                                            {/* Cross-Chain Bridge Review UI */}
+                                            <Show when={msg.role === 'assistant' && msg.isBridgeReview && msg.bridgeData && props.pendingBridge?.()}>
+                                                <div class="mt-4 p-4 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20">
+                                                    <div class="flex items-center gap-3 mb-4">
+                                                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                                                            <svg class="w-5 h-5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M17 3v18" />
+                                                                <path d="M10 18l7-6-7-6" />
+                                                                <path d="M7 3v18" />
+                                                            </svg>
+                                                        </div>
+                                                        <div>
+                                                            <div class="text-sm font-bold text-white">Cross-Chain Bridge</div>
+                                                            <div class="text-xs text-gray-400">Vision Chain → {msg.bridgeData.destinationChain}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between mb-4 p-3 rounded-xl bg-black/30">
+                                                        <span class="text-xs text-gray-400">Amount</span>
+                                                        <span class="text-lg font-bold text-white">{msg.bridgeData.amount} <span class="text-purple-400">{msg.bridgeData.symbol}</span></span>
+                                                    </div>
+                                                    <div class="flex gap-3">
+                                                        <button
+                                                            onClick={() => props.onCancelBridge?.()}
+                                                            class="flex-1 px-4 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all text-sm font-medium"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={() => props.onExecuteBridge?.()}
+                                                            disabled={props.isBridging?.()}
+                                                            class="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                                        >
+                                                            <Show when={props.isBridging?.()} fallback="Confirm & Sign">
+                                                                <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                    <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
+                                                                    <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round" />
+                                                                </svg>
+                                                                Processing...
+                                                            </Show>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </Show>
+
                                             {/* Specialized Batch Report UI */}
                                             <Show when={msg.role === 'assistant' && msg.isBatchReport && msg.batchReportData}>
                                                 <BatchReportCard
@@ -1176,6 +1232,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 )}
                                             </For>
                                         </div>
+
                                     </Show>
                                 </div>
                             </Show>
