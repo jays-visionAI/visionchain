@@ -90,9 +90,10 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
     const resolveName = (address: string | undefined) => {
         if (!address || !props.contacts) return 'New Recipient';
-        const contact = props.contacts.find((c: any) => c.address.toLowerCase() === address.toLowerCase());
+        const contact = props.contacts.find((c: any) => c.address?.toLowerCase() === address.toLowerCase());
         return contact ? contact.name : 'New Recipient';
     };
+
 
     const formatDate = (ts: number) => {
         const d = new Date(ts);
