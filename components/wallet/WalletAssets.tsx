@@ -31,6 +31,7 @@ interface WalletAssetsProps {
     onCloudRestore?: () => void;
     walletAddress?: () => string;
     contacts?: any[];
+    sepoliaVcnBalance?: () => number;
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
@@ -134,8 +135,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             <button
                                 onClick={() => props.onRestoreWallet?.()}
                                 class={`flex items-center justify-center gap-3 px-6 py-4 ${props.cloudWalletAvailable
-                                        ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
-                                        : 'bg-amber-500 hover:bg-amber-400 text-black shadow-xl shadow-amber-500/20'
+                                    ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
+                                    : 'bg-amber-500 hover:bg-amber-400 text-black shadow-xl shadow-amber-500/20'
                                     } font-black rounded-xl transition-all active:scale-95 ${props.cloudWalletAvailable ? '' : 'flex-1'}`}
                             >
                                 <Shield class="w-5 h-5" />
@@ -276,35 +277,48 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             {/* Dynamic Token Rows */}
                             <For each={[
                                 { id: 'vcn_main', symbol: 'VCN', name: 'Purchased (VCN)', network: 'mainnet' },
-                                { id: 'vcn_test', symbol: 'VCN', name: 'VCN (Testnet)', network: 'testnet' }
+                                { id: 'vcn_test', symbol: 'VCN', name: 'VCN (Testnet)', network: 'testnet' },
+                                { id: 'vcn_sepolia', symbol: 'wVCN', name: 'VCN (Sepolia)', network: 'sepolia' }
                             ]}>
                                 {(item, index) => {
                                     // Visibility Filter
-                                    if (networkFilter() !== 'all' && networkFilter() !== item.network) return null;
+                                    if (networkFilter() !== 'all' && networkFilter() !== item.network && item.network !== 'sepolia') return null;
 
-                                    const asset = () => props.getAssetData(item.symbol);
+                                    const asset = () => props.getAssetData('VCN');
                                     const isMainnetItem = item.network === 'mainnet';
+                                    const isSepoliaItem = item.network === 'sepolia';
 
-                                    const displayBalance = () => isMainnetItem ? asset().purchasedBalance : asset().liquidBalance;
+                                    const displayBalance = () => {
+                                        if (isSepoliaItem) return props.sepoliaVcnBalance?.() || 0;
+                                        return isMainnetItem ? asset().purchasedBalance : asset().liquidBalance;
+                                    };
                                     const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
                                     // Styling distinction
                                     const isTestnetStyle = item.network === 'testnet';
+                                    const isSepoliaStyle = item.network === 'sepolia';
 
                                     return (
-                                        <div class={`flex items-center justify-between px-4 sm:px-8 py-5 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''}`}>
+                                        <div class={`flex items-center justify-between px-4 sm:px-8 py-5 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''} ${isSepoliaStyle ? 'bg-purple-500/[0.02]' : ''}`}>
                                             {/* Left side: Token Info */}
                                             <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                                                 <div class="relative flex-shrink-0">
                                                     <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-lg ${isTestnetStyle
                                                         ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-500 border border-amber-500/30'
-                                                        : 'bg-gradient-to-br from-blue-600 to-cyan-500'
+                                                        : isSepoliaStyle
+                                                            ? 'bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-500 border border-purple-500/30'
+                                                            : 'bg-gradient-to-br from-blue-600 to-cyan-500'
                                                         }`}>
-                                                        V
+                                                        {isSepoliaStyle ? 'S' : 'V'}
                                                     </div>
                                                     <Show when={isTestnetStyle}>
                                                         <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] flex items-center justify-center">
                                                             <div class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                                                        </div>
+                                                    </Show>
+                                                    <Show when={isSepoliaStyle}>
+                                                        <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] flex items-center justify-center">
+                                                            <div class="w-2.5 h-2.5 rounded-full bg-purple-500" />
                                                         </div>
                                                     </Show>
                                                 </div>
@@ -313,6 +327,9 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                         {item.symbol}
                                                         <Show when={isTestnetStyle}>
                                                             <span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-500 border border-amber-500/30">TEST</span>
+                                                        </Show>
+                                                        <Show when={isSepoliaStyle}>
+                                                            <span class="px-1.5 py-0.5 rounded text-[9px] bg-purple-500/20 text-purple-400 border border-purple-500/30">SEPOLIA</span>
                                                         </Show>
                                                     </div>
                                                     <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{item.name}</div>
@@ -344,7 +361,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                                                 {/* Total Value */}
                                                 <div class="w-auto sm:w-32 text-right order-1 sm:order-2">
-                                                    <span class={`text-[16px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : 'text-white'}`}>
+                                                    <span class={`text-[16px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : isSepoliaStyle ? 'text-purple-400/80' : 'text-white'}`}>
                                                         {displayValue()}
                                                     </span>
                                                 </div>

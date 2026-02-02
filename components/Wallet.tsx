@@ -547,6 +547,36 @@ const Wallet = (): JSX.Element => {
     const [unreadNotificationsCount, setUnreadNotificationsCount] = createSignal(0);
     const [chatHistoryOpen, setChatHistoryOpen] = createSignal(true);
 
+    // --- Sepolia Cross-Chain Asset State ---
+    const [sepoliaVcnBalance, setSepoliaVcnBalance] = createSignal(0);
+    const [isLoadingSepoliaBalance, setIsLoadingSepoliaBalance] = createSignal(false);
+
+    // Sepolia wVCN Balance Fetcher
+    const fetchSepoliaBalance = async () => {
+        const addr = walletAddress();
+        if (!addr) return;
+
+        setIsLoadingSepoliaBalance(true);
+        try {
+            // Sepolia Equalizer contract (wVCN)
+            const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+            const SEPOLIA_EQUALIZER = '0x6e6E465594cED9cA33995939b9579a8A29194983';
+            const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+
+            const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+            const contract = new ethers.Contract(SEPOLIA_EQUALIZER, ERC20_ABI, provider);
+            const balance = await contract.balanceOf(addr);
+            const balanceNum = parseFloat(ethers.formatEther(balance));
+            setSepoliaVcnBalance(balanceNum);
+            console.log(`[Sepolia] wVCN Balance: ${balanceNum}`);
+        } catch (err) {
+            console.warn('[Sepolia] Failed to fetch wVCN balance:', err);
+            setSepoliaVcnBalance(0);
+        } finally {
+            setIsLoadingSepoliaBalance(false);
+        }
+    };
+
     // --- Enterprise Bulk Transfer Agent State ---
     const [batchAgents, setBatchAgents] = createSignal<any[]>([]);
     const [reviewMulti, setReviewMulti] = createSignal<any[] | null>(null);
@@ -1683,19 +1713,22 @@ const Wallet = (): JSX.Element => {
 
             // FETCH ON-CHAIN BALANCES (Testnet v2)
             if (walletAddress()) {
-                console.log("🔄 Fetching On-Chain Balances for:", walletAddress());
+                console.log("Fetching On-Chain Balances for:", walletAddress());
                 const [vcnBalance, ethBalance] = await Promise.all([
                     contractService.getTokenBalance(walletAddress()),
                     contractService.getNativeBalance(walletAddress())
                 ]);
 
-                console.log(`📊 On-Chain: VCN=${vcnBalance}, ETH=${ethBalance}`);
+                console.log(`On-Chain: VCN=${vcnBalance}, ETH=${ethBalance}`);
 
                 setUserHoldings(prev => ({
                     ...prev,
                     VCN: Number(vcnBalance),
                     ETH: Number(ethBalance)
                 }));
+
+                // Also fetch Sepolia wVCN balance
+                fetchSepoliaBalance();
             }
         } catch (error) {
             console.error('Failed to fetch portfolio data:', error);
@@ -2370,7 +2403,29 @@ const Wallet = (): JSX.Element => {
                 bridgeDestination: bridge.destinationChain
             }]);
 
+            // Create Bridge Started Notification
+            try {
+                await createNotification(userProfile().email, {
+                    type: 'bridge_started',
+                    title: lastLocale() === 'ko' ? '브릿지 요청 시작됨' : 'Bridge Request Started',
+                    content: lastLocale() === 'ko'
+                        ? `${bridge.amount} VCN → ${chainDisplay} 브릿지가 시작되었습니다. 약 10-30분 후 도착 예정.`
+                        : `${bridge.amount} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
+                    data: {
+                        amount: bridge.amount,
+                        destinationChain: bridge.destinationChain,
+                        txHash: result.txHash,
+                        status: 'pending'
+                    }
+                });
+            } catch (notiErr) {
+                console.warn('[Bridge] Notification failed:', notiErr);
+            }
+
             setPendingBridge(null);
+
+            // Refresh Sepolia balance after a delay (to catch the arrival)
+            setTimeout(() => fetchSepoliaBalance(), 60000);
 
 
 
@@ -3280,6 +3335,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 }}
                                 walletAddress={walletAddress}
                                 contacts={contacts()}
+                                sepoliaVcnBalance={sepoliaVcnBalance}
                             />
                         </Show>
 
