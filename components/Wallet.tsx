@@ -468,11 +468,10 @@ const Wallet = (): JSX.Element => {
     const [flowLoading, setFlowLoading] = createSignal(false);
     const [isImporting, setIsImporting] = createSignal(false);
     const [importStep, setImportStep] = createSignal(0);
+    const [isWalletRestored, setIsWalletRestored] = createSignal(false); // Track if wallet was restored
     const [searchQuery, setSearchQuery] = createSignal('');
     const [showLogoutConfirm, setShowLogoutConfirm] = createSignal(false);
     const [pendingLogout, setPendingLogout] = createSignal<(() => void) | null>(null);
-
-    // Prompt before leaving the wallet entirely
     useBeforeLeave((e: any) => {
         // e.to might be a string (path) or an object with pathname
         const destination = e.to;
@@ -2009,6 +2008,7 @@ const Wallet = (): JSX.Element => {
 
             // 6. Success state
             setShowPasswordModal(false);
+            setIsWalletRestored(isRestoring()); // Track if this was a restoration
             setIsRestoring(false); // Reset restore state
             setOnboardingStep(4); // Move to Success Screen AFTER password is set
 
@@ -2023,6 +2023,7 @@ const Wallet = (): JSX.Element => {
     const finishOnboarding = () => {
         setOnboardingSuccess(false);
         setOnboardingStep(0);
+        setIsWalletRestored(false); // Reset for next time
         navigate('/wallet/assets');
     };
 
@@ -3862,8 +3863,14 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                         <div class="w-14 h-14 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
                                                             <Check class="w-8 h-8 text-green-400" />
                                                         </div>
-                                                        <h2 class="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">Account Created</h2>
-                                                        <p class="text-gray-400 font-medium text-sm md:text-base">Your Vision Chain Account has been successfully created</p>
+                                                        <h2 class="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">
+                                                            {isWalletRestored() ? 'Wallet Restored' : 'Account Created'}
+                                                        </h2>
+                                                        <p class="text-gray-400 font-medium text-sm md:text-base">
+                                                            {isWalletRestored()
+                                                                ? 'Your wallet has been successfully restored from your recovery phrase'
+                                                                : 'Your Vision Chain Account has been successfully created'}
+                                                        </p>
                                                     </div>
 
                                                     <div class="p-6 md:p-8 space-y-6">
@@ -3891,7 +3898,9 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     <span class="text-[10px] md:text-xs font-bold text-white text-right">HD Wallet</span>
                                                                 </div>
                                                                 <div class="flex items-center justify-between gap-4">
-                                                                    <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Created:</span>
+                                                                    <span class="text-[10px] md:text-xs text-gray-400 shrink-0">
+                                                                        {isWalletRestored() ? 'Restored:' : 'Created:'}
+                                                                    </span>
                                                                     <span class="text-[10px] md:text-xs font-bold text-white text-right">{new Date().toLocaleDateString()}</span>
                                                                 </div>
                                                             </div>
