@@ -1385,6 +1385,9 @@ export interface UserData {
     referralCount?: number;
     totalRewardsVCN?: number;
     totalRewardsUSD?: number;
+
+    // Admin Sent Tracking
+    adminSentTotal?: number;   // Total VCN sent by admin to this user
 }
 
 export interface ReferralReward {

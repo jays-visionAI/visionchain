@@ -105,6 +105,21 @@ const AdminUsers = () => {
                 user.walletAddress!,
                 amountStr
             );
+
+            // Update adminSentTotal in Firestore
+            try {
+                const { getFirebaseDb } = await import('../../services/firebaseService');
+                const { doc, updateDoc, increment } = await import('firebase/firestore');
+                const db = getFirebaseDb();
+                await updateDoc(doc(db, 'users', user.email.toLowerCase()), {
+                    adminSentTotal: increment(amount)
+                });
+                // Refresh the users list to show updated amount
+                refetch();
+            } catch (updateErr) {
+                console.warn('[AdminUsers] Failed to update adminSentTotal:', updateErr);
+            }
+
             setSuccessModal({
                 isOpen: true,
                 txHash: receipt.hash || '',

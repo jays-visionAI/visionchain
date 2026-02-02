@@ -10,7 +10,8 @@ import {
     Send,
     Mail,
     RefreshCw,
-    MoreVertical
+    MoreVertical,
+    Coins
 } from 'lucide-solid';
 import { UserData } from '../../../services/firebaseService';
 
@@ -26,6 +27,11 @@ interface UserTableRowProps {
 export const UserTableRow: Component<UserTableRowProps> = (props) => {
     const isRegistered = () => props.user.status === 'Registered' || props.user.status === 'WalletCreated' || props.user.status === 'VestingDeployed' || (props.user.walletAddress && props.user.walletAddress.startsWith('0x'));
     const hasWallet = () => (props.user.walletAddress && props.user.walletAddress.length > 20 && props.user.walletAddress.startsWith('0x')) || props.user.status === 'WalletCreated' || props.user.status === 'VestingDeployed';
+
+    const formatNumber = (num: number | undefined) => {
+        if (!num || num === 0) return '-';
+        return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    };
 
     return (
         <div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 hover:bg-white/[0.03] transition-colors items-center">
@@ -43,16 +49,16 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
             </div>
 
             {/* Registration Status */}
-            <div class="md:col-span-2 flex items-center">
+            <div class="md:col-span-1 flex items-center">
                 <Show when={isRegistered()} fallback={
-                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-yellow-500/10 text-[9px] font-black text-yellow-500 uppercase tracking-widest border border-yellow-500/20 whitespace-nowrap">
-                        <Clock class="w-3 h-3" />
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/10 text-[8px] font-black text-yellow-500 uppercase tracking-widest border border-yellow-500/20 whitespace-nowrap">
+                        <Clock class="w-2.5 h-2.5" />
                         Pending
                     </span>
                 }>
-                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-[9px] font-black text-green-500 uppercase tracking-widest border border-green-500/20 whitespace-nowrap">
-                        <CheckCircle class="w-3 h-3" />
-                        Registered
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-[8px] font-black text-green-500 uppercase tracking-widest border border-green-500/20 whitespace-nowrap">
+                        <CheckCircle class="w-2.5 h-2.5" />
+                        Reg
                     </span>
                 </Show>
             </div>
@@ -60,25 +66,25 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
             {/* Wallet Status */}
             <div class="md:col-span-1 flex items-center">
                 <Show when={hasWallet()} fallback={
-                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-500/10 text-[9px] font-black text-gray-500 uppercase tracking-widest border border-gray-500/20">
-                        <XCircle class="w-3 h-3" />
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-gray-500/10 text-[8px] font-black text-gray-500 uppercase tracking-widest border border-gray-500/20">
+                        <XCircle class="w-2.5 h-2.5" />
                         None
                     </span>
                 }>
-                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-blue-500/10 text-[9px] font-black text-blue-500 uppercase tracking-widest border border-blue-500/20">
-                        <Shield class="w-3 h-3" />
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/10 text-[8px] font-black text-blue-500 uppercase tracking-widest border border-blue-500/20">
+                        <Shield class="w-2.5 h-2.5" />
                         Active
                     </span>
                 </Show>
             </div>
 
             {/* Wallet Address */}
-            <div class="md:col-span-3 flex items-center">
+            <div class="md:col-span-2 flex items-center">
                 <Show when={hasWallet() && props.user.walletAddress && props.user.walletAddress !== 'Not Created'} fallback={
-                    <span class="text-[9px] font-bold text-gray-700 uppercase tracking-widest italic">Address Missing</span>
+                    <span class="text-[9px] font-bold text-gray-700 uppercase tracking-widest italic">Missing</span>
                 }>
                     <div class="flex items-center gap-2 group/addr">
-                        <span class="text-[11px] font-mono text-cyan-400 group-hover:text-cyan-300 transition-colors">
+                        <span class="text-[10px] font-mono text-cyan-400 group-hover:text-cyan-300 transition-colors">
                             {props.shortAddress(props.user.walletAddress)}
                         </span>
                         <div class="flex items-center gap-1 opacity-0 group-hover/addr:opacity-100 transition-opacity">
@@ -107,9 +113,9 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
                 <Show when={props.user.status === 'VestingDeployed'} fallback={
                     <span class="text-[9px] font-bold text-gray-600 uppercase tracking-widest">N/A</span>
                 }>
-                    <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-purple-500/10 text-[9px] font-black text-purple-400 uppercase tracking-widest border border-purple-500/20">
-                        <Star class="w-3 h-3" />
-                        Deployed
+                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-purple-500/10 text-[8px] font-black text-purple-400 uppercase tracking-widest border border-purple-500/20">
+                        <Star class="w-2.5 h-2.5" />
+                        OK
                     </span>
                 </Show>
             </div>
@@ -119,14 +125,29 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
                 <Show when={props.user.referrerId} fallback={
                     <span class="text-[9px] font-bold text-gray-700 uppercase tracking-widest italic">Direct</span>
                 }>
-                    <div class="text-[10px] font-bold text-cyan-500/80 truncate uppercase tracking-tighter" title={props.user.referrerId}>
+                    <div class="text-[9px] font-bold text-cyan-500/80 truncate uppercase tracking-tighter" title={props.user.referrerId}>
                         {props.user.referrerId?.split('@')[0]}
                     </div>
                 </Show>
             </div>
 
+            {/* Admin Sent Total */}
+            <div class="md:col-span-2 flex items-center justify-center">
+                <Show when={props.user.adminSentTotal && props.user.adminSentTotal > 0} fallback={
+                    <span class="text-[9px] font-bold text-gray-700 uppercase tracking-widest">-</span>
+                }>
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <Coins class="w-3 h-3 text-emerald-400" />
+                        <span class="text-[11px] font-black text-emerald-400 tracking-tight">
+                            {formatNumber(props.user.adminSentTotal)}
+                        </span>
+                        <span class="text-[8px] font-bold text-emerald-500/60 uppercase">VCN</span>
+                    </div>
+                </Show>
+            </div>
+
             {/* Actions */}
-            <div class="md:col-span-1 flex items-center justify-end gap-1.5">
+            <div class="md:col-span-2 flex items-center justify-end gap-1.5">
                 <Show when={hasWallet() && props.user.walletAddress && props.user.walletAddress !== 'Not Created'}>
                     <button
                         onClick={() => props.onSendVCN(props.user)}
