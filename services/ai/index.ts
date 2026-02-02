@@ -358,13 +358,54 @@ export const generateTextStream = async (
             : '';
         const fullPrompt = historyContext + prompt;
 
+        // --- Locale & Time Injection (CRITICAL: Must match generateText) ---
+        const now = new Date();
+        const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const userLocale = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+
+        const formatDateForCoinGecko = (date: Date): string => {
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            return `${day}-${month}-${year}`;
+        };
+
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const oneWeekAgo = new Date(now);
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+        const localeInfo = `[System Time Context - Use this for ALL date/time calculations]
+CURRENT_UTC_TIME: ${now.toISOString()}
+CURRENT_TIMESTAMP_MS: ${Date.now()}
+TIMEZONE: ${userTimezone}
+USER_LOCALE: ${userLocale}
+TODAY_LOCAL: ${now.toLocaleDateString(userLocale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+TODAY_DD_MM_YYYY: ${formatDateForCoinGecko(now)}
+YESTERDAY_DD_MM_YYYY: ${formatDateForCoinGecko(yesterday)}
+ONE_WEEK_AGO_DD_MM_YYYY: ${formatDateForCoinGecko(oneWeekAgo)}
+
+IMPORTANT: When user asks for "current" or "now" price, use get_current_price tool.
+When user asks for historical price (past dates), use get_historical_price with the date in DD-MM-YYYY format.
+For "yesterday", use YESTERDAY_DD_MM_YYYY. For "a week ago", use ONE_WEEK_AGO_DD_MM_YYYY.`;
+
+        const dynamicSystemPrompt = `${config.systemPrompt || 'You are Vision AI, a helpful crypto wallet assistant.'}
+
+${localeInfo}
+
+[CRITICAL INSTRUCTIONS]
+1. RESPONSE LANGUAGE: You MUST respond in the SAME language as the user's input.
+2. FINANCIAL CONSULTANT PERSONA: Your tone should be professional, insightful, and helpful.
+3. REAL-TIME DATA: Use TODAY_LOCAL as the current date. Never guess or use outdated dates.`;
+
         // Use streaming router
         let accumulatedText = '';
         const result = await factory.getRouter().generateTextStream(
             fullPrompt,
             config,
             {
-                systemPrompt: "You are Vision AI, a helpful crypto wallet assistant.",
+                systemPrompt: dynamicSystemPrompt,
                 imageBase64
             },
             (chunk: string) => {
