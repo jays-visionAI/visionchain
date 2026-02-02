@@ -575,6 +575,7 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public" }, async (
   }
 
   try {
+    // eslint-disable-next-line no-unused-vars
     const { user, token, recipient, amount, fee, deadline, signature } = req.body;
 
     // Validation
