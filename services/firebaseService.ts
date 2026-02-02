@@ -3203,3 +3203,159 @@ export const subscribeToProactiveAISettings = (callback: (settings: ProactiveAIS
         }
     });
 };
+
+// ==================== Global Announcements System ====================
+
+export interface GlobalAnnouncement {
+    id?: string;
+    title: string;
+    content: string;
+    type: 'info' | 'warning' | 'critical' | 'maintenance' | 'feature';
+    priority: 'low' | 'normal' | 'high' | 'urgent';
+    createdAt: any;
+    updatedAt?: any;
+    expiresAt?: any;
+    isActive: boolean;
+    createdBy: string;
+    // Optional metadata
+    actionUrl?: string;
+    actionLabel?: string;
+    imageUrl?: string;
+}
+
+// Get all active announcements
+export const getGlobalAnnouncements = async (): Promise<GlobalAnnouncement[]> => {
+    try {
+        const db = getFirebaseDb();
+        const announcementsRef = collection(db, 'global_announcements');
+        const q = query(announcementsRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GlobalAnnouncement));
+    } catch (e) {
+        console.error('[Announcements] Error fetching:', e);
+        return [];
+    }
+};
+
+// Subscribe to announcements (real-time)
+export const subscribeToAnnouncements = (callback: (announcements: GlobalAnnouncement[]) => void) => {
+    const db = getFirebaseDb();
+    const announcementsRef = collection(db, 'global_announcements');
+    const q = query(announcementsRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
+
+    return onSnapshot(q, (snapshot) => {
+        const announcements = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GlobalAnnouncement));
+        callback(announcements);
+    }, (error) => {
+        console.error('[Announcements] Subscribe error:', error);
+        callback([]);
+    });
+};
+
+// Create a new announcement (Admin only)
+export const createAnnouncement = async (announcement: Omit<GlobalAnnouncement, 'id' | 'createdAt'>): Promise<string | null> => {
+    try {
+        const db = getFirebaseDb();
+        const docRef = await addDoc(collection(db, 'global_announcements'), {
+            ...announcement,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+        console.log('[Announcements] Created:', docRef.id);
+        return docRef.id;
+    } catch (e) {
+        console.error('[Announcements] Error creating:', e);
+        return null;
+    }
+};
+
+// Update an announcement (Admin only)
+export const updateAnnouncement = async (id: string, data: Partial<GlobalAnnouncement>): Promise<boolean> => {
+    try {
+        const db = getFirebaseDb();
+        await updateDoc(doc(db, 'global_announcements', id), {
+            ...data,
+            updatedAt: serverTimestamp()
+        });
+        console.log('[Announcements] Updated:', id);
+        return true;
+    } catch (e) {
+        console.error('[Announcements] Error updating:', e);
+        return false;
+    }
+};
+
+// Delete an announcement (Admin only)
+export const deleteAnnouncement = async (id: string): Promise<boolean> => {
+    try {
+        const db = getFirebaseDb();
+        await deleteDoc(doc(db, 'global_announcements', id));
+        console.log('[Announcements] Deleted:', id);
+        return true;
+    } catch (e) {
+        console.error('[Announcements] Error deleting:', e);
+        return false;
+    }
+};
+
+// Get all announcements for admin (including inactive)
+export const getAllAnnouncementsAdmin = async (): Promise<GlobalAnnouncement[]> => {
+    try {
+        const db = getFirebaseDb();
+        const announcementsRef = collection(db, 'global_announcements');
+        const q = query(announcementsRef, orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GlobalAnnouncement));
+    } catch (e) {
+        console.error('[Announcements] Error fetching all:', e);
+        return [];
+    }
+};
+
+// Mark announcement as read by user
+export const markAnnouncementRead = async (userEmail: string, announcementId: string): Promise<void> => {
+    try {
+        const db = getFirebaseDb();
+        await setDoc(
+            doc(db, 'users', userEmail.toLowerCase(), 'read_announcements', announcementId),
+            { readAt: serverTimestamp() }
+        );
+    } catch (e) {
+        console.error('[Announcements] Error marking read:', e);
+    }
+};
+
+// Get user's read announcement IDs
+export const getReadAnnouncementIds = async (userEmail: string): Promise<string[]> => {
+    try {
+        const db = getFirebaseDb();
+        const readRef = collection(db, 'users', userEmail.toLowerCase(), 'read_announcements');
+        const snapshot = await getDocs(readRef);
+        return snapshot.docs.map(doc => doc.id);
+    } catch (e) {
+        console.error('[Announcements] Error getting read IDs:', e);
+        return [];
+    }
+};
+
+// Subscribe to user's read announcements (real-time)
+export const subscribeToReadAnnouncements = (userEmail: string, callback: (ids: string[]) => void) => {
+    const db = getFirebaseDb();
+    const readRef = collection(db, 'users', userEmail.toLowerCase(), 'read_announcements');
+
+    return onSnapshot(query(readRef), (snapshot) => {
+        callback(snapshot.docs.map(doc => doc.id));
+    }, (error) => {
+        console.error('[Announcements] Subscribe read error:', error);
+        callback([]);
+    });
+};

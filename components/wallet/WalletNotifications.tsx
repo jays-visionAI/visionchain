@@ -1,4 +1,4 @@
-import { createSignal, For, Show, createEffect } from 'solid-js';
+import { createSignal, For, Show, createEffect, onCleanup } from 'solid-js';
 import {
     Bell,
     Check,
@@ -37,11 +37,23 @@ import {
     Shield,
     ShieldAlert,
     Send,
-    Repeat
+    Repeat,
+    // Announcements
+    AlertTriangle,
+    Sparkles,
+    Wrench,
+    ExternalLink
 } from 'lucide-solid';
 import { Motion, Presence } from 'solid-motionone';
 import { useAuth } from '../auth/authContext';
-import { getFirebaseDb, Contact } from '../../services/firebaseService';
+import {
+    getFirebaseDb,
+    Contact,
+    GlobalAnnouncement,
+    subscribeToAnnouncements,
+    subscribeToReadAnnouncements,
+    markAnnouncementRead
+} from '../../services/firebaseService';
 import {
     collection,
     query,
@@ -54,6 +66,7 @@ import {
 } from 'firebase/firestore';
 
 import { WalletViewHeader } from './WalletViewHeader';
+
 
 // Notification types enumeration for better type safety
 export type NotificationType =
@@ -144,6 +157,16 @@ export function WalletNotifications() {
     const [filter, setFilter] = createSignal<'all' | 'unread'>('all');
     const [selectedId, setSelectedId] = createSignal<string | null>(null);
 
+    // Tab state: 'announcements' | 'notifications'
+    const [activeTab, setActiveTab] = createSignal<'announcements' | 'notifications'>('announcements');
+
+    // Announcements state
+    const [announcements, setAnnouncements] = createSignal<GlobalAnnouncement[]>([]);
+    const [readAnnouncementIds, setReadAnnouncementIds] = createSignal<string[]>([]);
+    const [announcementsLoading, setAnnouncementsLoading] = createSignal(true);
+    const [selectedAnnouncementId, setSelectedAnnouncementId] = createSignal<string | null>(null);
+
+
     // Helper: Resolve wallet address to contact name
     const getContactName = (address: string): string | null => {
         if (!address || !address.startsWith('0x')) return null;
@@ -223,6 +246,59 @@ export function WalletNotifications() {
 
         return () => unsubscribe();
     });
+
+    // Subscribe to Global Announcements
+    createEffect(() => {
+        const unsubscribe = subscribeToAnnouncements((list) => {
+            setAnnouncements(list);
+            setAnnouncementsLoading(false);
+        });
+
+        onCleanup(() => unsubscribe());
+    });
+
+    // Subscribe to user's read announcements
+    createEffect(() => {
+        const email = auth.user()?.email;
+        if (!email) return;
+
+        const unsubscribe = subscribeToReadAnnouncements(email, (ids) => {
+            setReadAnnouncementIds(ids);
+        });
+
+        onCleanup(() => unsubscribe());
+    });
+
+    // Helper: Check if announcement is read
+    const isAnnouncementRead = (id: string): boolean => {
+        return readAnnouncementIds().includes(id);
+    };
+
+    // Unread announcements count
+    const unreadAnnouncementsCount = () => {
+        return announcements().filter(a => !isAnnouncementRead(a.id!)).length;
+    };
+
+    // Get announcement type meta
+    const getAnnouncementMeta = (type: GlobalAnnouncement['type']) => {
+        switch (type) {
+            case 'info':
+                return { icon: Info, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Info' };
+            case 'warning':
+                return { icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Warning' };
+            case 'critical':
+                return { icon: ShieldAlert, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Critical' };
+            case 'maintenance':
+                return { icon: Wrench, color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Maintenance' };
+            case 'feature':
+                return { icon: Sparkles, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'New Feature' };
+            default:
+                return { icon: Megaphone, color: 'text-gray-400', bg: 'bg-gray-400/10', label: 'Announcement' };
+        }
+    };
+
+    // Selected announcement
+    const selectedAnnouncement = () => announcements().find(a => a.id === selectedAnnouncementId());
 
     const markAsRead = async (id: string) => {
         const email = auth.user()?.email;
@@ -381,210 +457,403 @@ export function WalletNotifications() {
                         icon={Bell}
                     />
 
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8">
-                        {/* Filter Chips */}
-                        <div class="flex bg-white/[0.03] p-1 rounded-2xl border border-white/5 w-full sm:w-auto">
-                            <button
-                                onClick={() => setFilter('all')}
-                                class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                            >
-                                All Logs
-                            </button>
-                            <button
-                                onClick={() => setFilter('unread')}
-                                class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
-                            >
-                                Unread
-                                <Show when={notifications().some(n => !n.read)}>
-                                    <span class="absolute top-1 right-2 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
-                                </Show>
-                            </button>
-                        </div>
-
-                        <div class="flex items-center gap-2 w-full sm:w-auto">
-                            <button
-                                onClick={markAllRead}
-                                disabled={!notifications().some(n => !n.read)}
-                                class="flex-1 sm:flex-none px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all disabled:opacity-0"
-                            >
-                                Mark All Read
-                            </button>
-                            <button
-                                onClick={clearAll}
-                                disabled={notifications().length === 0}
-                                class="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 transition-all disabled:opacity-0"
-                            >
-                                Purge All
-                            </button>
-                        </div>
+                    {/* Main Tab Navigation: Announcements vs My Notifications */}
+                    <div class="flex bg-white/[0.02] p-1.5 rounded-2xl border border-white/5 mt-8">
+                        <button
+                            onClick={() => { setActiveTab('announcements'); setSelectedId(null); setSelectedAnnouncementId(null); }}
+                            class={`flex-1 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative flex items-center justify-center gap-2 ${activeTab() === 'announcements' ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                        >
+                            <Megaphone class="w-4 h-4" />
+                            Announcements
+                            <Show when={unreadAnnouncementsCount() > 0}>
+                                <span class="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                                    {unreadAnnouncementsCount()}
+                                </span>
+                            </Show>
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('notifications'); setSelectedId(null); setSelectedAnnouncementId(null); }}
+                            class={`flex-1 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative flex items-center justify-center gap-2 ${activeTab() === 'notifications' ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                        >
+                            <Bell class="w-4 h-4" />
+                            My Notifications
+                            <Show when={notifications().some(n => !n.read)}>
+                                <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
+                            </Show>
+                        </button>
                     </div>
+
+                    {/* Sub-filters for My Notifications tab only */}
+                    <Show when={activeTab() === 'notifications'}>
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                            <div class="flex bg-white/[0.03] p-1 rounded-2xl border border-white/5 w-full sm:w-auto">
+                                <button
+                                    onClick={() => setFilter('all')}
+                                    class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                    All Logs
+                                </button>
+                                <button
+                                    onClick={() => setFilter('unread')}
+                                    class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                >
+                                    Unread
+                                    <Show when={notifications().some(n => !n.read)}>
+                                        <span class="absolute top-1 right-2 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                                    </Show>
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-2 w-full sm:w-auto">
+                                <button
+                                    onClick={markAllRead}
+                                    disabled={!notifications().some(n => !n.read)}
+                                    class="flex-1 sm:flex-none px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all disabled:opacity-0"
+                                >
+                                    Mark All Read
+                                </button>
+                                <button
+                                    onClick={clearAll}
+                                    disabled={notifications().length === 0}
+                                    class="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 transition-all disabled:opacity-0"
+                                >
+                                    Purge All
+                                </button>
+                            </div>
+                        </div>
+                    </Show>
                 </div>
             </div>
+
 
             {/* List and Detail Layout */}
             <div class="flex-1 flex overflow-hidden relative">
                 {/* List View */}
                 <div
-                    class={`flex-1 flex flex-col overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch transition-all duration-500 ${selectedId() ? 'hidden lg:flex' : 'flex'}`}
+                    class={`flex-1 flex flex-col overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch transition-all duration-500 ${(activeTab() === 'notifications' ? selectedId() : selectedAnnouncementId()) ? 'hidden lg:flex' : 'flex'}`}
                     style="-webkit-overflow-scrolling: touch;"
                 >
                     <div class="max-w-5xl mx-auto w-full p-4 lg:p-8 pt-4 space-y-3 pb-32">
-                        <Show when={!isLoading()} fallback={
-                            <div class="flex flex-col items-center justify-center py-20 gap-4">
-                                <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">Synchronizing Data...</span>
-                            </div>
-                        }>
-                            <For each={filtered()}>
-                                {(item) => {
-                                    const meta = getMeta(item.type);
-                                    return (
-                                        <div
-                                            onClick={() => {
-                                                setSelectedId(item.id);
-                                                if (!item.read) markAsRead(item.id);
-                                            }}
-                                            class={`group relative p-5 rounded-3xl border transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-center gap-4 ${selectedId() === item.id
-                                                ? 'bg-blue-600/10 border-blue-500/30'
-                                                : item.read ? 'bg-white/[0.01] border-white/5' : 'bg-white/[0.04] border-white/10 ring-1 ring-white/5 shadow-2xl'
-                                                }`}
-                                        >
-                                            <div class={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bg}`}>
-                                                <meta.icon class={`w-6 h-6 ${meta.color}`} />
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex items-center justify-between mb-1">
-                                                    <span class={`text-[10px] font-black uppercase tracking-widest transition-colors ${item.read ? 'text-gray-600' : 'text-blue-400'}`}>
-                                                        {meta.label}
-                                                    </span>
-                                                    <span class="text-[9px] font-bold text-gray-700">{formatTime(item.timestamp)}</span>
-                                                </div>
-                                                <h4 class={`text-sm font-black truncate uppercase tracking-tight ${item.read ? 'text-gray-500' : 'text-white italic'}`}>
-                                                    {item.title}
-                                                </h4>
-                                                <p class="text-[11px] text-gray-600 font-medium truncate mt-0.5">{formatWithContactName(item.content)}</p>
-                                            </div>
-                                            <div class="shrink-0 transition-transform group-hover:translate-x-1">
-                                                <ChevronRight class={`w-4 h-4 ${selectedId() === item.id ? 'text-blue-400' : 'text-gray-800'}`} />
-                                            </div>
-                                        </div>
-                                    );
-                                }}
-                            </For>
-
-                            <Show when={filtered().length === 0}>
-                                <div class="flex flex-col items-center justify-center py-24 text-center space-y-6">
-                                    <div class="w-24 h-24 bg-white/[0.02] border border-dashed border-white/10 rounded-full flex items-center justify-center">
-                                        <Inbox class="w-10 h-10 text-gray-800" />
-                                    </div>
-                                    <div>
-                                        <p class="text-white font-black italic uppercase tracking-tight">System Status: Idle</p>
-                                        <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">No new signals detected in your sector.</p>
-                                    </div>
+                        {/* Announcements Tab Content */}
+                        <Show when={activeTab() === 'announcements'}>
+                            <Show when={!announcementsLoading()} fallback={
+                                <div class="flex flex-col items-center justify-center py-20 gap-4">
+                                    <div class="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">Loading Announcements...</span>
                                 </div>
+                            }>
+                                <For each={announcements()}>
+                                    {(item) => {
+                                        const meta = getAnnouncementMeta(item.type);
+                                        const isRead = isAnnouncementRead(item.id!);
+                                        return (
+                                            <div
+                                                onClick={async () => {
+                                                    setSelectedAnnouncementId(item.id!);
+                                                    if (!isRead && auth.user()?.email) {
+                                                        await markAnnouncementRead(auth.user()!.email!, item.id!);
+                                                    }
+                                                }}
+                                                class={`group relative p-5 rounded-3xl border transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-center gap-4 ${selectedAnnouncementId() === item.id
+                                                    ? 'bg-purple-600/10 border-purple-500/30'
+                                                    : isRead ? 'bg-white/[0.01] border-white/5' : 'bg-gradient-to-r from-purple-500/5 to-blue-500/5 border-purple-500/20 ring-1 ring-purple-500/10 shadow-2xl'
+                                                    }`}
+                                            >
+                                                <div class={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bg}`}>
+                                                    <meta.icon class={`w-6 h-6 ${meta.color}`} />
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center justify-between mb-1">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class={`text-[10px] font-black uppercase tracking-widest transition-colors ${isRead ? 'text-gray-600' : 'text-purple-400'}`}>
+                                                                {meta.label}
+                                                            </span>
+                                                            <Show when={item.priority === 'urgent' || item.priority === 'high'}>
+                                                                <span class="px-2 py-0.5 bg-red-500/20 text-red-400 text-[8px] font-black uppercase rounded-md">
+                                                                    {item.priority}
+                                                                </span>
+                                                            </Show>
+                                                        </div>
+                                                        <span class="text-[9px] font-bold text-gray-700">{formatTime(item.createdAt)}</span>
+                                                    </div>
+                                                    <h4 class={`text-sm font-black truncate uppercase tracking-tight ${isRead ? 'text-gray-500' : 'text-white italic'}`}>
+                                                        {item.title}
+                                                    </h4>
+                                                    <p class="text-[11px] text-gray-600 font-medium truncate mt-0.5">{item.content}</p>
+                                                </div>
+                                                <div class="shrink-0 transition-transform group-hover:translate-x-1">
+                                                    <ChevronRight class={`w-4 h-4 ${selectedAnnouncementId() === item.id ? 'text-purple-400' : 'text-gray-800'}`} />
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                </For>
+
+                                <Show when={announcements().length === 0}>
+                                    <div class="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                                        <div class="w-24 h-24 bg-white/[0.02] border border-dashed border-white/10 rounded-full flex items-center justify-center">
+                                            <Megaphone class="w-10 h-10 text-gray-800" />
+                                        </div>
+                                        <div>
+                                            <p class="text-white font-black italic uppercase tracking-tight">No Announcements</p>
+                                            <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">All systems operational. No official announcements at this time.</p>
+                                        </div>
+                                    </div>
+                                </Show>
+                            </Show>
+                        </Show>
+
+                        {/* Notifications Tab Content */}
+                        <Show when={activeTab() === 'notifications'}>
+                            <Show when={!isLoading()} fallback={
+                                <div class="flex flex-col items-center justify-center py-20 gap-4">
+                                    <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">Synchronizing Data...</span>
+                                </div>
+                            }>
+                                <For each={filtered()}>
+                                    {(item) => {
+                                        const meta = getMeta(item.type);
+                                        return (
+                                            <div
+                                                onClick={() => {
+                                                    setSelectedId(item.id);
+                                                    if (!item.read) markAsRead(item.id);
+                                                }}
+                                                class={`group relative p-5 rounded-3xl border transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-center gap-4 ${selectedId() === item.id
+                                                    ? 'bg-blue-600/10 border-blue-500/30'
+                                                    : item.read ? 'bg-white/[0.01] border-white/5' : 'bg-white/[0.04] border-white/10 ring-1 ring-white/5 shadow-2xl'
+                                                    }`}
+                                            >
+                                                <div class={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bg}`}>
+                                                    <meta.icon class={`w-6 h-6 ${meta.color}`} />
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center justify-between mb-1">
+                                                        <span class={`text-[10px] font-black uppercase tracking-widest transition-colors ${item.read ? 'text-gray-600' : 'text-blue-400'}`}>
+                                                            {meta.label}
+                                                        </span>
+                                                        <span class="text-[9px] font-bold text-gray-700">{formatTime(item.timestamp)}</span>
+                                                    </div>
+                                                    <h4 class={`text-sm font-black truncate uppercase tracking-tight ${item.read ? 'text-gray-500' : 'text-white italic'}`}>
+                                                        {item.title}
+                                                    </h4>
+                                                    <p class="text-[11px] text-gray-600 font-medium truncate mt-0.5">{formatWithContactName(item.content)}</p>
+                                                </div>
+                                                <div class="shrink-0 transition-transform group-hover:translate-x-1">
+                                                    <ChevronRight class={`w-4 h-4 ${selectedId() === item.id ? 'text-blue-400' : 'text-gray-800'}`} />
+                                                </div>
+                                            </div>
+                                        );
+                                    }}
+                                </For>
+
+                                <Show when={filtered().length === 0}>
+                                    <div class="flex flex-col items-center justify-center py-24 text-center space-y-6">
+                                        <div class="w-24 h-24 bg-white/[0.02] border border-dashed border-white/10 rounded-full flex items-center justify-center">
+                                            <Inbox class="w-10 h-10 text-gray-800" />
+                                        </div>
+                                        <div>
+                                            <p class="text-white font-black italic uppercase tracking-tight">System Status: Idle</p>
+                                            <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">No new signals detected in your sector.</p>
+                                        </div>
+                                    </div>
+                                </Show>
                             </Show>
                         </Show>
                     </div>
                 </div>
 
+
                 {/* Detail View Pane */}
                 <div
-                    class={`flex-[1.2] lg:static fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform overflow-y-auto overscroll-contain ${selectedId() ? 'translate-x-0' : 'translate-x-full pointer-events-none lg:translate-x-0 lg:opacity-30 lg:pointer-events-auto'}`}
+                    class={`flex-[1.2] lg:static fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform overflow-y-auto overscroll-contain ${(activeTab() === 'announcements' ? selectedAnnouncementId() : selectedId())
+                            ? 'translate-x-0'
+                            : 'translate-x-full pointer-events-none lg:translate-x-0 lg:opacity-30 lg:pointer-events-auto'
+                        }`}
                     style="-webkit-overflow-scrolling: touch;"
                 >
-                    <Show when={selectedItem()} fallback={
-                        <div class="hidden lg:flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30">
-                            <MailOpen class="w-16 h-16 text-gray-700" />
-                            <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">Selection Required For Decryption</p>
-                        </div>
-                    }>
-                        {(item) => {
-                            const meta = getMeta(item().type);
-                            return (
-                                <div class="flex flex-col min-h-full relative">
-                                    {/* Mobile Back Button */}
-                                    <div class="lg:hidden p-6 absolute top-0 left-0 bg-gradient-to-b from-[#0A0A0B] to-transparent w-full z-10">
-                                        <button
-                                            onClick={() => setSelectedId(null)}
-                                            class="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-black text-[10px] uppercase tracking-widest"
-                                        >
-                                            <ChevronLeft class="w-4 h-4" /> Back to logs
-                                        </button>
-                                    </div>
+                    {/* Announcement Detail */}
+                    <Show when={activeTab() === 'announcements'}>
+                        <Show when={selectedAnnouncement()} fallback={
+                            <div class="hidden lg:flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30">
+                                <Megaphone class="w-16 h-16 text-gray-700" />
+                                <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">Select An Announcement</p>
+                            </div>
+                        }>
+                            {(item) => {
+                                const meta = getAnnouncementMeta(item().type);
+                                return (
+                                    <div class="flex flex-col min-h-full relative">
+                                        {/* Mobile Back Button */}
+                                        <div class="lg:hidden p-6 absolute top-0 left-0 bg-gradient-to-b from-[#0A0A0B] to-transparent w-full z-10">
+                                            <button
+                                                onClick={() => setSelectedAnnouncementId(null)}
+                                                class="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-black text-[10px] uppercase tracking-widest"
+                                            >
+                                                <ChevronLeft class="w-4 h-4" /> Back
+                                            </button>
+                                        </div>
 
-                                    <div class="p-6 lg:p-12 pt-20 lg:pt-12 space-y-12 max-w-2xl mx-auto w-full">
-                                        <div class="space-y-6">
-                                            <div class="flex items-center justify-between">
-                                                <div class={`w-16 h-16 rounded-[28px] flex items-center justify-center ${meta.bg} border-2 border-white/5`}>
-                                                    <meta.icon class={`w-8 h-8 ${meta.color}`} />
+                                        <div class="p-6 lg:p-12 pt-20 lg:pt-12 space-y-12 max-w-2xl mx-auto w-full">
+                                            <div class="space-y-6">
+                                                <div class="flex items-center justify-between">
+                                                    <div class={`w-16 h-16 rounded-[28px] flex items-center justify-center ${meta.bg} border-2 border-white/5`}>
+                                                        <meta.icon class={`w-8 h-8 ${meta.color}`} />
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <Show when={item().priority === 'urgent' || item().priority === 'high'}>
+                                                            <span class="px-3 py-1.5 bg-red-500/20 text-red-400 text-[10px] font-black uppercase rounded-xl border border-red-500/20">
+                                                                {item().priority}
+                                                            </span>
+                                                        </Show>
+                                                    </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => removeNotification(item().id)}
-                                                    class="p-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-2xl text-red-500 transition-all active:scale-95 group"
+
+                                                <div>
+                                                    <div class="flex flex-wrap items-center gap-3 mb-3">
+                                                        <span class={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] ${meta.bg} ${meta.color} border border-white/5`}>
+                                                            {meta.label}
+                                                        </span>
+                                                        <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                                            Official
+                                                        </span>
+                                                    </div>
+                                                    <h2 class="text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
+                                                        {item().title}
+                                                    </h2>
+                                                    <div class="flex flex-col gap-1 border-l-2 border-purple-600/30 pl-4 py-1">
+                                                        <p class="text-gray-400 font-medium text-sm">
+                                                            {formatFullDate(item().createdAt)}
+                                                        </p>
+                                                        <p class="text-[10px] text-gray-600 font-medium">
+                                                            Posted by: {item().createdBy}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="prose prose-invert max-w-none">
+                                                <p class="text-lg lg:text-xl text-gray-400 font-medium leading-[1.6] whitespace-pre-wrap">
+                                                    {item().content}
+                                                </p>
+                                            </div>
+
+                                            <Show when={item().actionUrl}>
+                                                <a
+                                                    href={item().actionUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl text-white font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all"
                                                 >
-                                                    <Trash2 class="w-5 h-5 group-hover:shake" />
-                                                </button>
-                                            </div>
-
-                                            <div>
-                                                <div class="flex flex-wrap items-center gap-3 mb-3">
-                                                    <span class={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] ${meta.bg} ${meta.color} border border-white/5`}>
-                                                        {meta.label}
-                                                    </span>
-                                                    {item().category && (
-                                                        <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-white/5 text-gray-500 border border-white/5">
-                                                            {item().category}
-                                                        </span>
-                                                    )}
-                                                    {item().priority === 'urgent' && (
-                                                        <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-red-500/20 text-red-400 border border-red-500/20">
-                                                            Urgent
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <h2 class="text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
-                                                    {item().title}
-                                                </h2>
-                                                <div class="flex flex-col gap-1 border-l-2 border-blue-600/30 pl-4 py-1">
-                                                    <p class="text-gray-400 font-medium text-sm">
-                                                        {formatFullDate(item().timestamp)}
-                                                    </p>
-                                                    <p class="text-gray-700 font-mono text-[10px] break-all">
-                                                        ID: {item().id}
-                                                    </p>
-                                                </div>
-                                            </div>
+                                                    <ExternalLink class="w-4 h-4" />
+                                                    {item().actionLabel || 'Learn More'}
+                                                </a>
+                                            </Show>
                                         </div>
-
-                                        <div class="prose prose-invert max-w-none">
-                                            <p class="text-lg lg:text-xl text-gray-400 font-medium leading-[1.6]">
-                                                {formatWithContactName(item().content)}
-                                            </p>
-                                        </div>
-
-                                        <Show when={item().data}>
-                                            <div class="p-8 bg-white/[0.02] border border-white/10 rounded-[40px] space-y-6">
-                                                <div class="text-[10px] font-black text-blue-500 uppercase tracking-[.2em] mb-2 border-b border-white/5 pb-4 flex items-center gap-2">
-                                                    <Filter class="w-3 h-3" /> Signal Metadata
-                                                </div>
-                                                <div class="grid grid-cols-1 gap-6">
-                                                    <For each={Object.entries(item().data || {})}>
-                                                        {([key, val]) => (
-                                                            <div class="space-y-1">
-                                                                <p class="text-[9px] font-black text-gray-700 uppercase tracking-widest">{key}</p>
-                                                                <p class="text-sm font-bold text-white font-mono break-all">{formatWithContactName(String(val))}</p>
-                                                            </div>
-                                                        )}
-                                                    </For>
-                                                </div>
-                                            </div>
-                                        </Show>
                                     </div>
-                                </div>
-                            );
-                        }}
+                                );
+                            }}
+                        </Show>
+                    </Show>
+
+                    {/* Notification Detail */}
+                    <Show when={activeTab() === 'notifications'}>
+                        <Show when={selectedItem()} fallback={
+                            <div class="hidden lg:flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30">
+                                <MailOpen class="w-16 h-16 text-gray-700" />
+                                <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">Selection Required For Decryption</p>
+                            </div>
+                        }>
+                            {(item) => {
+                                const meta = getMeta(item().type);
+                                return (
+                                    <div class="flex flex-col min-h-full relative">
+                                        {/* Mobile Back Button */}
+                                        <div class="lg:hidden p-6 absolute top-0 left-0 bg-gradient-to-b from-[#0A0A0B] to-transparent w-full z-10">
+                                            <button
+                                                onClick={() => setSelectedId(null)}
+                                                class="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-black text-[10px] uppercase tracking-widest"
+                                            >
+                                                <ChevronLeft class="w-4 h-4" /> Back to logs
+                                            </button>
+                                        </div>
+
+                                        <div class="p-6 lg:p-12 pt-20 lg:pt-12 space-y-12 max-w-2xl mx-auto w-full">
+                                            <div class="space-y-6">
+                                                <div class="flex items-center justify-between">
+                                                    <div class={`w-16 h-16 rounded-[28px] flex items-center justify-center ${meta.bg} border-2 border-white/5`}>
+                                                        <meta.icon class={`w-8 h-8 ${meta.color}`} />
+                                                    </div>
+                                                    <button
+                                                        onClick={() => removeNotification(item().id)}
+                                                        class="p-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-2xl text-red-500 transition-all active:scale-95 group"
+                                                    >
+                                                        <Trash2 class="w-5 h-5 group-hover:shake" />
+                                                    </button>
+                                                </div>
+
+                                                <div>
+                                                    <div class="flex flex-wrap items-center gap-3 mb-3">
+                                                        <span class={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] ${meta.bg} ${meta.color} border border-white/5`}>
+                                                            {meta.label}
+                                                        </span>
+                                                        {item().category && (
+                                                            <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-white/5 text-gray-500 border border-white/5">
+                                                                {item().category}
+                                                            </span>
+                                                        )}
+                                                        {item().priority === 'urgent' && (
+                                                            <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-red-500/20 text-red-400 border border-red-500/20">
+                                                                Urgent
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <h2 class="text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
+                                                        {item().title}
+                                                    </h2>
+                                                    <div class="flex flex-col gap-1 border-l-2 border-blue-600/30 pl-4 py-1">
+                                                        <p class="text-gray-400 font-medium text-sm">
+                                                            {formatFullDate(item().timestamp)}
+                                                        </p>
+                                                        <p class="text-gray-700 font-mono text-[10px] break-all">
+                                                            ID: {item().id}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="prose prose-invert max-w-none">
+                                                <p class="text-lg lg:text-xl text-gray-400 font-medium leading-[1.6]">
+                                                    {formatWithContactName(item().content)}
+                                                </p>
+                                            </div>
+
+                                            <Show when={item().data}>
+                                                <div class="p-8 bg-white/[0.02] border border-white/10 rounded-[40px] space-y-6">
+                                                    <div class="text-[10px] font-black text-blue-500 uppercase tracking-[.2em] mb-2 border-b border-white/5 pb-4 flex items-center gap-2">
+                                                        <Filter class="w-3 h-3" /> Signal Metadata
+                                                    </div>
+                                                    <div class="grid grid-cols-1 gap-6">
+                                                        <For each={Object.entries(item().data || {})}>
+                                                            {([key, val]) => (
+                                                                <div class="space-y-1">
+                                                                    <p class="text-[9px] font-black text-gray-700 uppercase tracking-widest">{key}</p>
+                                                                    <p class="text-sm font-bold text-white font-mono break-all">{formatWithContactName(String(val))}</p>
+                                                                </div>
+                                                            )}
+                                                        </For>
+                                                    </div>
+                                                </div>
+                                            </Show>
+                                        </div>
+                                    </div>
+                                );
+                            }}
+                        </Show>
                     </Show>
                 </div>
+
             </div>
         </div>
     );

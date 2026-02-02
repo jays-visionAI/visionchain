@@ -17,8 +17,10 @@ import {
     Activity,
     Folder,
     UserPlus,
-    Zap
+    Zap,
+    Megaphone
 } from 'lucide-solid';
+
 
 // Icon mapping for dynamic icon resolution
 export const iconMap: Record<string, Component<{ class?: string }>> = {
@@ -39,7 +41,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Activity,
     Folder,
     UserPlus,
-    Zap
+    Zap,
+    Megaphone
 };
 
 // Menu item interface with optional children for sub-menus
@@ -158,6 +161,15 @@ export const adminMenuConfig: AdminMenuItem[] = [
         icon: 'Folder',
         category: 'core',
         order: 10
+    },
+    {
+        id: 'announcements',
+        path: '/adminsystem/announcements',
+        label: 'Announcements',
+        icon: 'Megaphone',
+        badge: 'NEW',
+        category: 'core',
+        order: 11
     },
     {
         id: 'vcn-settings',

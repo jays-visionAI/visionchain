@@ -17,6 +17,8 @@ export const AdminTraffic = lazy(() => import('../components/admin/AdminTraffic'
 export const VcnSettings = lazy(() => import('../components/admin/VcnSettings'));
 export const PaymasterAdmin = lazy(() => import('../components/admin/PaymasterAdmin'));
 export const AdminDeFi = lazy(() => import('../components/admin/AdminDeFi'));
+export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
+
 
 // Loading spinner component
 export function PageLoader() {
@@ -187,6 +189,17 @@ export function AdminDeFiPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminDeFi />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminAnnouncementsPage() {
+    document.title = 'System Announcements | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminAnnouncements />
             </AdminLayout>
         </Suspense>
     );

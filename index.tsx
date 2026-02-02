@@ -104,6 +104,8 @@ render(() => (
       <Route path="/adminsystem/api-docs/*" component={Admin.AdminApiDocsPage} />
       <Route path="/adminsystem/settings" component={Admin.AdminSettingsPage} />
       <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
+      <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
+
     </Router>
   </AuthProvider>
 ), rootElement);
