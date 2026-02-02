@@ -2217,13 +2217,19 @@ const Wallet = (): JSX.Element => {
 
         setIsBridging(true);
         try {
-            // Use window.ethereum directly for signing
-            if (!(window as any).ethereum) {
-                throw new Error('No wallet provider found');
+            // Use Internal Wallet (Cloud Wallet) - NOT MetaMask
+            const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+            if (!encrypted) {
+                throw new Error(lastLocale() === 'ko'
+                    ? "로컬 지갑 키를 찾을 수 없습니다. 복구 문구로 지갑을 복원해주세요."
+                    : "Local wallet key not found. Please restore your wallet using your recovery phrase.");
             }
-            const provider = new ethers.BrowserProvider((window as any).ethereum);
-            const signer = await provider.getSigner();
-            const userAddr = await signer.getAddress();
+
+            const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
+            const { privateKey, address: userAddr } = WalletService.deriveEOA(mnemonic);
+
+            // Connect internal wallet
+            await contractService.connectInternalWallet(privateKey);
 
             // Vision Chain IntentCommitment contract
             const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
@@ -2237,6 +2243,10 @@ const Wallet = (): JSX.Element => {
             const dstChainId = bridge.destinationChain.toUpperCase() === 'ETHEREUM' || bridge.destinationChain.toUpperCase() === 'SEPOLIA'
                 ? SEPOLIA_CHAIN_ID
                 : 137;
+
+            // Create provider and signer from internal wallet
+            const provider = new ethers.JsonRpcProvider(import.meta.env.VITE_RPC_URL || 'http://46.224.221.201:8545');
+            const internalSigner = new ethers.Wallet(privateKey, provider);
 
             // ABI for IntentCommitment
             const INTENT_ABI = [
@@ -2285,9 +2295,10 @@ const Wallet = (): JSX.Element => {
                 ]
             };
 
-            // Sign with EIP-712
-            console.log('[Bridge] Signing intent with EIP-712...');
-            const intentSignature = await signer.signTypedData(domain, types, intent);
+            // Sign with EIP-712 using internal wallet
+            console.log('[Bridge] Signing intent with internal wallet...');
+            const intentSignature = await internalSigner.signTypedData(domain, types, intent);
+
 
             // Submit to Paymaster API for gas sponsorship
             console.log('[Bridge] Submitting to Paymaster API...');
