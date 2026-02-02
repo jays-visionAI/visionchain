@@ -570,7 +570,8 @@ const Wallet = (): JSX.Element => {
             setSepoliaVcnBalance(balanceNum);
             console.log(`[Sepolia] wVCN Balance: ${balanceNum}`);
         } catch (err) {
-            console.warn('[Sepolia] Failed to fetch wVCN balance:', err);
+            // Sepolia Equalizer may not be deployed yet - silently handle
+            console.debug('[Sepolia] wVCN balance fetch skipped (contract may not exist):', (err as any)?.message || 'Unknown error');
             setSepoliaVcnBalance(0);
         } finally {
             setIsLoadingSepoliaBalance(false);
