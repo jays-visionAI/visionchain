@@ -2272,8 +2272,9 @@ const Wallet = (): JSX.Element => {
                 ? SEPOLIA_CHAIN_ID
                 : 137;
 
-            // Create provider and signer from internal wallet
-            const provider = new ethers.JsonRpcProvider(import.meta.env.VITE_RPC_URL || 'http://46.224.221.201:8545');
+            // Create provider and signer from internal wallet (use HTTPS RPC proxy to avoid mixed content)
+            const HTTPS_RPC_PROXY = 'https://api.visionchain.co/rpc-proxy';
+            const provider = new ethers.JsonRpcProvider(HTTPS_RPC_PROXY);
             const internalSigner = new ethers.Wallet(privateKey, provider);
 
             // ABI for IntentCommitment

@@ -567,6 +567,15 @@ const INTENT_COMMITMENT_ABI = [
 ];
 
 exports.bridgeWithPaymaster = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  // Handle CORS preflight
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
