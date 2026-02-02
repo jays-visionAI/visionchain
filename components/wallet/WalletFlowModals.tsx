@@ -108,8 +108,8 @@ export const WalletFlowModals = (props: WalletFlowModalsProps) => {
                         {/* Flow Content */}
                         <div class="space-y-6">
                             <Switch>
-                                {/* STEP 3: BATCH STARTED - Universal for all flows */}
-                                <Match when={props.flowStep() === 3}>
+                                {/* STEP 3: BATCH STARTED - Only for batch_send/multi flows */}
+                                <Match when={props.flowStep() === 3 && (props.activeFlow() === 'batch_send' || props.activeFlow() === 'multi')}>
                                     <div class="py-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
                                         <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/30 mb-4">
                                             <Layers class="w-8 h-8 text-white" />
