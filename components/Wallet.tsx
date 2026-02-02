@@ -1968,10 +1968,16 @@ const Wallet = (): JSX.Element => {
             console.log("[Wallet] NEW ADDRESS DERIVED:", address);
 
             // 2. Encrypt and Save Locally
+            const userEmail = userProfile().email;
+            console.log("[Wallet] Saving encrypted wallet for email:", userEmail);
             const encrypted = await WalletService.encrypt(mnemonic, walletPassword());
-            WalletService.saveEncryptedWallet(encrypted, userProfile().email);
+            WalletService.saveEncryptedWallet(encrypted, userEmail);
+            // Verify save worked
+            const verifyKey = `vcn_wallet_${btoa(userEmail).substring(0, 16)}`;
+            console.log("[Wallet] Verify localStorage key:", verifyKey, "exists:", !!localStorage.getItem(verifyKey));
             // Save address unencrypted for UI consistency (SCOPED)
-            WalletService.saveAddressHint(address, userProfile().email);
+            WalletService.saveAddressHint(address, userEmail);
+
 
             // 3. Update Backend Status
             const user = auth.user();
@@ -3491,7 +3497,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                         <p class="text-gray-400 font-medium">Enter your 15-word recovery phrase</p>
                                                     </div>
 
-                                                    <div class="p-8 space-y-6">
+                                                    <div class="p-8 space-y-6 overflow-hidden">
                                                         <div>
                                                             <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Recovery Phrase</label>
                                                             <textarea
@@ -3501,7 +3507,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                 value={restoringMnemonic()}
                                                                 onInput={(e) => setRestoringMnemonic(e.currentTarget.value)}
                                                                 autofocus
-                                                                class="w-full bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed relative z-20"
+                                                                class="w-full max-w-full box-border bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed relative z-20"
                                                             />
                                                         </div>
 
