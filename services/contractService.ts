@@ -35,6 +35,7 @@ const ADDRESSES = {
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
     // Paymaster API (Cloud Functions)
     PAYMASTER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymasterTimeLock",
+    PAYMASTER_TRANSFER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymasterTransfer",
 
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
@@ -492,8 +493,8 @@ export class ContractService {
 
         const signature = await this.signer.signTypedData(domain, types, values);
 
-        // 5. Submit to Paymaster API
-        const response = await fetch(`${ADDRESSES.SEQUENCER_URL.replace('/submit', '')}/paymaster/transfer`, {
+        // 5. Submit to Paymaster API (Cloud Function)
+        const response = await fetch(ADDRESSES.PAYMASTER_TRANSFER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

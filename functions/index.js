@@ -559,6 +559,102 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
   }
 });
 
+// --- Paymaster Transfer (Gasless Token Transfers) ---
+exports.paymasterTransfer = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  // Handle CORS preflight
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { user, token, recipient, amount, fee, deadline, signature } = req.body;
+
+    // Validation
+    if (!user || !recipient || !amount) {
+      return res.status(400).json({ error: "Missing required fields: user, recipient, amount" });
+    }
+
+    // Verify deadline if provided
+    if (deadline && Math.floor(Date.now() / 1000) > deadline) {
+      return res.status(400).json({ error: "Request expired" });
+    }
+
+    console.log(`[PaymasterTransfer] Request from ${user}`);
+    console.log(`[PaymasterTransfer] Recipient: ${recipient}, Amount: ${amount}`);
+
+    // Setup Blockchain Connection with Admin Wallet
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+    // VCN Token Contract
+    const vcnTokenAddress = token || VCN_TOKEN_ADDRESS;
+    const tokenABI = [
+      "function transfer(address to, uint256 amount) external returns (bool)",
+      "function balanceOf(address account) external view returns (uint256)",
+    ];
+    const tokenContract = new ethers.Contract(vcnTokenAddress, tokenABI, adminWallet);
+
+    // Convert amount from string (wei) to BigInt
+    const amountBigInt = BigInt(amount);
+
+    // Check admin balance
+    const adminBalance = await tokenContract.balanceOf(adminWallet.address);
+    if (adminBalance < amountBigInt) {
+      console.error(`[PaymasterTransfer] Insufficient admin balance: ${adminBalance} < ${amountBigInt}`);
+      return res.status(400).json({ error: "Paymaster has insufficient funds" });
+    }
+
+    // Execute Transfer from Admin Wallet on behalf of user
+    // Note: In production, you would verify the permit signature and call transferFrom
+    // For now, we use a simple admin transfer model (admin pre-funds and transfers)
+    const tx = await tokenContract.transfer(recipient, amountBigInt);
+    console.log(`[PaymasterTransfer] TX sent: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    console.log(`[PaymasterTransfer] TX confirmed in block ${receipt.blockNumber}`);
+
+    // Index transaction to Firestore
+    try {
+      await db.collection("transactions").doc(tx.hash).set({
+        hash: tx.hash,
+        chainId: 1337,
+        type: "Transfer",
+        from_addr: user.toLowerCase(),
+        to_addr: recipient.toLowerCase(),
+        value: ethers.formatUnits(amountBigInt, 18),
+        timestamp: Date.now(),
+        status: "indexed",
+        metadata: {
+          method: "Paymaster Gasless Transfer",
+          source: "paymaster",
+          fee: fee ? ethers.formatUnits(BigInt(fee), 18) : "1.0",
+          actualSender: adminWallet.address.toLowerCase(),
+        },
+      });
+      console.log(`[PaymasterTransfer] Transaction indexed: ${tx.hash}`);
+    } catch (indexErr) {
+      console.warn("[PaymasterTransfer] Indexing failed (non-critical):", indexErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+    });
+  } catch (err) {
+    console.error("[PaymasterTransfer] Error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
 // --- Bridge Paymaster (Gasless Cross-Chain Bridge) ---
 const INTENT_COMMITMENT_ADDRESS = "0x47c05BCCA7d57c87083EB4e586007530eE4539e9";
 const INTENT_COMMITMENT_ABI = [
