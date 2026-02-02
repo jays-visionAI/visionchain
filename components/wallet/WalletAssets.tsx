@@ -11,6 +11,7 @@ import {
     TrendingUp,
     Menu,
     ChevronRight,
+    Cloud,
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { WalletActivity } from './WalletActivity';
@@ -25,8 +26,10 @@ interface WalletAssetsProps {
     totalValue: () => number;
     networkMode: 'mainnet' | 'testnet';
     isLocalWalletMissing?: boolean;
+    cloudWalletAvailable?: boolean;
     onRestoreWallet?: () => void;
-    walletAddress?: () => string; // Added prop
+    onCloudRestore?: () => void;
+    walletAddress?: () => string;
     contacts?: any[];
 }
 
@@ -96,7 +99,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
             <div class="max-w-5xl mx-auto px-4 lg:px-0 py-6 md:py-10">
                 {/* Wallet Out-of-Sync / Missing Local Data Warning */}
                 <Show when={props.isLocalWalletMissing}>
-                    <div class="mb-8 p-6 bg-amber-500/10 border border-amber-500/30 rounded-[24px] flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-md shadow-2xl">
+                    <div class="mb-8 p-6 bg-amber-500/10 border border-amber-500/30 rounded-[24px] flex flex-col gap-6 backdrop-blur-md shadow-2xl">
                         <div class="flex items-start gap-4">
                             <div class="p-3 bg-amber-500/20 rounded-2xl shadow-inner">
                                 <Shield class="w-6 h-6 text-amber-400" />
@@ -106,16 +109,42 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <p class="text-sm text-amber-200/70 leading-relaxed max-w-xl">
                                     Your account address is recognized, but the encrypted key is not found on this device.
                                     You are in <span class="text-white font-bold">view-only mode</span>. To send tokens or stake,
-                                    you must restore your wallet using your recovery phrase.
+                                    you must restore your wallet.
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => props.onRestoreWallet?.()}
-                            class="px-8 py-3.5 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-xl transition-all shadow-xl shadow-amber-500/20 active:scale-95 whitespace-nowrap text-sm"
-                        >
-                            Restore Wallet
-                        </button>
+
+                        {/* Restore Options */}
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            {/* Cloud Restore - Primary if available */}
+                            <Show when={props.cloudWalletAvailable}>
+                                <button
+                                    onClick={() => props.onCloudRestore?.()}
+                                    class="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-black rounded-xl transition-all shadow-xl shadow-blue-500/20 active:scale-95"
+                                >
+                                    <Cloud class="w-5 h-5" />
+                                    <div class="text-left">
+                                        <div class="text-sm">Restore from Cloud</div>
+                                        <div class="text-[10px] opacity-80 font-medium">Just enter your password</div>
+                                    </div>
+                                </button>
+                            </Show>
+
+                            {/* Seed Phrase Restore */}
+                            <button
+                                onClick={() => props.onRestoreWallet?.()}
+                                class={`flex items-center justify-center gap-3 px-6 py-4 ${props.cloudWalletAvailable
+                                        ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
+                                        : 'bg-amber-500 hover:bg-amber-400 text-black shadow-xl shadow-amber-500/20'
+                                    } font-black rounded-xl transition-all active:scale-95 ${props.cloudWalletAvailable ? '' : 'flex-1'}`}
+                            >
+                                <Shield class="w-5 h-5" />
+                                <div class="text-left">
+                                    <div class="text-sm">Use Recovery Phrase</div>
+                                    <div class={`text-[10px] font-medium ${props.cloudWalletAvailable ? 'opacity-60' : 'opacity-80'}`}>15-word seed phrase</div>
+                                </div>
+                            </button>
+                        </div>
                     </div>
                 </Show>
 

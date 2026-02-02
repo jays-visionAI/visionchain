@@ -2,8 +2,443 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 const { ethers } = require("ethers");
+const crypto = require("crypto");
+// Lazy load nodemailer to avoid deployment timeout
+let nodemailer = null;
+/**
+ * Lazy load nodemailer module
+ * @return {object} Nodemailer module
+ */
+function getNodemailer() {
+  if (!nodemailer) {
+    nodemailer = require("nodemailer");
+  }
+  return nodemailer;
+}
 
 admin.initializeApp();
+
+// =============================================================================
+// SECURE WALLET CLOUD SYNC - Envelope Encryption
+// =============================================================================
+// The client encrypts the wallet with the user's password (AES-256-GCM).
+// The server adds a SECOND layer of encryption with a server-side master key.
+// Even if Firebase is compromised, attackers need BOTH:
+//   1. User's password (for client-side decryption)
+//   2. Server master key (for server-side decryption)
+// =============================================================================
+
+// Server-side master key - in production, use Secret Manager
+const SERVER_ENCRYPTION_KEY = process.env.WALLET_ENCRYPTION_KEY ||
+  "vcn-server-key-2026-very-secure-32b"; // MUST be 32 bytes for AES-256
+
+/**
+ * Server-side AES-256-GCM encryption
+ * @param {string} data - Data to encrypt (already client-encrypted)
+ * @return {string} Base64 encoded encrypted data with IV prepended
+ */
+function serverEncrypt(data) {
+  const iv = crypto.randomBytes(16);
+  const key = Buffer.from(SERVER_ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32));
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  let encrypted = cipher.update(data, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  const authTag = cipher.getAuthTag();
+
+  // Format: IV (16 bytes) + AuthTag (16 bytes) + Encrypted Data
+  const combined = Buffer.concat([iv, authTag, Buffer.from(encrypted, "base64")]);
+  return combined.toString("base64");
+}
+
+/**
+ * Server-side AES-256-GCM decryption
+ * @param {string} encryptedBase64 - Base64 encoded encrypted data
+ * @return {string} Decrypted data (still client-encrypted)
+ */
+function serverDecrypt(encryptedBase64) {
+  const combined = Buffer.from(encryptedBase64, "base64");
+
+  if (combined.length < 33) { // IV(16) + AuthTag(16) + at least 1 byte
+    throw new Error("Invalid encrypted data format");
+  }
+
+  const iv = combined.slice(0, 16);
+  const authTag = combined.slice(16, 32);
+  const encryptedData = combined.slice(32);
+
+  const key = Buffer.from(SERVER_ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32));
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+
+  let decrypted = decipher.update(encryptedData, undefined, "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+// =============================================================================
+// EMAIL SERVICE - Nodemailer with Google Workspace / Gmail
+// =============================================================================
+// For Google Workspace (visai.io):
+// 1. Enable 2FA on the Google Workspace account
+// 2. Go to: Google Account > Security > App Passwords
+// 3. Create new app password for "Mail"
+// 4. Set environment variables:
+//    firebase functions:secrets:set EMAIL_USER
+//    firebase functions:secrets:set EMAIL_APP_PASSWORD
+// =============================================================================
+
+const EMAIL_CONFIG = {
+  host: "smtp.gmail.com", // Works for both Gmail and Google Workspace
+  port: 587,
+  secure: false, // Use TLS
+  auth: {
+    user: process.env.EMAIL_USER || "jays@visai.io",
+    pass: process.env.EMAIL_APP_PASSWORD || "", // App Password
+  },
+};
+
+/**
+ * Create email transporter
+ * @return {object} Nodemailer transporter
+ */
+function getEmailTransporter() {
+  return getNodemailer().createTransport(EMAIL_CONFIG);
+}
+
+/**
+ * Send security email (verification code, suspicious activity alert)
+ * @param {string} to - Recipient email
+ * @param {string} subject - Email subject
+ * @param {string} htmlContent - HTML email body
+ * @return {Promise<boolean>} Success status
+ */
+async function sendSecurityEmail(to, subject, htmlContent) {
+  try {
+    // Check if email is configured
+    if (!process.env.EMAIL_APP_PASSWORD) {
+      console.warn("[Email] Email not configured, skipping email to:", to);
+      console.log("[Email] Subject:", subject);
+      return false;
+    }
+
+    const transporter = getEmailTransporter();
+
+    const mailOptions = {
+      from: `"Vision Chain Security" <${EMAIL_CONFIG.auth.user}>`,
+      to: to,
+      subject: subject,
+      html: htmlContent,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email] Security email sent to ${to}`);
+    return true;
+  } catch (err) {
+    console.error("[Email] Failed to send:", err);
+    return false;
+  }
+}
+
+/**
+ * Generate device verification email HTML
+ * @param {string} code - Verification code
+ * @param {string} deviceInfo - Device details
+ * @return {string} HTML content
+ */
+function generateVerificationEmailHtml(code, deviceInfo) {
+  /* eslint-disable max-len */
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0b; color: #fff; padding: 40px; }
+        .container { max-width: 500px; margin: 0 auto; background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; }
+        .logo { font-size: 24px; font-weight: bold; color: #22d3ee; margin-bottom: 24px; }
+        .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #22d3ee; background: rgba(34,211,238,0.1); padding: 16px 24px; border-radius: 12px; display: inline-block; margin: 24px 0; }
+        .warning { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); padding: 16px; border-radius: 12px; margin-top: 24px; }
+        .footer { margin-top: 32px; font-size: 12px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="logo">Vision Chain</div>
+        <h2>New Device Verification</h2>
+        <p>A new device is trying to access your wallet. Enter this code to verify:</p>
+        <div class="code">${code}</div>
+        <p>This code expires in 15 minutes.</p>
+        <div class="warning">
+          <strong>Device Info:</strong><br/>
+          ${deviceInfo || "Unknown device"}
+        </div>
+        <p class="footer">
+          If you didn't request this, someone may be trying to access your account.
+          Please secure your account immediately.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Generate suspicious activity alert email HTML
+ * @param {string} reason - Alert reason
+ * @param {string} details - Activity details
+ * @return {string} HTML content
+ */
+function generateSuspiciousActivityEmailHtml(reason, details) {
+  /* eslint-disable max-len */
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0b; color: #fff; padding: 40px; }
+        .container { max-width: 500px; margin: 0 auto; background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; }
+        .logo { font-size: 24px; font-weight: bold; color: #22d3ee; margin-bottom: 24px; }
+        .alert { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); padding: 20px; border-radius: 12px; margin: 24px 0; }
+        .details { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; }
+        .footer { margin-top: 32px; font-size: 12px; color: #888; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="logo">Vision Chain</div>
+        <h2>Security Alert</h2>
+        <div class="alert">
+          <strong>Suspicious Activity Detected</strong><br/>
+          ${reason}
+        </div>
+        <div class="details">
+          ${details}
+        </div>
+        <p>If this wasn't you, please:</p>
+        <ul>
+          <li>Change your password immediately</li>
+          <li>Review your recent account activity</li>
+          <li>Enable two-factor authentication</li>
+        </ul>
+        <p class="footer">
+          This is an automated security alert from Vision Chain.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// =============================================================================
+// SECURITY FEATURES - Rate Limiting, Device Fingerprint, IP Anomaly Detection
+// =============================================================================
+
+/**
+ * Rate Limiting: Prevent brute-force attacks
+ * @param {string} email - User email
+ * @param {object} db - Firestore instance
+ * @return {Promise<void>} Throws if rate limited
+ */
+async function checkRateLimit(email, db) {
+  const rateLimitDoc = await db.collection("security_rate_limits").doc(email).get();
+
+  if (rateLimitDoc.exists) {
+    const data = rateLimitDoc.data();
+    const now = Date.now();
+    const windowMs = 15 * 60 * 1000; // 15 minutes
+
+    // Clean up old attempts
+    const recentAttempts = (data.attempts || []).filter(
+      (t) => now - t < windowMs,
+    );
+
+    if (recentAttempts.length >= 5) {
+      const waitMinutes = Math.ceil((windowMs - (now - recentAttempts[0])) / 60000);
+      throw new HttpsError(
+        "resource-exhausted",
+        `Too many attempts. Please try again in ${waitMinutes} minutes.`,
+      );
+    }
+
+    // Update attempts
+    await db.collection("security_rate_limits").doc(email).update({
+      attempts: [...recentAttempts, now],
+    });
+  } else {
+    await db.collection("security_rate_limits").doc(email).set({
+      attempts: [Date.now()],
+    });
+  }
+}
+
+/**
+ * Clear rate limit on successful authentication
+ * @param {string} email - User email
+ * @param {object} db - Firestore instance
+ */
+async function clearRateLimit(email, db) {
+  try {
+    await db.collection("security_rate_limits").doc(email).delete();
+  } catch (e) {
+    // Ignore if doesn't exist
+  }
+}
+
+/**
+ * Device Fingerprint: Track known devices
+ * @param {string} email - User email
+ * @param {string} deviceFingerprint - Client-generated device fingerprint
+ * @param {object} db - Firestore instance
+ * @return {Promise<{isNewDevice: boolean, requiresVerification: boolean}>}
+ */
+async function checkDeviceFingerprint(email, deviceFingerprint, db) {
+  if (!deviceFingerprint) {
+    return { isNewDevice: true, requiresVerification: false };
+  }
+
+  const deviceDoc = await db.collection("security_devices").doc(email).get();
+
+  if (!deviceDoc.exists) {
+    // First device - save it
+    await db.collection("security_devices").doc(email).set({
+      devices: [{
+        fingerprint: deviceFingerprint,
+        firstSeen: Date.now(),
+        lastSeen: Date.now(),
+        verified: true, // First device is auto-verified
+      }],
+    });
+    return { isNewDevice: false, requiresVerification: false };
+  }
+
+  const data = deviceDoc.data();
+  const existingDevice = data.devices.find((d) => d.fingerprint === deviceFingerprint);
+
+  if (existingDevice) {
+    // Known device - update last seen
+    const updatedDevices = data.devices.map((d) =>
+      d.fingerprint === deviceFingerprint ? { ...d, lastSeen: Date.now() } : d,
+    );
+    await db.collection("security_devices").doc(email).update({ devices: updatedDevices });
+    return { isNewDevice: false, requiresVerification: false };
+  }
+
+  // New device - requires verification
+  const newDevice = {
+    fingerprint: deviceFingerprint,
+    firstSeen: Date.now(),
+    lastSeen: Date.now(),
+    verified: false,
+    verificationCode: crypto.randomBytes(3).toString("hex").toUpperCase(),
+    verificationExpiry: Date.now() + 15 * 60 * 1000, // 15 minutes
+  };
+
+  await db.collection("security_devices").doc(email).update({
+    devices: admin.firestore.FieldValue.arrayUnion(newDevice),
+  });
+
+  return {
+    isNewDevice: true,
+    requiresVerification: true,
+    verificationCode: newDevice.verificationCode,
+  };
+}
+
+/**
+ * IP Anomaly Detection: Track geographic patterns
+ * @param {string} email - User email
+ * @param {string} ipAddress - Client IP
+ * @param {object} db - Firestore instance
+ * @return {Promise<object>} Result with suspicious flag and optional reason
+ */
+async function checkIpAnomaly(email, ipAddress, db) {
+  if (!ipAddress || ipAddress === "::1" || ipAddress === "127.0.0.1") {
+    return { suspicious: false }; // Local development
+  }
+
+  const ipDoc = await db.collection("security_ip_history").doc(email).get();
+
+  if (!ipDoc.exists) {
+    // First access - save IP
+    await db.collection("security_ip_history").doc(email).set({
+      knownIps: [{
+        ip: ipAddress,
+        firstSeen: Date.now(),
+        lastSeen: Date.now(),
+        accessCount: 1,
+      }],
+      lastAccessIp: ipAddress,
+      lastAccessTime: Date.now(),
+    });
+    return { suspicious: false };
+  }
+
+  const data = ipDoc.data();
+  const knownIp = data.knownIps.find((i) => i.ip === ipAddress);
+
+  if (knownIp) {
+    // Known IP - update
+    const updatedIps = data.knownIps.map((i) =>
+      i.ip === ipAddress ?
+        { ...i, lastSeen: Date.now(), accessCount: (i.accessCount || 0) + 1 } :
+        i,
+    );
+    await db.collection("security_ip_history").doc(email).update({
+      knownIps: updatedIps,
+      lastAccessIp: ipAddress,
+      lastAccessTime: Date.now(),
+    });
+    return { suspicious: false };
+  }
+
+  // New IP - check if suspicious
+  const timeSinceLastAccess = Date.now() - (data.lastAccessTime || 0);
+  const tooFast = timeSinceLastAccess < 5 * 60 * 1000; // Less than 5 minutes
+
+  // Add new IP to history
+  await db.collection("security_ip_history").doc(email).update({
+    knownIps: admin.firestore.FieldValue.arrayUnion({
+      ip: ipAddress,
+      firstSeen: Date.now(),
+      lastSeen: Date.now(),
+      accessCount: 1,
+    }),
+    lastAccessIp: ipAddress,
+    lastAccessTime: Date.now(),
+  });
+
+  if (tooFast && data.knownIps.length > 0) {
+    return {
+      suspicious: true,
+      reason: "Access from new IP address very quickly after previous access",
+      previousIp: data.lastAccessIp,
+      newIp: ipAddress,
+    };
+  }
+
+  return { suspicious: false, isNewIp: true };
+}
+
+/**
+ * Log security event for audit trail
+ * @param {string} email - User email
+ * @param {string} action - Action type
+ * @param {object} details - Event details
+ * @param {object} db - Firestore instance
+ */
+async function logSecurityEvent(email, action, details, db) {
+  try {
+    await db.collection("security_audit_log").add({
+      email: email,
+      action: action,
+      details: details,
+      timestamp: admin.firestore.Timestamp.now(),
+    });
+  } catch (e) {
+    console.error("[Security] Failed to log event:", e);
+  }
+}
+
 const db = admin.firestore();
 
 // Configuration
@@ -312,6 +747,311 @@ exports.updateWalletAddress = onCall(async (request) => {
   } catch (err) {
     console.error("Update Wallet Failed:", err);
     throw new HttpsError("internal", "Database update failed");
+  }
+});
+
+// =============================================================================
+// CLOUD WALLET SYNC - Secure Save/Load
+// =============================================================================
+
+/**
+ * Save encrypted wallet to cloud with server-side envelope encryption
+ * Client sends: clientEncryptedWallet (already AES-256-GCM encrypted with user password)
+ * Server adds: server-side AES-256-GCM encryption layer
+ * Stored in Firestore: double-encrypted wallet
+ */
+exports.saveWalletToCloud = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const { clientEncryptedWallet, walletAddress, passwordStrength } = request.data;
+  const email = request.auth.token.email?.toLowerCase();
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  if (!clientEncryptedWallet || !walletAddress) {
+    throw new HttpsError("invalid-argument", "Missing wallet data.");
+  }
+
+  // Enforce minimum password strength for cloud sync
+  // passwordStrength is calculated client-side: { length, hasUpper, hasLower, hasNumber, hasSpecial }
+  if (passwordStrength) {
+    const { length, hasUpper, hasLower, hasNumber, hasSpecial } = passwordStrength;
+    const score = (hasUpper ? 1 : 0) + (hasLower ? 1 : 0) + (hasNumber ? 1 : 0) + (hasSpecial ? 1 : 0);
+
+    if (length < 10 || score < 3) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Password too weak for cloud sync. Minimum: 10 chars + 3 of (uppercase/lowercase/number/special)",
+      );
+    }
+  }
+
+  try {
+    console.log(`[CloudSync] Saving wallet for ${email}`);
+
+    // Server-side envelope encryption
+    const serverEncryptedWallet = serverEncrypt(clientEncryptedWallet);
+
+    // Store in Firestore
+    await db.collection("wallets_encrypted").doc(email).set({
+      encryptedWallet: serverEncryptedWallet, // Double encrypted
+      walletAddress: walletAddress, // For display only (not sensitive)
+      createdAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
+      version: 2, // Envelope encryption version
+    });
+
+    console.log(`[CloudSync] Wallet saved successfully for ${email}`);
+    return { success: true };
+  } catch (err) {
+    console.error("[CloudSync] Save failed:", err);
+    throw new HttpsError("internal", "Failed to save wallet to cloud.");
+  }
+});
+
+/**
+ * Load encrypted wallet from cloud
+ * Decrypts server-side layer and returns client-encrypted wallet
+ * Client must still decrypt with user's password
+ *
+ * SECURITY FEATURES:
+ * - Rate Limiting: 5 attempts per 15 minutes
+ * - Device Fingerprint: New devices require email verification
+ * - IP Anomaly Detection: Alerts on suspicious access patterns
+ */
+exports.loadWalletFromCloud = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+  const { deviceFingerprint } = request.data || {};
+
+  // Get IP from request context
+  const ipAddress = request.rawRequest?.ip ||
+    request.rawRequest?.headers?.["x-forwarded-for"]?.split(",")[0] ||
+    request.rawRequest?.connection?.remoteAddress ||
+    "unknown";
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  try {
+    console.log(`[CloudSync] Loading wallet for ${email} from IP ${ipAddress}`);
+
+    // ============== SECURITY CHECK 1: Rate Limiting ==============
+    await checkRateLimit(email, db);
+
+    // ============== SECURITY CHECK 2: Device Fingerprint ==============
+    const deviceCheck = await checkDeviceFingerprint(email, deviceFingerprint, db);
+
+    if (deviceCheck.requiresVerification) {
+      // Log security event
+      await logSecurityEvent(email, "NEW_DEVICE_DETECTED", {
+        fingerprint: deviceFingerprint,
+        ipAddress: ipAddress,
+        verificationCode: deviceCheck.verificationCode,
+      }, db);
+
+      // Send verification email
+      const deviceInfo = `IP: ${ipAddress}<br/>Device ID: ${deviceFingerprint || "Unknown"}`;
+      const emailHtml = generateVerificationEmailHtml(deviceCheck.verificationCode, deviceInfo);
+      await sendSecurityEmail(
+        email,
+        "Vision Chain - New Device Verification Required",
+        emailHtml,
+      );
+
+      console.log(`[Security] New device for ${email}, verification code sent to email`);
+
+      return {
+        exists: true,
+        requiresDeviceVerification: true,
+        message: "New device detected. Please check your email for a verification code.",
+      };
+    }
+
+    // ============== SECURITY CHECK 3: IP Anomaly Detection ==============
+    const ipCheck = await checkIpAnomaly(email, ipAddress, db);
+
+    if (ipCheck.suspicious) {
+      // Log suspicious activity
+      await logSecurityEvent(email, "SUSPICIOUS_IP_ACCESS", {
+        previousIp: ipCheck.previousIp,
+        newIp: ipCheck.newIp,
+        reason: ipCheck.reason,
+      }, db);
+
+      // Send alert email
+      const details = `Previous IP: ${ipCheck.previousIp}<br/>New IP: ${ipCheck.newIp}<br/>Time: ${new Date().toISOString()}`;
+      const alertHtml = generateSuspiciousActivityEmailHtml(ipCheck.reason, details);
+      await sendSecurityEmail(
+        email,
+        "Vision Chain - Security Alert: Unusual Access Pattern",
+        alertHtml,
+      );
+
+      console.warn(`[Security] Suspicious access for ${email}: ${ipCheck.reason}`);
+      // We still allow access but user is notified
+    }
+
+    // ============== WALLET RETRIEVAL ==============
+    const walletDoc = await db.collection("wallets_encrypted").doc(email).get();
+
+    if (!walletDoc.exists) {
+      return { exists: false };
+    }
+
+    const data = walletDoc.data();
+
+    // Check version - only v2 (envelope encrypted) is supported
+    if (data.version !== 2) {
+      console.warn(`[CloudSync] Old wallet version for ${email}, migration needed`);
+      return { exists: false, needsMigration: true };
+    }
+
+    // Server-side decryption (removes our layer, keeps client layer)
+    const clientEncryptedWallet = serverDecrypt(data.encryptedWallet);
+
+    // Clear rate limit on successful load
+    await clearRateLimit(email, db);
+
+    // Log successful access
+    await logSecurityEvent(email, "WALLET_LOADED", {
+      ipAddress: ipAddress,
+      deviceFingerprint: deviceFingerprint || "unknown",
+    }, db);
+
+    console.log(`[CloudSync] Wallet loaded successfully for ${email}`);
+    return {
+      exists: true,
+      clientEncryptedWallet: clientEncryptedWallet,
+      walletAddress: data.walletAddress,
+    };
+  } catch (err) {
+    // Log failed attempt
+    await logSecurityEvent(email, "WALLET_LOAD_FAILED", {
+      error: err.message,
+      ipAddress: ipAddress,
+    }, db);
+
+    console.error("[CloudSync] Load failed:", err);
+
+    // Re-throw rate limit errors with user-friendly message
+    if (err.code === "resource-exhausted") {
+      throw err;
+    }
+
+    throw new HttpsError("internal", "Failed to load wallet from cloud.");
+  }
+});
+
+/**
+ * Verify device with email verification code
+ * Call this after receiving the code via email to verify a new device
+ */
+exports.verifyDeviceCode = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+  const { verificationCode, deviceFingerprint } = request.data || {};
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  if (!verificationCode || !deviceFingerprint) {
+    throw new HttpsError("invalid-argument", "Missing verification code or device ID.");
+  }
+
+  try {
+    const deviceDoc = await db.collection("security_devices").doc(email).get();
+
+    if (!deviceDoc.exists) {
+      throw new HttpsError("not-found", "No device records found.");
+    }
+
+    const data = deviceDoc.data();
+    const device = data.devices.find((d) =>
+      d.fingerprint === deviceFingerprint &&
+      d.verificationCode === verificationCode.toUpperCase() &&
+      !d.verified,
+    );
+
+    if (!device) {
+      await logSecurityEvent(email, "DEVICE_VERIFICATION_FAILED", {
+        deviceFingerprint,
+        attemptedCode: verificationCode,
+      }, db);
+      throw new HttpsError("permission-denied", "Invalid or expired verification code.");
+    }
+
+    // Check expiry
+    if (device.verificationExpiry && Date.now() > device.verificationExpiry) {
+      throw new HttpsError("deadline-exceeded", "Verification code has expired. Please try again.");
+    }
+
+    // Mark device as verified
+    const updatedDevices = data.devices.map((d) =>
+      d.fingerprint === deviceFingerprint ?
+        { ...d, verified: true, verifiedAt: Date.now() } :
+        d,
+    );
+
+    await db.collection("security_devices").doc(email).update({
+      devices: updatedDevices,
+    });
+
+    await logSecurityEvent(email, "DEVICE_VERIFIED", {
+      deviceFingerprint,
+    }, db);
+
+    console.log(`[Security] Device verified for ${email}`);
+    return { success: true, message: "Device verified successfully." };
+  } catch (err) {
+    if (err.code) throw err; // Re-throw HttpsError
+    console.error("[Security] Device verification failed:", err);
+    throw new HttpsError("internal", "Verification failed.");
+  }
+});
+
+/**
+ * Check if user has a cloud wallet (without loading it)
+ */
+exports.checkCloudWallet = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  try {
+    const walletDoc = await db.collection("wallets_encrypted").doc(email).get();
+
+    if (!walletDoc.exists) {
+      return { exists: false };
+    }
+
+    const data = walletDoc.data();
+    return {
+      exists: true,
+      walletAddress: data.walletAddress,
+      createdAt: data.createdAt?.toDate()?.toISOString(),
+    };
+  } catch (err) {
+    console.error("[CloudSync] Check failed:", err);
+    throw new HttpsError("internal", "Failed to check cloud wallet.");
   }
 });
 

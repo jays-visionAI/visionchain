@@ -1071,6 +1071,11 @@ export const getFirebaseDb = () => {
     return db;
 };
 
+export const getFirebaseApp = () => {
+    if (!app) initializeFirebase();
+    return app;
+};
+
 /**
  * Uploads a profile image to Firebase Storage and updates user document/profile
  */

@@ -18,9 +18,13 @@ import {
     ChevronDown,
     LogOut,
     Search,
-    Clock
+    Clock,
+    Cloud,
+    RefreshCw,
 } from 'lucide-solid';
 import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
+import { CloudWalletService, calculatePasswordStrength } from '../../services/cloudWalletService';
+import { WalletService } from '../../services/walletService';
 import { countries, Country } from './CountryData';
 import { useAuth } from '../auth/authContext';
 import { WalletViewHeader } from './WalletViewHeader';
@@ -73,6 +77,12 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [passwordError, setPasswordError] = createSignal('');
     const [passwordSuccess, setPasswordSuccess] = createSignal(false);
 
+    // Cloud Sync state
+    const [cloudSyncStatus, setCloudSyncStatus] = createSignal<'none' | 'synced' | 'error'>('none');
+    const [cloudSyncPassword, setCloudSyncPassword] = createSignal('');
+    const [cloudSyncLoading, setCloudSyncLoading] = createSignal(false);
+    const [cloudSyncError, setCloudSyncError] = createSignal('');
+
     const handleChangePassword = (e: Event) => {
         e.preventDefault();
         setPasswordError('');
@@ -100,6 +110,46 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
         // Hide success after 3 seconds
         setTimeout(() => setPasswordSuccess(false), 3000);
+    };
+
+    // Cloud Sync Handler
+    const handleCloudSync = async () => {
+        if (!cloudSyncPassword()) {
+            setCloudSyncError('Please enter your wallet password');
+            return;
+        }
+
+        const strength = calculatePasswordStrength(cloudSyncPassword());
+        if (!strength.isStrongEnough) {
+            setCloudSyncError('Password not strong enough for cloud sync. Minimum: 10 chars + 3 of (upper/lower/number/special)');
+            return;
+        }
+
+        try {
+            setCloudSyncLoading(true);
+            setCloudSyncError('');
+
+            const userEmail = auth.user()?.email;
+            if (!userEmail) {
+                throw new Error('User not logged in');
+            }
+
+            const result = await CloudWalletService.syncLocalToCloud(cloudSyncPassword(), userEmail);
+
+            if (result.success) {
+                setCloudSyncStatus('synced');
+                setCloudSyncPassword('');
+            } else {
+                setCloudSyncError(result.error || 'Failed to sync wallet');
+                setCloudSyncStatus('error');
+            }
+        } catch (err: any) {
+            console.error('[CloudSync] Error:', err);
+            setCloudSyncError(err.message || 'An error occurred');
+            setCloudSyncStatus('error');
+        } finally {
+            setCloudSyncLoading(false);
+        }
     };
 
     const tabs = [
@@ -153,6 +203,16 @@ export function WalletSettings(props: { onBack?: () => void }) {
                 } else {
                     setPhone(savedPhone);
                 }
+            }
+
+            // Check cloud sync status
+            try {
+                const cloudCheck = await CloudWalletService.hasCloudWallet();
+                if (cloudCheck.exists) {
+                    setCloudSyncStatus('synced');
+                }
+            } catch (e) {
+                console.warn('[Settings] Failed to check cloud sync status:', e);
             }
         }
 
@@ -568,6 +628,91 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 </div>
                             </div>
                             <Toggle checked={twoFactorAuth()} onChange={setTwoFactorAuth} />
+                        </div>
+
+                        {/* Cloud Wallet Sync */}
+                        <div class="p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div class="flex items-start gap-4">
+                                    <div class="p-2 rounded-lg bg-blue-500/10">
+                                        <Cloud class="w-5 h-5 text-blue-400" />
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-medium">Cloud Wallet Sync</p>
+                                        <p class="text-gray-400 text-sm mt-0.5">
+                                            Backup your wallet to the cloud for cross-browser access.
+                                            Your wallet is protected by double encryption.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Cloud Sync Form */}
+                            <div class="mt-4 ml-0 sm:ml-14 space-y-4">
+                                <Show when={cloudSyncStatus() === 'synced'}>
+                                    <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center gap-3">
+                                        <Check class="w-5 h-5 text-green-400" />
+                                        <div>
+                                            <p class="text-green-400 font-medium">Wallet synced to cloud</p>
+                                            <p class="text-green-300/60 text-xs">You can access your wallet from any browser</p>
+                                        </div>
+                                    </div>
+                                </Show>
+
+                                <Show when={cloudSyncStatus() !== 'synced'}>
+                                    <div class="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                                        <p class="text-amber-400 text-sm mb-3">
+                                            Enter your wallet password to backup to cloud:
+                                        </p>
+                                        <div class="flex flex-col sm:flex-row gap-3">
+                                            <input
+                                                type="password"
+                                                value={cloudSyncPassword()}
+                                                onInput={(e) => setCloudSyncPassword(e.currentTarget.value)}
+                                                placeholder="Wallet password"
+                                                class="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+                                            />
+                                            <button
+                                                onClick={handleCloudSync}
+                                                disabled={!cloudSyncPassword() || cloudSyncLoading()}
+                                                class="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                                            >
+                                                <Show when={cloudSyncLoading()} fallback={<><Cloud class="w-4 h-4" /> Sync to Cloud</>}>
+                                                    <RefreshCw class="w-4 h-4 animate-spin" /> Syncing...
+                                                </Show>
+                                            </button>
+                                        </div>
+
+                                        {/* Password Strength */}
+                                        <Show when={cloudSyncPassword()}>
+                                            {(() => {
+                                                const strength = calculatePasswordStrength(cloudSyncPassword());
+                                                return (
+                                                    <div class="mt-3">
+                                                        <div class="flex gap-1 mb-1">
+                                                            {[1, 2, 3, 4].map((i) => (
+                                                                <div class={`h-1 flex-1 rounded-full ${i <= strength.score ? (strength.isStrongEnough ? 'bg-green-500' : 'bg-amber-500') : 'bg-white/10'}`} />
+                                                            ))}
+                                                        </div>
+                                                        <p class={`text-xs ${strength.isStrongEnough ? 'text-green-400' : 'text-amber-400'}`}>
+                                                            {strength.isStrongEnough
+                                                                ? 'Password is strong enough for cloud sync'
+                                                                : `Password needs: ${strength.length < 10 ? '10+ chars, ' : ''}${strength.score < 3 ? '3+ of (upper/lower/number/special)' : ''}`}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </Show>
+
+                                        {/* Error */}
+                                        <Show when={cloudSyncError()}>
+                                            <div class="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                                <p class="text-red-400 text-sm">{cloudSyncError()}</p>
+                                            </div>
+                                        </Show>
+                                    </div>
+                                </Show>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -80,6 +80,7 @@ import {
 } from '../services/firebaseService';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
+import { CloudWalletService, calculatePasswordStrength } from '../services/cloudWalletService';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services/vcnPriceService';
 import { generateText, generateTextStream } from '../services/ai';
@@ -514,6 +515,11 @@ const Wallet = (): JSX.Element => {
     const [onboardingSuccess, setOnboardingSuccess] = createSignal(false);
     const [referralBonus, setReferralBonus] = createSignal('0');
     const [isLocalWalletMissing, setIsLocalWalletMissing] = createSignal(false);
+    const [cloudWalletAvailable, setCloudWalletAvailable] = createSignal(false);
+    const [showCloudRestoreModal, setShowCloudRestoreModal] = createSignal(false);
+    const [cloudRestorePassword, setCloudRestorePassword] = createSignal('');
+    const [cloudRestoreLoading, setCloudRestoreLoading] = createSignal(false);
+    const [cloudRestoreError, setCloudRestoreError] = createSignal('');
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
     const [editPhone, setEditPhone] = createSignal('');
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
@@ -1502,6 +1508,25 @@ const Wallet = (): JSX.Element => {
                 const hasLocalWallet = WalletService.hasWallet(user.email);
                 setIsLocalWalletMissing(hasBackendWallet && !hasLocalWallet);
 
+                // If backend has wallet but local doesn't, check cloud sync
+                if (hasBackendWallet && !hasLocalWallet) {
+                    console.log("[Wallet] Local wallet missing, checking cloud sync...");
+
+                    // Check if cloud wallet exists (non-blocking)
+                    CloudWalletService.hasCloudWallet().then(cloudResult => {
+                        if (cloudResult.exists) {
+                            console.log("[Wallet] Cloud wallet found! User can restore with password.");
+                            setCloudWalletAvailable(true);
+                        } else {
+                            console.log("[Wallet] No cloud wallet - user must restore from seed phrase.");
+                            setCloudWalletAvailable(false);
+                        }
+                    }).catch(err => {
+                        console.warn("[Wallet] Cloud check failed:", err);
+                        setCloudWalletAvailable(false);
+                    });
+                }
+
                 if (hasBackendWallet || hasLocalWallet) {
                     const finalAddress = data.walletAddress || localAddress || '';
                     console.log(`[Profile] Loading address for ${user.email}:`, finalAddress);
@@ -1943,7 +1968,7 @@ const Wallet = (): JSX.Element => {
             setCurrentPrivateKey(privateKey); // Cache for internal wallet operations
             console.log("[Wallet] NEW ADDRESS DERIVED:", address);
 
-            // 2. Encrypt and Save 
+            // 2. Encrypt and Save Locally
             const encrypted = await WalletService.encrypt(mnemonic, walletPassword());
             WalletService.saveEncryptedWallet(encrypted, userProfile().email);
             // Save address unencrypted for UI consistency (SCOPED)
@@ -1956,7 +1981,23 @@ const Wallet = (): JSX.Element => {
                 await updateWalletStatus(user.email, address, true);
             }
 
-            // 4. Update User State & Signals
+            // 4. Cloud Sync (for cross-browser access) - Non-blocking
+            const passwordStrength = calculatePasswordStrength(walletPassword());
+            if (passwordStrength.isStrongEnough) {
+                CloudWalletService.saveToCloud(mnemonic, walletPassword(), address, userProfile().email)
+                    .then(result => {
+                        if (result.success) {
+                            console.log("[Wallet] Cloud sync successful - wallet accessible from any browser");
+                        } else {
+                            console.warn("[Wallet] Cloud sync skipped:", result.error);
+                        }
+                    })
+                    .catch(err => console.warn("[Wallet] Cloud sync error (non-critical):", err));
+            } else {
+                console.log("[Wallet] Password not strong enough for cloud sync - local only");
+            }
+
+            // 5. Update User State & Signals
             setWalletAddressSignal(address); // Force update the signal
             setUserProfile(prev => ({
                 ...prev,
@@ -1966,7 +2007,7 @@ const Wallet = (): JSX.Element => {
             }));
             console.log("[Wallet] Local state updated with new address.");
 
-            // 5. Success state
+            // 6. Success state
             setShowPasswordModal(false);
             setIsRestoring(false); // Reset restore state
             setOnboardingStep(4); // Move to Success Screen AFTER password is set
@@ -1983,6 +2024,55 @@ const Wallet = (): JSX.Element => {
         setOnboardingSuccess(false);
         setOnboardingStep(0);
         navigate('/wallet/assets');
+    };
+
+    // Cloud Wallet Restore Handler
+    const handleCloudRestore = async () => {
+        if (!cloudRestorePassword()) {
+            setCloudRestoreError('Please enter your password');
+            return;
+        }
+
+        try {
+            setCloudRestoreLoading(true);
+            setCloudRestoreError('');
+
+            const result = await CloudWalletService.loadFromCloud(
+                cloudRestorePassword(),
+                userProfile().email
+            );
+
+            if (result.success && result.mnemonic) {
+                console.log('[CloudRestore] Wallet restored successfully from cloud');
+
+                // Update state
+                setWalletAddressSignal(result.walletAddress || '');
+                const { privateKey } = WalletService.deriveEOA(result.mnemonic);
+                setCurrentPrivateKey(privateKey);
+
+                setIsLocalWalletMissing(false);
+                setCloudWalletAvailable(false);
+                setShowCloudRestoreModal(false);
+                setCloudRestorePassword('');
+
+                // Update user profile
+                setUserProfile(prev => ({
+                    ...prev,
+                    isVerified: true,
+                    address: result.walletAddress || prev.address
+                }));
+
+                // Show success message
+                alert('Wallet restored successfully from cloud!');
+            } else {
+                setCloudRestoreError(result.error || 'Failed to restore wallet');
+            }
+        } catch (err: any) {
+            console.error('[CloudRestore] Error:', err);
+            setCloudRestoreError(err.message || 'An error occurred');
+        } finally {
+            setCloudRestoreLoading(false);
+        }
     };
 
     const startVerification = () => {
@@ -2915,9 +3005,13 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 totalValue={totalValue}
                                 networkMode={networkMode()}
                                 isLocalWalletMissing={isLocalWalletMissing()}
+                                cloudWalletAvailable={cloudWalletAvailable()}
                                 onRestoreWallet={() => {
                                     navigate('/wallet/profile');
                                     setOnboardingStep(2);
+                                }}
+                                onCloudRestore={() => {
+                                    setShowCloudRestoreModal(true);
                                 }}
                                 walletAddress={walletAddress}
                                 contacts={contacts()}
@@ -4087,6 +4181,95 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             </div>
                         </Show>
 
+                        {/* Cloud Wallet Restore Modal */}
+                        <Show when={showCloudRestoreModal()}>
+                            <Motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+                            >
+                                <div
+                                    class="absolute inset-0 bg-black/80 backdrop-blur-md"
+                                    onClick={() => setShowCloudRestoreModal(false)}
+                                />
+
+                                <Motion.div
+                                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                                    class="relative w-full max-w-md bg-[#111113] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl"
+                                >
+                                    {/* Header */}
+                                    <div class="p-8 pb-6 text-center">
+                                        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center border border-blue-500/30">
+                                            <svg class="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                            </svg>
+                                        </div>
+                                        <h2 class="text-2xl font-black text-white mb-2">Restore from Cloud</h2>
+                                        <p class="text-sm text-gray-400">
+                                            Enter your wallet password to restore your wallet from the cloud.
+                                        </p>
+                                    </div>
+
+                                    {/* Form */}
+                                    <div class="px-8 pb-8 space-y-4">
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                                Wallet Password
+                                            </label>
+                                            <input
+                                                type="password"
+                                                value={cloudRestorePassword()}
+                                                onInput={(e) => setCloudRestorePassword(e.currentTarget.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && handleCloudRestore()}
+                                                placeholder="Enter your password"
+                                                class="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                                            />
+                                        </div>
+
+                                        {/* Error Message */}
+                                        <Show when={cloudRestoreError()}>
+                                            <div class="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                                                <p class="text-sm text-red-400">{cloudRestoreError()}</p>
+                                            </div>
+                                        </Show>
+
+                                        {/* Info */}
+                                        <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                                            <p class="text-xs text-blue-300/80">
+                                                Your wallet is protected by double encryption. Only you can decrypt it with your password.
+                                            </p>
+                                        </div>
+
+                                        {/* Buttons */}
+                                        <div class="flex gap-3 pt-2">
+                                            <button
+                                                onClick={() => {
+                                                    setShowCloudRestoreModal(false);
+                                                    setCloudRestorePassword('');
+                                                    setCloudRestoreError('');
+                                                }}
+                                                class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleCloudRestore}
+                                                disabled={!cloudRestorePassword() || cloudRestoreLoading()}
+                                                class="flex-[2] py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <Show when={cloudRestoreLoading()} fallback="Restore Wallet">
+                                                    <RefreshCw class="w-4 h-4 animate-spin" />
+                                                    Restoring...
+                                                </Show>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </Motion.div>
+                            </Motion.div>
+                        </Show>
                         {/* Profile Image Crop Modal */}
                         <Show when={isCropping()}>
                             <Motion.div
