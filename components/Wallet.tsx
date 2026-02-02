@@ -1406,6 +1406,10 @@ const Wallet = (): JSX.Element => {
                     totalRewards: 0
                 }));
                 alert("Rewards Claimed Successfully!");
+            } else if (action.type === 'bridge') {
+                // Execute Bridge via the separated function
+                const bridgeData = action.data as { amount: string; destinationChain: string };
+                await executeBridgeIntent(bridgeData);
             }
         } catch (error: any) {
             console.error("Internal Action Failed:", error);
@@ -2210,11 +2214,34 @@ const Wallet = (): JSX.Element => {
         }]);
     };
 
-    // === Cross-Chain Bridge Execution ===
+    // === Cross-Chain Bridge Confirmation (Request Password) ===
     const handleExecuteBridge = async () => {
         const bridge = pendingBridge();
         if (!bridge || isBridging()) return;
 
+        // Check if local wallet exists
+        const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+        if (!encrypted) {
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: lastLocale() === 'ko'
+                    ? "로컬 지갑 키를 찾을 수 없습니다. 복구 문구로 지갑을 복원해주세요."
+                    : "Local wallet key not found. Please restore your wallet using your recovery phrase."
+            }]);
+            setPendingBridge(null);
+            return;
+        }
+
+        // Request password for signing
+        setPasswordMode('verify');
+        setPendingAction({ type: 'bridge', data: bridge });
+        setWalletPassword('');
+        setConfirmWalletPassword('');
+        setShowPasswordModal(true);
+    };
+
+    // === Actual Bridge Execution (After Password Verified) ===
+    const executeBridgeIntent = async (bridge: { amount: string; destinationChain: string }) => {
         setIsBridging(true);
         try {
             // Use Internal Wallet (Cloud Wallet) - NOT MetaMask
@@ -2223,6 +2250,7 @@ const Wallet = (): JSX.Element => {
                 throw new Error(lastLocale() === 'ko'
                     ? "로컬 지갑 키를 찾을 수 없습니다. 복구 문구로 지갑을 복원해주세요."
                     : "Local wallet key not found. Please restore your wallet using your recovery phrase.");
+
             }
 
             const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
