@@ -5,6 +5,7 @@ import {
     Info,
     AlertCircle,
     ArrowDownLeft,
+    ArrowUpRight,
     Clock,
     Trash2,
     CheckCircle2,
@@ -16,7 +17,27 @@ import {
     Search,
     Inbox,
     MailOpen,
-    Filter
+    Filter,
+    // Staking icons
+    TrendingUp,
+    TrendingDown,
+    Timer,
+    Coins,
+    // Referral & Level
+    Users,
+    UserPlus,
+    Award,
+    Star,
+    // Events & Prizes
+    Gift,
+    Trophy,
+    Medal,
+    PartyPopper,
+    // System & Security
+    Shield,
+    ShieldAlert,
+    Send,
+    Repeat
 } from 'lucide-solid';
 import { Motion, Presence } from 'solid-motionone';
 import { useAuth } from '../auth/authContext';
@@ -34,14 +55,85 @@ import {
 
 import { WalletViewHeader } from './WalletViewHeader';
 
+// Notification types enumeration for better type safety
+export type NotificationType =
+    // Transfer related
+    | 'transfer_received'
+    | 'transfer_sent'
+    | 'transfer_scheduled'
+    // Staking related
+    | 'staking_deposit'
+    | 'staking_withdrawal'
+    | 'staking_pending'
+    | 'staking_reward'
+    // TimeLock / Scheduled Transfer
+    | 'timelock_scheduled'
+    | 'timelock_executed'
+    | 'timelock_cancelled'
+    // Multi-send
+    | 'multi_send_complete'
+    | 'multi_send_partial'
+    // Referral & Level
+    | 'referral_signup'
+    | 'referral_reward'
+    | 'level_up'
+    // Events & Prizes
+    | 'event_participation'
+    | 'event_result'
+    | 'prize_winner'
+    | 'ranking_update'
+    // Bridge
+    | 'bridge_finalized'
+    | 'bridge_pending'
+    | 'challenge_raised'
+    // System
+    | 'system_announcement'
+    | 'system_notice'
+    | 'security_alert'
+    | 'alert';
+
+export interface NotificationData {
+    // Transaction related
+    txHash?: string;
+    amount?: string;
+    token?: string;
+    from?: string;
+    to?: string;
+    // Staking related
+    stakingId?: string;
+    stakingAmount?: string;
+    stakingDuration?: number;
+    rewardAmount?: string;
+    // Referral related
+    referredUser?: string;
+    referralLevel?: number;
+    bonusAmount?: string;
+    // Event/Prize related
+    eventId?: string;
+    eventName?: string;
+    rank?: number;
+    prizeAmount?: string;
+    // Level up
+    previousLevel?: number;
+    newLevel?: number;
+    // General
+    actionUrl?: string;
+    expiresAt?: any;
+    [key: string]: any;
+}
+
 export interface Notification {
     id: string;
-    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert' | 'challenge_raised' | 'bridge_finalized' | 'bridge_pending';
+    type: NotificationType;
     title: string;
     content: string;
     timestamp: any;
     read: boolean;
-    data?: any;
+    data?: NotificationData;
+    // Enhanced fields
+    category?: 'transaction' | 'staking' | 'referral' | 'event' | 'system' | 'security';
+    priority?: 'low' | 'normal' | 'high' | 'urgent';
+    actionable?: boolean;
 }
 
 export function WalletNotifications() {
@@ -184,19 +276,95 @@ export function WalletNotifications() {
         if (diff < 60) return 'Just now';
         if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
         if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`; // Within a week
         return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    };
+
+    // Full date/time format for detail view
+    const formatFullDate = (ts: any) => {
+        if (!ts) return 'Unknown';
+        const date = ts?.toDate ? ts.toDate() : new Date(ts);
+        return date.toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
     };
 
     const getMeta = (type: string) => {
         switch (type) {
-            case 'transfer_received': return { icon: ArrowDownLeft, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Transfer' };
-            case 'transfer_scheduled': return { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Scheduled' };
-            case 'system_announcement': return { icon: Megaphone, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'System' };
-            case 'alert': return { icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Alert' };
-            case 'challenge_raised': return { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Challenge' };
-            case 'bridge_finalized': return { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Bridge' };
-            case 'bridge_pending': return { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Pending' };
-            default: return { icon: Info, color: 'text-gray-400', bg: 'bg-gray-400/10', label: 'Info' };
+            // Transfer related
+            case 'transfer_received':
+                return { icon: ArrowDownLeft, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Received' };
+            case 'transfer_sent':
+                return { icon: ArrowUpRight, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Sent' };
+            case 'transfer_scheduled':
+                return { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Scheduled' };
+
+            // Staking related
+            case 'staking_deposit':
+                return { icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-400/10', label: 'Stake' };
+            case 'staking_withdrawal':
+                return { icon: TrendingDown, color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Unstake' };
+            case 'staking_pending':
+                return { icon: Timer, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Pending' };
+            case 'staking_reward':
+                return { icon: Coins, color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'Reward' };
+
+            // TimeLock / Scheduled Transfer
+            case 'timelock_scheduled':
+                return { icon: Calendar, color: 'text-indigo-400', bg: 'bg-indigo-400/10', label: 'TimeLock' };
+            case 'timelock_executed':
+                return { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Executed' };
+            case 'timelock_cancelled':
+                return { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Cancelled' };
+
+            // Multi-send
+            case 'multi_send_complete':
+                return { icon: Send, color: 'text-cyan-400', bg: 'bg-cyan-400/10', label: 'Multi-Send' };
+            case 'multi_send_partial':
+                return { icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Partial' };
+
+            // Referral & Level
+            case 'referral_signup':
+                return { icon: UserPlus, color: 'text-teal-400', bg: 'bg-teal-400/10', label: 'Referral' };
+            case 'referral_reward':
+                return { icon: Gift, color: 'text-pink-400', bg: 'bg-pink-400/10', label: 'Bonus' };
+            case 'level_up':
+                return { icon: Award, color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'Level Up' };
+
+            // Events & Prizes
+            case 'event_participation':
+                return { icon: Star, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Event' };
+            case 'event_result':
+                return { icon: Medal, color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Result' };
+            case 'prize_winner':
+                return { icon: Trophy, color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'Winner' };
+            case 'ranking_update':
+                return { icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Ranking' };
+
+            // Bridge
+            case 'bridge_finalized':
+                return { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Bridge' };
+            case 'bridge_pending':
+                return { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Pending' };
+            case 'challenge_raised':
+                return { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Challenge' };
+
+            // System & Security
+            case 'system_announcement':
+                return { icon: Megaphone, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Announce' };
+            case 'system_notice':
+                return { icon: Info, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Notice' };
+            case 'security_alert':
+                return { icon: ShieldAlert, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Security' };
+            case 'alert':
+                return { icon: AlertCircle, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Alert' };
+
+            default:
+                return { icon: Info, color: 'text-gray-400', bg: 'bg-gray-400/10', label: 'Info' };
         }
     };
 
@@ -359,18 +527,32 @@ export function WalletNotifications() {
                                             </div>
 
                                             <div>
-                                                <div class="flex items-center gap-3 mb-3">
+                                                <div class="flex flex-wrap items-center gap-3 mb-3">
                                                     <span class={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] ${meta.bg} ${meta.color} border border-white/5`}>
-                                                        {meta.label} Signal
+                                                        {meta.label}
                                                     </span>
-                                                    <span class="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{formatTime(item().timestamp)}</span>
+                                                    {item().category && (
+                                                        <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-white/5 text-gray-500 border border-white/5">
+                                                            {item().category}
+                                                        </span>
+                                                    )}
+                                                    {item().priority === 'urgent' && (
+                                                        <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-red-500/20 text-red-400 border border-red-500/20">
+                                                            Urgent
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <h2 class="text-4xl lg:text-5xl font-black italic text-white leading-[0.9] uppercase tracking-tighter mb-4">
+                                                <h2 class="text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
                                                     {item().title}
                                                 </h2>
-                                                <p class="text-gray-500 font-mono text-[11px] break-all border-l-2 border-blue-600/30 pl-4 py-1">
-                                                    LOG_ID: {item().id}
-                                                </p>
+                                                <div class="flex flex-col gap-1 border-l-2 border-blue-600/30 pl-4 py-1">
+                                                    <p class="text-gray-400 font-medium text-sm">
+                                                        {formatFullDate(item().timestamp)}
+                                                    </p>
+                                                    <p class="text-gray-700 font-mono text-[10px] break-all">
+                                                        ID: {item().id}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
 
