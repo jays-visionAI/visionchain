@@ -458,7 +458,7 @@ export function WalletNotifications() {
                     />
 
                     {/* Main Tab Navigation: Announcements vs My Notifications */}
-                    <div class="flex bg-white/[0.02] p-1.5 rounded-2xl border border-white/5 mt-8 gap-1">
+                    <div class="flex bg-white/[0.02] p-1.5 rounded-2xl border border-white/5 mt-4 sm:mt-8 gap-1">
                         <button
                             onClick={() => { setActiveTab('announcements'); setSelectedId(null); setSelectedAnnouncementId(null); }}
                             class={`flex-1 px-2 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative flex items-center justify-center gap-1 sm:gap-2 ${activeTab() === 'announcements' ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
@@ -487,7 +487,7 @@ export function WalletNotifications() {
 
                     {/* Sub-filters for My Notifications tab only */}
                     <Show when={activeTab() === 'notifications'}>
-                        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
                             <div class="flex bg-white/[0.03] p-1 rounded-2xl border border-white/5 w-full sm:w-auto">
                                 <button
                                     onClick={() => setFilter('all')}
@@ -506,20 +506,20 @@ export function WalletNotifications() {
                                 </button>
                             </div>
 
-                            <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <div class="flex items-center gap-2">
                                 <button
                                     onClick={markAllRead}
                                     disabled={!notifications().some(n => !n.read)}
-                                    class="flex-1 sm:flex-none px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-all disabled:opacity-0"
+                                    class="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-white transition-all disabled:opacity-30"
                                 >
-                                    Mark All Read
+                                    Mark Read
                                 </button>
                                 <button
                                     onClick={clearAll}
                                     disabled={notifications().length === 0}
-                                    class="flex-1 sm:flex-none px-4 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 transition-all disabled:opacity-0"
+                                    class="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[9px] font-black uppercase tracking-wider text-red-400 transition-all disabled:opacity-30"
                                 >
-                                    Purge All
+                                    Clear
                                 </button>
                             </div>
                         </div>
@@ -535,7 +535,7 @@ export function WalletNotifications() {
                     class={`flex-1 flex flex-col overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch transition-all duration-500 ${(activeTab() === 'notifications' ? selectedId() : selectedAnnouncementId()) ? 'hidden lg:flex' : 'flex'}`}
                     style="-webkit-overflow-scrolling: touch;"
                 >
-                    <div class="max-w-5xl mx-auto w-full p-4 lg:p-8 pt-4 space-y-3 pb-32">
+                    <div class="max-w-5xl mx-auto w-full px-3 py-2 lg:p-8 lg:pt-4 space-y-2 sm:space-y-3 pb-32">
                         {/* Announcements Tab Content */}
                         <Show when={activeTab() === 'announcements'}>
                             <Show when={!announcementsLoading()} fallback={
@@ -697,15 +697,15 @@ export function WalletNotifications() {
                                             </button>
                                         </div>
 
-                                        <div class="p-6 lg:p-12 pt-20 lg:pt-12 space-y-12 max-w-2xl mx-auto w-full">
+                                        <div class="p-4 lg:p-12 pt-16 lg:pt-12 space-y-8 lg:space-y-12 max-w-2xl mx-auto w-full pb-safe">
                                             <div class="space-y-6">
                                                 <div class="flex items-center justify-between">
                                                     <div class={`w-16 h-16 rounded-[28px] flex items-center justify-center ${meta.bg} border-2 border-white/5`}>
                                                         <meta.icon class={`w-8 h-8 ${meta.color}`} />
                                                     </div>
-                                                    <div class="flex items-center gap-2">
+                                                    <div class="flex items-center gap-2 shrink-0">
                                                         <Show when={item().priority === 'urgent' || item().priority === 'high'}>
-                                                            <span class="px-3 py-1.5 bg-red-500/20 text-red-400 text-[10px] font-black uppercase rounded-xl border border-red-500/20">
+                                                            <span class="px-2 py-1 bg-red-500/20 text-red-400 text-[9px] font-black uppercase rounded-lg border border-red-500/20 whitespace-nowrap">
                                                                 {item().priority}
                                                             </span>
                                                         </Show>
@@ -721,7 +721,7 @@ export function WalletNotifications() {
                                                             Official
                                                         </span>
                                                     </div>
-                                                    <h2 class="text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
+                                                    <h2 class="text-2xl sm:text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
                                                         {item().title}
                                                     </h2>
                                                     <div class="flex flex-col gap-1 border-l-2 border-purple-600/30 pl-4 py-1">
@@ -752,6 +752,7 @@ export function WalletNotifications() {
                                                     {item().actionLabel || 'Learn More'}
                                                 </a>
                                             </Show>
+                                            <div class="h-20 lg:h-0" /> {/* Safe area spacer for mobile */}
                                         </div>
                                     </div>
                                 );
