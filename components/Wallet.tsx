@@ -2225,11 +2225,11 @@ const Wallet = (): JSX.Element => {
             const signer = await provider.getSigner();
             const userAddr = await signer.getAddress();
 
-
             // Vision Chain IntentCommitment contract
             const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
             const VISION_CHAIN_ID = 1337;
             const SEPOLIA_CHAIN_ID = 11155111;
+            const PAYMASTER_API = 'https://vision-chain.cloudfunctions.net';
 
             // Determine destination chain ID
             const dstChainId = bridge.destinationChain.toUpperCase() === 'ETHEREUM' || bridge.destinationChain.toUpperCase() === 'SEPOLIA'
@@ -2242,7 +2242,7 @@ const Wallet = (): JSX.Element => {
                 "function getNextNonce(address user) view returns (uint256)"
             ];
 
-            const intentContract = new ethers.Contract(VISION_INTENT_COMMITMENT, INTENT_ABI, signer);
+            const intentContract = new ethers.Contract(VISION_INTENT_COMMITMENT, INTENT_ABI, provider);
 
             // Get next nonce
             const nonce = await intentContract.getNextNonce(userAddr);
@@ -2261,7 +2261,7 @@ const Wallet = (): JSX.Element => {
                 expiry: BigInt(expiry)
             };
 
-            // EIP-712 Domain
+            // EIP-712 Domain for Bridge Intent
             const domain = {
                 name: 'VisionBridge',
                 version: '1',
@@ -2285,19 +2285,37 @@ const Wallet = (): JSX.Element => {
 
             // Sign with EIP-712
             console.log('[Bridge] Signing intent with EIP-712...');
-            const signature = await signer.signTypedData(domain, types, intent);
+            const intentSignature = await signer.signTypedData(domain, types, intent);
 
-            // Submit commitIntent transaction
-            console.log('[Bridge] Submitting commitIntent...');
-            const tx = await intentContract.commitIntent(intent, signature, { gasLimit: 300000 });
-            console.log(`[Bridge] Tx submitted: ${tx.hash}`);
+            // Submit to Paymaster API for gas sponsorship
+            console.log('[Bridge] Submitting to Paymaster API...');
+            const response = await fetch(`${PAYMASTER_API}/bridgeWithPaymaster`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user: userAddr,
+                    srcChainId: VISION_CHAIN_ID,
+                    dstChainId: dstChainId,
+                    token: ethers.ZeroAddress,
+                    amount: amountWei.toString(),
+                    recipient: userAddr,
+                    nonce: nonce.toString(),
+                    expiry: expiry,
+                    intentSignature: intentSignature
+                })
+            });
 
-            const receipt = await tx.wait();
-            console.log(`[Bridge] Confirmed in block ${receipt.blockNumber}`);
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(`Paymaster Failed: ${error.error || response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log(`[Bridge] Tx submitted via Paymaster: ${result.txHash}`);
 
             // Success message with Explorer link
             const chainDisplay = bridge.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridge.destinationChain;
-            const visionScanLink = `https://visionscan.org/tx/${tx.hash}`;
+            const visionScanLink = `https://visionscan.org/tx/${result.txHash}`;
 
             const successMsg = lastLocale() === 'ko'
                 ? `브릿지 요청이 성공적으로 제출되었습니다!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[VisionScan에서 보기](${visionScanLink})\n\n약 10-30분 후 목적지 체인에서 토큰을 수령할 수 있습니다.`
@@ -2306,11 +2324,12 @@ const Wallet = (): JSX.Element => {
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: successMsg,
-                bridgeTxHash: tx.hash,
+                bridgeTxHash: result.txHash,
                 bridgeDestination: bridge.destinationChain
             }]);
 
             setPendingBridge(null);
+
 
 
         } catch (error: any) {
