@@ -1401,7 +1401,7 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
 // =============================================================================
 const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 const SEPOLIA_EQUALIZER = "0x6e6E465594cED9cA33995939b9579a8A29194983";
-const ERC20_ABI = ["function balanceOf(address) view returns (uint256)"];
+// ERC20_ABI already defined above at line 469
 
 /**
  * Check pending bridge transactions and update their status
@@ -1495,6 +1495,8 @@ exports.checkBridgeCompletion = onSchedule("every 5 minutes", async () => {
 
 /**
  * Helper: Find user email by wallet address
+ * @param {string} address - Wallet address to search for
+ * @return {Promise<string|null>} User email or null
  */
 async function findEmailByAddress(address) {
   if (!address) return null;
@@ -1513,6 +1515,9 @@ async function findEmailByAddress(address) {
 
 /**
  * Helper: Create bridge notification
+ * @param {string} email - User email
+ * @param {object} notification - Notification data
+ * @return {Promise<void>}
  */
 async function createBridgeNotification(email, notification) {
   if (!email) return;
