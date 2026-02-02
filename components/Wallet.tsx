@@ -2229,7 +2229,7 @@ const Wallet = (): JSX.Element => {
             const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
             const VISION_CHAIN_ID = 1337;
             const SEPOLIA_CHAIN_ID = 11155111;
-            const PAYMASTER_API = 'https://vision-chain.cloudfunctions.net';
+            const PAYMASTER_API = 'https://us-central1-visionchain-d19ed.cloudfunctions.net';
 
             // Determine destination chain ID
             const dstChainId = bridge.destinationChain.toUpperCase() === 'ETHEREUM' || bridge.destinationChain.toUpperCase() === 'SEPOLIA'
