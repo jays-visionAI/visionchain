@@ -2741,7 +2741,9 @@ If they say "Yes", output the navigate intent JSON for "referral".
         setSeedPhrase(mnemonic.split(' '));
         setIsRestoring(true);
         setPasswordMode('setup');
+        console.log("[Restore] About to show password modal...");
         setShowPasswordModal(true);
+        console.log("[Restore] Password modal should be visible now. showPasswordModal:", true);
     };
 
     const handleMint = async () => {
@@ -4093,12 +4095,14 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     animate={{ opacity: 1 }}
                                     exit={{ opacity: 0 }}
                                     class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                                    onClick={(e) => e.stopPropagation()}
                                 />
                                 <Motion.div
                                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
                                     class="relative w-[90vw] max-w-[420px] bg-[#27272a] border border-white/10 rounded-[32px] overflow-hidden shadow-2xl mx-auto"
+                                    onClick={(e) => e.stopPropagation()}
                                 >
                                     <div class="p-8 space-y-6">
                                         <div class="text-center">
