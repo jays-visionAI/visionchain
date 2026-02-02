@@ -832,8 +832,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 setIsMobileHistoryOpen(false);
                                             }}
                                             class={`w-full p-3 rounded-xl text-left transition-all border ${props.currentSessionId() === conv.id
-                                                    ? 'bg-purple-600/10 border-purple-500/30'
-                                                    : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.05]'
+                                                ? 'bg-purple-600/10 border-purple-500/30'
+                                                : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.05]'
                                                 }`}
                                         >
                                             <div class="flex flex-col gap-1">
@@ -1114,6 +1114,72 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     {/* Expanded State - Full Input */}
                     <Show when={bottomSheetExpanded()}>
                         <div class="px-4 pb-6">
+                            {/* Mobile Agent Desk - Show when there are active agents */}
+                            <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0}>
+                                <div class="mb-3">
+                                    {/* Agent Desk Header with Toggle */}
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
+                                        <button
+                                            onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
+                                            class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 ${isAgentBayCollapsed()
+                                                ? 'bg-blue-600/90 border-blue-400 text-white'
+                                                : 'bg-[#121214]/80 border-white/10 text-gray-400'
+                                                }`}
+                                        >
+                                            <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500'}`} />
+                                            <span>{isAgentBayCollapsed() ? 'Show' : 'Hide'}</span>
+                                            <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-3 h-3" />}>
+                                                <ChevronDown class="w-3 h-3" />
+                                            </Show>
+                                        </button>
+                                    </div>
+
+                                    {/* Agent Chips - Scrollable row when expanded */}
+                                    <Show when={!isAgentBayCollapsed()}>
+                                        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                            {/* Batch Agents */}
+                                            <For each={props.batchAgents()}>
+                                                {(agent) => (
+                                                    <AgentChip
+                                                        task={{
+                                                            id: agent.id,
+                                                            type: 'BATCH',
+                                                            summary: `${agent.successCount + agent.failedCount}/${agent.totalCount} Txs`,
+                                                            status: (agent.status === 'EXECUTING' || agent.status === 'executing') ? 'EXECUTING' : (agent.status === 'SENT' ? 'SENT' : 'FAILED'),
+                                                            timestamp: agent.startTime,
+                                                            progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100,
+                                                            error: agent.error
+                                                        }}
+                                                        isCompact={true}
+                                                        onClick={() => {
+                                                            setSelectedTaskId(agent.id);
+                                                            setIsQueueDrawerOpen(true);
+                                                        }}
+                                                        onDismiss={(id) => props.onDismissTask?.(id)}
+                                                    />
+                                                )}
+                                            </For>
+
+                                            {/* Time-lock Agents */}
+                                            <For each={activeTimeTasks()}>
+                                                {(task) => (
+                                                    <AgentChip
+                                                        task={task}
+                                                        isCompact={true}
+                                                        onClick={() => {
+                                                            setSelectedTaskId(task.id);
+                                                            setIsQueueDrawerOpen(true);
+                                                        }}
+                                                        onDismiss={(id) => props.onDismissTask?.(id)}
+                                                    />
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                </div>
+                            </Show>
+
                             {/* Input Container */}
                             <div class="relative bg-[#121214] rounded-2xl border border-white/10 overflow-hidden">
                                 <textarea
