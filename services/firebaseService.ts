@@ -3244,19 +3244,27 @@ export const getGlobalAnnouncements = async (): Promise<GlobalAnnouncement[]> =>
 export const subscribeToAnnouncements = (callback: (announcements: GlobalAnnouncement[]) => void) => {
     const db = getFirebaseDb();
     const announcementsRef = collection(db, 'global_announcements');
-    const q = query(announcementsRef, where('isActive', '==', true), orderBy('createdAt', 'desc'));
+    // Only filter by isActive, sort on client to avoid composite index requirement
+    const q = query(announcementsRef, where('isActive', '==', true));
 
     return onSnapshot(q, (snapshot) => {
         const announcements = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         } as GlobalAnnouncement));
+        // Sort by createdAt descending on client
+        announcements.sort((a, b) => {
+            const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+            const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+            return bTime.getTime() - aTime.getTime();
+        });
         callback(announcements);
     }, (error) => {
         console.error('[Announcements] Subscribe error:', error);
         callback([]);
     });
 };
+
 
 // Create a new announcement (Admin only)
 export const createAnnouncement = async (announcement: Omit<GlobalAnnouncement, 'id' | 'createdAt'>): Promise<string | null> => {
