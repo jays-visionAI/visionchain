@@ -684,7 +684,7 @@ exports.adminFundPool = onRequest({ cors: true, invoker: "public" }, async (req,
 });
 
 // --- Secure Wallet Update ---
-exports.updateWalletAddress = onCall(async (request) => {
+exports.updateWalletAddress = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -760,7 +760,7 @@ exports.updateWalletAddress = onCall(async (request) => {
  * Server adds: server-side AES-256-GCM encryption layer
  * Stored in Firestore: double-encrypted wallet
  */
-exports.saveWalletToCloud = onCall(async (request) => {
+exports.saveWalletToCloud = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -823,7 +823,7 @@ exports.saveWalletToCloud = onCall(async (request) => {
  * - Device Fingerprint: New devices require email verification
  * - IP Anomaly Detection: Alerts on suspicious access patterns
  */
-exports.loadWalletFromCloud = onCall(async (request) => {
+exports.loadWalletFromCloud = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -955,7 +955,7 @@ exports.loadWalletFromCloud = onCall(async (request) => {
  * Verify device with email verification code
  * Call this after receiving the code via email to verify a new device
  */
-exports.verifyDeviceCode = onCall(async (request) => {
+exports.verifyDeviceCode = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -1025,7 +1025,7 @@ exports.verifyDeviceCode = onCall(async (request) => {
 /**
  * Check if user has a cloud wallet (without loading it)
  */
-exports.checkCloudWallet = onCall(async (request) => {
+exports.checkCloudWallet = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }

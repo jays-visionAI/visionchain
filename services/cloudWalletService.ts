@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getFirebaseApp } from './firebaseService';
 import { WalletService } from './walletService';
 
-const functions = getFunctions(getFirebaseApp());
+const functions = getFunctions(getFirebaseApp(), 'us-central1');
 
 // Password strength calculation
 export interface PasswordStrength {
