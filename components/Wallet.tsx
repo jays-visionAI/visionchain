@@ -946,7 +946,7 @@ const Wallet = (): JSX.Element => {
                         console.log("[Paymaster] Fee Quote:", feeQuote);
 
                         setLoadingMessage(`AGENT: SCHEDULING (Fee: ${feeQuote.totalFee} VCN)...`);
-                        const result = await contractService.scheduleTimeLockGasless(recipient, amount, lockDelaySeconds());
+                        const result = await contractService.scheduleTimeLockGasless(recipient, amount, lockDelaySeconds(), auth.user()?.email || undefined);
                         console.log("[Paymaster] Time-lock Scheduled:", result);
 
                         timeLockTxHash = result.txHash;

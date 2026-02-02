@@ -1,4 +1,5 @@
 module.exports = {
+  ignorePatterns: ["add-announcement.js"],
   env: {
     es2020: true,
     node: true,

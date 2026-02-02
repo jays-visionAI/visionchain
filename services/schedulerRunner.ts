@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { getFirebaseDb, createNotification, findUserByAddress } from './firebaseService';
-import { collection, query, where, limit, getDocs, updateDoc, doc, runTransaction, Timestamp, increment } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, updateDoc, doc, runTransaction, Timestamp, increment, setDoc } from 'firebase/firestore';
 
 // --- Configuration ---
 const MAX_RETRIES = 3;
@@ -164,8 +164,27 @@ export const runSchedulerTick = async () => {
             });
             console.log(`Success: ${jobId}`);
 
-            // 6. Create Notifications
+            // 5b. Record in transactions collection for History page
             const taskData = jobDoc.data();
+            try {
+                await setDoc(doc(db, 'transactions', tx.hash), {
+                    hash: tx.hash,
+                    from_addr: taskData.senderAddress?.toLowerCase() || '',
+                    to_addr: taskData.recipient?.toLowerCase() || '',
+                    value: String(taskData.amount || 0),
+                    timestamp: Date.now(),
+                    type: 'Time Lock Transfer',
+                    status: 'success',
+                    block_number: 0, // Will be updated if needed
+                    source: 'TIMELOCK_AGENT',
+                    scheduleId: taskData.scheduleId
+                });
+                console.log(`Transaction recorded: ${tx.hash}`);
+            } catch (txRecordErr) {
+                console.warn("Failed to record transaction:", txRecordErr);
+            }
+
+            // 6. Create Notifications
             const symbol = taskData.token || 'VCN';
 
             // To Sender

@@ -123,6 +123,10 @@ const AgentChip = (props: AgentChipProps) => {
     });
 
     const timeStatus = createMemo(() => {
+        // Show status-specific messages for non-WAITING states
+        if (props.task.status === 'SENT') return 'Complete';
+        if (props.task.status === 'EXECUTING') return 'Processing...';
+        if (props.task.status === 'FAILED') return 'Failed';
         if (props.task.status !== 'WAITING') return props.task.timeLeft || '';
         if (!props.task.executeAt) return props.task.timeLeft || '';
 

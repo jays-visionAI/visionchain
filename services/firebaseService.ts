@@ -1899,7 +1899,17 @@ export const subscribeToQueue = (
             return b.timestamp - a.timestamp; // Newest finished first
         });
 
-        callback(sorted);
+        // Filter out SENT tasks older than 1 minute (auto-dismiss from Agent Desk)
+        const now = Date.now();
+        const AUTO_DISMISS_MS = 60 * 1000; // 1 minute
+        const filtered = sorted.filter((task: any) => {
+            if (task.status === 'SENT' && task.completedAt) {
+                return (now - task.completedAt) < AUTO_DISMISS_MS;
+            }
+            return true; // Keep all other tasks
+        });
+
+        callback(filtered);
     });
 };
 

@@ -701,7 +701,8 @@ export class ContractService {
     async scheduleTimeLockGasless(
         recipient: string,
         amount: string,
-        delaySeconds: number
+        delaySeconds: number,
+        userEmail?: string
     ): Promise<{ receipt: any; scheduleId: string; txHash: string }> {
         if (!this.signer) throw new Error("Wallet not connected");
 
@@ -761,6 +762,8 @@ export class ContractService {
                 fee: totalFeeWei.toString(),
                 deadline,
                 signature,
+                userEmail: userEmail || null,
+                senderAddress: userAddress,
                 gasEstimate: {
                     gasLimit: gasEstimate.gasLimit.toString(),
                     gasPrice: gasEstimate.gasPrice.toString()

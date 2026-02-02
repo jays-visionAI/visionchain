@@ -479,7 +479,7 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
   }
 
   try {
-    const { user, recipient, amount, unlockTime, fee, deadline } = req.body;
+    const { user, recipient, amount, unlockTime, fee, deadline, userEmail, senderAddress } = req.body;
 
     // Validation
     if (!user || !recipient || !amount || !unlockTime) {
@@ -528,6 +528,8 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
         scheduleId: scheduleId,
         from: user,
         to: recipient,
+        senderAddress: senderAddress || user,
+        recipient: recipient,
         amount: amount,
         unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
         status: "WAITING",
@@ -535,6 +537,8 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
         txHash: tx.hash,
         fee: fee || "0",
         type: "TIMELOCK_PAYMASTER",
+        userEmail: userEmail || null,
+        token: "VCN",
       });
       jobId = jobRef.id;
       console.log(`[Paymaster] Firestore job created: ${jobId}`);
@@ -1203,6 +1207,47 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
           error: null, // Clear prev errors
         });
         console.log(`Success: ${jobId}`);
+
+        // Record in transactions collection for History page
+        try {
+          await db.collection("transactions").doc(tx.hash).set({
+            hash: tx.hash,
+            from_addr: (data.from || data.senderAddress || "").toLowerCase(),
+            to_addr: (data.to || data.recipient || "").toLowerCase(),
+            value: String(data.amount || 0),
+            timestamp: Date.now(),
+            type: "Time Lock Transfer",
+            status: "success",
+            block_number: 0,
+            source: "TIMELOCK_AGENT",
+            scheduleId: data.scheduleId,
+          });
+          console.log(`Transaction recorded: ${tx.hash}`);
+        } catch (txRecordErr) {
+          console.warn("Failed to record transaction:", txRecordErr.message);
+        }
+
+        // Create Notification for sender
+        try {
+          const senderEmail = data.userEmail || data.email;
+          if (senderEmail) {
+            const symbol = data.token || "VCN";
+            const recipientShort = (data.to || data.recipient || "").slice(0, 8);
+
+            await db.collection("notifications").add({
+              email: senderEmail.toLowerCase(),
+              type: "transfer_complete",
+              title: "TRANSFER SUCCESSFUL",
+              content: `Successfully sent ${data.amount} ${symbol} to ${recipientShort}... via Time Lock Agent.`,
+              data: { txHash: tx.hash, jobId, amount: data.amount, recipient: data.to || data.recipient },
+              isRead: false,
+              createdAt: admin.firestore.Timestamp.now(),
+            });
+            console.log(`Notification sent to ${senderEmail}`);
+          }
+        } catch (notifyErr) {
+          console.warn("Failed to send notification:", notifyErr.message);
+        }
       } catch (err) {
         console.error(`Failed Job ${jobId}:`, err);
 

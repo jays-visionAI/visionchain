@@ -458,25 +458,27 @@ export function WalletNotifications() {
                     />
 
                     {/* Main Tab Navigation: Announcements vs My Notifications */}
-                    <div class="flex bg-white/[0.02] p-1.5 rounded-2xl border border-white/5 mt-8">
+                    <div class="flex bg-white/[0.02] p-1.5 rounded-2xl border border-white/5 mt-8 gap-1">
                         <button
                             onClick={() => { setActiveTab('announcements'); setSelectedId(null); setSelectedAnnouncementId(null); }}
-                            class={`flex-1 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative flex items-center justify-center gap-2 ${activeTab() === 'announcements' ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                            class={`flex-1 px-2 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative flex items-center justify-center gap-1 sm:gap-2 ${activeTab() === 'announcements' ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                         >
-                            <Megaphone class="w-4 h-4" />
-                            Announcements
+                            <Megaphone class="w-4 h-4 shrink-0" />
+                            <span class="sm:hidden">News</span>
+                            <span class="hidden sm:inline">Announcements</span>
                             <Show when={unreadAnnouncementsCount() > 0}>
-                                <span class="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                                <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] sm:min-w-[20px] sm:h-5 bg-red-500 text-white text-[9px] sm:text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                                     {unreadAnnouncementsCount()}
                                 </span>
                             </Show>
                         </button>
                         <button
                             onClick={() => { setActiveTab('notifications'); setSelectedId(null); setSelectedAnnouncementId(null); }}
-                            class={`flex-1 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative flex items-center justify-center gap-2 ${activeTab() === 'notifications' ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                            class={`flex-1 px-2 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative flex items-center justify-center gap-1 sm:gap-2 ${activeTab() === 'notifications' ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                         >
-                            <Bell class="w-4 h-4" />
-                            My Notifications
+                            <Bell class="w-4 h-4 shrink-0" />
+                            <span class="sm:hidden">Alerts</span>
+                            <span class="hidden sm:inline">My Notifications</span>
                             <Show when={notifications().some(n => !n.read)}>
                                 <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
                             </Show>
@@ -668,8 +670,8 @@ export function WalletNotifications() {
                 {/* Detail View Pane */}
                 <div
                     class={`flex-[1.2] lg:static fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform overflow-y-auto overscroll-contain ${(activeTab() === 'announcements' ? selectedAnnouncementId() : selectedId())
-                            ? 'translate-x-0'
-                            : 'translate-x-full pointer-events-none lg:translate-x-0 lg:opacity-30 lg:pointer-events-auto'
+                        ? 'translate-x-0'
+                        : 'translate-x-full pointer-events-none lg:translate-x-0 lg:opacity-30 lg:pointer-events-auto'
                         }`}
                     style="-webkit-overflow-scrolling: touch;"
                 >
