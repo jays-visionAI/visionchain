@@ -32,9 +32,11 @@ export default function TxDetailView(props: TxDetailProps) {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Mock Cross-chain Detection (Phase 2)
-    const isCrossChain = props.tx.method === 'Hub Transfer' || props.tx.type === 'LayerZero';
-    const mockPacketId = "0xpacket...123";
+    // Cross-chain Detection - includes bridge transactions
+    const isCrossChain = props.tx.method === 'Hub Transfer' || props.tx.type === 'LayerZero' || props.tx.type === 'Bridge' || props.tx.to?.startsWith('bridge:');
+    const isBridgeTx = props.tx.type === 'Bridge' || props.tx.to?.startsWith('bridge:');
+    const bridgeDestination = isBridgeTx ? (props.tx.to?.replace('bridge:', '') || props.tx.metadata?.destinationChain || 'Unknown') : '';
+    const mockPacketId = props.tx.hash || "0xpacket...123";
 
     return (
         <Motion.div
@@ -127,28 +129,42 @@ export default function TxDetailView(props: TxDetailProps) {
 
                         {/* Cross-chain Section (Phase 2) */}
                         <Show when={isCrossChain}>
-                            <div class="bg-gradient-to-r from-purple-900/10 to-blue-900/10 border border-purple-500/20 rounded-xl p-5 relative overflow-hidden group">
+                            <div class={`bg-gradient-to-r ${isBridgeTx ? 'from-purple-900/20 to-indigo-900/20 border-purple-500/30' : 'from-purple-900/10 to-blue-900/10 border-purple-500/20'} border rounded-xl p-5 relative overflow-hidden group`}>
                                 <div class="absolute right-0 top-0 p-4 opacity-10">
                                     <Globe class="w-16 h-16 text-purple-400" />
                                 </div>
                                 <div class="relative z-10">
                                     <div class="flex items-center gap-2 mb-3">
                                         <Globe class="w-4 h-4 text-purple-400" />
-                                        <h4 class="text-[10px] font-black text-purple-300 uppercase tracking-widest">Cross-Chain Transaction</h4>
+                                        <h4 class="text-[10px] font-black text-purple-300 uppercase tracking-widest">
+                                            {isBridgeTx ? 'Cross-Chain Bridge' : 'Cross-Chain Transaction'}
+                                        </h4>
                                     </div>
                                     <div class="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 mb-3">
                                         <div class="flex items-center gap-2">
-                                            <span class="text-xs font-bold text-gray-400">Src: Ethereum</span>
-                                            <ArrowRight class="w-3 h-3 text-gray-600" />
-                                            <span class="text-xs font-bold text-white">Dst: Vision Chain</span>
+                                            <span class="text-xs font-bold text-gray-400">Src: Vision Chain</span>
+                                            <ArrowRight class="w-3 h-3 text-purple-500" />
+                                            <span class="text-xs font-bold text-white uppercase">{isBridgeTx ? `Dst: ${bridgeDestination}` : 'Dst: Vision Chain'}</span>
                                         </div>
-                                        <span class="px-2 py-1 bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-400 uppercase rounded animate-pulse">Inflight</span>
+                                        <span class={`px-2 py-1 text-[9px] font-black uppercase rounded ${props.tx.bridgeStatus === 'FINALIZED'
+                                                ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                                : props.tx.bridgeStatus === 'CHALLENGED'
+                                                    ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                                    : 'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse'
+                                            }`}>
+                                            {props.tx.bridgeStatus === 'FINALIZED' ? 'Finalized' : props.tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : 'Pending'}
+                                        </span>
                                     </div>
+                                    <Show when={props.tx.challengeEndTime}>
+                                        <div class="text-[9px] text-gray-500 mb-2">
+                                            Challenge Period Ends: {new Date(props.tx.challengeEndTime).toLocaleString()}
+                                        </div>
+                                    </Show>
                                     <button
                                         onClick={() => props.onViewPacket(mockPacketId)}
                                         class="text-[10px] font-black underline text-purple-400 hover:text-white transition-colors"
                                     >
-                                        View Packet Lifecycle →
+                                        View Packet Lifecycle
                                     </button>
                                 </div>
                             </div>

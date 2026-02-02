@@ -1395,3 +1395,173 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
       }
     }
   });
+
+// =============================================================================
+// BRIDGE COMPLETION CHECKER - Monitor pending bridges and notify on completion
+// =============================================================================
+const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+const SEPOLIA_EQUALIZER = "0x6e6E465594cED9cA33995939b9579a8A29194983";
+const ERC20_ABI = ["function balanceOf(address) view returns (uint256)"];
+
+/**
+ * Check pending bridge transactions and update their status
+ * Called every 5 minutes via scheduler
+ */
+exports.checkBridgeCompletion = onSchedule("every 5 minutes", async () => {
+  console.log("[Bridge Checker] Starting bridge completion check...");
+
+  const db = admin.firestore();
+
+  // Get all pending bridge transactions
+  const pendingBridges = await db.collection("bridgeTransactions")
+    .where("status", "in", ["COMMITTED", "PENDING"])
+    .limit(50)
+    .get();
+
+  if (pendingBridges.empty) {
+    console.log("[Bridge Checker] No pending bridges found");
+    return;
+  }
+
+  console.log(`[Bridge Checker] Found ${pendingBridges.size} pending bridges`);
+
+  const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+  const equalizerContract = new ethers.Contract(SEPOLIA_EQUALIZER, ERC20_ABI, sepoliaProvider);
+
+  for (const docSnap of pendingBridges.docs) {
+    const bridge = docSnap.data();
+    const txHash = bridge.txHash;
+    const recipient = bridge.recipient || bridge.user;
+
+    try {
+      // Check if challenge period is over (10 minutes)
+      const createdAt = bridge.createdAt?.toMillis?.() || Date.now();
+      const challengePeriodEnd = createdAt + (10 * 60 * 1000); // 10 minutes
+
+      if (Date.now() < challengePeriodEnd) {
+        console.log(`[Bridge Checker] ${txHash} still in challenge period`);
+        continue;
+      }
+
+      // Check Sepolia balance for the recipient
+      const currentBalance = await equalizerContract.balanceOf(recipient);
+      const balanceNum = parseFloat(ethers.formatEther(currentBalance));
+
+      // If balance > 0, consider bridge completed
+      // (In production, you'd check the specific mint event)
+      if (balanceNum > 0) {
+        console.log(`[Bridge Checker] ${txHash} appears finalized. Balance: ${balanceNum}`);
+
+        // Update Firestore status
+        await docSnap.ref.update({
+          status: "FINALIZED",
+          finalizedAt: admin.firestore.Timestamp.now(),
+          sepoliaBalance: balanceNum,
+        });
+
+        // Also update the transactions collection for History display
+        const txRef = db.collection("transactions").doc(txHash);
+        await txRef.update({
+          bridgeStatus: "FINALIZED",
+          finalizedAt: admin.firestore.Timestamp.now(),
+        }).catch(() => {
+          // Transaction may not exist in this collection
+        });
+
+        // Send completion notification
+        const userEmail = await findEmailByAddress(bridge.user);
+        if (userEmail) {
+          await createBridgeNotification(userEmail, {
+            type: "bridge_completed",
+            title: "Bridge Completed",
+            content: `${ethers.formatEther(bridge.amount)} VCN has been successfully bridged to Sepolia.`,
+            data: {
+              txHash: txHash,
+              amount: bridge.amount,
+              destinationChain: "sepolia",
+              status: "completed",
+            },
+          });
+          console.log(`[Bridge Checker] Notification sent to ${userEmail}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[Bridge Checker] Error checking ${txHash}:`, err.message);
+    }
+  }
+
+  console.log("[Bridge Checker] Check completed");
+});
+
+/**
+ * Helper: Find user email by wallet address
+ */
+async function findEmailByAddress(address) {
+  if (!address) return null;
+
+  const db = admin.firestore();
+  const usersSnapshot = await db.collection("users")
+    .where("walletAddress", "==", address.toLowerCase())
+    .limit(1)
+    .get();
+
+  if (!usersSnapshot.empty) {
+    return usersSnapshot.docs[0].id; // email is the doc ID
+  }
+  return null;
+}
+
+/**
+ * Helper: Create bridge notification
+ */
+async function createBridgeNotification(email, notification) {
+  if (!email) return;
+
+  const db = admin.firestore();
+  await db.collection("users").doc(email.toLowerCase()).collection("notifications").add({
+    ...notification,
+    read: false,
+    createdAt: admin.firestore.Timestamp.now(),
+  });
+}
+
+/**
+ * Manual endpoint to check bridge status (for testing)
+ */
+exports.checkBridgeStatus = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  const { txHash } = req.query;
+
+  if (!txHash) {
+    return res.status(400).json({ error: "txHash required" });
+  }
+
+  try {
+    const db = admin.firestore();
+    const bridgeDoc = await db.collection("bridgeTransactions")
+      .where("txHash", "==", txHash)
+      .limit(1)
+      .get();
+
+    if (bridgeDoc.empty) {
+      return res.status(404).json({ error: "Bridge transaction not found" });
+    }
+
+    const data = bridgeDoc.docs[0].data();
+    return res.status(200).json({
+      status: data.status,
+      txHash: data.txHash,
+      amount: data.amount,
+      createdAt: data.createdAt?.toDate?.().toISOString(),
+      finalizedAt: data.finalizedAt?.toDate?.().toISOString() || null,
+    });
+  } catch (err) {
+    console.error("[Bridge Status] Error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
