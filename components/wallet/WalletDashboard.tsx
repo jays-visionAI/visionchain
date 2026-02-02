@@ -41,8 +41,11 @@ import {
     Layers,
     Lock,
     AlertTriangle,
-    List
+    List,
+    History,
+    X
 } from 'lucide-solid';
+
 
 interface WalletDashboardProps {
     messages: () => any[];
@@ -616,10 +619,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isMobile, setIsMobile] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     // Bottom Sheet state for mobile input
     const [bottomSheetExpanded, setBottomSheetExpanded] = createSignal(true);
+    // Mobile Chat History drawer state
+    const [isMobileHistoryOpen, setIsMobileHistoryOpen] = createSignal(false);
     let bottomSheetDragStart = 0;
     // Initialize with defaults immediately for instant UI
     const [quickActions, setQuickActions] = createSignal<QuickAction[]>(DEFAULT_QUICK_ACTIONS);
     let scrollContainerRef: HTMLDivElement | undefined;
+
 
     onMount(() => {
         // Load Quick Actions from Firebase in background (non-blocking)
@@ -770,6 +776,103 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     onClose={() => setSelectedBatchId(null)}
                     agent={selectedBatchAgent()}
                 />
+
+                {/* Mobile Chat History Drawer */}
+                <Presence>
+                    <Show when={isMobileHistoryOpen()}>
+                        <Motion.div
+                            initial={{ x: '-100%', opacity: 0.5 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: '-100%', opacity: 0.5 }}
+                            transition={{ duration: 0.3, easing: [0.32, 0.72, 0, 1] }}
+                            class="fixed inset-y-0 left-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-r border-white/10 shadow-2xl z-[60] flex flex-col md:hidden"
+                        >
+                            {/* Header */}
+                            <div class="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0a0b]">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                        <History class="w-4 h-4 text-purple-400" />
+                                    </div>
+                                    <span class="text-sm font-bold text-white uppercase tracking-wider">Chat History</span>
+                                </div>
+                                <button
+                                    onClick={() => setIsMobileHistoryOpen(false)}
+                                    class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                >
+                                    <X class="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* New Chat Button */}
+                            <div class="p-3 border-b border-white/5">
+                                <button
+                                    onClick={() => {
+                                        props.onNewChat();
+                                        setIsMobileHistoryOpen(false);
+                                    }}
+                                    class="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg"
+                                >
+                                    <Plus class="w-4 h-4" />
+                                    New Chat
+                                </button>
+                            </div>
+
+                            {/* History List */}
+                            <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-hide">
+                                <Show when={props.history().length === 0}>
+                                    <div class="py-12 text-center text-gray-500 text-xs font-bold uppercase tracking-widest">
+                                        No chat history yet
+                                    </div>
+                                </Show>
+                                <For each={props.history()}>
+                                    {(conv) => (
+                                        <button
+                                            onClick={() => {
+                                                props.onSelectConversation(conv);
+                                                setIsMobileHistoryOpen(false);
+                                            }}
+                                            class={`w-full p-3 rounded-xl text-left transition-all border ${props.currentSessionId() === conv.id
+                                                    ? 'bg-purple-600/10 border-purple-500/30'
+                                                    : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.05]'
+                                                }`}
+                                        >
+                                            <div class="flex flex-col gap-1">
+                                                <span class={`text-[12px] font-bold truncate ${props.currentSessionId() === conv.id ? 'text-purple-400' : 'text-gray-100'
+                                                    }`}>
+                                                    {conv.messages[0]?.text || 'New Chat'}
+                                                </span>
+                                                <div class="flex items-center gap-2 text-[9px] text-gray-500 font-bold uppercase tracking-widest">
+                                                    <span>{new Date(conv.updatedAt || conv.createdAt).toLocaleDateString()}</span>
+                                                    <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                                    <span>{conv.messages.length} msgs</span>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    )}
+                                </For>
+                            </div>
+                        </Motion.div>
+                    </Show>
+                </Presence>
+
+                {/* Mobile History Backdrop */}
+                <Show when={isMobileHistoryOpen()}>
+                    <div
+                        class="fixed inset-0 bg-black/60 z-[55] md:hidden"
+                        onClick={() => setIsMobileHistoryOpen(false)}
+                    />
+                </Show>
+
+                {/* Mobile Chat History Floating Button */}
+                <Show when={isMobile() && !isMobileHistoryOpen()}>
+                    <button
+                        onClick={() => setIsMobileHistoryOpen(true)}
+                        class="fixed top-20 left-4 z-40 w-10 h-10 bg-[#1a1a1c] border border-white/10 rounded-full flex items-center justify-center shadow-lg hover:bg-white/10 transition-all"
+                        title="Chat History"
+                    >
+                        <History class="w-4 h-4 text-purple-400" />
+                    </button>
+                </Show>
 
                 {/* Messages Area */}
                 <div
