@@ -80,7 +80,7 @@ import {
     uploadProfileImage
 } from '../services/firebaseService';
 
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { CloudWalletService, calculatePasswordStrength } from '../services/cloudWalletService';
 import { ethers } from 'ethers';
@@ -2420,6 +2420,30 @@ const Wallet = (): JSX.Element => {
                 });
             } catch (notiErr) {
                 console.warn('[Bridge] Notification failed:', notiErr);
+            }
+
+            // Save Bridge Transaction to Firestore for History display
+            try {
+                const db = getFirebaseDb();
+                const txRef = doc(db, 'transactions', result.txHash);
+                await setDoc(txRef, {
+                    hash: result.txHash,
+                    from_addr: walletAddress()?.toLowerCase(),
+                    to_addr: 'bridge:sepolia', // Special address for bridge
+                    value: bridge.amount,
+                    timestamp: Date.now(),
+                    type: 'Bridge',
+                    bridgeStatus: 'PENDING',
+                    challengeEndTime: Date.now() + (10 * 60 * 1000), // 10 min challenge period
+                    metadata: {
+                        destinationChain: bridge.destinationChain,
+                        srcChainId: 1337,
+                        dstChainId: bridge.destinationChain.toUpperCase() === 'SEPOLIA' ? 11155111 : 137
+                    }
+                });
+                console.log('[Bridge] Saved to Firestore for History');
+            } catch (historyErr) {
+                console.warn('[Bridge] Failed to save history:', historyErr);
             }
 
             setPendingBridge(null);

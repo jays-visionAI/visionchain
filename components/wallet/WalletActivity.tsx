@@ -196,20 +196,31 @@ export const WalletActivity = (props: WalletActivityProps) => {
                     <For each={transactions()}>
                         {(tx) => {
                             const isIncoming = tx.to_addr.toLowerCase() === props.walletAddress?.toLowerCase();
+                            const isBridge = tx.type === 'Bridge' || tx.to_addr.startsWith('bridge:');
                             const date = new Date(tx.timestamp).toLocaleString();
                             const shortHash = `${tx.hash.slice(0, 6)}...${tx.hash.slice(-4)}`;
 
                             return (
-                                <div class="flex items-center justify-between py-4 px-5 bg-[#111114] border border-white/[0.04] rounded-xl hover:bg-white/[0.02] transition-colors cursor-pointer group mb-3 last:mb-0">
+                                <div class={`flex items-center justify-between py-4 px-5 bg-[#111114] border rounded-xl hover:bg-white/[0.02] transition-colors cursor-pointer group mb-3 last:mb-0 ${isBridge ? 'border-purple-500/20' : 'border-white/[0.04]'}`}>
                                     <div class="flex items-center gap-4">
-                                        <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${isIncoming
-                                            ? 'bg-green-500/10 text-green-400'
-                                            : 'bg-blue-500/10 text-blue-400'}`}>
-                                            {isIncoming ? <ArrowDownLeft class="w-5 h-5" /> : <ArrowUpRight class="w-5 h-5" />}
+                                        <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${isBridge
+                                            ? 'bg-purple-500/10 text-purple-400'
+                                            : isIncoming
+                                                ? 'bg-green-500/10 text-green-400'
+                                                : 'bg-blue-500/10 text-blue-400'}`}>
+                                            {isBridge ? <RefreshCw class="w-5 h-5" /> : isIncoming ? <ArrowDownLeft class="w-5 h-5" /> : <ArrowUpRight class="w-5 h-5" />}
                                         </div>
                                         <div class="flex-1 min-w-0 pr-2">
                                             <div class="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">
-                                                {(() => {
+                                                {isBridge ? (
+                                                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                        <span class="text-purple-400 font-bold">Bridge</span>
+                                                        <span class="text-gray-400">to</span>
+                                                        <span class="text-purple-300 font-black uppercase tracking-tight">
+                                                            {tx.to_addr.replace('bridge:', '')}
+                                                        </span>
+                                                    </div>
+                                                ) : (() => {
                                                     const counterpartyAddr = isIncoming ? tx.from_addr : tx.to_addr;
                                                     const contact = props.contacts?.find((c: any) =>
                                                         c.address?.toLowerCase() === counterpartyAddr?.toLowerCase()
