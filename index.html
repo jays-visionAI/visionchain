@@ -294,8 +294,46 @@
 </head>
 
 <body>
-  <div id="debug-marker" style="display:none">v1.5.0-FIREFIX</div>
+  <div id="debug-marker" style="display:none">v1.6.0-SW</div>
   <div id="root"></div>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js', {
+            scope: '/'
+          });
+          console.log('[App] ServiceWorker registered:', registration.scope);
+
+          // Check for updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            console.log('[App] New ServiceWorker installing...');
+
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New version available - prompt user to refresh
+                console.log('[App] New version available!');
+                // Auto-activate new version
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+              }
+            });
+          });
+
+          // Handle controller change (page will reload with new version)
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('[App] Controller changed, reloading for new version...');
+            window.location.reload();
+          });
+        } catch (error) {
+          console.error('[App] ServiceWorker registration failed:', error);
+        }
+      });
+    }
+  </script>
+
   <script type="module" src="/index.tsx"></script>
 </body>
 
