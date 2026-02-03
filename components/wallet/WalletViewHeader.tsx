@@ -26,7 +26,7 @@ export const WalletViewHeader = (props: WalletViewHeaderProps) => {
                     {props.title} <Show when={props.titleAccent}><span class="text-blue-500">{props.titleAccent}</span></Show>
                 </h1>
                 <Show when={props.description}>
-                    <p class="text-gray-500 font-medium max-w-md mt-2 leading-relaxed">
+                    <p class="hidden sm:block text-gray-500 font-medium max-w-md mt-2 leading-relaxed">
                         {props.description}
                     </p>
                 </Show>
