@@ -5,6 +5,7 @@ import { parseChartBlocks } from './VisionChart';
 const VisionChart = lazy(() => import('./VisionChart').then(m => ({ default: m.VisionChart })));
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
+import BridgeAgentChip from '../chat/queue/BridgeAgentChip';
 import QueueDrawer from '../chat/queue/QueueDrawer';
 import { getQuickActions, QuickAction } from '../../services/firebaseService';
 import {
@@ -1231,6 +1232,14 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     />
                                                 )}
                                             </For>
+
+                                            {/* Bridge Agent */}
+                                            <Show when={props.userProfile()?.walletAddress}>
+                                                <BridgeAgentChip
+                                                    walletAddress={props.userProfile()?.walletAddress || ''}
+                                                    onViewBridgePage={() => props.setActiveView('bridge')}
+                                                />
+                                            </Show>
                                         </div>
 
                                     </Show>
@@ -1384,6 +1393,14 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                     />
                                                                 )}
                                                             </For>
+
+                                                            {/* Bridge Agent */}
+                                                            <Show when={props.userProfile()?.walletAddress}>
+                                                                <BridgeAgentChip
+                                                                    walletAddress={props.userProfile()?.walletAddress || ''}
+                                                                    onViewBridgePage={() => props.setActiveView('bridge')}
+                                                                />
+                                                            </Show>
                                                         </div>
                                                     </Motion.div>
                                                 </Show>
