@@ -83,6 +83,21 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [cloudSyncLoading, setCloudSyncLoading] = createSignal(false);
     const [cloudSyncError, setCloudSyncError] = createSignal('');
 
+    // TOTP 2FA state
+    const [totpEnabled, setTotpEnabled] = createSignal(false);
+    const [totpSetupMode, setTotpSetupMode] = createSignal(false);
+    const [totpQrCode, setTotpQrCode] = createSignal('');
+    const [totpSecret, setTotpSecret] = createSignal('');
+    const [totpCode, setTotpCode] = createSignal('');
+    const [totpLoading, setTotpLoading] = createSignal(false);
+    const [totpError, setTotpError] = createSignal('');
+    const [totpSuccess, setTotpSuccess] = createSignal('');
+    const [backupCodes, setBackupCodes] = createSignal<string[]>([]);
+    const [showBackupCodes, setShowBackupCodes] = createSignal(false);
+    const [backupCodesRemaining, setBackupCodesRemaining] = createSignal(0);
+    const [totpDisableMode, setTotpDisableMode] = createSignal(false);
+    const [totpDisableCode, setTotpDisableCode] = createSignal('');
+
     const handleChangePassword = (e: Event) => {
         e.preventDefault();
         setPasswordError('');
@@ -152,6 +167,104 @@ export function WalletSettings(props: { onBack?: () => void }) {
         }
     };
 
+    // TOTP 2FA Handlers
+    const handleSetupTOTP = async () => {
+        try {
+            setTotpLoading(true);
+            setTotpError('');
+
+            const result = await CloudWalletService.setupTOTP();
+
+            if (result.success && result.qrCode && result.secret) {
+                setTotpQrCode(result.qrCode);
+                setTotpSecret(result.secret);
+                setTotpSetupMode(true);
+            } else {
+                setTotpError(result.error || 'Failed to setup 2FA');
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Setup error:', err);
+            setTotpError(err.message || 'An error occurred');
+        } finally {
+            setTotpLoading(false);
+        }
+    };
+
+    const handleEnableTOTP = async () => {
+        if (totpCode().length !== 6) {
+            setTotpError('Please enter a 6-digit code');
+            return;
+        }
+
+        try {
+            setTotpLoading(true);
+            setTotpError('');
+
+            const result = await CloudWalletService.enableTOTP(totpCode());
+
+            if (result.success && result.backupCodes) {
+                setBackupCodes(result.backupCodes);
+                setShowBackupCodes(true);
+                setTotpEnabled(true);
+                setTotpSetupMode(false);
+                setTotpCode('');
+                setTotpSuccess('2FA enabled successfully! Save your backup codes.');
+                setBackupCodesRemaining(result.backupCodes.length);
+            } else {
+                setTotpError(result.error || 'Invalid code');
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Enable error:', err);
+            setTotpError(err.message || 'An error occurred');
+        } finally {
+            setTotpLoading(false);
+        }
+    };
+
+    const handleDisableTOTP = async () => {
+        if (totpDisableCode().length < 6) {
+            setTotpError('Please enter a valid code');
+            return;
+        }
+
+        try {
+            setTotpLoading(true);
+            setTotpError('');
+
+            const result = await CloudWalletService.disableTOTP(totpDisableCode());
+
+            if (result.success) {
+                setTotpEnabled(false);
+                setTotpDisableMode(false);
+                setTotpDisableCode('');
+                setTotpSuccess('2FA has been disabled');
+                setBackupCodesRemaining(0);
+                setTimeout(() => setTotpSuccess(''), 3000);
+            } else {
+                setTotpError(result.error || 'Invalid code');
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Disable error:', err);
+            setTotpError(err.message || 'An error occurred');
+        } finally {
+            setTotpLoading(false);
+        }
+    };
+
+    const loadTOTPStatus = async () => {
+        try {
+            const status = await CloudWalletService.getTOTPStatus();
+            setTotpEnabled(status.enabled);
+            setBackupCodesRemaining(status.backupCodesRemaining);
+        } catch (err) {
+            console.warn('[TOTP] Status check failed:', err);
+        }
+    };
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
     const tabs = [
         { id: 'general', label: 'General', icon: Settings },
         { id: 'presets', label: 'Payment Presets', icon: Globe },
@@ -214,6 +327,9 @@ export function WalletSettings(props: { onBack?: () => void }) {
             } catch (e) {
                 console.warn('[Settings] Failed to check cloud sync status:', e);
             }
+
+            // Check TOTP 2FA status
+            await loadTOTPStatus();
         }
 
         setSelectedCountry(initialCountry);
@@ -617,17 +733,225 @@ export function WalletSettings(props: { onBack?: () => void }) {
                         <h2 class="text-lg font-semibold text-white">Security Settings</h2>
                     </div>
                     <div class="divide-y divide-white/5">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Key class="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">Two-Factor Authentication</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Add an extra layer of security to your account</p>
+                        {/* Two-Factor Authentication Section */}
+                        <div class="p-6 hover:bg-white/[0.01] transition-colors">
+                            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                <div class="flex items-start gap-4">
+                                    <div class={`p-2 rounded-lg ${totpEnabled() ? 'bg-green-500/10' : 'bg-white/5'}`}>
+                                        <Key class={`w-5 h-5 ${totpEnabled() ? 'text-green-400' : 'text-gray-400'}`} />
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <p class="text-white font-medium">Two-Factor Authentication</p>
+                                            <Show when={totpEnabled()}>
+                                                <span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-[10px] font-bold rounded-full uppercase">Active</span>
+                                            </Show>
+                                        </div>
+                                        <p class="text-gray-400 text-sm mt-0.5">
+                                            Use Google Authenticator for additional security when restoring your wallet from cloud.
+                                        </p>
+                                        <Show when={totpEnabled() && backupCodesRemaining() > 0}>
+                                            <p class="text-amber-400 text-xs mt-1">
+                                                {backupCodesRemaining()} backup codes remaining
+                                            </p>
+                                        </Show>
+                                    </div>
                                 </div>
                             </div>
-                            <Toggle checked={twoFactorAuth()} onChange={setTwoFactorAuth} />
+
+                            {/* Success/Error Messages */}
+                            <Show when={totpSuccess()}>
+                                <div class="mt-4 ml-0 sm:ml-14 p-3 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center gap-2">
+                                    <Check class="w-4 h-4 text-green-400" />
+                                    <span class="text-green-400 text-sm">{totpSuccess()}</span>
+                                </div>
+                            </Show>
+                            <Show when={totpError()}>
+                                <div class="mt-4 ml-0 sm:ml-14 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-2">
+                                    <AlertCircle class="w-4 h-4 text-red-400" />
+                                    <span class="text-red-400 text-sm">{totpError()}</span>
+                                </div>
+                            </Show>
+
+                            {/* 2FA Setup Flow */}
+                            <div class="mt-4 ml-0 sm:ml-14 space-y-4">
+                                <Show when={!totpEnabled() && !totpSetupMode()}>
+                                    <button
+                                        onClick={handleSetupTOTP}
+                                        disabled={totpLoading()}
+                                        class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <Show when={totpLoading()} fallback={<><Shield class="w-4 h-4" /> Enable 2FA</>}>
+                                            <RefreshCw class="w-4 h-4 animate-spin" /> Setting up...
+                                        </Show>
+                                    </button>
+                                </Show>
+
+                                {/* QR Code Setup Mode */}
+                                <Show when={totpSetupMode()}>
+                                    <div class="p-6 bg-white/[0.03] rounded-2xl border border-white/10 space-y-6">
+                                        <div class="text-center space-y-4">
+                                            <h3 class="text-lg font-bold text-white">Scan QR Code</h3>
+                                            <p class="text-gray-400 text-sm">Open Google Authenticator and scan this QR code</p>
+
+                                            {/* QR Code */}
+                                            <div class="inline-block p-4 bg-white rounded-2xl">
+                                                <img src={totpQrCode()} alt="2FA QR Code" class="w-48 h-48" />
+                                            </div>
+
+                                            {/* Manual Entry Secret */}
+                                            <div class="p-4 bg-black/30 rounded-xl border border-white/10">
+                                                <p class="text-gray-500 text-[10px] uppercase tracking-widest mb-2">Manual Entry Code</p>
+                                                <div class="flex items-center justify-center gap-2">
+                                                    <code class="text-cyan-400 font-mono text-sm tracking-wider">{totpSecret()}</code>
+                                                    <button
+                                                        onClick={() => {
+                                                            copyToClipboard(totpSecret());
+                                                            setTotpSuccess('Secret copied!');
+                                                            setTimeout(() => setTotpSuccess(''), 2000);
+                                                        }}
+                                                        class="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
+                                                    >
+                                                        <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Verification Code Input */}
+                                        <div class="space-y-3">
+                                            <label class="text-gray-400 text-sm block">Enter the 6-digit code from your app</label>
+                                            <input
+                                                type="text"
+                                                value={totpCode()}
+                                                onInput={(e) => setTotpCode(e.currentTarget.value.replace(/\D/g, '').slice(0, 6))}
+                                                placeholder="000000"
+                                                maxLength={6}
+                                                class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white text-center text-2xl font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-cyan-500/50"
+                                            />
+                                        </div>
+
+                                        <div class="flex flex-col sm:flex-row gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    setTotpSetupMode(false);
+                                                    setTotpQrCode('');
+                                                    setTotpSecret('');
+                                                    setTotpCode('');
+                                                    setTotpError('');
+                                                }}
+                                                class="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 transition-all"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleEnableTOTP}
+                                                disabled={totpCode().length !== 6 || totpLoading()}
+                                                class="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <Show when={totpLoading()} fallback={<><Check class="w-4 h-4" /> Verify & Enable</>}>
+                                                    <RefreshCw class="w-4 h-4 animate-spin" /> Verifying...
+                                                </Show>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </Show>
+
+                                {/* Backup Codes Display */}
+                                <Show when={showBackupCodes() && backupCodes().length > 0}>
+                                    <div class="p-6 bg-amber-500/10 rounded-2xl border border-amber-500/30 space-y-4">
+                                        <div class="flex items-start gap-3">
+                                            <AlertCircle class="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                                            <div>
+                                                <h3 class="text-amber-400 font-bold">Save Your Backup Codes</h3>
+                                                <p class="text-amber-300/70 text-sm mt-1">
+                                                    These codes can be used if you lose access to Google Authenticator. Each code can only be used once.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            <For each={backupCodes()}>
+                                                {(code) => (
+                                                    <div class="p-2 bg-black/30 rounded-lg text-center">
+                                                        <code class="text-white font-mono text-sm">{code}</code>
+                                                    </div>
+                                                )}
+                                            </For>
+                                        </div>
+
+                                        <div class="flex flex-col sm:flex-row gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    copyToClipboard(backupCodes().join('\n'));
+                                                    setTotpSuccess('Backup codes copied!');
+                                                    setTimeout(() => setTotpSuccess(''), 2000);
+                                                }}
+                                                class="flex-1 px-4 py-2 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                                Copy All
+                                            </button>
+                                            <button
+                                                onClick={() => setShowBackupCodes(false)}
+                                                class="flex-1 px-4 py-2 bg-amber-500/20 text-amber-400 font-medium rounded-xl hover:bg-amber-500/30 transition-all"
+                                            >
+                                                I've Saved My Codes
+                                            </button>
+                                        </div>
+                                    </div>
+                                </Show>
+
+                                {/* 2FA Enabled - Show Disable Option */}
+                                <Show when={totpEnabled() && !totpSetupMode() && !showBackupCodes()}>
+                                    <Show when={!totpDisableMode()}>
+                                        <button
+                                            onClick={() => setTotpDisableMode(true)}
+                                            class="w-full sm:w-auto px-6 py-3 bg-red-500/10 border border-red-500/30 text-red-400 font-bold rounded-xl hover:bg-red-500/20 transition-all"
+                                        >
+                                            Disable 2FA
+                                        </button>
+                                    </Show>
+
+                                    <Show when={totpDisableMode()}>
+                                        <div class="p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-4">
+                                            <p class="text-red-400 text-sm">Enter your authenticator code or backup code to disable 2FA:</p>
+                                            <div class="flex flex-col sm:flex-row gap-3">
+                                                <input
+                                                    type="text"
+                                                    value={totpDisableCode()}
+                                                    onInput={(e) => setTotpDisableCode(e.currentTarget.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                                                    placeholder="Enter code"
+                                                    class="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white font-mono text-center tracking-wider placeholder-gray-500 focus:outline-none focus:border-red-500/50"
+                                                />
+                                                <button
+                                                    onClick={handleDisableTOTP}
+                                                    disabled={totpDisableCode().length < 6 || totpLoading()}
+                                                    class="px-6 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <Show when={totpLoading()} fallback="Disable">
+                                                        <RefreshCw class="w-4 h-4 animate-spin" />
+                                                    </Show>
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setTotpDisableMode(false);
+                                                        setTotpDisableCode('');
+                                                        setTotpError('');
+                                                    }}
+                                                    class="px-4 py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-all"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </Show>
+                                </Show>
+                            </div>
                         </div>
 
                         {/* Cloud Wallet Sync */}
