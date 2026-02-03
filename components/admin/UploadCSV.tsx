@@ -59,16 +59,25 @@ export const UploadCSV = () => {
 
             // Map based on expected order: email, partnerCode, amountToken, date, unlockRatio, vestingPeriod
             if (values.length >= 6) {
-                const email = values[0]?.trim();
-                // Skip entries with empty or invalid email
+                const email = values[0]?.trim().toLowerCase();
+                const amountToken = Number(values[2]) || 0;
+
+                // Skip entries with empty/invalid email OR zero amount
                 if (!email || !email.includes('@')) {
-                    console.warn(`Skipping invalid entry at line ${i + 1}: empty or invalid email`);
+                    console.warn(`[CSV Parse] Skipping line ${i + 1}: invalid email "${values[0]}"`);
                     continue;
                 }
+
+                // Skip entries with zero or invalid amount (likely empty rows)
+                if (amountToken <= 0) {
+                    console.warn(`[CSV Parse] Skipping line ${i + 1}: zero or invalid amount for ${email}`);
+                    continue;
+                }
+
                 entries.push({
                     email: email,
                     partnerCode: values[1] || '',
-                    amountToken: Number(values[2]) || 0,
+                    amountToken: amountToken,
                     date: values[3] || '',
                     unlockRatio: Number(values[4]) || 0,
                     vestingPeriod: Number(values[5]) || 0,
@@ -76,6 +85,8 @@ export const UploadCSV = () => {
                 });
             }
         }
+
+        console.log(`[CSV Parse] Parsed ${entries.length} valid entries`);
         return entries;
     };
 
