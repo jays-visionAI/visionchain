@@ -83,8 +83,25 @@ export const UploadCSV = () => {
         if (!file() || parsedData().length === 0) return;
         setIsUploading(true);
         try {
-            // Use the already parsed data
-            const entries = parsedData();
+            // Filter out any entries with empty or invalid emails before uploading
+            const entries = parsedData().filter(e => {
+                const email = e.email?.trim().toLowerCase();
+                if (!email || !email.includes('@')) {
+                    console.warn(`[Upload] Filtering out invalid entry: ${e.email}`);
+                    return false;
+                }
+                return true;
+            });
+
+            if (entries.length === 0) {
+                setUploadStatus({
+                    success: false,
+                    message: 'No valid entries found in CSV. Please check the email column.'
+                });
+                return;
+            }
+
+            console.log(`[Upload] Processing ${entries.length} valid entries...`);
             const result = await uploadTokenSaleData(entries);
 
             // Send invitation emails ONLY for new users (newInvitations)
