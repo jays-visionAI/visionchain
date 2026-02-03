@@ -2412,14 +2412,12 @@ const Wallet = (): JSX.Element => {
                 bridgeDestination: bridge.destinationChain
             }]);
 
-            // Create Bridge Started Notification
+            // Create Bridge Started Notification (English only for testnet)
             try {
                 await createNotification(userProfile().email, {
                     type: 'bridge_started',
-                    title: lastLocale() === 'ko' ? '브릿지 요청 시작됨' : 'Bridge Request Started',
-                    content: lastLocale() === 'ko'
-                        ? `${bridge.amount} VCN → ${chainDisplay} 브릿지가 시작되었습니다. 약 10-30분 후 도착 예정.`
-                        : `${bridge.amount} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
+                    title: 'Bridge Request Started',
+                    content: `${bridge.amount} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
                     data: {
                         amount: bridge.amount,
                         destinationChain: bridge.destinationChain,

@@ -166,6 +166,19 @@ export function WalletNotifications() {
     const [announcementsLoading, setAnnouncementsLoading] = createSignal(true);
     const [selectedAnnouncementId, setSelectedAnnouncementId] = createSignal<string | null>(null);
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = createSignal(1);
+    const [isMobile, setIsMobile] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+    const pageSize = () => isMobile() ? 10 : 20;
+
+    // Track window resize for responsive pagination
+    createEffect(() => {
+        if (typeof window === 'undefined') return;
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        onCleanup(() => window.removeEventListener('resize', handleResize));
+    });
+
 
     // Helper: Resolve wallet address to contact name
     const getContactName = (address: string): string | null => {
@@ -343,6 +356,22 @@ export function WalletNotifications() {
         return notifications();
     };
 
+    // Paginated filtered list
+    const paginatedFiltered = () => {
+        const all = filtered();
+        const start = (currentPage() - 1) * pageSize();
+        const end = start + pageSize();
+        return all.slice(start, end);
+    };
+
+    const totalPages = () => Math.ceil(filtered().length / pageSize());
+
+    // Reset page when filter changes
+    createEffect(() => {
+        filter();
+        setCurrentPage(1);
+    });
+
     const selectedItem = () => notifications().find(n => n.id === selectedId());
 
     const formatTime = (ts: any) => {
@@ -485,41 +514,47 @@ export function WalletNotifications() {
                         </button>
                     </div>
 
-                    {/* Sub-filters for My Notifications tab only */}
+                    {/* Sub-filters for My Notifications tab only - Compact mobile design */}
                     <Show when={activeTab() === 'notifications'}>
-                        <div class="flex flex-wrap items-center justify-between gap-2 mt-3">
-                            <div class="flex bg-white/[0.03] p-1 rounded-2xl border border-white/5 w-full sm:w-auto">
+                        <div class="flex items-center justify-between gap-2 mt-3">
+                            {/* Filter Tabs - Compact */}
+                            <div class="flex bg-white/[0.03] p-0.5 sm:p-1 rounded-xl border border-white/5">
                                 <button
                                     onClick={() => setFilter('all')}
-                                    class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                    class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                                 >
-                                    All Logs
+                                    All
                                 </button>
                                 <button
                                     onClick={() => setFilter('unread')}
-                                    class={`flex-1 sm:flex-none px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                                    class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                                 >
-                                    Unread
+                                    New
                                     <Show when={notifications().some(n => !n.read)}>
-                                        <span class="absolute top-1 right-2 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+                                        <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
                                     </Show>
                                 </button>
                             </div>
 
-                            <div class="flex items-center gap-2">
+                            {/* Action Buttons - Icons only on mobile */}
+                            <div class="flex items-center gap-1 sm:gap-2">
                                 <button
                                     onClick={markAllRead}
                                     disabled={!notifications().some(n => !n.read)}
-                                    class="px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-[9px] font-black uppercase tracking-wider text-gray-400 hover:text-white transition-all disabled:opacity-30"
+                                    class="p-2 sm:px-3 sm:py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg sm:rounded-xl text-gray-400 hover:text-white transition-all disabled:opacity-30"
+                                    title="Mark all as read"
                                 >
-                                    Mark Read
+                                    <Check class="w-4 h-4 sm:hidden" />
+                                    <span class="hidden sm:inline text-[9px] font-black uppercase tracking-wider">Mark Read</span>
                                 </button>
                                 <button
                                     onClick={clearAll}
                                     disabled={notifications().length === 0}
-                                    class="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-xl text-[9px] font-black uppercase tracking-wider text-red-400 transition-all disabled:opacity-30"
+                                    class="p-2 sm:px-3 sm:py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 rounded-lg sm:rounded-xl text-red-400 transition-all disabled:opacity-30"
+                                    title="Clear all"
                                 >
-                                    Clear
+                                    <Trash2 class="w-4 h-4 sm:hidden" />
+                                    <span class="hidden sm:inline text-[9px] font-black uppercase tracking-wider">Clear</span>
                                 </button>
                             </div>
                         </div>
@@ -613,7 +648,7 @@ export function WalletNotifications() {
                                     <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">Synchronizing Data...</span>
                                 </div>
                             }>
-                                <For each={filtered()}>
+                                <For each={paginatedFiltered()}>
                                     {(item) => {
                                         const meta = getMeta(item.type);
                                         return (
@@ -622,25 +657,25 @@ export function WalletNotifications() {
                                                     setSelectedId(item.id);
                                                     if (!item.read) markAsRead(item.id);
                                                 }}
-                                                class={`group relative p-5 rounded-3xl border transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-center gap-4 ${selectedId() === item.id
+                                                class={`group relative p-3 sm:p-5 rounded-2xl sm:rounded-3xl border transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] flex items-center gap-3 sm:gap-4 ${selectedId() === item.id
                                                     ? 'bg-blue-600/10 border-blue-500/30'
                                                     : item.read ? 'bg-white/[0.01] border-white/5' : 'bg-white/[0.04] border-white/10 ring-1 ring-white/5 shadow-2xl'
                                                     }`}
                                             >
-                                                <div class={`shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center ${meta.bg}`}>
-                                                    <meta.icon class={`w-6 h-6 ${meta.color}`} />
+                                                <div class={`shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center ${meta.bg}`}>
+                                                    <meta.icon class={`w-5 h-5 sm:w-6 sm:h-6 ${meta.color}`} />
                                                 </div>
                                                 <div class="flex-1 min-w-0">
-                                                    <div class="flex items-center justify-between mb-1">
-                                                        <span class={`text-[10px] font-black uppercase tracking-widest transition-colors ${item.read ? 'text-gray-600' : 'text-blue-400'}`}>
+                                                    <div class="flex items-center justify-between mb-0.5 sm:mb-1">
+                                                        <span class={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-colors ${item.read ? 'text-gray-600' : 'text-blue-400'}`}>
                                                             {meta.label}
                                                         </span>
-                                                        <span class="text-[9px] font-bold text-gray-700">{formatTime(item.timestamp)}</span>
+                                                        <span class="text-[8px] sm:text-[9px] font-bold text-gray-700">{formatTime(item.timestamp)}</span>
                                                     </div>
-                                                    <h4 class={`text-sm font-black truncate uppercase tracking-tight ${item.read ? 'text-gray-500' : 'text-white italic'}`}>
+                                                    <h4 class={`text-xs sm:text-sm font-black truncate uppercase tracking-tight ${item.read ? 'text-gray-500' : 'text-white italic'}`}>
                                                         {item.title}
                                                     </h4>
-                                                    <p class="text-[11px] text-gray-600 font-medium truncate mt-0.5">{formatWithContactName(item.content)}</p>
+                                                    <p class="text-[10px] sm:text-[11px] text-gray-600 font-medium truncate mt-0.5">{formatWithContactName(item.content)}</p>
                                                 </div>
                                                 <div class="shrink-0 transition-transform group-hover:translate-x-1">
                                                     <ChevronRight class={`w-4 h-4 ${selectedId() === item.id ? 'text-blue-400' : 'text-gray-800'}`} />
@@ -649,6 +684,29 @@ export function WalletNotifications() {
                                         );
                                     }}
                                 </For>
+
+                                {/* Pagination Controls */}
+                                <Show when={totalPages() > 1}>
+                                    <div class="flex items-center justify-center gap-2 mt-4 pb-4">
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                            disabled={currentPage() === 1}
+                                            class="p-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                            <ChevronLeft class="w-4 h-4" />
+                                        </button>
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest px-4">
+                                            {currentPage()} / {totalPages()}
+                                        </span>
+                                        <button
+                                            onClick={() => setCurrentPage(p => Math.min(totalPages(), p + 1))}
+                                            disabled={currentPage() === totalPages()}
+                                            class="p-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-gray-400 hover:text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                            <ChevronRight class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </Show>
 
                                 <Show when={filtered().length === 0}>
                                     <div class="flex flex-col items-center justify-center py-24 text-center space-y-6">
@@ -667,9 +725,9 @@ export function WalletNotifications() {
                 </div>
 
 
-                {/* Detail View Pane */}
+                {/* Detail View Pane - Full width on mobile */}
                 <div
-                    class={`flex-[1.2] lg:static fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform overflow-y-auto overscroll-contain ${(activeTab() === 'announcements' ? selectedAnnouncementId() : selectedId())
+                    class={`w-full lg:w-auto lg:flex-[1.2] lg:static fixed inset-0 z-50 bg-[#0A0A0B] flex flex-col transition-all duration-300 transform overflow-y-auto overscroll-contain ${(activeTab() === 'announcements' ? selectedAnnouncementId() : selectedId())
                         ? 'translate-x-0'
                         : 'translate-x-full pointer-events-none lg:translate-x-0 lg:opacity-30 lg:pointer-events-auto'
                         }`}
@@ -697,7 +755,7 @@ export function WalletNotifications() {
                                             </button>
                                         </div>
 
-                                        <div class="p-4 lg:p-12 pt-16 lg:pt-12 space-y-8 lg:space-y-12 max-w-2xl mx-auto w-full pb-safe">
+                                        <div class="p-4 lg:p-12 pt-16 lg:pt-12 space-y-6 lg:space-y-12 w-full max-w-full lg:max-w-2xl mx-auto pb-safe">
                                             <div class="space-y-6">
                                                 <div class="flex items-center justify-between">
                                                     <div class={`w-16 h-16 rounded-[28px] flex items-center justify-center ${meta.bg} border-2 border-white/5`}>
@@ -782,7 +840,7 @@ export function WalletNotifications() {
                                             </button>
                                         </div>
 
-                                        <div class="p-6 lg:p-12 pt-20 lg:pt-12 space-y-12 max-w-2xl mx-auto w-full">
+                                        <div class="p-4 lg:p-12 pt-16 lg:pt-12 space-y-6 lg:space-y-12 w-full max-w-full lg:max-w-2xl mx-auto">
                                             <div class="space-y-6">
                                                 <div class="flex items-center justify-between">
                                                     <div class={`w-16 h-16 rounded-[28px] flex items-center justify-center ${meta.bg} border-2 border-white/5`}>
