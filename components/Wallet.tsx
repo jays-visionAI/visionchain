@@ -488,7 +488,15 @@ const Wallet = (): JSX.Element => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [showLogoutConfirm, setShowLogoutConfirm] = createSignal(false);
     const [pendingLogout, setPendingLogout] = createSignal<(() => void) | null>(null);
+
     useBeforeLeave((e: any) => {
+        // CRITICAL: Skip this check during PWA startup (first 3 seconds)
+        // PWA installations can trigger spurious navigation events
+        if (Date.now() - appStartTime < 3000) {
+            console.log('[Wallet] Ignoring early beforeLeave event (PWA startup)');
+            return;
+        }
+
         // e.to might be a string (path) or an object with pathname
         const destination = e.to;
         const path = typeof destination === 'string'
@@ -516,14 +524,8 @@ const Wallet = (): JSX.Element => {
     const cancelLogout = () => {
         setShowLogoutConfirm(false);
         setPendingLogout(null);
-
-        // CRITICAL: Check if user is actually still logged in
-        // If not, redirect to login instead of showing stale/dummy data
-        if (!auth.user()) {
-            console.warn('[Wallet] User is not authenticated after cancel - redirecting to login');
-            window.location.href = '/login';
-            return;
-        }
+        // Simply close the modal - do NOT redirect or change any state
+        // User explicitly chose to stay, so keep current state as-is
     };
 
     const [copied, setCopied] = createSignal(false);
