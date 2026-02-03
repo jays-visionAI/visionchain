@@ -42,7 +42,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
 
     const invitationMessage = () => {
         const url = referralUrl();
-        return `Join Vision Chain\n${url}`;
+        return url; // URL only, title is added separately in navigator.share()
     };
 
     const getDynamicLevelData = (count: number, cfg: ReferralConfig) => {
