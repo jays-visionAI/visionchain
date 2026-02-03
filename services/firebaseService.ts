@@ -2024,6 +2024,8 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     const db = getFirebaseDb();
     const newInvitations: { email: string; partnerCode: string }[] = [];
     const existingMembers: string[] = [];
+    const changedAmounts: { email: string; oldAmount: number; newAmount: number }[] = [];
+    const newRecords: string[] = [];
 
     // Process entries sequentially or in small batches to avoid rate limits
     // For simplicity, we'll process Firestore writes in parallel but limit concurrency if needed.
@@ -2064,14 +2066,20 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
         };
 
         if (existingSaleSnap.exists()) {
-            // Existing record - only update fields that are missing or zero in the existing record
+            // Existing record - check for changes
             const existingData = existingSaleSnap.data();
+            const existingAmount = existingData.amountToken || 0;
+            const newAmount = entry.amountToken || 0;
 
-            // Only update amountToken if the existing value is 0 or missing
-            if (!existingData.amountToken || existingData.amountToken === 0) {
-                if (entry.amountToken && entry.amountToken > 0) {
-                    updateData.amountToken = entry.amountToken;
-                }
+            // Check if amount is different and new amount is valid
+            if (newAmount > 0 && existingAmount !== newAmount) {
+                updateData.amountToken = newAmount;
+                changedAmounts.push({
+                    email: emailLower,
+                    oldAmount: existingAmount,
+                    newAmount: newAmount
+                });
+                console.log(`[uploadTokenSaleData] Amount changed for ${emailLower}: ${existingAmount} -> ${newAmount}`);
             }
 
             // Only update partnerCode if missing
@@ -2104,6 +2112,7 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
                 walletAddress: derivedWallet || null,
                 createdAt: new Date().toISOString()
             };
+            newRecords.push(emailLower);
             console.log(`[uploadTokenSaleData] Creating new record for ${emailLower}`);
         }
 
@@ -2138,7 +2147,9 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     return {
         count: entries.length,
         newInvitations: newInvitations.map(i => i.email),
-        existingMembers
+        existingMembers,
+        changedAmounts,  // NEW: Array of { email, oldAmount, newAmount }
+        newRecords       // NEW: Array of new record emails
     };
 };
 

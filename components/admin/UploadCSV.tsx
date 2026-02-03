@@ -1,5 +1,12 @@
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, For } from 'solid-js';
 import { uploadTokenSaleData, TokenSaleEntry, sendInvitationEmail } from '../../services/firebaseService';
+
+interface UploadResultType {
+    newInvitations: string[];
+    existingMembers: string[];
+    changedAmounts: { email: string; oldAmount: number; newAmount: number }[];
+    newRecords: string[];
+}
 
 export const UploadCSV = () => {
     const [dragActive, setDragActive] = createSignal(false);
@@ -7,7 +14,7 @@ export const UploadCSV = () => {
     const [parsedData, setParsedData] = createSignal<TokenSaleEntry[]>([]);
     const [isUploading, setIsUploading] = createSignal(false);
     const [uploadStatus, setUploadStatus] = createSignal<{ success: boolean, message: string } | null>(null);
-    const [uploadResult, setUploadResult] = createSignal<{ newInvitations: string[], existingMembers: string[] } | null>(null);
+    const [uploadResult, setUploadResult] = createSignal<UploadResultType | null>(null);
 
     const handleDrag = (e: Event) => {
         e.preventDefault();
@@ -150,12 +157,9 @@ export const UploadCSV = () => {
 
             setUploadResult({
                 newInvitations: result.newInvitations,
-                existingMembers: result.existingMembers
-            });
-
-            setUploadResult({
-                newInvitations: result.newInvitations,
-                existingMembers: result.existingMembers
+                existingMembers: result.existingMembers,
+                changedAmounts: result.changedAmounts || [],
+                newRecords: result.newRecords || []
             });
 
             // --- 4. Auto-Distribute Testnet Tokens (10% of Purchased Amount) ---
@@ -186,12 +190,22 @@ export const UploadCSV = () => {
                 // OR we just set a flag in Firebase 'testnetTokenStatus': 'pending'
             }
 
-            // Per user request: "Calculate 10% and enable sending."
-            // We will update the status message to reflect this readiness.
+            // Build summary message
+            const changedCount = result.changedAmounts?.length || 0;
+            const newCount = result.newRecords?.length || 0;
+
+            let summaryMessage = `Successfully processed ${result.count} entries.`;
+            if (newCount > 0) {
+                summaryMessage += ` ${newCount} new records created.`;
+            }
+            if (changedCount > 0) {
+                summaryMessage += ` ${changedCount} amounts updated.`;
+            }
+            summaryMessage += ` ${emailCount} invitation emails sent.`;
 
             setUploadStatus({
                 success: true,
-                message: `Successfully processed ${result.count} entries. Invited ${emailCount} new users and updated ${result.existingMembers.length} existing members. (Testnet tokens 10% distribution pending)`
+                message: summaryMessage
             });
 
             // Clear file selection after successful upload but keep result view
@@ -370,6 +384,45 @@ export const UploadCSV = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                    </Show>
+
+                    {/* Changed Amounts Section - NEW */}
+                    <Show when={uploadResult()?.changedAmounts && uploadResult()!.changedAmounts.length > 0}>
+                        <div>
+                            <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]"></span>
+                                Amount Changes ({uploadResult()?.changedAmounts.length})
+                            </h3>
+                            <div class="bg-[#0B0E14] border border-amber-900/30 rounded-xl overflow-hidden shadow-lg shadow-amber-900/10 mb-4">
+                                <div class="max-h-80 overflow-y-auto custom-scrollbar">
+                                    <table class="w-full text-sm text-left text-slate-400">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 sticky top-0 backdrop-blur-sm">
+                                            <tr>
+                                                <th class="px-6 py-3">Email</th>
+                                                <th class="px-6 py-3 text-right">Old Amount</th>
+                                                <th class="px-6 py-3 text-center">{'→'}</th>
+                                                <th class="px-6 py-3 text-right">New Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <For each={uploadResult()?.changedAmounts}>
+                                                {(change) => (
+                                                    <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                                        <td class="px-6 py-3 font-mono text-slate-300 text-xs">{change.email}</td>
+                                                        <td class="px-6 py-3 text-right text-red-400 font-bold">{change.oldAmount.toLocaleString()}</td>
+                                                        <td class="px-6 py-3 text-center text-amber-500 font-bold">{'→'}</td>
+                                                        <td class="px-6 py-3 text-right text-green-400 font-bold">{change.newAmount.toLocaleString()}</td>
+                                                    </tr>
+                                                )}
+                                            </For>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-amber-400 text-xs">
+                                Total {uploadResult()?.changedAmounts.length} user(s) had their VCN amount updated.
                             </div>
                         </div>
                     </Show>
