@@ -51,7 +51,8 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
         },
         intents: {
             keywords: {
-                bridge: ['bridge', 'move to', 'cross-chain'],
+                // Include Ethereum-related keywords since testnet uses Sepolia
+                bridge: ['bridge', 'move to', 'cross-chain', 'to ethereum', 'to eth', 'to erc-20', 'erc20', 'to sepolia', 'to mainnet'],
                 schedule: [' in ', ' after '],
                 send: ['send', 'pay', 'transfer'],
                 timeAfter: ['in', 'after']
@@ -70,8 +71,19 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
                     }
                 ],
                 bridge: [
+                    // Standard bridge pattern
                     {
-                        regex: /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z]+)/i,
+                        regex: /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z0-9-]+)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    },
+                    // "Convert to Ethereum" pattern - treat as bridge to Sepolia
+                    {
+                        regex: /(?:convert|change|swap)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+(?:ethereum|eth|erc-?20|sepolia)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    },
+                    // "Send to Ethereum network" pattern
+                    {
+                        regex: /(?:send|transfer)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+(?:ethereum|eth|erc-?20|sepolia)(?:\s+network)?/i,
                         mapping: { amount: 1, token: 2, chain: 3 }
                     }
                 ]
@@ -92,7 +104,8 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
         },
         intents: {
             keywords: {
-                bridge: ['브릿지', '옮겨', '이동'],
+                // 테스트넷에서는 이더리움 = Sepolia로 매핑
+                bridge: ['브릿지', '옮겨', '이동', '이더리움', '이더로', '이더계열', 'erc-20', 'erc20', '세폴리아'],
                 schedule: [' 뒤에', ' 후에', ' 예약'],
                 send: ['보내', '이체', '송금', '결제', '전송'],
                 timeAfter: ['뒤에', '후에', '이후에']
@@ -115,8 +128,24 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
                     }
                 ],
                 bridge: [
+                    // 기본 브릿지 패턴: "1 VCN 브릿지 to Ethereum"
                     {
-                        regex: /([0-9.]+)\s+([a-zA-Z]+)\s+(?:브릿지|옮겨|이동)\s+(?:to|로|으로)\s+([a-zA-Z]+)/i,
+                        regex: /([0-9.]+)\s+([a-zA-Z]+)\s+(?:브릿지|옮겨|이동)\s+(?:to|로|으로)\s+([a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣0-9-]+)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    },
+                    // 이더리움으로 변환 패턴: "1 VCN을 이더리움으로 바꿔줘"
+                    {
+                        regex: /([0-9.]+)\s*([a-zA-Z]+)\s*(?:을|를)?\s*(?:이더리움|이더|erc-?20|세폴리아)(?:으로|로)?\s*(?:바꿔|변환|전환|보내)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    },
+                    // 이더리움 계열로 보내기: "이더리움으로 1 VCN 보내줘"
+                    {
+                        regex: /(?:이더리움|이더|erc-?20|세폴리아)(?:으로|로)?\s+([0-9.]+)\s*([a-zA-Z]+)\s*(?:보내|이동|옮겨|브릿지)/i,
+                        mapping: { amount: 1, token: 2, chain: 3 }
+                    },
+                    // "1 VCN을 이더리움으로 보내줘" 패턴
+                    {
+                        regex: /([0-9.]+)\s*([a-zA-Z]+)\s*(?:이더리움|이더|erc-?20|세폴리아)(?:으로|로)\s*(?:보내|전송|이동)/i,
                         mapping: { amount: 1, token: 2, chain: 3 }
                     }
                 ]

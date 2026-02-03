@@ -208,8 +208,15 @@ export class ActionResolverService {
         const VISION_CHAIN_ID = 1337;
         const SEPOLIA_CHAIN_ID = 11155111;
 
-        // Determine destination chain ID
-        const dstChainId = destinationChain.toUpperCase() === 'ETHEREUM' || destinationChain.toUpperCase() === 'SEPOLIA'
+        // Normalize destination chain name to Sepolia for all Ethereum-related keywords
+        // Since we're on testnet, Ethereum/ETH/ERC-20 all map to Sepolia
+        const chainUpper = destinationChain.toUpperCase();
+        const ethereumKeywords = [
+            'ETHEREUM', 'ETH', 'SEPOLIA', 'ERC-20', 'ERC20', 'MAINNET',
+            '이더리움', '이더', '세폴리아', '이더계열'
+        ];
+
+        const dstChainId = ethereumKeywords.some(kw => chainUpper.includes(kw))
             ? SEPOLIA_CHAIN_ID
             : 137; // Polygon placeholder
 
