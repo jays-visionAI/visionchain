@@ -470,10 +470,15 @@ async function logSecurityEvent(email, action, details, db) {
 const db = admin.firestore();
 
 // Configuration
-const RPC_URL = "http://46.224.221.201:8545"; // Testnet
-// Executor key - in production, use environment config or Secret Manager
-const EXECUTOR_PRIVATE_KEY = process.env.EXECUTOR_PK ||
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Hardhat default #0
+const RPC_URL = "http://46.224.221.201:8545"; // Vision Chain Testnet
+
+// Vision Chain Executor - MUST be set via Firebase Secrets
+// firebase functions:secrets:set VCN_EXECUTOR_PK
+const VCN_EXECUTOR_PK = process.env.VCN_EXECUTOR_PK;
+
+// Legacy fallback for existing functions (will be removed after migration)
+const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
+
 const TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
 const TIMELOCK_ABI = [
   "function executeTransfer(uint256 scheduleId) external",
@@ -2151,9 +2156,13 @@ exports.disableTOTP = onCall({ cors: true }, async (request) => {
 // =============================================================================
 
 // Sepolia Configuration
-const SEPOLIA_RPC_URL = "https://rpc.sepolia.org";
+const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
 const SEPOLIA_CHAIN_ID = 11155111;
 const CHALLENGE_PERIOD_MINUTES = 15;
+
+// Sepolia Bridge Relayer - MUST be set via Firebase Secrets
+// firebase functions:secrets:set SEPOLIA_RELAYER_PK
+const SEPOLIA_RELAYER_PK = process.env.SEPOLIA_RELAYER_PK;
 
 /**
  * Bridge Relayer - Scheduled Function
@@ -2163,6 +2172,7 @@ exports.bridgeRelayer = onSchedule({
   schedule: "every 5 minutes",
   timeZone: "Asia/Seoul",
   memory: "256MiB",
+  secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK"],
 }, async (_event) => {
   console.log("[Bridge Relayer] Starting scheduled execution...");
 
@@ -2250,13 +2260,17 @@ exports.bridgeRelayer = onSchedule({
  * @return {Promise<string>} Destination transaction hash
  */
 async function executeSepoliaBridgeTransfer(bridge) {
-  const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
-  const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+  if (!SEPOLIA_RELAYER_PK) {
+    throw new Error("SEPOLIA_RELAYER_PK secret not configured. Run: firebase functions:secrets:set SEPOLIA_RELAYER_PK");
+  }
 
-  const balance = await provider.getBalance(adminWallet.address);
+  const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+  const relayerWallet = new ethers.Wallet(SEPOLIA_RELAYER_PK, provider);
+
+  const balance = await provider.getBalance(relayerWallet.address);
   const amountWei = BigInt(bridge.amount);
 
-  console.log(`[Sepolia Bridge] Admin balance: ${ethers.formatEther(balance)} ETH`);
+  console.log(`[Sepolia Bridge] Relayer balance: ${ethers.formatEther(balance)} ETH`);
   console.log(`[Sepolia Bridge] Transfer amount: ${ethers.formatEther(amountWei)} VCN`);
 
   // Check if we have enough balance
@@ -2278,7 +2292,7 @@ async function executeSepoliaBridgeTransfer(bridge) {
   }
 
   // Execute real transfer
-  const tx = await adminWallet.sendTransaction({
+  const tx = await relayerWallet.sendTransaction({
     to: bridge.recipient,
     value: amountWei,
     gasLimit: 21000,
@@ -2398,7 +2412,7 @@ async function sendBridgeCompleteEmail(email, bridge, destTxHash) {
 // =============================================================================
 // BRIDGE RELAYER - Manual Trigger (For Testing)
 // =============================================================================
-exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public", secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK"] }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
