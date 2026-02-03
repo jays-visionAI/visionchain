@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, For, Show, onMount } from 'solid-js';
+import { Component, createSignal, createEffect, For, Show, onMount, onCleanup } from 'solid-js';
 import {
     ArrowRightLeft,
     ArrowDown,
@@ -10,10 +10,13 @@ import {
     CheckCircle2,
     AlertCircle,
     Wallet,
-    RefreshCw
+    RefreshCw,
+    Loader2
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
+import { getFirebaseDb } from '../services/firebaseService';
+import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 
 // Extend Window interface for ethereum
 declare global {
@@ -46,6 +49,21 @@ interface Transaction {
     status: 'Pending' | 'Processing' | 'Success';
     time: string;
     hash: string;
+}
+
+// Bridge transaction from Firebase
+interface BridgeTransaction {
+    id: string;
+    user: string;
+    srcChainId: number;
+    dstChainId: number;
+    amount: string;
+    recipient: string;
+    intentHash?: string;
+    txHash: string;
+    status: 'COMMITTED' | 'PROCESSING' | 'COMPLETED' | 'FINALIZED' | 'FAILED';
+    createdAt: any;
+    completedAt?: any;
 }
 
 interface NetworkConfig {
@@ -85,6 +103,84 @@ const Bridge: Component<BridgeProps> = (props) => {
     const [txHash, setTxHash] = createSignal('');
     const [errorMsg, setErrorMsg] = createSignal('');
     const [transactions, setTransactions] = createSignal<Transaction[]>([]);
+
+    // Firebase bridge tracking state
+    const [bridgeHistory, setBridgeHistory] = createSignal<BridgeTransaction[]>([]);
+    const [isLoadingBridgeHistory, setIsLoadingBridgeHistory] = createSignal(true);
+    let unsubscribeBridgeHistory: (() => void) | null = null;
+
+    // Get chain name from chainId
+    const getChainName = (chainId: number): string => {
+        if (chainId === 11155111) return 'Ethereum Sepolia';
+        if (chainId === 1337 || chainId === 20261337) return 'Vision Chain';
+        return `Chain ${chainId}`;
+    };
+
+    // Get time ago string
+    const getTimeAgo = (timestamp: any): string => {
+        if (!timestamp) return 'Just now';
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        const now = new Date();
+        const diff = now.getTime() - date.getTime();
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+
+        if (minutes < 1) return 'Just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        return `${Math.floor(hours / 24)}d ago`;
+    };
+
+    // Get estimated completion time
+    const getEstimatedCompletion = (createdAt: any, status: string): string => {
+        if (status === 'COMPLETED' || status === 'FINALIZED') return 'Completed';
+        if (status === 'FAILED') return 'Failed';
+        if (!createdAt) return '~15-30 min';
+
+        const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+        const elapsed = (Date.now() - date.getTime()) / 60000; // minutes
+        const remaining = Math.max(0, 30 - elapsed);
+
+        if (remaining <= 0) return 'Completing soon...';
+        return `~${Math.ceil(remaining)} min remaining`;
+    };
+
+    // Subscribe to Firebase bridge transactions
+    const subscribeToBridgeHistory = () => {
+        const addr = walletAddress();
+        if (!addr) {
+            setBridgeHistory([]);
+            setIsLoadingBridgeHistory(false);
+            return;
+        }
+
+        try {
+            const db = getFirebaseDb();
+            const bridgeRef = collection(db, 'bridgeTransactions');
+            const q = query(
+                bridgeRef,
+                where('user', '==', addr.toLowerCase()),
+                orderBy('createdAt', 'desc'),
+                limit(10)
+            );
+
+            unsubscribeBridgeHistory = onSnapshot(q, (snapshot) => {
+                const bridges: BridgeTransaction[] = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                } as BridgeTransaction));
+                setBridgeHistory(bridges);
+                setIsLoadingBridgeHistory(false);
+            }, (error) => {
+                console.error('[Bridge] Firebase subscription error:', error);
+                setBridgeHistory([]);
+                setIsLoadingBridgeHistory(false);
+            });
+        } catch (err) {
+            console.error('[Bridge] Failed to subscribe to bridge history:', err);
+            setIsLoadingBridgeHistory(false);
+        }
+    };
 
     // Load balance
     const loadBalance = async () => {
@@ -201,6 +297,7 @@ const Bridge: Component<BridgeProps> = (props) => {
     onMount(async () => {
         if (walletAddress()) {
             await loadBalance();
+            subscribeToBridgeHistory();
         }
 
         if (window.ethereum) {
@@ -211,9 +308,22 @@ const Bridge: Component<BridgeProps> = (props) => {
         }
     });
 
+    // Cleanup Firebase subscription on unmount
+    onCleanup(() => {
+        if (unsubscribeBridgeHistory) {
+            unsubscribeBridgeHistory();
+        }
+    });
+
     createEffect(() => {
-        if (walletAddress()) {
+        const addr = walletAddress();
+        if (addr) {
             loadBalance();
+            // Re-subscribe when wallet address changes
+            if (unsubscribeBridgeHistory) {
+                unsubscribeBridgeHistory();
+            }
+            subscribeToBridgeHistory();
         }
     });
 
@@ -443,50 +553,116 @@ const Bridge: Component<BridgeProps> = (props) => {
                                 <p class="text-xs text-blue-400/60 font-medium">Chain ID: {currentChainId()}</p>
                             </div>
 
-                            {/* Recent History */}
+                            {/* Recent Bridge History - Real-time from Firebase */}
                             <div class="bg-[#111113]/40 border border-white/[0.06] rounded-[24px] p-6">
                                 <div class="flex items-center justify-between mb-6">
                                     <div class="flex items-center gap-3">
                                         <History class="w-5 h-5 text-gray-400" />
-                                        <h3 class="text-sm font-black italic tracking-widest uppercase">Your Activity</h3>
+                                        <h3 class="text-sm font-black italic tracking-widest uppercase">Bridge Status</h3>
                                     </div>
                                     <button
-                                        onClick={loadBalance}
+                                        onClick={() => subscribeToBridgeHistory()}
                                         class="p-2 hover:bg-white/5 rounded-lg transition-colors"
                                     >
                                         <RefreshCw class="w-4 h-4 text-gray-500" />
                                     </button>
                                 </div>
-                                <Show when={transactions().length > 0} fallback={
-                                    <div class="py-8 text-center">
-                                        <History class="w-10 h-10 text-gray-700 mx-auto mb-3" />
-                                        <p class="text-gray-600 text-xs">No transfers yet</p>
+
+                                <Show when={!isLoadingBridgeHistory()} fallback={
+                                    <div class="py-8 flex items-center justify-center gap-2 text-gray-500">
+                                        <Loader2 class="w-4 h-4 animate-spin" />
+                                        <span class="text-xs">Loading...</span>
                                     </div>
                                 }>
-                                    <div class="space-y-4">
-                                        <For each={transactions()}>
-                                            {(tx) => (
-                                                <div class="flex items-start gap-4 group">
-                                                    <div class={`w-1 h-10 rounded-full ${tx.status === 'Processing' ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`} />
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="flex justify-between items-start mb-1">
-                                                            <span class="text-xs font-black italic tracking-tight uppercase">{tx.amount} {tx.asset}</span>
-                                                            <span class={`text-[9px] font-bold px-1.5 py-0.5 rounded ${tx.status === 'Processing' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-500'
+                                    <Show when={bridgeHistory().length > 0} fallback={
+                                        <div class="py-8 text-center">
+                                            <History class="w-10 h-10 text-gray-700 mx-auto mb-3" />
+                                            <p class="text-gray-600 text-xs">No bridge requests yet</p>
+                                        </div>
+                                    }>
+                                        <div class="space-y-4">
+                                            <For each={bridgeHistory()}>
+                                                {(bridge) => (
+                                                    <div class="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-3">
+                                                        {/* Header */}
+                                                        <div class="flex justify-between items-start">
+                                                            <div>
+                                                                <span class="text-sm font-black text-white">
+                                                                    {parseFloat(bridge.amount).toLocaleString()} VCN
+                                                                </span>
+                                                                <div class="text-[10px] text-gray-500 mt-0.5">
+                                                                    {getChainName(bridge.srcChainId)} → {getChainName(bridge.dstChainId)}
+                                                                </div>
+                                                            </div>
+                                                            <span class={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${bridge.status === 'COMMITTED' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                                    bridge.status === 'PROCESSING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                                                        bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                                            'bg-red-500/10 text-red-400 border border-red-500/20'
                                                                 }`}>
-                                                                {tx.status}
+                                                                {bridge.status === 'COMMITTED' ? 'Processing' :
+                                                                    bridge.status === 'PROCESSING' ? 'Confirming' :
+                                                                        bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? 'Complete' : 'Failed'}
                                                             </span>
                                                         </div>
-                                                        <div class="text-[10px] text-gray-500 font-medium truncate mb-1">
-                                                            {tx.from} → {tx.to}
+
+                                                        {/* Progress Bar */}
+                                                        <Show when={bridge.status !== 'FAILED'}>
+                                                            <div class="space-y-1.5">
+                                                                <div class="flex gap-1">
+                                                                    <div class={`h-1 flex-1 rounded-full transition-all duration-500 ${['COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status)
+                                                                            ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'
+                                                                            : 'bg-gray-800'
+                                                                        }`} />
+                                                                    <div class={`h-1 flex-1 rounded-full transition-all duration-500 ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status)
+                                                                            ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
+                                                                            : 'bg-gray-800'
+                                                                        }`} />
+                                                                    <div class={`h-1 flex-1 rounded-full transition-all duration-500 ${['COMPLETED', 'FINALIZED'].includes(bridge.status)
+                                                                            ? 'bg-green-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                                                                            : 'bg-gray-800'
+                                                                        }`} />
+                                                                </div>
+                                                                <div class="flex justify-between text-[8px] text-gray-600 font-bold uppercase tracking-widest">
+                                                                    <span class={['COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status) ? 'text-blue-400' : ''}>
+                                                                        Submitted
+                                                                    </span>
+                                                                    <span class={['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status) ? 'text-amber-400' : ''}>
+                                                                        Verifying
+                                                                    </span>
+                                                                    <span class={['COMPLETED', 'FINALIZED'].includes(bridge.status) ? 'text-green-400' : ''}>
+                                                                        Complete
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </Show>
+
+                                                        {/* Time Info */}
+                                                        <div class="flex justify-between items-center text-[10px]">
+                                                            <span class="text-gray-500">{getTimeAgo(bridge.createdAt)}</span>
+                                                            <Show when={bridge.status === 'COMMITTED' || bridge.status === 'PROCESSING'}>
+                                                                <span class="text-blue-400 font-bold flex items-center gap-1">
+                                                                    <Clock class="w-3 h-3" />
+                                                                    {getEstimatedCompletion(bridge.createdAt, bridge.status)}
+                                                                </span>
+                                                            </Show>
                                                         </div>
-                                                        <div class="text-[10px] text-gray-600">
-                                                            {tx.time} | {tx.hash}
-                                                        </div>
+
+                                                        {/* TX Link */}
+                                                        <Show when={bridge.txHash}>
+                                                            <a
+                                                                href={`https://www.visionchain.co/visionscan/tx/${bridge.txHash}`}
+                                                                target="_blank"
+                                                                class="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] text-gray-400 hover:text-white transition-colors"
+                                                            >
+                                                                <ExternalLink class="w-3 h-3" />
+                                                                View on VisionScan
+                                                            </a>
+                                                        </Show>
                                                     </div>
-                                                </div>
-                                            )}
-                                        </For>
-                                    </div>
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
                                 </Show>
                             </div>
                         </div>
