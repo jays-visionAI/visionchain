@@ -16,7 +16,8 @@ import {
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 import { getFirebaseDb } from '../services/firebaseService';
-import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, limit, doc, setDoc } from 'firebase/firestore';
+import { createNotification } from '../services/notificationService';
 
 // Extend Window interface for ethereum
 declare global {
@@ -25,13 +26,20 @@ declare global {
     }
 }
 
-// Contract Addresses
-const VISION_VAULT_ADDRESS = '0x8464135c8F25Da09e49BC8782676a84730C318bC';
+// Contract Addresses - IntentCommitment for Paymaster approach
+const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
 const VCN_TOKEN_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 
-const VISION_VAULT_ABI = [
-    'function depositToVision(uint256 amount, uint256 destinationChainId) external',
-    'function withdrawFromVision(uint256 amount, bytes calldata proof) external'
+// Chain IDs
+const VISION_CHAIN_ID = 1337;
+const SEPOLIA_CHAIN_ID = 11155111;
+
+// Paymaster API URL
+const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+const PAYMASTER_API = `https://us-central1-${firebaseProjectId}.cloudfunctions.net`;
+
+const INTENT_ABI = [
+    "function getNextNonce(address user) view returns (uint256)"
 ];
 
 const ERC20_ABI = [
@@ -208,7 +216,7 @@ const Bridge: Component<BridgeProps> = (props) => {
         loadBalance();
     };
 
-    // Handle bridge transfer using Cloud Wallet
+    // Handle bridge transfer using EIP-712 + Paymaster (same as Chat)
     const handleBridge = async () => {
         const amountVal = amount();
         if (!amountVal || parseFloat(amountVal) <= 0) {
@@ -227,36 +235,141 @@ const Bridge: Component<BridgeProps> = (props) => {
             return;
         }
 
+        const userEmail = props.userEmail?.();
+
         try {
             setIsBridging(true);
             setIsApproving(true);
             setErrorMsg('');
             setStep(2);
 
-            // Use Vision Chain RPC with private key
+            // Create provider and signer
             const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
             const signer = new ethers.Wallet(privateKey, provider);
-            const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
-            const vault = new ethers.Contract(VISION_VAULT_ADDRESS, VISION_VAULT_ABI, signer);
+            const userAddr = walletAddress();
 
+            // Get destination chain ID
+            const dstChainId = toNetwork().chainId;
+
+            // Get next nonce from IntentCommitment contract
+            const intentContract = new ethers.Contract(VISION_INTENT_COMMITMENT, INTENT_ABI, provider);
+            const nonce = await intentContract.getNextNonce(userAddr);
             const amountWei = ethers.parseEther(amountVal);
+            const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
 
-            // Check and approve if needed
-            const allowance = await vcn.allowance(walletAddress(), VISION_VAULT_ADDRESS);
-            if (allowance < amountWei) {
-                const approveTx = await vcn.approve(VISION_VAULT_ADDRESS, amountWei);
-                await approveTx.wait();
-            }
+            // Build intent struct
+            const intent = {
+                user: userAddr,
+                srcChainId: BigInt(VISION_CHAIN_ID),
+                dstChainId: BigInt(dstChainId),
+                token: ethers.ZeroAddress, // Native VCN
+                amount: amountWei,
+                recipient: userAddr,
+                nonce: nonce,
+                expiry: BigInt(expiry)
+            };
+
+            // EIP-712 Domain for Bridge Intent
+            const domain = {
+                name: 'VisionBridge',
+                version: '1',
+                chainId: VISION_CHAIN_ID,
+                verifyingContract: VISION_INTENT_COMMITMENT
+            };
+
+            // EIP-712 Types
+            const types = {
+                BridgeIntent: [
+                    { name: 'user', type: 'address' },
+                    { name: 'srcChainId', type: 'uint256' },
+                    { name: 'dstChainId', type: 'uint256' },
+                    { name: 'token', type: 'address' },
+                    { name: 'amount', type: 'uint256' },
+                    { name: 'recipient', type: 'address' },
+                    { name: 'nonce', type: 'uint256' },
+                    { name: 'expiry', type: 'uint256' }
+                ]
+            };
 
             setIsApproving(false);
+            console.log('[Bridge] Signing intent with EIP-712...');
 
-            // Execute bridge deposit
-            const tx = await vault.depositToVision(amountWei, toNetwork().chainId);
-            setTxHash(tx.hash);
+            // Sign with EIP-712
+            const intentSignature = await signer.signTypedData(domain, types, intent);
 
-            await tx.wait();
+            // Submit to Paymaster API
+            console.log('[Bridge] Submitting to Paymaster API...');
+            const response = await fetch(`${PAYMASTER_API}/bridgeWithPaymaster`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user: userAddr,
+                    srcChainId: VISION_CHAIN_ID,
+                    dstChainId: dstChainId,
+                    token: ethers.ZeroAddress,
+                    amount: amountWei.toString(),
+                    recipient: userAddr,
+                    nonce: nonce.toString(),
+                    expiry: expiry,
+                    intentSignature: intentSignature
+                })
+            });
 
-            // Add to transaction history
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(`Paymaster Failed: ${error.error || response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log(`[Bridge] Tx submitted via Paymaster: ${result.txHash}`);
+            setTxHash(result.txHash);
+
+            // Create notification (bridge_started)
+            const chainDisplay = toNetwork().name;
+            if (userEmail) {
+                try {
+                    await createNotification(userEmail, {
+                        type: 'bridge_started' as any,
+                        title: 'Bridge Request Started',
+                        content: `${amountVal} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
+                        data: {
+                            amount: amountVal,
+                            destinationChain: chainDisplay,
+                            txHash: result.txHash,
+                            status: 'pending'
+                        }
+                    });
+                    console.log('[Bridge] Notification created');
+                } catch (notiErr) {
+                    console.warn('[Bridge] Notification failed:', notiErr);
+                }
+            }
+
+            // Save to Firebase for History
+            try {
+                const db = getFirebaseDb();
+                const txRef = doc(db, 'transactions', result.txHash);
+                await setDoc(txRef, {
+                    hash: result.txHash,
+                    from_addr: userAddr.toLowerCase(),
+                    to_addr: 'bridge:sepolia',
+                    value: amountVal,
+                    timestamp: Date.now(),
+                    type: 'Bridge',
+                    bridgeStatus: 'PENDING',
+                    challengeEndTime: Date.now() + (10 * 60 * 1000),
+                    metadata: {
+                        destinationChain: chainDisplay,
+                        srcChainId: VISION_CHAIN_ID,
+                        dstChainId: dstChainId
+                    }
+                });
+                console.log('[Bridge] Saved to Firestore for History');
+            } catch (historyErr) {
+                console.warn('[Bridge] Failed to save history:', historyErr);
+            }
+
+            // Add to local transaction list
             const newTx: Transaction = {
                 id: Date.now().toString(),
                 from: fromNetwork().name,
@@ -265,11 +378,12 @@ const Bridge: Component<BridgeProps> = (props) => {
                 asset: selectedAsset(),
                 status: 'Processing',
                 time: 'Just now',
-                hash: tx.hash.slice(0, 6) + '...' + tx.hash.slice(-4)
+                hash: result.txHash.slice(0, 6) + '...' + result.txHash.slice(-4)
             };
             setTransactions(prev => [newTx, ...prev]);
 
             setStep(3);
+            setAmount('');
             await loadBalance();
 
         } catch (err: any) {
