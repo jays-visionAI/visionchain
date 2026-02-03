@@ -4604,7 +4604,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                     </div>
 
                                     {/* Form */}
-                                    <div class="px-8 pb-8 space-y-4">
+                                    <div class="px-6 pb-6 space-y-4">
                                         <div>
                                             <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                                                 Wallet Password
@@ -4615,7 +4615,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                 onInput={(e) => setCloudRestorePassword(e.currentTarget.value)}
                                                 onKeyPress={(e) => e.key === 'Enter' && handleCloudRestore()}
                                                 placeholder="Enter your password"
-                                                class="w-full px-5 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                                                class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                                             />
                                         </div>
 
