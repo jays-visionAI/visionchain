@@ -2052,14 +2052,62 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
             }
         }
 
-        // 1. Update token_sales
+        // 1. Update token_sales - Smart merge to preserve existing data
         const saleRef = doc(db, 'token_sales', emailLower);
-        await setDoc(saleRef, {
-            ...entry,
+        const existingSaleSnap = await getDoc(saleRef);
+
+        let updateData: any = {
             email: emailLower,
             status: derivedStatus,
-            walletAddress: derivedWallet || null
-        }, { merge: true });
+            walletAddress: derivedWallet || null,
+            updatedAt: new Date().toISOString()
+        };
+
+        if (existingSaleSnap.exists()) {
+            // Existing record - only update fields that are missing or zero in the existing record
+            const existingData = existingSaleSnap.data();
+
+            // Only update amountToken if the existing value is 0 or missing
+            if (!existingData.amountToken || existingData.amountToken === 0) {
+                if (entry.amountToken && entry.amountToken > 0) {
+                    updateData.amountToken = entry.amountToken;
+                }
+            }
+
+            // Only update partnerCode if missing
+            if (!existingData.partnerCode && entry.partnerCode) {
+                updateData.partnerCode = entry.partnerCode;
+            }
+
+            // Only update unlockRatio if missing or zero
+            if (!existingData.unlockRatio && entry.unlockRatio) {
+                updateData.unlockRatio = entry.unlockRatio;
+            }
+
+            // Only update vestingPeriod if missing or zero
+            if (!existingData.vestingPeriod && entry.vestingPeriod) {
+                updateData.vestingPeriod = entry.vestingPeriod;
+            }
+
+            // Only update date if missing
+            if (!existingData.date && entry.date) {
+                updateData.date = entry.date;
+            }
+
+            console.log(`[uploadTokenSaleData] Updating existing record for ${emailLower}:`, updateData);
+        } else {
+            // New record - include all fields from CSV
+            updateData = {
+                ...entry,
+                email: emailLower,
+                status: derivedStatus,
+                walletAddress: derivedWallet || null,
+                createdAt: new Date().toISOString()
+            };
+            console.log(`[uploadTokenSaleData] Creating new record for ${emailLower}`);
+        }
+
+        await setDoc(saleRef, updateData, { merge: true });
 
         // 2. Check users collection
         // Reuse userRef and userSnap from above
