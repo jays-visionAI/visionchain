@@ -556,6 +556,13 @@ const Wallet = (): JSX.Element => {
         const addr = walletAddress();
         if (!addr) return;
 
+        // TODO: Re-enable when Sepolia Equalizer contract is deployed
+        // Currently disabled to prevent console errors
+        setSepoliaVcnBalance(0);
+        setIsLoadingSepoliaBalance(false);
+        return;
+
+        /* Disabled until Sepolia Equalizer is deployed
         setIsLoadingSepoliaBalance(true);
         try {
             // Sepolia Equalizer contract (wVCN)
@@ -576,6 +583,7 @@ const Wallet = (): JSX.Element => {
         } finally {
             setIsLoadingSepoliaBalance(false);
         }
+        */
     };
 
     // --- Enterprise Bulk Transfer Agent State ---
