@@ -18,6 +18,7 @@ import { WalletViewHeader } from './wallet/WalletViewHeader';
 import { getFirebaseDb } from '../services/firebaseService';
 import { collection, query, where, orderBy, onSnapshot, limit, doc, setDoc } from 'firebase/firestore';
 import { createNotification } from '../services/notificationService';
+import { getVcnPrice, initPriceService } from '../services/vcnPriceService';
 
 // Extend Window interface for ethereum
 declare global {
@@ -118,6 +119,77 @@ const Bridge: Component<BridgeProps> = (props) => {
     const [bridgeHistory, setBridgeHistory] = createSignal<BridgeTransaction[]>([]);
     const [isLoadingBridgeHistory, setIsLoadingBridgeHistory] = createSignal(true);
     let unsubscribeBridgeHistory: (() => void) | null = null;
+
+    // Current chain ID and network switching
+    const [currentChainId, setCurrentChainId] = createSignal<number>(0);
+
+    // Detect current chain from MetaMask or default to Vision Chain for Cloud Wallet
+    const detectCurrentChain = async () => {
+        if (window.ethereum) {
+            try {
+                const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+                setCurrentChainId(parseInt(chainIdHex, 16));
+            } catch (e) {
+                console.warn('[Bridge] Failed to detect chain:', e);
+                setCurrentChainId(VISION_CHAIN_ID); // Default to Vision Chain
+            }
+        } else {
+            // Cloud wallet - assume Vision Chain
+            setCurrentChainId(VISION_CHAIN_ID);
+        }
+    };
+
+    // Switch network (MetaMask only)
+    const switchNetwork = async (targetChainId: number) => {
+        if (!window.ethereum) {
+            setErrorMsg('Network switching requires MetaMask');
+            return;
+        }
+
+        try {
+            await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: `0x${targetChainId.toString(16)}` }],
+            });
+            setCurrentChainId(targetChainId);
+        } catch (switchError: any) {
+            // Chain not added, try to add it
+            if (switchError.code === 4902) {
+                try {
+                    if (targetChainId === VISION_CHAIN_ID) {
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: `0x${VISION_CHAIN_ID.toString(16)}`,
+                                chainName: 'Vision Chain',
+                                nativeCurrency: { name: 'VCN', symbol: 'VCN', decimals: 18 },
+                                rpcUrls: [VISION_RPC_URL],
+                                blockExplorerUrls: ['https://www.visionchain.co/visionscan'],
+                            }],
+                        });
+                    } else if (targetChainId === SEPOLIA_CHAIN_ID) {
+                        await window.ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                                chainId: `0x${SEPOLIA_CHAIN_ID.toString(16)}`,
+                                chainName: 'Ethereum Sepolia',
+                                nativeCurrency: { name: 'SepoliaETH', symbol: 'ETH', decimals: 18 },
+                                rpcUrls: ['https://rpc.sepolia.org'],
+                                blockExplorerUrls: ['https://sepolia.etherscan.io'],
+                            }],
+                        });
+                    }
+                    setCurrentChainId(targetChainId);
+                } catch (addError) {
+                    console.error('[Bridge] Failed to add network:', addError);
+                    setErrorMsg('Failed to add network to wallet');
+                }
+            } else {
+                console.error('[Bridge] Failed to switch network:', switchError);
+                setErrorMsg('Failed to switch network');
+            }
+        }
+    };
 
     // Get chain name from chainId
     const getChainName = (chainId: number): string => {
@@ -328,8 +400,9 @@ const Bridge: Component<BridgeProps> = (props) => {
             const chainDisplay = toNetwork().name;
             if (userEmail) {
                 try {
-                    await createNotification(userEmail, {
-                        type: 'bridge_started' as any,
+                    await createNotification({
+                        userEmail: userEmail,
+                        type: 'transfer_received', // Using existing type for now
                         title: 'Bridge Request Started',
                         content: `${amountVal} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
                         data: {
@@ -404,6 +477,19 @@ const Bridge: Component<BridgeProps> = (props) => {
 
     // Load data on mount and when wallet changes
     onMount(async () => {
+        // Initialize VCN price service
+        initPriceService();
+
+        // Detect current chain
+        await detectCurrentChain();
+
+        // Listen for chain changes (MetaMask)
+        if (window.ethereum) {
+            window.ethereum.on('chainChanged', (chainIdHex: string) => {
+                setCurrentChainId(parseInt(chainIdHex, 16));
+            });
+        }
+
         if (walletAddress()) {
             await loadBalance();
             subscribeToBridgeHistory();
@@ -549,6 +635,17 @@ const Bridge: Component<BridgeProps> = (props) => {
 
                                         {/* Summary & Action */}
                                         <div class="pt-4 space-y-4">
+                                            {/* VCN Price Display */}
+                                            <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
+                                                <span>VCN Price</span>
+                                                <span class="text-emerald-400 font-bold">${getVcnPrice().toFixed(4)}</span>
+                                            </div>
+                                            <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
+                                                <span>Estimated Value</span>
+                                                <span class="text-white font-bold">
+                                                    ${(parseFloat(amount() || '0') * getVcnPrice()).toFixed(2)} USD
+                                                </span>
+                                            </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
                                                 <span>Bridge Fee (Est.)</span>
                                                 <span class="text-gray-300">0.1% + Gas</span>
@@ -654,6 +751,20 @@ const Bridge: Component<BridgeProps> = (props) => {
                                 </div>
                                 <div class="text-lg font-black italic mb-2 tracking-tight">Connected: {walletAddress().slice(0, 6)}...{walletAddress().slice(-4)}</div>
                                 <p class="text-xs text-blue-400/60 font-medium">Chain ID: {currentChainId()}</p>
+
+                                {/* Live VCN Price */}
+                                <div class="mt-4 pt-4 border-t border-white/5">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">VCN Price</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="relative flex h-2 w-2">
+                                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                            </span>
+                                            <span class="text-lg font-black text-emerald-400 tabular-nums">${getVcnPrice().toFixed(4)}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Recent Bridge History - Real-time from Firebase */}
