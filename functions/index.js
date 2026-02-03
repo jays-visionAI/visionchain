@@ -2163,7 +2163,7 @@ exports.bridgeRelayer = onSchedule({
   schedule: "every 5 minutes",
   timeZone: "Asia/Seoul",
   memory: "256MiB",
-}, async (event) => {
+}, async (_event) => {
   console.log("[Bridge Relayer] Starting scheduled execution...");
 
   try {
@@ -2227,7 +2227,6 @@ exports.bridgeRelayer = onSchedule({
         } catch (notifyErr) {
           console.warn("[Bridge Relayer] Notification failed:", notifyErr.message);
         }
-
       } catch (bridgeErr) {
         console.error(`[Bridge Relayer] Failed to process bridge ${bridgeId}:`, bridgeErr);
 
@@ -2240,7 +2239,6 @@ exports.bridgeRelayer = onSchedule({
     }
 
     console.log("[Bridge Relayer] Execution completed");
-
   } catch (err) {
     console.error("[Bridge Relayer] Critical error:", err);
   }
@@ -2248,6 +2246,8 @@ exports.bridgeRelayer = onSchedule({
 
 /**
  * Execute bridge transfer on Sepolia
+ * @param {object} bridge - Bridge transaction data
+ * @return {Promise<string>} Destination transaction hash
  */
 async function executeSepoliaBridgeTransfer(bridge) {
   const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
@@ -2305,6 +2305,8 @@ async function executeSepoliaBridgeTransfer(bridge) {
 
 /**
  * Execute bridge transfer on Vision Chain (reverse bridge)
+ * @param {object} bridge - Bridge transaction data
+ * @return {Promise<string>} Destination transaction hash
  */
 async function executeVisionChainBridgeTransfer(bridge) {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -2338,6 +2340,8 @@ async function executeVisionChainBridgeTransfer(bridge) {
 
 /**
  * Get user email from wallet address
+ * @param {string} address - Wallet address
+ * @return {Promise<string|null>} User email or null
  */
 async function getBridgeUserEmail(address) {
   try {
@@ -2357,13 +2361,16 @@ async function getBridgeUserEmail(address) {
 
 /**
  * Send bridge completion notification email
+ * @param {string} email - User email
+ * @param {object} bridge - Bridge transaction data
+ * @param {string} destTxHash - Destination transaction hash
  */
 async function sendBridgeCompleteEmail(email, bridge, destTxHash) {
   const amount = ethers.formatEther(BigInt(bridge.amount));
   const destChain = bridge.dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
-  const explorerUrl = bridge.dstChainId === SEPOLIA_CHAIN_ID
-    ? `https://sepolia.etherscan.io/tx/${destTxHash}`
-    : `https://www.visionchain.co/visionscan/tx/${destTxHash}`;
+  const explorerUrl = bridge.dstChainId === SEPOLIA_CHAIN_ID ?
+    `https://sepolia.etherscan.io/tx/${destTxHash}` :
+    `https://www.visionchain.co/visionscan/tx/${destTxHash}`;
 
   const emailHtml = `
     <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: auto; padding: 40px; background: #111; color: #fff; border-radius: 16px;">
@@ -2449,7 +2456,6 @@ exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public" }, asyn
         });
 
         results.push({ bridgeId, status: "COMPLETED", txHash: destTxHash });
-
       } catch (err) {
         await docSnap.ref.update({
           status: "FAILED",
@@ -2466,7 +2472,6 @@ exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public" }, asyn
       processed: results.length,
       results: results,
     });
-
   } catch (err) {
     console.error("[Bridge Relayer] Manual trigger error:", err);
     return res.status(500).json({ error: err.message });
