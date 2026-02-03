@@ -244,9 +244,12 @@ const Wallet = (): JSX.Element => {
 
     // Handle browser popstate (back/forward button)
     const handlePopState = (e: PopStateEvent) => {
-        // Ignore popstate within first 1 second of app load (PWA startup issue)
-        if (Date.now() - appStartTime < 1000) {
+        // Ignore popstate within first 3 seconds of app load (PWA startup issue)
+        // PWA installations can trigger multiple spurious popstate events
+        if (Date.now() - appStartTime < 3000) {
             console.log('[Wallet] Ignoring early popstate event (PWA startup)');
+            // Re-push wallet state to prevent navigation issues
+            window.history.pushState({ wallet: true }, '', '/wallet/assets');
             return;
         }
 
@@ -262,11 +265,12 @@ const Wallet = (): JSX.Element => {
                 navigate(`/wallet/${prevView}`, { replace: true });
             }
         } else {
-            // User is trying to leave wallet - push them back
+            // User is trying to leave wallet - just push them back to wallet
+            // DO NOT show logout confirm here - it causes PWA issues
+            // User should use the explicit logout button in settings
             if (onboardingStep() === 0) {
-                // Prevent leaving by pushing wallet state back
                 window.history.pushState({ wallet: true }, '', '/wallet/assets');
-                setShowLogoutConfirm(true);
+                // Removed: setShowLogoutConfirm(true) - causes PWA startup issues
             }
         }
     };
@@ -512,6 +516,14 @@ const Wallet = (): JSX.Element => {
     const cancelLogout = () => {
         setShowLogoutConfirm(false);
         setPendingLogout(null);
+
+        // CRITICAL: Check if user is actually still logged in
+        // If not, redirect to login instead of showing stale/dummy data
+        if (!auth.user()) {
+            console.warn('[Wallet] User is not authenticated after cancel - redirecting to login');
+            window.location.href = '/login';
+            return;
+        }
     };
 
     const [copied, setCopied] = createSignal(false);
