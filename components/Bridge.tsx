@@ -76,18 +76,20 @@ const NETWORKS: NetworkConfig[] = [
     { name: 'Vision Testnet', chainId: 20261337 }
 ];
 
+// Vision Chain RPC endpoint
+const VISION_RPC_URL = 'https://www.visionchain.co/rpc';
+
 // Props interface
 interface BridgeProps {
     walletAddress?: () => string;
+    privateKey?: () => string;
+    userEmail?: () => string;
 }
 
 const Bridge: Component<BridgeProps> = (props) => {
     // Connection state - derived from prop
     const isConnected = () => !!(props.walletAddress?.() || '');
     const walletAddress = () => props.walletAddress?.() || '';
-
-    // Chain state
-    const [currentChainId, setCurrentChainId] = createSignal<number>(0);
 
     // Bridge state
     const [fromNetwork, setFromNetwork] = createSignal(NETWORKS[0]);
@@ -182,25 +184,23 @@ const Bridge: Component<BridgeProps> = (props) => {
         }
     };
 
-    // Load balance
+    // Load balance from Vision Chain directly (Cloud Wallet)
     const loadBalance = async () => {
-        if (!walletAddress() || !window.ethereum) return;
+        const addr = walletAddress();
+        if (!addr) return;
 
         try {
-            const provider = new ethers.BrowserProvider(window.ethereum);
+            const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
             const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
-            const bal = await vcn.balanceOf(walletAddress());
+            const bal = await vcn.balanceOf(addr);
             setBalance(ethers.formatEther(bal));
-
-            const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-            setCurrentChainId(parseInt(chainId, 16));
         } catch (err) {
             console.error('Failed to load balance:', err);
             setBalance('0');
         }
     };
 
-    // Switch networks
+    // Switch networks (swap from/to)
     const handleSwitch = () => {
         const temp = fromNetwork();
         setFromNetwork(toNetwork());
@@ -208,29 +208,22 @@ const Bridge: Component<BridgeProps> = (props) => {
         loadBalance();
     };
 
-    // Switch to correct network
-    const switchNetwork = async (chainId: number) => {
-        try {
-            await window.ethereum.request({
-                method: 'wallet_switchEthereumChain',
-                params: [{ chainId: `0x${chainId.toString(16)}` }]
-            });
-            setCurrentChainId(chainId);
-            await loadBalance();
-        } catch (err: any) {
-            setErrorMsg(err.message || 'Failed to switch network');
-        }
-    };
-
-    // Handle bridge transfer
+    // Handle bridge transfer using Cloud Wallet
     const handleBridge = async () => {
-        if (!amount() || parseFloat(amount()) <= 0) {
+        const amountVal = amount();
+        if (!amountVal || parseFloat(amountVal) <= 0) {
             setErrorMsg('Please enter a valid amount');
             return;
         }
 
-        if (parseFloat(amount()) > parseFloat(balance())) {
+        if (parseFloat(amountVal) > parseFloat(balance())) {
             setErrorMsg('Insufficient balance');
+            return;
+        }
+
+        const privateKey = props.privateKey?.();
+        if (!privateKey) {
+            setErrorMsg('Wallet not unlocked. Please enter your spending password.');
             return;
         }
 
@@ -240,12 +233,13 @@ const Bridge: Component<BridgeProps> = (props) => {
             setErrorMsg('');
             setStep(2);
 
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
+            // Use Vision Chain RPC with private key
+            const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
+            const signer = new ethers.Wallet(privateKey, provider);
             const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
             const vault = new ethers.Contract(VISION_VAULT_ADDRESS, VISION_VAULT_ABI, signer);
 
-            const amountWei = ethers.parseEther(amount());
+            const amountWei = ethers.parseEther(amountVal);
 
             // Check and approve if needed
             const allowance = await vcn.allowance(walletAddress(), VISION_VAULT_ADDRESS);
@@ -267,7 +261,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                 id: Date.now().toString(),
                 from: fromNetwork().name,
                 to: toNetwork().name,
-                amount: amount(),
+                amount: amountVal,
                 asset: selectedAsset(),
                 status: 'Processing',
                 time: 'Just now',
@@ -279,6 +273,7 @@ const Bridge: Component<BridgeProps> = (props) => {
             await loadBalance();
 
         } catch (err: any) {
+            console.error('[Bridge] Transfer failed:', err);
             setErrorMsg(err.reason || err.message || 'Bridge transfer failed');
             setStep(1);
         } finally {
@@ -298,13 +293,6 @@ const Bridge: Component<BridgeProps> = (props) => {
         if (walletAddress()) {
             await loadBalance();
             subscribeToBridgeHistory();
-        }
-
-        if (window.ethereum) {
-            window.ethereum.on('chainChanged', (chainId: string) => {
-                setCurrentChainId(parseInt(chainId, 16));
-                loadBalance();
-            });
         }
     });
 
@@ -458,11 +446,11 @@ const Bridge: Component<BridgeProps> = (props) => {
 
                                             <button
                                                 onClick={handleBridge}
-                                                disabled={!amount() || isBridging() || currentChainId() !== fromNetwork().chainId}
+                                                disabled={!amount() || isBridging() || parseFloat(amount()) > parseFloat(balance())}
                                                 class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:cursor-not-allowed"
                                             >
                                                 <ArrowRightLeft class="w-4 h-4" />
-                                                {currentChainId() !== fromNetwork().chainId ? 'WRONG NETWORK' : 'START BRIDGE TRANSFER'}
+                                                {parseFloat(amount() || '0') > parseFloat(balance()) ? 'INSUFFICIENT BALANCE' : 'START BRIDGE TRANSFER'}
                                             </button>
                                         </div>
                                     </div>

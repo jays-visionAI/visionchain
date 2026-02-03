@@ -3303,7 +3303,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         {/* Bridge View */}
                         <Show when={activeView() === 'bridge'}>
                             <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <Bridge walletAddress={walletAddress} />
+                                <Bridge walletAddress={walletAddress} privateKey={currentPrivateKey} userEmail={() => userProfile()?.email || ''} />
                             </div>
                         </Show>
 
