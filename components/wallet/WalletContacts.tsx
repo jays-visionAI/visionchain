@@ -172,6 +172,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                     title="CONTACT"
                     titleAccent="LIST"
                     description="Manage your network and map identifiers to Vision IDs for seamless interaction."
+                    hideDescriptionOnMobile={true}
                     rightElement={
                         <div class="flex items-center gap-2">
                             <button

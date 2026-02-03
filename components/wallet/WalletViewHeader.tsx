@@ -33,21 +33,23 @@ export const WalletViewHeader = (props: WalletViewHeaderProps) => {
                 </Show>
             </div>
 
-            {/* Status indicator - hidden on mobile to save space */}
+            {/* Status indicator or right element */}
             <Show when={props.rightElement || props.icon}>
-                <div class="hidden md:flex bg-[#111113]/60 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-4 items-center justify-center md:justify-start gap-4 transition-all hover:bg-[#111113]/80 group">
-                    {props.rightElement || (
-                        <>
-                            <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-105 transition-transform">
-                                {props.icon && <props.icon class="w-6 h-6 text-blue-400" />}
-                            </div>
-                            <div>
-                                <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Status</div>
-                                <div class="text-lg font-black text-white italic">Active</div>
-                            </div>
-                        </>
-                    )}
-                </div>
+                {props.rightElement ? (
+                    <div class="flex bg-[#111113]/60 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-4 items-center justify-center md:justify-start gap-4 transition-all hover:bg-[#111113]/80 group">
+                        {props.rightElement}
+                    </div>
+                ) : (
+                    <div class="hidden md:flex bg-[#111113]/60 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-4 items-center justify-center md:justify-start gap-4 transition-all hover:bg-[#111113]/80 group">
+                        <div class="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-105 transition-transform">
+                            {props.icon && <props.icon class="w-6 h-6 text-blue-400" />}
+                        </div>
+                        <div>
+                            <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Status</div>
+                            <div class="text-lg font-black text-white italic">Active</div>
+                        </div>
+                    </div>
+                )}
             </Show>
         </div>
     );
