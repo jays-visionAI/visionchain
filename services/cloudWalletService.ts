@@ -155,13 +155,17 @@ export const CloudWalletService = {
      */
     async loadFromCloud(
         password: string,
-        userEmail: string
-    ): Promise<{ success: boolean; mnemonic?: string; walletAddress?: string; error?: string; requiresVerification?: boolean }> {
+        userEmail: string,
+        totpCode?: string,
+        useBackupCode?: boolean
+    ): Promise<{ success: boolean; mnemonic?: string; walletAddress?: string; error?: string; requiresVerification?: boolean; requires2FA?: boolean }> {
         try {
             // 1. Fetch from server (server decrypts its layer)
             const loadWalletFromCloud = httpsCallable(functions, 'loadWalletFromCloud');
             const result = await loadWalletFromCloud({
                 deviceFingerprint: getDeviceId(), // Send device ID for security tracking
+                totpCode,
+                useBackupCode,
             });
 
             const data = result.data as {
@@ -170,8 +174,18 @@ export const CloudWalletService = {
                 walletAddress?: string;
                 needsMigration?: boolean;
                 requiresDeviceVerification?: boolean;
+                requires2FA?: boolean;
                 message?: string;
             };
+
+            // Handle 2FA requirement
+            if (data.requires2FA) {
+                return {
+                    success: false,
+                    error: data.message || 'Two-factor authentication required.',
+                    requires2FA: true,
+                };
+            }
 
             // Handle new device verification requirement
             if (data.requiresDeviceVerification) {
@@ -297,6 +311,93 @@ export const CloudWalletService = {
                 success: false,
                 error: err.message || 'Failed to verify device',
             };
+        }
+    },
+
+    /**
+     * Setup TOTP 2FA - Get QR code and secret
+     */
+    async setupTOTP(): Promise<{ success: boolean; secret?: string; qrCode?: string; error?: string }> {
+        try {
+            const setupTOTP = httpsCallable(functions, 'setupTOTP');
+            const result = await setupTOTP({});
+
+            const data = result.data as { success: boolean; secret?: string; qrCode?: string; message?: string };
+
+            if (data.success) {
+                console.log('[TOTP] Setup initiated');
+                return { success: true, secret: data.secret, qrCode: data.qrCode };
+            } else {
+                return { success: false, error: 'Setup failed' };
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Setup failed:', err);
+            return { success: false, error: err.message || 'Failed to setup 2FA' };
+        }
+    },
+
+    /**
+     * Enable TOTP 2FA - Verify first code and activate
+     */
+    async enableTOTP(totpCode: string): Promise<{ success: boolean; backupCodes?: string[]; error?: string }> {
+        try {
+            const enableTOTP = httpsCallable(functions, 'enableTOTP');
+            const result = await enableTOTP({ totpCode });
+
+            const data = result.data as { success: boolean; backupCodes?: string[]; message?: string };
+
+            if (data.success) {
+                console.log('[TOTP] 2FA enabled');
+                return { success: true, backupCodes: data.backupCodes };
+            } else {
+                return { success: false, error: 'Enable failed' };
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Enable failed:', err);
+            return { success: false, error: err.message || 'Failed to enable 2FA' };
+        }
+    },
+
+    /**
+     * Get TOTP status - Check if 2FA is enabled
+     */
+    async getTOTPStatus(): Promise<{ enabled: boolean; setupPending: boolean; backupCodesRemaining: number }> {
+        try {
+            const getTOTPStatus = httpsCallable(functions, 'getTOTPStatus');
+            const result = await getTOTPStatus({});
+
+            const data = result.data as { enabled: boolean; setupPending: boolean; backupCodesRemaining: number };
+
+            return {
+                enabled: data.enabled || false,
+                setupPending: data.setupPending || false,
+                backupCodesRemaining: data.backupCodesRemaining || 0,
+            };
+        } catch (err: any) {
+            console.error('[TOTP] Status check failed:', err);
+            return { enabled: false, setupPending: false, backupCodesRemaining: 0 };
+        }
+    },
+
+    /**
+     * Disable TOTP 2FA - Requires current code
+     */
+    async disableTOTP(totpCode: string, useBackupCode = false): Promise<{ success: boolean; error?: string }> {
+        try {
+            const disableTOTP = httpsCallable(functions, 'disableTOTP');
+            const result = await disableTOTP({ totpCode, useBackupCode });
+
+            const data = result.data as { success: boolean; message?: string };
+
+            if (data.success) {
+                console.log('[TOTP] 2FA disabled');
+                return { success: true };
+            } else {
+                return { success: false, error: 'Disable failed' };
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Disable failed:', err);
+            return { success: false, error: err.message || 'Failed to disable 2FA' };
         }
     },
 };

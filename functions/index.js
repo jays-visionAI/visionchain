@@ -3,6 +3,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const admin = require("firebase-admin");
 const { ethers } = require("ethers");
 const crypto = require("crypto");
+
 // Lazy load nodemailer to avoid deployment timeout
 let nodemailer = null;
 /**
@@ -14,6 +15,33 @@ function getNodemailer() {
     nodemailer = require("nodemailer");
   }
   return nodemailer;
+}
+
+// Lazy load TOTP libraries
+let authenticator = null;
+let qrcode = null;
+
+/**
+ * Get authenticator from otplib (lazy loaded)
+ * @return {object} Authenticator instance
+ */
+function getAuthenticator() {
+  if (!authenticator) {
+    const { authenticator: auth } = require("otplib");
+    authenticator = auth;
+  }
+  return authenticator;
+}
+
+/**
+ * Get QRCode library (lazy loaded)
+ * @return {object} QRCode module
+ */
+function getQRCode() {
+  if (!qrcode) {
+    qrcode = require("qrcode");
+  }
+  return qrcode;
 }
 
 admin.initializeApp();
@@ -1038,7 +1066,7 @@ exports.loadWalletFromCloud = onCall({ cors: true }, async (request) => {
   }
 
   const email = request.auth.token.email?.toLowerCase();
-  const { deviceFingerprint } = request.data || {};
+  const { deviceFingerprint, totpCode, useBackupCode } = request.data || {};
 
   // Get IP from request context
   const ipAddress = request.rawRequest?.ip ||
@@ -1055,6 +1083,68 @@ exports.loadWalletFromCloud = onCall({ cors: true }, async (request) => {
 
     // ============== SECURITY CHECK 1: Rate Limiting ==============
     await checkRateLimit(email, db);
+
+    // ============== SECURITY CHECK 1.5: TOTP 2FA ==============
+    const totpDoc = await db.collection("security_totp").doc(email).get();
+    const has2FA = totpDoc.exists && totpDoc.data().enabled;
+
+    if (has2FA) {
+      if (!totpCode) {
+        // 2FA is required but no code provided
+        return {
+          exists: true,
+          requires2FA: true,
+          message: "Two-factor authentication required. Please enter your authenticator code.",
+        };
+      }
+
+      // Verify TOTP code
+      const totpData = totpDoc.data();
+
+      if (useBackupCode) {
+        // Verify backup code
+        const backupCodes = totpData.backupCodes || [];
+        const matchingCode = backupCodes.find((bc) => {
+          if (bc.used) return false;
+          const decrypted = serverDecrypt(bc.code);
+          return decrypted === totpCode.toUpperCase();
+        });
+
+        if (!matchingCode) {
+          await logSecurityEvent(email, "CLOUD_RESTORE_BACKUP_FAILED", { code: totpCode }, db);
+          throw new HttpsError("permission-denied", "Invalid or already used backup code.");
+        }
+
+        // Mark backup code as used
+        const updatedCodes = backupCodes.map((bc) => {
+          const decrypted = serverDecrypt(bc.code);
+          if (decrypted === totpCode.toUpperCase()) {
+            return { ...bc, used: true, usedAt: Date.now() };
+          }
+          return bc;
+        });
+
+        await db.collection("security_totp").doc(email).update({
+          backupCodes: updatedCodes,
+        });
+
+        await logSecurityEvent(email, "CLOUD_RESTORE_BACKUP_USED", {}, db);
+        console.log(`[CloudSync] Backup code used for ${email}`);
+      } else {
+        // Verify TOTP code
+        const auth = getAuthenticator();
+        const secret = serverDecrypt(totpData.secret);
+        const isValid = auth.check(totpCode, secret);
+
+        if (!isValid) {
+          await logSecurityEvent(email, "CLOUD_RESTORE_TOTP_FAILED", { code: totpCode }, db);
+          throw new HttpsError("permission-denied", "Invalid authenticator code. Please try again.");
+        }
+
+        await logSecurityEvent(email, "CLOUD_RESTORE_TOTP_VERIFIED", {}, db);
+        console.log(`[CloudSync] TOTP verified for ${email}`);
+      }
+    }
 
     // ============== SECURITY CHECK 2: Device Fingerprint ==============
     const deviceCheck = await checkDeviceFingerprint(email, deviceFingerprint, db);
@@ -1665,5 +1755,387 @@ exports.checkBridgeStatus = onRequest({ cors: true, invoker: "public" }, async (
   } catch (err) {
     console.error("[Bridge Status] Error:", err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// TOTP 2FA - Google Authenticator
+// =============================================================================
+
+/**
+ * Setup TOTP 2FA - Generate secret and QR code
+ * User must scan QR and verify before 2FA is enabled
+ */
+exports.setupTOTP = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  try {
+    const db = admin.firestore();
+    const auth = getAuthenticator();
+    const QRCode = getQRCode();
+
+    // Check if already has TOTP enabled
+    const totpDoc = await db.collection("security_totp").doc(email).get();
+    if (totpDoc.exists && totpDoc.data().enabled) {
+      throw new HttpsError(
+        "already-exists",
+        "2FA is already enabled. Disable it first to regenerate."
+      );
+    }
+
+    // Generate new secret
+    const secret = auth.generateSecret();
+
+    // Generate otpauth URI for Google Authenticator
+    const otpauthUrl = auth.keyuri(email, "Vision Chain", secret);
+
+    // Generate QR code as data URL
+    const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl, {
+      color: {
+        dark: "#22d3ee",
+        light: "#00000000",
+      },
+      width: 256,
+      margin: 2,
+    });
+
+    // Store pending secret (not enabled yet)
+    await db.collection("security_totp").doc(email).set({
+      secret: serverEncrypt(secret), // Encrypt the secret
+      enabled: false,
+      createdAt: admin.firestore.Timestamp.now(),
+      setupAttempts: 0,
+    });
+
+    console.log(`[TOTP] Setup initiated for ${email}`);
+
+    return {
+      success: true,
+      secret: secret, // Show to user for manual entry
+      qrCode: qrCodeDataUrl,
+      message: "Scan QR code with Google Authenticator and enter the code to enable 2FA.",
+    };
+  } catch (err) {
+    if (err.code) throw err;
+    console.error("[TOTP] Setup failed:", err);
+    throw new HttpsError("internal", "Failed to setup 2FA.");
+  }
+});
+
+/**
+ * Enable TOTP 2FA - Verify first code and activate
+ */
+exports.enableTOTP = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+  const { totpCode } = request.data || {};
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  if (!totpCode || totpCode.length !== 6) {
+    throw new HttpsError("invalid-argument", "Please enter a valid 6-digit code.");
+  }
+
+  try {
+    const db = admin.firestore();
+    const auth = getAuthenticator();
+
+    const totpDoc = await db.collection("security_totp").doc(email).get();
+
+    if (!totpDoc.exists) {
+      throw new HttpsError("not-found", "Please setup 2FA first.");
+    }
+
+    const data = totpDoc.data();
+
+    if (data.enabled) {
+      throw new HttpsError("already-exists", "2FA is already enabled.");
+    }
+
+    // Rate limit setup attempts
+    if (data.setupAttempts >= 10) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Too many failed attempts. Please setup 2FA again."
+      );
+    }
+
+    // Decrypt and verify
+    const secret = serverDecrypt(data.secret);
+    const isValid = auth.check(totpCode, secret);
+
+    if (!isValid) {
+      // Increment failed attempts
+      await db.collection("security_totp").doc(email).update({
+        setupAttempts: admin.firestore.FieldValue.increment(1),
+      });
+      throw new HttpsError("permission-denied", "Invalid code. Please try again.");
+    }
+
+    // Generate backup codes
+    const backupCodes = [];
+    for (let i = 0; i < 8; i++) {
+      backupCodes.push(crypto.randomBytes(4).toString("hex").toUpperCase());
+    }
+
+    // Enable 2FA
+    await db.collection("security_totp").doc(email).update({
+      enabled: true,
+      enabledAt: admin.firestore.Timestamp.now(),
+      backupCodes: backupCodes.map((code) => ({
+        code: serverEncrypt(code),
+        used: false,
+      })),
+      setupAttempts: 0,
+    });
+
+    // Log security event
+    await logSecurityEvent(email, "TOTP_ENABLED", {}, db);
+
+    // Send confirmation email
+    const emailHtml = `
+      <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: auto; padding: 40px; background: #111; color: #fff; border-radius: 16px;">
+        <h2 style="color: #22d3ee;">2FA Enabled Successfully</h2>
+        <p>Two-factor authentication has been enabled on your Vision Chain account.</p>
+        <p>Please save your backup codes in a secure location:</p>
+        <div style="background: #1a1a1a; padding: 16px; border-radius: 8px; font-family: monospace; margin: 24px 0;">
+          ${backupCodes.map((c) => `<div style="padding:4px 0;">${c}</div>`).join("")}
+        </div>
+        <p style="color: #888; font-size: 12px;">Each backup code can only be used once.</p>
+        <p style="color: #888; font-size: 12px; margin-top: 24px;">If you did not enable 2FA, please contact support immediately.</p>
+      </div>
+    `;
+
+    await sendSecurityEmail(email, "Vision Chain - 2FA Enabled", emailHtml);
+
+    console.log(`[TOTP] Enabled for ${email}`);
+
+    return {
+      success: true,
+      backupCodes: backupCodes,
+      message: "2FA enabled successfully. Please save your backup codes.",
+    };
+  } catch (err) {
+    if (err.code) throw err;
+    console.error("[TOTP] Enable failed:", err);
+    throw new HttpsError("internal", "Failed to enable 2FA.");
+  }
+});
+
+/**
+ * Verify TOTP code - Used during wallet restore
+ */
+exports.verifyTOTP = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+  const { totpCode, useBackupCode } = request.data || {};
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  if (!totpCode) {
+    throw new HttpsError("invalid-argument", "Please enter a code.");
+  }
+
+  try {
+    const db = admin.firestore();
+
+    const totpDoc = await db.collection("security_totp").doc(email).get();
+
+    if (!totpDoc.exists || !totpDoc.data().enabled) {
+      // No 2FA enabled - return success (skip verification)
+      return { success: true, skipped: true };
+    }
+
+    const data = totpDoc.data();
+
+    // Rate limiting for verification
+    await checkRateLimit(email + "_totp", db);
+
+    if (useBackupCode) {
+      // Verify backup code
+      const backupCodes = data.backupCodes || [];
+      const matchingCode = backupCodes.find((bc) => {
+        if (bc.used) return false;
+        const decrypted = serverDecrypt(bc.code);
+        return decrypted === totpCode.toUpperCase();
+      });
+
+      if (!matchingCode) {
+        await logSecurityEvent(email, "TOTP_BACKUP_FAILED", { code: totpCode }, db);
+        throw new HttpsError("permission-denied", "Invalid or already used backup code.");
+      }
+
+      // Mark backup code as used
+      const updatedCodes = backupCodes.map((bc) => {
+        const decrypted = serverDecrypt(bc.code);
+        if (decrypted === totpCode.toUpperCase()) {
+          return { ...bc, used: true, usedAt: Date.now() };
+        }
+        return bc;
+      });
+
+      await db.collection("security_totp").doc(email).update({
+        backupCodes: updatedCodes,
+      });
+
+      await logSecurityEvent(email, "TOTP_BACKUP_USED", {}, db);
+      await clearRateLimit(email + "_totp", db);
+
+      console.log(`[TOTP] Backup code used for ${email}`);
+      return { success: true, usedBackupCode: true };
+    }
+
+    // Verify TOTP code
+    const auth = getAuthenticator();
+    const secret = serverDecrypt(data.secret);
+    const isValid = auth.check(totpCode, secret);
+
+    if (!isValid) {
+      await logSecurityEvent(email, "TOTP_VERIFY_FAILED", { code: totpCode }, db);
+      throw new HttpsError("permission-denied", "Invalid code. Please try again.");
+    }
+
+    await clearRateLimit(email + "_totp", db);
+    await logSecurityEvent(email, "TOTP_VERIFIED", {}, db);
+
+    console.log(`[TOTP] Verified for ${email}`);
+    return { success: true };
+  } catch (err) {
+    if (err.code) throw err;
+    console.error("[TOTP] Verify failed:", err);
+    throw new HttpsError("internal", "Failed to verify 2FA code.");
+  }
+});
+
+/**
+ * Check TOTP status - Whether 2FA is enabled
+ */
+exports.getTOTPStatus = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  try {
+    const db = admin.firestore();
+
+    const totpDoc = await db.collection("security_totp").doc(email).get();
+
+    if (!totpDoc.exists) {
+      return { enabled: false, setupPending: false };
+    }
+
+    const data = totpDoc.data();
+    return {
+      enabled: data.enabled || false,
+      setupPending: !data.enabled && !!data.secret,
+      enabledAt: data.enabledAt?.toDate()?.toISOString() || null,
+      backupCodesRemaining: data.backupCodes?.filter((bc) => !bc.used).length || 0,
+    };
+  } catch (err) {
+    console.error("[TOTP] Status check failed:", err);
+    throw new HttpsError("internal", "Failed to check 2FA status.");
+  }
+});
+
+/**
+ * Disable TOTP 2FA - Requires current TOTP code or backup code
+ */
+exports.disableTOTP = onCall({ cors: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be logged in.");
+  }
+
+  const email = request.auth.token.email?.toLowerCase();
+  const { totpCode, useBackupCode } = request.data || {};
+
+  if (!email) {
+    throw new HttpsError("failed-precondition", "User email missing.");
+  }
+
+  if (!totpCode) {
+    throw new HttpsError("invalid-argument", "Please enter a code to disable 2FA.");
+  }
+
+  try {
+    const db = admin.firestore();
+
+    const totpDoc = await db.collection("security_totp").doc(email).get();
+
+    if (!totpDoc.exists || !totpDoc.data().enabled) {
+      throw new HttpsError("not-found", "2FA is not enabled.");
+    }
+
+    const data = totpDoc.data();
+
+    // Verify code first
+    if (useBackupCode) {
+      const backupCodes = data.backupCodes || [];
+      const matchingCode = backupCodes.find((bc) => {
+        if (bc.used) return false;
+        const decrypted = serverDecrypt(bc.code);
+        return decrypted === totpCode.toUpperCase();
+      });
+
+      if (!matchingCode) {
+        throw new HttpsError("permission-denied", "Invalid backup code.");
+      }
+    } else {
+      const auth = getAuthenticator();
+      const secret = serverDecrypt(data.secret);
+      const isValid = auth.check(totpCode, secret);
+
+      if (!isValid) {
+        throw new HttpsError("permission-denied", "Invalid code.");
+      }
+    }
+
+    // Disable 2FA
+    await db.collection("security_totp").doc(email).delete();
+
+    await logSecurityEvent(email, "TOTP_DISABLED", {}, db);
+
+    // Send notification email
+    const emailHtml = `
+      <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: auto; padding: 40px; background: #111; color: #fff; border-radius: 16px;">
+        <h2 style="color: #ef4444;">2FA Disabled</h2>
+        <p>Two-factor authentication has been disabled on your Vision Chain account.</p>
+        <p style="color: #888; font-size: 12px;">If you did not make this change, please contact support immediately and change your password.</p>
+        <p style="color: #888; font-size: 12px; margin-top: 24px;">Time: ${new Date().toISOString()}</p>
+      </div>
+    `;
+
+    await sendSecurityEmail(email, "Vision Chain - 2FA Disabled", emailHtml);
+
+    console.log(`[TOTP] Disabled for ${email}`);
+
+    return { success: true, message: "2FA has been disabled." };
+  } catch (err) {
+    if (err.code) throw err;
+    console.error("[TOTP] Disable failed:", err);
+    throw new HttpsError("internal", "Failed to disable 2FA.");
   }
 });
