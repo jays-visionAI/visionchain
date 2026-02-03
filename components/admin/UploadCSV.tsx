@@ -48,45 +48,61 @@ export const UploadCSV = () => {
     const parseCSV = async (file: File): Promise<TokenSaleEntry[]> => {
         const text = await file.text();
         const lines = text.split('\n');
-        // Simple validation or skip header
-
         const entries: TokenSaleEntry[] = [];
+
+        // Expected columns (indices 0-5 only, ignore any columns after index 5):
+        // 0: email, 1: partnerCode, 2: amountToken, 3: date, 4: unlockRatio, 5: vestingPeriod
+        const COLUMN = {
+            EMAIL: 0,
+            PARTNER_CODE: 1,
+            AMOUNT: 2,
+            DATE: 3,
+            UNLOCK_RATIO: 4,
+            VESTING_PERIOD: 5
+        };
 
         // Start from index 1 to skip header
         for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const values = lines[i].split(',').map(v => v.trim());
+            const line = lines[i].trim();
+            if (!line) continue;
 
-            // Map based on expected order: email, partnerCode, amountToken, date, unlockRatio, vestingPeriod
-            if (values.length >= 6) {
-                const email = values[0]?.trim().toLowerCase();
-                const amountToken = Number(values[2]) || 0;
+            // Split by comma and take only first 6 columns
+            const allValues = line.split(',').map(v => v.trim());
+            const values = allValues.slice(0, 6); // Only take first 6 columns, ignore rest
 
-                // Skip entries with empty/invalid email OR zero amount
-                if (!email || !email.includes('@')) {
-                    console.warn(`[CSV Parse] Skipping line ${i + 1}: invalid email "${values[0]}"`);
-                    continue;
-                }
-
-                // Skip entries with zero or invalid amount (likely empty rows)
-                if (amountToken <= 0) {
-                    console.warn(`[CSV Parse] Skipping line ${i + 1}: zero or invalid amount for ${email}`);
-                    continue;
-                }
-
-                entries.push({
-                    email: email,
-                    partnerCode: values[1] || '',
-                    amountToken: amountToken,
-                    date: values[3] || '',
-                    unlockRatio: Number(values[4]) || 0,
-                    vestingPeriod: Number(values[5]) || 0,
-                    status: 'Pending'
-                });
+            // Must have at least 6 columns
+            if (values.length < 6) {
+                console.warn(`[CSV Parse] Skipping line ${i + 1}: insufficient columns (${values.length})`);
+                continue;
             }
+
+            const email = values[COLUMN.EMAIL]?.toLowerCase();
+            const amountToken = Number(values[COLUMN.AMOUNT]) || 0;
+
+            // Skip entries with empty/invalid email
+            if (!email || !email.includes('@')) {
+                console.warn(`[CSV Parse] Skipping line ${i + 1}: invalid email "${values[COLUMN.EMAIL]}"`);
+                continue;
+            }
+
+            // Skip entries with zero or invalid amount (likely empty rows)
+            if (amountToken <= 0) {
+                console.warn(`[CSV Parse] Skipping line ${i + 1}: zero amount for ${email}`);
+                continue;
+            }
+
+            entries.push({
+                email: email,
+                partnerCode: values[COLUMN.PARTNER_CODE] || '',
+                amountToken: amountToken,
+                date: values[COLUMN.DATE] || '',
+                unlockRatio: Number(values[COLUMN.UNLOCK_RATIO]) || 0,
+                vestingPeriod: Number(values[COLUMN.VESTING_PERIOD]) || 0,
+                status: 'Pending'
+            });
         }
 
-        console.log(`[CSV Parse] Parsed ${entries.length} valid entries`);
+        console.log(`[CSV Parse] Parsed ${entries.length} valid entries (6 columns only)`);
         return entries;
     };
 
