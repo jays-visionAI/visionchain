@@ -2158,7 +2158,7 @@ exports.disableTOTP = onCall({ cors: true }, async (request) => {
 // Sepolia Configuration
 const SEPOLIA_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
 const SEPOLIA_CHAIN_ID = 11155111;
-const CHALLENGE_PERIOD_MINUTES = 15;
+const CHALLENGE_PERIOD_MINUTES = 2; // 테스트용 (프로덕션: 15분)
 
 // Sepolia Bridge Relayer - MUST be set via Firebase Secrets
 // firebase functions:secrets:set SEPOLIA_RELAYER_PK
