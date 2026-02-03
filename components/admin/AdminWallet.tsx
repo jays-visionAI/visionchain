@@ -371,19 +371,19 @@ export default function AdminWallet() {
                                             <tr class="hover:bg-white/[0.02] transition-colors group">
                                                 <td class="px-6 py-4">
                                                     <div class={`flex items-center gap-2 px-2 py-1 rounded-lg w-fit ${tx.status === 'completed' ? 'bg-green-500/10' :
-                                                            tx.status === 'challenged' ? 'bg-red-500/10' :
-                                                                tx.status === 'pending' ? 'bg-amber-500/10' :
-                                                                    tx.status === 'finalized' ? 'bg-blue-500/10' : 'bg-yellow-500/10'
+                                                        tx.status === 'challenged' ? 'bg-red-500/10' :
+                                                            tx.status === 'pending' ? 'bg-amber-500/10' :
+                                                                tx.status === 'finalized' ? 'bg-blue-500/10' : 'bg-yellow-500/10'
                                                         }`}>
                                                         <div class={`w-2 h-2 rounded-full ${tx.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' :
-                                                                tx.status === 'challenged' ? 'bg-red-500 animate-pulse' :
-                                                                    tx.status === 'pending' ? 'bg-amber-500 animate-pulse' :
-                                                                        tx.status === 'finalized' ? 'bg-blue-500' : 'bg-yellow-500 animate-pulse'
+                                                            tx.status === 'challenged' ? 'bg-red-500 animate-pulse' :
+                                                                tx.status === 'pending' ? 'bg-amber-500 animate-pulse' :
+                                                                    tx.status === 'finalized' ? 'bg-blue-500' : 'bg-yellow-500 animate-pulse'
                                                             }`} />
                                                         <span class={`text-[9px] font-black uppercase tracking-widest ${tx.status === 'completed' ? 'text-green-400' :
-                                                                tx.status === 'challenged' ? 'text-red-400' :
-                                                                    tx.status === 'pending' ? 'text-amber-400' :
-                                                                        tx.status === 'finalized' ? 'text-blue-400' : 'text-yellow-400'
+                                                            tx.status === 'challenged' ? 'text-red-400' :
+                                                                tx.status === 'pending' ? 'text-amber-400' :
+                                                                    tx.status === 'finalized' ? 'text-blue-400' : 'text-yellow-400'
                                                             }`}>
                                                             {tx.bridgeStatus || tx.status}
                                                         </span>
@@ -421,7 +421,7 @@ export default function AdminWallet() {
                                                 <td class="px-6 py-4 text-right">
                                                     <Show when={tx.hash}>
                                                         <a
-                                                            href={`https://visionscan.org/tx/${tx.hash}`}
+                                                            href={`https://www.visionchain.co/visionscan/tx/${tx.hash}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             class="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-500 hover:text-cyan-400 inline-block"

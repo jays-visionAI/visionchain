@@ -96,7 +96,7 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
                                 <Copy class="w-3 h-3" />
                             </button>
                             <a
-                                href={`https://visionscan.org/address/${props.user.walletAddress}`}
+                                href={`https://www.visionchain.co/visionscan/address/${props.user.walletAddress}`}
                                 target="_blank"
                                 class="p-1 hover:bg-white/10 rounded-md text-gray-500 hover:text-white transition-colors"
                                 title="View on Explorer"

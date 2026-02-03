@@ -32,7 +32,7 @@ const CONFIGS: Record<Environment, {
         isProduction: false,
         rpcUrl: import.meta.env.VITE_RPC_URL || 'http://46.224.221.201:8545',
         chainId: 1337,
-        explorerUrl: 'https://staging-scan.visionchain.co',
+        explorerUrl: 'https://www.visionchain.co/visionscan',
         apiBaseUrl: 'https://staging-api.visionchain.co',
     },
     production: {
@@ -40,7 +40,7 @@ const CONFIGS: Record<Environment, {
         isProduction: true,
         rpcUrl: import.meta.env.VITE_RPC_URL || 'http://46.224.221.201:8545',
         chainId: 1337,
-        explorerUrl: 'https://visionscan.org',
+        explorerUrl: 'https://www.visionchain.co/visionscan',
         apiBaseUrl: 'https://api.visionchain.co',
     },
 };

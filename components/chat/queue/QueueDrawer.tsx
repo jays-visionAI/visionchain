@@ -252,7 +252,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                                 <span class="text-[9px] text-emerald-500/60 font-mono mt-0.5 truncate max-w-[250px]">{task.txHash}</span>
                                                             </div>
                                                             <button
-                                                                onClick={() => window.open(`https://visionscan.org/tx/${task.txHash}`, '_blank')}
+                                                                onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
                                                                 class="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors"
                                                             >
                                                                 <ExternalLink class="w-3.5 h-3.5" />
@@ -317,7 +317,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                 <Show when={!['WAITING', 'EXECUTING'].includes(task.status)}>
                                                     <Show when={task.txHash}>
                                                         <button
-                                                            onClick={() => window.open(`https://visionscan.org/tx/${task.txHash}`, '_blank')}
+                                                            onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
                                                             class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
                                                         >
                                                             <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan

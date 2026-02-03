@@ -1182,7 +1182,7 @@ const Wallet = (): JSX.Element => {
                     const recipientContact = contactList.find((c: any) => c.address?.toLowerCase() === recipient.toLowerCase());
                     const recipientName = recipientContact?.name || `${recipient.slice(0, 6)}...${recipient.slice(-4)}`;
                     const txHash = lastTxHash();
-                    const txLink = txHash ? `https://visionscan.org/tx/${txHash}` : '';
+                    const txLink = txHash ? `https://www.visionchain.co/visionscan/tx/${txHash}` : '';
 
                     const completionMessage = lastLocale() === 'ko'
                         ? isScheduled
@@ -2399,7 +2399,7 @@ const Wallet = (): JSX.Element => {
 
             // Success message with Explorer link
             const chainDisplay = bridge.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridge.destinationChain;
-            const visionScanLink = `https://visionscan.org/tx/${result.txHash}`;
+            const visionScanLink = `https://www.visionchain.co/visionscan/tx/${result.txHash}`;
 
             const successMsg = lastLocale() === 'ko'
                 ? `브릿지 요청이 성공적으로 제출되었습니다!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[VisionScan에서 보기](${visionScanLink})\n\n약 10-30분 후 목적지 체인에서 토큰을 수령할 수 있습니다.`
