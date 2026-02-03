@@ -281,10 +281,11 @@ export const UploadCSV = () => {
                     <div class="bg-slate-800/50 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
                         <h3 class="font-bold text-white text-sm">Preview Data ({parsedData().length} entries)</h3>
                     </div>
-                    <div class="overflow-x-auto">
+                    <div class="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
                         <table class="w-full text-sm text-left text-slate-400">
-                            <thead class="text-xs text-slate-300 uppercase bg-slate-800/50">
+                            <thead class="text-xs text-slate-300 uppercase bg-slate-800/50 sticky top-0">
                                 <tr>
+                                    <th class="px-6 py-3">#</th>
                                     <th class="px-6 py-3">Email</th>
                                     <th class="px-6 py-3">Partner</th>
                                     <th class="px-6 py-3 text-right">Amount</th>
@@ -294,20 +295,21 @@ export const UploadCSV = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {parsedData().slice(0, 5).map((entry, index) => (
+                                {parsedData().slice(0, 1000).map((entry, index) => (
                                     <tr class="border-b border-slate-700 hover:bg-slate-800/20">
-                                        <td class="px-6 py-4 font-medium text-white">{entry.email}</td>
-                                        <td class="px-6 py-4">{entry.partnerCode}</td>
-                                        <td class="px-6 py-4 text-right">{entry.amountToken.toLocaleString()}</td>
-                                        <td class="px-6 py-4">{entry.date}</td>
-                                        <td class="px-6 py-4 text-right">{entry.unlockRatio}%</td>
-                                        <td class="px-6 py-4 text-right">{entry.vestingPeriod}</td>
+                                        <td class="px-6 py-3 text-slate-500 text-xs">{index + 1}</td>
+                                        <td class="px-6 py-3 font-medium text-white text-xs">{entry.email}</td>
+                                        <td class="px-6 py-3 text-xs">{entry.partnerCode}</td>
+                                        <td class="px-6 py-3 text-right text-xs">{entry.amountToken.toLocaleString()}</td>
+                                        <td class="px-6 py-3 text-xs">{entry.date}</td>
+                                        <td class="px-6 py-3 text-right text-xs">{entry.unlockRatio}%</td>
+                                        <td class="px-6 py-3 text-right text-xs">{entry.vestingPeriod}</td>
                                     </tr>
                                 ))}
-                                {parsedData().length > 5 && (
+                                {parsedData().length > 1000 && (
                                     <tr>
-                                        <td colspan="6" class="px-6 py-3 text-center text-xs text-slate-500 italic">
-                                            ... and {parsedData().length - 5} more entries
+                                        <td colspan="7" class="px-6 py-3 text-center text-xs text-slate-500 italic">
+                                            ... and {parsedData().length - 1000} more entries (showing first 1000)
                                         </td>
                                     </tr>
                                 )}
