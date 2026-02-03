@@ -1787,7 +1787,7 @@ exports.setupTOTP = onCall({ cors: true }, async (request) => {
     if (totpDoc.exists && totpDoc.data().enabled) {
       throw new HttpsError(
         "already-exists",
-        "2FA is already enabled. Disable it first to regenerate."
+        "2FA is already enabled. Disable it first to regenerate.",
       );
     }
 
@@ -1869,7 +1869,7 @@ exports.enableTOTP = onCall({ cors: true }, async (request) => {
     if (data.setupAttempts >= 10) {
       throw new HttpsError(
         "resource-exhausted",
-        "Too many failed attempts. Please setup 2FA again."
+        "Too many failed attempts. Please setup 2FA again.",
       );
     }
 
