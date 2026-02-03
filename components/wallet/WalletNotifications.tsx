@@ -484,6 +484,7 @@ export function WalletNotifications() {
                         titleAccent=""
                         description="Stay informed with real-time updates on your assets, security signals, and ecosystem alerts."
                         icon={Bell}
+                        hideDescriptionOnMobile={true}
                     />
 
                     {/* Main Tab Navigation: Announcements vs My Notifications */}

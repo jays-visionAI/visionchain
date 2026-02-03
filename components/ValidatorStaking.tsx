@@ -483,6 +483,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                     titleAccent="STAKING"
                     description="Stake VCN to become a bridge validator. Secure cross-chain transfers and earn rewards."
                     icon={Shield}
+                    hideDescriptionOnMobile={true}
                 />
 
                 {/* Rewards & Conditions Card - NEW */}
