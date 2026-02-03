@@ -59,13 +59,19 @@ export const UploadCSV = () => {
 
             // Map based on expected order: email, partnerCode, amountToken, date, unlockRatio, vestingPeriod
             if (values.length >= 6) {
+                const email = values[0]?.trim();
+                // Skip entries with empty or invalid email
+                if (!email || !email.includes('@')) {
+                    console.warn(`Skipping invalid entry at line ${i + 1}: empty or invalid email`);
+                    continue;
+                }
                 entries.push({
-                    email: values[0],
-                    partnerCode: values[1],
-                    amountToken: Number(values[2]),
-                    date: values[3],
-                    unlockRatio: Number(values[4]),
-                    vestingPeriod: Number(values[5]),
+                    email: email,
+                    partnerCode: values[1] || '',
+                    amountToken: Number(values[2]) || 0,
+                    date: values[3] || '',
+                    unlockRatio: Number(values[4]) || 0,
+                    vestingPeriod: Number(values[5]) || 0,
                     status: 'Pending'
                 });
             }

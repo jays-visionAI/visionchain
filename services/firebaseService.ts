@@ -2032,6 +2032,12 @@ export const uploadTokenSaleData = async (entries: TokenSaleEntry[]) => {
     for (const entry of entries) {
         const emailLower = entry.email.toLowerCase().trim();
 
+        // Skip entries with empty or invalid email
+        if (!emailLower || !emailLower.includes('@')) {
+            console.warn(`[uploadTokenSaleData] Skipping invalid email: "${entry.email}"`);
+            continue;
+        }
+
         // 0. Check for existing User Wallet Status (Prevention of Overwriting Status)
         const userRef = doc(db, 'users', emailLower);
         const userSnap = await getDoc(userRef);
