@@ -2455,7 +2455,7 @@ const Wallet = (): JSX.Element => {
                     timestamp: Date.now(),
                     type: 'Bridge',
                     bridgeStatus: 'PENDING',
-                    challengeEndTime: Date.now() + (10 * 60 * 1000), // 10 min challenge period
+                    challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period (matches Bridge Relayer)
                     metadata: {
                         destinationChain: bridge.destinationChain,
                         srcChainId: 1337,

@@ -430,7 +430,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                     timestamp: Date.now(),
                     type: 'Bridge',
                     bridgeStatus: 'PENDING',
-                    challengeEndTime: Date.now() + (10 * 60 * 1000),
+                    challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
                     metadata: {
                         destinationChain: chainDisplay,
                         srcChainId: VISION_CHAIN_ID,
