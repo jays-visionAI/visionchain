@@ -37,7 +37,8 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     const [bridges, setBridges] = createSignal<BridgeTransaction[]>([]);
     const [isLoading, setIsLoading] = createSignal(true);
     const [isExpanded, setIsExpanded] = createSignal(false);
-    let unsubscribe: (() => void) | null = null;
+    let unsubscribe1: (() => void) | null = null;
+    let unsubscribe2: (() => void) | null = null;
 
     // Get chain name from chainId
     const getChainName = (chainId: number): string => {
@@ -65,17 +66,17 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     const getEstimatedCompletion = (createdAt: any, status: string): string => {
         if (status === 'COMPLETED' || status === 'FINALIZED') return 'Complete';
         if (status === 'FAILED') return 'Failed';
-        if (!createdAt) return '~15-30 min';
+        if (!createdAt) return '~2-5 min';
 
         const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
         const elapsed = (Date.now() - date.getTime()) / 60000;
-        const remaining = Math.max(0, 30 - elapsed);
+        const remaining = Math.max(0, 5 - elapsed);
 
         if (remaining <= 0) return 'Soon...';
         return `~${Math.ceil(remaining)}m`;
     };
 
-    // Subscribe to Firebase
+    // Subscribe to Firebase - both bridgeTransactions and transactions collections
     createEffect(() => {
         const addr = props.walletAddress;
         if (!addr) {
@@ -88,32 +89,82 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         const normalizedAddr = addr.toLowerCase();
         console.log('[BridgeAgentChip] Subscribing for wallet:', normalizedAddr);
 
+        let bridgeTxList: BridgeTransaction[] = [];
+        let txList: BridgeTransaction[] = [];
+
+        const updateCombinedBridges = () => {
+            // Combine and sort by timestamp, remove duplicates
+            const combined = [...bridgeTxList, ...txList];
+            combined.sort((a, b) => {
+                const timeA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+                const timeB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+                return timeB.getTime() - timeA.getTime();
+            });
+            console.log('[BridgeAgentChip] Combined bridges:', combined.length);
+            setBridges(combined.slice(0, 5));
+            setIsLoading(false);
+        };
+
         try {
             const db = getFirebaseDb();
+
+            // 1. Subscribe to bridgeTransactions collection (backend-created)
             const bridgeRef = collection(db, 'bridgeTransactions');
-            const q = query(
+            const q1 = query(
                 bridgeRef,
                 where('user', '==', normalizedAddr),
                 orderBy('createdAt', 'desc'),
                 limit(5)
             );
 
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                const bridgeList: BridgeTransaction[] = snapshot.docs.map(doc => ({
+            unsubscribe1 = onSnapshot(q1, (snapshot) => {
+                bridgeTxList = snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data()
                 } as BridgeTransaction));
-                console.log('[BridgeAgentChip] Received', bridgeList.length, 'bridges:', bridgeList.map(b => b.status));
-                setBridges(bridgeList);
-                setIsLoading(false);
+                console.log('[BridgeAgentChip] bridgeTransactions:', bridgeTxList.length);
+                updateCombinedBridges();
             }, (error) => {
-                console.error('[BridgeAgentChip] Firebase error:', error);
-                // Check if it's an index error
-                if (error.message?.includes('index')) {
-                    console.error('[BridgeAgentChip] INDEX REQUIRED! Check Firebase console for index creation link.');
-                }
-                setBridges([]);
-                setIsLoading(false);
+                console.error('[BridgeAgentChip] bridgeTransactions error:', error);
+            });
+
+            // 2. Subscribe to transactions collection (frontend-created bridges)
+            const txRef = collection(db, 'transactions');
+            const q2 = query(
+                txRef,
+                where('from_addr', '==', normalizedAddr),
+                where('type', '==', 'Bridge'),
+                orderBy('timestamp', 'desc'),
+                limit(5)
+            );
+
+            unsubscribe2 = onSnapshot(q2, (snapshot) => {
+                txList = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // Map transactions format to BridgeTransaction format
+                    return {
+                        id: doc.id,
+                        user: data.from_addr,
+                        srcChainId: data.metadata?.srcChainId || 1337,
+                        dstChainId: data.metadata?.dstChainId || 11155111,
+                        amount: String(parseFloat(data.value || '0') * 1e18),
+                        recipient: data.from_addr,
+                        txHash: data.hash,
+                        // Map bridgeStatus to status
+                        status: data.bridgeStatus === 'PENDING' ? 'COMMITTED' :
+                            data.bridgeStatus === 'PROCESSING' ? 'PROCESSING' :
+                                data.bridgeStatus === 'COMPLETED' ? 'COMPLETED' :
+                                    data.bridgeStatus === 'FAILED' ? 'FAILED' : 'COMMITTED',
+                        createdAt: data.timestamp ? { toDate: () => new Date(data.timestamp) } : null,
+                        completedAt: data.completedAt
+                    } as BridgeTransaction;
+                });
+                console.log('[BridgeAgentChip] transactions bridges:', txList.length);
+                updateCombinedBridges();
+            }, (error) => {
+                console.error('[BridgeAgentChip] transactions error:', error);
+                // Index might be missing - still show bridgeTransactions
+                updateCombinedBridges();
             });
         } catch (err) {
             console.error('[BridgeAgentChip] Failed to subscribe:', err);
@@ -122,7 +173,8 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     });
 
     onCleanup(() => {
-        if (unsubscribe) unsubscribe();
+        if (unsubscribe1) unsubscribe1();
+        if (unsubscribe2) unsubscribe2();
     });
 
     // Count active (pending) bridges
