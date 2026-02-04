@@ -1172,7 +1172,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     <Show when={bottomSheetExpanded()}>
                         <div class="px-4 pb-6">
                             {/* Mobile Agent Desk - Show when there are active agents or bridge monitoring possible */}
-                            <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0 || props.userProfile()?.walletAddress}>
+                            <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0 || props.userProfile()?.address}>
                                 <div class="mb-3">
                                     {/* Agent Desk Header with Toggle */}
                                     <div class="flex items-center justify-between mb-2">
@@ -1302,7 +1302,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
                                 {/* Unified Background Agents Bar - Above Input (also show for bridge monitoring) */}
-                                <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0 || props.userProfile()?.walletAddress}>
+                                <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0 || props.userProfile()?.address}>
                                     <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
                                         {/* Header Row: Agent Desk Label (left) + Toggle Button (right) */}
                                         <div class="hidden md:flex items-center justify-between mb-1">
