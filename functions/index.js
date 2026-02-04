@@ -2380,6 +2380,7 @@ async function executeSepoliaBridgeTransfer(bridge) {
   const balance = await provider.getBalance(relayerWallet.address);
   const amountWei = BigInt(bridge.amount);
 
+  console.log(`[Sepolia Bridge] Relayer address: ${relayerWallet.address}`);
   console.log(`[Sepolia Bridge] Relayer balance: ${ethers.formatEther(balance)} ETH`);
   console.log(`[Sepolia Bridge] Transfer amount: ${ethers.formatEther(amountWei)} VCN`);
 
