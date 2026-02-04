@@ -36,7 +36,7 @@ interface BridgeAgentChipProps {
 const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     const [bridges, setBridges] = createSignal<BridgeTransaction[]>([]);
     const [isLoading, setIsLoading] = createSignal(true);
-    const [isExpanded, setIsExpanded] = createSignal(false);
+    // const [isExpanded, setIsExpanded] = createSignal(false); // Removed
     let unsubscribe1: (() => void) | null = null;
     let unsubscribe2: (() => void) | null = null;
 
@@ -45,6 +45,19 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         if (chainId === 11155111) return 'Sepolia';
         if (chainId === 1337 || chainId === 20261337) return 'Vision';
         return `Chain ${chainId}`;
+    };
+
+    // Format amount from Wei to VCN
+    const formatAmount = (weiAmount: string): string => {
+        try {
+            const wei = BigInt(weiAmount);
+            const vcn = Number(wei) / 1e18;
+            if (vcn >= 1000000) return `${(vcn / 1000000).toFixed(2)}M`;
+            if (vcn >= 1000) return `${(vcn / 1000).toFixed(2)}K`;
+            return vcn.toFixed(vcn < 10 ? 2 : 0);
+        } catch {
+            return weiAmount;
+        }
     };
 
     // Get time ago string
@@ -89,31 +102,30 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         const normalizedAddr = addr.toLowerCase();
         console.log('[BridgeAgentChip] Subscribing for wallet:', normalizedAddr);
 
+        setIsLoading(true);
         let bridgeTxList: BridgeTransaction[] = [];
         let txList: BridgeTransaction[] = [];
 
         const updateCombinedBridges = () => {
-            // Combine and sort by timestamp, remove duplicates
+            // Combine and deduplicate by id
             const combined = [...bridgeTxList, ...txList];
-            combined.sort((a, b) => {
-                const timeA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-                const timeB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
-                return timeB.getTime() - timeA.getTime();
-            });
-            console.log('[BridgeAgentChip] Combined bridges:', combined.length);
-            setBridges(combined.slice(0, 5));
+            const unique = combined.filter((b, i, arr) =>
+                arr.findIndex(x => x.id === b.id) === i
+            );
+            console.log('[BridgeAgentChip] Combined bridges:', unique.length);
+            setBridges(unique);
             setIsLoading(false);
         };
 
         try {
             const db = getFirebaseDb();
 
-            // 1. Subscribe to bridgeTransactions collection (backend-created)
+            // 1. Listen to bridgeTransactions collection (legacy)
             const bridgeRef = collection(db, 'bridgeTransactions');
             const q1 = query(
                 bridgeRef,
                 where('user', '==', normalizedAddr),
-                orderBy('createdAt', 'desc'),
+                // orderBy('createdAt', 'desc'), // Removed orderBy for now to avoid index issues
                 limit(5)
             );
 
@@ -126,10 +138,10 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                 updateCombinedBridges();
             }, (error) => {
                 console.error('[BridgeAgentChip] bridgeTransactions error:', error);
+                updateCombinedBridges();
             });
 
-            // 2. Subscribe to transactions collection (frontend-created bridges)
-            // Note: Using simpler query to avoid index requirement
+            // 2. Listen to users/{email}/transactions where type === 'Bridge'
             const txRef = collection(db, 'transactions');
             const q2 = query(
                 txRef,
@@ -179,8 +191,8 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     });
 
     onCleanup(() => {
-        if (unsubscribe1) unsubscribe1();
-        if (unsubscribe2) unsubscribe2();
+        unsubscribe1?.();
+        unsubscribe2?.();
     });
 
     // Count active (pending) bridges - include all non-final states
@@ -192,32 +204,58 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     // Filter visible bridges (active + recently completed within 1 minute)
     const visibleBridges = () => {
         const now = Date.now();
-        console.log('[BridgeAgentChip] Filtering bridges, total:', bridges().length);
+        const oneMinute = 60 * 1000;
+
         return bridges().filter(b => {
-            // Always show active bridges (including PENDING/SUBMITTED)
+            // Always show active bridges
             if (b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
                 b.status === 'PENDING' || b.status === 'SUBMITTED') {
-                console.log('[BridgeAgentChip] Active bridge:', b.id, b.status);
                 return true;
             }
-            // Show completed/finalized bridges for 1 minute after completion
-            if ((b.status === 'COMPLETED' || b.status === 'FINALIZED') && b.completedAt) {
-                const completedTime = b.completedAt.toDate ? b.completedAt.toDate().getTime() : b.completedAt;
-                return (now - completedTime) < 60000; // 1 minute
+
+            // Show completed within last minute
+            if (b.status === 'COMPLETED' || b.status === 'FINALIZED') {
+                const completedTime = b.completedAt?.toDate?.()?.getTime() ||
+                    b.createdAt?.toDate?.()?.getTime() || 0; // Fallback to createdAt if completedAt is missing
+                return (now - completedTime) < oneMinute;
             }
-            // Show recently created completed bridges (fallback if no completedAt)
-            if ((b.status === 'COMPLETED' || b.status === 'FINALIZED') && b.createdAt) {
-                const createdTime = b.createdAt.toDate ? b.createdAt.toDate().getTime() : b.createdAt;
-                return (now - createdTime) < 120000; // 2 minutes from creation
-            }
+
             // Show failed bridges
             if (b.status === 'FAILED') return true;
+
             return false;
+        }).sort((a, b) => {
+            // Sort by createdAt (newest first)
+            const timeA = a.createdAt?.toDate?.()?.getTime() || 0;
+            const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
+            return timeB - timeA;
         });
     };
 
+    // Get the latest bridge to display
+    const latestBridge = () => visibleBridges()[0] || null;
+
     // Reactive show condition
-    const shouldShow = () => !isLoading() && visibleBridges().length > 0;
+    const shouldShow = () => !isLoading() && latestBridge() !== null;
+
+    // Get status display info
+    const getStatusInfo = (status: string) => {
+        switch (status) {
+            case 'PENDING':
+            case 'SUBMITTED':
+            case 'COMMITTED':
+                return { label: 'Processing', color: 'text-blue-400', bg: 'bg-blue-500/10', pulse: true, icon: Loader2 };
+            case 'PROCESSING':
+                return { label: 'Verifying', color: 'text-amber-400', bg: 'bg-amber-500/10', pulse: true, icon: Loader2 };
+            case 'COMPLETED':
+            case 'FINALIZED':
+                return { label: 'Complete', color: 'text-green-400', bg: 'bg-green-500/10', pulse: false, icon: Check };
+            case 'FAILED':
+                return { label: 'Failed', color: 'text-red-400', bg: 'bg-red-500/10', pulse: false, icon: AlertCircle };
+            default:
+                return { label: status, color: 'text-gray-400', bg: 'bg-gray-500/10', pulse: false, icon: ArrowRightLeft };
+        }
+    };
 
     return (
         <Show when={shouldShow()}>
@@ -226,125 +264,97 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[240px] max-w-[320px] shadow-2xl shadow-black/40"
             >
-                {/* Header */}
-                <button
-                    onClick={() => setIsExpanded(!isExpanded())}
-                    class="flex items-center justify-between p-3.5 hover:bg-white/[0.02] transition-colors"
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
-                            <Show when={activeBridges().length > 0} fallback={<ArrowRightLeft class="w-4 h-4 text-purple-400" />}>
-                                <Loader2 class="w-4 h-4 text-purple-400 animate-spin" />
-                            </Show>
+                {/* Single Bridge Display */}
+                <div class="p-3.5 space-y-3">
+                    {/* Header */}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                                <Show when={activeBridges().length > 0} fallback={<ArrowRightLeft class="w-4 h-4 text-purple-400" />}>
+                                    <Loader2 class="w-4 h-4 text-purple-400 animate-spin" />
+                                </Show>
+                            </div>
+                            <div class="flex flex-col items-start">
+                                <span class="text-[10px] font-black text-white uppercase tracking-widest">
+                                    Bridge Agent
+                                </span>
+                                <Show when={latestBridge()}>
+                                    {(bridge) => {
+                                        const statusInfo = getStatusInfo(bridge().status);
+                                        return (
+                                            <span class={`text-[9px] font-bold ${statusInfo.color} ${statusInfo.pulse ? 'animate-pulse' : ''}`}>
+                                                {statusInfo.label}
+                                            </span>
+                                        );
+                                    }}
+                                </Show>
+                            </div>
                         </div>
-                        <div class="flex flex-col items-start">
-                            <span class="text-[10px] font-black text-white uppercase tracking-widest">
-                                Bridge Agent
-                            </span>
-                            <span class="text-[9px] font-bold text-purple-400">
-                                {activeBridges().length > 0
-                                    ? `${activeBridges().length} Active`
-                                    : `${bridges().length} Total`}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
                         <Show when={activeBridges().length > 0}>
                             <span class="px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-[8px] font-black text-purple-300 animate-pulse">
-                                PROCESSING
+                                {activeBridges().length} ACTIVE
                             </span>
                         </Show>
-                        {isExpanded() ? (
-                            <ChevronUp class="w-4 h-4 text-gray-500" />
-                        ) : (
-                            <ChevronDown class="w-4 h-4 text-gray-500" />
-                        )}
                     </div>
-                </button>
 
-                {/* Expanded Bridge List */}
-                <Show when={isExpanded()}>
-                    <div class="border-t border-white/5 bg-black/20 max-h-[300px] overflow-y-auto custom-scrollbar">
-                        <For each={bridges()}>
-                            {(bridge) => (
-                                <div class="p-3 border-b border-white/5 last:border-b-0 space-y-2">
-                                    {/* Bridge Info */}
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-[11px] font-black text-white">
-                                                {parseFloat(bridge.amount).toLocaleString()} VCN
-                                            </span>
-                                            <span class="text-[9px] text-gray-500">
-                                                {getChainName(bridge.srcChainId)} → {getChainName(bridge.dstChainId)}
-                                            </span>
-                                        </div>
-                                        <span class={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${bridge.status === 'COMMITTED' ? 'bg-blue-500/10 text-blue-400' :
-                                            bridge.status === 'PROCESSING' ? 'bg-amber-500/10 text-amber-400' :
-                                                bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? 'bg-green-500/10 text-green-400' :
-                                                    'bg-red-500/10 text-red-400'
-                                            }`}>
-                                            {bridge.status === 'COMMITTED' ? 'Pending' :
-                                                bridge.status === 'PROCESSING' ? 'Verifying' :
-                                                    bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? 'Done' : 'Failed'}
-                                        </span>
-                                    </div>
-
-                                    {/* Progress Bar */}
-                                    <Show when={bridge.status !== 'FAILED'}>
-                                        <div class="flex gap-0.5">
-                                            <div class={`h-0.5 flex-1 rounded-full ${['COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status)
-                                                ? 'bg-blue-500'
-                                                : 'bg-gray-800'
-                                                }`} />
-                                            <div class={`h-0.5 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status)
-                                                ? 'bg-amber-500'
-                                                : 'bg-gray-800'
-                                                }`} />
-                                            <div class={`h-0.5 flex-1 rounded-full ${['COMPLETED', 'FINALIZED'].includes(bridge.status)
-                                                ? 'bg-green-500'
-                                                : 'bg-gray-800'
-                                                }`} />
-                                        </div>
-                                    </Show>
-
-                                    {/* Time & Link */}
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-[9px] text-gray-600">{getTimeAgo(bridge.createdAt)}</span>
-                                        <div class="flex items-center gap-2">
-                                            <Show when={bridge.status === 'COMMITTED' || bridge.status === 'PROCESSING'}>
-                                                <span class="text-[9px] text-purple-400 font-bold flex items-center gap-1">
-                                                    <Clock class="w-2.5 h-2.5" />
-                                                    {getEstimatedCompletion(bridge.createdAt, bridge.status)}
-                                                </span>
-                                            </Show>
-                                            <Show when={bridge.txHash}>
-                                                <a
-                                                    href={`https://www.visionchain.co/visionscan/tx/${bridge.txHash}`}
-                                                    target="_blank"
-                                                    class="text-[9px] text-gray-500 hover:text-purple-400 flex items-center gap-0.5 transition-colors"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    <ExternalLink class="w-2.5 h-2.5" />
-                                                </a>
-                                            </Show>
-                                        </div>
-                                    </div>
+                    {/* Bridge Info */}
+                    <Show when={latestBridge()}>
+                        {(bridge) => (
+                            <div class="bg-black/20 rounded-xl p-3 space-y-2 border border-white/5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-lg font-black text-white">
+                                        {formatAmount(bridge().amount)} VCN
+                                    </span>
+                                    <span class="text-[9px] text-gray-500">
+                                        {getTimeAgo(bridge().createdAt)}
+                                    </span>
                                 </div>
-                            )}
-                        </For>
-                    </div>
+                                <div class="flex items-center gap-2 text-[10px] text-gray-400">
+                                    <span class="font-bold">{getChainName(bridge().srcChainId)}</span>
+                                    <ArrowRightLeft class="w-3 h-3 text-purple-400" />
+                                    <span class="font-bold">{getChainName(bridge().dstChainId)}</span>
+                                </div>
+                                {/* Progress Bar */}
+                                <div class="flex gap-0.5 mt-2">
+                                    <div class={`h-1 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                        ? 'bg-blue-500' : 'bg-gray-800'}`} />
+                                    <div class={`h-1 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                        ? 'bg-amber-500' : 'bg-gray-800'}`} />
+                                    <div class={`h-1 flex-1 rounded-full ${['COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                        ? 'bg-green-500' : 'bg-gray-800'}`} />
+                                </div>
+                                {/* Time & Link */}
+                                <div class="flex items-center justify-between pt-2">
+                                    <Show when={bridge().status === 'COMMITTED' || bridge().status === 'PROCESSING' || bridge().status === 'PENDING' || bridge().status === 'SUBMITTED'}>
+                                        <span class="text-[9px] text-purple-400 font-bold flex items-center gap-1">
+                                            <Clock class="w-2.5 h-2.5" />
+                                            {getEstimatedCompletion(bridge().createdAt, bridge().status)}
+                                        </span>
+                                    </Show>
+                                    <Show when={bridge().txHash}>
+                                        <a
+                                            href={`https://www.visionchain.co/visionscan/tx/${bridge().txHash}`}
+                                            target="_blank"
+                                            class="text-[9px] text-gray-500 hover:text-purple-400 flex items-center gap-0.5 transition-colors"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            View Tx <ExternalLink class="w-2.5 h-2.5" />
+                                        </a>
+                                    </Show>
+                                </div>
+                            </div>
+                        )}
+                    </Show>
 
-                    {/* Footer */}
-                    <div class="p-2 bg-black/30 border-t border-white/5">
-                        <button
-                            onClick={() => props.onViewBridgePage?.()}
-                            class="w-full py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl text-[9px] font-black text-purple-400 uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                        >
-                            <ArrowRightLeft class="w-3 h-3" />
-                            Go to Bridge Page
-                        </button>
-                    </div>
-                </Show>
+                    {/* Go to Bridge Page Button */}
+                    <button
+                        onClick={() => props.onViewBridgePage?.()}
+                        class="w-full py-2.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl text-[9px] font-black text-purple-400 uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                    >
+                        <ArrowRightLeft class="w-3 h-3" />
+                        Go to Bridge Page
+                    </button>
+                </div>
 
                 {/* Glow Effect */}
                 <div class="absolute -right-4 -top-4 w-16 h-16 rounded-full blur-2xl opacity-10 bg-purple-500" />
