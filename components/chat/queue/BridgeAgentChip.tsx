@@ -1,18 +1,15 @@
-import { createSignal, createEffect, Show, For, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, onCleanup } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
     ArrowRightLeft,
     Clock,
-    ExternalLink,
     Check,
     Loader2,
     AlertCircle,
-    ChevronDown,
-    ChevronUp,
-    RefreshCw
+    X
 } from 'lucide-solid';
 import { getFirebaseDb } from '../../../services/firebaseService';
-import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, limit } from 'firebase/firestore';
 
 interface BridgeTransaction {
     id: string;
@@ -30,7 +27,7 @@ interface BridgeTransaction {
 
 interface BridgeAgentChipProps {
     walletAddress: string;
-    onViewBridgePage?: () => void;
+    onDismiss?: (id: string) => void;
 }
 
 const BridgeAgentChip = (props: BridgeAgentChipProps) => {
@@ -262,102 +259,85 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             <Motion.div
                 initial={{ opacity: 0, y: 10, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[240px] max-w-[320px] shadow-2xl shadow-black/40"
+                class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[200px] max-w-[280px] shadow-2xl shadow-black/40"
             >
+                {/* Dismiss Button */}
+                <button
+                    onClick={() => latestBridge() && props.onDismiss?.(latestBridge()!.id)}
+                    class="absolute top-2 right-2 p-1 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all z-10"
+                    title="Dismiss"
+                >
+                    <X class="w-3.5 h-3.5" />
+                </button>
+
                 {/* Single Bridge Display */}
-                <div class="p-3.5 space-y-3">
+                <div class="p-3 space-y-2">
                     {/* Header */}
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
-                                <Show when={activeBridges().length > 0} fallback={<ArrowRightLeft class="w-4 h-4 text-purple-400" />}>
-                                    <Loader2 class="w-4 h-4 text-purple-400 animate-spin" />
-                                </Show>
-                            </div>
-                            <div class="flex flex-col items-start">
-                                <span class="text-[10px] font-black text-white uppercase tracking-widest">
-                                    Bridge Agent
-                                </span>
-                                <Show when={latestBridge()}>
-                                    {(bridge) => {
-                                        const statusInfo = getStatusInfo(bridge().status);
-                                        return (
-                                            <span class={`text-[9px] font-bold ${statusInfo.color} ${statusInfo.pulse ? 'animate-pulse' : ''}`}>
-                                                {statusInfo.label}
-                                            </span>
-                                        );
-                                    }}
-                                </Show>
-                            </div>
+                    <div class="flex items-center gap-2.5 pr-6">
+                        <div class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                            <Show when={activeBridges().length > 0} fallback={<ArrowRightLeft class="w-4 h-4 text-purple-400" />}>
+                                <Loader2 class="w-4 h-4 text-purple-400 animate-spin" />
+                            </Show>
                         </div>
-                        <Show when={activeBridges().length > 0}>
-                            <span class="px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-[8px] font-black text-purple-300 animate-pulse">
-                                {activeBridges().length} ACTIVE
+                        <div class="flex flex-col items-start min-w-0">
+                            <span class="text-[10px] font-black text-white uppercase tracking-widest">
+                                Bridge Agent
                             </span>
-                        </Show>
+                            <Show when={latestBridge()}>
+                                {(bridge) => {
+                                    const statusInfo = getStatusInfo(bridge().status);
+                                    return (
+                                        <span class={`text-[9px] font-bold ${statusInfo.color} ${statusInfo.pulse ? 'animate-pulse' : ''}`}>
+                                            {statusInfo.label}
+                                        </span>
+                                    );
+                                }}
+                            </Show>
+                        </div>
                     </div>
 
                     {/* Bridge Info */}
                     <Show when={latestBridge()}>
                         {(bridge) => (
-                            <div class="bg-black/20 rounded-xl p-3 space-y-2 border border-white/5">
+                            <div class="space-y-1.5">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-lg font-black text-white">
+                                    <span class="text-sm font-black text-white">
                                         {formatAmount(bridge().amount)} VCN
                                     </span>
-                                    <span class="text-[9px] text-gray-500">
+                                    <span class="text-[9px] text-gray-600">
                                         {getTimeAgo(bridge().createdAt)}
                                     </span>
                                 </div>
-                                <div class="flex items-center gap-2 text-[10px] text-gray-400">
+                                <div class="flex items-center gap-1.5 text-[9px] text-gray-500">
                                     <span class="font-bold">{getChainName(bridge().srcChainId)}</span>
-                                    <ArrowRightLeft class="w-3 h-3 text-purple-400" />
+                                    <ArrowRightLeft class="w-2.5 h-2.5 text-purple-400" />
                                     <span class="font-bold">{getChainName(bridge().dstChainId)}</span>
                                 </div>
                                 {/* Progress Bar */}
-                                <div class="flex gap-0.5 mt-2">
-                                    <div class={`h-1 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                <div class="flex gap-0.5">
+                                    <div class={`h-0.5 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
                                         ? 'bg-blue-500' : 'bg-gray-800'}`} />
-                                    <div class={`h-1 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                    <div class={`h-0.5 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
                                         ? 'bg-amber-500' : 'bg-gray-800'}`} />
-                                    <div class={`h-1 flex-1 rounded-full ${['COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                    <div class={`h-0.5 flex-1 rounded-full ${['COMPLETED', 'FINALIZED'].includes(bridge().status)
                                         ? 'bg-green-500' : 'bg-gray-800'}`} />
                                 </div>
-                                {/* Time & Link */}
-                                <div class="flex items-center justify-between pt-2">
-                                    <Show when={bridge().status === 'COMMITTED' || bridge().status === 'PROCESSING' || bridge().status === 'PENDING' || bridge().status === 'SUBMITTED'}>
-                                        <span class="text-[9px] text-purple-400 font-bold flex items-center gap-1">
-                                            <Clock class="w-2.5 h-2.5" />
+                                {/* Estimated Time (only for active) */}
+                                <Show when={bridge().status === 'COMMITTED' || bridge().status === 'PROCESSING' || bridge().status === 'PENDING' || bridge().status === 'SUBMITTED'}>
+                                    <div class="flex items-center gap-1 pt-0.5">
+                                        <Clock class="w-2.5 h-2.5 text-purple-400" />
+                                        <span class="text-[8px] text-purple-400 font-bold">
                                             {getEstimatedCompletion(bridge().createdAt, bridge().status)}
                                         </span>
-                                    </Show>
-                                    <Show when={bridge().txHash}>
-                                        <a
-                                            href={`https://www.visionchain.co/visionscan/tx/${bridge().txHash}`}
-                                            target="_blank"
-                                            class="text-[9px] text-gray-500 hover:text-purple-400 flex items-center gap-0.5 transition-colors"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            View Tx <ExternalLink class="w-2.5 h-2.5" />
-                                        </a>
-                                    </Show>
-                                </div>
+                                    </div>
+                                </Show>
                             </div>
                         )}
                     </Show>
-
-                    {/* Go to Bridge Page Button */}
-                    <button
-                        onClick={() => props.onViewBridgePage?.()}
-                        class="w-full py-2.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl text-[9px] font-black text-purple-400 uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                    >
-                        <ArrowRightLeft class="w-3 h-3" />
-                        Go to Bridge Page
-                    </button>
                 </div>
 
                 {/* Glow Effect */}
-                <div class="absolute -right-4 -top-4 w-16 h-16 rounded-full blur-2xl opacity-10 bg-purple-500" />
+                <div class="absolute -right-4 -top-4 w-12 h-12 rounded-full blur-2xl opacity-10 bg-purple-500" />
             </Motion.div>
         </Show>
     );

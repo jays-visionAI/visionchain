@@ -81,6 +81,7 @@ interface WalletDashboardProps {
 
     // Queue Integration
     queueTasks: () => any[];
+    bridgeTasks?: () => any[];  // Bridge transactions for Queue display
     onCancelTask: (taskId: string) => void;
     onDismissTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
@@ -688,9 +689,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const combinedDrawerTasks = createMemo(() => {
         const queueTasks = props.queueTasks();
         const batchAgents = props.batchAgents();
+        const bridgeTasks = props.bridgeTasks?.() || [];
 
         // Early return for empty state - performance optimization
-        if (queueTasks.length === 0 && batchAgents.length === 0) return [];
+        if (queueTasks.length === 0 && batchAgents.length === 0 && bridgeTasks.length === 0) return [];
 
         const batchTasks = batchAgents
             .map(agent => ({
@@ -704,7 +706,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 token: 'TX',
                 progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
             }));
-        return [...queueTasks, ...batchTasks];
+        return [...queueTasks, ...batchTasks, ...bridgeTasks];
     });
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
@@ -1243,15 +1245,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
 
                                             {/* Bridge Agent - Always render, component handles visibility */}
-                                            {(() => {
-                                                // Note: userProfile uses 'address' field, not 'walletAddress'
-                                                const addr = props.userProfile()?.address;
-                                                console.log('[WalletDashboard] Bridge Agent check, address:', addr);
-                                                return null;
-                                            })()}
                                             <BridgeAgentChip
                                                 walletAddress={props.userProfile()?.address || ''}
-                                                onViewBridgePage={() => props.setActiveView('bridge')}
+                                                onDismiss={(id) => console.log('[BridgeAgentChip] Dismissed:', id)}
                                             />
                                         </div>
 
@@ -1409,10 +1405,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
 
 
+
                                                             {/* Bridge Agent - Always render */}
                                                             <BridgeAgentChip
                                                                 walletAddress={props.userProfile()?.address || ''}
-                                                                onViewBridgePage={() => props.setActiveView('bridge')}
+                                                                onDismiss={(id) => console.log('[BridgeAgentChip] Dismissed:', id)}
                                                             />
                                                         </div>
                                                     </Motion.div>

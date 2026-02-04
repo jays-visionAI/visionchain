@@ -80,7 +80,7 @@ import {
     uploadProfileImage
 } from '../services/firebaseService';
 
-import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, limit } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { CloudWalletService, calculatePasswordStrength } from '../services/cloudWalletService';
 import { ethers } from 'ethers';
@@ -488,6 +488,7 @@ const Wallet = (): JSX.Element => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [showLogoutConfirm, setShowLogoutConfirm] = createSignal(false);
     const [pendingLogout, setPendingLogout] = createSignal<(() => void) | null>(null);
+    const [bridgeTasks, setBridgeTasks] = createSignal<any[]>([]);  // Bridge transactions for Agent Queue
 
     useBeforeLeave((e: any) => {
         // CRITICAL: Skip this check during PWA startup (first 3 seconds)
@@ -627,6 +628,75 @@ const Wallet = (): JSX.Element => {
             });
             return () => unsubscribe();
         }
+    });
+
+    // Subscribe to Bridge transactions for Agent Queue display
+    createEffect(() => {
+        const addr = walletAddress();
+        if (!addr) {
+            setBridgeTasks([]);
+            return;
+        }
+
+        const normalizedAddr = addr.toLowerCase();
+        const db = getFirebaseDb();
+        const txRef = collection(db, 'transactions');
+        const q = query(
+            txRef,
+            where('from_addr', '==', normalizedAddr),
+            where('type', '==', 'Bridge'),
+            limit(10)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const tasks = snapshot.docs.map(docItem => {
+                const data = docItem.data();
+                const bridgeStatus = data.bridgeStatus || 'PENDING';
+
+                // Map bridge status to AgentTask status
+                let status: 'WAITING' | 'EXECUTING' | 'SENT' | 'FAILED' = 'WAITING';
+                if (bridgeStatus === 'PENDING' || bridgeStatus === 'SUBMITTED' || bridgeStatus === 'COMMITTED') {
+                    status = 'WAITING';
+                } else if (bridgeStatus === 'PROCESSING') {
+                    status = 'EXECUTING';
+                } else if (bridgeStatus === 'COMPLETED' || bridgeStatus === 'FINALIZED' || bridgeStatus === 'FULFILLED') {
+                    status = 'SENT';
+                } else if (bridgeStatus === 'FAILED') {
+                    status = 'FAILED';
+                }
+
+                // Format amount from Wei to VCN
+                let amount = data.value || '0';
+                try {
+                    const vcn = Number(BigInt(Math.round(parseFloat(amount) * 1e18))) / 1e18;
+                    amount = vcn >= 1000 ? `${(vcn / 1000).toFixed(1)}K` : vcn.toFixed(vcn < 10 ? 2 : 0);
+                } catch { /* keep original */ }
+
+                const dstChain = data.metadata?.dstChainId === 11155111 ? 'Sepolia' : 'Vision';
+
+                return {
+                    id: `bridge_${docItem.id}`,
+                    type: 'BRIDGE' as const,
+                    summary: `${amount} VCN → ${dstChain}`,
+                    status,
+                    timestamp: data.timestamp || Date.now(),
+                    recipient: data.to_addr || 'Bridge',
+                    amount: `${amount}`,
+                    token: 'VCN',
+                    txHash: data.hash,
+                    scheduleId: docItem.id,
+                    error: bridgeStatus === 'FAILED' ? 'Bridge transaction failed' : undefined
+                };
+            })
+                // Sort by timestamp (newest first)
+                .sort((a, b) => b.timestamp - a.timestamp);
+
+            setBridgeTasks(tasks);
+        }, (error) => {
+            console.error('[Wallet] Bridge tasks subscription error:', error);
+        });
+
+        return unsubscribe;
     });
 
     const handleCancelTask = async (taskId: string) => {
@@ -3230,6 +3300,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 isRecording={isRecording}
                                 // Queue Integration (Time-lock Agent)
                                 queueTasks={queueTasks}
+                                bridgeTasks={bridgeTasks}
                                 onCancelTask={handleCancelTask}
                                 onDismissTask={handleDismissTask}
                                 onForceExecute={handleForceExecute}

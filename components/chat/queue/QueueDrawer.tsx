@@ -1,6 +1,6 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers } from 'lucide-solid';
+import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers, ArrowRightLeft } from 'lucide-solid';
 import { AgentTask } from './AgentChip';
 import { contractService } from '../../../services/contractService';
 import { cancelScheduledTask } from '../../../services/firebaseService';
@@ -173,7 +173,11 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                 task.status === 'EXECUTING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse' :
                                                     task.status === 'SENT' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
                                                         'bg-gray-500/10 border-gray-500/30 text-gray-400'}`}>
-                                            <Show when={task.type === 'BATCH'} fallback={<Clock class="w-4 h-4" />}>
+                                            <Show when={task.type === 'BATCH'} fallback={
+                                                <Show when={task.type === 'BRIDGE'} fallback={<Clock class="w-4 h-4" />}>
+                                                    <ArrowRightLeft class="w-4 h-4" />
+                                                </Show>
+                                            }>
                                                 <Layers class="w-4 h-4" />
                                             </Show>
                                         </div>
@@ -181,7 +185,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                             <div class="flex items-center justify-between gap-2">
                                                 <div class="flex items-center gap-1.5 min-w-0">
                                                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
-                                                        {task.type === 'BATCH' ? 'BATCH AGENT' : 'TIME LOCK AGENT'}
+                                                        {task.type === 'BATCH' ? 'BATCH AGENT' : task.type === 'BRIDGE' ? 'BRIDGE AGENT' : 'TIME LOCK AGENT'}
                                                     </span>
                                                     <div class="w-1 h-1 rounded-full bg-gray-700 shrink-0" />
                                                     <span class="text-xs font-bold text-gray-200 truncate">

@@ -3080,7 +3080,7 @@ export const deleteAdminDocument = async (id: string): Promise<void> => {
 // --- Notification Engine ---
 
 export interface NotificationData {
-    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert';
+    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert' | 'bridge_started' | 'bridge_completed';
     title: string;
     content: string;
     data?: any;
