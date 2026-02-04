@@ -18,7 +18,8 @@ import {
     AlertCircle,
     Share2,
     Trash2,
-    Edit3
+    Edit3,
+    ChevronDown
 } from 'lucide-solid';
 import { getUserContacts, Contact, normalizePhoneNumber, searchUserByPhone, syncUserContacts, deleteContact } from '../../services/firebaseService';
 import { AddContactModal } from './AddContactModal';
@@ -43,6 +44,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
     const [isSyncing, setIsSyncing] = createSignal(false);
     const [copiedId, setCopiedId] = createSignal<string | null>(null);
     const [activeTab, setActiveTab] = createSignal<'all' | 'favorites'>('all');
+    const [expandedContactId, setExpandedContactId] = createSignal<string | null>(null);
 
     const loadContacts = async () => {
         setIsLoading(true);
@@ -270,7 +272,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 <div class="bg-white/[0.01] border border-white/[0.06] rounded-[32px] overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full">
-                            <thead>
+                            <thead class="hidden md:table-header-group">
                                 <tr class="text-left border-b border-white/[0.04]">
                                     <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Name</th>
                                     <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Info</th>
@@ -303,126 +305,271 @@ export const WalletContacts = (props: WalletContactsProps) => {
 
                                 <For each={filteredContacts()}>
                                     {(contact) => (
-                                        <tr class="group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02] last:border-0 text-white">
-                                            <td class="px-8 py-4">
-                                                <div class="flex items-center gap-4">
-                                                    <div class={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-xl transition-transform group-hover:scale-110 ${contact.vchainUserUid
-                                                        ? 'bg-gradient-to-br from-blue-600 to-indigo-600'
-                                                        : 'bg-gray-800 border border-white/5'
-                                                        }`}>
-                                                        {contact.internalName.charAt(0)}
+                                        <>
+                                            {/* Desktop Row */}
+                                            <tr class="hidden md:table-row group hover:bg-white/[0.02] transition-colors border-b border-white/[0.02] last:border-0 text-white">
+                                                <td class="px-8 py-4">
+                                                    <div class="flex items-center gap-4">
+                                                        <div class={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-xl transition-transform group-hover:scale-110 ${contact.vchainUserUid
+                                                            ? 'bg-gradient-to-br from-blue-600 to-indigo-600'
+                                                            : 'bg-gray-800 border border-white/5'
+                                                            }`}>
+                                                            {contact.internalName.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <div class="font-bold text-white">{contact.internalName}</div>
+                                                            <Show when={contact.vchainUserUid}>
+                                                                <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">Verified Network Member</div>
+                                                            </Show>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <div class="font-bold text-white">{contact.internalName}</div>
-                                                        <Show when={contact.vchainUserUid}>
-                                                            <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">Verified Network Member</div>
-                                                        </Show>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <div class="space-y-1">
-                                                    <div class="flex items-center gap-2 text-xs font-medium text-gray-400">
-                                                        <Phone class="w-3 h-3 opacity-50" />
-                                                        {contact.phone}
-                                                    </div>
-                                                    <Show when={contact.email}>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <div class="space-y-1">
                                                         <div class="flex items-center gap-2 text-xs font-medium text-gray-400">
-                                                            <Mail class="w-3 h-3 opacity-50" />
-                                                            {contact.email}
+                                                            <Phone class="w-3 h-3 opacity-50" />
+                                                            {contact.phone}
                                                         </div>
-                                                    </Show>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <Show when={contact.address} fallback={
-                                                    <Show when={contact.syncStatus === 'ambiguous'} fallback={
-                                                        <span class="text-xs font-mono text-gray-600">Wait for sync...</span>
-                                                    }>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
-                                                            class="text-[10px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-md hover:bg-amber-400/20 transition-all animate-pulse"
-                                                        >
-                                                            Select Account
-                                                        </button>
-                                                    </Show>
-                                                }>
-                                                    <div class="flex items-center gap-2 group/addr cursor-pointer" onClick={() => copyAddress(contact.address!, contact.id!)}>
-                                                        <span class="text-xs font-mono text-blue-400 group-hover/addr:text-blue-300 transition-colors bg-blue-400/5 px-2 py-1 rounded-md border border-blue-400/10">
-                                                            {contact.address?.substring(0, 10)}...{contact.address?.substring(contact.address.length - 8)}
-                                                        </span>
-                                                        <Show when={copiedId() === contact.id} fallback={<Copy class="w-3 h-3 text-gray-600 group-hover/addr:text-white" />}>
-                                                            <Check class="w-3 h-3 text-green-400" />
+                                                        <Show when={contact.email}>
+                                                            <div class="flex items-center gap-2 text-xs font-medium text-gray-400">
+                                                                <Mail class="w-3 h-3 opacity-50" />
+                                                                {contact.email}
+                                                            </div>
                                                         </Show>
                                                     </div>
-                                                </Show>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <Show when={contact.vchainUserUid} fallback={
-                                                    <Show when={contact.syncStatus === 'ambiguous'} fallback={
-                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-orange-500/5 border border-orange-500/10 rounded-md">
-                                                            <div class="w-1 h-1 rounded-full bg-orange-500" />
-                                                            <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">Pending</span>
-                                                        </div>
-                                                    }>
-                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
-                                                            <div class="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
-                                                            <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">Action Required</span>
-                                                        </div>
-                                                    </Show>
-                                                }>
-                                                    <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/5 border border-green-500/10 rounded-md">
-                                                        <div class="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_8px_#10b981]" />
-                                                        <span class="text-[9px] font-black text-green-400 uppercase tracking-widest">Registered</span>
-                                                    </div>
-                                                </Show>
-                                            </td>
-                                            <td class="px-8 py-4 text-right">
-                                                <div class="flex items-center justify-end gap-2">
+                                                </td>
+                                                <td class="px-6 py-4">
                                                     <Show when={contact.address} fallback={
-                                                        <button
-                                                            onClick={() => handleInvite(contact)}
-                                                            class="flex items-center gap-2 px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all border border-orange-500/20 active:scale-95 group/invite"
-                                                            title="Invite Friend"
-                                                        >
-                                                            <Share2 class="w-3.5 h-3.5 group-hover/invite:rotate-12 transition-transform" />
-                                                            <span class="text-[10px] font-black uppercase tracking-wider">Invite</span>
-                                                        </button>
+                                                        <Show when={contact.syncStatus === 'ambiguous'} fallback={
+                                                            <span class="text-xs font-mono text-gray-600">Wait for sync...</span>
+                                                        }>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
+                                                                class="text-[10px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-md hover:bg-amber-400/20 transition-all animate-pulse"
+                                                            >
+                                                                Select Account
+                                                            </button>
+                                                        </Show>
                                                     }>
-                                                        <button
-                                                            onClick={() => {
-                                                                props.setRecipientAddress(contact.address!);
-                                                                props.startFlow('send');
-                                                            }}
-                                                            class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all shadow-lg shadow-blue-600/10 active:scale-95"
-                                                            title="Send Asset"
-                                                        >
-                                                            <Zap class="w-4 h-4" />
-                                                        </button>
+                                                        <div class="flex items-center gap-2 group/addr cursor-pointer" onClick={() => copyAddress(contact.address!, contact.id!)}>
+                                                            <span class="text-xs font-mono text-blue-400 group-hover/addr:text-blue-300 transition-colors bg-blue-400/5 px-2 py-1 rounded-md border border-blue-400/10">
+                                                                {contact.address?.substring(0, 10)}...{contact.address?.substring(contact.address.length - 8)}
+                                                            </span>
+                                                            <Show when={copiedId() === contact.id} fallback={<Copy class="w-3 h-3 text-gray-600 group-hover/addr:text-white" />}>
+                                                                <Check class="w-3 h-3 text-green-400" />
+                                                            </Show>
+                                                        </div>
                                                     </Show>
-                                                    <button
-                                                        onClick={(e) => toggleFavorite(e, contact)}
-                                                        class={`p-2 rounded-xl transition-all ${contact.isFavorite ? 'bg-yellow-500/10 text-yellow-500' : 'bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-yellow-500'}`}
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <Show when={contact.vchainUserUid} fallback={
+                                                        <Show when={contact.syncStatus === 'ambiguous'} fallback={
+                                                            <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-orange-500/5 border border-orange-500/10 rounded-md">
+                                                                <div class="w-1 h-1 rounded-full bg-orange-500" />
+                                                                <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">Pending</span>
+                                                            </div>
+                                                        }>
+                                                            <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                                                <div class="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+                                                                <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">Action Required</span>
+                                                            </div>
+                                                        </Show>
+                                                    }>
+                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/5 border border-green-500/10 rounded-md">
+                                                            <div class="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_8px_#10b981]" />
+                                                            <span class="text-[9px] font-black text-green-400 uppercase tracking-widest">Registered</span>
+                                                        </div>
+                                                    </Show>
+                                                </td>
+                                                <td class="px-8 py-4 text-right">
+                                                    <div class="flex items-center justify-end gap-2">
+                                                        <Show when={contact.address} fallback={
+                                                            <button
+                                                                onClick={() => handleInvite(contact)}
+                                                                class="flex items-center gap-2 px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all border border-orange-500/20 active:scale-95 group/invite"
+                                                                title="Invite Friend"
+                                                            >
+                                                                <Share2 class="w-3.5 h-3.5 group-hover/invite:rotate-12 transition-transform" />
+                                                                <span class="text-[10px] font-black uppercase tracking-wider">Invite</span>
+                                                            </button>
+                                                        }>
+                                                            <button
+                                                                onClick={() => {
+                                                                    props.setRecipientAddress(contact.address!);
+                                                                    props.startFlow('send');
+                                                                }}
+                                                                class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all shadow-lg shadow-blue-600/10 active:scale-95"
+                                                                title="Send Asset"
+                                                            >
+                                                                <Zap class="w-4 h-4" />
+                                                            </button>
+                                                        </Show>
+                                                        <button
+                                                            onClick={(e) => toggleFavorite(e, contact)}
+                                                            class={`p-2 rounded-xl transition-all ${contact.isFavorite ? 'bg-yellow-500/10 text-yellow-500' : 'bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-yellow-500'}`}
+                                                        >
+                                                            <Star class={`w-4 h-4 ${contact.isFavorite ? 'fill-current' : ''}`} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleEdit(contact)}
+                                                            class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-white rounded-xl transition-all"
+                                                            title="Edit Contact"
+                                                        >
+                                                            <Edit3 class="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(contact)}
+                                                            class="p-2 bg-white/[0.03] hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-xl transition-all"
+                                                            title="Delete Contact"
+                                                        >
+                                                            <Trash2 class="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+
+                                            {/* Mobile Card - Accordion Style */}
+                                            <tr class="md:hidden border-b border-white/[0.02] last:border-0">
+                                                <td colspan="5" class="p-0">
+                                                    {/* Header Row (Always Visible) */}
+                                                    <div
+                                                        class="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                                                        onClick={() => setExpandedContactId(expandedContactId() === contact.id ? null : contact.id!)}
                                                     >
-                                                        <Star class={`w-4 h-4 ${contact.isFavorite ? 'fill-current' : ''}`} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleEdit(contact)}
-                                                        class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-white rounded-xl transition-all"
-                                                        title="Edit Contact"
-                                                    >
-                                                        <Edit3 class="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(contact)}
-                                                        class="p-2 bg-white/[0.03] hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-xl transition-all"
-                                                        title="Delete Contact"
-                                                    >
-                                                        <Trash2 class="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
+                                                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                                                            <div class={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shadow-xl shrink-0 ${contact.vchainUserUid
+                                                                ? 'bg-gradient-to-br from-blue-600 to-indigo-600'
+                                                                : 'bg-gray-800 border border-white/5'
+                                                                }`}>
+                                                                {contact.internalName.charAt(0)}
+                                                            </div>
+                                                            <div class="min-w-0 flex-1">
+                                                                <div class="font-bold text-white truncate">{contact.internalName}</div>
+                                                                <Show when={contact.vchainUserUid}>
+                                                                    <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">Verified</div>
+                                                                </Show>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-2 shrink-0">
+                                                            {/* Quick Actions */}
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleEdit(contact); }}
+                                                                class="p-2 bg-white/[0.03] hover:bg-white/[0.08] text-gray-500 hover:text-white rounded-xl transition-all"
+                                                            >
+                                                                <Edit3 class="w-4 h-4" />
+                                                            </button>
+                                                            <Show when={contact.address}>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        props.setRecipientAddress(contact.address!);
+                                                                        props.startFlow('send');
+                                                                    }}
+                                                                    class="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all"
+                                                                >
+                                                                    <Zap class="w-4 h-4" />
+                                                                </button>
+                                                            </Show>
+                                                            <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform ${expandedContactId() === contact.id ? 'rotate-180' : ''}`} />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expandable Details */}
+                                                    <Show when={expandedContactId() === contact.id}>
+                                                        <div class="px-4 pb-4 space-y-3 bg-white/[0.01] border-t border-white/[0.04]">
+                                                            {/* Contact Info */}
+                                                            <div class="pt-3 space-y-2">
+                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Info</div>
+                                                                <div class="flex items-center gap-2 text-xs font-medium text-gray-400">
+                                                                    <Phone class="w-3 h-3 opacity-50" />
+                                                                    {contact.phone}
+                                                                </div>
+                                                                <Show when={contact.email}>
+                                                                    <div class="flex items-center gap-2 text-xs font-medium text-gray-400">
+                                                                        <Mail class="w-3 h-3 opacity-50" />
+                                                                        {contact.email}
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
+
+                                                            {/* Vision ID / Address */}
+                                                            <div class="space-y-2">
+                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Vision ID / Address</div>
+                                                                <Show when={contact.address} fallback={
+                                                                    <Show when={contact.syncStatus === 'ambiguous'} fallback={
+                                                                        <span class="text-xs font-mono text-gray-600">Wait for sync...</span>
+                                                                    }>
+                                                                        <button
+                                                                            onClick={() => setSelectedContact(contact)}
+                                                                            class="text-[10px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-md hover:bg-amber-400/20 transition-all animate-pulse"
+                                                                        >
+                                                                            Select Account
+                                                                        </button>
+                                                                    </Show>
+                                                                }>
+                                                                    <div class="flex items-center gap-2 group/addr cursor-pointer" onClick={() => copyAddress(contact.address!, contact.id!)}>
+                                                                        <span class="text-xs font-mono text-blue-400 bg-blue-400/5 px-2 py-1 rounded-md border border-blue-400/10">
+                                                                            {contact.address?.substring(0, 10)}...{contact.address?.substring(contact.address.length - 8)}
+                                                                        </span>
+                                                                        <Show when={copiedId() === contact.id} fallback={<Copy class="w-3 h-3 text-gray-600" />}>
+                                                                            <Check class="w-3 h-3 text-green-400" />
+                                                                        </Show>
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
+
+                                                            {/* Status */}
+                                                            <div class="space-y-2">
+                                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</div>
+                                                                <Show when={contact.vchainUserUid} fallback={
+                                                                    <Show when={contact.syncStatus === 'ambiguous'} fallback={
+                                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-orange-500/5 border border-orange-500/10 rounded-md">
+                                                                            <div class="w-1 h-1 rounded-full bg-orange-500" />
+                                                                            <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">Pending</span>
+                                                                        </div>
+                                                                    }>
+                                                                        <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                                                                            <div class="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
+                                                                            <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">Action Required</span>
+                                                                        </div>
+                                                                    </Show>
+                                                                }>
+                                                                    <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/5 border border-green-500/10 rounded-md">
+                                                                        <div class="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_8px_#10b981]" />
+                                                                        <span class="text-[9px] font-black text-green-400 uppercase tracking-widest">Registered</span>
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
+
+                                                            {/* All Actions */}
+                                                            <div class="flex items-center gap-2 pt-2 border-t border-white/[0.04]">
+                                                                <Show when={!contact.address}>
+                                                                    <button
+                                                                        onClick={() => handleInvite(contact)}
+                                                                        class="flex items-center gap-2 px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all border border-orange-500/20"
+                                                                    >
+                                                                        <Share2 class="w-3.5 h-3.5" />
+                                                                        <span class="text-[10px] font-black uppercase">Invite</span>
+                                                                    </button>
+                                                                </Show>
+                                                                <button
+                                                                    onClick={(e) => toggleFavorite(e, contact)}
+                                                                    class={`p-2 rounded-xl transition-all ${contact.isFavorite ? 'bg-yellow-500/10 text-yellow-500' : 'bg-white/[0.03] text-gray-500'}`}
+                                                                >
+                                                                    <Star class={`w-4 h-4 ${contact.isFavorite ? 'fill-current' : ''}`} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDelete(contact)}
+                                                                    class="p-2 bg-white/[0.03] hover:bg-red-500/10 text-gray-500 hover:text-red-500 rounded-xl transition-all"
+                                                                >
+                                                                    <Trash2 class="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </Show>
+                                                </td>
+                                            </tr>
+                                        </>
                                     )}
                                 </For>
                             </tbody>
