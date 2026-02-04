@@ -177,17 +177,23 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         if (unsubscribe2) unsubscribe2();
     });
 
-    // Count active (pending) bridges
+    // Count active (pending) bridges - include all non-final states
     const activeBridges = () => bridges().filter(b =>
-        b.status === 'COMMITTED' || b.status === 'PROCESSING'
+        b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
+        b.status === 'PENDING' || b.status === 'SUBMITTED'
     );
 
     // Filter visible bridges (active + recently completed within 1 minute)
     const visibleBridges = () => {
         const now = Date.now();
+        console.log('[BridgeAgentChip] Filtering bridges, total:', bridges().length);
         return bridges().filter(b => {
-            // Always show active bridges
-            if (b.status === 'COMMITTED' || b.status === 'PROCESSING') return true;
+            // Always show active bridges (including PENDING/SUBMITTED)
+            if (b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
+                b.status === 'PENDING' || b.status === 'SUBMITTED') {
+                console.log('[BridgeAgentChip] Active bridge:', b.id, b.status);
+                return true;
+            }
             // Show completed/finalized bridges for 1 minute after completion
             if ((b.status === 'COMPLETED' || b.status === 'FINALIZED') && b.completedAt) {
                 const completedTime = b.completedAt.toDate ? b.completedAt.toDate().getTime() : b.completedAt;
