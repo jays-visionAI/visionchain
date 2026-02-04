@@ -1289,10 +1289,15 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             </For>
 
 
+
                                             {/* Bridge Agent - Always render, component handles visibility */}
                                             <BridgeAgentChip
                                                 walletAddress={props.userProfile()?.address || ''}
                                                 onDismiss={(id) => props.onDismissTask?.(id)}
+                                                onClick={(id) => {
+                                                    setSelectedTaskId(id);
+                                                    setIsQueueDrawerOpen(true);
+                                                }}
                                             />
                                         </div>
 
@@ -1455,6 +1460,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             <BridgeAgentChip
                                                                 walletAddress={props.userProfile()?.address || ''}
                                                                 onDismiss={(id) => props.onDismissTask?.(id)}
+                                                                onClick={(id) => {
+                                                                    setSelectedTaskId(id);
+                                                                    setIsQueueDrawerOpen(true);
+                                                                }}
                                                             />
                                                         </div>
                                                     </Motion.div>

@@ -28,6 +28,7 @@ interface BridgeTransaction {
 interface BridgeAgentChipProps {
     walletAddress: string;
     onDismiss?: (id: string) => void;
+    onClick?: (id: string) => void;  // Click to open Queue and focus
 }
 
 const BridgeAgentChip = (props: BridgeAgentChipProps) => {
@@ -259,11 +260,22 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             <Motion.div
                 initial={{ opacity: 0, y: 10, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[200px] max-w-[280px] shadow-2xl shadow-black/40"
+                class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[200px] max-w-[280px] shadow-2xl shadow-black/40 cursor-pointer hover:border-purple-500/50 transition-colors"
+                onClick={(e: MouseEvent) => {
+                    // Don't trigger if clicking dismiss button
+                    if ((e.target as HTMLElement).closest('button')) return;
+                    const bridge = latestBridge();
+                    if (bridge) {
+                        props.onClick?.(`bridge_${bridge.id}`);
+                    }
+                }}
             >
                 {/* Dismiss Button */}
                 <button
-                    onClick={() => latestBridge() && props.onDismiss?.(latestBridge()!.id)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        latestBridge() && props.onDismiss?.(`bridge_${latestBridge()!.id}`);
+                    }}
                     class="absolute top-2 right-2 p-1 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all z-10"
                     title="Dismiss"
                 >
