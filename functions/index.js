@@ -506,7 +506,7 @@ const ERC20_ABI = [
 ];
 
 // --- Paymaster TimeLock (Gasless Scheduled Transfers) ---
-exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -593,7 +593,7 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public" }, async (
 });
 
 // --- Paymaster Transfer (Gasless Token Transfers) ---
-exports.paymasterTransfer = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   // Handle CORS preflight
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -696,7 +696,7 @@ const INTENT_COMMITMENT_ABI = [
   "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
 ];
 
-exports.bridgeWithPaymaster = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+exports.bridgeWithPaymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   // Handle CORS preflight
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");

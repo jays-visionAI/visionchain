@@ -79,48 +79,85 @@ export default function AdminWallet() {
     const [loading, setLoading] = createSignal(true);
     const [syncing, setSyncing] = createSignal(false);
 
-    // Fetch real transaction data from Firebase
+    // Fetch real transaction data from Firebase (transactions + scheduledTransfers + bridgeTransactions)
     const fetchTransactions = async () => {
         try {
             const db = getFirebaseDb();
+            const allTxList: Transaction[] = [];
 
-            // Try to get transactions from Firebase
-            const txCollection = collection(db, 'transactions');
-            const q = query(txCollection, orderBy('timestamp', 'desc'), limit(50));
-            const snapshot = await getDocs(q);
-
-            const txList: Transaction[] = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    type: data.type || 'send',
-                    amount: data.amount ? `${parseFloat(data.amount).toLocaleString()} VCN` : '0 VCN',
-                    from: data.from || data.sender || 'Unknown',
-                    to: data.to || data.recipient || 'Unknown',
-                    status: data.status || 'completed',
-                    bridgeStatus: data.bridgeStatus,
-                    time: data.timestamp ? formatTimeAgo(data.timestamp) : 'Unknown',
-                    hash: data.hash || data.txHash,
-                    timestamp: data.timestamp
-                };
-            });
-
-            setTransactions(txList);
-        } catch (error) {
-            console.error('[AdminWallet] Failed to fetch transactions:', error);
-            // If no transactions collection, try scheduledTransfers or other sources
+            // 1. Fetch from transactions collection
             try {
-                const db = getFirebaseDb();
-                const scheduledCollection = collection(db, 'scheduledTransfers');
-                const q = query(scheduledCollection, orderBy('createdAt', 'desc'), limit(50));
-                const snapshot = await getDocs(q);
+                const txCollection = collection(db, 'transactions');
+                const txQuery = query(txCollection, orderBy('timestamp', 'desc'), limit(30));
+                const txSnapshot = await getDocs(txQuery);
 
-                const txList: Transaction[] = snapshot.docs.map(doc => {
+                txSnapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    const timestamp = data.createdAt ? new Date(data.createdAt).getTime() : Date.now();
-                    return {
+                    allTxList.push({
                         id: doc.id,
-                        type: data.type === 'BATCH' ? 'send' : 'send',
+                        type: (data.type?.toLowerCase() as Transaction['type']) || 'send',
+                        amount: data.value ? `${parseFloat(data.value).toLocaleString()} VCN` : '0 VCN',
+                        from: data.from_addr || data.from || 'Unknown',
+                        to: data.to_addr || data.to || 'Unknown',
+                        status: data.bridgeStatus === 'PENDING' ? 'pending' :
+                            data.bridgeStatus === 'COMMITTED' ? 'pending' : 'completed',
+                        bridgeStatus: data.bridgeStatus,
+                        time: data.timestamp ? formatTimeAgo(data.timestamp) : 'Unknown',
+                        hash: data.hash || data.txHash,
+                        timestamp: data.timestamp || Date.now()
+                    });
+                });
+            } catch (e) {
+                console.warn('[AdminWallet] transactions collection error:', e);
+            }
+
+            // 2. Fetch from bridgeTransactions collection
+            try {
+                const bridgeCollection = collection(db, 'bridgeTransactions');
+                const bridgeQuery = query(bridgeCollection, orderBy('createdAt', 'desc'), limit(30));
+                const bridgeSnapshot = await getDocs(bridgeQuery);
+
+                bridgeSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const createdAt = data.createdAt?.toDate?.() || new Date();
+                    const timestamp = createdAt.getTime();
+
+                    // Avoid duplicates (if also in transactions collection)
+                    if (!allTxList.some(tx => tx.hash === data.txHash)) {
+                        allTxList.push({
+                            id: doc.id,
+                            type: 'bridge',
+                            amount: data.amount ? `${(parseFloat(data.amount) / 1e18).toLocaleString()} VCN` : '0 VCN',
+                            from: data.user || 'Unknown',
+                            to: `Bridge → Chain ${data.dstChainId}`,
+                            status: data.status === 'COMMITTED' ? 'pending' :
+                                data.status === 'FINALIZED' ? 'finalized' :
+                                    data.status === 'CHALLENGED' ? 'challenged' : 'completed',
+                            bridgeStatus: data.status,
+                            time: formatTimeAgo(timestamp),
+                            hash: data.txHash,
+                            timestamp
+                        });
+                    }
+                });
+            } catch (e) {
+                console.warn('[AdminWallet] bridgeTransactions collection error:', e);
+            }
+
+            // 3. Fetch from scheduledTransfers collection
+            try {
+                const scheduledCollection = collection(db, 'scheduledTransfers');
+                const scheduledQuery = query(scheduledCollection, orderBy('createdAt', 'desc'), limit(20));
+                const scheduledSnapshot = await getDocs(scheduledQuery);
+
+                scheduledSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const createdAt = data.createdAt?.toDate?.() || new Date();
+                    const timestamp = createdAt.getTime();
+
+                    allTxList.push({
+                        id: doc.id,
+                        type: 'send',
                         amount: data.amount ? `${parseFloat(data.amount).toLocaleString()} VCN` : '0 VCN',
                         from: data.sender || data.userEmail || 'System',
                         to: data.recipient || 'Unknown',
@@ -128,15 +165,21 @@ export default function AdminWallet() {
                             data.status === 'WAITING' ? 'pending' :
                                 data.status === 'FAILED' ? 'challenged' : 'pending',
                         time: formatTimeAgo(timestamp),
-                        hash: data.executionTx || data.creationTx,
+                        hash: data.executionTx || data.creationTx || data.txHash,
                         timestamp
-                    };
+                    });
                 });
-
-                setTransactions(txList);
-            } catch (fallbackError) {
-                console.warn('[AdminWallet] No transaction data available');
+            } catch (e) {
+                console.warn('[AdminWallet] scheduledTransfers collection error:', e);
             }
+
+            // Sort all transactions by timestamp (newest first)
+            allTxList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            setTransactions(allTxList.slice(0, 50)); // Limit to 50 most recent
+            console.log(`[AdminWallet] Loaded ${allTxList.length} transactions from all collections`);
+        } catch (error) {
+            console.error('[AdminWallet] Failed to fetch transactions:', error);
         }
     };
 
