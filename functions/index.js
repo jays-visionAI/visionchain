@@ -2177,30 +2177,75 @@ exports.bridgeRelayer = onSchedule({
   console.log("[Bridge Relayer] Starting scheduled execution...");
 
   try {
-    // 1. Query COMMITTED bridge transactions older than 15 minutes
+    // 1. Query COMMITTED bridge transactions older than challenge period
     const cutoffTime = new Date(Date.now() - (CHALLENGE_PERIOD_MINUTES * 60 * 1000));
     const cutoffTimestamp = admin.firestore.Timestamp.fromDate(cutoffTime);
+    console.log(`[Bridge Relayer] Cutoff time: ${cutoffTime.toISOString()}, Challenge period: ${CHALLENGE_PERIOD_MINUTES} min`);
 
+    // Check bridgeTransactions collection (backend-created)
+    const allCommittedBridges = await db.collection("bridgeTransactions")
+      .where("status", "==", "COMMITTED")
+      .limit(20)
+      .get();
+    console.log(`[Bridge Relayer] bridgeTransactions COMMITTED: ${allCommittedBridges.size}`);
+
+    // ALSO check transactions collection for Bridge type with PENDING status (frontend-created)
+    const allPendingBridges = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .where("bridgeStatus", "==", "PENDING")
+      .limit(20)
+      .get();
+    console.log(`[Bridge Relayer] transactions PENDING Bridges: ${allPendingBridges.size}`);
+
+    if (allCommittedBridges.size > 0) {
+      allCommittedBridges.docs.forEach((doc) => {
+        const data = doc.data();
+        const createdAt = data.createdAt?.toDate?.() || "unknown";
+        console.log(`[Bridge Relayer] bridgeTransactions/${doc.id}: status=${data.status}, createdAt=${createdAt}, amount=${data.amount}`);
+      });
+    }
+
+    if (allPendingBridges.size > 0) {
+      allPendingBridges.docs.forEach((doc) => {
+        const data = doc.data();
+        const ts = data.timestamp ? new Date(data.timestamp).toISOString() : "unknown";
+        console.log(`[Bridge Relayer] transactions/${doc.id}: bridgeStatus=${data.bridgeStatus}, timestamp=${ts}, value=${data.value}`);
+      });
+    }
+
+    // Process bridges from bridgeTransactions collection (past cutoff)
     const pendingBridges = await db.collection("bridgeTransactions")
       .where("status", "==", "COMMITTED")
       .where("createdAt", "<=", cutoffTimestamp)
-      .limit(10) // Process max 10 per run to avoid timeout
+      .limit(10)
       .get();
 
-    if (pendingBridges.empty) {
-      console.log("[Bridge Relayer] No pending bridges to process");
+
+    // Process bridges from transactions collection (past challenge period)
+    const pendingTxBridges = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .where("bridgeStatus", "==", "PENDING")
+      .where("challengeEndTime", "<=", Date.now())
+      .limit(10)
+      .get();
+
+    const totalPending = pendingBridges.size + pendingTxBridges.size;
+    console.log(`[Bridge Relayer] Ready to process: ${pendingBridges.size} from bridgeTransactions, ${pendingTxBridges.size} from transactions`);
+
+    if (totalPending === 0) {
+      console.log("[Bridge Relayer] No pending bridges to process (past cutoff time)");
       return;
     }
 
-    console.log(`[Bridge Relayer] Found ${pendingBridges.size} bridges to process`);
+    console.log(`[Bridge Relayer] Found ${pendingBridges.size} + ${pendingTxBridges.size} bridges to process`);
 
-    // 2. Process each bridge
+    // 2. Process bridges from bridgeTransactions collection
     for (const docSnap of pendingBridges.docs) {
       const bridge = docSnap.data();
       const bridgeId = docSnap.id;
 
       try {
-        console.log(`[Bridge Relayer] Processing bridge ${bridgeId}`);
+        console.log(`[Bridge Relayer] Processing bridgeTransactions/${bridgeId}`);
         console.log(`[Bridge Relayer] Amount: ${bridge.amount}, Recipient: ${bridge.recipient}`);
 
         // Update status to PROCESSING
@@ -2243,6 +2288,71 @@ exports.bridgeRelayer = onSchedule({
         await docSnap.ref.update({
           status: "FAILED",
           failedAt: admin.firestore.Timestamp.now(),
+          errorMessage: bridgeErr.message || "Unknown error",
+        });
+      }
+    }
+
+    // 3. Process bridges from transactions collection (frontend-created)
+    for (const docSnap of pendingTxBridges.docs) {
+      const txData = docSnap.data();
+      const txId = docSnap.id;
+
+      try {
+        console.log(`[Bridge Relayer] Processing transactions/${txId}`);
+        const dstChainId = txData.metadata?.dstChainId || 11155111; // Default to Sepolia
+        const amount = txData.value || "0";
+        const recipient = txData.from_addr; // Bridge back to sender
+
+        console.log(`[Bridge Relayer] Amount: ${amount} VCN, Recipient: ${recipient}, DstChain: ${dstChainId}`);
+
+        // Update status to PROCESSING
+        await docSnap.ref.update({
+          bridgeStatus: "PROCESSING",
+          processingStartedAt: Date.now(),
+        });
+
+        // Construct bridge object for existing functions
+        const bridge = {
+          amount: String(parseFloat(amount) * 1e18), // Convert to wei
+          recipient: recipient,
+          dstChainId: dstChainId,
+          srcChainId: txData.metadata?.srcChainId || 1337,
+          intentHash: txId, // Use txId as intentHash for tracking
+        };
+
+        // Execute on destination chain
+        let destTxHash = null;
+        if (dstChainId === SEPOLIA_CHAIN_ID) {
+          destTxHash = await executeSepoliaBridgeTransfer(bridge);
+        } else {
+          destTxHash = await executeVisionChainBridgeTransfer(bridge);
+        }
+
+        // Update status to COMPLETED
+        await docSnap.ref.update({
+          bridgeStatus: "COMPLETED",
+          completedAt: Date.now(),
+          destinationTxHash: destTxHash,
+        });
+
+        console.log(`[Bridge Relayer] transactions/${txId} completed. Dest TX: ${destTxHash}`);
+
+        // Send completion notification
+        try {
+          const userEmail = await getBridgeUserEmail(recipient);
+          if (userEmail) {
+            await sendBridgeCompleteEmail(userEmail, bridge, destTxHash);
+          }
+        } catch (notifyErr) {
+          console.warn("[Bridge Relayer] Notification failed:", notifyErr.message);
+        }
+      } catch (bridgeErr) {
+        console.error(`[Bridge Relayer] Failed to process transactions/${txId}:`, bridgeErr);
+
+        await docSnap.ref.update({
+          bridgeStatus: "FAILED",
+          failedAt: Date.now(),
           errorMessage: bridgeErr.message || "Unknown error",
         });
       }
