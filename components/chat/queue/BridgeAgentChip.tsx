@@ -79,17 +79,21 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     createEffect(() => {
         const addr = props.walletAddress;
         if (!addr) {
+            console.log('[BridgeAgentChip] No wallet address provided');
             setBridges([]);
             setIsLoading(false);
             return;
         }
+
+        const normalizedAddr = addr.toLowerCase();
+        console.log('[BridgeAgentChip] Subscribing for wallet:', normalizedAddr);
 
         try {
             const db = getFirebaseDb();
             const bridgeRef = collection(db, 'bridgeTransactions');
             const q = query(
                 bridgeRef,
-                where('user', '==', addr.toLowerCase()),
+                where('user', '==', normalizedAddr),
                 orderBy('createdAt', 'desc'),
                 limit(5)
             );
@@ -99,10 +103,15 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                     id: doc.id,
                     ...doc.data()
                 } as BridgeTransaction));
+                console.log('[BridgeAgentChip] Received', bridgeList.length, 'bridges:', bridgeList.map(b => b.status));
                 setBridges(bridgeList);
                 setIsLoading(false);
             }, (error) => {
                 console.error('[BridgeAgentChip] Firebase error:', error);
+                // Check if it's an index error
+                if (error.message?.includes('index')) {
+                    console.error('[BridgeAgentChip] INDEX REQUIRED! Check Firebase console for index creation link.');
+                }
                 setBridges([]);
                 setIsLoading(false);
             });
