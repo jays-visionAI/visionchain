@@ -769,7 +769,7 @@ exports.bridgeWithPaymaster = onRequest({ cors: true, invoker: "public" }, async
     // Save to Firestore for tracking
     try {
       await db.collection("bridgeTransactions").add({
-        user: user,
+        user: user.toLowerCase(),
         srcChainId: srcChainId,
         dstChainId: dstChainId,
         amount: amount,
@@ -2169,7 +2169,7 @@ const SEPOLIA_RELAYER_PK = process.env.SEPOLIA_RELAYER_PK;
  * Runs every 5 minutes to process completed bridge intents
  */
 exports.bridgeRelayer = onSchedule({
-  schedule: "every 5 minutes",
+  schedule: "every 2 minutes",
   timeZone: "Asia/Seoul",
   memory: "256MiB",
   secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK"],
