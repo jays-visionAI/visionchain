@@ -23,6 +23,7 @@ interface BridgeTransaction {
     status: 'PENDING' | 'SUBMITTED' | 'COMMITTED' | 'PROCESSING' | 'COMPLETED' | 'FINALIZED' | 'FAILED';
     createdAt: any;
     completedAt?: any;
+    hiddenFromDesk?: boolean;
 }
 
 interface BridgeAgentChipProps {
@@ -166,7 +167,8 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                         intentHash: data.intentHash,
                         status: status as BridgeTransaction['status'],
                         createdAt: data.timestamp ? { toDate: () => new Date(data.timestamp) } : null,
-                        completedAt: data.completedAt
+                        completedAt: data.completedAt,
+                        hiddenFromDesk: data.hiddenFromDesk || false
                     } as BridgeTransaction;
                 });
                 // Sort client-side by timestamp (newest first)
@@ -199,12 +201,15 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         b.status === 'PENDING' || b.status === 'SUBMITTED'
     );
 
-    // Filter visible bridges (active + recently completed within 1 minute)
+    // Filter visible bridges (active + recently completed within 1 minute, respect hiddenFromDesk)
     const visibleBridges = () => {
         const now = Date.now();
         const oneMinute = 60 * 1000;
 
         return bridges().filter(b => {
+            // Skip if user dismissed from desk
+            if (b.hiddenFromDesk) return false;
+
             // Always show active bridges
             if (b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
                 b.status === 'PENDING' || b.status === 'SUBMITTED') {
@@ -218,7 +223,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                 return (now - completedTime) < oneMinute;
             }
 
-            // Show failed bridges
+            // Show failed bridges (unless hidden)
             if (b.status === 'FAILED') return true;
 
             return false;

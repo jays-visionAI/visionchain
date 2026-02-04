@@ -84,12 +84,14 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     const filteredTasks = createMemo(() => {
         return props.tasks.filter((t: any) => {
             if (activeTab() === 'ACTIVE') {
-                // Active tab: WAITING/EXECUTING, but hide if user dismissed from desk
+                // Active tab: WAITING/EXECUTING/FAILED, but hide if user dismissed
                 if (t.hiddenFromDesk) return false;
-                return ['WAITING', 'EXECUTING'].includes(t.status);
+                return ['WAITING', 'EXECUTING', 'FAILED'].includes(t.status);
             }
-            // History tab: show all completed/failed (including hidden)
-            return ['SENT', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(t.status);
+            // History tab: show completed tasks only (SENT, CANCELLED, EXPIRED)
+            // FAILED tasks that are dismissed also move to history
+            if (t.status === 'FAILED' && t.hiddenFromDesk) return true;
+            return ['SENT', 'CANCELLED', 'EXPIRED'].includes(t.status);
         }).sort((a, b) => b.timestamp - a.timestamp);
     });
 
@@ -332,16 +334,19 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                             <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
                                                         </button>
                                                     </Show>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            props.onDismissTask?.(task.id);
-                                                        }}
-                                                        class="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
-                                                        title="Dismiss this task"
-                                                    >
-                                                        <X class="w-3.5 h-3.5" /> Dismiss
-                                                    </button>
+                                                    {/* Dismiss button only in Active tab for FAILED tasks */}
+                                                    <Show when={activeTab() === 'ACTIVE' && task.status === 'FAILED'}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                props.onDismissTask?.(task.id);
+                                                            }}
+                                                            class="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                                                            title="Dismiss this task"
+                                                        >
+                                                            <X class="w-3.5 h-3.5" /> Dismiss
+                                                        </button>
+                                                    </Show>
                                                 </Show>
                                             </div>
                                         </div>

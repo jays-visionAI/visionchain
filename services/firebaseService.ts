@@ -2005,22 +2005,32 @@ export const dismissScheduledTask = async (taskId: string) => {
     return hideTaskFromDesk(taskId);
 };
 
-// Hide a bridge transaction from Agent Desk (for transactions collection)
-export const hideBridgeFromDesk = async (txHash: string) => {
+// Hide a bridge transaction from Agent Desk (updates both collections)
+export const hideBridgeFromDesk = async (txId: string) => {
     const db = getFirebaseDb();
+    const updateData = {
+        hiddenFromDesk: true,
+        hiddenAt: new Date().toISOString()
+    };
+
     try {
-        // Bridge transactions are stored with hash as document ID
-        const docRef = doc(db, 'transactions', txHash);
-        await updateDoc(docRef, {
-            hiddenFromDesk: true,
-            hiddenAt: new Date().toISOString()
-        });
-        console.log("[Queue] Bridge hidden from desk:", txHash);
-        return true;
-    } catch (e) {
-        console.error("Hide bridge from desk failed:", e);
-        throw e;
+        // Try updating transactions collection first (primary)
+        const txDocRef = doc(db, 'transactions', txId);
+        await updateDoc(txDocRef, updateData);
+        console.log("[Queue] Bridge hidden from desk (transactions):", txId);
+    } catch (e1) {
+        console.log("[Queue] transactions update failed, trying bridgeTransactions...");
+        // Fallback to bridgeTransactions collection
+        try {
+            const bridgeDocRef = doc(db, 'bridgeTransactions', txId);
+            await updateDoc(bridgeDocRef, updateData);
+            console.log("[Queue] Bridge hidden from desk (bridgeTransactions):", txId);
+        } catch (e2) {
+            console.error("Hide bridge from desk failed:", e2);
+            throw e2;
+        }
     }
+    return true;
 };
 
 export const markTaskAsSent = async (taskId: string, txHash: string) => {
