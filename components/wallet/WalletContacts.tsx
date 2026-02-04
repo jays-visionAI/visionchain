@@ -185,7 +185,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                             <button
                                 onClick={handleSync}
                                 disabled={isSyncing()}
-                                class="flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 whitespace-nowrap"
+                                class="flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-xl hover:bg-orange-400 transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-orange-500/20 whitespace-nowrap"
                                 title="Sync Contacts"
                             >
                                 <RefreshCw class={`w-3.5 h-3.5 ${isSyncing() ? 'animate-spin' : ''}`} />
