@@ -1244,12 +1244,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                             {/* Bridge Agent - Always render, component handles visibility */}
                                             {(() => {
-                                                const addr = props.userProfile()?.walletAddress;
-                                                console.log('[WalletDashboard] Bridge Agent check, walletAddress:', addr);
+                                                // Note: userProfile uses 'address' field, not 'walletAddress'
+                                                const addr = props.userProfile()?.address;
+                                                console.log('[WalletDashboard] Bridge Agent check, address:', addr);
                                                 return null;
                                             })()}
                                             <BridgeAgentChip
-                                                walletAddress={props.userProfile()?.walletAddress || ''}
+                                                walletAddress={props.userProfile()?.address || ''}
                                                 onViewBridgePage={() => props.setActiveView('bridge')}
                                             />
                                         </div>
@@ -1407,9 +1408,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             </For>
 
 
+
                                                             {/* Bridge Agent - Always render */}
                                                             <BridgeAgentChip
-                                                                walletAddress={props.userProfile()?.walletAddress || ''}
+                                                                walletAddress={props.userProfile()?.address || ''}
                                                                 onViewBridgePage={() => props.setActiveView('bridge')}
                                                             />
                                                         </div>
