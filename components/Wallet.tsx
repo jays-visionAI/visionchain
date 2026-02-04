@@ -71,6 +71,7 @@ import {
     saveScheduledTransfer,
     cancelScheduledTask,
     dismissScheduledTask,
+    hideBridgeFromDesk,
     createNotification,
     NotificationData,
     getFirebaseDb,
@@ -680,12 +681,15 @@ const Wallet = (): JSX.Element => {
                     summary: `${amount} VCN → ${dstChain}`,
                     status,
                     timestamp: data.timestamp || Date.now(),
+                    completedAt: data.completedAt ? new Date(data.completedAt).getTime() :
+                        (status === 'SENT' ? (data.timestamp || Date.now()) : undefined),
                     recipient: data.to_addr || 'Bridge',
                     amount: `${amount}`,
                     token: 'VCN',
                     txHash: data.hash,
                     scheduleId: docItem.id,
-                    error: bridgeStatus === 'FAILED' ? 'Bridge transaction failed' : undefined
+                    error: bridgeStatus === 'FAILED' ? 'Bridge transaction failed' : undefined,
+                    hiddenFromDesk: data.hiddenFromDesk || false
                 };
             })
                 // Sort by timestamp (newest first)
@@ -710,19 +714,42 @@ const Wallet = (): JSX.Element => {
         }
     };
 
-    // Dismiss a failed or overdue task from the UI and Firebase
+    // Hide a task from Agent Desk (not delete - preserves in History)
     const handleDismissTask = async (taskId: string) => {
-        // Remove from queue tasks (optimistic UI update)
-        setQueueTasks(prev => prev.filter(t => t.id !== taskId));
-        // Also remove from batch agents if applicable
-        setBatchAgents(prev => prev.filter(a => a.id !== taskId));
+        // Handle Bridge transactions (ID starts with 'bridge_')
+        if (taskId.startsWith('bridge_')) {
+            const actualId = taskId.replace('bridge_', '');
+            // Optimistic UI update
+            setBridgeTasks(prev => prev.map(t =>
+                t.id === taskId ? { ...t, hiddenFromDesk: true } : t
+            ));
+            try {
+                await hideBridgeFromDesk(actualId);
+            } catch (e) {
+                console.error('[Wallet] Failed to hide bridge from desk:', e);
+            }
+            return;
+        }
 
-        // Delete from Firebase
+        // Handle Batch agents
+        if (batchAgents().some((a: any) => a.id === taskId)) {
+            setBatchAgents(prev => prev.map((a: any) =>
+                a.id === taskId ? { ...a, hiddenFromDesk: true } : a
+            ));
+            // Note: Batch agents might not have Firebase persistence, just local state
+            return;
+        }
+
+        // Handle Time-lock tasks
+        setQueueTasks(prev => prev.map((t: any) =>
+            t.id === taskId ? { ...t, hiddenFromDesk: true } : t
+        ));
+
+        // Update Firebase (hides instead of deletes now)
         try {
             await dismissScheduledTask(taskId);
         } catch (e) {
-            console.error('[Wallet] Failed to dismiss task from Firebase:', e);
-            // UI already updated, so just log the error
+            console.error('[Wallet] Failed to hide task from desk:', e);
         }
     };
 

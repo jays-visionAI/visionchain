@@ -662,15 +662,18 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
         onCleanup(() => window.removeEventListener('resize', handleResize));
     });
 
-    // Memo for active time-lock tasks (show SENT for 60 seconds then hide)
+    // Memo for active time-lock tasks (show SENT for 60 seconds then hide, respect hiddenFromDesk)
     const activeTimeTasks = createMemo(() => {
         const tasks = props.queueTasks();
         // Early return for empty queue - performance optimization
         if (tasks.length === 0) return [];
 
         const now = Date.now();
-        return tasks.filter(t => {
-            // Always show WAITING, EXECUTING, FAILED
+        return tasks.filter((t: any) => {
+            // Already hidden by user
+            if (t.hiddenFromDesk) return false;
+
+            // Always show WAITING, EXECUTING, FAILED (unless hidden)
             if (['WAITING', 'EXECUTING', 'FAILED'].includes(t.status)) return true;
             // Show SENT tasks for 60 seconds after completion
             if (t.status === 'SENT' && t.completedAt) {
@@ -686,6 +689,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     const [selectedBatchId, setSelectedBatchId] = createSignal<string | null>(null);
 
+    // All tasks for Agent Queue (includes hidden for History tab)
     const combinedDrawerTasks = createMemo(() => {
         const queueTasks = props.queueTasks();
         const batchAgents = props.batchAgents();
@@ -704,9 +708,50 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 recipient: agent.transactions?.[0]?.recipient,
                 amount: `${agent.successCount + agent.failedCount}/${agent.totalCount}`,
                 token: 'TX',
-                progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100
+                progress: ((agent.successCount + agent.failedCount) / agent.totalCount) * 100,
+                completedAt: agent.completedAt,
+                hiddenFromDesk: agent.hiddenFromDesk || false
             }));
         return [...queueTasks, ...batchTasks, ...bridgeTasks];
+    });
+
+    // Filtered tasks for Agent Desk chips (auto-hide after 1min, respect hiddenFromDesk)
+    const deskTasks = createMemo(() => {
+        const now = Date.now();
+        const AUTO_HIDE_MS = 60 * 1000; // 1 minute after completion
+
+        return combinedDrawerTasks().filter((task: any) => {
+            // Already hidden by user
+            if (task.hiddenFromDesk) return false;
+
+            // Auto-hide completed tasks after 1 minute
+            if ((task.status === 'SENT' || task.status === 'FINALIZED' || task.status === 'COMPLETED') && task.completedAt) {
+                return (now - task.completedAt) < AUTO_HIDE_MS;
+            }
+
+            // Show all active and failed tasks
+            return true;
+        });
+    });
+
+    // Filtered batch agents for Agent Desk (auto-hide after 1min, respect hiddenFromDesk)
+    const activeBatchAgents = createMemo(() => {
+        const agents = props.batchAgents();
+        if (agents.length === 0) return [];
+
+        const now = Date.now();
+        const AUTO_HIDE_MS = 60 * 1000;
+
+        return agents.filter((agent: any) => {
+            if (agent.hiddenFromDesk) return false;
+
+            // Auto-hide completed after 1 minute
+            if (agent.status === 'SENT' && agent.completedAt) {
+                return (now - agent.completedAt) < AUTO_HIDE_MS;
+            }
+
+            return true;
+        });
     });
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
@@ -1138,7 +1183,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             </Show>
 
                             {/* Dynamic Spacer for Agent Bay / Input Padding */}
-                            <div class={`transition-all duration-300 ${(activeTimeTasks().length > 0 || props.batchAgents().length > 0) && !isAgentBayCollapsed()
+                            <div class={`transition-all duration-300 ${(activeTimeTasks().length > 0 || activeBatchAgents().length > 0) && !isAgentBayCollapsed()
                                 ? 'h-64'
                                 : 'h-48 md:h-32'
                                 }`} />
@@ -1182,7 +1227,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     <Show when={bottomSheetExpanded()}>
                         <div class="px-4 pb-6">
                             {/* Mobile Agent Desk - Show when there are active agents or bridge monitoring possible */}
-                            <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0 || props.userProfile()?.address}>
+                            <Show when={activeTimeTasks().length > 0 || activeBatchAgents().length > 0 || props.userProfile()?.address}>
                                 <div class="mb-3">
                                     {/* Agent Desk Header with Toggle */}
                                     <div class="flex items-center justify-between mb-2">
@@ -1206,7 +1251,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <Show when={!isAgentBayCollapsed()}>
                                         <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                                             {/* Batch Agents */}
-                                            <For each={props.batchAgents()}>
+                                            <For each={activeBatchAgents()}>
                                                 {(agent) => (
                                                     <AgentChip
                                                         task={{
@@ -1247,7 +1292,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             {/* Bridge Agent - Always render, component handles visibility */}
                                             <BridgeAgentChip
                                                 walletAddress={props.userProfile()?.address || ''}
-                                                onDismiss={(id) => console.log('[BridgeAgentChip] Dismissed:', id)}
+                                                onDismiss={(id) => props.onDismissTask?.(id)}
                                             />
                                         </div>
 
@@ -1311,7 +1356,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         <div class="max-w-3xl mx-auto px-3 md:px-0 pointer-events-auto">
                             <Presence>
                                 {/* Unified Background Agents Bar - Above Input (also show for bridge monitoring) */}
-                                <Show when={activeTimeTasks().length > 0 || props.batchAgents().length > 0 || props.userProfile()?.address}>
+                                <Show when={activeTimeTasks().length > 0 || activeBatchAgents().length > 0 || props.userProfile()?.address}>
                                     <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
                                         {/* Header Row: Agent Desk Label (left) + Toggle Button (right) */}
                                         <div class="hidden md:flex items-center justify-between mb-1">
@@ -1366,7 +1411,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                         {/* Unified Scrollable Row */}
                                                         <div class="flex-1 flex gap-3 overflow-x-auto scrollbar-hide py-0.5 pl-2">
                                                             {/* Batch Agents */}
-                                                            <For each={props.batchAgents()}>
+                                                            <For each={activeBatchAgents()}>
                                                                 {(agent) => (
                                                                     <AgentChip
                                                                         task={{
@@ -1409,7 +1454,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             {/* Bridge Agent - Always render */}
                                                             <BridgeAgentChip
                                                                 walletAddress={props.userProfile()?.address || ''}
-                                                                onDismiss={(id) => console.log('[BridgeAgentChip] Dismissed:', id)}
+                                                                onDismiss={(id) => props.onDismissTask?.(id)}
                                                             />
                                                         </div>
                                                     </Motion.div>

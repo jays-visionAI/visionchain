@@ -1883,7 +1883,9 @@ export const subscribeToQueue = (
                 token: data.token,
                 scheduleId: data.scheduleId,
                 txHash: data.executionTx || data.executedTxHash || data.txHash || data.creationTx,
-                error: data.error
+                error: data.error,
+                hiddenFromDesk: data.hiddenFromDesk || false,
+                hiddenAt: data.hiddenAt
             };
         });
 
@@ -1902,17 +1904,7 @@ export const subscribeToQueue = (
             return b.timestamp - a.timestamp; // Newest finished first
         });
 
-        // Filter out SENT tasks older than 1 minute (auto-dismiss from Agent Desk)
-        const now = Date.now();
-        const AUTO_DISMISS_MS = 60 * 1000; // 1 minute
-        const filtered = sorted.filter((task: any) => {
-            if (task.status === 'SENT' && task.completedAt) {
-                return (now - task.completedAt) < AUTO_DISMISS_MS;
-            }
-            return true; // Keep all other tasks
-        });
-
-        callback(filtered);
+        callback(sorted);
     });
 };
 
@@ -1990,16 +1982,43 @@ export const retryScheduledTask = async (taskId: string) => {
     }
 };
 
-// Dismiss (delete) a task from Firebase - for FAILED, SENT, or CANCELLED tasks
-export const dismissScheduledTask = async (taskId: string) => {
+// Hide a task from Agent Desk (does NOT delete - preserves in History)
+export const hideTaskFromDesk = async (taskId: string) => {
     const db = getFirebaseDb();
     try {
         const docRef = doc(db, 'scheduledTransfers', taskId);
-        await deleteDoc(docRef);
-        console.log("[Queue] Task dismissed:", taskId);
+        await updateDoc(docRef, {
+            hiddenFromDesk: true,
+            hiddenAt: new Date().toISOString()
+        });
+        console.log("[Queue] Task hidden from desk:", taskId);
         return true;
     } catch (e) {
-        console.error("Dismiss failed:", e);
+        console.error("Hide from desk failed:", e);
+        throw e;
+    }
+};
+
+// Legacy: Dismiss (delete) - kept for backwards compatibility but prefer hideTaskFromDesk
+export const dismissScheduledTask = async (taskId: string) => {
+    // Now just hides instead of deleting to preserve history
+    return hideTaskFromDesk(taskId);
+};
+
+// Hide a bridge transaction from Agent Desk (for transactions collection)
+export const hideBridgeFromDesk = async (txHash: string) => {
+    const db = getFirebaseDb();
+    try {
+        // Bridge transactions are stored with hash as document ID
+        const docRef = doc(db, 'transactions', txHash);
+        await updateDoc(docRef, {
+            hiddenFromDesk: true,
+            hiddenAt: new Date().toISOString()
+        });
+        console.log("[Queue] Bridge hidden from desk:", txHash);
+        return true;
+    } catch (e) {
+        console.error("Hide bridge from desk failed:", e);
         throw e;
     }
 };

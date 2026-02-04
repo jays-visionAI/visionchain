@@ -82,8 +82,13 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     };
 
     const filteredTasks = createMemo(() => {
-        return props.tasks.filter(t => {
-            if (activeTab() === 'ACTIVE') return ['WAITING', 'EXECUTING'].includes(t.status);
+        return props.tasks.filter((t: any) => {
+            if (activeTab() === 'ACTIVE') {
+                // Active tab: WAITING/EXECUTING, but hide if user dismissed from desk
+                if (t.hiddenFromDesk) return false;
+                return ['WAITING', 'EXECUTING'].includes(t.status);
+            }
+            // History tab: show all completed/failed (including hidden)
             return ['SENT', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(t.status);
         }).sort((a, b) => b.timestamp - a.timestamp);
     });
@@ -124,7 +129,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-bold text-white uppercase tracking-wider">Agent Queue</span>
                             <div class="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded text-[10px] font-bold">
-                                {props.tasks.filter(t => ['WAITING', 'EXECUTING'].includes(t.status)).length} Active
+                                {props.tasks.filter((t: any) => ['WAITING', 'EXECUTING'].includes(t.status) && !t.hiddenFromDesk).length} Active
                             </div>
                         </div>
                         <button
