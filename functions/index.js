@@ -2756,15 +2756,41 @@ exports.secureBridgeRelayer = onSchedule("every 2 minutes", async () => {
 
           console.log(`[Secure Bridge] ${txId} completed. Dest TX: ${destTxHash}`);
 
-          // Send notification
+          // Send notification - both email and Firestore
           try {
             const userEmail = await getBridgeUserEmail(txData.from_addr);
             if (userEmail) {
+              // 1. Send email notification
               await sendBridgeCompleteEmail(userEmail, {
                 amount: ethers.parseEther(txData.value || "0").toString(),
                 recipient: txData.from_addr,
                 dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID,
               }, destTxHash);
+
+              // 2. Create in-app notification in Firestore
+              const destChain = (txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID) === SEPOLIA_CHAIN_ID ?
+                "Ethereum Sepolia" : "Vision Chain";
+              const explorerUrl = (txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID) === SEPOLIA_CHAIN_ID ?
+                `https://sepolia.etherscan.io/tx/${destTxHash}` :
+                `https://www.visionchain.co/visionscan/tx/${destTxHash}`;
+
+              await db.collection("notifications").add({
+                email: userEmail,
+                type: "bridge_completed",
+                title: "Bridge Transfer Complete",
+                content: `${txData.value} VCN successfully bridged to ${destChain}. View on explorer.`,
+                data: {
+                  amount: txData.value,
+                  destinationChain: destChain,
+                  sourceTxHash: txId,
+                  destinationTxHash: destTxHash,
+                  explorerUrl: explorerUrl,
+                  status: "completed",
+                },
+                createdAt: admin.firestore.Timestamp.now(),
+                read: false,
+              });
+              console.log(`[Secure Bridge] Notification created for ${userEmail}`);
             }
           } catch (notifyErr) {
             console.warn("[Secure Bridge] Notification failed:", notifyErr.message);

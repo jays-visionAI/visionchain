@@ -2423,12 +2423,15 @@ const Wallet = (): JSX.Element => {
                     value: bridge.amount,
                     timestamp: Date.now(),
                     type: 'Bridge',
-                    bridgeStatus: 'PENDING',
-                    challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period (matches Bridge Relayer)
+                    bridgeStatus: 'PENDING', // Relayer will update to SUBMITTED → COMPLETED
+                    intentHash: intentHash,
+                    commitTxHash: commitTx.hash,
+                    lockTxHash: resultTxHash,
+                    challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
                     metadata: {
                         destinationChain: bridge.destinationChain,
                         srcChainId: 1337,
-                        dstChainId: bridge.destinationChain.toUpperCase() === 'SEPOLIA' ? 11155111 : 137
+                        dstChainId: dstChainId
                     }
                 });
                 console.log('[Bridge] Saved to Firestore for History');
