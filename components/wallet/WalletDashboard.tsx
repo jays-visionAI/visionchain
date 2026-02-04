@@ -790,15 +790,28 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     agent={selectedBatchAgent()}
                 />
 
-                {/* Mobile Chat History Drawer */}
-                <Presence>
+                {/* Mobile Chat History Drawer - Optimized for smooth close animation */}
+                <Presence exitBeforeEnter>
                     <Show when={isMobileHistoryOpen()}>
+                        {/* Backdrop - inside Presence for coordinated exit */}
                         <Motion.div
-                            initial={{ x: '100%', opacity: 0.5 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: '100%', opacity: 0.5 }}
-                            transition={{ duration: 0.3, easing: [0.32, 0.72, 0, 1] }}
-                            class="fixed inset-y-0 right-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-l border-white/10 shadow-2xl z-[60] flex flex-col md:hidden"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                            class="fixed inset-0 bg-black/60 z-[55] md:hidden"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMobileHistoryOpen(false);
+                            }}
+                        />
+                        {/* Drawer Panel */}
+                        <Motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ duration: 0.2, easing: [0.32, 0.72, 0, 1] }}
+                            class="fixed inset-y-0 right-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-l border-white/10 shadow-2xl z-[60] flex flex-col md:hidden will-change-transform"
                         >
                             {/* Header */}
                             <div class="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0a0b]">
@@ -809,8 +822,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <span class="text-sm font-bold text-white uppercase tracking-wider">Chat History</span>
                                 </div>
                                 <button
-                                    onClick={() => setIsMobileHistoryOpen(false)}
-                                    class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsMobileHistoryOpen(false);
+                                    }}
+                                    class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors active:scale-95"
                                 >
                                     <X class="w-4 h-4" />
                                 </button>
@@ -823,15 +839,15 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         props.onNewChat();
                                         setIsMobileHistoryOpen(false);
                                     }}
-                                    class="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg"
+                                    class="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg active:scale-98"
                                 >
                                     <Plus class="w-4 h-4" />
                                     New Chat
                                 </button>
                             </div>
 
-                            {/* History List */}
-                            <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-hide">
+                            {/* History List - Virtualized for performance */}
+                            <div class="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-hide overscroll-contain">
                                 <Show when={props.history().length === 0}>
                                     <div class="py-12 text-center text-gray-500 text-xs font-bold uppercase tracking-widest">
                                         No chat history yet
@@ -844,9 +860,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 props.onSelectConversation(conv);
                                                 setIsMobileHistoryOpen(false);
                                             }}
-                                            class={`w-full p-3 rounded-xl text-left transition-all border ${props.currentSessionId() === conv.id
+                                            class={`w-full p-3 rounded-xl text-left transition-colors border ${props.currentSessionId() === conv.id
                                                 ? 'bg-purple-600/10 border-purple-500/30'
-                                                : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.1] hover:bg-white/[0.05]'
+                                                : 'bg-white/[0.02] border-white/[0.04] active:bg-white/[0.08]'
                                                 }`}
                                         >
                                             <div class="flex flex-col gap-1">
@@ -867,14 +883,6 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                         </Motion.div>
                     </Show>
                 </Presence>
-
-                {/* Mobile History Backdrop */}
-                <Show when={isMobileHistoryOpen()}>
-                    <div
-                        class="fixed inset-0 bg-black/60 z-[55] md:hidden"
-                        onClick={() => setIsMobileHistoryOpen(false)}
-                    />
-                </Show>
 
                 {/* Mobile Chat History Floating Button - Top Right */}
                 <Show when={isMobile() && !isMobileHistoryOpen()}>
