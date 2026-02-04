@@ -1241,13 +1241,17 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 )}
                                             </For>
 
-                                            {/* Bridge Agent */}
-                                            <Show when={props.userProfile()?.walletAddress}>
-                                                <BridgeAgentChip
-                                                    walletAddress={props.userProfile()?.walletAddress || ''}
-                                                    onViewBridgePage={() => props.setActiveView('bridge')}
-                                                />
-                                            </Show>
+
+                                            {/* Bridge Agent - Always render, component handles visibility */}
+                                            {(() => {
+                                                const addr = props.userProfile()?.walletAddress;
+                                                console.log('[WalletDashboard] Bridge Agent check, walletAddress:', addr);
+                                                return null;
+                                            })()}
+                                            <BridgeAgentChip
+                                                walletAddress={props.userProfile()?.walletAddress || ''}
+                                                onViewBridgePage={() => props.setActiveView('bridge')}
+                                            />
                                         </div>
 
                                     </Show>
@@ -1402,13 +1406,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 )}
                                                             </For>
 
-                                                            {/* Bridge Agent */}
-                                                            <Show when={props.userProfile()?.walletAddress}>
-                                                                <BridgeAgentChip
-                                                                    walletAddress={props.userProfile()?.walletAddress || ''}
-                                                                    onViewBridgePage={() => props.setActiveView('bridge')}
-                                                                />
-                                                            </Show>
+
+                                                            {/* Bridge Agent - Always render */}
+                                                            <BridgeAgentChip
+                                                                walletAddress={props.userProfile()?.walletAddress || ''}
+                                                                onViewBridgePage={() => props.setActiveView('bridge')}
+                                                            />
                                                         </div>
                                                     </Motion.div>
                                                 </Show>
