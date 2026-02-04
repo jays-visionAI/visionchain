@@ -9,18 +9,33 @@ import { getFirebaseDb } from './firebaseService';
 import { doc, setDoc } from 'firebase/firestore';
 
 const ADDRESSES = {
-    // Vision Chain Custom Testnet v2 (Chain ID: 1337)
-    VCN_TOKEN: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-    NODE_LICENSE: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-    MINING_POOL: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
-    VCN_VESTING: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
-    TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb", // Deployed to Vision Testnet
+    // Vision Chain v2 - VCN Native (Chain ID: 1337)
+    // Note: VCN is now the NATIVE token (like ETH on Ethereum)
+    // No VCN_TOKEN contract needed - use native balance instead
+
+    // Core Contracts (Native VCN Edition) - Deployed 2026-02-04
+    VCN_VESTING: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    NODE_LICENSE: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    MINING_POOL: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+    VISION_BRIDGE: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
+    VCN_PAYMASTER: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
+
+    // Secure Bridge (Phase 1 - Optimistic Security)
+    INTENT_COMMITMENT: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+    MESSAGE_INBOX: "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318",
+    VISION_BRIDGE_SECURE: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+
+    // Sepolia Contracts
+    VCN_TOKEN_SEPOLIA: "0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f",
+
+    // Legacy (kept for compatibility, may not be used)
+    VCN_TOKEN: "0x0000000000000000000000000000000000000000", // Deprecated - VCN is native now
+    TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
     TIME_LOCK_AGENT_MOCK: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 
-    // V2 Security Core (Hardened)
-    VISION_EQUALIZER: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788", // EqualizerV2
-    VCN_PAYMASTER: "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",    // PaymasterV2 (Diagnostic Smart Relayer)
-    VISION_PROFILE_REGISTRY: "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c", // AI Registry
+    // V2 Security Core
+    VISION_EQUALIZER: "0x0000000000000000000000000000000000000000", // Pending
+    VISION_PROFILE_REGISTRY: "0x0000000000000000000000000000000000000000", // Pending
 
     // Vision Chain RPC Resource Pool (High Availability)
     RPC_NODES: [
@@ -40,6 +55,8 @@ const ADDRESSES = {
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
 };
+
+
 
 export class ContractService {
     private provider: BrowserProvider | ethers.JsonRpcProvider | null = null;
@@ -167,6 +184,11 @@ export class ContractService {
     }
 
     async getTokenBalance(address: string, tokenAddress: string = ADDRESSES.VCN_TOKEN): Promise<string> {
+        // VCN is now native token - if querying VCN_TOKEN (zero address), return native balance
+        if (tokenAddress === ADDRESSES.VCN_TOKEN || tokenAddress === "0x0000000000000000000000000000000000000000") {
+            return this.getNativeBalance(address);
+        }
+
         const provider = await this.getRobustProvider();
         const abi = ["function balance(address account) view returns (uint256)", "function balanceOf(address account) view returns (uint256)"];
         const contract = new ethers.Contract(tokenAddress, abi, provider);
@@ -185,6 +207,7 @@ export class ContractService {
             }
         }
     }
+
 
     private initializeContracts(signerOrProvider: any) {
         this.nodeLicense = new ethers.Contract(ADDRESSES.NODE_LICENSE, NodeLicenseABI.abi, signerOrProvider);

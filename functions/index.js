@@ -2365,7 +2365,8 @@ exports.bridgeRelayer = onSchedule({
 });
 
 /**
- * Execute bridge transfer on Sepolia
+ * Execute bridge transfer on Sepolia - Mint VCN tokens
+ * When user locks VCN on Vision Chain, we mint VCN on Sepolia
  * @param {object} bridge - Bridge transaction data
  * @return {Promise<string>} Destination transaction hash
  */
@@ -2377,29 +2378,32 @@ async function executeSepoliaBridgeTransfer(bridge) {
   const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
   const relayerWallet = new ethers.Wallet(SEPOLIA_RELAYER_PK, provider);
 
-  const balance = await provider.getBalance(relayerWallet.address);
   const vcnAmountWei = BigInt(bridge.amount);
-  const vcnAmount = Number(ethers.formatEther(vcnAmountWei));
-
-  // Convert VCN to ETH based on price ratio
-  // VCN price: ~$0.30, ETH price: ~$3000 -> 1 VCN = 0.0001 ETH
-  const VCN_TO_ETH_RATIO = 0.0001;
-  const ethAmount = vcnAmount * VCN_TO_ETH_RATIO;
-  const ethAmountWei = ethers.parseEther(ethAmount.toFixed(18));
-
-  // Estimate gas cost (~21000 gas * ~20 gwei = ~0.00042 ETH)
-  const estimatedGasCost = ethers.parseEther("0.0005");
-  const totalRequired = ethAmountWei + estimatedGasCost;
+  const vcnAmount = ethers.formatEther(vcnAmountWei);
 
   console.log(`[Sepolia Bridge] Relayer address: ${relayerWallet.address}`);
-  console.log(`[Sepolia Bridge] Relayer balance: ${ethers.formatEther(balance)} ETH`);
-  console.log(`[Sepolia Bridge] VCN amount: ${vcnAmount} VCN`);
-  console.log(`[Sepolia Bridge] ETH equivalent: ${ethAmount.toFixed(6)} ETH (ratio: ${VCN_TO_ETH_RATIO})`);
-  console.log(`[Sepolia Bridge] Total required (incl gas): ${ethers.formatEther(totalRequired)} ETH`);
+  console.log(`[Sepolia Bridge] VCN amount to mint: ${vcnAmount} VCN`);
+  console.log(`[Sepolia Bridge] Recipient: ${bridge.recipient}`);
 
-  // Check if we have enough balance
-  if (balance < totalRequired) {
-    console.warn("[Sepolia Bridge] Insufficient Sepolia ETH balance - simulating transfer");
+  // VCN Token contract on Sepolia (to be deployed)
+  // TODO: Update this address after deploying VCNToken on Sepolia
+  const VCN_SEPOLIA_ADDRESS = process.env.VCN_SEPOLIA_ADDRESS || "0x0000000000000000000000000000000000000000";
+
+  // VCN Token ABI for minting
+  const VCN_TOKEN_ABI = [
+    "function bridgeMint(address to, uint256 amount, bytes32 bridgeId) external",
+    "function balanceOf(address account) view returns (uint256)",
+  ];
+
+  // Check ETH balance for gas
+  const ethBalance = await provider.getBalance(relayerWallet.address);
+  const estimatedGas = ethers.parseEther("0.001"); // ~0.001 ETH for gas
+
+  console.log(`[Sepolia Bridge] Relayer ETH balance: ${ethers.formatEther(ethBalance)} ETH`);
+
+  if (VCN_SEPOLIA_ADDRESS === "0x0000000000000000000000000000000000000000") {
+    // VCN contract not deployed yet - simulate
+    console.warn("[Sepolia Bridge] VCN_SEPOLIA_ADDRESS not configured - simulating mint");
 
     await db.collection("bridgeExecutions").add({
       bridgeId: bridge.intentHash,
@@ -2407,33 +2411,49 @@ async function executeSepoliaBridgeTransfer(bridge) {
       srcChainId: bridge.srcChainId,
       dstChainId: bridge.dstChainId,
       vcnAmount: bridge.amount,
-      ethAmount: ethAmountWei.toString(),
       recipient: bridge.recipient,
       executedAt: admin.firestore.Timestamp.now(),
-      note: `Simulated - need ${ethers.formatEther(totalRequired)} ETH, have ${ethers.formatEther(balance)} ETH`,
+      note: "Simulated - VCN contract not deployed on Sepolia yet",
     });
 
     return `SIMULATED_${Date.now()}`;
   }
 
-  // Execute real ETH transfer (equivalent value to VCN)
-  const tx = await relayerWallet.sendTransaction({
-    to: bridge.recipient,
-    value: ethAmountWei,
-    gasLimit: 21000,
+  if (ethBalance < estimatedGas) {
+    console.warn("[Sepolia Bridge] Insufficient ETH for gas - simulating mint");
+
+    await db.collection("bridgeExecutions").add({
+      bridgeId: bridge.intentHash,
+      type: "SIMULATED",
+      srcChainId: bridge.srcChainId,
+      dstChainId: bridge.dstChainId,
+      vcnAmount: bridge.amount,
+      recipient: bridge.recipient,
+      executedAt: admin.firestore.Timestamp.now(),
+      note: `Simulated - need ETH for gas, have ${ethers.formatEther(ethBalance)} ETH`,
+    });
+
+    return `SIMULATED_${Date.now()}`;
+  }
+
+  // Execute VCN mint on Sepolia
+  const vcnContract = new ethers.Contract(VCN_SEPOLIA_ADDRESS, VCN_TOKEN_ABI, relayerWallet);
+  const bridgeId = ethers.keccak256(ethers.toUtf8Bytes(bridge.intentHash || `bridge_${Date.now()}`));
+
+  const tx = await vcnContract.bridgeMint(bridge.recipient, vcnAmountWei, bridgeId, {
+    gasLimit: 100000,
   });
 
-  console.log(`[Sepolia Bridge] TX sent: ${tx.hash}`);
+  console.log(`[Sepolia Bridge] VCN mint TX sent: ${tx.hash}`);
   const receipt = await tx.wait();
-  console.log(`[Sepolia Bridge] TX confirmed in block ${receipt.blockNumber}`);
+  console.log(`[Sepolia Bridge] VCN mint confirmed in block ${receipt.blockNumber}`);
 
   await db.collection("bridgeExecutions").add({
     bridgeId: bridge.intentHash,
-    type: "REAL",
+    type: "VCN_MINT",
     srcChainId: bridge.srcChainId,
     dstChainId: bridge.dstChainId,
     vcnAmount: bridge.amount,
-    ethAmount: ethAmountWei.toString(),
     recipient: bridge.recipient,
     txHash: tx.hash,
     blockNumber: receipt.blockNumber,
@@ -2443,8 +2463,10 @@ async function executeSepoliaBridgeTransfer(bridge) {
   return tx.hash;
 }
 
+
 /**
- * Execute bridge transfer on Vision Chain (reverse bridge)
+ * Execute bridge transfer on Vision Chain (reverse bridge) - Native VCN Edition
+ * Since VCN is now native, we unlock VCN by calling the bridge contract
  * @param {object} bridge - Bridge transaction data
  * @return {Promise<string>} Destination transaction hash
  */
@@ -2452,31 +2474,60 @@ async function executeVisionChainBridgeTransfer(bridge) {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-  const vcnContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, adminWallet);
   const amountWei = BigInt(bridge.amount);
 
-  console.log(`[Vision Bridge] Transferring ${ethers.formatEther(amountWei)} VCN to ${bridge.recipient}`);
+  console.log(`[Vision Bridge] Unlocking ${ethers.formatEther(amountWei)} native VCN to ${bridge.recipient}`);
 
-  const tx = await vcnContract.transfer(bridge.recipient, amountWei, { gasLimit: 100000 });
+  // For Native VCN, we simply send VCN directly (no ERC-20 contract needed)
+  // The Bridge contract holds locked VCN and releases it
+  const VISION_BRIDGE_ADDRESS = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
-  console.log(`[Vision Bridge] TX sent: ${tx.hash}`);
-  const receipt = await tx.wait();
-  console.log(`[Vision Bridge] TX confirmed in block ${receipt.blockNumber}`);
+  // Check if we should use bridge contract or direct transfer (for small amounts/testing)
+  const adminBalance = await provider.getBalance(adminWallet.address);
 
-  await db.collection("bridgeExecutions").add({
-    bridgeId: bridge.intentHash,
-    type: "REAL",
-    srcChainId: bridge.srcChainId,
-    dstChainId: bridge.dstChainId,
-    amount: bridge.amount,
-    recipient: bridge.recipient,
-    txHash: tx.hash,
-    blockNumber: receipt.blockNumber,
-    executedAt: admin.firestore.Timestamp.now(),
-  });
+  if (adminBalance >= amountWei + ethers.parseEther("0.01")) {
+    // Direct transfer from admin wallet (simpler for now)
+    const tx = await adminWallet.sendTransaction({
+      to: bridge.recipient,
+      value: amountWei,
+      gasLimit: 21000,
+    });
 
-  return tx.hash;
+    console.log(`[Vision Bridge] TX sent: ${tx.hash}`);
+    const receipt = await tx.wait();
+    console.log(`[Vision Bridge] TX confirmed in block ${receipt.blockNumber}`);
+
+    await db.collection("bridgeExecutions").add({
+      bridgeId: bridge.intentHash,
+      type: "NATIVE_VCN",
+      srcChainId: bridge.srcChainId,
+      dstChainId: bridge.dstChainId,
+      amount: bridge.amount,
+      recipient: bridge.recipient,
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+      executedAt: admin.firestore.Timestamp.now(),
+    });
+
+    return tx.hash;
+  } else {
+    console.warn("[Vision Bridge] Insufficient admin balance - simulating transfer");
+
+    await db.collection("bridgeExecutions").add({
+      bridgeId: bridge.intentHash,
+      type: "SIMULATED",
+      srcChainId: bridge.srcChainId,
+      dstChainId: bridge.dstChainId,
+      amount: bridge.amount,
+      recipient: bridge.recipient,
+      executedAt: admin.firestore.Timestamp.now(),
+      note: "Simulated - admin wallet needs funding",
+    });
+
+    return `SIMULATED_${Date.now()}`;
+  }
 }
+
 
 /**
  * Get user email from wallet address
@@ -2614,6 +2665,369 @@ exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public", secret
     });
   } catch (err) {
     console.error("[Bridge Relayer] Manual trigger error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// SECURE BRIDGE RELAYER (Phase 1 - Optimistic Security Model)
+// ============================================================
+
+// Secure Bridge Contract Addresses (Vision Chain) - Phase 1 Security
+const SECURE_INTENT_COMMITMENT = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+const SECURE_MESSAGE_INBOX = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318";
+const SECURE_VISION_BRIDGE = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
+const VCN_TOKEN_SEPOLIA = "0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f";
+
+// MessageInbox ABI
+const MESSAGE_INBOX_ABI = [
+  "function submitPending(bytes32 intentHash, address sender, address recipient, uint256 amount, uint256 srcChainId, uint256 nonce) external returns (bytes32)",
+  "function finalize(bytes32 messageId) external returns (bool)",
+  "function canFinalize(bytes32 messageId) view returns (bool)",
+  "function getMessage(bytes32 messageId) view returns (tuple(bytes32 intentHash, address sender, address recipient, uint256 amount, uint256 srcChainId, uint256 dstChainId, uint256 nonce, uint256 submittedAt, uint256 challengePeriodEnd, uint8 status, address challenger, string challengeReason))"
+];
+
+// VCN Token Sepolia ABI
+const VCN_TOKEN_SEPOLIA_ABI = [
+  "function bridgeMint(address to, uint256 amount, bytes32 bridgeId) external",
+  "function balanceOf(address account) view returns (uint256)"
+];
+
+/**
+ * Secure Bridge Relayer - Submits VCN lock events to destination chain as PENDING
+ * Then finalizes after challenge period
+ * 
+ * Flow:
+ * 1. Watch for VCNLocked events on Vision Chain
+ * 2. Submit as PENDING on destination MessageInbox
+ * 3. Wait for challenge period
+ * 4. Finalize and mint on destination
+ */
+exports.secureBridgeRelayer = functions.pubsub
+  .schedule("every 2 minutes")
+  .onRun(async () => {
+    console.log("[Secure Bridge] Starting optimistic bridge relayer...");
+
+    try {
+      // 1. Find pending secure bridge transactions
+      const pendingBridges = await db.collection("transactions")
+        .where("type", "==", "Bridge")
+        .where("bridgeStatus", "in", ["PENDING", "SUBMITTED"])
+        .orderBy("timestamp", "asc")
+        .limit(10)
+        .get();
+
+      console.log(`[Secure Bridge] Found ${pendingBridges.size} bridges to process`);
+
+      for (const docSnap of pendingBridges.docs) {
+        const txData = docSnap.data();
+        const txId = docSnap.id;
+
+        try {
+          const currentStatus = txData.bridgeStatus;
+          const challengeEndTime = txData.challengeEndTime || 0;
+
+          // PENDING -> Submit to MessageInbox as PENDING
+          if (currentStatus === "PENDING") {
+            console.log(`[Secure Bridge] Submitting ${txId} to MessageInbox...`);
+
+            const messageId = await submitToMessageInbox(txData);
+
+            await docSnap.ref.update({
+              bridgeStatus: "SUBMITTED",
+              messageId: messageId,
+              submittedAt: admin.firestore.Timestamp.now()
+            });
+
+            console.log(`[Secure Bridge] ${txId} submitted. MessageID: ${messageId}`);
+          }
+
+          // SUBMITTED -> Check if challenge period ended, then finalize
+          else if (currentStatus === "SUBMITTED" && Date.now() >= challengeEndTime) {
+            console.log(`[Secure Bridge] Finalizing ${txId}...`);
+
+            const messageId = txData.messageId;
+            const destTxHash = await finalizeAndMint(txData, messageId);
+
+            await docSnap.ref.update({
+              bridgeStatus: "COMPLETED",
+              destinationTxHash: destTxHash,
+              completedAt: admin.firestore.Timestamp.now()
+            });
+
+            console.log(`[Secure Bridge] ${txId} completed. Dest TX: ${destTxHash}`);
+
+            // Send notification
+            try {
+              const userEmail = await getBridgeUserEmail(txData.from_addr);
+              if (userEmail) {
+                await sendBridgeCompleteEmail(userEmail, {
+                  amount: ethers.parseEther(txData.value || "0").toString(),
+                  recipient: txData.from_addr,
+                  dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID
+                }, destTxHash);
+              }
+            } catch (notifyErr) {
+              console.warn("[Secure Bridge] Notification failed:", notifyErr.message);
+            }
+          }
+        } catch (bridgeErr) {
+          console.error(`[Secure Bridge] Error processing ${txId}:`, bridgeErr);
+
+          await docSnap.ref.update({
+            bridgeStatus: "FAILED",
+            errorMessage: bridgeErr.message,
+            failedAt: admin.firestore.Timestamp.now()
+          });
+        }
+      }
+
+      console.log("[Secure Bridge] Relayer run completed");
+    } catch (err) {
+      console.error("[Secure Bridge] Critical error:", err);
+    }
+  });
+
+/**
+ * Submit lock event to destination chain's MessageInbox
+ */
+async function submitToMessageInbox(txData) {
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+  const messageInbox = new ethers.Contract(SECURE_MESSAGE_INBOX, MESSAGE_INBOX_ABI, wallet);
+
+  const intentHash = txData.intentHash || ethers.keccak256(ethers.toUtf8Bytes(txData.hash));
+  const sender = txData.from_addr;
+  const recipient = txData.from_addr; // Same as sender for now
+  const amount = ethers.parseEther(txData.value || "0");
+  const srcChainId = txData.metadata?.srcChainId || VISION_CHAIN_ID;
+  const nonce = Date.now(); // Simple nonce for now
+
+  console.log(`[Secure Bridge] Submitting: sender=${sender}, amount=${ethers.formatEther(amount)} VCN`);
+
+  const tx = await messageInbox.submitPending(intentHash, sender, recipient, amount, srcChainId, nonce);
+  const receipt = await tx.wait();
+
+  // Extract messageId from event
+  const messageSubmittedTopic = ethers.id("MessageSubmitted(bytes32,bytes32,address,address,uint256,uint256)");
+  const log = receipt.logs.find(l => l.topics[0] === messageSubmittedTopic);
+
+  let messageId = ethers.ZeroHash;
+  if (log) {
+    messageId = log.topics[1];
+  }
+
+  return messageId;
+}
+
+/**
+ * Finalize a pending message and mint tokens on destination
+ */
+async function finalizeAndMint(txData, messageId) {
+  const dstChainId = txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID;
+
+  if (dstChainId === SEPOLIA_CHAIN_ID) {
+    // Finalize on Vision Chain's MessageInbox, then mint on Sepolia
+    const visionProvider = new ethers.JsonRpcProvider(RPC_URL);
+    const visionWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, visionProvider);
+
+    const messageInbox = new ethers.Contract(SECURE_MESSAGE_INBOX, MESSAGE_INBOX_ABI, visionWallet);
+
+    // Check if can finalize
+    const canFinalize = await messageInbox.canFinalize(messageId);
+    if (!canFinalize) {
+      throw new Error("Cannot finalize yet - challenge period not ended or already finalized");
+    }
+
+    // Finalize
+    const finalizeTx = await messageInbox.finalize(messageId);
+    await finalizeTx.wait();
+    console.log("[Secure Bridge] Finalized on Vision Chain");
+
+    // Now mint on Sepolia
+    if (!SEPOLIA_RELAYER_PK) {
+      throw new Error("SEPOLIA_RELAYER_PK not configured");
+    }
+
+    const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
+    const sepoliaWallet = new ethers.Wallet(SEPOLIA_RELAYER_PK, sepoliaProvider);
+
+    const vcnToken = new ethers.Contract(VCN_TOKEN_SEPOLIA, VCN_TOKEN_SEPOLIA_ABI, sepoliaWallet);
+
+    const amount = ethers.parseEther(txData.value || "0");
+    const recipient = txData.from_addr;
+    const bridgeId = messageId;
+
+    const mintTx = await vcnToken.bridgeMint(recipient, amount, bridgeId, { gasLimit: 100000 });
+    const mintReceipt = await mintTx.wait();
+
+    console.log(`[Secure Bridge] Minted ${ethers.formatEther(amount)} VCN on Sepolia. TX: ${mintTx.hash}`);
+
+    // Record execution
+    await db.collection("bridgeExecutions").add({
+      bridgeId: txData.hash,
+      messageId: messageId,
+      type: "SECURE_BRIDGE_MINT",
+      srcChainId: VISION_CHAIN_ID,
+      dstChainId: SEPOLIA_CHAIN_ID,
+      amount: amount.toString(),
+      recipient: recipient,
+      finalizeTxHash: finalizeTx.hash,
+      mintTxHash: mintTx.hash,
+      executedAt: admin.firestore.Timestamp.now()
+    });
+
+    return mintTx.hash;
+  } else {
+    // Reverse bridge: Finalize on Sepolia, unlock on Vision Chain
+    // This would be for burning VCN on Sepolia → unlocking on Vision Chain
+    throw new Error("Reverse bridge (Sepolia → Vision) not yet implemented");
+  }
+}
+
+/**
+ * Manual trigger for secure bridge relayer (for testing)
+ */
+exports.triggerSecureBridgeRelayer = functions.https.onRequest(async (req, res) => {
+  // CORS
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  console.log("[Secure Bridge] Manual trigger initiated");
+
+  try {
+    const { action, txHash, messageId } = req.body || {};
+
+    if (action === "status") {
+      // Get status of a specific bridge
+      const docSnap = await db.collection("transactions").doc(txHash).get();
+      if (!docSnap.exists) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+      return res.status(200).json({ success: true, data: docSnap.data() });
+    }
+
+    if (action === "force_finalize" && messageId) {
+      // Force finalize a specific message
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+      const messageInbox = new ethers.Contract(SECURE_MESSAGE_INBOX, MESSAGE_INBOX_ABI, wallet);
+
+      const msg = await messageInbox.getMessage(messageId);
+      const canFinalize = await messageInbox.canFinalize(messageId);
+
+      return res.status(200).json({
+        success: true,
+        messageId,
+        canFinalize,
+        message: {
+          intentHash: msg.intentHash,
+          sender: msg.sender,
+          recipient: msg.recipient,
+          amount: msg.amount.toString(),
+          status: msg.status,
+          challengePeriodEnd: new Date(Number(msg.challengePeriodEnd) * 1000).toISOString()
+        }
+      });
+    }
+
+    // Default: run the relayer
+    const pendingBridges = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .where("bridgeStatus", "in", ["PENDING", "SUBMITTED"])
+      .limit(10)
+      .get();
+
+    const results = [];
+
+    for (const docSnap of pendingBridges.docs) {
+      const txData = docSnap.data();
+      results.push({
+        id: docSnap.id,
+        status: txData.bridgeStatus,
+        value: txData.value,
+        challengeEndTime: txData.challengeEndTime,
+        isReady: Date.now() >= (txData.challengeEndTime || 0)
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Found ${results.length} pending bridges`,
+      bridges: results
+    });
+  } catch (err) {
+    console.error("[Secure Bridge] Manual trigger error:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Get bridge status and challenge period info
+ */
+exports.getBridgeStatus = functions.https.onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  const { txHash, messageId } = req.query;
+
+  try {
+    if (txHash) {
+      const docSnap = await db.collection("transactions").doc(txHash).get();
+      if (!docSnap.exists) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+
+      const data = docSnap.data();
+      const challengeEndTime = data.challengeEndTime || 0;
+      const now = Date.now();
+
+      return res.status(200).json({
+        success: true,
+        txHash,
+        status: data.bridgeStatus,
+        value: data.value,
+        challengePeriod: {
+          endTime: challengeEndTime,
+          endTimeISO: new Date(challengeEndTime).toISOString(),
+          remainingMs: Math.max(0, challengeEndTime - now),
+          remainingMinutes: Math.max(0, Math.ceil((challengeEndTime - now) / 60000)),
+          isEnded: now >= challengeEndTime
+        },
+        messageId: data.messageId,
+        destinationTxHash: data.destinationTxHash
+      });
+    }
+
+    if (messageId) {
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const messageInbox = new ethers.Contract(SECURE_MESSAGE_INBOX, MESSAGE_INBOX_ABI, provider);
+
+      const msg = await messageInbox.getMessage(messageId);
+      const canFinalize = await messageInbox.canFinalize(messageId);
+
+      return res.status(200).json({
+        success: true,
+        messageId,
+        canFinalize,
+        onChainData: {
+          intentHash: msg.intentHash,
+          sender: msg.sender,
+          recipient: msg.recipient,
+          amount: msg.amount.toString(),
+          amountFormatted: ethers.formatEther(msg.amount),
+          status: ["NONE", "PENDING", "CHALLENGED", "FINALIZED", "REVERTED", "EXPIRED"][msg.status] || "UNKNOWN",
+          challengePeriodEnd: Number(msg.challengePeriodEnd),
+          challengePeriodEndISO: new Date(Number(msg.challengePeriodEnd) * 1000).toISOString()
+        }
+      });
+    }
+
+    return res.status(400).json({ error: "Provide either txHash or messageId" });
+  } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
