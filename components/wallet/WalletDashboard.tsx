@@ -794,11 +794,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 <Presence>
                     <Show when={isMobileHistoryOpen()}>
                         <Motion.div
-                            initial={{ x: '-100%', opacity: 0.5 }}
+                            initial={{ x: '100%', opacity: 0.5 }}
                             animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: '-100%', opacity: 0.5 }}
+                            exit={{ x: '100%', opacity: 0.5 }}
                             transition={{ duration: 0.3, easing: [0.32, 0.72, 0, 1] }}
-                            class="fixed inset-y-0 left-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-r border-white/10 shadow-2xl z-[60] flex flex-col md:hidden"
+                            class="fixed inset-y-0 right-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-l border-white/10 shadow-2xl z-[60] flex flex-col md:hidden"
                         >
                             {/* Header */}
                             <div class="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0a0b]">
@@ -876,11 +876,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     />
                 </Show>
 
-                {/* Mobile Chat History Floating Button */}
+                {/* Mobile Chat History Floating Button - Top Right */}
                 <Show when={isMobile() && !isMobileHistoryOpen()}>
                     <button
                         onClick={() => setIsMobileHistoryOpen(true)}
-                        class="fixed top-20 left-4 z-40 w-10 h-10 bg-[#1a1a1c] border border-white/10 rounded-full flex items-center justify-center shadow-lg hover:bg-white/10 transition-all"
+                        class="fixed top-20 right-4 z-40 w-10 h-10 bg-[#1a1a1c] border border-white/10 rounded-full flex items-center justify-center shadow-lg hover:bg-white/10 transition-all"
                         title="Chat History"
                     >
                         <History class="w-4 h-4 text-purple-400" />
