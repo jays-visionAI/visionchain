@@ -2380,13 +2380,12 @@ const Wallet = (): JSX.Element => {
 
             const resultTxHash = lockTx.hash;
 
-            // Success message with Explorer link
+            // Success message - NO link until bridge is complete
             const chainDisplay = bridge.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridge.destinationChain;
-            const visionScanLink = `https://www.visionchain.co/visionscan/tx/${resultTxHash}`;
 
             const successMsg = lastLocale() === 'ko'
-                ? `브릿지 요청이 성공적으로 제출되었습니다!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[VisionScan에서 보기](${visionScanLink})\n\n약 10-30분 후 목적지 체인에서 토큰을 수령할 수 있습니다.`
-                : `Bridge request submitted successfully!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[View on VisionScan](${visionScanLink})\n\nTokens will arrive on the destination chain in approximately 10-30 minutes.`;
+                ? `브릿지 요청이 성공적으로 제출되었습니다!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n약 2분 후 목적지 체인에서 토큰을 수령할 수 있습니다.\n\n에이전트 데스크에서 진행 상태를 확인하세요.`
+                : `Bridge request submitted successfully!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\nTokens will arrive on the destination chain in approximately 2 minutes.\n\nCheck progress in Agent Desk.`;
 
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -2400,7 +2399,7 @@ const Wallet = (): JSX.Element => {
                 await createNotification(userProfile().email, {
                     type: 'bridge_started',
                     title: 'Bridge Request Started',
-                    content: `${bridge.amount} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
+                    content: `${bridge.amount} VCN → ${chainDisplay} bridge started. Expected arrival in ~2 minutes.`,
                     data: {
                         amount: bridge.amount,
                         destinationChain: bridge.destinationChain,

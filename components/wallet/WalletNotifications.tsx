@@ -96,6 +96,8 @@ export type NotificationType =
     | 'prize_winner'
     | 'ranking_update'
     // Bridge
+    | 'bridge_started'
+    | 'bridge_completed'
     | 'bridge_finalized'
     | 'bridge_pending'
     | 'challenge_raised'
@@ -451,6 +453,10 @@ export function WalletNotifications() {
                 return { icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Ranking' };
 
             // Bridge
+            case 'bridge_started':
+                return { icon: Repeat, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Bridge' };
+            case 'bridge_completed':
+                return { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Complete' };
             case 'bridge_finalized':
                 return { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Bridge' };
             case 'bridge_pending':

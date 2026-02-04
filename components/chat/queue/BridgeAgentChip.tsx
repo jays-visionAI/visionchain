@@ -23,7 +23,7 @@ interface BridgeTransaction {
     recipient: string;
     intentHash?: string;
     txHash: string;
-    status: 'COMMITTED' | 'PROCESSING' | 'COMPLETED' | 'FINALIZED' | 'FAILED';
+    status: 'PENDING' | 'SUBMITTED' | 'COMMITTED' | 'PROCESSING' | 'COMPLETED' | 'FINALIZED' | 'FAILED';
     createdAt: any;
     completedAt?: any;
 }
@@ -129,19 +129,22 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             });
 
             // 2. Subscribe to transactions collection (frontend-created bridges)
+            // Note: Using simpler query to avoid index requirement
             const txRef = collection(db, 'transactions');
             const q2 = query(
                 txRef,
                 where('from_addr', '==', normalizedAddr),
                 where('type', '==', 'Bridge'),
-                orderBy('timestamp', 'desc'),
-                limit(5)
+                limit(10) // Get more, will sort client-side
             );
 
             unsubscribe2 = onSnapshot(q2, (snapshot) => {
                 txList = snapshot.docs.map(doc => {
                     const data = doc.data();
+                    console.log('[BridgeAgentChip] Found bridge tx:', doc.id, 'status:', data.bridgeStatus);
                     // Map transactions format to BridgeTransaction format
+                    // Keep original status names for display
+                    const status = data.bridgeStatus || 'PENDING';
                     return {
                         id: doc.id,
                         user: data.from_addr,
@@ -150,14 +153,17 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                         amount: String(parseFloat(data.value || '0') * 1e18),
                         recipient: data.from_addr,
                         txHash: data.hash,
-                        // Map bridgeStatus to status
-                        status: data.bridgeStatus === 'PENDING' ? 'COMMITTED' :
-                            data.bridgeStatus === 'PROCESSING' ? 'PROCESSING' :
-                                data.bridgeStatus === 'COMPLETED' ? 'COMPLETED' :
-                                    data.bridgeStatus === 'FAILED' ? 'FAILED' : 'COMMITTED',
+                        intentHash: data.intentHash,
+                        status: status as BridgeTransaction['status'],
                         createdAt: data.timestamp ? { toDate: () => new Date(data.timestamp) } : null,
                         completedAt: data.completedAt
                     } as BridgeTransaction;
+                });
+                // Sort client-side by timestamp (newest first)
+                txList.sort((a, b) => {
+                    const timeA = a.createdAt?.toDate?.()?.getTime() || 0;
+                    const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
+                    return timeB - timeA;
                 });
                 console.log('[BridgeAgentChip] transactions bridges:', txList.length);
                 updateCombinedBridges();
