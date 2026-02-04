@@ -1012,7 +1012,7 @@ const Wallet = (): JSX.Element => {
                         const result = await contractService.scheduleTimeLockGasless(recipient, amount, lockDelaySeconds(), auth.user()?.email || undefined);
                         console.log("[Paymaster] Time-lock Scheduled:", result);
 
-                        timeLockTxHash = result.txHash;
+                        timeLockTxHash = resultTxHash;
                         timeLockScheduleId = result.scheduleId;
                         timeLockSuccess = true;
 
@@ -1115,8 +1115,8 @@ const Wallet = (): JSX.Element => {
 
                         // Extract hash from backend response if available, or just mark success
                         // The Smart Relayer returns status: 'success'
-                        if (result.txHashes) {
-                            setLastTxHash(result.txHashes.transfer || result.txHashes.permit);
+                        if (resultTxHashes) {
+                            setLastTxHash(resultTxHashes.transfer || resultTxHashes.permit);
                         }
                     } catch (error: any) {
                         console.warn("Paymaster failed, attempting standard transfer...", error);
@@ -1296,7 +1296,7 @@ const Wallet = (): JSX.Element => {
                             if (symbol === 'VCN') {
                                 try {
                                     const result = await contractService.sendGaslessTokens(recipientAddr, tx.amount);
-                                    receipt = { hash: result.txHashes?.transfer || result.txHashes?.permit || result.txHash || '0x...' };
+                                    receipt = { hash: resultTxHashes?.transfer || resultTxHashes?.permit || resultTxHash || '0x...' };
                                     console.log(`[Batch] Gasless transfer ${i + 1}/${transactions.length} successful:`, receipt.hash);
                                 } catch (gcError: any) {
                                     console.warn(`[Batch] Gasless failed for tx ${i + 1}, trying standard:`, gcError.message);
@@ -2315,105 +2315,74 @@ const Wallet = (): JSX.Element => {
             // Connect internal wallet
             await contractService.connectInternalWallet(privateKey);
 
-            // Vision Chain IntentCommitment contract
-            const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
+            // Vision Chain - Secure Bridge (Phase 1) Contracts
+            const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
+            const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
             const VISION_CHAIN_ID = 1337;
             const SEPOLIA_CHAIN_ID = 11155111;
-            // Use Firebase project ID to determine Cloud Functions URL
-            const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
-            const PAYMASTER_API = `https://us-central1-${firebaseProjectId}.cloudfunctions.net`;
 
             // Determine destination chain ID
-            const dstChainId = bridge.destinationChain.toUpperCase() === 'ETHEREUM' || bridge.destinationChain.toUpperCase() === 'SEPOLIA'
-                ? SEPOLIA_CHAIN_ID
-                : 137;
+            const chainUpper = bridge.destinationChain.toUpperCase();
+            const ethereumKeywords = ['ETHEREUM', 'ETH', 'SEPOLIA', 'ERC-20', 'ERC20', '이더리움', '이더', '세폴리아'];
+            const dstChainId = ethereumKeywords.some(kw => chainUpper.includes(kw)) ? SEPOLIA_CHAIN_ID : 137;
 
             // Create provider and signer from internal wallet (use HTTPS RPC proxy to avoid mixed content)
             const HTTPS_RPC_PROXY = 'https://api.visionchain.co/rpc-proxy';
             const provider = new ethers.JsonRpcProvider(HTTPS_RPC_PROXY);
             const internalSigner = new ethers.Wallet(privateKey, provider);
 
-            // ABI for IntentCommitment
-            const INTENT_ABI = [
-                "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
-                "function getNextNonce(address user) view returns (uint256)"
+            const amountWei = ethers.parseEther(bridge.amount);
+
+            // === STEP 1: Commit Intent on-chain ===
+            console.log('[Bridge] Step 1: Committing intent on-chain...');
+
+            const INTENT_COMMITMENT_ABI = [
+                "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
+                "function userNonces(address) view returns (uint256)"
             ];
 
-            const intentContract = new ethers.Contract(VISION_INTENT_COMMITMENT, INTENT_ABI, provider);
+            const intentContract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, internalSigner);
+            const commitTx = await intentContract.commitIntent(userAddr, amountWei, dstChainId);
+            console.log('[Bridge] Intent commit tx:', commitTx.hash);
+            const commitReceipt = await commitTx.wait();
 
-            // Get next nonce
-            const nonce = await intentContract.getNextNonce(userAddr);
-            const amountWei = ethers.parseEther(bridge.amount);
-            const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
+            // Extract intentHash from event logs
+            const intentCommittedTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
+            const intentLog = commitReceipt.logs.find((log: any) => log.topics[0] === intentCommittedTopic);
 
-            // Build intent struct
-            const intent = {
-                user: userAddr,
-                srcChainId: BigInt(VISION_CHAIN_ID),
-                dstChainId: BigInt(dstChainId),
-                token: ethers.ZeroAddress, // Native VCN
-                amount: amountWei,
-                recipient: userAddr, // Same address on destination
-                nonce: nonce,
-                expiry: BigInt(expiry)
-            };
-
-            // EIP-712 Domain for Bridge Intent
-            const domain = {
-                name: 'VisionBridge',
-                version: '1',
-                chainId: VISION_CHAIN_ID,
-                verifyingContract: VISION_INTENT_COMMITMENT
-            };
-
-            // EIP-712 Types
-            const types = {
-                BridgeIntent: [
-                    { name: 'user', type: 'address' },
-                    { name: 'srcChainId', type: 'uint256' },
-                    { name: 'dstChainId', type: 'uint256' },
-                    { name: 'token', type: 'address' },
-                    { name: 'amount', type: 'uint256' },
-                    { name: 'recipient', type: 'address' },
-                    { name: 'nonce', type: 'uint256' },
-                    { name: 'expiry', type: 'uint256' }
-                ]
-            };
-
-            // Sign with EIP-712 using internal wallet
-            console.log('[Bridge] Signing intent with internal wallet...');
-            const intentSignature = await internalSigner.signTypedData(domain, types, intent);
-
-
-            // Submit to Paymaster API for gas sponsorship
-            console.log('[Bridge] Submitting to Paymaster API...');
-            const response = await fetch(`${PAYMASTER_API}/bridgeWithPaymaster`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user: userAddr,
-                    srcChainId: VISION_CHAIN_ID,
-                    dstChainId: dstChainId,
-                    token: ethers.ZeroAddress,
-                    amount: amountWei.toString(),
-                    recipient: userAddr,
-                    nonce: nonce.toString(),
-                    expiry: expiry,
-                    intentSignature: intentSignature
-                })
-            });
-
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(`Paymaster Failed: ${error.error || response.statusText}`);
+            let intentHash: string;
+            if (intentLog) {
+                intentHash = intentLog.topics[1];
+            } else {
+                // Fallback: compute hash manually
+                const nonce = await intentContract.userNonces(userAddr);
+                intentHash = ethers.keccak256(ethers.solidityPacked(
+                    ['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
+                    [userAddr, userAddr, amountWei, nonce - 1n, 0, dstChainId]
+                ));
             }
+            console.log('[Bridge] Intent hash:', intentHash);
 
-            const result = await response.json();
-            console.log(`[Bridge] Tx submitted via Paymaster: ${result.txHash}`);
+            // === STEP 2: Lock VCN with intentHash ===
+            console.log('[Bridge] Step 2: Locking VCN...');
+
+            const BRIDGE_SECURE_ABI = [
+                "function lockVCN(bytes32 intentHash, address recipient, uint256 destChainId) payable"
+            ];
+
+            const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, BRIDGE_SECURE_ABI, internalSigner);
+            const lockTx = await bridgeContract.lockVCN(intentHash, userAddr, dstChainId, {
+                value: amountWei // Send native VCN
+            });
+            console.log('[Bridge] Lock tx:', lockTx.hash);
+            const lockReceipt = await lockTx.wait();
+            console.log('[Bridge] Lock confirmed in block:', lockReceipt.blockNumber);
+
+            const resultTxHash = lockTx.hash;
 
             // Success message with Explorer link
             const chainDisplay = bridge.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridge.destinationChain;
-            const visionScanLink = `https://www.visionchain.co/visionscan/tx/${result.txHash}`;
+            const visionScanLink = `https://www.visionchain.co/visionscan/tx/${resultTxHash}`;
 
             const successMsg = lastLocale() === 'ko'
                 ? `브릿지 요청이 성공적으로 제출되었습니다!\n\n**${bridge.amount} VCN** → ${chainDisplay}\n\n**Vision Chain TX:**\n[VisionScan에서 보기](${visionScanLink})\n\n약 10-30분 후 목적지 체인에서 토큰을 수령할 수 있습니다.`
@@ -2422,7 +2391,7 @@ const Wallet = (): JSX.Element => {
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: successMsg,
-                bridgeTxHash: result.txHash,
+                bridgeTxHash: resultTxHash,
                 bridgeDestination: bridge.destinationChain
             }]);
 
@@ -2435,7 +2404,7 @@ const Wallet = (): JSX.Element => {
                     data: {
                         amount: bridge.amount,
                         destinationChain: bridge.destinationChain,
-                        txHash: result.txHash,
+                        txHash: resultTxHash,
                         status: 'pending'
                     }
                 });
@@ -2446,9 +2415,9 @@ const Wallet = (): JSX.Element => {
             // Save Bridge Transaction to Firestore for History display
             try {
                 const db = getFirebaseDb();
-                const txRef = doc(db, 'transactions', result.txHash);
+                const txRef = doc(db, 'transactions', resultTxHash);
                 await setDoc(txRef, {
-                    hash: result.txHash,
+                    hash: resultTxHash,
                     from_addr: walletAddress()?.toLowerCase(),
                     to_addr: 'bridge:sepolia', // Special address for bridge
                     value: bridge.amount,

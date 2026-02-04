@@ -201,15 +201,15 @@ export class ActionResolverService {
         const { amount, token, destinationChain } = intent.params;
         if (!amount || !destinationChain) throw new Error("Missing Bridge params");
 
-        // Vision Chain IntentCommitment contract
-        const VISION_INTENT_COMMITMENT = '0x47c05BCCA7d57c87083EB4e586007530eE4539e9';
+        // Vision Chain - Secure Bridge (Phase 1) Contracts
+        const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
+        const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
 
         // Chain IDs
         const VISION_CHAIN_ID = 1337;
         const SEPOLIA_CHAIN_ID = 11155111;
 
         // Normalize destination chain name to Sepolia for all Ethereum-related keywords
-        // Since we're on testnet, Ethereum/ETH/ERC-20 all map to Sepolia
         const chainUpper = destinationChain.toUpperCase();
         const ethereumKeywords = [
             'ETHEREUM', 'ETH', 'SEPOLIA', 'ERC-20', 'ERC20', 'MAINNET',
@@ -220,59 +220,39 @@ export class ActionResolverService {
             ? SEPOLIA_CHAIN_ID
             : 137; // Polygon placeholder
 
-        // EIP-712 Domain for Vision Chain
-        const eip712Domain = {
-            name: 'VisionBridge',
-            version: '1',
-            chainId: VISION_CHAIN_ID,
-            verifyingContract: VISION_INTENT_COMMITMENT
-        };
-
-        // EIP-712 Types
-        const eip712Types = {
-            BridgeIntent: [
-                { name: 'user', type: 'address' },
-                { name: 'srcChainId', type: 'uint256' },
-                { name: 'dstChainId', type: 'uint256' },
-                { name: 'token', type: 'address' },
-                { name: 'amount', type: 'uint256' },
-                { name: 'recipient', type: 'address' },
-                { name: 'nonce', type: 'uint256' },
-                { name: 'expiry', type: 'uint256' }
-            ]
-        };
-
-        // Build intent data (nonce will be fetched on execution)
+        // Build bridge data for 2-step secure bridge
         const amountWei = ethers.parseEther(amount);
-        const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
 
-        // Intent data for signing
-        const intentData = {
-            user: userAddress,
-            srcChainId: VISION_CHAIN_ID,
-            dstChainId: dstChainId,
-            token: ethers.ZeroAddress, // Native VCN
-            amount: amountWei.toString(),
-            recipient: userAddress, // Same address on destination
-            expiry: expiry
-        };
+        // ABIs for secure bridge
+        const INTENT_COMMITMENT_ABI = [
+            "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
+            "function userNonces(address) view returns (uint256)"
+        ];
 
-        // ABI for commitIntent
-        const INTENT_ABI = [
-            "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
-            "function getNextNonce(address user) view returns (uint256)"
+        const BRIDGE_SECURE_ABI = [
+            "function lockVCN(bytes32 intentHash, address recipient, uint256 destChainId) payable"
         ];
 
         return {
             type: 'TRANSACTION',
             summary: `Bridge ${amount} VCN from Vision Chain to ${destinationChain}`,
             data: {
-                bridgeType: 'INTENT_COMMITMENT',
-                contractAddress: VISION_INTENT_COMMITMENT,
-                abi: INTENT_ABI,
-                intentData: intentData,
-                eip712Domain: eip712Domain,
-                eip712Types: eip712Types
+                bridgeType: 'SECURE_BRIDGE_V1',
+                step1: {
+                    contractAddress: INTENT_COMMITMENT_ADDRESS,
+                    abi: INTENT_COMMITMENT_ABI,
+                    method: 'commitIntent',
+                    args: [userAddress, amountWei.toString(), dstChainId]
+                },
+                step2: {
+                    contractAddress: VISION_BRIDGE_SECURE_ADDRESS,
+                    abi: BRIDGE_SECURE_ABI,
+                    method: 'lockVCN',
+                    value: amountWei.toString()
+                },
+                recipient: userAddress,
+                amount: amountWei.toString(),
+                dstChainId: dstChainId
             },
             visualization: {
                 type: 'BRIDGE',
