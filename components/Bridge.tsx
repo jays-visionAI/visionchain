@@ -309,9 +309,9 @@ const Bridge: Component<BridgeProps> = (props) => {
             return;
         }
 
-        // Contract minimum is 1 VCN (VisionBridgeSecure.sol: minLockAmount = 1 ether)
-        if (parseFloat(amountVal) < 1) {
-            setErrorMsg('Minimum bridge amount is 1 VCN');
+        // Contract minimum is 0.1 VCN (VisionBridgeSecure.sol: minLockAmount after setLimits)
+        if (parseFloat(amountVal) < 0.1) {
+            setErrorMsg('Minimum bridge amount is 0.1 VCN');
             return;
         }
 
@@ -648,7 +648,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
                                                 <span>Minimum Bridge</span>
-                                                <span class="text-gray-300">1 VCN</span>
+                                                <span class="text-gray-300">0.1 VCN</span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
                                                 <span>Estimated Arrival</span>
@@ -657,14 +657,14 @@ const Bridge: Component<BridgeProps> = (props) => {
 
                                             <button
                                                 onClick={handleBridge}
-                                                disabled={!amount() || isBridging() || parseFloat(amount()) > parseFloat(balance()) || parseFloat(amount()) < 1}
+                                                disabled={!amount() || isBridging() || parseFloat(amount()) > parseFloat(balance()) || parseFloat(amount()) < 0.1}
                                                 class="w-full py-5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:cursor-not-allowed"
                                             >
                                                 <ArrowRightLeft class="w-4 h-4" />
                                                 {parseFloat(amount() || '0') > parseFloat(balance())
                                                     ? 'INSUFFICIENT BALANCE'
-                                                    : parseFloat(amount() || '0') < 1 && parseFloat(amount() || '0') > 0
-                                                        ? 'MINIMUM 1 VCN'
+                                                    : parseFloat(amount() || '0') < 0.1 && parseFloat(amount() || '0') > 0
+                                                        ? 'MINIMUM 0.1 VCN'
                                                         : 'START BRIDGE TRANSFER'}
                                             </button>
                                         </div>
