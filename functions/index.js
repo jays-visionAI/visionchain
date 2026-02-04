@@ -2480,6 +2480,7 @@ async function executeVisionChainBridgeTransfer(bridge) {
 
   // For Native VCN, we simply send VCN directly (no ERC-20 contract needed)
   // The Bridge contract holds locked VCN and releases it
+  // eslint-disable-next-line no-unused-vars
   const VISION_BRIDGE_ADDRESS = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
   // Check if we should use bridge contract or direct transfer (for small amounts/testing)
@@ -2674,9 +2675,11 @@ exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public", secret
 // ============================================================
 
 // Secure Bridge Contract Addresses (Vision Chain) - Phase 1 Security
-const SECURE_INTENT_COMMITMENT = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+// eslint-disable-next-line no-unused-vars
+const _SECURE_INTENT_COMMITMENT = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
 const SECURE_MESSAGE_INBOX = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318";
-const SECURE_VISION_BRIDGE = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
+// eslint-disable-next-line no-unused-vars
+const _SECURE_VISION_BRIDGE = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
 const VCN_TOKEN_SEPOLIA = "0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f";
 
 // MessageInbox ABI
@@ -2684,112 +2687,110 @@ const MESSAGE_INBOX_ABI = [
   "function submitPending(bytes32 intentHash, address sender, address recipient, uint256 amount, uint256 srcChainId, uint256 nonce) external returns (bytes32)",
   "function finalize(bytes32 messageId) external returns (bool)",
   "function canFinalize(bytes32 messageId) view returns (bool)",
-  "function getMessage(bytes32 messageId) view returns (tuple(bytes32 intentHash, address sender, address recipient, uint256 amount, uint256 srcChainId, uint256 dstChainId, uint256 nonce, uint256 submittedAt, uint256 challengePeriodEnd, uint8 status, address challenger, string challengeReason))"
+  "function getMessage(bytes32 messageId) view returns (tuple(bytes32 intentHash, address sender, address recipient, uint256 amount, uint256 srcChainId, uint256 dstChainId, uint256 nonce, uint256 submittedAt, uint256 challengePeriodEnd, uint8 status, address challenger, string challengeReason))",
 ];
 
 // VCN Token Sepolia ABI
 const VCN_TOKEN_SEPOLIA_ABI = [
   "function bridgeMint(address to, uint256 amount, bytes32 bridgeId) external",
-  "function balanceOf(address account) view returns (uint256)"
+  "function balanceOf(address account) view returns (uint256)",
 ];
 
 /**
  * Secure Bridge Relayer - Submits VCN lock events to destination chain as PENDING
  * Then finalizes after challenge period
- * 
+ *
  * Flow:
  * 1. Watch for VCNLocked events on Vision Chain
  * 2. Submit as PENDING on destination MessageInbox
  * 3. Wait for challenge period
  * 4. Finalize and mint on destination
  */
-exports.secureBridgeRelayer = functions.pubsub
-  .schedule("every 2 minutes")
-  .onRun(async () => {
-    console.log("[Secure Bridge] Starting optimistic bridge relayer...");
+exports.secureBridgeRelayer = onSchedule("every 2 minutes", async () => {
+  console.log("[Secure Bridge] Starting optimistic bridge relayer...");
 
-    try {
-      // 1. Find pending secure bridge transactions
-      const pendingBridges = await db.collection("transactions")
-        .where("type", "==", "Bridge")
-        .where("bridgeStatus", "in", ["PENDING", "SUBMITTED"])
-        .orderBy("timestamp", "asc")
-        .limit(10)
-        .get();
+  try {
+    // 1. Find pending secure bridge transactions
+    const pendingBridges = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .where("bridgeStatus", "in", ["PENDING", "SUBMITTED"])
+      .orderBy("timestamp", "asc")
+      .limit(10)
+      .get();
 
-      console.log(`[Secure Bridge] Found ${pendingBridges.size} bridges to process`);
+    console.log(`[Secure Bridge] Found ${pendingBridges.size} bridges to process`);
 
-      for (const docSnap of pendingBridges.docs) {
-        const txData = docSnap.data();
-        const txId = docSnap.id;
+    for (const docSnap of pendingBridges.docs) {
+      const txData = docSnap.data();
+      const txId = docSnap.id;
 
-        try {
-          const currentStatus = txData.bridgeStatus;
-          const challengeEndTime = txData.challengeEndTime || 0;
+      try {
+        const currentStatus = txData.bridgeStatus;
+        const challengeEndTime = txData.challengeEndTime || 0;
 
-          // PENDING -> Submit to MessageInbox as PENDING
-          if (currentStatus === "PENDING") {
-            console.log(`[Secure Bridge] Submitting ${txId} to MessageInbox...`);
+        // PENDING -> Submit to MessageInbox as PENDING
+        if (currentStatus === "PENDING") {
+          console.log(`[Secure Bridge] Submitting ${txId} to MessageInbox...`);
 
-            const messageId = await submitToMessageInbox(txData);
-
-            await docSnap.ref.update({
-              bridgeStatus: "SUBMITTED",
-              messageId: messageId,
-              submittedAt: admin.firestore.Timestamp.now()
-            });
-
-            console.log(`[Secure Bridge] ${txId} submitted. MessageID: ${messageId}`);
-          }
-
-          // SUBMITTED -> Check if challenge period ended, then finalize
-          else if (currentStatus === "SUBMITTED" && Date.now() >= challengeEndTime) {
-            console.log(`[Secure Bridge] Finalizing ${txId}...`);
-
-            const messageId = txData.messageId;
-            const destTxHash = await finalizeAndMint(txData, messageId);
-
-            await docSnap.ref.update({
-              bridgeStatus: "COMPLETED",
-              destinationTxHash: destTxHash,
-              completedAt: admin.firestore.Timestamp.now()
-            });
-
-            console.log(`[Secure Bridge] ${txId} completed. Dest TX: ${destTxHash}`);
-
-            // Send notification
-            try {
-              const userEmail = await getBridgeUserEmail(txData.from_addr);
-              if (userEmail) {
-                await sendBridgeCompleteEmail(userEmail, {
-                  amount: ethers.parseEther(txData.value || "0").toString(),
-                  recipient: txData.from_addr,
-                  dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID
-                }, destTxHash);
-              }
-            } catch (notifyErr) {
-              console.warn("[Secure Bridge] Notification failed:", notifyErr.message);
-            }
-          }
-        } catch (bridgeErr) {
-          console.error(`[Secure Bridge] Error processing ${txId}:`, bridgeErr);
+          const messageId = await submitToMessageInbox(txData);
 
           await docSnap.ref.update({
-            bridgeStatus: "FAILED",
-            errorMessage: bridgeErr.message,
-            failedAt: admin.firestore.Timestamp.now()
+            bridgeStatus: "SUBMITTED",
+            messageId: messageId,
+            submittedAt: admin.firestore.Timestamp.now(),
           });
-        }
-      }
 
-      console.log("[Secure Bridge] Relayer run completed");
-    } catch (err) {
-      console.error("[Secure Bridge] Critical error:", err);
+          console.log(`[Secure Bridge] ${txId} submitted. MessageID: ${messageId}`);
+        } else if (currentStatus === "SUBMITTED" && Date.now() >= challengeEndTime) {
+          // SUBMITTED -> Check if challenge period ended, then finalize
+          console.log(`[Secure Bridge] Finalizing ${txId}...`);
+
+          const messageId = txData.messageId;
+          const destTxHash = await finalizeAndMint(txData, messageId);
+
+          await docSnap.ref.update({
+            bridgeStatus: "COMPLETED",
+            destinationTxHash: destTxHash,
+            completedAt: admin.firestore.Timestamp.now(),
+          });
+
+          console.log(`[Secure Bridge] ${txId} completed. Dest TX: ${destTxHash}`);
+
+          // Send notification
+          try {
+            const userEmail = await getBridgeUserEmail(txData.from_addr);
+            if (userEmail) {
+              await sendBridgeCompleteEmail(userEmail, {
+                amount: ethers.parseEther(txData.value || "0").toString(),
+                recipient: txData.from_addr,
+                dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID,
+              }, destTxHash);
+            }
+          } catch (notifyErr) {
+            console.warn("[Secure Bridge] Notification failed:", notifyErr.message);
+          }
+        }
+      } catch (bridgeErr) {
+        console.error(`[Secure Bridge] Error processing ${txId}:`, bridgeErr);
+
+        await docSnap.ref.update({
+          bridgeStatus: "FAILED",
+          errorMessage: bridgeErr.message,
+          failedAt: admin.firestore.Timestamp.now(),
+        });
+      }
     }
-  });
+
+    console.log("[Secure Bridge] Relayer run completed");
+  } catch (err) {
+    console.error("[Secure Bridge] Critical error:", err);
+  }
+});
 
 /**
  * Submit lock event to destination chain's MessageInbox
+ * @param {object} txData - Transaction data from Firestore
+ * @return {Promise<string>} Message ID
  */
 async function submitToMessageInbox(txData) {
   const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -2801,7 +2802,7 @@ async function submitToMessageInbox(txData) {
   const sender = txData.from_addr;
   const recipient = txData.from_addr; // Same as sender for now
   const amount = ethers.parseEther(txData.value || "0");
-  const srcChainId = txData.metadata?.srcChainId || VISION_CHAIN_ID;
+  const srcChainId = txData.metadata?.srcChainId || 1337; // Vision Chain
   const nonce = Date.now(); // Simple nonce for now
 
   console.log(`[Secure Bridge] Submitting: sender=${sender}, amount=${ethers.formatEther(amount)} VCN`);
@@ -2811,7 +2812,7 @@ async function submitToMessageInbox(txData) {
 
   // Extract messageId from event
   const messageSubmittedTopic = ethers.id("MessageSubmitted(bytes32,bytes32,address,address,uint256,uint256)");
-  const log = receipt.logs.find(l => l.topics[0] === messageSubmittedTopic);
+  const log = receipt.logs.find((l) => l.topics[0] === messageSubmittedTopic);
 
   let messageId = ethers.ZeroHash;
   if (log) {
@@ -2823,6 +2824,9 @@ async function submitToMessageInbox(txData) {
 
 /**
  * Finalize a pending message and mint tokens on destination
+ * @param {object} txData - Transaction data from Firestore
+ * @param {string} messageId - Message ID from MessageInbox
+ * @return {Promise<string>} Destination transaction hash
  */
 async function finalizeAndMint(txData, messageId) {
   const dstChainId = txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID;
@@ -2860,7 +2864,7 @@ async function finalizeAndMint(txData, messageId) {
     const bridgeId = messageId;
 
     const mintTx = await vcnToken.bridgeMint(recipient, amount, bridgeId, { gasLimit: 100000 });
-    const mintReceipt = await mintTx.wait();
+    await mintTx.wait();
 
     console.log(`[Secure Bridge] Minted ${ethers.formatEther(amount)} VCN on Sepolia. TX: ${mintTx.hash}`);
 
@@ -2869,13 +2873,13 @@ async function finalizeAndMint(txData, messageId) {
       bridgeId: txData.hash,
       messageId: messageId,
       type: "SECURE_BRIDGE_MINT",
-      srcChainId: VISION_CHAIN_ID,
+      srcChainId: 1337,
       dstChainId: SEPOLIA_CHAIN_ID,
       amount: amount.toString(),
       recipient: recipient,
       finalizeTxHash: finalizeTx.hash,
       mintTxHash: mintTx.hash,
-      executedAt: admin.firestore.Timestamp.now()
+      executedAt: admin.firestore.Timestamp.now(),
     });
 
     return mintTx.hash;
@@ -2889,7 +2893,7 @@ async function finalizeAndMint(txData, messageId) {
 /**
  * Manual trigger for secure bridge relayer (for testing)
  */
-exports.triggerSecureBridgeRelayer = functions.https.onRequest(async (req, res) => {
+exports.triggerSecureBridgeRelayer = onRequest({ cors: true }, async (req, res) => {
   // CORS
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -2929,8 +2933,8 @@ exports.triggerSecureBridgeRelayer = functions.https.onRequest(async (req, res) 
           recipient: msg.recipient,
           amount: msg.amount.toString(),
           status: msg.status,
-          challengePeriodEnd: new Date(Number(msg.challengePeriodEnd) * 1000).toISOString()
-        }
+          challengePeriodEnd: new Date(Number(msg.challengePeriodEnd) * 1000).toISOString(),
+        },
       });
     }
 
@@ -2950,14 +2954,14 @@ exports.triggerSecureBridgeRelayer = functions.https.onRequest(async (req, res) 
         status: txData.bridgeStatus,
         value: txData.value,
         challengeEndTime: txData.challengeEndTime,
-        isReady: Date.now() >= (txData.challengeEndTime || 0)
+        isReady: Date.now() >= (txData.challengeEndTime || 0),
       });
     }
 
     return res.status(200).json({
       success: true,
       message: `Found ${results.length} pending bridges`,
-      bridges: results
+      bridges: results,
     });
   } catch (err) {
     console.error("[Secure Bridge] Manual trigger error:", err);
@@ -2968,7 +2972,7 @@ exports.triggerSecureBridgeRelayer = functions.https.onRequest(async (req, res) 
 /**
  * Get bridge status and challenge period info
  */
-exports.getBridgeStatus = functions.https.onRequest(async (req, res) => {
+exports.getBridgeStatus = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(204).send("");
 
@@ -2995,10 +2999,10 @@ exports.getBridgeStatus = functions.https.onRequest(async (req, res) => {
           endTimeISO: new Date(challengeEndTime).toISOString(),
           remainingMs: Math.max(0, challengeEndTime - now),
           remainingMinutes: Math.max(0, Math.ceil((challengeEndTime - now) / 60000)),
-          isEnded: now >= challengeEndTime
+          isEnded: now >= challengeEndTime,
         },
         messageId: data.messageId,
-        destinationTxHash: data.destinationTxHash
+        destinationTxHash: data.destinationTxHash,
       });
     }
 
@@ -3021,8 +3025,8 @@ exports.getBridgeStatus = functions.https.onRequest(async (req, res) => {
           amountFormatted: ethers.formatEther(msg.amount),
           status: ["NONE", "PENDING", "CHALLENGED", "FINALIZED", "REVERTED", "EXPIRED"][msg.status] || "UNKNOWN",
           challengePeriodEnd: Number(msg.challengePeriodEnd),
-          challengePeriodEndISO: new Date(Number(msg.challengePeriodEnd) * 1000).toISOString()
-        }
+          challengePeriodEndISO: new Date(Number(msg.challengePeriodEnd) * 1000).toISOString(),
+        },
       });
     }
 
