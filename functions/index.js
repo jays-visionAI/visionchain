@@ -2384,9 +2384,10 @@ async function executeSepoliaBridgeTransfer(bridge) {
   console.log(`[Sepolia Bridge] Relayer balance: ${ethers.formatEther(balance)} ETH`);
   console.log(`[Sepolia Bridge] Transfer amount: ${ethers.formatEther(amountWei)} VCN`);
 
-  // Check if we have enough balance
-  if (balance < amountWei + ethers.parseEther("0.01")) {
-    console.warn("[Sepolia Bridge] Insufficient Sepolia balance - simulating transfer");
+  // Check if we have enough gas (0.001 ETH minimum for gas)
+  const minGasBalance = ethers.parseEther("0.001");
+  if (balance < minGasBalance) {
+    console.warn("[Sepolia Bridge] Insufficient Sepolia ETH for gas - simulating transfer");
 
     await db.collection("bridgeExecutions").add({
       bridgeId: bridge.intentHash,
@@ -2396,7 +2397,7 @@ async function executeSepoliaBridgeTransfer(bridge) {
       amount: bridge.amount,
       recipient: bridge.recipient,
       executedAt: admin.firestore.Timestamp.now(),
-      note: "Simulated - insufficient Sepolia balance",
+      note: "Simulated - insufficient Sepolia ETH for gas",
     });
 
     return `SIMULATED_${Date.now()}`;
