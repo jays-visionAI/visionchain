@@ -2378,35 +2378,48 @@ async function executeSepoliaBridgeTransfer(bridge) {
   const relayerWallet = new ethers.Wallet(SEPOLIA_RELAYER_PK, provider);
 
   const balance = await provider.getBalance(relayerWallet.address);
-  const amountWei = BigInt(bridge.amount);
+  const vcnAmountWei = BigInt(bridge.amount);
+  const vcnAmount = Number(ethers.formatEther(vcnAmountWei));
+
+  // Convert VCN to ETH based on price ratio
+  // VCN price: ~$0.30, ETH price: ~$3000 -> 1 VCN = 0.0001 ETH
+  const VCN_TO_ETH_RATIO = 0.0001;
+  const ethAmount = vcnAmount * VCN_TO_ETH_RATIO;
+  const ethAmountWei = ethers.parseEther(ethAmount.toFixed(18));
+
+  // Estimate gas cost (~21000 gas * ~20 gwei = ~0.00042 ETH)
+  const estimatedGasCost = ethers.parseEther("0.0005");
+  const totalRequired = ethAmountWei + estimatedGasCost;
 
   console.log(`[Sepolia Bridge] Relayer address: ${relayerWallet.address}`);
   console.log(`[Sepolia Bridge] Relayer balance: ${ethers.formatEther(balance)} ETH`);
-  console.log(`[Sepolia Bridge] Transfer amount: ${ethers.formatEther(amountWei)} VCN`);
+  console.log(`[Sepolia Bridge] VCN amount: ${vcnAmount} VCN`);
+  console.log(`[Sepolia Bridge] ETH equivalent: ${ethAmount.toFixed(6)} ETH (ratio: ${VCN_TO_ETH_RATIO})`);
+  console.log(`[Sepolia Bridge] Total required (incl gas): ${ethers.formatEther(totalRequired)} ETH`);
 
-  // Check if we have enough gas (0.001 ETH minimum for gas)
-  const minGasBalance = ethers.parseEther("0.001");
-  if (balance < minGasBalance) {
-    console.warn("[Sepolia Bridge] Insufficient Sepolia ETH for gas - simulating transfer");
+  // Check if we have enough balance
+  if (balance < totalRequired) {
+    console.warn("[Sepolia Bridge] Insufficient Sepolia ETH balance - simulating transfer");
 
     await db.collection("bridgeExecutions").add({
       bridgeId: bridge.intentHash,
       type: "SIMULATED",
       srcChainId: bridge.srcChainId,
       dstChainId: bridge.dstChainId,
-      amount: bridge.amount,
+      vcnAmount: bridge.amount,
+      ethAmount: ethAmountWei.toString(),
       recipient: bridge.recipient,
       executedAt: admin.firestore.Timestamp.now(),
-      note: "Simulated - insufficient Sepolia ETH for gas",
+      note: `Simulated - need ${ethers.formatEther(totalRequired)} ETH, have ${ethers.formatEther(balance)} ETH`,
     });
 
     return `SIMULATED_${Date.now()}`;
   }
 
-  // Execute real transfer
+  // Execute real ETH transfer (equivalent value to VCN)
   const tx = await relayerWallet.sendTransaction({
     to: bridge.recipient,
-    value: amountWei,
+    value: ethAmountWei,
     gasLimit: 21000,
   });
 
@@ -2419,7 +2432,8 @@ async function executeSepoliaBridgeTransfer(bridge) {
     type: "REAL",
     srcChainId: bridge.srcChainId,
     dstChainId: bridge.dstChainId,
-    amount: bridge.amount,
+    vcnAmount: bridge.amount,
+    ethAmount: ethAmountWei.toString(),
     recipient: bridge.recipient,
     txHash: tx.hash,
     blockNumber: receipt.blockNumber,
