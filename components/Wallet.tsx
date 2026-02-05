@@ -563,35 +563,87 @@ const Wallet = (): JSX.Element => {
     const [unreadNotificationsCount, setUnreadNotificationsCount] = createSignal(0);
     const [chatHistoryOpen, setChatHistoryOpen] = createSignal(true);
 
-    // --- Sepolia Cross-Chain Asset State ---
+    // --- Multi-Chain Asset State ---
     const [sepoliaVcnBalance, setSepoliaVcnBalance] = createSignal(0);
-    const [isLoadingSepoliaBalance, setIsLoadingSepoliaBalance] = createSignal(false);
+    const [ethMainnetBalance, setEthMainnetBalance] = createSignal(0);
+    const [polygonBalance, setPolygonBalance] = createSignal(0);
+    const [baseBalance, setBaseBalance] = createSignal(0);
+    const [isLoadingMultiChain, setIsLoadingMultiChain] = createSignal(false);
 
-    // Sepolia VCN Balance Fetcher
-    const fetchSepoliaBalance = async () => {
+    // Multi-Chain Balance Fetcher
+    const fetchMultiChainBalances = async () => {
         const addr = walletAddress();
         if (!addr) return;
 
-        setIsLoadingSepoliaBalance(true);
-        try {
-            // Sepolia VCN Token (bridged from Vision Chain)
-            const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
-            const SEPOLIA_VCN_TOKEN = '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f';
-            const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+        setIsLoadingMultiChain(true);
 
-            const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
-            const contract = new ethers.Contract(SEPOLIA_VCN_TOKEN, ERC20_ABI, provider);
-            const balance = await contract.balanceOf(addr);
-            const balanceNum = parseFloat(ethers.formatEther(balance));
-            setSepoliaVcnBalance(balanceNum);
-            console.log(`[Sepolia] VCN Balance: ${balanceNum}`);
-        } catch (err) {
-            console.debug('[Sepolia] VCN balance fetch error:', (err as any)?.message || 'Unknown error');
-            setSepoliaVcnBalance(0);
-        } finally {
-            setIsLoadingSepoliaBalance(false);
-        }
+        // Fetch all balances in parallel
+        const fetchPromises = [
+            // Sepolia VCN Token
+            (async () => {
+                try {
+                    const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+                    const SEPOLIA_VCN_TOKEN = '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f';
+                    const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+                    const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+                    const contract = new ethers.Contract(SEPOLIA_VCN_TOKEN, ERC20_ABI, provider);
+                    const balance = await contract.balanceOf(addr);
+                    setSepoliaVcnBalance(parseFloat(ethers.formatEther(balance)));
+                } catch (err) {
+                    console.debug('[Sepolia] VCN balance error:', err);
+                    setSepoliaVcnBalance(0);
+                }
+            })(),
+
+            // Ethereum Mainnet ETH
+            (async () => {
+                try {
+                    const ETH_RPC = 'https://ethereum-rpc.publicnode.com';
+                    const provider = new ethers.JsonRpcProvider(ETH_RPC);
+                    const balance = await provider.getBalance(addr);
+                    setEthMainnetBalance(parseFloat(ethers.formatEther(balance)));
+                    console.log('[Ethereum] ETH Balance:', parseFloat(ethers.formatEther(balance)));
+                } catch (err) {
+                    console.debug('[Ethereum] ETH balance error:', err);
+                    setEthMainnetBalance(0);
+                }
+            })(),
+
+            // Polygon Mainnet MATIC
+            (async () => {
+                try {
+                    const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com';
+                    const provider = new ethers.JsonRpcProvider(POLYGON_RPC);
+                    const balance = await provider.getBalance(addr);
+                    setPolygonBalance(parseFloat(ethers.formatEther(balance)));
+                    console.log('[Polygon] MATIC Balance:', parseFloat(ethers.formatEther(balance)));
+                } catch (err) {
+                    console.debug('[Polygon] MATIC balance error:', err);
+                    setPolygonBalance(0);
+                }
+            })(),
+
+            // Base Mainnet ETH
+            (async () => {
+                try {
+                    const BASE_RPC = 'https://base-rpc.publicnode.com';
+                    const provider = new ethers.JsonRpcProvider(BASE_RPC);
+                    const balance = await provider.getBalance(addr);
+                    setBaseBalance(parseFloat(ethers.formatEther(balance)));
+                    console.log('[Base] ETH Balance:', parseFloat(ethers.formatEther(balance)));
+                } catch (err) {
+                    console.debug('[Base] ETH balance error:', err);
+                    setBaseBalance(0);
+                }
+            })(),
+        ];
+
+        await Promise.allSettled(fetchPromises);
+        setIsLoadingMultiChain(false);
     };
+
+    // Legacy wrapper for Sepolia balance
+    const fetchSepoliaBalance = fetchMultiChainBalances;
 
     // --- Enterprise Bulk Transfer Agent State ---
     const [batchAgents, setBatchAgents] = createSignal<any[]>([]);
@@ -3455,6 +3507,9 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 walletAddress={walletAddress}
                                 contacts={contacts()}
                                 sepoliaVcnBalance={sepoliaVcnBalance}
+                                ethMainnetBalance={ethMainnetBalance}
+                                polygonBalance={polygonBalance}
+                                baseBalance={baseBalance}
                             />
                         </Show>
 

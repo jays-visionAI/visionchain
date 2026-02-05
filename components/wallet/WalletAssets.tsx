@@ -32,6 +32,9 @@ interface WalletAssetsProps {
     walletAddress?: () => string;
     contacts?: any[];
     sepoliaVcnBalance?: () => number;
+    ethMainnetBalance?: () => number;
+    polygonBalance?: () => number;
+    baseBalance?: () => number;
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
@@ -317,23 +320,33 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     // Visibility Filter
                                     if (networkFilter() !== 'all' && networkFilter() !== item.network) return null;
 
-                                    const asset = () => props.getAssetData('VCN');
-                                    const isMainnetVcn = item.id === 'vcn_main';
-                                    const isSepoliaItem = item.chain === 'sepolia';
-                                    const isTestnetVcn = item.id === 'vcn_test';
+                                    const vcnAsset = () => props.getAssetData('VCN');
 
-                                    const displayBalance = () => {
-                                        if (isSepoliaItem) return props.sepoliaVcnBalance?.() || 0;
-                                        if (isMainnetVcn) return asset().purchasedBalance;
-                                        if (isTestnetVcn) return asset().liquidBalance;
-                                        // Other mainnet chains - placeholder (will integrate later)
+                                    // Price mapping for different assets (USD)
+                                    const getPriceForChain = (chain: string, symbol: string) => {
+                                        if (symbol === 'VCN') return vcnAsset().price;
+                                        if (symbol === 'ETH') return 3200; // ETH price placeholder
+                                        if (symbol === 'MATIC') return 0.45; // MATIC price placeholder
                                         return 0;
                                     };
-                                    const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+                                    const displayBalance = () => {
+                                        switch (item.id) {
+                                            case 'vcn_main': return vcnAsset().purchasedBalance;
+                                            case 'vcn_test': return vcnAsset().liquidBalance;
+                                            case 'vcn_sepolia': return props.sepoliaVcnBalance?.() || 0;
+                                            case 'eth_main': return props.ethMainnetBalance?.() || 0;
+                                            case 'matic_main': return props.polygonBalance?.() || 0;
+                                            case 'base_main': return props.baseBalance?.() || 0;
+                                            default: return 0;
+                                        }
+                                    };
+
+                                    const price = getPriceForChain(item.chain, item.symbol);
+                                    const displayValue = () => (displayBalance() * price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
                                     // Styling based on network type
                                     const isTestnetStyle = item.network === 'testnet';
-                                    const isSepoliaStyle = item.chain === 'sepolia';
 
                                     // Chain logos/colors
                                     const chainConfig: Record<string, { icon: string, color: string, bgColor: string }> = {
@@ -341,7 +354,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         ethereum: { icon: 'E', color: 'text-indigo-400', bgColor: 'from-indigo-500 to-purple-600' },
                                         polygon: { icon: 'P', color: 'text-purple-400', bgColor: 'from-purple-500 to-indigo-600' },
                                         base: { icon: 'B', color: 'text-blue-400', bgColor: 'from-blue-500 to-blue-700' },
-                                        sepolia: { icon: 'S', color: 'text-purple-400', bgColor: 'from-purple-500/20 to-indigo-500/20' },
+                                        sepolia: { icon: 'S', color: 'text-amber-400', bgColor: 'from-amber-500/20 to-orange-500/20' },
                                     };
                                     const config = chainConfig[item.chain] || chainConfig.vision;
 
@@ -379,12 +392,12 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                             {/* Middle columns - Hidden on small mobile */}
                                             <div class="hidden lg:block w-24 text-right">
                                                 <span class="text-sm md:text-base font-medium text-white">
-                                                    ${asset().price.toFixed(4)}
+                                                    ${price.toFixed(item.symbol === 'MATIC' ? 2 : 4)}
                                                 </span>
                                             </div>
                                             <div class="hidden xl:block w-24 text-right px-2">
-                                                <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[12px] md:text-[13px] ${asset().change24h > 0 ? 'text-green-400 bg-green-500/5' : 'text-red-400 bg-red-500/5'}`}>
-                                                    {asset().change24h.toFixed(1)}%
+                                                <div class={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md font-bold text-[12px] md:text-[13px] ${vcnAsset().change24h > 0 ? 'text-green-400 bg-green-500/5' : 'text-red-400 bg-red-500/5'}`}>
+                                                    {item.symbol === 'VCN' ? vcnAsset().change24h.toFixed(1) : '0.0'}%
                                                 </div>
                                             </div>
 
@@ -394,14 +407,14 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                 <div class="w-auto sm:w-32 text-right order-2 sm:order-1">
                                                     <div class="text-[12px] sm:text-[15px] md:text-[16px] font-medium sm:font-bold text-gray-400 sm:text-white tabular-nums tracking-wide">
                                                         <span class="sm:hidden text-[10px] text-gray-600 mr-1">Qty:</span>
-                                                        {displayBalance().toLocaleString()}
+                                                        {displayBalance().toLocaleString(undefined, { maximumFractionDigits: 6 })}
                                                     </div>
                                                     <div class="hidden sm:block text-[10px] md:text-[11px] text-gray-500 font-bold uppercase tracking-widest">{item.symbol}</div>
                                                 </div>
 
                                                 {/* Total Value */}
                                                 <div class="w-auto sm:w-32 text-right order-1 sm:order-2">
-                                                    <span class={`text-[16px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : isSepoliaStyle ? 'text-purple-400/80' : 'text-white'}`}>
+                                                    <span class={`text-[16px] md:text-[18px] font-bold tabular-nums drop-shadow-sm ${isTestnetStyle ? 'text-amber-500/80' : 'text-white'}`}>
                                                         {displayValue()}
                                                     </span>
                                                 </div>
