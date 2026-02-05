@@ -30,8 +30,8 @@ async function main() {
     console.log(`Balance: ${hre.ethers.formatEther(balance)} Native Token`);
     console.log("=".repeat(60));
 
-    // Bridge relayer address (same as Sepolia deployment)
-    const BRIDGE_RELAYER = "0x5B913E69f8f7e36e9EB9A9c64bD7f730F2a1DF99";
+    // Bridge relayer address (same as Sepolia deployment - auto-checksum)
+    const BRIDGE_RELAYER = hre.ethers.getAddress("0x5b913e69f8f7e36e9eb9a9c64bd7f730f2a1df99");
 
     console.log("\nDeploying VCN Token...");
     console.log(`  Admin: ${deployer.address}`);

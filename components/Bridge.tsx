@@ -11,7 +11,8 @@ import {
     AlertCircle,
     Wallet,
     RefreshCw,
-    Loader2
+    Loader2,
+    ChevronRight
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
@@ -162,6 +163,10 @@ const Bridge: Component<BridgeProps> = (props) => {
     const [isBridging, setIsBridging] = createSignal(false);
     const [isApproving, setIsApproving] = createSignal(false);
     const [step, setStep] = createSignal(1); // 1: Input, 2: Processing, 3: Success
+    const [showNetworkDropdown, setShowNetworkDropdown] = createSignal(false);
+
+    // Get available destination networks (excluding source)
+    const getDestinationNetworks = () => NETWORKS.filter(n => n.chainId !== fromNetwork().chainId);
 
     // Transaction state
     const [txHash, setTxHash] = createSignal('');
@@ -623,19 +628,78 @@ const Bridge: Component<BridgeProps> = (props) => {
                                             </button>
                                         </div>
 
-                                        {/* To Network */}
-                                        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all">
+                                        {/* To Network - Dropdown */}
+                                        <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all relative">
                                             <div class="flex justify-between items-center mb-3">
-                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">To Network</span>
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Destination Network</span>
                                             </div>
-                                            <div class="flex items-center gap-4">
-                                                <div class="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center border border-purple-500/20">
-                                                    <Zap class="w-5 h-5 text-purple-400" />
+                                            <button
+                                                onClick={() => setShowNetworkDropdown(!showNetworkDropdown())}
+                                                class="w-full flex items-center gap-4 hover:bg-white/5 rounded-xl p-2 -m-2 transition-all"
+                                            >
+                                                <div class={`w-10 h-10 rounded-full flex items-center justify-center border ${toNetwork().chainId === 11155111 ? 'bg-purple-600/20 border-purple-500/20' :
+                                                    toNetwork().chainId === 80002 ? 'bg-violet-600/20 border-violet-500/20' :
+                                                        toNetwork().chainId === 84532 ? 'bg-blue-600/20 border-blue-500/20' :
+                                                            'bg-cyan-600/20 border-cyan-500/20'
+                                                    }`}>
+                                                    <Zap class={`w-5 h-5 ${toNetwork().chainId === 11155111 ? 'text-purple-400' :
+                                                        toNetwork().chainId === 80002 ? 'text-violet-400' :
+                                                            toNetwork().chainId === 84532 ? 'text-blue-400' :
+                                                                'text-cyan-400'
+                                                        }`} />
                                                 </div>
-                                                <div class="flex-1">
+                                                <div class="flex-1 text-left">
                                                     <div class="text-lg font-black italic uppercase tracking-tight">{toNetwork().name}</div>
+                                                    <Show when={!toNetwork().enabled}>
+                                                        <span class="text-[10px] text-amber-400 font-bold">Coming Soon</span>
+                                                    </Show>
                                                 </div>
-                                            </div>
+                                                <ChevronRight class={`w-5 h-5 text-gray-500 transition-transform ${showNetworkDropdown() ? 'rotate-90' : ''}`} />
+                                            </button>
+
+                                            {/* Network Dropdown */}
+                                            <Show when={showNetworkDropdown()}>
+                                                <div class="absolute left-0 right-0 top-full mt-2 bg-[#1a1a1c] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                                                    <For each={getDestinationNetworks()}>
+                                                        {(network) => (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (network.enabled) {
+                                                                        setToNetwork(network);
+                                                                        setShowNetworkDropdown(false);
+                                                                    }
+                                                                }}
+                                                                disabled={!network.enabled}
+                                                                class={`w-full flex items-center gap-4 p-4 transition-all ${network.enabled
+                                                                    ? 'hover:bg-white/5 cursor-pointer'
+                                                                    : 'opacity-50 cursor-not-allowed'
+                                                                    } ${toNetwork().chainId === network.chainId ? 'bg-white/5' : ''}`}
+                                                            >
+                                                                <div class={`w-8 h-8 rounded-full flex items-center justify-center border ${network.chainId === 11155111 ? 'bg-purple-600/20 border-purple-500/20' :
+                                                                    network.chainId === 80002 ? 'bg-violet-600/20 border-violet-500/20' :
+                                                                        network.chainId === 84532 ? 'bg-blue-600/20 border-blue-500/20' :
+                                                                            'bg-cyan-600/20 border-cyan-500/20'
+                                                                    }`}>
+                                                                    <Zap class={`w-4 h-4 ${network.chainId === 11155111 ? 'text-purple-400' :
+                                                                        network.chainId === 80002 ? 'text-violet-400' :
+                                                                            network.chainId === 84532 ? 'text-blue-400' :
+                                                                                'text-cyan-400'
+                                                                        }`} />
+                                                                </div>
+                                                                <div class="flex-1 text-left">
+                                                                    <div class="text-sm font-bold">{network.name}</div>
+                                                                    <Show when={!network.enabled}>
+                                                                        <span class="text-[10px] text-amber-400 font-bold">Coming Soon</span>
+                                                                    </Show>
+                                                                </div>
+                                                                <Show when={toNetwork().chainId === network.chainId}>
+                                                                    <CheckCircle2 class="w-4 h-4 text-green-400" />
+                                                                </Show>
+                                                            </button>
+                                                        )}
+                                                    </For>
+                                                </div>
+                                            </Show>
                                         </div>
 
                                         {/* Asset & Amount */}
