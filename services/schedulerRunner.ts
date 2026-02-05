@@ -7,7 +7,7 @@ const MAX_RETRIES = 3;
 const EXECUTION_BATCH_SIZE = 50; // Max jobs per tick
 const LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes lock
 const EXECUTOR_PRIVATE_KEY = process.env.VITE_EXECUTOR_PK || '';
-const RPC_URL = "http://46.224.221.201:8545"; // Testnet Cluster
+const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2
 const TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
 
 // ABI for execute function only
