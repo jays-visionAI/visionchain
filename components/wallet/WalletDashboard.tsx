@@ -132,83 +132,29 @@ const TypingIndicator = () => (
 );
 
 const ThinkingDisplay = (props: { steps: any[] }) => {
-    const [isExpanded, setIsExpanded] = createSignal(true);
-
-    // Auto-expand if error occurs
-    createEffect(() => {
-        if (props.steps.some(s => s.status === 'error')) {
-            setIsExpanded(true);
-        }
-    });
-
+    // Simple loading indicator - no detailed thinking steps exposed
     return (
         <Motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             class="flex flex-col md:flex-row gap-2 md:gap-5 items-start mt-4 mb-8"
         >
-            {/* Thinking Icon (Matches Assistant Icon Layout) */}
+            {/* Assistant Icon */}
             <div class="w-10 h-10 rounded-2xl bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 shadow-2xl mt-1">
                 <Bot class="w-5 h-5 text-purple-400 animate-pulse" />
             </div>
 
-            {/* Thinking Content Box (Matches Assistant Bubble Styles) */}
+            {/* Simple Loading Bubble */}
             <div class="w-full md:max-w-[85%]">
-                <div class="bg-[#18181b]/50 backdrop-blur-3xl border border-white/[0.08] rounded-[24px] rounded-tl-sm overflow-hidden shadow-2xl transition-all duration-300">
-                    {/* Header / Summary View */}
-                    <div
-                        class="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-white/[0.02]"
-                        onClick={() => setIsExpanded(!isExpanded())}
-                    >
-                        <div class="flex flex-col">
-                            <div class="flex items-center gap-2">
-                                <span class="text-[13px] font-bold text-gray-100 uppercase tracking-wider">Vision AI Thinking</span>
-                                <div class="flex gap-0.5 items-end h-3 pb-0.5">
-                                    <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
-                                    <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
-                                    <span class="w-0.5 h-0.5 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.3s" }} />
-                                </div>
-                            </div>
-                            <span class="text-[10px] text-gray-500 font-medium truncate max-w-[200px]">
-                                {props.steps[props.steps.length - 1]?.label || "Processing Request..."}
-                            </span>
+                <div class="bg-[#18181b]/50 backdrop-blur-3xl border border-white/[0.08] rounded-[24px] rounded-tl-sm overflow-hidden shadow-2xl px-6 py-4">
+                    <div class="flex items-center gap-3">
+                        <div class="flex gap-1 items-center">
+                            <span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0s" }} />
+                            <span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.15s" }} />
+                            <span class="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ "animation-delay": "0.3s" }} />
                         </div>
-
-                        <button class="text-gray-500 hover:text-white transition-colors p-1">
-                            <ChevronDown class={`w-4 h-4 transition-transform duration-300 ${isExpanded() ? 'rotate-180' : ''}`} />
-                        </button>
+                        <span class="text-[13px] font-medium text-gray-400">Vision AI Responding...</span>
                     </div>
-
-                    {/* Expanded Details */}
-                    <Show when={isExpanded()}>
-                        <div class="border-t border-white/5 bg-black/20 px-6 py-5 space-y-4">
-                            <For each={props.steps}>
-                                {(step) => (
-                                    <div class="flex items-start gap-3 group animate-in fade-in slide-in-from-top-1 duration-300">
-                                        <div class="mt-1 relative flex-shrink-0">
-                                            <Show when={step.status === 'loading'} fallback={
-                                                <div class={`w-2 h-2 rounded-full ${step.status === 'completed' ? 'bg-green-500' : 'bg-red-500'}`} />
-                                            }>
-                                                <div class="w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
-                                            </Show>
-                                            <Show when={step.status === 'completed'}>
-                                                <div class="absolute inset-0 bg-green-500 rounded-full animate-ping opacity-20" />
-                                            </Show>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="text-[12px] font-bold text-gray-200">{step.label}</div>
-                                            <Show when={step.detail}>
-                                                <div class="text-[10px] text-gray-500 mt-1 leading-relaxed">{step.detail}</div>
-                                            </Show>
-                                        </div>
-                                        <Show when={step.status === 'completed'}>
-                                            <Check class="w-3.5 h-3.5 text-green-500/50 flex-shrink-0" />
-                                        </Show>
-                                    </div>
-                                )}
-                            </For>
-                        </div>
-                    </Show>
                 </div>
             </div>
         </Motion.div>
