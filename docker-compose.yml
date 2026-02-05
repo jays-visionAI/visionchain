@@ -14,7 +14,7 @@ services:
     volumes:
       - ./deploy/v2-testnet/node1:/root/.ethereum
     command: >
-      --networkid 1337 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug" --allow-insecure-unlock --nat extip:172.20.0.11
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug,clique" --allow-insecure-unlock --unlock "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --password /root/.ethereum/password.txt --mine --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --nat extip:172.20.0.11
     deploy:
       resources:
         limits:
@@ -34,7 +34,7 @@ services:
     volumes:
       - ./deploy/v2-testnet/node2:/root/.ethereum
     command: >
-      --networkid 1337 --http --http.addr "0.0.0.0" --http.port 8545 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.12
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.12
     deploy:
       resources:
         limits:
@@ -54,7 +54,7 @@ services:
     volumes:
       - ./deploy/v2-testnet/node3:/root/.ethereum
     command: >
-      --networkid 1337 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.13
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.13
     deploy:
       resources:
         limits:
@@ -74,7 +74,7 @@ services:
     volumes:
       - ./deploy/v2-testnet/node4:/root/.ethereum
     command: >
-      --networkid 1337 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.14
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.14
     deploy:
       resources:
         limits:
@@ -94,7 +94,7 @@ services:
     volumes:
       - ./deploy/v2-testnet/node5:/root/.ethereum
     command: >
-      --networkid 1337 --bootnodes "enode://70ff387a4ffeb0929d9498043ff3a77083af378dabd6574d00ae792aaff914639822392abe5a4a5d11a7e354b50f89ac7e28830eca3b937f814f98effc07e608@172.20.0.11:30303" --nat extip:172.20.0.15
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.15
     deploy:
       resources:
         limits:

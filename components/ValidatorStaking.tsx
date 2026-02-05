@@ -21,7 +21,7 @@ import { contractService } from '../services/contractService';
 import { WalletService } from '../services/walletService';
 
 // ============ Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0x746a48E39dC57Ff14B872B8979E20efE5E5100B1'; // Fixed APY Contract
+const BRIDGE_STAKING_ADDRESS = '0xc351628EB244ec633d5f21fBD6621e1a683B1181'; // Fixed APY Contract
 const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // VCN Token address
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy'; // HTTPS RPC Proxy
 

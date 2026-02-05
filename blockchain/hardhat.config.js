@@ -13,9 +13,9 @@ module.exports = {
         },
     },
     paths: {
-        sources: "./contracts",
-        artifacts: "./artifacts",
-        cache: "./cache"
+        sources: __dirname + "/contracts",
+        artifacts: __dirname + "/artifacts",
+        cache: __dirname + "/cache"
     },
     networks: {
         hardhat: {
@@ -50,7 +50,7 @@ module.exports = {
         // Vision Chain Custom Testnet v2 (Current)
         visionV2: {
             url: "https://api.visionchain.co/rpc-proxy",
-            chainId: 1337,
+            chainId: 3151909,
             accounts: ["0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"], // Admin Key
             gasPrice: 1000000000, // 1 gwei
             gas: 8000000
