@@ -1252,12 +1252,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             </Show>
 
                                             {/* AI Response Actions - Feedback & Copy */}
-                                            <Show when={msg.role === 'assistant' && text.trim().length > 0}>
+                                            <Show when={msg.role === 'assistant' && msg.content.trim().length > 0 && parseResponseSections(msg.content.split('[RECOMMENDED_QUESTIONS]')[0]).length <= 1}>
                                                 <div class="flex items-center gap-1 mt-2 px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                     {/* Copy Button */}
                                                     <button
                                                         onClick={() => {
-                                                            navigator.clipboard.writeText(text.trim());
+                                                            const contentToCopy = msg.content.split('[RECOMMENDED_QUESTIONS]')[0].trim();
+                                                            navigator.clipboard.writeText(contentToCopy);
                                                             // Show toast notification
                                                             const toast = document.createElement('div');
                                                             toast.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium z-50 animate-in fade-in slide-in-from-bottom-2';

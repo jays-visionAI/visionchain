@@ -46,7 +46,7 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                     <div class="w-full">
                         <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-4 text-center">Select Destination Network</label>
                         <div class="flex flex-wrap justify-center gap-2">
-                            <For each={['Vision Chain', 'Ethereum', 'Polygon']}>
+                            <For each={['Vision Chain', 'Ethereum', 'Polygon', 'Base']}>
                                 {(net) => (
                                     <button
                                         onClick={() => props.setReceiveNetwork(net)}
