@@ -265,60 +265,100 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                     <div class="lg:col-span-8">
 
                         <div class="bg-gradient-to-br from-white/[0.03] to-transparent border border-white/[0.06] rounded-[24px] overflow-hidden shadow-2xl backdrop-blur-sm">
+                            {/* Network Filter Tabs */}
+                            <div class="flex items-center gap-2 px-6 py-4 border-b border-white/[0.04] bg-white/[0.01]">
+                                <button
+                                    onClick={() => setNetworkFilter('all')}
+                                    class={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${networkFilter() === 'all'
+                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                                        : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                                >
+                                    All Networks
+                                </button>
+                                <button
+                                    onClick={() => setNetworkFilter('mainnet')}
+                                    class={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${networkFilter() === 'mainnet'
+                                        ? 'bg-green-500 text-white shadow-lg shadow-green-500/20'
+                                        : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                                >
+                                    Mainnet
+                                </button>
+                                <button
+                                    onClick={() => setNetworkFilter('testnet')}
+                                    class={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${networkFilter() === 'testnet'
+                                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+                                        : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                                >
+                                    Testnet
+                                </button>
+                            </div>
+
                             {/* Table Header - Hidden on mobile, visible on sm+ */}
                             <div class="hidden sm:flex items-center px-8 py-4 border-b border-white/[0.04] text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] bg-white/[0.01]">
                                 <div class="flex-1">Asset</div>
                                 <div class="w-24 text-right hidden lg:block">Market Price</div>
                                 <div class="w-24 text-right hidden xl:block">24h Change</div>
-                                <div class="w-32 text-right">User Holdings</div>
-                                <div class="w-32 text-right">Total Value</div>
+                                <div class="w-32 text-right">Holdings</div>
+                                <div class="w-32 text-right">Value</div>
                             </div>
 
                             {/* Dynamic Token Rows */}
                             <For each={[
-                                { id: 'vcn_main', symbol: 'VCN', name: 'Purchased (VCN)', network: 'mainnet' },
-                                { id: 'vcn_test', symbol: 'VCN', name: 'VCN (Testnet)', network: 'testnet' },
-                                { id: 'vcn_sepolia', symbol: 'wVCN', name: 'VCN (Sepolia)', network: 'sepolia' }
+                                // Mainnet Assets
+                                { id: 'vcn_main', symbol: 'VCN', name: 'Vision Chain (Mainnet)', network: 'mainnet', chain: 'vision' },
+                                { id: 'eth_main', symbol: 'ETH', name: 'Ethereum Mainnet', network: 'mainnet', chain: 'ethereum' },
+                                { id: 'matic_main', symbol: 'MATIC', name: 'Polygon Mainnet', network: 'mainnet', chain: 'polygon' },
+                                { id: 'base_main', symbol: 'ETH', name: 'Base Mainnet', network: 'mainnet', chain: 'base' },
+                                // Testnet Assets
+                                { id: 'vcn_test', symbol: 'VCN', name: 'Vision Chain (Testnet)', network: 'testnet', chain: 'vision' },
+                                { id: 'vcn_sepolia', symbol: 'VCN', name: 'Ethereum Sepolia', network: 'testnet', chain: 'sepolia' },
                             ]}>
                                 {(item, index) => {
                                     // Visibility Filter
-                                    if (networkFilter() !== 'all' && networkFilter() !== item.network && item.network !== 'sepolia') return null;
+                                    if (networkFilter() !== 'all' && networkFilter() !== item.network) return null;
 
                                     const asset = () => props.getAssetData('VCN');
-                                    const isMainnetItem = item.network === 'mainnet';
-                                    const isSepoliaItem = item.network === 'sepolia';
+                                    const isMainnetVcn = item.id === 'vcn_main';
+                                    const isSepoliaItem = item.chain === 'sepolia';
+                                    const isTestnetVcn = item.id === 'vcn_test';
 
                                     const displayBalance = () => {
                                         if (isSepoliaItem) return props.sepoliaVcnBalance?.() || 0;
-                                        return isMainnetItem ? asset().purchasedBalance : asset().liquidBalance;
+                                        if (isMainnetVcn) return asset().purchasedBalance;
+                                        if (isTestnetVcn) return asset().liquidBalance;
+                                        // Other mainnet chains - placeholder (will integrate later)
+                                        return 0;
                                     };
                                     const displayValue = () => (displayBalance() * asset().price).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-                                    // Styling distinction
+                                    // Styling based on network type
                                     const isTestnetStyle = item.network === 'testnet';
-                                    const isSepoliaStyle = item.network === 'sepolia';
+                                    const isSepoliaStyle = item.chain === 'sepolia';
+
+                                    // Chain logos/colors
+                                    const chainConfig: Record<string, { icon: string, color: string, bgColor: string }> = {
+                                        vision: { icon: 'V', color: 'text-blue-400', bgColor: 'from-blue-600 to-cyan-500' },
+                                        ethereum: { icon: 'E', color: 'text-indigo-400', bgColor: 'from-indigo-500 to-purple-600' },
+                                        polygon: { icon: 'P', color: 'text-purple-400', bgColor: 'from-purple-500 to-indigo-600' },
+                                        base: { icon: 'B', color: 'text-blue-400', bgColor: 'from-blue-500 to-blue-700' },
+                                        sepolia: { icon: 'S', color: 'text-purple-400', bgColor: 'from-purple-500/20 to-indigo-500/20' },
+                                    };
+                                    const config = chainConfig[item.chain] || chainConfig.vision;
 
                                     return (
-                                        <div class={`flex items-center justify-between px-4 sm:px-8 py-5 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''} ${isSepoliaStyle ? 'bg-purple-500/[0.02]' : ''}`}>
+                                        <div class={`flex items-center justify-between px-4 sm:px-8 py-5 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''}`}>
                                             {/* Left side: Token Info */}
                                             <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                                                 <div class="relative flex-shrink-0">
                                                     <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-lg ${isTestnetStyle
                                                         ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-500 border border-amber-500/30'
-                                                        : isSepoliaStyle
-                                                            ? 'bg-gradient-to-br from-purple-500/20 to-indigo-500/20 text-purple-500 border border-purple-500/30'
-                                                            : 'bg-gradient-to-br from-blue-600 to-cyan-500'
+                                                        : `bg-gradient-to-br ${config.bgColor}`
                                                         }`}>
-                                                        {isSepoliaStyle ? 'S' : 'V'}
+                                                        {config.icon}
                                                     </div>
                                                     <Show when={isTestnetStyle}>
                                                         <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] flex items-center justify-center">
                                                             <div class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                                                        </div>
-                                                    </Show>
-                                                    <Show when={isSepoliaStyle}>
-                                                        <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] flex items-center justify-center">
-                                                            <div class="w-2.5 h-2.5 rounded-full bg-purple-500" />
                                                         </div>
                                                     </Show>
                                                 </div>
@@ -328,8 +368,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                                         <Show when={isTestnetStyle}>
                                                             <span class="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/20 text-amber-500 border border-amber-500/30">TEST</span>
                                                         </Show>
-                                                        <Show when={isSepoliaStyle}>
-                                                            <span class="px-1.5 py-0.5 rounded text-[9px] bg-purple-500/20 text-purple-400 border border-purple-500/30">SEPOLIA</span>
+                                                        <Show when={item.network === 'mainnet' && item.chain !== 'vision'}>
+                                                            <span class="px-1.5 py-0.5 rounded text-[9px] bg-green-500/20 text-green-400 border border-green-500/30">MAINNET</span>
                                                         </Show>
                                                     </div>
                                                     <div class="text-[11px] md:text-[12px] text-gray-500 font-medium truncate tracking-tight">{item.name}</div>

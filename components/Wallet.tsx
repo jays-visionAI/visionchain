@@ -567,39 +567,30 @@ const Wallet = (): JSX.Element => {
     const [sepoliaVcnBalance, setSepoliaVcnBalance] = createSignal(0);
     const [isLoadingSepoliaBalance, setIsLoadingSepoliaBalance] = createSignal(false);
 
-    // Sepolia wVCN Balance Fetcher
+    // Sepolia VCN Balance Fetcher
     const fetchSepoliaBalance = async () => {
         const addr = walletAddress();
         if (!addr) return;
 
-        // TODO: Re-enable when Sepolia Equalizer contract is deployed
-        // Currently disabled to prevent console errors
-        setSepoliaVcnBalance(0);
-        setIsLoadingSepoliaBalance(false);
-        return;
-
-        /* Disabled until Sepolia Equalizer is deployed
         setIsLoadingSepoliaBalance(true);
         try {
-            // Sepolia Equalizer contract (wVCN)
+            // Sepolia VCN Token (bridged from Vision Chain)
             const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
-            const SEPOLIA_EQUALIZER = '0x6e6E465594cED9cA33995939b9579a8A29194983';
+            const SEPOLIA_VCN_TOKEN = '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f';
             const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
 
             const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
-            const contract = new ethers.Contract(SEPOLIA_EQUALIZER, ERC20_ABI, provider);
+            const contract = new ethers.Contract(SEPOLIA_VCN_TOKEN, ERC20_ABI, provider);
             const balance = await contract.balanceOf(addr);
             const balanceNum = parseFloat(ethers.formatEther(balance));
             setSepoliaVcnBalance(balanceNum);
-            console.log(`[Sepolia] wVCN Balance: ${balanceNum}`);
+            console.log(`[Sepolia] VCN Balance: ${balanceNum}`);
         } catch (err) {
-            // Sepolia Equalizer may not be deployed yet - silently handle
-            console.debug('[Sepolia] wVCN balance fetch skipped (contract may not exist):', (err as any)?.message || 'Unknown error');
+            console.debug('[Sepolia] VCN balance fetch error:', (err as any)?.message || 'Unknown error');
             setSepoliaVcnBalance(0);
         } finally {
             setIsLoadingSepoliaBalance(false);
         }
-        */
     };
 
     // --- Enterprise Bulk Transfer Agent State ---
