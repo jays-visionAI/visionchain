@@ -15,6 +15,7 @@ import {
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { WalletActivity } from './WalletActivity';
+import { getEthPrice, getMaticPrice } from '../../services/vcnPriceService';
 
 interface WalletAssetsProps {
     totalValueStr: () => string;
@@ -322,11 +323,11 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                                     const vcnAsset = () => props.getAssetData('VCN');
 
-                                    // Price mapping for different assets (USD)
+                                    // Price mapping for different assets (USD) - Live prices from CoinGecko
                                     const getPriceForChain = (chain: string, symbol: string) => {
                                         if (symbol === 'VCN') return vcnAsset().price;
-                                        if (symbol === 'ETH') return 3200; // ETH price placeholder
-                                        if (symbol === 'MATIC') return 0.45; // MATIC price placeholder
+                                        if (symbol === 'ETH') return getEthPrice();
+                                        if (symbol === 'MATIC') return getMaticPrice();
                                         return 0;
                                     };
 

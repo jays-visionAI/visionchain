@@ -24,6 +24,11 @@ const [currentPrice, setCurrentPrice] = createSignal(0.3750);
 const [priceHistory, setPriceHistory] = createSignal<number[]>([]);
 const [priceSettings, setPriceSettings] = createSignal<VcnPriceSettings>(DEFAULT_SETTINGS);
 
+// Multi-chain price signals
+const [ethPrice, setEthPrice] = createSignal(0);
+const [maticPrice, setMaticPrice] = createSignal(0);
+const [lastPriceFetch, setLastPriceFetch] = createSignal(0);
+
 // Fibonacci-inspired Price Volatility Engine
 // Uses harmonics based on the Golden Ratio (PHI) to simulate natural market cycles
 const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number) => {
@@ -55,6 +60,32 @@ const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number
     return Math.max(settings.minPrice, Math.min(settings.maxPrice, result));
 };
 
+// Fetch market prices from CoinGecko (free API, no key required)
+const fetchMarketPrices = async () => {
+    // Rate limit: only fetch every 60 seconds
+    if (Date.now() - lastPriceFetch() < 60000) return;
+
+    try {
+        const response = await fetch(
+            'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,matic-network&vs_currencies=usd',
+            { headers: { 'Accept': 'application/json' } }
+        );
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.ethereum?.usd) setEthPrice(data.ethereum.usd);
+            if (data['matic-network']?.usd) setMaticPrice(data['matic-network'].usd);
+            setLastPriceFetch(Date.now());
+            console.log('[PriceService] Market prices updated:', { ETH: data.ethereum?.usd, MATIC: data['matic-network']?.usd });
+        }
+    } catch (err) {
+        console.debug('[PriceService] Failed to fetch market prices:', err);
+        // Use fallback prices if API fails
+        if (ethPrice() === 0) setEthPrice(3200);
+        if (maticPrice() === 0) setMaticPrice(0.45);
+    }
+};
+
 // Initial Fetch and Subscription
 let isInitialized = false;
 export const initPriceService = () => {
@@ -77,6 +108,9 @@ export const initPriceService = () => {
         }
     });
 
+    // Fetch market prices immediately
+    fetchMarketPrices();
+
     // Update the live price signal every second
     setInterval(() => {
         if (priceSettings().enabled) {
@@ -91,11 +125,18 @@ export const initPriceService = () => {
             });
         }
     }, 1000);
+
+    // Refresh market prices every 60 seconds
+    setInterval(fetchMarketPrices, 60000);
 };
 
 export const getVcnPrice = () => currentPrice();
 export const getVcnPriceHistory = () => priceHistory();
 export const getVcnPriceSettings = () => priceSettings();
+
+// Multi-chain price getters
+export const getEthPrice = () => ethPrice() || 3200; // fallback
+export const getMaticPrice = () => maticPrice() || 0.45; // fallback
 
 // Get the price at midnight today (local time)
 export const getDailyOpeningPrice = () => {
