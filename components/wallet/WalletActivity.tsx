@@ -67,6 +67,10 @@ export const WalletActivity = (props: WalletActivityProps) => {
                 getDocs(receivedQuery)
             ]);
 
+            console.log(`[WalletActivity] Querying for address: ${normalizedAddress}`);
+            console.log(`[WalletActivity] Sent transactions found: ${sentSnapshot.docs.length}`);
+            console.log(`[WalletActivity] Received transactions found: ${receivedSnapshot.docs.length}`);
+
             // Merge and deduplicate by hash
             const allTxs = new Map();
             sentSnapshot.docs.forEach(doc => allTxs.set(doc.id, doc.data()));
