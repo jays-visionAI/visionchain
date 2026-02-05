@@ -97,6 +97,7 @@ interface WalletDashboardProps {
     unreadCount: number;
     contacts: () => any[];
     showResponseTime?: boolean;
+    walletAddress?: () => string;
 
     // Cross-Chain Bridge
     pendingBridge?: () => {
@@ -1452,7 +1453,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                             {/* Bridge Agent - Always render, component handles visibility */}
                                             <BridgeAgentChip
-                                                walletAddress={props.userProfile()?.address || ''}
+                                                walletAddress={props.walletAddress?.() || props.userProfile()?.address || ''}
                                                 onDismiss={(id) => props.onDismissTask?.(id)}
                                                 onClick={(id) => {
                                                     setSelectedTaskId(id);
@@ -1618,7 +1619,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                                                             {/* Bridge Agent - Always render */}
                                                             <BridgeAgentChip
-                                                                walletAddress={props.userProfile()?.address || ''}
+                                                                walletAddress={props.walletAddress?.() || props.userProfile()?.address || ''}
                                                                 onDismiss={(id) => props.onDismissTask?.(id)}
                                                                 onClick={(id) => {
                                                                     setSelectedTaskId(id);

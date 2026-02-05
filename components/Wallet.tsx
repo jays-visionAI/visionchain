@@ -3419,6 +3419,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 unreadCount={0}
                                 contacts={contacts}
                                 showResponseTime={showResponseTime()}
+                                walletAddress={walletAddress}
                                 onStartBatch={(txs, interval) => {
                                     console.log("Starting batch with txs:", txs, "interval:", interval);
                                     setPendingAction({
