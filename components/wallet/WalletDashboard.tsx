@@ -955,7 +955,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                         initial={{ opacity: 0, scale: 0.98, y: 10 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         transition={{ duration: 0.4 }}
-                                        class={`flex flex-col md:flex-row gap-2 md:gap-5 ${msg.role === 'user' ? 'items-end md:justify-end' : 'items-start'}`}
+                                        class={`group flex flex-col md:flex-row gap-2 md:gap-5 ${msg.role === 'user' ? 'items-end md:justify-end' : 'items-start'}`}
                                     >
                                         <Show when={msg.role === 'assistant'}>
                                             <div class="w-10 h-10 rounded-2xl bg-[#0d0d0f] border border-white/5 flex items-center justify-center flex-shrink-0 shadow-2xl mt-1">
@@ -1088,6 +1088,59 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     {msg.responseTime >= 1000
                                                         ? `${(msg.responseTime / 1000).toFixed(1)}s`
                                                         : `${msg.responseTime}ms`}
+                                                </div>
+                                            </Show>
+
+                                            {/* AI Response Actions - Feedback & Copy */}
+                                            <Show when={msg.role === 'assistant' && text.trim().length > 0}>
+                                                <div class="flex items-center gap-1 mt-2 px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                    {/* Copy Button */}
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(text.trim());
+                                                            // Show toast notification
+                                                            const toast = document.createElement('div');
+                                                            toast.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium z-50 animate-in fade-in slide-in-from-bottom-2';
+                                                            toast.textContent = 'Copied to clipboard';
+                                                            document.body.appendChild(toast);
+                                                            setTimeout(() => toast.remove(), 2000);
+                                                        }}
+                                                        class="p-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-gray-300 transition-all"
+                                                        title="Copy response"
+                                                    >
+                                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                                        </svg>
+                                                    </button>
+
+                                                    {/* Thumbs Up */}
+                                                    <button
+                                                        onClick={() => {
+                                                            console.log('[Feedback] Positive for message:', msg.id);
+                                                            // TODO: Save feedback to Firebase
+                                                        }}
+                                                        class="p-1.5 rounded-lg hover:bg-green-500/10 text-gray-500 hover:text-green-400 transition-all"
+                                                        title="Good response"
+                                                    >
+                                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                                                        </svg>
+                                                    </button>
+
+                                                    {/* Thumbs Down */}
+                                                    <button
+                                                        onClick={() => {
+                                                            console.log('[Feedback] Negative for message:', msg.id);
+                                                            // TODO: Save feedback to Firebase
+                                                        }}
+                                                        class="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-all"
+                                                        title="Bad response"
+                                                    >
+                                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                                                        </svg>
+                                                    </button>
                                                 </div>
                                             </Show>
                                         </div>
