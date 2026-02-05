@@ -9,16 +9,19 @@ import { getFirebaseDb } from './firebaseService';
 import { doc, setDoc } from 'firebase/firestore';
 
 const ADDRESSES = {
-    // Vision Chain v2 - VCN Native (Chain ID: 1337)
-    // Note: VCN is now the NATIVE token (like ETH on Ethereum)
-    // No VCN_TOKEN contract needed - use native balance instead
+    // Vision Chain v2 - Chain ID: 3151909
+    // VCN is now an ERC-20 token deployed on Vision Chain v2
 
-    // Core Contracts (Native VCN Edition) - Deployed 2026-02-04
+    // Core Contracts (Vision Chain v2) - Deployed 2026-02-06
+    VCN_TOKEN: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // VCN ERC-20 Token
+    VCN_PAYMASTER: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512", // VCNPaymasterNative
+    BRIDGE_STAKING: "0xc351628EB244ec633d5f21fBD6621e1a683B1181", // BridgeStaking (12% APY)
+
+    // Legacy Core Contracts (old chain)
     VCN_VESTING: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
     NODE_LICENSE: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
     MINING_POOL: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
     VISION_BRIDGE: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-    VCN_PAYMASTER: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
 
     // Secure Bridge (Phase 1 - Optimistic Security)
     INTENT_COMMITMENT: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
@@ -28,8 +31,7 @@ const ADDRESSES = {
     // Sepolia Contracts
     VCN_TOKEN_SEPOLIA: "0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f",
 
-    // Legacy (kept for compatibility, may not be used)
-    VCN_TOKEN: "0x0000000000000000000000000000000000000000", // Deprecated - VCN is native now
+    // Legacy (kept for compatibility)
     TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
     TIME_LOCK_AGENT_MOCK: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 
@@ -183,8 +185,9 @@ export class ContractService {
     }
 
     async getTokenBalance(address: string, tokenAddress: string = ADDRESSES.VCN_TOKEN): Promise<string> {
-        // VCN is now native token - if querying VCN_TOKEN (zero address), return native balance
-        if (tokenAddress === ADDRESSES.VCN_TOKEN || tokenAddress === "0x0000000000000000000000000000000000000000") {
+        // VCN is now ERC-20 token on Vision Chain v2
+        // Only return native balance for zero address
+        if (tokenAddress === "0x0000000000000000000000000000000000000000") {
             return this.getNativeBalance(address);
         }
 
