@@ -470,7 +470,7 @@ async function logSecurityEvent(email, action, details, db) {
 const db = admin.firestore();
 
 // Configuration
-const RPC_URL = "http://46.224.221.201:8545"; // Vision Chain Testnet
+const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2 (Chain ID: 3151909)
 
 // Vision Chain Executor - MUST be set via Firebase Secrets
 // firebase functions:secrets:set VCN_EXECUTOR_PK
