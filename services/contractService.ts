@@ -247,7 +247,7 @@ export class ContractService {
 
     async submitToSequencer(signedTx: string, options: { chainId?: number, type?: string, metadata?: any } = {}) {
         try {
-            const { chainId = 1337, type = 'evm', metadata = {} } = options;
+            const { chainId = 3151909, type = 'evm', metadata = {} } = options;
             const response = await fetch(ADDRESSES.SEQUENCER_URL, {
                 method: 'POST',
                 headers: {
@@ -485,7 +485,7 @@ export class ContractService {
 
         // 3. Get Nonce
         const nonce = await (contract as any).nonces(userAddress);
-        const chainId = 1337;
+        const chainId = 3151909; // Vision Chain v2
 
         // 4. Sign EIP-712 Permit
         // Dynamic name fetching to match on-chain value exactly
