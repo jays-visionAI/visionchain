@@ -3087,6 +3087,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             role: 'assistant',
                             content: msg
                         }]);
+                        setThinkingSteps([]);
+                        setStreamingContent('');
                         setChatLoading(false);
                         return;
                     }
@@ -3110,6 +3112,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         isMultiReview: true,
                         batchData: results
                     }]);
+                    setThinkingSteps([]);
+                    setStreamingContent('');
                     setChatLoading(false);
                     return;
 
@@ -3170,6 +3174,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         isBridgeReview: true,
                         bridgeData: bridgeData
                     }]);
+                    setThinkingSteps([]); // Clear thinking before returning
+                    setStreamingContent(''); // Clear streaming content
                     setChatLoading(false);
                     return;
                 }
