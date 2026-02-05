@@ -75,7 +75,7 @@ export const BRIDGE_CONTRACTS = {
     },
     // Vision Testnet (Destination Chain)
     vision: {
-        chainId: 1337,
+        chainId: 3151909,
         rpc: 'https://api.visionchain.co/rpc-proxy',
         intentCommitment: '0x47c05BCCA7d57c87083EB4e586007530eE4539e9',
         messageInbox: '0x408F924BAEC71cC3968614Cb2c58E155A35e6890',

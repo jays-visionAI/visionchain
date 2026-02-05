@@ -344,7 +344,7 @@ export class ContractService {
                 const db = getFirebaseDb();
                 await setDoc(doc(db, 'transactions', tx.hash), {
                     hash: tx.hash,
-                    chainId: 1337,
+                    chainId: 3151909,
                     type: 'Transfer',
                     from_addr: fromAddress.toLowerCase(),
                     to_addr: to.toLowerCase(),
@@ -366,7 +366,7 @@ export class ContractService {
                 const db = getFirebaseDb();
                 await setDoc(doc(db, 'transactions', tx.hash), {
                     hash: tx.hash,
-                    chainId: 1337,
+                    chainId: 3151909,
                     type: 'Transfer',
                     from_addr: fromAddress.toLowerCase(),
                     to_addr: to.toLowerCase(),
@@ -431,7 +431,7 @@ export class ContractService {
             const db = getFirebaseDb();
             await setDoc(doc(db, 'transactions', tx.hash), {
                 hash: tx.hash,
-                chainId: 1337,
+                chainId: 3151909,
                 type: 'Transfer',
                 from_addr: adminAddress.toLowerCase(),
                 to_addr: toAddress.toLowerCase(),
@@ -546,7 +546,7 @@ export class ContractService {
             const db = getFirebaseDb();
             await setDoc(doc(db, 'transactions', result.txHash || `gasless-${Date.now()}`), {
                 hash: result.txHash || `gasless-${Date.now()}`,
-                chainId: 1337,
+                chainId: 3151909,
                 type: 'Transfer',
                 from_addr: userAddress.toLowerCase(),
                 to_addr: to.toLowerCase(),
@@ -752,7 +752,7 @@ export class ContractService {
         const domain = {
             name: tokenName,
             version: "1",
-            chainId: 1337,
+            chainId: 3151909,
             verifyingContract: ADDRESSES.VCN_TOKEN
         };
 
@@ -834,7 +834,7 @@ export class ContractService {
         const domain = {
             name: tokenName,
             version: "1",
-            chainId: 1337,
+            chainId: 3151909,
             verifyingContract: ADDRESSES.VCN_TOKEN
         };
 
@@ -1078,7 +1078,7 @@ export class ContractService {
                 value: ethers.parseEther(value || "0"),
                 nonce: nonce !== undefined ? nonce : await wallet.getNonce(),
                 gasLimit: 21000,
-                chainId: 1337
+                chainId: 3151909
             };
 
             // Use provided gas price or fetch if missing
