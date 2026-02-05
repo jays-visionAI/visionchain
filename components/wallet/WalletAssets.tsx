@@ -316,11 +316,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 // Testnet Assets
                                 { id: 'vcn_test', symbol: 'VCN', name: 'Vision Chain (Testnet)', network: 'testnet', chain: 'vision' },
                                 { id: 'vcn_sepolia', symbol: 'VCN', name: 'Ethereum Sepolia', network: 'testnet', chain: 'sepolia' },
-                            ]}>
+                            ].filter(item => networkFilter() === 'all' || networkFilter() === item.network)}>
                                 {(item, index) => {
-                                    // Visibility Filter
-                                    if (networkFilter() !== 'all' && networkFilter() !== item.network) return null;
-
                                     const vcnAsset = () => props.getAssetData('VCN');
 
                                     // Price mapping for different assets (USD) - Live prices from CoinGecko
