@@ -110,6 +110,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             const unique = combined.filter((b, i, arr) =>
                 arr.findIndex(x => x.id === b.id) === i
             );
+            console.log('[BridgeAgentChip] Total bridges found:', unique.length, 'from bridgeTx:', bridgeTxList.length, 'from tx:', txList.length);
             setBridges(unique);
             setIsLoading(false);
         };
