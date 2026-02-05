@@ -10,13 +10,13 @@
  *   - VCN_EXECUTOR_PK environment variable must be set (admin private key)
  */
 
-const { ethers } = require('ethers');
+import { ethers } from 'ethers';
 
 // Contract addresses
-const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
+const VISION_BRIDGE_SECURE_ADDRESS = '0xFDA890183E1e18eE7b02A94d9DF195515D914655';
 
-// Vision Chain RPC
-const VISION_RPC_URL = 'https://www.visionchain.co/rpc';
+// Vision Chain RPC (direct node access)
+const VISION_RPC_URL = 'http://46.224.221.201:8545';
 
 // VisionBridgeSecure ABI (only setLimits function)
 const BRIDGE_ABI = [

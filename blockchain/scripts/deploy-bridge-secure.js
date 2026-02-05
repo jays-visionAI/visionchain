@@ -17,7 +17,13 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const RPC_URL = 'http://46.224.221.201:8545';
-const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
+
+if (!ADMIN_PRIVATE_KEY) {
+    console.error('ERROR: ADMIN_PRIVATE_KEY environment variable is required');
+    console.error('Usage: ADMIN_PRIVATE_KEY=0x... node scripts/deploy-bridge-secure.js');
+    process.exit(1);
+}
 
 // Supported destination chains
 const SEPOLIA_CHAIN_ID = 11155111;

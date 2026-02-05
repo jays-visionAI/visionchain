@@ -796,6 +796,96 @@ exports.bridgeWithPaymaster = onRequest({ cors: true, invoker: "public", secrets
   }
 });
 
+// --- Admin: Update VisionBridgeSecure Limits ---
+const VISION_BRIDGE_SECURE_ADDRESS = "0xFDA890183E1e18eE7b02A94d9DF195515D914655";
+const VISION_BRIDGE_SECURE_ABI = [
+  "function setLimits(uint256 _minLock, uint256 _maxLock, uint256 _maxDailyPerUser, uint256 _globalDaily) external",
+  "function minLockAmount() view returns (uint256)",
+  "function maxLockAmount() view returns (uint256)",
+  "function maxDailyLockPerUser() view returns (uint256)",
+  "function globalDailyLimit() view returns (uint256)",
+];
+
+exports.updateBridgeLimits = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { adminKey, minLock, maxLock, maxDailyPerUser, globalDaily } = req.body;
+
+    // Simple admin key check (should use proper auth in production)
+    if (adminKey !== "vcn-admin-2026") {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    // Default values if not provided
+    const newMinLock = minLock || "0.1"; // 0.1 VCN
+    const newMaxLock = maxLock || "1000000"; // 1M VCN
+    const newMaxDailyPerUser = maxDailyPerUser || "100000"; // 100K VCN
+    const newGlobalDaily = globalDaily || "10000000"; // 10M VCN
+
+    console.log("[Bridge Limits] Updating limits...");
+    console.log(`  minLock: ${newMinLock} VCN`);
+    console.log(`  maxLock: ${newMaxLock} VCN`);
+    console.log(`  maxDailyPerUser: ${newMaxDailyPerUser} VCN`);
+    console.log(`  globalDaily: ${newGlobalDaily} VCN`);
+
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+    const contract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, VISION_BRIDGE_SECURE_ABI, adminWallet);
+
+    // Get current limits
+    let currentLimits = {};
+    try {
+      currentLimits = {
+        minLock: ethers.formatEther(await contract.minLockAmount()),
+        maxLock: ethers.formatEther(await contract.maxLockAmount()),
+        maxDailyPerUser: ethers.formatEther(await contract.maxDailyLockPerUser()),
+        globalDaily: ethers.formatEther(await contract.globalDailyLimit()),
+      };
+      console.log("[Bridge Limits] Current limits:", currentLimits);
+    } catch (e) {
+      console.log("[Bridge Limits] Could not read current limits");
+    }
+
+    // Update limits
+    const tx = await contract.setLimits(
+      ethers.parseEther(newMinLock),
+      ethers.parseEther(newMaxLock),
+      ethers.parseEther(newMaxDailyPerUser),
+      ethers.parseEther(newGlobalDaily),
+    );
+
+    console.log("[Bridge Limits] TX sent:", tx.hash);
+    const receipt = await tx.wait();
+    console.log("[Bridge Limits] Confirmed in block:", receipt.blockNumber);
+
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      previousLimits: currentLimits,
+      newLimits: {
+        minLock: newMinLock,
+        maxLock: newMaxLock,
+        maxDailyPerUser: newMaxDailyPerUser,
+        globalDaily: newGlobalDaily,
+      },
+    });
+  } catch (err) {
+    console.error("[Bridge Limits] Error:", err);
+    return res.status(500).json({ error: err.message || "Failed to update limits" });
+  }
+});
+
 
 // --- Admin Set Target APY (Server-Side, Fixed APY) ---
 exports.adminSetAPY = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
