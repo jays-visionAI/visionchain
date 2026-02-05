@@ -35,10 +35,19 @@ const VISION_BRIDGE_SECURE_ADDRESS = '0xFDA890183E1e18eE7b02A94d9DF195515D914655
 // Chain IDs
 const VISION_CHAIN_ID = 1337;
 const SEPOLIA_CHAIN_ID = 11155111;
+const POLYGON_AMOY_CHAIN_ID = 80002;
+const BASE_SEPOLIA_CHAIN_ID = 84532;
 
 // Paymaster API URL
 const firebaseProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
 const PAYMASTER_API = `https://us-central1-${firebaseProjectId}.cloudfunctions.net`;
+
+// VCN Token Addresses per Chain (for bridging destinations)
+const VCN_TOKEN_ADDRESSES: Record<number, string> = {
+    [SEPOLIA_CHAIN_ID]: '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f',      // Ethereum Sepolia
+    [POLYGON_AMOY_CHAIN_ID]: '',   // TODO: Deploy VCN Token to Polygon Amoy
+    [BASE_SEPOLIA_CHAIN_ID]: '',   // TODO: Deploy VCN Token to Base Sepolia
+};
 
 // IntentCommitment ABI
 const INTENT_COMMITMENT_ABI = [
@@ -89,11 +98,44 @@ interface BridgeTransaction {
 interface NetworkConfig {
     name: string;
     chainId: number;
+    rpcUrl?: string;
+    explorerUrl?: string;
+    vcnTokenAddress?: string;
+    enabled: boolean;
 }
 
 const NETWORKS: NetworkConfig[] = [
-    { name: 'Ethereum Sepolia', chainId: 11155111 },
-    { name: 'Vision Testnet', chainId: 20261337 }
+    {
+        name: 'Vision Testnet',
+        chainId: 20261337,
+        rpcUrl: 'https://www.visionchain.co/rpc',
+        explorerUrl: 'https://www.visionchain.co/visionscan',
+        enabled: true
+    },
+    {
+        name: 'Ethereum Sepolia',
+        chainId: 11155111,
+        rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+        explorerUrl: 'https://sepolia.etherscan.io',
+        vcnTokenAddress: '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f',
+        enabled: true
+    },
+    {
+        name: 'Polygon Amoy',
+        chainId: 80002,
+        rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com',
+        explorerUrl: 'https://amoy.polygonscan.com',
+        vcnTokenAddress: '', // TODO: Deploy
+        enabled: false  // Enable after VCN token deployment
+    },
+    {
+        name: 'Base Sepolia',
+        chainId: 84532,
+        rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
+        explorerUrl: 'https://sepolia.basescan.org',
+        vcnTokenAddress: '', // TODO: Deploy
+        enabled: false  // Enable after VCN token deployment
+    }
 ];
 
 // Vision Chain RPC endpoint

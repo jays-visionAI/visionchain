@@ -21,10 +21,24 @@ module.exports = {
         hardhat: {
             chainId: 1337
         },
-        // Polygon Amoy Testnet
+        // Polygon Amoy Testnet (old config)
         amoy: {
             url: process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+        },
+        // Polygon Amoy Testnet (new - for VCN Token deployment)
+        polygon_amoy: {
+            url: "https://polygon-amoy-bor-rpc.publicnode.com",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 80002,
+            gasPrice: "auto"
+        },
+        // Base Sepolia Testnet (for VCN Token deployment)
+        base_sepolia: {
+            url: "https://base-sepolia-rpc.publicnode.com",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 84532,
+            gasPrice: "auto"
         },
         // Vision Chain Testnet (old)
         visionTestnet: {
