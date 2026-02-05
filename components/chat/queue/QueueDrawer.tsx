@@ -84,14 +84,13 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     const filteredTasks = createMemo(() => {
         return props.tasks.filter((t: any) => {
             if (activeTab() === 'ACTIVE') {
-                // Active tab: WAITING/EXECUTING/FAILED, but hide if user dismissed
-                if (t.hiddenFromDesk) return false;
-                return ['WAITING', 'EXECUTING', 'FAILED'].includes(t.status);
+                // Active tab: ONLY processing tasks (WAITING, EXECUTING)
+                // FAILED, SENT, COMPLETED should NOT appear here
+                return ['WAITING', 'EXECUTING'].includes(t.status);
             }
-            // History tab: show completed tasks only (SENT, CANCELLED, EXPIRED)
-            // FAILED tasks that are dismissed also move to history
-            if (t.status === 'FAILED' && t.hiddenFromDesk) return true;
-            return ['SENT', 'CANCELLED', 'EXPIRED'].includes(t.status);
+            // History tab: show ALL completed/finished tasks
+            // SENT, COMPLETED, FINALIZED, FAILED, CANCELLED, EXPIRED
+            return ['SENT', 'COMPLETED', 'FINALIZED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(t.status);
         }).sort((a, b) => b.timestamp - a.timestamp);
     });
 
@@ -300,17 +299,21 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
                                             {/* Action Buttons */}
                                             <div class="flex gap-2 pt-2 border-t border-white/5">
-                                                <Show when={['WAITING', 'EXECUTING'].includes(task.status)}>
+                                                {/* Cancel button - ONLY for WAITING status */}
+                                                <Show when={task.status === 'WAITING'}>
                                                     <button
                                                         onClick={(e) => handleCancel(task.scheduleId, e)}
                                                         disabled={isCancelling() === task.scheduleId}
                                                         class="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                                     >
-                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> {task.status === 'EXECUTING' ? 'Stop Agent' : 'Cancel Task'}</>}>
+                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> Cancel Task</>}>
                                                             <div class="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                                                         </Show>
                                                     </button>
+                                                </Show>
 
+                                                {/* Force Execute button - only for WAITING/EXECUTING */}
+                                                <Show when={['WAITING', 'EXECUTING'].includes(task.status)}>
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -325,28 +328,14 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                     </button>
                                                 </Show>
 
-                                                <Show when={!['WAITING', 'EXECUTING'].includes(task.status)}>
-                                                    <Show when={task.txHash}>
-                                                        <button
-                                                            onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
-                                                            class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
-                                                        >
-                                                            <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
-                                                        </button>
-                                                    </Show>
-                                                    {/* Dismiss button only in Active tab for FAILED tasks */}
-                                                    <Show when={activeTab() === 'ACTIVE' && task.status === 'FAILED'}>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                props.onDismissTask?.(task.id);
-                                                            }}
-                                                            class="py-2.5 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
-                                                            title="Dismiss this task"
-                                                        >
-                                                            <X class="w-3.5 h-3.5" /> Dismiss
-                                                        </button>
-                                                    </Show>
+                                                {/* View on VisionScan button - for completed tasks with txHash */}
+                                                <Show when={!['WAITING', 'EXECUTING'].includes(task.status) && task.txHash}>
+                                                    <button
+                                                        onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
+                                                        class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                                                    >
+                                                        <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
+                                                    </button>
                                                 </Show>
                                             </div>
                                         </div>
