@@ -161,6 +161,142 @@ const ThinkingDisplay = (props: { steps: any[] }) => {
     );
 };
 
+// Parse AI response into sections based on markdown headers
+const parseResponseSections = (content: string): { title: string; content: string }[] => {
+    // Split by ## headers (keeping the header)
+    const parts = content.split(/(?=^## )/gm);
+
+    if (parts.length <= 1 || !parts[0].trim().startsWith('## ')) {
+        // No headers found, return as single section
+        return [{ title: 'Response', content }];
+    }
+
+    return parts
+        .filter(part => part.trim())
+        .map(part => {
+            const lines = part.split('\n');
+            const headerLine = lines[0];
+            const title = headerLine.replace(/^##\s*/, '').trim();
+            const sectionContent = lines.slice(1).join('\n').trim();
+            return { title: title || 'Details', content: sectionContent };
+        });
+};
+
+// Accordion Response Component
+const AccordionResponse = (props: {
+    content: string;
+    msgId?: string;
+    onCopy: (text: string) => void;
+}) => {
+    const sections = createMemo(() => parseResponseSections(props.content));
+    const [expandedSections, setExpandedSections] = createSignal<Set<number>>(new Set([0])); // First section open by default
+    const [feedback, setFeedback] = createSignal<Record<number, 'up' | 'down' | null>>({});
+
+    const toggleSection = (index: number) => {
+        const current = expandedSections();
+        const newSet = new Set(current);
+        if (newSet.has(index)) {
+            newSet.delete(index);
+        } else {
+            newSet.add(index);
+        }
+        setExpandedSections(newSet);
+    };
+
+    const handleFeedback = (index: number, type: 'up' | 'down') => {
+        setFeedback(prev => ({
+            ...prev,
+            [index]: prev[index] === type ? null : type
+        }));
+        console.log(`[Feedback] Section ${index}: ${type}`);
+    };
+
+    // If only one section, render normally without accordion
+    if (sections().length <= 1) {
+        return null; // Let the normal rendering handle it
+    }
+
+    return (
+        <div class="space-y-2">
+            <For each={sections()}>
+                {(section, index) => (
+                    <div class="rounded-2xl border border-white/[0.08] overflow-hidden bg-[#18181b]/50 backdrop-blur-3xl">
+                        {/* Section Header */}
+                        <button
+                            onClick={() => toggleSection(index())}
+                            class="w-full px-5 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div class={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${expandedSections().has(index())
+                                    ? 'bg-blue-500/20 text-blue-400'
+                                    : 'bg-white/5 text-gray-500'
+                                    }`}>
+                                    {index() + 1}
+                                </div>
+                                <span class="text-sm font-bold text-gray-200">{section.title}</span>
+                            </div>
+                            <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform duration-200 ${expandedSections().has(index()) ? 'rotate-180' : ''
+                                }`} />
+                        </button>
+
+                        {/* Section Content */}
+                        <Show when={expandedSections().has(index())}>
+                            <div class="px-5 pb-4 border-t border-white/5">
+                                <div
+                                    class="pt-3 text-[15px] leading-[1.6] text-gray-100 markdown-body"
+                                    innerHTML={marked.parse(section.content) as string}
+                                />
+
+                                {/* Section Actions */}
+                                <div class="flex items-center gap-1 mt-3 pt-3 border-t border-white/5">
+                                    {/* Copy */}
+                                    <button
+                                        onClick={() => props.onCopy(section.content)}
+                                        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-white/5 text-gray-500 hover:text-gray-300 transition-all text-xs"
+                                    >
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                        </svg>
+                                        Copy
+                                    </button>
+
+                                    {/* Thumbs Up */}
+                                    <button
+                                        onClick={() => handleFeedback(index(), 'up')}
+                                        class={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs ${feedback()[index()] === 'up'
+                                            ? 'bg-green-500/10 text-green-400'
+                                            : 'hover:bg-green-500/10 text-gray-500 hover:text-green-400'
+                                            }`}
+                                    >
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                                        </svg>
+                                        {feedback()[index()] === 'up' ? 'Helpful' : ''}
+                                    </button>
+
+                                    {/* Thumbs Down */}
+                                    <button
+                                        onClick={() => handleFeedback(index(), 'down')}
+                                        class={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs ${feedback()[index()] === 'down'
+                                            ? 'bg-red-500/10 text-red-400'
+                                            : 'hover:bg-red-500/10 text-gray-500 hover:text-red-400'
+                                            }`}
+                                    >
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </Show>
+                    </div>
+                )}
+            </For>
+        </div>
+    );
+};
+
 const MultiReviewCard = (props: {
     transactions: any[],
     onApprove: (interval: number) => void,
@@ -968,16 +1104,40 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             {(() => {
                                                 const rawContent = msg.content.split('[RECOMMENDED_QUESTIONS]')[0];
                                                 const { text, charts } = parseChartBlocks(rawContent);
+                                                const sections = parseResponseSections(text);
+                                                const hasMultipleSections = msg.role === 'assistant' && sections.length > 1;
+
+                                                const handleCopySection = (content: string) => {
+                                                    navigator.clipboard.writeText(content);
+                                                    const toast = document.createElement('div');
+                                                    toast.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium z-50 animate-in fade-in slide-in-from-bottom-2';
+                                                    toast.textContent = 'Copied to clipboard';
+                                                    document.body.appendChild(toast);
+                                                    setTimeout(() => toast.remove(), 2000);
+                                                };
+
                                                 return (
                                                     <>
                                                         <Show when={text.trim().length > 0}>
-                                                            <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all markdown-body overflow-hidden break-words ${msg.role === 'user'
-                                                                ? 'bg-[#007AFF] text-white rounded-tr-sm shadow-[0_10px_30px_-5px_rgba(0,122,255,0.3)]'
-                                                                : 'bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm'
-                                                                }`}
-                                                                style="max-width: 100%; word-wrap: break-word; overflow-wrap: break-word;"
-                                                                innerHTML={marked.parse(text) as string}
-                                                            />
+                                                            {/* Accordion view for multi-section responses */}
+                                                            <Show when={hasMultipleSections}>
+                                                                <AccordionResponse
+                                                                    content={text}
+                                                                    msgId={msg.id}
+                                                                    onCopy={handleCopySection}
+                                                                />
+                                                            </Show>
+
+                                                            {/* Normal view for single section */}
+                                                            <Show when={!hasMultipleSections}>
+                                                                <div class={`px-6 py-4 rounded-[24px] text-[16px] leading-[1.6] transition-all markdown-body overflow-hidden break-words ${msg.role === 'user'
+                                                                    ? 'bg-[#007AFF] text-white rounded-tr-sm shadow-[0_10px_30px_-5px_rgba(0,122,255,0.3)]'
+                                                                    : 'bg-[#18181b]/50 backdrop-blur-3xl text-gray-100 border border-white/[0.08] rounded-tl-sm'
+                                                                    }`}
+                                                                    style="max-width: 100%; word-wrap: break-word; overflow-wrap: break-word;"
+                                                                    innerHTML={marked.parse(text) as string}
+                                                                />
+                                                            </Show>
                                                         </Show>
                                                         <For each={charts}>
                                                             {(chartData) => (
