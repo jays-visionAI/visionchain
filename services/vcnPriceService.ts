@@ -66,17 +66,18 @@ const fetchMarketPrices = async () => {
     if (Date.now() - lastPriceFetch() < 60000) return;
 
     try {
+        // Note: MATIC is now POL (polygon-ecosystem-token) on CoinGecko
         const response = await fetch(
-            'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,matic-network&vs_currencies=usd',
+            'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,polygon-ecosystem-token&vs_currencies=usd',
             { headers: { 'Accept': 'application/json' } }
         );
 
         if (response.ok) {
             const data = await response.json();
             if (data.ethereum?.usd) setEthPrice(data.ethereum.usd);
-            if (data['matic-network']?.usd) setMaticPrice(data['matic-network'].usd);
+            if (data['polygon-ecosystem-token']?.usd) setMaticPrice(data['polygon-ecosystem-token'].usd);
             setLastPriceFetch(Date.now());
-            console.log('[PriceService] Market prices updated:', { ETH: data.ethereum?.usd, MATIC: data['matic-network']?.usd });
+            console.log('[PriceService] Market prices updated:', { ETH: data.ethereum?.usd, POL: data['polygon-ecosystem-token']?.usd });
         }
     } catch (err) {
         console.debug('[PriceService] Failed to fetch market prices:', err);

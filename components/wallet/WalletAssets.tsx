@@ -36,6 +36,8 @@ interface WalletAssetsProps {
     ethMainnetBalance?: () => number;
     polygonBalance?: () => number;
     baseBalance?: () => number;
+    polygonAmoyBalance?: () => number;
+    baseSepoliaBalance?: () => number;
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
@@ -311,11 +313,13 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 // Mainnet Assets
                                 { id: 'vcn_main', symbol: 'VCN', name: 'Vision Chain (Mainnet)', network: 'mainnet', chain: 'vision' },
                                 { id: 'eth_main', symbol: 'ETH', name: 'Ethereum Mainnet', network: 'mainnet', chain: 'ethereum' },
-                                { id: 'matic_main', symbol: 'MATIC', name: 'Polygon Mainnet', network: 'mainnet', chain: 'polygon' },
+                                { id: 'pol_main', symbol: 'POL', name: 'Polygon Mainnet', network: 'mainnet', chain: 'polygon' },
                                 { id: 'base_main', symbol: 'ETH', name: 'Base Mainnet', network: 'mainnet', chain: 'base' },
                                 // Testnet Assets
                                 { id: 'vcn_test', symbol: 'VCN', name: 'Vision Chain (Testnet)', network: 'testnet', chain: 'vision' },
                                 { id: 'vcn_sepolia', symbol: 'VCN', name: 'Ethereum Sepolia', network: 'testnet', chain: 'sepolia' },
+                                { id: 'pol_amoy', symbol: 'POL', name: 'Polygon Amoy', network: 'testnet', chain: 'amoy' },
+                                { id: 'base_sepolia', symbol: 'ETH', name: 'Base Sepolia', network: 'testnet', chain: 'base_test' },
                             ].filter(item => networkFilter() === 'all' || networkFilter() === item.network)}>
                                 {(item, index) => {
                                     const vcnAsset = () => props.getAssetData('VCN');
@@ -324,7 +328,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     const getPriceForChain = (chain: string, symbol: string) => {
                                         if (symbol === 'VCN') return vcnAsset().price;
                                         if (symbol === 'ETH') return getEthPrice();
-                                        if (symbol === 'MATIC') return getMaticPrice();
+                                        if (symbol === 'POL') return getMaticPrice();
                                         return 0;
                                     };
 
@@ -334,8 +338,10 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                             case 'vcn_test': return vcnAsset().liquidBalance;
                                             case 'vcn_sepolia': return props.sepoliaVcnBalance?.() || 0;
                                             case 'eth_main': return props.ethMainnetBalance?.() || 0;
-                                            case 'matic_main': return props.polygonBalance?.() || 0;
+                                            case 'pol_main': return props.polygonBalance?.() || 0;
                                             case 'base_main': return props.baseBalance?.() || 0;
+                                            case 'pol_amoy': return props.polygonAmoyBalance?.() || 0;
+                                            case 'base_sepolia': return props.baseSepoliaBalance?.() || 0;
                                             default: return 0;
                                         }
                                     };
@@ -353,6 +359,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         polygon: { icon: 'P', color: 'text-purple-400', bgColor: 'from-purple-500 to-indigo-600' },
                                         base: { icon: 'B', color: 'text-blue-400', bgColor: 'from-blue-500 to-blue-700' },
                                         sepolia: { icon: 'S', color: 'text-amber-400', bgColor: 'from-amber-500/20 to-orange-500/20' },
+                                        amoy: { icon: 'A', color: 'text-purple-400', bgColor: 'from-purple-500/20 to-indigo-500/20' },
+                                        base_test: { icon: 'B', color: 'text-blue-400', bgColor: 'from-blue-500/20 to-blue-700/20' },
                                     };
                                     const config = chainConfig[item.chain] || chainConfig.vision;
 

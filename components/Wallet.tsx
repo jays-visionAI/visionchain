@@ -568,6 +568,8 @@ const Wallet = (): JSX.Element => {
     const [ethMainnetBalance, setEthMainnetBalance] = createSignal(0);
     const [polygonBalance, setPolygonBalance] = createSignal(0);
     const [baseBalance, setBaseBalance] = createSignal(0);
+    const [polygonAmoyBalance, setPolygonAmoyBalance] = createSignal(0);
+    const [baseSepoliaBalance, setBaseSepoliaBalance] = createSignal(0);
     const [isLoadingMultiChain, setIsLoadingMultiChain] = createSignal(false);
 
     // Multi-Chain Balance Fetcher
@@ -609,16 +611,16 @@ const Wallet = (): JSX.Element => {
                 }
             })(),
 
-            // Polygon Mainnet MATIC
+            // Polygon Mainnet POL
             (async () => {
                 try {
                     const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com';
                     const provider = new ethers.JsonRpcProvider(POLYGON_RPC);
                     const balance = await provider.getBalance(addr);
                     setPolygonBalance(parseFloat(ethers.formatEther(balance)));
-                    console.log('[Polygon] MATIC Balance:', parseFloat(ethers.formatEther(balance)));
+                    console.log('[Polygon] POL Balance:', parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Polygon] MATIC balance error:', err);
+                    console.debug('[Polygon] POL balance error:', err);
                     setPolygonBalance(0);
                 }
             })(),
@@ -634,6 +636,34 @@ const Wallet = (): JSX.Element => {
                 } catch (err) {
                     console.debug('[Base] ETH balance error:', err);
                     setBaseBalance(0);
+                }
+            })(),
+
+            // Polygon Amoy Testnet POL
+            (async () => {
+                try {
+                    const AMOY_RPC = 'https://polygon-amoy-bor-rpc.publicnode.com';
+                    const provider = new ethers.JsonRpcProvider(AMOY_RPC);
+                    const balance = await provider.getBalance(addr);
+                    setPolygonAmoyBalance(parseFloat(ethers.formatEther(balance)));
+                    console.log('[Polygon Amoy] POL Balance:', parseFloat(ethers.formatEther(balance)));
+                } catch (err) {
+                    console.debug('[Polygon Amoy] POL balance error:', err);
+                    setPolygonAmoyBalance(0);
+                }
+            })(),
+
+            // Base Sepolia Testnet ETH
+            (async () => {
+                try {
+                    const BASE_SEPOLIA_RPC = 'https://base-sepolia-rpc.publicnode.com';
+                    const provider = new ethers.JsonRpcProvider(BASE_SEPOLIA_RPC);
+                    const balance = await provider.getBalance(addr);
+                    setBaseSepoliaBalance(parseFloat(ethers.formatEther(balance)));
+                    console.log('[Base Sepolia] ETH Balance:', parseFloat(ethers.formatEther(balance)));
+                } catch (err) {
+                    console.debug('[Base Sepolia] ETH balance error:', err);
+                    setBaseSepoliaBalance(0);
                 }
             })(),
         ];
@@ -3510,6 +3540,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 ethMainnetBalance={ethMainnetBalance}
                                 polygonBalance={polygonBalance}
                                 baseBalance={baseBalance}
+                                polygonAmoyBalance={polygonAmoyBalance}
+                                baseSepoliaBalance={baseSepoliaBalance}
                             />
                         </Show>
 
