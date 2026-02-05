@@ -92,14 +92,13 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     createEffect(() => {
         const addr = props.walletAddress;
         if (!addr) {
-            console.log('[BridgeAgentChip] No wallet address provided');
             setBridges([]);
             setIsLoading(false);
             return;
         }
 
         const normalizedAddr = addr.toLowerCase();
-        console.log('[BridgeAgentChip] Subscribing for wallet:', normalizedAddr);
+        // Subscription started (debug only)
 
         setIsLoading(true);
         let bridgeTxList: BridgeTransaction[] = [];
@@ -111,7 +110,6 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             const unique = combined.filter((b, i, arr) =>
                 arr.findIndex(x => x.id === b.id) === i
             );
-            console.log('[BridgeAgentChip] Combined bridges:', unique.length);
             setBridges(unique);
             setIsLoading(false);
         };
@@ -133,7 +131,6 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                     id: doc.id,
                     ...doc.data()
                 } as BridgeTransaction));
-                console.log('[BridgeAgentChip] bridgeTransactions:', bridgeTxList.length);
                 updateCombinedBridges();
             }, (error) => {
                 console.error('[BridgeAgentChip] bridgeTransactions error:', error);
@@ -152,7 +149,6 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             unsubscribe2 = onSnapshot(q2, (snapshot) => {
                 txList = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    console.log('[BridgeAgentChip] Found bridge tx:', doc.id, 'status:', data.bridgeStatus);
                     // Map transactions format to BridgeTransaction format
                     // Keep original status names for display
                     const status = data.bridgeStatus || 'PENDING';
@@ -177,7 +173,6 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                     const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
                     return timeB - timeA;
                 });
-                console.log('[BridgeAgentChip] transactions bridges:', txList.length);
                 updateCombinedBridges();
             }, (error) => {
                 console.error('[BridgeAgentChip] transactions error:', error);
