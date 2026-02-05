@@ -1182,7 +1182,7 @@ const Wallet = (): JSX.Element => {
                         const result = await contractService.scheduleTimeLockGasless(recipient, amount, lockDelaySeconds(), auth.user()?.email || undefined);
                         console.log("[Paymaster] Time-lock Scheduled:", result);
 
-                        timeLockTxHash = resultTxHash;
+                        timeLockTxHash = result.txHash;
                         timeLockScheduleId = result.scheduleId;
                         timeLockSuccess = true;
 
@@ -1285,8 +1285,8 @@ const Wallet = (): JSX.Element => {
 
                         // Extract hash from backend response if available, or just mark success
                         // The Smart Relayer returns status: 'success'
-                        if (resultTxHashes) {
-                            setLastTxHash(resultTxHashes.transfer || resultTxHashes.permit);
+                        if (result && (result.txHash || result.hash)) {
+                            setLastTxHash(result.txHash || result.hash);
                         }
                     } catch (error: any) {
                         console.warn("Paymaster failed, attempting standard transfer...", error);
@@ -1466,7 +1466,7 @@ const Wallet = (): JSX.Element => {
                             if (symbol === 'VCN') {
                                 try {
                                     const result = await contractService.sendGaslessTokens(recipientAddr, tx.amount);
-                                    receipt = { hash: resultTxHashes?.transfer || resultTxHashes?.permit || resultTxHash || '0x...' };
+                                    receipt = { hash: result?.txHash || result?.hash || '0x...' };
                                     console.log(`[Batch] Gasless transfer ${i + 1}/${transactions.length} successful:`, receipt.hash);
                                 } catch (gcError: any) {
                                     console.warn(`[Batch] Gasless failed for tx ${i + 1}, trying standard:`, gcError.message);
