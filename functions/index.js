@@ -659,7 +659,7 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
     try {
       await db.collection("transactions").doc(tx.hash).set({
         hash: tx.hash,
-        chainId: 1337,
+        chainId: 3151909,
         type: "Transfer",
         from_addr: user.toLowerCase(),
         to_addr: recipient.toLowerCase(),
