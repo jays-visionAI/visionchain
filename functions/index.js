@@ -639,13 +639,17 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
     ];
     const tokenContract = new ethers.Contract(vcnTokenAddress, tokenABI, adminWallet);
 
-    // Convert amount from string (wei) to BigInt
-    const amountBigInt = BigInt(amount);
+    // Convert amounts from string (wei) to BigInt
+    const transferAmountBigInt = BigInt(amount);
+    const feeBigInt = fee ? BigInt(fee) : ethers.parseUnits("1.0", 18); // Default 1 VCN fee
+    const totalAmountBigInt = transferAmountBigInt + feeBigInt; // Must match client permit signature
+
+    console.log(`[PaymasterTransfer] Transfer: ${ethers.formatUnits(transferAmountBigInt, 18)}, Fee: ${ethers.formatUnits(feeBigInt, 18)}, Total: ${ethers.formatUnits(totalAmountBigInt, 18)}`);
 
     // Check USER balance (not admin!)
     const userBalance = await tokenContract.balanceOf(user);
-    if (userBalance < amountBigInt) {
-      console.error(`[PaymasterTransfer] Insufficient user balance: ${userBalance} < ${amountBigInt}`);
+    if (userBalance < totalAmountBigInt) {
+      console.error(`[PaymasterTransfer] Insufficient user balance: ${userBalance} < ${totalAmountBigInt}`);
       return res.status(400).json({ error: "Insufficient balance" });
     }
 
@@ -670,9 +674,9 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
 
     console.log(`[PaymasterTransfer] Calling permit for ${user} -> admin`);
 
-    // Step 1: Call permit to allow admin to spend user's tokens
+    // Step 1: Call permit to allow admin to spend user's tokens (permit value = totalAmount)
     try {
-      const permitTx = await tokenContract.permit(user, adminWallet.address, amountBigInt, deadline, v, r, s);
+      const permitTx = await tokenContract.permit(user, adminWallet.address, totalAmountBigInt, deadline, v, r, s);
       await permitTx.wait();
       console.log(`[PaymasterTransfer] Permit successful: ${permitTx.hash}`);
     } catch (permitErr) {
@@ -680,9 +684,10 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
       return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
     }
 
-    // Step 2: Execute transferFrom - move tokens from USER to recipient
-    console.log(`[PaymasterTransfer] Calling transferFrom(${user}, ${recipient}, ${amountBigInt})`);
-    const tx = await tokenContract.transferFrom(user, recipient, amountBigInt);
+    // Step 2: Execute transferFrom - move transfer amount from USER to recipient
+    // Note: Fee remains with user for now (or can be collected separately)
+    console.log(`[PaymasterTransfer] Calling transferFrom(${user}, ${recipient}, ${transferAmountBigInt})`);
+    const tx = await tokenContract.transferFrom(user, recipient, transferAmountBigInt);
     console.log(`[PaymasterTransfer] TX sent: ${tx.hash}`);
 
     const receipt = await tx.wait();
@@ -696,7 +701,7 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
         type: "Transfer",
         from_addr: user.toLowerCase(),
         to_addr: recipient.toLowerCase(),
-        value: ethers.formatUnits(amountBigInt, 18),
+        value: ethers.formatUnits(transferAmountBigInt, 18),
         timestamp: Date.now(),
         status: "indexed",
         metadata: {
