@@ -535,11 +535,13 @@ const VCN_TOKEN_ABI = [
  * }
  */
 exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
-  // Handle CORS preflight
+  // Set CORS headers for ALL responses (including errors)
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Max-Age", "3600");
 
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return res.status(204).send("");
   }
