@@ -642,16 +642,47 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
     // Convert amount from string (wei) to BigInt
     const amountBigInt = BigInt(amount);
 
-    // Check admin balance (temporary - admin transfer mode)
-    const adminBalance = await tokenContract.balanceOf(adminWallet.address);
-    if (adminBalance < amountBigInt) {
-      console.error(`[PaymasterTransfer] Insufficient admin balance: ${adminBalance} < ${amountBigInt}`);
-      return res.status(400).json({ error: "Paymaster has insufficient funds" });
+    // Check USER balance (not admin!)
+    const userBalance = await tokenContract.balanceOf(user);
+    if (userBalance < amountBigInt) {
+      console.error(`[PaymasterTransfer] Insufficient user balance: ${userBalance} < ${amountBigInt}`);
+      return res.status(400).json({ error: "Insufficient balance" });
     }
 
-    // Execute Transfer from Admin Wallet (temporary mode)
-    // TODO: Implement proper permit + transferFrom once VCN Token permit is verified
-    const tx = await tokenContract.transfer(recipient, amountBigInt);
+    // Parse the permit signature (v, r, s)
+    let v;
+    let r;
+    let s;
+    if (signature && typeof signature === "object" && signature.v !== undefined) {
+      // Already split
+      v = signature.v;
+      r = signature.r;
+      s = signature.s;
+    } else if (signature && typeof signature === "string") {
+      // Split the signature
+      const sig = ethers.Signature.from(signature);
+      v = sig.v;
+      r = sig.r;
+      s = sig.s;
+    } else {
+      return res.status(400).json({ error: "Invalid signature format" });
+    }
+
+    console.log(`[PaymasterTransfer] Calling permit for ${user} -> admin`);
+
+    // Step 1: Call permit to allow admin to spend user's tokens
+    try {
+      const permitTx = await tokenContract.permit(user, adminWallet.address, amountBigInt, deadline, v, r, s);
+      await permitTx.wait();
+      console.log(`[PaymasterTransfer] Permit successful: ${permitTx.hash}`);
+    } catch (permitErr) {
+      console.error(`[PaymasterTransfer] Permit failed:`, permitErr);
+      return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+    }
+
+    // Step 2: Execute transferFrom - move tokens from USER to recipient
+    console.log(`[PaymasterTransfer] Calling transferFrom(${user}, ${recipient}, ${amountBigInt})`);
+    const tx = await tokenContract.transferFrom(user, recipient, amountBigInt);
     console.log(`[PaymasterTransfer] TX sent: ${tx.hash}`);
 
     const receipt = await tx.wait();
