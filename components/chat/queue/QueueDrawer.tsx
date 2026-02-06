@@ -30,6 +30,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     const [activeTab, setActiveTab] = createSignal<'ACTIVE' | 'HISTORY'>('ACTIVE');
     const [expandedIds, setExpandedIds] = createSignal<Set<string>>(new Set());
     const [isCancelling, setIsCancelling] = createSignal<string | null>(null);
+    const [isDismissing, setIsDismissing] = createSignal<string | null>(null);
 
     const handleCancel = async (scheduleId: string | undefined, e: Event) => {
         e.stopPropagation();
@@ -45,13 +46,30 @@ const QueueDrawer = (props: QueueDrawerProps) => {
             } else {
                 console.warn("No cancel handler provided");
             }
-
-            // Optimistic UI update could happen here via subscription automatically
         } catch (err) {
             console.error("Cancel failed:", err);
             alert("Failed to cancel transfer. See console for details.");
         } finally {
             setIsCancelling(null);
+        }
+    };
+
+    const handleDismiss = async (taskId: string, e: Event) => {
+        e.stopPropagation();
+        if (!taskId) return;
+
+        setIsDismissing(taskId);
+        try {
+            // Dismiss via Parent Prop (removes from Queue and Desk)
+            if (props.onDismissTask) {
+                await props.onDismissTask(taskId);
+            } else {
+                console.warn("No dismiss handler provided");
+            }
+        } catch (err) {
+            console.error("Dismiss failed:", err);
+        } finally {
+            setIsDismissing(null);
         }
     };
 
@@ -299,7 +317,7 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
                                             {/* Action Buttons */}
                                             <div class="flex gap-2 pt-2 border-t border-white/5">
-                                                {/* Cancel button - ONLY for WAITING status */}
+                                                {/* Cancel button - ONLY for WAITING status (before execution) */}
                                                 <Show when={task.status === 'WAITING'}>
                                                     <button
                                                         onClick={(e) => handleCancel(task.scheduleId, e)}
@@ -308,6 +326,19 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                     >
                                                         <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> Cancel Task</>}>
                                                             <div class="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                                        </Show>
+                                                    </button>
+                                                </Show>
+
+                                                {/* Dismiss button - for completed/failed tasks (after execution) */}
+                                                <Show when={['SENT', 'FAILED', 'COMPLETED', 'CANCELLED', 'EXPIRED'].includes(task.status)}>
+                                                    <button
+                                                        onClick={(e) => handleDismiss(task.id, e)}
+                                                        disabled={isDismissing() === task.id}
+                                                        class="flex-1 py-2.5 bg-gray-500/10 hover:bg-gray-500/20 border border-gray-500/30 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                                    >
+                                                        <Show when={isDismissing() === task.id} fallback={<><X class="w-3.5 h-3.5" /> Dismiss Task</>}>
+                                                            <div class="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin" />
                                                         </Show>
                                                     </button>
                                                 </Show>

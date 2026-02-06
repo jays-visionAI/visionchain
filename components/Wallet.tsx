@@ -787,42 +787,35 @@ const Wallet = (): JSX.Element => {
         }
     };
 
-    // Hide a task from Agent Desk (not delete - preserves in History)
+    // Dismiss a task from Agent Queue and Agent Desk (completely remove)
     const handleDismissTask = async (taskId: string) => {
         // Handle Bridge transactions (ID starts with 'bridge_')
         if (taskId.startsWith('bridge_')) {
             const actualId = taskId.replace('bridge_', '');
-            // Optimistic UI update
-            setBridgeTasks(prev => prev.map(t =>
-                t.id === taskId ? { ...t, hiddenFromDesk: true } : t
-            ));
+            // Completely remove from local state
+            setBridgeTasks(prev => prev.filter(t => t.id !== taskId));
             try {
                 await hideBridgeFromDesk(actualId);
             } catch (e) {
-                console.error('[Wallet] Failed to hide bridge from desk:', e);
+                console.error('[Wallet] Failed to dismiss bridge:', e);
             }
             return;
         }
 
-        // Handle Batch agents
+        // Handle Batch agents - completely remove
         if (batchAgents().some((a: any) => a.id === taskId)) {
-            setBatchAgents(prev => prev.map((a: any) =>
-                a.id === taskId ? { ...a, hiddenFromDesk: true } : a
-            ));
-            // Note: Batch agents might not have Firebase persistence, just local state
+            setBatchAgents(prev => prev.filter((a: any) => a.id !== taskId));
             return;
         }
 
-        // Handle Time-lock tasks
-        setQueueTasks(prev => prev.map((t: any) =>
-            t.id === taskId ? { ...t, hiddenFromDesk: true } : t
-        ));
+        // Handle Time-lock tasks - completely remove from local state
+        setQueueTasks(prev => prev.filter((t: any) => t.id !== taskId));
 
-        // Update Firebase (hides instead of deletes now)
+        // Update Firebase to mark as dismissed
         try {
             await dismissScheduledTask(taskId);
         } catch (e) {
-            console.error('[Wallet] Failed to hide task from desk:', e);
+            console.error('[Wallet] Failed to dismiss task:', e);
         }
     };
 
