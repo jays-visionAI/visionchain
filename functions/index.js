@@ -561,6 +561,13 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
       userEmail,
       transactions,
       senderAddress,
+      // Bridge specific
+      srcChainId,
+      dstChainId,
+      token,
+      nonce,
+      expiry,
+      intentSignature,
     } = req.body;
 
     console.log(`[Paymaster] Request type: ${type} from ${user}`);
@@ -591,8 +598,11 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
       case "batch":
         return await handleBatch(req, res, { user, transactions, fee, deadline, signature, tokenContract, adminWallet, userEmail });
 
+      case "bridge":
+        return await handleBridge(req, res, { user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature, adminWallet });
+
       default:
-        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch` });
+        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge` });
     }
   } catch (err) {
     console.error("[Paymaster] Error:", err);
@@ -888,117 +898,98 @@ async function indexTransaction(txHash, { type, from, to, amount, fee, method })
   }
 }
 
+/**
+ * Handle bridge (cross-chain) transfer
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {object} params - Bridge parameters
+ * @return {Promise} - Response promise
+ */
+async function handleBridge(req, res, { user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature, adminWallet }) {
+  if (!user || !srcChainId || !dstChainId || !amount || !recipient || !intentSignature) {
+    return res.status(400).json({ error: "Missing required fields for bridge" });
+  }
+
+  // Verify expiry
+  if (Math.floor(Date.now() / 1000) > expiry) {
+    return res.status(400).json({ error: "Intent expired" });
+  }
+
+  console.log(`[Paymaster:Bridge] ${user} bridging ${amount} to chain ${dstChainId}`);
+
+  // Intent Commitment Contract
+  const INTENT_COMMITMENT_ADDRESS = "0x47c05BCCA7d57c87083EB4e586007530eE4539e9";
+  const INTENT_COMMITMENT_ABI = [
+    "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
+  ];
+  const contract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, adminWallet);
+
+  // Build intent struct
+  const intent = {
+    user: user,
+    srcChainId: BigInt(srcChainId),
+    dstChainId: BigInt(dstChainId),
+    token: token || ethers.ZeroAddress,
+    amount: BigInt(amount),
+    recipient: recipient,
+    nonce: BigInt(nonce),
+    expiry: BigInt(expiry),
+  };
+
+  // Execute commitIntent on behalf of user (gas paid by admin)
+  const tx = await contract.commitIntent(intent, intentSignature, { gasLimit: 300000 });
+  console.log(`[Paymaster:Bridge] TX sent: ${tx.hash}`);
+
+  const receipt = await tx.wait();
+  console.log(`[Paymaster:Bridge] Confirmed in block ${receipt.blockNumber}`);
+
+  // Parse intentHash from event
+  let intentHash = null;
+  for (const log of receipt.logs || []) {
+    try {
+      if (log.topics && log.topics.length > 1) {
+        intentHash = log.topics[1];
+        break;
+      }
+    } catch (e) {
+      // Not our event
+    }
+  }
+
+  // Save to Firestore for tracking
+  try {
+    await db.collection("bridgeTransactions").add({
+      user: user.toLowerCase(),
+      srcChainId: srcChainId,
+      dstChainId: dstChainId,
+      amount: amount,
+      recipient: recipient,
+      intentHash: intentHash,
+      txHash: tx.hash,
+      status: "COMMITTED",
+      createdAt: admin.firestore.Timestamp.now(),
+      type: "BRIDGE_PAYMASTER",
+    });
+    console.log(`[Paymaster:Bridge] Firestore record created`);
+  } catch (firestoreErr) {
+    console.warn("[Paymaster:Bridge] Firestore write failed:", firestoreErr.message);
+  }
+
+  return res.status(200).json({
+    success: true,
+    txHash: tx.hash,
+    intentHash: intentHash,
+  });
+}
+
 // Legacy aliases for backward compatibility (will be removed after migration)
 exports.paymasterTransfer = exports.paymaster;
 exports.paymasterTimeLock = exports.paymaster;
 
 
-// --- Bridge Paymaster (Gasless Cross-Chain Bridge) ---
-const INTENT_COMMITMENT_ADDRESS = "0x47c05BCCA7d57c87083EB4e586007530eE4539e9";
-const INTENT_COMMITMENT_ABI = [
-  // eslint-disable-next-line max-len
-  "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
-];
+// Legacy alias for bridgeWithPaymaster (backward compatibility)
+exports.bridgeWithPaymaster = exports.paymaster;
 
-exports.bridgeWithPaymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
-  // Handle CORS preflight
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(204).send("");
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  try {
-    const {
-      user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature,
-    } = req.body;
-
-    // Validation
-    if (!user || !srcChainId || !dstChainId || !amount || !recipient || !intentSignature) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Verify expiry
-    if (Math.floor(Date.now() / 1000) > expiry) {
-      return res.status(400).json({ error: "Intent expired" });
-    }
-
-    console.log(`[Bridge Paymaster] Request from ${user}`);
-    console.log(`[Bridge Paymaster] Amount: ${amount}, Dst: ${dstChainId}, Recipient: ${recipient}`);
-
-    // Setup Blockchain Connection with Admin Wallet
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-    const contract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, adminWallet);
-
-    // Build intent struct
-    const intent = {
-      user: user,
-      srcChainId: BigInt(srcChainId),
-      dstChainId: BigInt(dstChainId),
-      token: token || ethers.ZeroAddress,
-      amount: BigInt(amount),
-      recipient: recipient,
-      nonce: BigInt(nonce),
-      expiry: BigInt(expiry),
-    };
-
-    // Execute commitIntent on behalf of user (gas paid by admin)
-    const tx = await contract.commitIntent(intent, intentSignature, { gasLimit: 300000 });
-    console.log(`[Bridge Paymaster] TX sent: ${tx.hash}`);
-
-    const receipt = await tx.wait();
-    console.log(`[Bridge Paymaster] TX confirmed in block ${receipt.blockNumber}`);
-
-    // Parse intentHash from event
-    let intentHash = null;
-    for (const log of receipt.logs || []) {
-      try {
-        // IntentCommitted event topic
-        if (log.topics && log.topics.length > 1) {
-          intentHash = log.topics[1]; // First indexed param is intentHash
-          break;
-        }
-      } catch (e) {
-        // Not our event
-      }
-    }
-
-    // Save to Firestore for tracking
-    try {
-      await db.collection("bridgeTransactions").add({
-        user: user.toLowerCase(),
-        srcChainId: srcChainId,
-        dstChainId: dstChainId,
-        amount: amount,
-        recipient: recipient,
-        intentHash: intentHash,
-        txHash: tx.hash,
-        status: "COMMITTED",
-        createdAt: admin.firestore.Timestamp.now(),
-        type: "BRIDGE_PAYMASTER",
-      });
-      console.log(`[Bridge Paymaster] Firestore record created`);
-    } catch (firestoreErr) {
-      console.warn("[Bridge Paymaster] Firestore write failed:", firestoreErr.message);
-    }
-
-    return res.status(200).json({
-      success: true,
-      txHash: tx.hash,
-      intentHash: intentHash,
-    });
-  } catch (err) {
-    console.error("[Bridge Paymaster] Error:", err);
-    return res.status(500).json({ error: err.message || "Internal server error" });
-  }
-});
 
 // --- Admin: Update VisionBridgeSecure Limits ---
 const VISION_BRIDGE_SECURE_ADDRESS = "0xFDA890183E1e18eE7b02A94d9DF195515D914655";
