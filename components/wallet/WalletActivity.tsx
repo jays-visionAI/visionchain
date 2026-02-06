@@ -3,7 +3,7 @@ import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink } from 'luci
 import { ethers } from 'ethers';
 import { contractService } from '../../services/contractService';
 import { getFirebaseDb } from '../../services/firebaseService';
-import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, orderBy } from 'firebase/firestore';
 
 interface WalletActivityProps {
     purchases: () => any[];
@@ -52,6 +52,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
             const sentQuery = query(
                 txRef,
                 where('from_addr', '==', normalizedAddress),
+                orderBy('timestamp', 'desc'),
                 limit(PAGE_SIZE)
             );
 
@@ -59,6 +60,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
             const receivedQuery = query(
                 txRef,
                 where('to_addr', '==', normalizedAddress),
+                orderBy('timestamp', 'desc'),
                 limit(PAGE_SIZE)
             );
 
