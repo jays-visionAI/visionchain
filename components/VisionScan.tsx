@@ -78,6 +78,8 @@ export default function VisionScan() {
 
                         const [fromSnap, toSnap] = await Promise.all([getDocs(fromQuery), getDocs(toQuery)]);
 
+                        console.log(`🔥 VisionScan: Sent (from_addr match): ${fromSnap.docs.length}, Received (to_addr match): ${toSnap.docs.length}`);
+
                         const txMap = new Map();
                         fromSnap.docs.forEach(d => txMap.set(d.id, d.data()));
                         toSnap.docs.forEach(d => txMap.set(d.id, d.data()));
