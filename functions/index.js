@@ -479,16 +479,11 @@ const VCN_EXECUTOR_PK = process.env.VCN_EXECUTOR_PK;
 // Legacy fallback for existing functions (will be removed after migration)
 const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
 
-const TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
-const TIMELOCK_ABI = [
-  "function executeTransfer(uint256 scheduleId) external",
-  "function scheduleTransferNative(address to, uint256 unlockTime) external payable returns (uint256)",
-  "event TransferScheduled(uint256 indexed scheduleId, address indexed creator, address indexed to, uint256 amount, uint256 unlockTime)",
-];
+// --- VCN Token Address (Vision Chain v2) ---
+const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 // --- BridgeStaking Contract Config ---
 const BRIDGE_STAKING_ADDRESS = "0x746a48E39dC57Ff14B872B8979E20efE5E5100B1";
-const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 const BRIDGE_STAKING_ABI = [
   "function setTargetAPY(uint256 _apyBasisPoints) external",
@@ -505,90 +500,41 @@ const ERC20_ABI = [
   "function balanceOf(address account) external view returns (uint256)",
 ];
 
-// --- Paymaster TimeLock (Gasless Scheduled Transfers - Firestore-based) ---
-// Note: This version uses Firestore-only scheduling without a separate TimeLock contract.
-// The schedulerRunner will call paymasterTransfer at the unlock time.
-exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+// =============================================================================
+// UNIFIED PAYMASTER - Single entry point for all gasless transfers
+// Supports: transfer (immediate), timelock (scheduled), batch (multiple)
+// =============================================================================
 
-  try {
-    const { user, recipient, amount, unlockTime, fee, deadline, userEmail, senderAddress, signature } = req.body;
+const VCN_TOKEN_ABI = [
+  "function transfer(address to, uint256 amount) external returns (bool)",
+  "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
+  "function balanceOf(address account) external view returns (uint256)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
+];
 
-    // Validation
-    if (!user || !recipient || !amount || !unlockTime) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    // Verify deadline
-    if (deadline && Math.floor(Date.now() / 1000) > deadline) {
-      return res.status(400).json({ error: "Request expired" });
-    }
-
-    console.log(`[PaymasterTimeLock] Request from ${user}`);
-    console.log(`[PaymasterTimeLock] Recipient: ${recipient}, Amount: ${amount}, UnlockTime: ${unlockTime}`);
-
-    // Generate a unique schedule ID
-    const scheduleId = `tl_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-    // Save to Firestore for scheduler to execute later
-    let jobId = null;
-    try {
-      const jobRef = await db.collection("scheduledTransfers").add({
-        scheduleId: scheduleId,
-        from: user,
-        to: recipient,
-        senderAddress: senderAddress || user,
-        recipient: recipient,
-        amount: amount,
-        unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
-        status: "WAITING",
-        createdAt: admin.firestore.Timestamp.now(),
-        txHash: null, // Will be set when executed
-        fee: fee || "0",
-        type: "TIMELOCK_PAYMASTER",
-        userEmail: userEmail || null,
-        token: "VCN",
-        signature: signature || null, // Store signature for later execution
-        retryCount: 0,
-      });
-      jobId = jobRef.id;
-      console.log(`[PaymasterTimeLock] Firestore job created: ${jobId}`);
-    } catch (firestoreErr) {
-      console.error("[PaymasterTimeLock] Firestore write failed:", firestoreErr.message);
-      return res.status(500).json({ error: "Failed to schedule transfer" });
-    }
-
-    // Create notification for sender
-    try {
-      await db.collection("notifications").add({
-        userEmail: userEmail,
-        type: "transfer_scheduled",
-        title: "Time Lock Transfer Scheduled",
-        content: `You have scheduled ${ethers.formatUnits(BigInt(amount), 18)} VCN to be sent to ${recipient.slice(0, 10)}...`,
-        createdAt: admin.firestore.Timestamp.now(),
-        read: false,
-        data: { scheduleId, jobId, recipient, amount, unlockTime },
-      });
-    } catch (notifyErr) {
-      console.warn("[PaymasterTimeLock] Notification failed (non-critical):", notifyErr.message);
-    }
-
-    return res.status(200).json({
-      success: true,
-      txHash: null, // No immediate tx - will be created when scheduler runs
-      scheduleId: scheduleId,
-      jobId: jobId,
-    });
-  } catch (err) {
-    console.error("[PaymasterTimeLock] Error:", err);
-    return res.status(500).json({ error: err.message || "Internal server error" });
-  }
-});
-
-// --- Paymaster Transfer (Gasless Token Transfers) ---
-exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
+/**
+ * Unified Paymaster API
+ * 
+ * Request body:
+ * {
+ *   type: 'transfer' | 'timelock' | 'batch',
+ *   user: string,              // Sender address
+ *   recipient: string,         // For transfer/timelock
+ *   amount: string,            // Wei amount for transfer/timelock
+ *   fee: string,               // Fee in wei
+ *   deadline: number,          // Permit deadline (unix timestamp)
+ *   signature: string | {v,r,s}, // EIP-712 permit signature
+ *   
+ *   // TimeLock specific
+ *   unlockTime?: number,       // Unix timestamp for scheduled execution
+ *   userEmail?: string,        // For notifications
+ *   
+ *   // Batch specific
+ *   transactions?: Array<{recipient, amount, name?}>
+ * }
+ */
+exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   // Handle CORS preflight
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -603,124 +549,328 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
   }
 
   try {
-    // eslint-disable-next-line no-unused-vars
-    const { user, token, recipient, amount, fee, deadline, signature } = req.body;
+    const {
+      type = "transfer",
+      user,
+      recipient,
+      amount,
+      fee,
+      deadline,
+      signature,
+      unlockTime,
+      userEmail,
+      transactions,
+      senderAddress
+    } = req.body;
 
-    // Validation
-    if (!user || !recipient || !amount) {
-      return res.status(400).json({ error: "Missing required fields: user, recipient, amount" });
+    console.log(`[Paymaster] Request type: ${type} from ${user}`);
+
+    // Basic validation
+    if (!user) {
+      return res.status(400).json({ error: "Missing required field: user" });
     }
 
-    // Verify deadline if provided
+    // Deadline check (if provided)
     if (deadline && Math.floor(Date.now() / 1000) > deadline) {
       return res.status(400).json({ error: "Request expired" });
     }
 
-    console.log(`[PaymasterTransfer] Request from ${user}`);
-    console.log(`[PaymasterTransfer] Recipient: ${recipient}, Amount: ${amount}`);
-
-    // Setup Blockchain Connection with Admin Wallet
+    // Setup blockchain connection
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+    const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-    // VCN Token Contract with permit and transferFrom
-    const vcnTokenAddress = token || VCN_TOKEN_ADDRESS;
-    const tokenABI = [
-      "function transfer(address to, uint256 amount) external returns (bool)",
-      "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
-      "function balanceOf(address account) external view returns (uint256)",
-      "function allowance(address owner, address spender) external view returns (uint256)",
-      "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
-    ];
-    const tokenContract = new ethers.Contract(vcnTokenAddress, tokenABI, adminWallet);
+    // Route based on type
+    switch (type) {
+      case "transfer":
+        return await handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet });
 
-    // Convert amounts from string (wei) to BigInt
-    const transferAmountBigInt = BigInt(amount);
-    const feeBigInt = fee ? BigInt(fee) : ethers.parseUnits("1.0", 18); // Default 1 VCN fee
-    const totalAmountBigInt = transferAmountBigInt + feeBigInt; // Must match client permit signature
+      case "timelock":
+        return await handleTimeLock(req, res, { user, recipient, amount, fee, deadline, signature, unlockTime, userEmail, senderAddress });
 
-    console.log(`[PaymasterTransfer] Transfer: ${ethers.formatUnits(transferAmountBigInt, 18)}, Fee: ${ethers.formatUnits(feeBigInt, 18)}, Total: ${ethers.formatUnits(totalAmountBigInt, 18)}`);
+      case "batch":
+        return await handleBatch(req, res, { user, transactions, fee, deadline, signature, tokenContract, adminWallet, userEmail });
 
-    // Check USER balance (not admin!)
-    const userBalance = await tokenContract.balanceOf(user);
-    if (userBalance < totalAmountBigInt) {
-      console.error(`[PaymasterTransfer] Insufficient user balance: ${userBalance} < ${totalAmountBigInt}`);
-      return res.status(400).json({ error: "Insufficient balance" });
+      default:
+        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch` });
     }
-
-    // Parse the permit signature (v, r, s)
-    let v;
-    let r;
-    let s;
-    if (signature && typeof signature === "object" && signature.v !== undefined) {
-      // Already split
-      v = signature.v;
-      r = signature.r;
-      s = signature.s;
-    } else if (signature && typeof signature === "string") {
-      // Split the signature
-      const sig = ethers.Signature.from(signature);
-      v = sig.v;
-      r = sig.r;
-      s = sig.s;
-    } else {
-      return res.status(400).json({ error: "Invalid signature format" });
-    }
-
-    console.log(`[PaymasterTransfer] Calling permit for ${user} -> admin`);
-
-    // Step 1: Call permit to allow admin to spend user's tokens (permit value = totalAmount)
-    try {
-      const permitTx = await tokenContract.permit(user, adminWallet.address, totalAmountBigInt, deadline, v, r, s);
-      await permitTx.wait();
-      console.log(`[PaymasterTransfer] Permit successful: ${permitTx.hash}`);
-    } catch (permitErr) {
-      console.error(`[PaymasterTransfer] Permit failed:`, permitErr);
-      return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
-    }
-
-    // Step 2: Execute transferFrom - move transfer amount from USER to recipient
-    // Note: Fee remains with user for now (or can be collected separately)
-    console.log(`[PaymasterTransfer] Calling transferFrom(${user}, ${recipient}, ${transferAmountBigInt})`);
-    const tx = await tokenContract.transferFrom(user, recipient, transferAmountBigInt);
-    console.log(`[PaymasterTransfer] TX sent: ${tx.hash}`);
-
-    const receipt = await tx.wait();
-    console.log(`[PaymasterTransfer] TX confirmed in block ${receipt.blockNumber}`);
-
-    // Index transaction to Firestore
-    try {
-      await db.collection("transactions").doc(tx.hash).set({
-        hash: tx.hash,
-        chainId: 3151909,
-        type: "Transfer",
-        from_addr: user.toLowerCase(),
-        to_addr: recipient.toLowerCase(),
-        value: ethers.formatUnits(transferAmountBigInt, 18),
-        timestamp: Date.now(),
-        status: "indexed",
-        metadata: {
-          method: "Paymaster Gasless Transfer",
-          source: "paymaster",
-          fee: fee ? ethers.formatUnits(BigInt(fee), 18) : "1.0",
-          gasSponsored: true,
-        },
-      });
-      console.log(`[PaymasterTransfer] Transaction indexed: ${tx.hash}`);
-    } catch (indexErr) {
-      console.warn("[PaymasterTransfer] Indexing failed (non-critical):", indexErr.message);
-    }
-
-    return res.status(200).json({
-      success: true,
-      txHash: tx.hash,
-      blockNumber: receipt.blockNumber,
-    });
   } catch (err) {
-    console.error("[PaymasterTransfer] Error:", err);
+    console.error("[Paymaster] Error:", err);
     return res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
+
+/**
+ * Handle immediate transfer
+ */
+async function handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet }) {
+  if (!recipient || !amount) {
+    return res.status(400).json({ error: "Missing required fields: recipient, amount" });
+  }
+
+  console.log(`[Paymaster:Transfer] ${user} -> ${recipient}, Amount: ${amount}`);
+
+  // Parse amounts
+  const transferAmountBigInt = BigInt(amount);
+  const feeBigInt = fee ? BigInt(fee) : ethers.parseUnits("1.0", 18);
+  const totalAmountBigInt = transferAmountBigInt + feeBigInt;
+
+  console.log(`[Paymaster:Transfer] Transfer: ${ethers.formatUnits(transferAmountBigInt, 18)}, Fee: ${ethers.formatUnits(feeBigInt, 18)}, Total: ${ethers.formatUnits(totalAmountBigInt, 18)}`);
+
+  // Check user balance
+  const userBalance = await tokenContract.balanceOf(user);
+  if (userBalance < totalAmountBigInt) {
+    console.error(`[Paymaster:Transfer] Insufficient balance: ${userBalance} < ${totalAmountBigInt}`);
+    return res.status(400).json({ error: "Insufficient balance" });
+  }
+
+  // Parse signature
+  const { v, r, s } = parseSignature(signature);
+  if (!v) {
+    return res.status(400).json({ error: "Invalid signature format" });
+  }
+
+  // Execute permit
+  try {
+    const permitTx = await tokenContract.permit(user, adminWallet.address, totalAmountBigInt, deadline, v, r, s);
+    await permitTx.wait();
+    console.log(`[Paymaster:Transfer] Permit successful: ${permitTx.hash}`);
+  } catch (permitErr) {
+    console.error(`[Paymaster:Transfer] Permit failed:`, permitErr);
+    return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+  }
+
+  // Execute transfer
+  const tx = await tokenContract.transferFrom(user, recipient, transferAmountBigInt);
+  console.log(`[Paymaster:Transfer] TX sent: ${tx.hash}`);
+
+  const receipt = await tx.wait();
+  console.log(`[Paymaster:Transfer] Confirmed in block ${receipt.blockNumber}`);
+
+  // Index to Firestore
+  await indexTransaction(tx.hash, {
+    type: "Transfer",
+    from: user,
+    to: recipient,
+    amount: ethers.formatUnits(transferAmountBigInt, 18),
+    fee: ethers.formatUnits(feeBigInt, 18),
+    method: "Paymaster Gasless Transfer",
+  });
+
+  return res.status(200).json({
+    success: true,
+    txHash: tx.hash,
+    blockNumber: receipt.blockNumber,
+  });
+}
+
+/**
+ * Handle scheduled (time lock) transfer
+ */
+async function handleTimeLock(req, res, { user, recipient, amount, fee, deadline, signature, unlockTime, userEmail, senderAddress }) {
+  if (!recipient || !amount || !unlockTime) {
+    return res.status(400).json({ error: "Missing required fields: recipient, amount, unlockTime" });
+  }
+
+  console.log(`[Paymaster:TimeLock] ${user} -> ${recipient}, Amount: ${amount}, UnlockTime: ${unlockTime}`);
+
+  // Generate schedule ID
+  const scheduleId = `tl_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+  // Save to Firestore for scheduler
+  const jobRef = await db.collection("scheduledTransfers").add({
+    scheduleId: scheduleId,
+    from: user,
+    to: recipient,
+    senderAddress: senderAddress || user,
+    recipient: recipient,
+    amount: amount,
+    unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
+    status: "WAITING",
+    createdAt: admin.firestore.Timestamp.now(),
+    txHash: null,
+    fee: fee || "0",
+    deadline: deadline,
+    signature: signature || null,
+    type: "TIMELOCK",
+    userEmail: userEmail || null,
+    token: "VCN",
+    retryCount: 0,
+  });
+
+  console.log(`[Paymaster:TimeLock] Job created: ${jobRef.id}`);
+
+  // Create notification
+  try {
+    await db.collection("notifications").add({
+      userEmail: userEmail,
+      type: "transfer_scheduled",
+      title: "Time Lock Transfer Scheduled",
+      content: `You have scheduled ${ethers.formatUnits(BigInt(amount), 18)} VCN to be sent to ${recipient.slice(0, 10)}...`,
+      createdAt: admin.firestore.Timestamp.now(),
+      read: false,
+      data: { scheduleId, jobId: jobRef.id, recipient, amount, unlockTime },
+    });
+  } catch (notifyErr) {
+    console.warn("[Paymaster:TimeLock] Notification failed:", notifyErr.message);
+  }
+
+  return res.status(200).json({
+    success: true,
+    txHash: null,
+    scheduleId: scheduleId,
+    jobId: jobRef.id,
+  });
+}
+
+/**
+ * Handle batch transfer
+ */
+async function handleBatch(req, res, { user, transactions, fee, deadline, signature, tokenContract, adminWallet, userEmail }) {
+  if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+    return res.status(400).json({ error: "Missing or invalid transactions array" });
+  }
+
+  console.log(`[Paymaster:Batch] ${user} sending ${transactions.length} transactions`);
+
+  // Calculate total amount
+  let totalAmount = BigInt(0);
+  for (const tx of transactions) {
+    totalAmount += BigInt(tx.amount || 0);
+  }
+  const feeBigInt = fee ? BigInt(fee) : ethers.parseUnits("1.0", 18);
+  const totalWithFee = totalAmount + feeBigInt;
+
+  console.log(`[Paymaster:Batch] Total: ${ethers.formatUnits(totalAmount, 18)}, Fee: ${ethers.formatUnits(feeBigInt, 18)}`);
+
+  // Check balance
+  const userBalance = await tokenContract.balanceOf(user);
+  if (userBalance < totalWithFee) {
+    return res.status(400).json({ error: "Insufficient balance for batch transfer" });
+  }
+
+  // Parse and execute permit
+  const { v, r, s } = parseSignature(signature);
+  if (v) {
+    try {
+      const permitTx = await tokenContract.permit(user, adminWallet.address, totalWithFee, deadline, v, r, s);
+      await permitTx.wait();
+      console.log(`[Paymaster:Batch] Permit successful`);
+    } catch (permitErr) {
+      console.error(`[Paymaster:Batch] Permit failed:`, permitErr);
+      return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+    }
+  }
+
+  // Execute transfers
+  const results = [];
+  for (const tx of transactions) {
+    try {
+      const txAmount = BigInt(tx.amount);
+      const transferTx = await tokenContract.transferFrom(user, tx.recipient, txAmount);
+      await transferTx.wait();
+
+      results.push({
+        recipient: tx.recipient,
+        name: tx.name,
+        amount: tx.amount,
+        status: "success",
+        txHash: transferTx.hash,
+      });
+
+      // Index each transaction
+      await indexTransaction(transferTx.hash, {
+        type: "Batch Transfer",
+        from: user,
+        to: tx.recipient,
+        amount: ethers.formatUnits(txAmount, 18),
+        fee: "0",
+        method: "Paymaster Batch Transfer",
+      });
+
+      console.log(`[Paymaster:Batch] Sent to ${tx.recipient}: ${transferTx.hash}`);
+    } catch (err) {
+      results.push({
+        recipient: tx.recipient,
+        name: tx.name,
+        amount: tx.amount,
+        status: "failed",
+        error: err.message,
+      });
+      console.error(`[Paymaster:Batch] Failed for ${tx.recipient}:`, err.message);
+    }
+  }
+
+  // Notification
+  if (userEmail) {
+    try {
+      const successCount = results.filter(r => r.status === "success").length;
+      await db.collection("notifications").add({
+        userEmail: userEmail,
+        type: "batch_complete",
+        title: "Batch Transfer Complete",
+        content: `Successfully sent ${successCount}/${transactions.length} transactions.`,
+        createdAt: admin.firestore.Timestamp.now(),
+        read: false,
+        data: { results },
+      });
+    } catch (e) {
+      console.warn("[Paymaster:Batch] Notification failed:", e.message);
+    }
+  }
+
+  return res.status(200).json({
+    success: true,
+    results: results,
+    totalFee: ethers.formatUnits(feeBigInt, 18),
+  });
+}
+
+// Helper: Parse signature to v, r, s
+function parseSignature(signature) {
+  if (!signature) return { v: null, r: null, s: null };
+
+  if (typeof signature === "object" && signature.v !== undefined) {
+    return { v: signature.v, r: signature.r, s: signature.s };
+  }
+
+  if (typeof signature === "string") {
+    const sig = ethers.Signature.from(signature);
+    return { v: sig.v, r: sig.r, s: sig.s };
+  }
+
+  return { v: null, r: null, s: null };
+}
+
+// Helper: Index transaction to Firestore
+async function indexTransaction(txHash, { type, from, to, amount, fee, method }) {
+  try {
+    await db.collection("transactions").doc(txHash).set({
+      hash: txHash,
+      chainId: 3151909,
+      type: type,
+      from_addr: from.toLowerCase(),
+      to_addr: to.toLowerCase(),
+      value: amount,
+      timestamp: Date.now(),
+      status: "indexed",
+      metadata: {
+        method: method,
+        source: "paymaster",
+        fee: fee,
+        gasSponsored: true,
+      },
+    });
+    console.log(`[Paymaster] Transaction indexed: ${txHash}`);
+  } catch (err) {
+    console.warn("[Paymaster] Indexing failed:", err.message);
+  }
+}
+
+// Legacy aliases for backward compatibility (will be removed after migration)
+exports.paymasterTransfer = exports.paymaster;
+exports.paymasterTimeLock = exports.paymaster;
+
 
 // --- Bridge Paymaster (Gasless Cross-Chain Bridge) ---
 const INTENT_COMMITMENT_ADDRESS = "0x47c05BCCA7d57c87083EB4e586007530eE4539e9";

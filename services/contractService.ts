@@ -50,9 +50,9 @@ const ADDRESSES = {
     ],
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
-    // Paymaster API (Cloud Functions)
-    PAYMASTER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymasterTimeLock",
-    PAYMASTER_TRANSFER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymasterTransfer",
+    // Paymaster API (Unified - Cloud Functions)
+    // Single endpoint supports: type='transfer', type='timelock', type='batch'
+    PAYMASTER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymaster",
 
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
@@ -519,11 +519,12 @@ export class ContractService {
 
         const signature = await this.signer.signTypedData(domain, types, values);
 
-        // 5. Submit to Paymaster API (Cloud Function)
-        const response = await fetch(ADDRESSES.PAYMASTER_TRANSFER_URL, {
+        // 5. Submit to Unified Paymaster API (Cloud Function)
+        const response = await fetch(ADDRESSES.PAYMASTER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                type: 'transfer', // Unified Paymaster - immediate transfer
                 user: userAddress,
                 token: tokenAddress,
                 recipient: to,
@@ -778,11 +779,12 @@ export class ContractService {
 
         const signature = await this.signer.signTypedData(domain, types, values);
 
-        // 3. Submit to Paymaster API (Cloud Run)
+        // 3. Submit to Unified Paymaster API (Cloud Run)
         const response = await fetch(ADDRESSES.PAYMASTER_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                type: 'timelock', // Unified Paymaster - scheduled transfer
                 user: userAddress,
                 recipient,
                 amount: amountWei.toString(),

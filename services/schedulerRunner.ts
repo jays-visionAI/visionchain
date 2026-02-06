@@ -4,21 +4,16 @@ import { collection, query, where, limit, getDocs, updateDoc, doc, runTransactio
 
 // --- Configuration ---
 const MAX_RETRIES = 3;
-const EXECUTION_BATCH_SIZE = 50; // Max jobs per tick
 const LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes lock
 const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-const PAYMASTER_ADMIN = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-// Paymaster Transfer API URL
-const PAYMASTER_TRANSFER_URL = "https://paymastertransfer-sapjcm3s5a-uc.a.run.app";
-
-// VCN Token ABI for permit and transferFrom
+// VCN Token ABI for transferFrom
 const VCN_TOKEN_ABI = [
     "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
-    "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
     "function balanceOf(address account) external view returns (uint256)"
 ];
+
 
 interface ScheduleJob {
     id: string; // Document ID
