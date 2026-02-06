@@ -6,13 +6,18 @@ import { collection, query, where, limit, getDocs, updateDoc, doc, runTransactio
 const MAX_RETRIES = 3;
 const EXECUTION_BATCH_SIZE = 50; // Max jobs per tick
 const LOCK_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes lock
-const EXECUTOR_PRIVATE_KEY = process.env.VITE_EXECUTOR_PK || '';
 const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2
-const TIMELOCK_ADDRESS = "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb";
+const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+const PAYMASTER_ADMIN = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
-// ABI for execute function only
-const TIMELOCK_ABI = [
-    "function executeTransfer(uint256 scheduleId) external"
+// Paymaster Transfer API URL
+const PAYMASTER_TRANSFER_URL = "https://paymastertransfer-sapjcm3s5a-uc.a.run.app";
+
+// VCN Token ABI for permit and transferFrom
+const VCN_TOKEN_ABI = [
+    "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
+    "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
+    "function balanceOf(address account) external view returns (uint256)"
 ];
 
 interface ScheduleJob {
@@ -116,12 +121,14 @@ export const runSchedulerTick = async () => {
     }
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider); // Paymaster/Executor Wallet
-    const contract = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, wallet);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider); // Paymaster/Executor Wallet
+    const vcnToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
     // 2. Process Each Job
     for (const jobDoc of eligibleJobs) {
         const jobId = jobDoc.id;
+        const jobData = jobDoc.data();
+
         try {
             await runTransaction(db, async (transaction) => {
                 const docRef = doc(db, 'scheduledTransfers', jobId);
@@ -143,17 +150,23 @@ export const runSchedulerTick = async () => {
                 });
             });
 
-            // 4. Submit Execute Transaction (Real Blockchain Interaction)
-            console.log(`Executing Schedule ID: ${jobDoc.data().scheduleId}`);
+            // 4. Execute Transfer using Admin Wallet (Paymaster pattern)
+            // The admin wallet executes transferFrom(sender, recipient, amount)
+            // This requires the sender to have approved the admin wallet (done via permit during scheduling)
+            console.log(`Executing TimeLock Transfer: ${jobId}`);
+            console.log(`   From: ${jobData.senderAddress}, To: ${jobData.recipient}, Amount: ${jobData.amount}`);
 
-            // Note: This is where we use the Paymaster wallet directly. 
-            // In a more complex Paymaster setup (ERC-4337), this would build a UserOp.
-            // But per requirement, we use existing Paymaster pipeline which usually means 
-            // the server wallet IS the paymaster for these admin actions.
-            const tx = await contract.executeTransfer(jobDoc.data().scheduleId);
+            const amountBigInt = BigInt(jobData.amount || 0);
+
+            // Execute transferFrom - admin calls on behalf of user
+            const tx = await vcnToken.transferFrom(
+                jobData.senderAddress,
+                jobData.recipient,
+                amountBigInt
+            );
             console.log(`   Hash: ${tx.hash}`);
 
-            // Wait for confirmation (optional, but good for immediate status update)
+            // Wait for confirmation
             await tx.wait(1);
 
             // 5. Update Success Status

@@ -505,14 +505,16 @@ const ERC20_ABI = [
   "function balanceOf(address account) external view returns (uint256)",
 ];
 
-// --- Paymaster TimeLock (Gasless Scheduled Transfers) ---
+// --- Paymaster TimeLock (Gasless Scheduled Transfers - Firestore-based) ---
+// Note: This version uses Firestore-only scheduling without a separate TimeLock contract.
+// The schedulerRunner will call paymasterTransfer at the unlock time.
 exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { user, recipient, amount, unlockTime, fee, deadline, userEmail, senderAddress } = req.body;
+    const { user, recipient, amount, unlockTime, fee, deadline, userEmail, senderAddress, signature } = req.body;
 
     // Validation
     if (!user || !recipient || !amount || !unlockTime) {
@@ -524,37 +526,13 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: 
       return res.status(400).json({ error: "Request expired" });
     }
 
-    console.log(`[Paymaster] TimeLock request from ${user}`);
-    console.log(`[Paymaster] Recipient: ${recipient}, Amount: ${amount}, UnlockTime: ${unlockTime}`);
+    console.log(`[PaymasterTimeLock] Request from ${user}`);
+    console.log(`[PaymasterTimeLock] Recipient: ${recipient}, Amount: ${amount}, UnlockTime: ${unlockTime}`);
 
-    // Setup Blockchain Connection with Admin Wallet
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
-    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-    const contract = new ethers.Contract(TIMELOCK_ADDRESS, TIMELOCK_ABI, adminWallet);
+    // Generate a unique schedule ID
+    const scheduleId = `tl_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    // Execute TimeLock Schedule on behalf of user
-    const amountWei = BigInt(amount);
-    const tx = await contract.scheduleTransferNative(recipient, unlockTime, { value: amountWei });
-    console.log(`[Paymaster] TX sent: ${tx.hash}`);
-
-    const receipt = await tx.wait();
-    console.log(`[Paymaster] TX confirmed in block ${receipt.blockNumber}`);
-
-    // Parse scheduleId from event
-    let scheduleId = null;
-    for (const log of receipt.logs || []) {
-      try {
-        const parsed = contract.interface.parseLog(log);
-        if (parsed && parsed.name === "TransferScheduled") {
-          scheduleId = parsed.args.scheduleId.toString();
-          break;
-        }
-      } catch (e) {
-        // Not our event
-      }
-    }
-
-    // Save to Firestore for scheduler to execute later (non-blocking)
+    // Save to Firestore for scheduler to execute later
     let jobId = null;
     try {
       const jobRef = await db.collection("scheduledTransfers").add({
@@ -567,27 +545,44 @@ exports.paymasterTimeLock = onRequest({ cors: true, invoker: "public", secrets: 
         unlockTimeTs: admin.firestore.Timestamp.fromMillis(unlockTime * 1000),
         status: "WAITING",
         createdAt: admin.firestore.Timestamp.now(),
-        txHash: tx.hash,
+        txHash: null, // Will be set when executed
         fee: fee || "0",
         type: "TIMELOCK_PAYMASTER",
         userEmail: userEmail || null,
         token: "VCN",
+        signature: signature || null, // Store signature for later execution
+        retryCount: 0,
       });
       jobId = jobRef.id;
-      console.log(`[Paymaster] Firestore job created: ${jobId}`);
+      console.log(`[PaymasterTimeLock] Firestore job created: ${jobId}`);
     } catch (firestoreErr) {
-      // Log but don't fail - blockchain tx already succeeded
-      console.warn("[Paymaster] Firestore write failed (non-critical):", firestoreErr.message);
+      console.error("[PaymasterTimeLock] Firestore write failed:", firestoreErr.message);
+      return res.status(500).json({ error: "Failed to schedule transfer" });
+    }
+
+    // Create notification for sender
+    try {
+      await db.collection("notifications").add({
+        userEmail: userEmail,
+        type: "transfer_scheduled",
+        title: "Time Lock Transfer Scheduled",
+        content: `You have scheduled ${ethers.formatUnits(BigInt(amount), 18)} VCN to be sent to ${recipient.slice(0, 10)}...`,
+        createdAt: admin.firestore.Timestamp.now(),
+        read: false,
+        data: { scheduleId, jobId, recipient, amount, unlockTime },
+      });
+    } catch (notifyErr) {
+      console.warn("[PaymasterTimeLock] Notification failed (non-critical):", notifyErr.message);
     }
 
     return res.status(200).json({
       success: true,
-      txHash: tx.hash,
+      txHash: null, // No immediate tx - will be created when scheduler runs
       scheduleId: scheduleId,
       jobId: jobId,
     });
   } catch (err) {
-    console.error("[Paymaster] TimeLock Error:", err);
+    console.error("[PaymasterTimeLock] Error:", err);
     return res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
