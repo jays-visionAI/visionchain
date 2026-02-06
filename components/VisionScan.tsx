@@ -71,8 +71,10 @@ export default function VisionScan() {
                         }
                     } else {
                         // Address lookup - query from_addr or to_addr
-                        const fromQuery = query(txCollection, where('from_addr', '==', termToSearch), orderBy('timestamp', 'desc'), fbLimit(limit()));
-                        const toQuery = query(txCollection, where('to_addr', '==', termToSearch), orderBy('timestamp', 'desc'), fbLimit(limit()));
+                        // Normalize to lowercase for consistent Firestore matching
+                        const normalizedAddress = termToSearch.toLowerCase();
+                        const fromQuery = query(txCollection, where('from_addr', '==', normalizedAddress), orderBy('timestamp', 'desc'), fbLimit(limit()));
+                        const toQuery = query(txCollection, where('to_addr', '==', normalizedAddress), orderBy('timestamp', 'desc'), fbLimit(limit()));
 
                         const [fromSnap, toSnap] = await Promise.all([getDocs(fromQuery), getDocs(toQuery)]);
 
