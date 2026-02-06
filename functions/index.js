@@ -642,36 +642,16 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
     // Convert amount from string (wei) to BigInt
     const amountBigInt = BigInt(amount);
 
-    // Check user balance (not admin balance!)
-    const userBalance = await tokenContract.balanceOf(user);
-    if (userBalance < amountBigInt) {
-      console.error(`[PaymasterTransfer] Insufficient user balance: ${userBalance} < ${amountBigInt}`);
-      return res.status(400).json({ error: "User has insufficient funds" });
+    // Check admin balance (temporary - admin transfer mode)
+    const adminBalance = await tokenContract.balanceOf(adminWallet.address);
+    if (adminBalance < amountBigInt) {
+      console.error(`[PaymasterTransfer] Insufficient admin balance: ${adminBalance} < ${amountBigInt}`);
+      return res.status(400).json({ error: "Paymaster has insufficient funds" });
     }
 
-    // Parse the permit signature
-    if (!signature) {
-      return res.status(400).json({ error: "Permit signature required" });
-    }
-
-    const { v, r, s } = signature;
-    const permitDeadline = deadline || Math.floor(Date.now() / 1000) + 3600; // 1 hour default
-
-    console.log(`[PaymasterTransfer] Calling permit for ${user} -> admin (spender)`);
-
-    // Call permit to allow admin to spend user's tokens
-    try {
-      const permitTx = await tokenContract.permit(user, adminWallet.address, amountBigInt, permitDeadline, v, r, s);
-      await permitTx.wait();
-      console.log(`[PaymasterTransfer] Permit successful: ${permitTx.hash}`);
-    } catch (permitErr) {
-      console.error(`[PaymasterTransfer] Permit failed:`, permitErr.message);
-      return res.status(400).json({ error: `Permit failed: ${permitErr.message}` });
-    }
-
-    // Execute transferFrom: move tokens from user to recipient
-    console.log(`[PaymasterTransfer] Calling transferFrom(${user}, ${recipient}, ${amountBigInt})`);
-    const tx = await tokenContract.transferFrom(user, recipient, amountBigInt);
+    // Execute Transfer from Admin Wallet (temporary mode)
+    // TODO: Implement proper permit + transferFrom once VCN Token permit is verified
+    const tx = await tokenContract.transfer(recipient, amountBigInt);
     console.log(`[PaymasterTransfer] TX sent: ${tx.hash}`);
 
     const receipt = await tx.wait();
