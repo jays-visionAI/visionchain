@@ -71,6 +71,12 @@ export const WalletActivity = (props: WalletActivityProps) => {
             console.log(`[WalletActivity] Sent transactions found: ${sentSnapshot.docs.length}`);
             console.log(`[WalletActivity] Received transactions found: ${receivedSnapshot.docs.length}`);
 
+            // Debug: Log first sent transaction
+            if (sentSnapshot.docs.length > 0) {
+                const firstSent = sentSnapshot.docs[0].data();
+                console.log(`[WalletActivity] First sent tx:`, firstSent.hash?.slice(0, 15), 'from:', firstSent.from_addr?.slice(0, 15), 'to:', firstSent.to_addr?.slice(0, 15), 'time:', new Date(firstSent.timestamp).toISOString());
+            }
+
             // Merge and deduplicate by hash
             const allTxs = new Map();
             sentSnapshot.docs.forEach(doc => allTxs.set(doc.id, doc.data()));
