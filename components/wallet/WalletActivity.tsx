@@ -213,7 +213,10 @@ export const WalletActivity = (props: WalletActivityProps) => {
                             const shortHash = `${tx.hash.slice(0, 6)}...${tx.hash.slice(-4)}`;
 
                             return (
-                                <div class={`flex items-center justify-between py-4 px-5 bg-[#111114] border rounded-xl hover:bg-white/[0.02] transition-colors cursor-pointer group mb-3 last:mb-0 ${isBridge ? 'border-purple-500/20' : 'border-white/[0.04]'}`}>
+                                <div
+                                    class={`flex items-center justify-between py-4 px-5 bg-[#111114] border rounded-xl hover:bg-white/[0.02] transition-colors cursor-pointer group mb-3 last:mb-0 ${isBridge ? 'border-purple-500/20' : 'border-white/[0.04]'}`}
+                                    onClick={() => window.location.href = `/visionscan?tx=${tx.hash}`}
+                                >
                                     <div class="flex items-center gap-4">
                                         <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${isBridge
                                             ? 'bg-purple-500/10 text-purple-400'
