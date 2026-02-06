@@ -1320,6 +1320,9 @@ const Wallet = (): JSX.Element => {
                 setFlowSuccess(true);
                 setFlowStep(3);
 
+                // Refresh on-chain balance after successful transfer
+                setTimeout(() => fetchPortfolioData(), 2000);
+
                 // --- Notification Logic ---
                 try {
                     const isScheduled = isSchedulingTimeLock();
