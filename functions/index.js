@@ -515,7 +515,7 @@ const VCN_TOKEN_ABI = [
 
 /**
  * Unified Paymaster API
- * 
+ *
  * Request body:
  * {
  *   type: 'transfer' | 'timelock' | 'batch',
@@ -525,11 +525,11 @@ const VCN_TOKEN_ABI = [
  *   fee: string,               // Fee in wei
  *   deadline: number,          // Permit deadline (unix timestamp)
  *   signature: string | {v,r,s}, // EIP-712 permit signature
- *   
+ *
  *   // TimeLock specific
  *   unlockTime?: number,       // Unix timestamp for scheduled execution
  *   userEmail?: string,        // For notifications
- *   
+ *
  *   // Batch specific
  *   transactions?: Array<{recipient, amount, name?}>
  * }
@@ -560,7 +560,7 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
       unlockTime,
       userEmail,
       transactions,
-      senderAddress
+      senderAddress,
     } = req.body;
 
     console.log(`[Paymaster] Request type: ${type} from ${user}`);
@@ -602,6 +602,10 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
 
 /**
  * Handle immediate transfer
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {object} params - Transfer parameters
+ * @return {Promise} - Response promise
  */
 async function handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet }) {
   if (!recipient || !amount) {
@@ -666,6 +670,10 @@ async function handleTransfer(req, res, { user, recipient, amount, fee, deadline
 
 /**
  * Handle scheduled (time lock) transfer
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {object} params - TimeLock parameters
+ * @return {Promise} - Response promise
  */
 async function handleTimeLock(req, res, { user, recipient, amount, fee, deadline, signature, unlockTime, userEmail, senderAddress }) {
   if (!recipient || !amount || !unlockTime) {
@@ -725,6 +733,10 @@ async function handleTimeLock(req, res, { user, recipient, amount, fee, deadline
 
 /**
  * Handle batch transfer
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {object} params - Batch parameters
+ * @return {Promise} - Response promise
  */
 async function handleBatch(req, res, { user, transactions, fee, deadline, signature, tokenContract, adminWallet, userEmail }) {
   if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
@@ -804,7 +816,7 @@ async function handleBatch(req, res, { user, transactions, fee, deadline, signat
   // Notification
   if (userEmail) {
     try {
-      const successCount = results.filter(r => r.status === "success").length;
+      const successCount = results.filter((r) => r.status === "success").length;
       await db.collection("notifications").add({
         userEmail: userEmail,
         type: "batch_complete",
@@ -826,7 +838,11 @@ async function handleBatch(req, res, { user, transactions, fee, deadline, signat
   });
 }
 
-// Helper: Parse signature to v, r, s
+/**
+ * Helper: Parse signature to v, r, s
+ * @param {string|object} signature - EIP-712 signature
+ * @return {object} - Parsed v, r, s components
+ */
 function parseSignature(signature) {
   if (!signature) return { v: null, r: null, s: null };
 
@@ -842,7 +858,12 @@ function parseSignature(signature) {
   return { v: null, r: null, s: null };
 }
 
-// Helper: Index transaction to Firestore
+/**
+ * Helper: Index transaction to Firestore
+ * @param {string} txHash - Transaction hash
+ * @param {object} params - Transaction details
+ * @return {Promise} - Firestore set promise
+ */
 async function indexTransaction(txHash, { type, from, to, amount, fee, method }) {
   try {
     await db.collection("transactions").doc(txHash).set({
@@ -1718,12 +1739,16 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
     // 3. Setup Blockchain Connection
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-    const contract = new ethers.Contract(TIMELOCK_ADDRESS,
-      TIMELOCK_ABI, wallet);
+
+    // VCN Token for transferFrom
+    const VCN_TIMELOCK_ABI = [
+      "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
+      "function balanceOf(address account) external view returns (uint256)",
+    ];
+    const vcnToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TIMELOCK_ABI, wallet);
 
     // 4. Execute Jobs
     // Note: We execute sequentially to manage nonce automatically.
-    // Parallel execution would require explicit nonce management.
     let currentNonce = await wallet.getNonce();
 
     for (const docSnap of dueJobs) {
@@ -1753,31 +1778,32 @@ exports.scheduledTransferTrigger = onSchedule("every 1 minutes",
       if (skipped) continue;
 
       try {
-        console.log(`Executing ID: ${data.scheduleId} nonce ${currentNonce}`);
+        console.log(`Executing TimeLock: ${jobId}`);
+        console.log(`   From: ${data.senderAddress || data.from}, To: ${data.recipient || data.to}, Amount: ${data.amount}`);
 
-        // Execute with specific nonce to prevent race conditions
-        const tx = await contract.executeTransfer(data.scheduleId, {
-          nonce: currentNonce,
-        });
+        const amountBigInt = BigInt(data.amount || 0);
+
+        // Execute transferFrom - admin wallet transfers from sender to recipient
+        const tx = await vcnToken.transferFrom(
+          data.senderAddress || data.from,
+          data.recipient || data.to,
+          amountBigInt,
+          { nonce: currentNonce },
+        );
 
         console.log(`   Hash: ${tx.hash}`);
 
-        // Increment Local Nonce immediately to unblock next job
+        // Increment Local Nonce
         currentNonce++;
 
-        // Update Success (Async)
-        // We don't await tx.wait() inside the loop to speed up processing
-        // But valid nonce management relies on the order.
-        // Since we use the same wallet, we SHOULD ideally wait or manage
-        // pending nonces.
-        // For stability, we wait for 1 confirmation.
+        // Wait for confirmation
         await tx.wait(1);
 
         await docSnap.ref.update({
           status: "SENT",
           executedAt: admin.firestore.Timestamp.now(),
           txHash: tx.hash,
-          error: null, // Clear prev errors
+          error: null,
         });
         console.log(`Success: ${jobId}`);
 
