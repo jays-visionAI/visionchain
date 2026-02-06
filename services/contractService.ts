@@ -518,6 +518,9 @@ export class ContractService {
 
         const signature = await this.signer.signTypedData(domain, types, values);
 
+        // Split signature into v, r, s for permit function
+        const sig = ethers.Signature.from(signature);
+
         // 5. Submit to Paymaster API (Cloud Function)
         const response = await fetch(ADDRESSES.PAYMASTER_TRANSFER_URL, {
             method: 'POST',
@@ -529,7 +532,11 @@ export class ContractService {
                 amount: transferAmount.toString(),
                 fee: fee.toString(),
                 deadline: deadline,
-                signature: signature
+                signature: {
+                    v: sig.v,
+                    r: sig.r,
+                    s: sig.s
+                }
             })
         });
 

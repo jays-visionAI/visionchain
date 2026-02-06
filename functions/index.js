@@ -628,28 +628,50 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
-    // VCN Token Contract
+    // VCN Token Contract with permit and transferFrom
     const vcnTokenAddress = token || VCN_TOKEN_ADDRESS;
     const tokenABI = [
       "function transfer(address to, uint256 amount) external returns (bool)",
+      "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
       "function balanceOf(address account) external view returns (uint256)",
+      "function allowance(address owner, address spender) external view returns (uint256)",
+      "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
     ];
     const tokenContract = new ethers.Contract(vcnTokenAddress, tokenABI, adminWallet);
 
     // Convert amount from string (wei) to BigInt
     const amountBigInt = BigInt(amount);
 
-    // Check admin balance
-    const adminBalance = await tokenContract.balanceOf(adminWallet.address);
-    if (adminBalance < amountBigInt) {
-      console.error(`[PaymasterTransfer] Insufficient admin balance: ${adminBalance} < ${amountBigInt}`);
-      return res.status(400).json({ error: "Paymaster has insufficient funds" });
+    // Check user balance (not admin balance!)
+    const userBalance = await tokenContract.balanceOf(user);
+    if (userBalance < amountBigInt) {
+      console.error(`[PaymasterTransfer] Insufficient user balance: ${userBalance} < ${amountBigInt}`);
+      return res.status(400).json({ error: "User has insufficient funds" });
     }
 
-    // Execute Transfer from Admin Wallet on behalf of user
-    // Note: In production, you would verify the permit signature and call transferFrom
-    // For now, we use a simple admin transfer model (admin pre-funds and transfers)
-    const tx = await tokenContract.transfer(recipient, amountBigInt);
+    // Parse the permit signature
+    if (!signature) {
+      return res.status(400).json({ error: "Permit signature required" });
+    }
+
+    const { v, r, s } = signature;
+    const permitDeadline = deadline || Math.floor(Date.now() / 1000) + 3600; // 1 hour default
+
+    console.log(`[PaymasterTransfer] Calling permit for ${user} -> admin (spender)`);
+
+    // Call permit to allow admin to spend user's tokens
+    try {
+      const permitTx = await tokenContract.permit(user, adminWallet.address, amountBigInt, permitDeadline, v, r, s);
+      await permitTx.wait();
+      console.log(`[PaymasterTransfer] Permit successful: ${permitTx.hash}`);
+    } catch (permitErr) {
+      console.error(`[PaymasterTransfer] Permit failed:`, permitErr.message);
+      return res.status(400).json({ error: `Permit failed: ${permitErr.message}` });
+    }
+
+    // Execute transferFrom: move tokens from user to recipient
+    console.log(`[PaymasterTransfer] Calling transferFrom(${user}, ${recipient}, ${amountBigInt})`);
+    const tx = await tokenContract.transferFrom(user, recipient, amountBigInt);
     console.log(`[PaymasterTransfer] TX sent: ${tx.hash}`);
 
     const receipt = await tx.wait();
@@ -670,7 +692,7 @@ exports.paymasterTransfer = onRequest({ cors: true, invoker: "public", secrets: 
           method: "Paymaster Gasless Transfer",
           source: "paymaster",
           fee: fee ? ethers.formatUnits(BigInt(fee), 18) : "1.0",
-          actualSender: adminWallet.address.toLowerCase(),
+          gasSponsored: true,
         },
       });
       console.log(`[PaymasterTransfer] Transaction indexed: ${tx.hash}`);
