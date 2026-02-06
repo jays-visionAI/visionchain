@@ -15,6 +15,7 @@ const ADDRESSES = {
     // Core Contracts (Vision Chain v2) - Deployed 2026-02-06
     VCN_TOKEN: "0x5FbDB2315678afecb367f032d93F642f64180aa3", // VCN ERC-20 Token
     VCN_PAYMASTER: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512", // VCNPaymasterNative
+    PAYMASTER_ADMIN: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // Admin wallet (executor) for gasless transfers
     BRIDGE_STAKING: "0xc351628EB244ec633d5f21fBD6621e1a683B1181", // BridgeStaking (12% APY)
 
     // Legacy Core Contracts (old chain)
@@ -562,7 +563,8 @@ export class ContractService {
 
     // Helper: Returns the deployed VCNPaymasterV2 address
     private async getPaymasterAddress() {
-        return ADDRESSES.VCN_PAYMASTER;
+        // Return Admin wallet address for permit signing (not the contract address)
+        return ADDRESSES.PAYMASTER_ADMIN;
     }
 
     async getPaymasterBalance(): Promise<string> {
