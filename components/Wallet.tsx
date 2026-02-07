@@ -1433,6 +1433,19 @@ const Wallet = (): JSX.Element => {
                 };
                 setBatchAgents(prev => [...prev, newAgent]);
 
+                // 1b. Send "Batch Started" notification to sender
+                const totalAmount = transactions.reduce((sum: number, tx: any) => sum + parseFloat(tx.amount || 0), 0);
+                try {
+                    await createNotification(userProfile().email, {
+                        type: 'multi_send_start',
+                        title: 'Batch Transfer Started',
+                        content: `Processing ${transactions.length} transfers totaling ${totalAmount.toFixed(2)} VCN...`,
+                        data: { agentId, count: transactions.length, totalAmount }
+                    });
+                } catch (notifyErr) {
+                    console.warn('[Batch] Start notification failed:', notifyErr);
+                }
+
                 // 2. Decrypt Mnemonic for all transactions - with error handling
                 let mnemonic: string;
                 let privateKey: string;
@@ -1597,13 +1610,25 @@ const Wallet = (): JSX.Element => {
                     setLastTxHash(firstSuccess.hash);
                 }
 
-                // Send notification to user
-                const notificationMsg = lastLocale() === 'ko'
-                    ? `✓ 배치 전송 완료: ${successMsg}개 성공, ${failMsg}개 실패`
-                    : `✓ Batch transfer complete: ${successMsg} succeeded, ${failMsg} failed`;
-
-                // TODO: Replace with actual notification system
-                console.log('[Notification]', notificationMsg);
+                // Send notification to user - Batch Complete
+                try {
+                    const notificationType = failMsg > 0 ? 'multi_send_partial' : 'multi_send_complete';
+                    await createNotification(userProfile().email, {
+                        type: notificationType,
+                        title: failMsg > 0 ? 'Batch Transfer Partial Success' : 'Batch Transfer Complete',
+                        content: lastLocale() === 'ko'
+                            ? `배치 전송 완료: ${successMsg}개 성공, ${failMsg}개 실패`
+                            : `Batch transfer complete: ${successMsg} succeeded, ${failMsg} failed`,
+                        data: {
+                            agentId,
+                            successCount: successMsg,
+                            failedCount: failMsg,
+                            txHash: firstSuccess?.hash
+                        }
+                    });
+                } catch (notifyErr) {
+                    console.warn('[Batch] Completion notification failed:', notifyErr);
+                }
 
                 // 4. Send specialized report message
                 const report = lastLocale() === 'ko'

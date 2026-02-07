@@ -145,7 +145,19 @@ export const runSchedulerTick = async () => {
                 });
             });
 
-            // 4. Execute Transfer using Admin Wallet (Paymaster pattern)
+            // 4. Send "Execution Started" notification
+            try {
+                await createNotification(jobData.userEmail, {
+                    type: 'transfer_scheduled',
+                    title: 'TimeLock Executing',
+                    content: `Executing scheduled transfer of ${jobData.amount} ${jobData.token || 'VCN'} to ${jobData.recipient.slice(0, 8)}...`,
+                    data: { jobId, status: 'executing' }
+                });
+            } catch (notifyErr) {
+                console.warn("Start notification failed:", notifyErr);
+            }
+
+            // 5. Execute Transfer using Admin Wallet (Paymaster pattern)
             // The admin wallet executes transferFrom(sender, recipient, amount)
             // This requires the sender to have approved the admin wallet (done via permit during scheduling)
             console.log(`Executing TimeLock Transfer: ${jobId}`);
@@ -192,10 +204,10 @@ export const runSchedulerTick = async () => {
                 console.warn("Failed to record transaction:", txRecordErr);
             }
 
-            // 6. Create Notifications
+            // 6. Create Success Notifications
             const symbol = taskData.token || 'VCN';
 
-            // To Sender
+            // To Sender - Success
             await createNotification(taskData.userEmail, {
                 type: 'transfer_scheduled',
                 title: 'Scheduled Transfer Complete',
@@ -233,6 +245,19 @@ export const runSchedulerTick = async () => {
                 newStatus = 'SENT'; // Or FAILED/CANCELLED depending on investigation, usually SENT means done elsewhere
             } else if (jobDoc.data().retryCount >= MAX_RETRIES) {
                 newStatus = 'FAILED';
+
+                // Send Failure Notification
+                const failedTaskData = jobDoc.data();
+                try {
+                    await createNotification(failedTaskData.userEmail, {
+                        type: 'alert',
+                        title: 'Scheduled Transfer Failed',
+                        content: `Failed to send ${failedTaskData.amount} ${failedTaskData.token || 'VCN'} to ${failedTaskData.recipient.slice(0, 8)}... Error: ${failureReason.slice(0, 50)}`,
+                        data: { jobId, error: failureReason }
+                    });
+                } catch (notifyErr) {
+                    console.warn("Failed to send failure notification:", notifyErr);
+                }
             } else {
                 // Exponential Backoff with Jitter: 1m, 5m, 15m...
                 const retryCount = (jobDoc.data().retryCount || 0) + 1;

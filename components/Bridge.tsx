@@ -506,6 +506,26 @@ const Bridge: Component<BridgeProps> = (props) => {
             console.error('[Bridge] Transfer failed:', err);
             setErrorMsg(err.reason || err.message || 'Bridge transfer failed');
             setStep(1);
+
+            // Send failure notification
+            const userEmail = props.userEmail?.();
+            if (userEmail) {
+                try {
+                    await createNotification({
+                        userEmail: userEmail,
+                        type: 'alert',
+                        title: 'Bridge Transfer Failed',
+                        content: `Failed to bridge ${amount()} VCN to ${toNetwork().name}. Error: ${(err.reason || err.message || 'Unknown error').slice(0, 50)}`,
+                        data: {
+                            amount: amount(),
+                            destinationChain: toNetwork().name,
+                            error: err.reason || err.message
+                        }
+                    });
+                } catch (notifyErr) {
+                    console.warn('[Bridge] Failure notification failed:', notifyErr);
+                }
+            }
         } finally {
             setIsBridging(false);
             setIsApproving(false);

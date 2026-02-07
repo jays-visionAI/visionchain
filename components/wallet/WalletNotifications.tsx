@@ -84,6 +84,7 @@ export type NotificationType =
     | 'timelock_executed'
     | 'timelock_cancelled'
     // Multi-send
+    | 'multi_send_start'
     | 'multi_send_complete'
     | 'multi_send_partial'
     // Referral & Level
@@ -429,6 +430,8 @@ export function WalletNotifications() {
                 return { icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Cancelled' };
 
             // Multi-send
+            case 'multi_send_start':
+                return { icon: Send, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Starting' };
             case 'multi_send_complete':
                 return { icon: Send, color: 'text-cyan-400', bg: 'bg-cyan-400/10', label: 'Multi-Send' };
             case 'multi_send_partial':

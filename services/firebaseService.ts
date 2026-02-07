@@ -3123,7 +3123,23 @@ export const deleteAdminDocument = async (id: string): Promise<void> => {
 // --- Notification Engine ---
 
 export interface NotificationData {
-    type: 'transfer_received' | 'transfer_scheduled' | 'system_announcement' | 'alert' | 'bridge_started' | 'bridge_completed';
+    type:
+    // Transfer
+    | 'transfer_received' | 'transfer_sent' | 'transfer_scheduled'
+    // Staking
+    | 'staking_deposit' | 'staking_withdrawal' | 'staking_pending' | 'staking_reward'
+    // TimeLock
+    | 'timelock_scheduled' | 'timelock_executed' | 'timelock_cancelled'
+    // Multi-send
+    | 'multi_send_start' | 'multi_send_complete' | 'multi_send_partial'
+    // Referral
+    | 'referral_signup' | 'referral_reward' | 'level_up'
+    // Events
+    | 'event_participation' | 'event_result' | 'prize_winner' | 'ranking_update'
+    // Bridge
+    | 'bridge_started' | 'bridge_completed' | 'bridge_finalized' | 'bridge_pending' | 'challenge_raised'
+    // System
+    | 'system_announcement' | 'system_notice' | 'security_alert' | 'alert';
     title: string;
     content: string;
     data?: any;
