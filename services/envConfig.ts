@@ -7,8 +7,24 @@
 
 type Environment = 'development' | 'staging' | 'production';
 
-// Detect current environment
-export const ENV: Environment = (import.meta.env.VITE_CHAIN_ENV as Environment) || 'development';
+// Detect current environment from URL or env variable
+const detectEnvironment = (): Environment => {
+    // Check env variable first
+    const envVar = import.meta.env.VITE_CHAIN_ENV as Environment;
+    if (envVar) return envVar;
+
+    // Auto-detect from hostname
+    if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        if (hostname.includes('staging.')) return 'staging';
+        if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) return 'development';
+        if (hostname.includes('visionchain.co') && !hostname.includes('staging.')) return 'production';
+    }
+
+    return 'development';
+};
+
+export const ENV: Environment = detectEnvironment();
 
 // Environment-specific configurations
 const CONFIGS: Record<Environment, {
