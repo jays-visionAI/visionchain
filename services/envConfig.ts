@@ -8,22 +8,39 @@
 type Environment = 'development' | 'staging' | 'production';
 
 // Detect current environment from URL or env variable
+// This runs at runtime, not build time
 const detectEnvironment = (): Environment => {
-    // Check env variable first
+    // Check env variable first (build-time override)
     const envVar = import.meta.env.VITE_CHAIN_ENV as Environment;
-    if (envVar) return envVar;
-
-    // Auto-detect from hostname
-    if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-        if (hostname.includes('staging.')) return 'staging';
-        if (hostname.includes('localhost') || hostname.includes('127.0.0.1')) return 'development';
-        if (hostname.includes('visionchain.co') && !hostname.includes('staging.')) return 'production';
+    if (envVar && ['development', 'staging', 'production'].includes(envVar)) {
+        return envVar;
     }
 
+    // Auto-detect from hostname at runtime
+    if (typeof window !== 'undefined' && window.location) {
+        const hostname = window.location.hostname;
+
+        // Check staging FIRST (more specific)
+        if (hostname.startsWith('staging.') || hostname.includes('staging.')) {
+            return 'staging';
+        }
+
+        // Check localhost/dev
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('localhost')) {
+            return 'development';
+        }
+
+        // Production is any visionchain.co without staging
+        if (hostname.includes('visionchain.co')) {
+            return 'production';
+        }
+    }
+
+    // Default fallback
     return 'development';
 };
 
+// Execute detection at module load time (which is runtime in browser)
 export const ENV: Environment = detectEnvironment();
 
 // Environment-specific configurations
