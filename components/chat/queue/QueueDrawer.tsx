@@ -103,10 +103,12 @@ const QueueDrawer = (props: QueueDrawerProps) => {
         return props.tasks.filter((t: any) => {
             if (activeTab() === 'ACTIVE') {
                 // Active tab: ONLY processing tasks (WAITING, EXECUTING)
-                // FAILED, SENT, COMPLETED should NOT appear here
+                // Also respect hiddenFromDesk for active tasks
+                if (t.hiddenFromDesk) return false;
                 return ['WAITING', 'EXECUTING'].includes(t.status);
             }
-            // History tab: show ALL completed/finished tasks
+            // History tab: show ALL completed/finished tasks (including hidden ones)
+            // This allows users to always review their transaction history
             // SENT, COMPLETED, FINALIZED, FAILED, CANCELLED, EXPIRED
             return ['SENT', 'COMPLETED', 'FINALIZED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(t.status);
         }).sort((a, b) => b.timestamp - a.timestamp);

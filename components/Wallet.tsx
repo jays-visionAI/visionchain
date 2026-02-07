@@ -787,33 +787,42 @@ const Wallet = (): JSX.Element => {
         }
     };
 
-    // Dismiss a task from Agent Queue and Agent Desk (completely remove)
+    // Dismiss a task from Agent Queue and Agent Desk (hide from UI, preserve in history)
     const handleDismissTask = async (taskId: string) => {
+        console.log('[Wallet] Dismissing task:', taskId);
+
         // Handle Bridge transactions (ID starts with 'bridge_')
         if (taskId.startsWith('bridge_')) {
             const actualId = taskId.replace('bridge_', '');
-            // Completely remove from local state
+            // Remove from local state using correct ID format
             setBridgeTasks(prev => prev.filter(t => t.id !== taskId));
             try {
                 await hideBridgeFromDesk(actualId);
+                console.log('[Wallet] Bridge dismissed:', actualId);
             } catch (e) {
                 console.error('[Wallet] Failed to dismiss bridge:', e);
             }
             return;
         }
 
-        // Handle Batch agents - completely remove
+        // Handle Batch agents - mark as hidden (not delete)
         if (batchAgents().some((a: any) => a.id === taskId)) {
-            setBatchAgents(prev => prev.filter((a: any) => a.id !== taskId));
+            setBatchAgents(prev => prev.map((a: any) =>
+                a.id === taskId ? { ...a, hiddenFromDesk: true, hiddenAt: Date.now() } : a
+            ));
+            console.log('[Wallet] Batch agent hidden:', taskId);
             return;
         }
 
-        // Handle Time-lock tasks - completely remove from local state
-        setQueueTasks(prev => prev.filter((t: any) => t.id !== taskId));
+        // Handle Time-lock tasks - update hiddenFromDesk flag locally first for immediate UI response
+        setQueueTasks(prev => prev.map((t: any) =>
+            t.id === taskId ? { ...t, hiddenFromDesk: true, hiddenAt: Date.now() } : t
+        ));
 
-        // Update Firebase to mark as dismissed
+        // Update Firebase to persist the hidden state
         try {
             await dismissScheduledTask(taskId);
+            console.log('[Wallet] TimeLock task dismissed:', taskId);
         } catch (e) {
             console.error('[Wallet] Failed to dismiss task:', e);
         }
