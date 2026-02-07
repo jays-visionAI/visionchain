@@ -85,6 +85,7 @@ interface WalletDashboardProps {
     onCancelTask: (taskId: string) => void;
     onDismissTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
+    onRetryTask?: (taskId: string) => void;
     isScheduling: boolean;
 
     // Sidebar Control
@@ -905,6 +906,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     onCancelTask={props.onCancelTask}
                     onDismissTask={props.onDismissTask}
                     onForceExecute={props.onForceExecute}
+                    onRetryTask={props.onRetryTask}
                 />
 
                 <MultiBatchDrawer

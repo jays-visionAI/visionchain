@@ -1837,14 +1837,28 @@ export const subscribeToQueue = (
     return onSnapshot(q, (snapshot: any) => {
         const tasks = snapshot.docs.map((doc: any) => {
             const data = doc.data();
+
+            // Determine status - prioritize actual execution state over stored status
+            const hasExecutionTx = data.executionTx || data.executedTxHash || data.txHash;
+            const hasError = data.error && !hasExecutionTx;
+
             let status: any = 'WAITING';
-            if (data.status === 'SENT' || data.status === 'sent') status = 'SENT';
-            else if (data.status === 'FAILED' || data.status === 'failed') status = 'FAILED';
-            else if (data.status === 'CANCELLED' || data.status === 'cancelled') status = 'CANCELLED';
-            else if (data.status === 'WAITING' || data.status === 'pending' || data.status === 'waiting') {
-                status = 'WAITING';
+
+            // First check for execution tx (most reliable indicator of success)
+            if (hasExecutionTx && !hasError) {
+                status = 'SENT';
+            } else if (hasError) {
+                status = 'FAILED';
+            } else if (data.status === 'SENT' || data.status === 'sent') {
+                status = 'SENT';
+            } else if (data.status === 'FAILED' || data.status === 'failed') {
+                status = 'FAILED';
+            } else if (data.status === 'CANCELLED' || data.status === 'cancelled') {
+                status = 'CANCELLED';
             } else if (data.status === 'EXECUTING' || data.status === 'executing') {
                 status = 'EXECUTING';
+            } else if (data.status === 'WAITING' || data.status === 'pending' || data.status === 'waiting' || !data.status) {
+                status = 'WAITING';
             }
 
             // Calculate relative time or formatted time

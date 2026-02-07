@@ -72,6 +72,7 @@ import {
     cancelScheduledTask,
     dismissScheduledTask,
     hideBridgeFromDesk,
+    retryScheduledTask,
     createNotification,
     NotificationData,
     getFirebaseDb,
@@ -825,6 +826,22 @@ const Wallet = (): JSX.Element => {
             console.log('[Wallet] TimeLock task dismissed:', taskId);
         } catch (e) {
             console.error('[Wallet] Failed to dismiss task:', e);
+        }
+    };
+
+    // Retry a failed task
+    const handleRetryTask = async (taskId: string) => {
+        console.log('[Wallet] Retrying task:', taskId);
+        try {
+            await retryScheduledTask(taskId);
+            // Update local state to reflect retry
+            setQueueTasks(prev => prev.map((t: any) =>
+                t.id === taskId ? { ...t, status: 'WAITING', error: null } : t
+            ));
+            alert('Task scheduled for retry.');
+        } catch (e) {
+            console.error('[Wallet] Failed to retry task:', e);
+            alert('Failed to retry task.');
         }
     };
 
@@ -3381,6 +3398,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 onCancelTask={handleCancelTask}
                                 onDismissTask={handleDismissTask}
                                 onForceExecute={handleForceExecute}
+                                onRetryTask={handleRetryTask}
                                 isScheduling={isSchedulingTimeLock()}
                                 chatHistoryOpen={chatHistoryOpen()}
                                 setChatHistoryOpen={setChatHistoryOpen}

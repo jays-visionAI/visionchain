@@ -1,6 +1,6 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers, ArrowRightLeft } from 'lucide-solid';
+import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers, ArrowRightLeft, RotateCcw } from 'lucide-solid';
 import { AgentTask } from './AgentChip';
 import { contractService } from '../../../services/contractService';
 import { cancelScheduledTask } from '../../../services/firebaseService';
@@ -24,6 +24,7 @@ interface QueueDrawerProps {
     onCancelTask?: (taskId: string) => void;
     onDismissTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
+    onRetryTask?: (taskId: string) => void;
 }
 
 const QueueDrawer = (props: QueueDrawerProps) => {
@@ -319,8 +320,8 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
                                             {/* Action Buttons */}
                                             <div class="flex gap-2 pt-2 border-t border-white/5">
-                                                {/* Cancel button - ONLY for WAITING status (before execution) */}
-                                                <Show when={task.status === 'WAITING'}>
+                                                {/* Cancel button - ONLY for WAITING status (before execution, not yet executed) */}
+                                                <Show when={task.status === 'WAITING' && !task.txHash}>
                                                     <button
                                                         onClick={(e) => handleCancel(task.scheduleId, e)}
                                                         disabled={isCancelling() === task.scheduleId}
@@ -332,42 +333,54 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                     </button>
                                                 </Show>
 
-                                                {/* Dismiss button - for completed/failed tasks (after execution) */}
-                                                <Show when={['SENT', 'FAILED', 'COMPLETED', 'CANCELLED', 'EXPIRED'].includes(task.status)}>
+                                                {/* Retry button - for FAILED tasks */}
+                                                <Show when={task.status === 'FAILED'}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            props.onRetryTask?.(task.id);
+                                                        }}
+                                                        class="flex-1 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                                                    >
+                                                        <RotateCcw class="w-3.5 h-3.5" /> Retry
+                                                    </button>
+                                                </Show>
+
+                                                {/* Dismiss button - for completed/failed tasks (removes from desk, keeps in history) */}
+                                                <Show when={['SENT', 'FAILED', 'COMPLETED', 'CANCELLED', 'EXPIRED', 'FINALIZED'].includes(task.status)}>
                                                     <button
                                                         onClick={(e) => handleDismiss(task.id, e)}
                                                         disabled={isDismissing() === task.id}
                                                         class="flex-1 py-2.5 bg-gray-500/10 hover:bg-gray-500/20 border border-gray-500/30 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                                     >
-                                                        <Show when={isDismissing() === task.id} fallback={<><X class="w-3.5 h-3.5" /> Dismiss Task</>}>
+                                                        <Show when={isDismissing() === task.id} fallback={<><X class="w-3.5 h-3.5" /> Dismiss</>}>
                                                             <div class="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin" />
                                                         </Show>
                                                     </button>
                                                 </Show>
 
-                                                {/* Force Execute button - only for WAITING/EXECUTING */}
-                                                <Show when={['WAITING', 'EXECUTING'].includes(task.status)}>
+                                                {/* Force Execute button - only for WAITING without txHash */}
+                                                <Show when={task.status === 'WAITING' && !task.txHash}>
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             props.onForceExecute?.(task.id);
                                                         }}
-                                                        class={`w-12 py-2.5 border rounded-xl flex items-center justify-center transition-all ${task.status === 'EXECUTING'
-                                                            ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-400'
-                                                            : 'bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400'}`}
-                                                        title={task.status === 'EXECUTING' ? "Force Retry" : "Execute Now"}
+                                                        class="w-12 py-2.5 border rounded-xl flex items-center justify-center transition-all bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400"
+                                                        title="Execute Now"
                                                     >
                                                         <Play class="w-3.5 h-3.5 fill-current" />
                                                     </button>
                                                 </Show>
 
-                                                {/* View on VisionScan button - for completed tasks with txHash */}
-                                                <Show when={!['WAITING', 'EXECUTING'].includes(task.status) && task.txHash}>
+                                                {/* View on VisionScan button - for tasks with txHash */}
+                                                <Show when={task.txHash}>
                                                     <button
                                                         onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
-                                                        class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
+                                                        class="w-12 py-2.5 bg-emerald-600 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-emerald-500/20"
+                                                        title="View on VisionScan"
                                                     >
-                                                        <ExternalLink class="w-3.5 h-3.5" /> View on Vision Scan
+                                                        <ExternalLink class="w-3.5 h-3.5" />
                                                     </button>
                                                 </Show>
                                             </div>
