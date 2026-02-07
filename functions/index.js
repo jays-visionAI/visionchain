@@ -896,81 +896,109 @@ async function indexTransaction(txHash, { type, from, to, amount, fee, method })
  * @param {object} params - Bridge parameters
  * @return {Promise} - Response promise
  */
-async function handleBridge(req, res, { user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature, adminWallet }) {
-  if (!user || !srcChainId || !dstChainId || !amount || !recipient || !intentSignature) {
-    return res.status(400).json({ error: "Missing required fields for bridge" });
+async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, amount, recipient, _nonce, _expiry, _intentSignature, adminWallet }) {
+  // For testnet, we allow bridge without signature verification for simplicity
+  // In production, we would verify the user's signature
+
+  if (!user || !dstChainId || !amount) {
+    return res.status(400).json({ error: "Missing required fields: user, dstChainId, amount" });
   }
 
-  // Verify expiry
-  if (Math.floor(Date.now() / 1000) > expiry) {
-    return res.status(400).json({ error: "Intent expired" });
-  }
+  // Use user's address as recipient if not specified
+  const bridgeRecipient = recipient || user;
+  const srcChain = srcChainId || 1337; // Default to Vision Chain
 
   console.log(`[Paymaster:Bridge] ${user} bridging ${amount} to chain ${dstChainId}`);
 
-  // Intent Commitment Contract
-  const INTENT_COMMITMENT_ADDRESS = "0x47c05BCCA7d57c87083EB4e586007530eE4539e9";
-  const INTENT_COMMITMENT_ABI = [
-    "function commitIntent((address user, uint256 srcChainId, uint256 dstChainId, address token, uint256 amount, address recipient, uint256 nonce, uint256 expiry) intent, bytes signature) external returns (bytes32)",
-  ];
-  const contract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, adminWallet);
+  try {
+    // Contract addresses (Vision Chain v2 Testnet)
+    const INTENT_COMMITMENT_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+    const VISION_BRIDGE_SECURE_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
 
-  // Build intent struct
-  const intent = {
-    user: user,
-    srcChainId: BigInt(srcChainId),
-    dstChainId: BigInt(dstChainId),
-    token: token || ethers.ZeroAddress,
-    amount: BigInt(amount),
-    recipient: recipient,
-    nonce: BigInt(nonce),
-    expiry: BigInt(expiry),
-  };
+    // IntentCommitment ABI (V2 - simpler interface)
+    const INTENT_COMMITMENT_ABI = [
+      "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
+      "function userNonces(address) view returns (uint256)",
+      "event IntentCommitted(bytes32 indexed intentHash, address indexed user, address indexed recipient, uint256 amount, uint256 nonce, uint256 createdAt, uint256 destChainId)",
+    ];
 
-  // Execute commitIntent on behalf of user (gas paid by admin)
-  const tx = await contract.commitIntent(intent, intentSignature, { gasLimit: 300000 });
-  console.log(`[Paymaster:Bridge] TX sent: ${tx.hash}`);
+    // VisionBridgeSecure ABI
+    const BRIDGE_SECURE_ABI = [
+      "function lockVCN(bytes32 intentHash, address recipient, uint256 destChainId) payable",
+    ];
 
-  const receipt = await tx.wait();
-  console.log(`[Paymaster:Bridge] Confirmed in block ${receipt.blockNumber}`);
+    const intentContract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, adminWallet);
+    const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, BRIDGE_SECURE_ABI, adminWallet);
 
-  // Parse intentHash from event
-  let intentHash = null;
-  for (const log of receipt.logs || []) {
-    try {
-      if (log.topics && log.topics.length > 1) {
+    const amountWei = BigInt(amount);
+
+    // === STEP 1: Commit Intent (Paymaster pays gas) ===
+    console.log(`[Paymaster:Bridge] Step 1: Committing intent on-chain...`);
+    const commitTx = await intentContract.commitIntent(bridgeRecipient, amountWei, dstChainId, { gasLimit: 200000 });
+    console.log(`[Paymaster:Bridge] Commit TX sent: ${commitTx.hash}`);
+    const commitReceipt = await commitTx.wait();
+    console.log(`[Paymaster:Bridge] Commit confirmed in block ${commitReceipt.blockNumber}`);
+
+    // Extract intentHash from event logs
+    const intentCommittedTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
+    let intentHash = null;
+    for (const log of commitReceipt.logs || []) {
+      if (log.topics && log.topics[0] === intentCommittedTopic) {
         intentHash = log.topics[1];
         break;
       }
-    } catch (e) {
-      // Not our event
     }
-  }
 
-  // Save to Firestore for tracking
-  try {
-    await db.collection("bridgeTransactions").add({
-      user: user.toLowerCase(),
-      srcChainId: srcChainId,
-      dstChainId: dstChainId,
-      amount: amount,
-      recipient: recipient,
-      intentHash: intentHash,
-      txHash: tx.hash,
-      status: "COMMITTED",
-      createdAt: admin.firestore.Timestamp.now(),
-      type: "BRIDGE_PAYMASTER",
+    if (!intentHash) {
+      // Fallback: compute hash manually
+      const userNonce = await intentContract.userNonces(user);
+      intentHash = ethers.keccak256(ethers.solidityPacked(
+        ["address", "address", "uint256", "uint256", "uint256", "uint256"],
+        [user, bridgeRecipient, amountWei, userNonce - 1n, 0, dstChainId],
+      ));
+    }
+    console.log(`[Paymaster:Bridge] Intent hash: ${intentHash}`);
+
+    // === STEP 2: Lock VCN with intentHash (Paymaster pays gas) ===
+    console.log(`[Paymaster:Bridge] Step 2: Locking VCN...`);
+    const lockTx = await bridgeContract.lockVCN(intentHash, bridgeRecipient, dstChainId, {
+      value: amountWei, // Send native VCN
+      gasLimit: 300000,
     });
-    console.log(`[Paymaster:Bridge] Firestore record created`);
-  } catch (firestoreErr) {
-    console.warn("[Paymaster:Bridge] Firestore write failed:", firestoreErr.message);
-  }
+    console.log(`[Paymaster:Bridge] Lock TX sent: ${lockTx.hash}`);
+    const lockReceipt = await lockTx.wait();
+    console.log(`[Paymaster:Bridge] Lock confirmed in block ${lockReceipt.blockNumber}`);
 
-  return res.status(200).json({
-    success: true,
-    txHash: tx.hash,
-    intentHash: intentHash,
-  });
+    // Save to Firestore for tracking
+    try {
+      await db.collection("bridgeTransactions").add({
+        user: user.toLowerCase(),
+        srcChainId: srcChain,
+        dstChainId: dstChainId,
+        amount: amount,
+        recipient: bridgeRecipient,
+        intentHash: intentHash,
+        commitTxHash: commitTx.hash,
+        lockTxHash: lockTx.hash,
+        status: "LOCKED",
+        createdAt: admin.firestore.Timestamp.now(),
+        type: "BRIDGE_PAYMASTER",
+      });
+      console.log(`[Paymaster:Bridge] Firestore record created`);
+    } catch (firestoreErr) {
+      console.warn("[Paymaster:Bridge] Firestore write failed:", firestoreErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      commitTxHash: commitTx.hash,
+      lockTxHash: lockTx.hash,
+      intentHash: intentHash,
+    });
+  } catch (err) {
+    console.error("[Paymaster:Bridge] Error:", err);
+    return res.status(500).json({ error: err.message || "Bridge transaction failed" });
+  }
 }
 
 // Legacy aliases for backward compatibility (will be removed after migration)

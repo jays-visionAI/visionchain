@@ -2466,85 +2466,52 @@ const Wallet = (): JSX.Element => {
     const executeBridgeIntent = async (bridge: { amount: string; destinationChain: string }) => {
         setIsBridging(true);
         try {
-            // Use Internal Wallet (Cloud Wallet) - NOT MetaMask
-            const encrypted = WalletService.getEncryptedWallet(userProfile().email);
-            if (!encrypted) {
+            const userAddr = walletAddress();
+            if (!userAddr) {
                 throw new Error(lastLocale() === 'ko'
-                    ? "로컬 지갑 키를 찾을 수 없습니다. 복구 문구로 지갑을 복원해주세요."
-                    : "Local wallet key not found. Please restore your wallet using your recovery phrase.");
-
+                    ? "지갑 주소를 찾을 수 없습니다."
+                    : "Wallet address not found.");
             }
 
-            const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
-            const { privateKey, address: userAddr } = WalletService.deriveEOA(mnemonic);
-
-            // Connect internal wallet
-            await contractService.connectInternalWallet(privateKey);
-
-            // Vision Chain - Secure Bridge (Phase 1) Contracts
-            const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
-            const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
+            // Vision Chain Constants
             const VISION_CHAIN_ID = 1337;
             const SEPOLIA_CHAIN_ID = 11155111;
+            const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app';
 
             // Determine destination chain ID
             const chainUpper = bridge.destinationChain.toUpperCase();
             const ethereumKeywords = ['ETHEREUM', 'ETH', 'SEPOLIA', 'ERC-20', 'ERC20', '이더리움', '이더', '세폴리아'];
             const dstChainId = ethereumKeywords.some(kw => chainUpper.includes(kw)) ? SEPOLIA_CHAIN_ID : 137;
 
-            // Create provider and signer from internal wallet (use HTTPS RPC proxy to avoid mixed content)
-            const HTTPS_RPC_PROXY = 'https://api.visionchain.co/rpc-proxy';
-            const provider = new ethers.JsonRpcProvider(HTTPS_RPC_PROXY);
-            const internalSigner = new ethers.Wallet(privateKey, provider);
+            const amountWei = ethers.parseEther(bridge.amount).toString();
 
-            const amountWei = ethers.parseEther(bridge.amount);
+            console.log('[Bridge] Calling Paymaster API for gasless bridge...');
+            console.log(`[Bridge] User: ${userAddr}, Amount: ${amountWei}, DstChain: ${dstChainId}`);
 
-            // === STEP 1: Commit Intent on-chain ===
-            console.log('[Bridge] Step 1: Committing intent on-chain...');
-
-            const INTENT_COMMITMENT_ABI = [
-                "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
-                "function userNonces(address) view returns (uint256)"
-            ];
-
-            const intentContract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_COMMITMENT_ABI, internalSigner);
-            const commitTx = await intentContract.commitIntent(userAddr, amountWei, dstChainId);
-            console.log('[Bridge] Intent commit tx:', commitTx.hash);
-            const commitReceipt = await commitTx.wait();
-
-            // Extract intentHash from event logs
-            const intentCommittedTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
-            const intentLog = commitReceipt.logs.find((log: any) => log.topics[0] === intentCommittedTopic);
-
-            let intentHash: string;
-            if (intentLog) {
-                intentHash = intentLog.topics[1];
-            } else {
-                // Fallback: compute hash manually
-                const nonce = await intentContract.userNonces(userAddr);
-                intentHash = ethers.keccak256(ethers.solidityPacked(
-                    ['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
-                    [userAddr, userAddr, amountWei, nonce - 1n, 0, dstChainId]
-                ));
-            }
-            console.log('[Bridge] Intent hash:', intentHash);
-
-            // === STEP 2: Lock VCN with intentHash ===
-            console.log('[Bridge] Step 2: Locking VCN...');
-
-            const BRIDGE_SECURE_ABI = [
-                "function lockVCN(bytes32 intentHash, address recipient, uint256 destChainId) payable"
-            ];
-
-            const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, BRIDGE_SECURE_ABI, internalSigner);
-            const lockTx = await bridgeContract.lockVCN(intentHash, userAddr, dstChainId, {
-                value: amountWei // Send native VCN
+            // Call Paymaster API to execute bridge (gasless)
+            const response = await fetch(PAYMASTER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'bridge',
+                    user: userAddr,
+                    recipient: userAddr, // Bridge to own wallet on destination chain
+                    amount: amountWei,
+                    srcChainId: VISION_CHAIN_ID,
+                    dstChainId: dstChainId,
+                })
             });
-            console.log('[Bridge] Lock tx:', lockTx.hash);
-            const lockReceipt = await lockTx.wait();
-            console.log('[Bridge] Lock confirmed in block:', lockReceipt.blockNumber);
 
-            const resultTxHash = lockTx.hash;
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Bridge Paymaster request failed');
+            }
+
+            console.log('[Bridge] Paymaster response:', result);
+
+            const resultTxHash = result.lockTxHash || result.commitTxHash;
+            const intentHash = result.intentHash;
 
             // Success message - NO link until bridge is complete
             const chainDisplay = bridge.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridge.destinationChain;
@@ -2570,6 +2537,7 @@ const Wallet = (): JSX.Element => {
                         amount: bridge.amount,
                         destinationChain: bridge.destinationChain,
                         txHash: resultTxHash,
+                        intentHash: intentHash,
                         status: 'pending'
                     }
                 });
@@ -2577,7 +2545,7 @@ const Wallet = (): JSX.Element => {
                 console.warn('[Bridge] Notification failed:', notiErr);
             }
 
-            // Save Bridge Transaction to Firestore for History display
+            // Save Bridge Transaction to Firestore for History display (client-side backup)
             try {
                 const db = getFirebaseDb();
                 const txRef = doc(db, 'transactions', resultTxHash);
@@ -2588,10 +2556,10 @@ const Wallet = (): JSX.Element => {
                     value: bridge.amount,
                     timestamp: Date.now(),
                     type: 'Bridge',
-                    bridgeStatus: 'PENDING', // Relayer will update to SUBMITTED → COMPLETED
+                    bridgeStatus: 'LOCKED', // Relayer will update to SUBMITTED → COMPLETED
                     intentHash: intentHash,
-                    commitTxHash: commitTx.hash,
-                    lockTxHash: resultTxHash,
+                    commitTxHash: result.commitTxHash,
+                    lockTxHash: result.lockTxHash,
                     challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
                     metadata: {
                         destinationChain: bridge.destinationChain,
@@ -2601,15 +2569,13 @@ const Wallet = (): JSX.Element => {
                 });
                 console.log('[Bridge] Saved to Firestore for History');
             } catch (historyErr) {
-                console.warn('[Bridge] Failed to save history:', historyErr);
+                console.warn('[Bridge] Failed to save history (non-critical):', historyErr);
             }
 
             setPendingBridge(null);
 
             // Refresh Sepolia balance after a delay (to catch the arrival)
             setTimeout(() => fetchSepoliaBalance(), 60000);
-
-
 
         } catch (error: any) {
             console.error('[Bridge] Error:', error);
