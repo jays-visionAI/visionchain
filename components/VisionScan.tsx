@@ -36,6 +36,21 @@ export default function VisionScan() {
     // Constants
     const API_URL = "https://api.visionchain.co/api/transactions";
     const RPC_URL = "https://api.visionchain.co/rpc-proxy";
+    const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+    // Fetch on-chain VCN balance for an address
+    const fetchOnChainBalance = async (address: string): Promise<string> => {
+        try {
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const abi = ["function balanceOf(address account) view returns (uint256)"];
+            const contract = new ethers.Contract(VCN_TOKEN_ADDRESS, abi, provider);
+            const balance = await contract.balanceOf(address);
+            return ethers.formatUnits(balance, 18);
+        } catch (error) {
+            console.warn("Failed to fetch on-chain balance:", error);
+            return "0";
+        }
+    };
 
     // --- Actions ---
 
@@ -49,6 +64,14 @@ export default function VisionScan() {
     const fetchTransactions = async (forceTerm?: string, overrides?: any) => {
         const termToSearch = forceTerm !== undefined && typeof forceTerm === 'string' ? forceTerm : searchTerm().trim();
         setAddressBalance(null);
+
+        // Fetch on-chain balance if it's an EVM address
+        if (termToSearch.length === 42 && termToSearch.startsWith('0x')) {
+            console.log(`🌐 VisionScan: Fetching on-chain balance for ${termToSearch}`);
+            const onChainBalance = await fetchOnChainBalance(termToSearch);
+            console.log(`🌐 VisionScan: On-chain VCN balance: ${onChainBalance}`);
+            setAddressBalance(onChainBalance);
+        }
 
         console.log(`🌐 VisionScan: Fetching for "${termToSearch}" with limit ${limit()} and page ${page()}`);
 
