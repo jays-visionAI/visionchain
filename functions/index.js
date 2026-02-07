@@ -534,26 +534,7 @@ const VCN_TOKEN_ABI = [
  *   transactions?: Array<{recipient, amount, name?}>
  * }
  */
-// Allowed origins for CORS
-const ALLOWED_ORIGINS = [
-  "https://www.visionchain.co",
-  "https://visionchain.co",
-  "https://visionchain-d19ed.web.app",
-  "https://visionchain-d19ed.firebaseapp.com",
-  "http://localhost:3000",
-  "http://localhost:5173",
-];
-
-exports.paymaster = onRequest({ cors: ALLOWED_ORIGINS, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
-  // Handle CORS preflight (backup - firebase should handle this with cors option)
-  if (req.method === "OPTIONS") {
-    res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-    res.set("Access-Control-Max-Age", "3600");
-    return res.status(204).send("");
-  }
-
+exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
