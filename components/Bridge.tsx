@@ -109,7 +109,7 @@ const NETWORKS: NetworkConfig[] = [
     {
         name: 'Vision Testnet',
         chainId: 20261337,
-        rpcUrl: 'https://www.visionchain.co/rpc',
+        rpcUrl: 'https://api.visionchain.co/rpc-proxy',
         explorerUrl: 'https://www.visionchain.co/visionscan',
         enabled: true
     },
@@ -140,7 +140,7 @@ const NETWORKS: NetworkConfig[] = [
 ];
 
 // Vision Chain RPC endpoint
-const VISION_RPC_URL = 'https://www.visionchain.co/rpc';
+const VISION_RPC_URL = 'https://api.visionchain.co/rpc-proxy';
 
 // Props interface
 interface BridgeProps {
