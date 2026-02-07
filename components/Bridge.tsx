@@ -325,15 +325,20 @@ const Bridge: Component<BridgeProps> = (props) => {
     // Load balance from Vision Chain directly (Cloud Wallet)
     const loadBalance = async () => {
         const addr = walletAddress();
-        if (!addr) return;
+        if (!addr) {
+            console.log('[Bridge] No wallet address, skipping balance load');
+            return;
+        }
 
         try {
+            console.log('[Bridge] Loading balance for:', addr, 'RPC:', VISION_RPC_URL);
             // Native VCN - get native balance
             const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
             const bal = await provider.getBalance(addr);
+            console.log('[Bridge] Balance loaded:', ethers.formatEther(bal), 'VCN');
             setBalance(ethers.formatEther(bal));
         } catch (err) {
-            console.error('Failed to load balance:', err);
+            console.error('[Bridge] Failed to load balance:', err);
             setBalance('0');
         }
     };
@@ -734,11 +739,19 @@ const Bridge: Component<BridgeProps> = (props) => {
                                             </div>
                                             <div class="flex items-center gap-4">
                                                 <input
-                                                    type="number"
+                                                    type="text"
+                                                    inputMode="decimal"
                                                     placeholder="0.00"
                                                     value={amount()}
-                                                    onInput={(e) => setAmount(e.currentTarget.value)}
-                                                    class="bg-transparent border-none text-3xl font-black focus:outline-none w-full placeholder-gray-700"
+                                                    onInput={(e) => {
+                                                        // Only allow numbers and decimal point
+                                                        const val = e.currentTarget.value.replace(/[^0-9.]/g, '');
+                                                        // Prevent multiple decimal points
+                                                        const parts = val.split('.');
+                                                        const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : val;
+                                                        setAmount(sanitized);
+                                                    }}
+                                                    class="bg-transparent border-none text-3xl font-black text-white focus:outline-none w-full placeholder-gray-600"
                                                 />
                                                 <div class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10">
                                                     <div class="w-5 h-5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500" />
