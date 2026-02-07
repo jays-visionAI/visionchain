@@ -102,16 +102,18 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
     const filteredTasks = createMemo(() => {
         return props.tasks.filter((t: any) => {
+            // Derive effective status: if txHash exists, treat as SENT
+            const effectiveStatus = t.txHash ? 'SENT' : t.status;
+
             if (activeTab() === 'ACTIVE') {
                 // Active tab: ONLY processing tasks (WAITING, EXECUTING)
                 // Also respect hiddenFromDesk for active tasks
                 if (t.hiddenFromDesk) return false;
-                return ['WAITING', 'EXECUTING'].includes(t.status);
+                return ['WAITING', 'EXECUTING'].includes(effectiveStatus);
             }
             // History tab: show ALL completed/finished tasks (including hidden ones)
-            // This allows users to always review their transaction history
             // SENT, COMPLETED, FINALIZED, FAILED, CANCELLED, EXPIRED
-            return ['SENT', 'COMPLETED', 'FINALIZED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(t.status);
+            return ['SENT', 'COMPLETED', 'FINALIZED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(effectiveStatus);
         }).sort((a, b) => b.timestamp - a.timestamp);
     });
 
@@ -187,207 +189,211 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                         </Show>
 
                         <For each={filteredTasks()}>
-                            {(task) => (
-                                <div class={`rounded-xl border transition-all overflow-hidden ${expandedIds().has(task.id) ? 'bg-[#242426] border-blue-500/20 shadow-lg' : 'bg-[#1e1e20] border-white/5 hover:border-white/10'}`}>
+                            {(task) => {
+                                // Derive effective status for display: if txHash exists, treat as SENT
+                                const effectiveStatus = () => task.txHash ? 'SENT' : task.status;
 
-                                    {/* Task Summary Header (Always Visible) */}
-                                    <div
-                                        class="p-3 flex items-center gap-3 cursor-pointer"
-                                        onClick={(e) => toggleExpand(task.id, e)}
-                                    >
-                                        <div class={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border 
-                                            ${task.status === 'WAITING' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' :
-                                                task.status === 'EXECUTING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse' :
-                                                    task.status === 'SENT' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
-                                                        'bg-gray-500/10 border-gray-500/30 text-gray-400'}`}>
-                                            <Show when={task.type === 'BATCH'} fallback={
-                                                <Show when={task.type === 'BRIDGE'} fallback={<Clock class="w-4 h-4" />}>
-                                                    <ArrowRightLeft class="w-4 h-4" />
+                                return (
+                                    <div class={`rounded-xl border transition-all overflow-hidden ${expandedIds().has(task.id) ? 'bg-[#242426] border-blue-500/20 shadow-lg' : 'bg-[#1e1e20] border-white/5 hover:border-white/10'}`}>
+
+                                        {/* Task Summary Header (Always Visible) */}
+                                        <div
+                                            class="p-3 flex items-center gap-3 cursor-pointer"
+                                            onClick={(e) => toggleExpand(task.id, e)}
+                                        >
+                                            <div class={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border 
+                                            ${effectiveStatus() === 'WAITING' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]' :
+                                                    effectiveStatus() === 'EXECUTING' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse' :
+                                                        effectiveStatus() === 'SENT' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.1)]' :
+                                                            'bg-gray-500/10 border-gray-500/30 text-gray-400'}`}>
+                                                <Show when={task.type === 'BATCH'} fallback={
+                                                    <Show when={task.type === 'BRIDGE'} fallback={<Clock class="w-4 h-4" />}>
+                                                        <ArrowRightLeft class="w-4 h-4" />
+                                                    </Show>
+                                                }>
+                                                    <Layers class="w-4 h-4" />
                                                 </Show>
-                                            }>
-                                                <Layers class="w-4 h-4" />
-                                            </Show>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center justify-between gap-2">
-                                                <div class="flex items-center gap-1.5 min-w-0">
-                                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
-                                                        {task.type === 'BATCH' ? 'BATCH AGENT' : task.type === 'BRIDGE' ? 'BRIDGE AGENT' : 'TIME LOCK AGENT'}
-                                                    </span>
-                                                    <div class="w-1 h-1 rounded-full bg-gray-700 shrink-0" />
-                                                    <span class="text-xs font-bold text-gray-200 truncate">
-                                                        {task.summary}
-                                                    </span>
-                                                </div>
-                                                <span class={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tight shrink-0 ${task.status === 'WAITING' ? 'bg-blue-500/20 text-blue-300' :
-                                                    task.status === 'EXECUTING' ? 'bg-amber-500/20 text-amber-300' :
-                                                        task.status === 'SENT' ? 'bg-emerald-500/20 text-emerald-300' :
-                                                            'bg-gray-800 text-gray-400'
-                                                    }`}>{task.status === 'SENT' ? 'SUCCESS' : task.status}</span>
                                             </div>
-                                            <div class="flex items-center gap-2 mt-1">
-                                                <div class="text-[10px] text-gray-400 font-medium">
-                                                    {resolveName(task.recipient)}
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="flex items-center gap-1.5 min-w-0">
+                                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
+                                                            {task.type === 'BATCH' ? 'BATCH AGENT' : task.type === 'BRIDGE' ? 'BRIDGE AGENT' : 'TIME LOCK AGENT'}
+                                                        </span>
+                                                        <div class="w-1 h-1 rounded-full bg-gray-700 shrink-0" />
+                                                        <span class="text-xs font-bold text-gray-200 truncate">
+                                                            {task.summary}
+                                                        </span>
+                                                    </div>
+                                                    <span class={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-tight shrink-0 ${effectiveStatus() === 'WAITING' ? 'bg-blue-500/20 text-blue-300' :
+                                                        effectiveStatus() === 'EXECUTING' ? 'bg-amber-500/20 text-amber-300' :
+                                                            effectiveStatus() === 'SENT' ? 'bg-emerald-500/20 text-emerald-300' :
+                                                                'bg-gray-800 text-gray-400'
+                                                        }`}>{effectiveStatus() === 'SENT' ? 'SUCCESS' : effectiveStatus()}</span>
                                                 </div>
-                                                <div class="text-[10px] text-gray-600">
-                                                    • {formatDate(task.timestamp)}
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <div class="text-[10px] text-gray-400 font-medium">
+                                                        {resolveName(task.recipient)}
+                                                    </div>
+                                                    <div class="text-[10px] text-gray-600">
+                                                        • {formatDate(task.timestamp)}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Detailed View (Expandable) */}
-                                    <Show when={expandedIds().has(task.id)}>
-                                        <div class="px-3 pb-3 pt-0 border-t border-white/5 mt-1">
-                                            {/* Details Grid */}
-                                            {/* Details Grid */}
-                                            <div class="grid grid-cols-2 gap-y-3 gap-x-2 py-3">
-                                                <div class="col-span-2">
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Recipient Details</span>
-                                                    <div class="flex items-center justify-between bg-black/40 p-2 rounded-xl border border-white/5 mt-1">
-                                                        <div class="flex flex-col">
-                                                            <span class="text-xs text-white font-bold">{resolveName(task.recipient)}</span>
-                                                            <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate max-w-[200px]">{task.recipient || 'No address'}</span>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => copyToClipboard(task.recipient || '')}
-                                                            class="p-1.5 hover:bg-white/10 rounded-lg text-gray-500 transition-colors"
-                                                        >
-                                                            <Copy class="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Amount</span>
-                                                    <div class="text-xs text-white font-black mt-0.5 bg-blue-500/10 px-2 py-1 rounded-lg border border-blue-500/20 inline-block">
-                                                        {task.amount} {task.token}
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Source</span>
-                                                    <div class="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
-                                                        {task.id?.slice(0, 12)}
-                                                        <div class="w-1 h-1 rounded-full bg-gray-700" />
-                                                        {task.type || 'TIME'}
-                                                    </div>
-                                                </div>
-
-                                                <Show when={task.txHash}>
+                                        {/* Detailed View (Expandable) */}
+                                        <Show when={expandedIds().has(task.id)}>
+                                            <div class="px-3 pb-3 pt-0 border-t border-white/5 mt-1">
+                                                {/* Details Grid */}
+                                                {/* Details Grid */}
+                                                <div class="grid grid-cols-2 gap-y-3 gap-x-2 py-3">
                                                     <div class="col-span-2">
-                                                        <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Transaction Result</span>
-                                                        <div class="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/20 mt-1 flex items-center justify-between">
+                                                        <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Recipient Details</span>
+                                                        <div class="flex items-center justify-between bg-black/40 p-2 rounded-xl border border-white/5 mt-1">
                                                             <div class="flex flex-col">
-                                                                <span class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Successful Execution</span>
-                                                                <span class="text-[9px] text-emerald-500/60 font-mono mt-0.5 truncate max-w-[250px]">{task.txHash}</span>
+                                                                <span class="text-xs text-white font-bold">{resolveName(task.recipient)}</span>
+                                                                <span class="text-[9px] text-gray-500 font-mono mt-0.5 truncate max-w-[200px]">{task.recipient || 'No address'}</span>
                                                             </div>
                                                             <button
-                                                                onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
-                                                                class="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors"
+                                                                onClick={() => copyToClipboard(task.recipient || '')}
+                                                                class="p-1.5 hover:bg-white/10 rounded-lg text-gray-500 transition-colors"
                                                             >
-                                                                <ExternalLink class="w-3.5 h-3.5" />
+                                                                <Copy class="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
                                                     </div>
-                                                </Show>
 
-                                                <div class="col-span-2">
-                                                    <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Timeline Status</span>
-                                                    <div class="flex items-center gap-1 mt-1.5">
-                                                        <div class={`h-1 flex-1 rounded-full ${['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-800'}`} />
-                                                        <div class={`h-1 flex-1 rounded-full ${['EXECUTING', 'SENT'].includes(task.status) ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-gray-800'}`} />
-                                                        <div class={`h-1 flex-1 rounded-full ${task.status === 'SENT' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-800'}`} />
+                                                    <div>
+                                                        <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Amount</span>
+                                                        <div class="text-xs text-white font-black mt-0.5 bg-blue-500/10 px-2 py-1 rounded-lg border border-blue-500/20 inline-block">
+                                                            {task.amount} {task.token}
+                                                        </div>
                                                     </div>
-                                                    <div class="flex justify-between text-[8px] text-gray-600 mt-1.5 px-0.5 font-black uppercase tracking-widest">
-                                                        <span class={['WAITING', 'EXECUTING', 'SENT'].includes(task.status) ? 'text-blue-400' : ''}>Start</span>
-                                                        <span class={['EXECUTING', 'SENT'].includes(task.status) ? 'text-amber-400' : ''}>Exec</span>
-                                                        <span class={task.status === 'SENT' ? 'text-emerald-400' : ''}>Done</span>
+
+                                                    <div>
+                                                        <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Source</span>
+                                                        <div class="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
+                                                            {task.id?.slice(0, 12)}
+                                                            <div class="w-1 h-1 rounded-full bg-gray-700" />
+                                                            {task.type || 'TIME'}
+                                                        </div>
+                                                    </div>
+
+                                                    <Show when={task.txHash}>
+                                                        <div class="col-span-2">
+                                                            <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Transaction Result</span>
+                                                            <div class="bg-emerald-500/5 p-2 rounded-xl border border-emerald-500/20 mt-1 flex items-center justify-between">
+                                                                <div class="flex flex-col">
+                                                                    <span class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Successful Execution</span>
+                                                                    <span class="text-[9px] text-emerald-500/60 font-mono mt-0.5 truncate max-w-[250px]">{task.txHash}</span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => window.open(`/visionscan?tx=${task.txHash}`, '_blank')}
+                                                                    class="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 rounded-lg text-emerald-400 transition-colors"
+                                                                >
+                                                                    <ExternalLink class="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </Show>
+
+                                                    <div class="col-span-2">
+                                                        <span class="text-[9px] text-gray-500 uppercase font-bold tracking-widest">Timeline Status</span>
+                                                        <div class="flex items-center gap-1 mt-1.5">
+                                                            <div class={`h-1 flex-1 rounded-full ${['WAITING', 'EXECUTING', 'SENT'].includes(effectiveStatus()) ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-gray-800'}`} />
+                                                            <div class={`h-1 flex-1 rounded-full ${['EXECUTING', 'SENT'].includes(effectiveStatus()) ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-gray-800'}`} />
+                                                            <div class={`h-1 flex-1 rounded-full ${effectiveStatus() === 'SENT' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-gray-800'}`} />
+                                                        </div>
+                                                        <div class="flex justify-between text-[8px] text-gray-600 mt-1.5 px-0.5 font-black uppercase tracking-widest">
+                                                            <span class={['WAITING', 'EXECUTING', 'SENT'].includes(effectiveStatus()) ? 'text-blue-400' : ''}>Start</span>
+                                                            <span class={['EXECUTING', 'SENT'].includes(effectiveStatus()) ? 'text-amber-400' : ''}>Exec</span>
+                                                            <span class={effectiveStatus() === 'SENT' ? 'text-emerald-400' : ''}>Done</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            <Show when={task.status === 'FAILED' && task.error}>
-                                                <div class="col-span-2 mt-1 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                                                    <span class="text-[9px] font-bold text-red-500 uppercase flex items-center gap-1">
-                                                        <AlertTriangle class="w-2.5 h-2.5" /> Failure Reason
-                                                    </span>
-                                                    <div class="text-[10px] text-red-300 mt-1 break-words font-mono leading-tight">
-                                                        {task.error}
+                                                <Show when={effectiveStatus() === 'FAILED' && task.error}>
+                                                    <div class="col-span-2 mt-1 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                                        <span class="text-[9px] font-bold text-red-500 uppercase flex items-center gap-1">
+                                                            <AlertTriangle class="w-2.5 h-2.5" /> Failure Reason
+                                                        </span>
+                                                        <div class="text-[10px] text-red-300 mt-1 break-words font-mono leading-tight">
+                                                            {task.error}
+                                                        </div>
                                                     </div>
+                                                </Show>
+
+                                                {/* Action Buttons */}
+                                                <div class="flex gap-2 pt-2 border-t border-white/5">
+                                                    {/* Cancel button - ONLY for WAITING status (before execution, not yet executed) */}
+                                                    <Show when={effectiveStatus() === 'WAITING' && !task.txHash}>
+                                                        <button
+                                                            onClick={(e) => handleCancel(task.scheduleId, e)}
+                                                            disabled={isCancelling() === task.scheduleId}
+                                                            class="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                                        >
+                                                            <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> Cancel Task</>}>
+                                                                <div class="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                                            </Show>
+                                                        </button>
+                                                    </Show>
+
+                                                    {/* Retry button - for FAILED tasks */}
+                                                    <Show when={effectiveStatus() === 'FAILED'}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                props.onRetryTask?.(task.id);
+                                                            }}
+                                                            class="flex-1 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
+                                                        >
+                                                            <RotateCcw class="w-3.5 h-3.5" /> Retry
+                                                        </button>
+                                                    </Show>
+
+                                                    {/* Dismiss button - for completed/failed tasks (removes from desk, keeps in history) */}
+                                                    <Show when={['SENT', 'FAILED', 'COMPLETED', 'CANCELLED', 'EXPIRED', 'FINALIZED'].includes(effectiveStatus()) || task.txHash}>
+                                                        <button
+                                                            onClick={(e) => handleDismiss(task.id, e)}
+                                                            disabled={isDismissing() === task.id}
+                                                            class="flex-1 py-2.5 bg-gray-500/10 hover:bg-gray-500/20 border border-gray-500/30 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                                        >
+                                                            <Show when={isDismissing() === task.id} fallback={<><X class="w-3.5 h-3.5" /> Dismiss</>}>
+                                                                <div class="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin" />
+                                                            </Show>
+                                                        </button>
+                                                    </Show>
+
+                                                    {/* Force Execute button - only for WAITING without txHash */}
+                                                    <Show when={effectiveStatus() === 'WAITING' && !task.txHash}>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                props.onForceExecute?.(task.id);
+                                                            }}
+                                                            class="w-12 py-2.5 border rounded-xl flex items-center justify-center transition-all bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400"
+                                                            title="Execute Now"
+                                                        >
+                                                            <Play class="w-3.5 h-3.5 fill-current" />
+                                                        </button>
+                                                    </Show>
+
+                                                    <Show when={task.txHash}>
+                                                        <button
+                                                            onClick={() => window.open(`/visionscan?tx=${task.txHash}`, '_blank')}
+                                                            class="w-12 py-2.5 bg-emerald-600 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-emerald-500/20"
+                                                            title="View on VisionScan"
+                                                        >
+                                                            <ExternalLink class="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </Show>
                                                 </div>
-                                            </Show>
-
-                                            {/* Action Buttons */}
-                                            <div class="flex gap-2 pt-2 border-t border-white/5">
-                                                {/* Cancel button - ONLY for WAITING status (before execution, not yet executed) */}
-                                                <Show when={task.status === 'WAITING' && !task.txHash}>
-                                                    <button
-                                                        onClick={(e) => handleCancel(task.scheduleId, e)}
-                                                        disabled={isCancelling() === task.scheduleId}
-                                                        class="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                                                    >
-                                                        <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> Cancel Task</>}>
-                                                            <div class="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
-                                                        </Show>
-                                                    </button>
-                                                </Show>
-
-                                                {/* Retry button - for FAILED tasks */}
-                                                <Show when={task.status === 'FAILED'}>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            props.onRetryTask?.(task.id);
-                                                        }}
-                                                        class="flex-1 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5"
-                                                    >
-                                                        <RotateCcw class="w-3.5 h-3.5" /> Retry
-                                                    </button>
-                                                </Show>
-
-                                                {/* Dismiss button - for completed/failed tasks (removes from desk, keeps in history) */}
-                                                <Show when={['SENT', 'FAILED', 'COMPLETED', 'CANCELLED', 'EXPIRED', 'FINALIZED'].includes(task.status)}>
-                                                    <button
-                                                        onClick={(e) => handleDismiss(task.id, e)}
-                                                        disabled={isDismissing() === task.id}
-                                                        class="flex-1 py-2.5 bg-gray-500/10 hover:bg-gray-500/20 border border-gray-500/30 text-gray-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                                                    >
-                                                        <Show when={isDismissing() === task.id} fallback={<><X class="w-3.5 h-3.5" /> Dismiss</>}>
-                                                            <div class="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-400 rounded-full animate-spin" />
-                                                        </Show>
-                                                    </button>
-                                                </Show>
-
-                                                {/* Force Execute button - only for WAITING without txHash */}
-                                                <Show when={task.status === 'WAITING' && !task.txHash}>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            props.onForceExecute?.(task.id);
-                                                        }}
-                                                        class="w-12 py-2.5 border rounded-xl flex items-center justify-center transition-all bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400"
-                                                        title="Execute Now"
-                                                    >
-                                                        <Play class="w-3.5 h-3.5 fill-current" />
-                                                    </button>
-                                                </Show>
-
-                                                {/* View on VisionScan button - for tasks with txHash */}
-                                                <Show when={task.txHash}>
-                                                    <button
-                                                        onClick={() => window.open(`https://www.visionchain.co/visionscan/tx/${task.txHash}`, '_blank')}
-                                                        class="w-12 py-2.5 bg-emerald-600 text-white rounded-xl flex items-center justify-center transition-all shadow-lg shadow-emerald-500/20"
-                                                        title="View on VisionScan"
-                                                    >
-                                                        <ExternalLink class="w-3.5 h-3.5" />
-                                                    </button>
-                                                </Show>
                                             </div>
-                                        </div>
-                                    </Show>
-                                </div>
-                            )}
+                                        </Show>
+                                    </div>
+                                );
+                            }}
                         </For>
                     </div>
                 </Motion.div>
