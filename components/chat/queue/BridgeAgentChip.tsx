@@ -275,7 +275,15 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        latestBridge() && props.onDismiss?.(`bridge_${latestBridge()!.id}`);
+                        const bridge = latestBridge();
+                        if (bridge) {
+                            // Immediately hide from local state
+                            setBridges(prev => prev.map(b =>
+                                b.id === bridge.id ? { ...b, hiddenFromDesk: true } : b
+                            ));
+                            // Then call parent handler to update Firebase
+                            props.onDismiss?.(`bridge_${bridge.id}`);
+                        }
                     }}
                     class="absolute top-2 right-2 p-1 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all z-10"
                     title="Dismiss"

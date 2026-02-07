@@ -129,8 +129,12 @@ const QueueDrawer = (props: QueueDrawerProps) => {
 
     const filteredTasks = createMemo(() => {
         return props.tasks.filter((t: any) => {
-            // Derive effective status: if txHash exists, treat as SENT
-            const effectiveStatus = t.txHash ? 'SENT' : t.status;
+            // Derive effective status:
+            // - FAILED/CANCELLED status should be preserved even if txHash exists
+            // - Otherwise, if txHash exists, treat as SENT (completed)
+            const effectiveStatus = ['FAILED', 'CANCELLED'].includes(t.status)
+                ? t.status
+                : (t.txHash ? 'SENT' : t.status);
 
             if (activeTab() === 'ACTIVE') {
                 // Active tab: ONLY processing tasks (WAITING, EXECUTING)
