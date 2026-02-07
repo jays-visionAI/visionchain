@@ -3559,3 +3559,167 @@ export const subscribeToReadAnnouncements = (userEmail: string, callback: (ids: 
         callback([]);
     });
 };
+
+// ==================== Bridge Network Configuration ====================
+
+export interface BridgeNetwork {
+    id?: string;
+    name: string;
+    chainId: number;
+    rpcUrl: string;
+    explorerUrl: string;
+    vcnTokenAddress?: string;
+    icon?: string;
+    enabled: boolean;
+    order: number;
+}
+
+// Default networks if Firebase is empty
+const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
+    {
+        name: 'Vision Testnet',
+        chainId: 20261337,
+        rpcUrl: 'https://api.visionchain.co/rpc-proxy',
+        explorerUrl: 'https://www.visionchain.co/visionscan',
+        icon: 'vision',
+        enabled: true,
+        order: 0
+    },
+    {
+        name: 'Ethereum Sepolia',
+        chainId: 11155111,
+        rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+        explorerUrl: 'https://sepolia.etherscan.io',
+        vcnTokenAddress: '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f',
+        icon: 'ethereum',
+        enabled: true,
+        order: 1
+    },
+    {
+        name: 'Polygon Amoy',
+        chainId: 80002,
+        rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com',
+        explorerUrl: 'https://amoy.polygonscan.com',
+        vcnTokenAddress: '',
+        icon: 'polygon',
+        enabled: false,
+        order: 2
+    },
+    {
+        name: 'Base Sepolia',
+        chainId: 84532,
+        rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
+        explorerUrl: 'https://sepolia.basescan.org',
+        vcnTokenAddress: '',
+        icon: 'base',
+        enabled: false,
+        order: 3
+    }
+];
+
+// Get bridge networks from Firebase
+export const getBridgeNetworks = async (): Promise<BridgeNetwork[]> => {
+    try {
+        const db = getFirebaseDb();
+        const networksRef = collection(db, 'bridge_networks');
+        const q = query(networksRef, orderBy('order', 'asc'));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            console.log('[Bridge] No networks in Firebase, using defaults');
+            return DEFAULT_BRIDGE_NETWORKS;
+        }
+
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as BridgeNetwork));
+    } catch (error) {
+        console.error('[Bridge] Failed to fetch networks:', error);
+        return DEFAULT_BRIDGE_NETWORKS;
+    }
+};
+
+// Subscribe to bridge networks (real-time updates)
+export const subscribeToBridgeNetworks = (callback: (networks: BridgeNetwork[]) => void) => {
+    const db = getFirebaseDb();
+    const networksRef = collection(db, 'bridge_networks');
+    const q = query(networksRef, orderBy('order', 'asc'));
+
+    return onSnapshot(q, (snapshot) => {
+        if (snapshot.empty) {
+            callback(DEFAULT_BRIDGE_NETWORKS);
+            return;
+        }
+
+        const networks = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as BridgeNetwork));
+        callback(networks);
+    }, (error) => {
+        console.error('[Bridge] Subscribe error:', error);
+        callback(DEFAULT_BRIDGE_NETWORKS);
+    });
+};
+
+// Save/update bridge network (Admin only)
+export const saveBridgeNetwork = async (network: BridgeNetwork): Promise<void> => {
+    const db = getFirebaseDb();
+    const networksRef = collection(db, 'bridge_networks');
+
+    if (network.id) {
+        // Update existing
+        const docRef = doc(db, 'bridge_networks', network.id);
+        await updateDoc(docRef, {
+            name: network.name,
+            chainId: network.chainId,
+            rpcUrl: network.rpcUrl,
+            explorerUrl: network.explorerUrl,
+            vcnTokenAddress: network.vcnTokenAddress || '',
+            icon: network.icon || '',
+            enabled: network.enabled,
+            order: network.order,
+            updatedAt: serverTimestamp()
+        });
+    } else {
+        // Create new
+        await addDoc(networksRef, {
+            ...network,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+    }
+};
+
+// Delete bridge network (Admin only)
+export const deleteBridgeNetwork = async (networkId: string): Promise<void> => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'bridge_networks', networkId);
+    await deleteDoc(docRef);
+};
+
+// Initialize default networks if collection is empty
+export const initializeBridgeNetworks = async (): Promise<void> => {
+    const db = getFirebaseDb();
+    const networksRef = collection(db, 'bridge_networks');
+    const snapshot = await getDocs(networksRef);
+
+    if (snapshot.empty) {
+        console.log('[Bridge] Initializing default bridge networks...');
+        const batch = writeBatch(db);
+
+        DEFAULT_BRIDGE_NETWORKS.forEach((network, index) => {
+            const docRef = doc(networksRef);
+            batch.set(docRef, {
+                ...network,
+                order: index,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+        });
+
+        await batch.commit();
+        console.log('[Bridge] Default networks initialized');
+    }
+};

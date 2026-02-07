@@ -16,7 +16,7 @@ import {
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
-import { getFirebaseDb } from '../services/firebaseService';
+import { getFirebaseDb, subscribeToBridgeNetworks, BridgeNetwork } from '../services/firebaseService';
 import { collection, query, where, orderBy, onSnapshot, limit, doc, setDoc } from 'firebase/firestore';
 import { createNotification } from '../services/notificationService';
 import { getVcnPrice, initPriceService } from '../services/vcnPriceService';
@@ -99,10 +99,12 @@ interface BridgeTransaction {
 interface NetworkConfig {
     name: string;
     chainId: number;
-    rpcUrl?: string;
-    explorerUrl?: string;
+    rpcUrl: string;
+    explorerUrl: string;
     vcnTokenAddress?: string;
     enabled: boolean;
+    order?: number;
+    icon?: string;
 }
 
 const NETWORKS: NetworkConfig[] = [
@@ -154,9 +156,13 @@ const Bridge: Component<BridgeProps> = (props) => {
     const isConnected = () => !!(props.walletAddress?.() || '');
     const walletAddress = () => props.walletAddress?.() || '';
 
-    // Bridge state
-    const [fromNetwork, setFromNetwork] = createSignal(NETWORKS[0]);
-    const [toNetwork, setToNetwork] = createSignal(NETWORKS[1]);
+    // Dynamic networks from Firebase
+    const [networks, setNetworks] = createSignal<BridgeNetwork[]>(NETWORKS.map((n, i) => ({ ...n, order: i })));
+    const [networksLoading, setNetworksLoading] = createSignal(true);
+
+    // Bridge state - use first/second network from dynamic list
+    const [fromNetwork, setFromNetwork] = createSignal<NetworkConfig>(NETWORKS[0]);
+    const [toNetwork, setToNetwork] = createSignal<NetworkConfig>(NETWORKS[1]);
     const [amount, setAmount] = createSignal('');
     const [selectedAsset, setSelectedAsset] = createSignal('VCN');
     const [balance, setBalance] = createSignal('0');
@@ -165,8 +171,8 @@ const Bridge: Component<BridgeProps> = (props) => {
     const [step, setStep] = createSignal(1); // 1: Input, 2: Processing, 3: Success
     const [showNetworkDropdown, setShowNetworkDropdown] = createSignal(false);
 
-    // Get available destination networks (excluding source)
-    const getDestinationNetworks = () => NETWORKS.filter(n => n.chainId !== fromNetwork().chainId);
+    // Get available destination networks (excluding source) - use dynamic list
+    const getDestinationNetworks = () => networks().filter(n => n.chainId !== fromNetwork().chainId);
 
     // Transaction state
     const [txHash, setTxHash] = createSignal('');
@@ -544,9 +550,26 @@ const Bridge: Component<BridgeProps> = (props) => {
     };
 
     // Load data on mount and when wallet changes
+    let unsubscribeNetworks: (() => void) | null = null;
+
     onMount(async () => {
         // Initialize VCN price service
         initPriceService();
+
+        // Subscribe to dynamic bridge networks from Firebase
+        unsubscribeNetworks = subscribeToBridgeNetworks((networkList) => {
+            console.log('[Bridge] Networks loaded:', networkList.length);
+            setNetworks(networkList);
+            setNetworksLoading(false);
+
+            // Update from/to networks if they haven't been set yet
+            if (networkList.length > 0) {
+                const visionNetwork = networkList.find(n => n.chainId === VISION_CHAIN_ID);
+                const otherNetwork = networkList.find(n => n.chainId !== VISION_CHAIN_ID && n.enabled);
+                if (visionNetwork) setFromNetwork(visionNetwork);
+                if (otherNetwork) setToNetwork(otherNetwork);
+            }
+        });
 
         // Detect current chain
         await detectCurrentChain();
@@ -568,6 +591,9 @@ const Bridge: Component<BridgeProps> = (props) => {
     onCleanup(() => {
         if (unsubscribeBridgeHistory) {
             unsubscribeBridgeHistory();
+        }
+        if (unsubscribeNetworks) {
+            unsubscribeNetworks();
         }
     });
 
