@@ -544,19 +544,13 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5173",
 ];
 
-exports.paymaster = onRequest({ cors: false, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
-  // Set CORS headers for ALL responses (including errors)
-  const origin = req.headers.origin || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-
-  res.set("Access-Control-Allow-Origin", allowedOrigin);
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.set("Access-Control-Allow-Credentials", "true");
-  res.set("Access-Control-Max-Age", "3600");
-
-  // Handle CORS preflight
+exports.paymaster = onRequest({ cors: ALLOWED_ORIGINS, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
+  // Handle CORS preflight (backup - firebase should handle this with cors option)
   if (req.method === "OPTIONS") {
+    res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    res.set("Access-Control-Max-Age", "3600");
     return res.status(204).send("");
   }
 
