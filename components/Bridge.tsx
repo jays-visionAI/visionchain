@@ -34,7 +34,7 @@ const MESSAGE_INBOX_ADDRESS = '0x785bcD75294b45D855883B75CdDE3e3bA237EF40';
 const VISION_BRIDGE_SECURE_ADDRESS = '0xFDA890183E1e18eE7b02A94d9DF195515D914655';
 
 // Chain IDs
-const VISION_CHAIN_ID = 1337;
+const VISION_CHAIN_ID = 20261337; // Vision Chain Testnet
 const SEPOLIA_CHAIN_ID = 11155111;
 const POLYGON_AMOY_CHAIN_ID = 80002;
 const BASE_SEPOLIA_CHAIN_ID = 84532;
@@ -893,7 +893,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                     <span class="text-[10px] font-black text-green-400 uppercase tracking-widest">Bridge Operational</span>
                                 </div>
                                 <div class="text-lg font-black italic mb-2 tracking-tight">Connected: {walletAddress().slice(0, 6)}...{walletAddress().slice(-4)}</div>
-                                <p class="text-xs text-blue-400/60 font-medium">Chain ID: {currentChainId()}</p>
+                                <p class="text-xs text-blue-400/60 font-medium">Chain ID: {props.privateKey?.() ? VISION_CHAIN_ID : currentChainId()}</p>
 
                                 {/* Live VCN Price */}
                                 <div class="mt-4 pt-4 border-t border-white/5">
