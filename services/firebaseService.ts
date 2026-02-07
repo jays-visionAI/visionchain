@@ -3430,14 +3430,28 @@ export const getGlobalAnnouncements = async (): Promise<GlobalAnnouncement[]> =>
 export const subscribeToAnnouncements = (callback: (announcements: GlobalAnnouncement[]) => void) => {
     const db = getFirebaseDb();
     const announcementsRef = collection(db, 'global_announcements');
-    // Only filter by isActive, sort on client to avoid composite index requirement
-    const q = query(announcementsRef, where('isActive', '==', true));
+    // Get all announcements, filter on client to handle isActive type issues
+    const q = query(announcementsRef);
 
     return onSnapshot(q, (snapshot) => {
-        const announcements = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as GlobalAnnouncement));
+        console.log('[Announcements] Raw docs from Firebase:', snapshot.docs.length);
+
+        const allAnnouncements = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('[Announcements] Doc:', doc.id, 'isActive:', data.isActive, 'type:', typeof data.isActive);
+            return {
+                id: doc.id,
+                ...data
+            } as GlobalAnnouncement;
+        });
+
+        // Filter active announcements on client (handles both boolean and string "true")
+        const announcements = allAnnouncements.filter(a =>
+            a.isActive === true || a.isActive === 'true' as any
+        );
+
+        console.log('[Announcements] Active announcements:', announcements.length);
+
         // Sort by createdAt descending on client
         announcements.sort((a, b) => {
             const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);

@@ -265,7 +265,9 @@ export function WalletNotifications() {
 
     // Subscribe to Global Announcements
     createEffect(() => {
+        console.log('[Notifications] Subscribing to announcements...');
         const unsubscribe = subscribeToAnnouncements((list) => {
+            console.log('[Notifications] Announcements received:', list.length, list);
             setAnnouncements(list);
             setAnnouncementsLoading(false);
         });
