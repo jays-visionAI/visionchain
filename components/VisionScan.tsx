@@ -2,7 +2,7 @@ import { createSignal, createMemo, onMount, Show } from 'solid-js';
 import { ethers } from 'ethers';
 import { initPriceService, getVcnPrice } from '../services/vcnPriceService';
 import { getFirebaseDb } from '../services/firebaseService';
-import { collection, query, where, orderBy, limit as fbLimit, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit as fbLimit, getDocs, doc, getDoc, getCountFromServer } from 'firebase/firestore';
 
 // Sub-Components (Phase 1 Refactor)
 import VisionScanHome from './VisionScanHome';
@@ -28,6 +28,7 @@ export default function VisionScan() {
     const [limit, setLimit] = createSignal(20);
     const [page, setPage] = createSignal(1);
     const [notFoundTerm, setNotFoundTerm] = createSignal<string | null>(null);
+    const [totalTxCount, setTotalTxCount] = createSignal<number>(0);
 
     // Network Stats
     const [blockHeight, setBlockHeight] = createSignal<string>('0');
@@ -99,9 +100,27 @@ export default function VisionScan() {
                         const fromQuery = query(txCollection, where('from_addr', '==', normalizedAddress), orderBy('timestamp', 'desc'), fbLimit(limit()));
                         const toQuery = query(txCollection, where('to_addr', '==', normalizedAddress), orderBy('timestamp', 'desc'), fbLimit(limit()));
 
-                        const [fromSnap, toSnap] = await Promise.all([getDocs(fromQuery), getDocs(toQuery)]);
+                        // Also get total count (without limit)
+                        const fromCountQuery = query(txCollection, where('from_addr', '==', normalizedAddress));
+                        const toCountQuery = query(txCollection, where('to_addr', '==', normalizedAddress));
+
+                        const [fromSnap, toSnap, fromCountSnap, toCountSnap] = await Promise.all([
+                            getDocs(fromQuery),
+                            getDocs(toQuery),
+                            getCountFromServer(fromCountQuery),
+                            getCountFromServer(toCountQuery)
+                        ]);
+
+                        // Calculate total unique transaction count
+                        const totalFromCount = fromCountSnap.data().count;
+                        const totalToCount = toCountSnap.data().count;
+                        // Estimate unique count (some transactions may have same address as both from and to)
+                        // For accurate count, we would need to fetch all and dedupe, but this is a reasonable estimate
+                        const estimatedTotal = totalFromCount + totalToCount;
+                        setTotalTxCount(estimatedTotal);
 
                         console.log(`🔥 VisionScan: Sent (from_addr match): ${fromSnap.docs.length}, Received (to_addr match): ${toSnap.docs.length}`);
+                        console.log(`🔥 VisionScan: Total count - From: ${totalFromCount}, To: ${totalToCount}, Estimated: ${estimatedTotal}`);
 
                         const txMap = new Map();
                         fromSnap.docs.forEach(d => txMap.set(d.id, d.data()));
@@ -361,6 +380,7 @@ export default function VisionScan() {
                         address={currentAddress()}
                         balance={addressBalance()}
                         transactions={transactions()}
+                        totalTxCount={totalTxCount()}
                         chainType={chainType()}
                         onViewTx={(tx) => {
                             setSelectedTx(tx);

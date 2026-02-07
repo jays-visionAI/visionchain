@@ -24,6 +24,7 @@ interface AddressDetailProps {
     address: string;
     balance: string | null;
     transactions: any[];
+    totalTxCount?: number;
     onViewTx: (tx: any) => void;
     onClose: () => void;
     chainType?: 'evm' | 'btc' | 'sol';
@@ -94,7 +95,7 @@ export default function AddressDetailView(props: AddressDetailProps) {
                 </div>
                 <div class="bg-white/[0.02] border border-white/5 p-6 rounded-2xl">
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Transactions</span>
-                    <span class="text-2xl font-black text-white">{props.transactions.length}</span>
+                    <span class="text-2xl font-black text-white">{props.totalTxCount || props.transactions.length}</span>
                 </div>
             </div>
 
