@@ -42,7 +42,8 @@ import {
     AlertTriangle,
     Sparkles,
     Wrench,
-    ExternalLink
+    ExternalLink,
+    ArrowRight
 } from 'lucide-solid';
 import { Motion, Presence } from 'solid-motionone';
 import { useAuth } from '../auth/authContext';
@@ -265,9 +266,7 @@ export function WalletNotifications() {
 
     // Subscribe to Global Announcements
     createEffect(() => {
-        console.log('[Notifications] Subscribing to announcements...');
         const unsubscribe = subscribeToAnnouncements((list) => {
-            console.log('[Notifications] Announcements received:', list.length, list);
             setAnnouncements(list);
             setAnnouncementsLoading(false);
         });
@@ -812,15 +811,25 @@ export function WalletNotifications() {
                                             </div>
 
                                             <Show when={item().actionUrl}>
-                                                <a
-                                                    href={item().actionUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    class="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl text-white font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all"
-                                                >
-                                                    <ExternalLink class="w-4 h-4" />
-                                                    {item().actionLabel || 'Learn More'}
-                                                </a>
+                                                <Show when={item().actionUrl?.startsWith('/')} fallback={
+                                                    <a
+                                                        href={item().actionUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        class="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl text-white font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all"
+                                                    >
+                                                        <ExternalLink class="w-4 h-4" />
+                                                        {item().actionLabel || 'Learn More'}
+                                                    </a>
+                                                }>
+                                                    <a
+                                                        href={item().actionUrl}
+                                                        class="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl text-white font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all"
+                                                    >
+                                                        <ArrowRight class="w-4 h-4" />
+                                                        {item().actionLabel || 'Go'}
+                                                    </a>
+                                                </Show>
                                             </Show>
                                             <div class="h-20 lg:h-0" /> {/* Safe area spacer for mobile */}
                                         </div>

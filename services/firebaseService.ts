@@ -3434,23 +3434,15 @@ export const subscribeToAnnouncements = (callback: (announcements: GlobalAnnounc
     const q = query(announcementsRef);
 
     return onSnapshot(q, (snapshot) => {
-        console.log('[Announcements] Raw docs from Firebase:', snapshot.docs.length);
-
-        const allAnnouncements = snapshot.docs.map(doc => {
-            const data = doc.data();
-            console.log('[Announcements] Doc:', doc.id, 'isActive:', data.isActive, 'type:', typeof data.isActive);
-            return {
-                id: doc.id,
-                ...data
-            } as GlobalAnnouncement;
-        });
+        const allAnnouncements = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GlobalAnnouncement));
 
         // Filter active announcements on client (handles both boolean and string "true")
         const announcements = allAnnouncements.filter(a =>
             a.isActive === true || a.isActive === 'true' as any
         );
-
-        console.log('[Announcements] Active announcements:', announcements.length);
 
         // Sort by createdAt descending on client
         announcements.sort((a, b) => {
