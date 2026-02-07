@@ -302,9 +302,10 @@ const MultiReviewCard = (props: {
     transactions: any[],
     onApprove: (interval: number) => void,
     onCancel: () => void,
-    onViewDetail: () => void
+    onViewDetail: () => void,
+    interval: number,
+    onIntervalChange: (val: number) => void
 }) => {
-    const [interval, setIntervalVal] = createSignal(5); // Default 5s
     return (
         <Motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -360,7 +361,7 @@ const MultiReviewCard = (props: {
             <div class="px-4 py-3 bg-white/[0.02] border-t border-white/5">
                 <div class="flex items-center justify-between mb-2">
                     <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Execution Interval</span>
-                    <span class="text-[10px] font-bold text-blue-400">{interval()}s <span class="text-gray-600">/ Tx</span></span>
+                    <span class="text-[10px] font-bold text-blue-400">{props.interval}s <span class="text-gray-600">/ Tx</span></span>
                 </div>
                 <div class="flex items-center gap-3">
                     <span class="text-[9px] font-bold text-gray-600">3s</span>
@@ -369,8 +370,8 @@ const MultiReviewCard = (props: {
                         min="3"
                         max="10"
                         step="1"
-                        value={interval()}
-                        onInput={(e) => setIntervalVal(parseInt(e.currentTarget.value))}
+                        value={props.interval}
+                        onInput={(e) => props.onIntervalChange(parseInt(e.currentTarget.value))}
                         class="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
                     <span class="text-[9px] font-bold text-gray-600">10s</span>
@@ -385,7 +386,7 @@ const MultiReviewCard = (props: {
                     Cancel
                 </button>
                 <button
-                    onClick={() => props.onApprove(interval())}
+                    onClick={() => props.onApprove(props.interval)}
                     class="flex-[2] py-2 bg-blue-500 hover:bg-blue-600 rounded-xl text-[11px] font-black text-white shadow-lg shadow-blue-500/20 transition-all uppercase tracking-widest"
                 >
                     Start Batch Transfer
@@ -771,6 +772,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     const [selectedBatchId, setSelectedBatchId] = createSignal<string | null>(null);
+    const [batchInterval, setBatchInterval] = createSignal(5); // Default 5s for batch transactions
 
     // All tasks for Agent Queue (includes hidden for History tab)
     const combinedDrawerTasks = createMemo(() => {
@@ -1173,6 +1175,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             <Show when={msg.role === 'assistant' && msg.isMultiReview && msg.batchData}>
                                                 <MultiReviewCard
                                                     transactions={msg.batchData}
+                                                    interval={batchInterval()}
+                                                    onIntervalChange={setBatchInterval}
                                                     onApprove={(interval) => {
                                                         props.onStartBatch(msg.batchData, interval);
                                                         props.setReviewMulti(null);
