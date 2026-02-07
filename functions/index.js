@@ -2080,7 +2080,7 @@ exports.checkBridgeStatus = onRequest({ cors: true, invoker: "public" }, async (
  * Setup TOTP 2FA - Generate secret and QR code
  * User must scan QR and verify before 2FA is enabled
  */
-exports.setupTOTP = onCall({ cors: true }, async (request) => {
+exports.setupTOTP = onCall({ cors: true, invoker: "public" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -2147,7 +2147,7 @@ exports.setupTOTP = onCall({ cors: true }, async (request) => {
 /**
  * Enable TOTP 2FA - Verify first code and activate
  */
-exports.enableTOTP = onCall({ cors: true }, async (request) => {
+exports.enableTOTP = onCall({ cors: true, invoker: "public" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -2342,7 +2342,7 @@ exports.verifyTOTP = onCall({ cors: true }, async (request) => {
 /**
  * Check TOTP status - Whether 2FA is enabled
  */
-exports.getTOTPStatus = onCall({ cors: true }, async (request) => {
+exports.getTOTPStatus = onCall({ cors: true, invoker: "public" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
@@ -2378,7 +2378,7 @@ exports.getTOTPStatus = onCall({ cors: true }, async (request) => {
 /**
  * Disable TOTP 2FA - Requires current TOTP code or backup code
  */
-exports.disableTOTP = onCall({ cors: true }, async (request) => {
+exports.disableTOTP = onCall({ cors: true, invoker: "public" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be logged in.");
   }
