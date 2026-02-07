@@ -50,9 +50,9 @@ const ADDRESSES = {
     ],
     RPC_URL: "https://api.visionchain.co/rpc-proxy",
     SEQUENCER_URL: "https://api.visionchain.co/rpc/submit",
-    // Paymaster API (Unified - Cloud Functions)
+    // Paymaster API (Unified - Cloud Functions Gen 2 / Cloud Run)
     // Single endpoint supports: type='transfer', type='timelock', type='batch'
-    PAYMASTER_URL: "https://us-central1-visionchain-d19ed.cloudfunctions.net/paymaster",
+    PAYMASTER_URL: "https://paymaster-sapjcm3s5a-uc.a.run.app",
 
     // Interoperability (Equalizer Model)
     VISION_VAULT_SEPOLIA_MOCK: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"

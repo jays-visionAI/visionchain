@@ -534,11 +534,25 @@ const VCN_TOKEN_ABI = [
  *   transactions?: Array<{recipient, amount, name?}>
  * }
  */
-exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
+// Allowed origins for CORS
+const ALLOWED_ORIGINS = [
+  "https://www.visionchain.co",
+  "https://visionchain.co",
+  "https://visionchain-d19ed.web.app",
+  "https://visionchain-d19ed.firebaseapp.com",
+  "http://localhost:3000",
+  "http://localhost:5173",
+];
+
+exports.paymaster = onRequest({ cors: false, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
   // Set CORS headers for ALL responses (including errors)
-  res.set("Access-Control-Allow-Origin", "*");
+  const origin = req.headers.origin || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  res.set("Access-Control-Allow-Origin", allowedOrigin);
   res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.set("Access-Control-Allow-Credentials", "true");
   res.set("Access-Control-Max-Age", "3600");
 
   // Handle CORS preflight
