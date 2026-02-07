@@ -759,13 +759,31 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             // Already hidden by user
             if (t.hiddenFromDesk) return false;
 
-            // Always show WAITING, EXECUTING, FAILED (unless hidden)
-            if (['WAITING', 'EXECUTING', 'FAILED'].includes(t.status)) return true;
-            // Show SENT tasks for 60 seconds after completion
-            if (t.status === 'SENT' && t.completedAt) {
-                const elapsed = now - t.completedAt;
-                return elapsed < 60000; // 60 seconds
+            // If txHash exists, task is already executed - derive effective status
+            const effectiveStatus = t.txHash ? 'SENT' : t.status;
+
+            // For completed tasks (txHash exists or SENT status), only show briefly
+            if (effectiveStatus === 'SENT') {
+                // Show for 60 seconds after completion, then hide
+                if (t.completedAt) {
+                    const elapsed = now - t.completedAt;
+                    return elapsed < 60000; // 60 seconds
+                }
+                // If no completedAt but has txHash, use createdAt or hide
+                if (t.txHash && t.timestamp) {
+                    const elapsed = now - t.timestamp;
+                    // If older than 5 minutes and has txHash, hide it
+                    return elapsed < 300000; // 5 minutes max display for old completed tasks
+                }
+                return false;
             }
+
+            // Always show WAITING, EXECUTING (unless hidden or already executed)
+            if (['WAITING', 'EXECUTING'].includes(effectiveStatus)) return true;
+
+            // Show FAILED tasks
+            if (effectiveStatus === 'FAILED') return true;
+
             return false;
         });
     });

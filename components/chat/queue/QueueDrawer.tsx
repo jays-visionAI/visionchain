@@ -89,8 +89,10 @@ const QueueDrawer = (props: QueueDrawerProps) => {
         setIsClearing(true);
         try {
             const result = await clearAllScheduledTasks(props.userEmail);
-            alert(`Deleted ${result.deleted} tasks.`);
+            alert(`Deleted ${result.deleted} tasks. Page will refresh.`);
             props.onClearAll?.();
+            // Force page refresh to ensure clean state
+            window.location.reload();
         } catch (err) {
             console.error("Clear all failed:", err);
             alert("Failed to clear tasks. See console for details.");
