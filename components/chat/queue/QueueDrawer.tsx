@@ -1,9 +1,9 @@
 import { createSignal, createMemo, For, Show } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
-import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers, ArrowRightLeft, RotateCcw } from 'lucide-solid';
+import { X, Clock, Check, AlertTriangle, ExternalLink, Copy, Ban, Activity, History, Play, Layers, ArrowRightLeft, RotateCcw, Trash2 } from 'lucide-solid';
 import { AgentTask } from './AgentChip';
 import { contractService } from '../../../services/contractService';
-import { cancelScheduledTask } from '../../../services/firebaseService';
+import { cancelScheduledTask, clearAllScheduledTasks } from '../../../services/firebaseService';
 
 // Extend AgentTask locally if needed or assume it has extra props from subscription
 interface DetailedAgentTask extends AgentTask {
@@ -25,6 +25,8 @@ interface QueueDrawerProps {
     onDismissTask?: (taskId: string) => void;
     onForceExecute?: (taskId: string) => void;
     onRetryTask?: (taskId: string) => void;
+    userEmail?: string;
+    onClearAll?: () => void;
 }
 
 const QueueDrawer = (props: QueueDrawerProps) => {
@@ -33,17 +35,17 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     const [isCancelling, setIsCancelling] = createSignal<string | null>(null);
     const [isDismissing, setIsDismissing] = createSignal<string | null>(null);
 
-    const handleCancel = async (scheduleId: string | undefined, e: Event) => {
+    const handleCancel = async (taskId: string | undefined, e: Event) => {
         e.stopPropagation();
-        if (!scheduleId) return;
+        if (!taskId) return;
 
         if (!confirm("Are you sure you want to cancel this scheduled transfer?")) return;
 
-        setIsCancelling(scheduleId);
+        setIsCancelling(taskId);
         try {
             // Cancel via Parent Prop (which handles Firebase update only)
             if (props.onCancelTask) {
-                await props.onCancelTask(scheduleId);
+                await props.onCancelTask(taskId);
             } else {
                 console.warn("No cancel handler provided");
             }
@@ -71,6 +73,29 @@ const QueueDrawer = (props: QueueDrawerProps) => {
             console.error("Dismiss failed:", err);
         } finally {
             setIsDismissing(null);
+        }
+    };
+
+    const [isClearing, setIsClearing] = createSignal(false);
+
+    const handleClearAll = async () => {
+        if (!props.userEmail) {
+            console.warn("No userEmail provided for clear all");
+            return;
+        }
+
+        if (!confirm("Are you sure you want to DELETE ALL agent tasks? This cannot be undone.")) return;
+
+        setIsClearing(true);
+        try {
+            const result = await clearAllScheduledTasks(props.userEmail);
+            alert(`Deleted ${result.deleted} tasks.`);
+            props.onClearAll?.();
+        } catch (err) {
+            console.error("Clear all failed:", err);
+            alert("Failed to clear tasks. See console for details.");
+        } finally {
+            setIsClearing(false);
         }
     };
 
@@ -156,12 +181,27 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                 {props.tasks.filter((t: any) => ['WAITING', 'EXECUTING'].includes(t.status) && !t.hiddenFromDesk).length} Active
                             </div>
                         </div>
-                        <button
-                            onClick={props.onClose}
-                            class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                        >
-                            <X class="w-4 h-4" />
-                        </button>
+                        <div class="flex items-center gap-1">
+                            {/* Clear All Button - Debug/Admin only */}
+                            <Show when={props.userEmail && props.tasks.length > 0}>
+                                <button
+                                    onClick={handleClearAll}
+                                    disabled={isClearing()}
+                                    class="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
+                                    title="Clear all tasks (DEBUG)"
+                                >
+                                    <Show when={isClearing()} fallback={<Trash2 class="w-4 h-4" />}>
+                                        <div class="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                    </Show>
+                                </button>
+                            </Show>
+                            <button
+                                onClick={props.onClose}
+                                class="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                            >
+                                <X class="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Tabs */}
@@ -329,11 +369,11 @@ const QueueDrawer = (props: QueueDrawerProps) => {
                                                     {/* Cancel button - ONLY for WAITING status (before execution, not yet executed) */}
                                                     <Show when={effectiveStatus() === 'WAITING' && !task.txHash}>
                                                         <button
-                                                            onClick={(e) => handleCancel(task.scheduleId, e)}
-                                                            disabled={isCancelling() === task.scheduleId}
+                                                            onClick={(e) => handleCancel(task.id, e)}
+                                                            disabled={isCancelling() === task.id}
                                                             class="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                                         >
-                                                            <Show when={isCancelling() === task.scheduleId} fallback={<><Ban class="w-3.5 h-3.5" /> Cancel Task</>}>
+                                                            <Show when={isCancelling() === task.id} fallback={<><Ban class="w-3.5 h-3.5" /> Cancel Task</>}>
                                                                 <div class="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
                                                             </Show>
                                                         </button>

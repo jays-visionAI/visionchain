@@ -2019,6 +2019,39 @@ export const dismissScheduledTask = async (taskId: string) => {
     return hideTaskFromDesk(taskId);
 };
 
+/**
+ * [DEBUG/ADMIN] Clear all scheduled tasks for a user
+ * Use this to reset agent desk data for testing
+ */
+export const clearAllScheduledTasks = async (userEmail: string): Promise<{ deleted: number }> => {
+    const db = getFirebaseDb();
+    try {
+        const q = query(
+            collection(db, 'scheduledTransfers'),
+            where('userEmail', '==', userEmail.toLowerCase())
+        );
+        const snapshot = await getDocs(q);
+
+        let deleted = 0;
+        const batch = writeBatch(db);
+
+        snapshot.docs.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+            deleted++;
+        });
+
+        if (deleted > 0) {
+            await batch.commit();
+        }
+
+        console.log(`[Queue] Cleared ${deleted} scheduled tasks for ${userEmail}`);
+        return { deleted };
+    } catch (e) {
+        console.error("Clear all tasks failed:", e);
+        throw e;
+    }
+};
+
 // Hide a bridge transaction from Agent Desk (updates both collections)
 export const hideBridgeFromDesk = async (txId: string) => {
     const db = getFirebaseDb();

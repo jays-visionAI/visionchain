@@ -99,6 +99,7 @@ interface WalletDashboardProps {
     contacts: () => any[];
     showResponseTime?: boolean;
     walletAddress?: () => string;
+    userEmail?: string;
 
     // Cross-Chain Bridge
     pendingBridge?: () => {
@@ -907,6 +908,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     onDismissTask={props.onDismissTask}
                     onForceExecute={props.onForceExecute}
                     onRetryTask={props.onRetryTask}
+                    userEmail={props.userEmail}
                 />
 
                 <MultiBatchDrawer
