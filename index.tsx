@@ -105,6 +105,7 @@ render(() => (
       <Route path="/adminsystem/settings" component={Admin.AdminSettingsPage} />
       <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
       <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
+      <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
 
     </Router>
   </AuthProvider>

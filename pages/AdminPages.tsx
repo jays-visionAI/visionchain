@@ -18,6 +18,7 @@ export const VcnSettings = lazy(() => import('../components/admin/VcnSettings'))
 export const PaymasterAdmin = lazy(() => import('../components/admin/PaymasterAdmin'));
 export const AdminDeFi = lazy(() => import('../components/admin/AdminDeFi'));
 export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
+export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminBridgeNetworks'));
 
 
 // Loading spinner component
@@ -200,6 +201,17 @@ export function AdminAnnouncementsPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminAnnouncements />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminBridgeNetworksPage() {
+    document.title = 'Bridge Networks | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminBridgeNetworks />
             </AdminLayout>
         </Suspense>
     );

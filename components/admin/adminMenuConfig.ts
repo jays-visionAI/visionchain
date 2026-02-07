@@ -18,7 +18,8 @@ import {
     Folder,
     UserPlus,
     Zap,
-    Megaphone
+    Megaphone,
+    Network
 } from 'lucide-solid';
 
 
@@ -42,7 +43,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Folder,
     UserPlus,
     Zap,
-    Megaphone
+    Megaphone,
+    Network
 };
 
 // Menu item interface with optional children for sub-menus
@@ -186,6 +188,15 @@ export const adminMenuConfig: AdminMenuItem[] = [
         icon: 'Database',
         category: 'custom',
         order: 9
+    },
+    {
+        id: 'bridge-networks',
+        path: '/adminsystem/bridge-networks',
+        label: 'Bridge Networks',
+        icon: 'Network',
+        badge: 'NEW',
+        category: 'custom',
+        order: 11
     },
 
     // ===== DEVELOPER PAGES =====
