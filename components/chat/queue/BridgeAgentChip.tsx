@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, onCleanup, For } from 'solid-js';
 import { Motion } from 'solid-motionone';
 import {
     ArrowRightLeft,
@@ -257,112 +257,105 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         }
     };
 
+    // Render each visible bridge as a separate chip
     return (
-        <Show when={shouldShow()}>
-            <Motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[200px] max-w-[280px] shadow-2xl shadow-black/40 cursor-pointer hover:border-purple-500/50 transition-colors"
-                onClick={(e: MouseEvent) => {
-                    // Don't trigger if clicking dismiss button
-                    if ((e.target as HTMLElement).closest('button')) return;
-                    const bridge = latestBridge();
-                    if (bridge) {
-                        props.onClick?.(`bridge_${bridge.id}`);
-                    }
-                }}
-            >
-                {/* Dismiss Button */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        const bridge = latestBridge();
-                        if (bridge) {
-                            // Immediately hide from local state
-                            setBridges(prev => prev.map(b =>
-                                b.id === bridge.id ? { ...b, hiddenFromDesk: true } : b
-                            ));
-                            // Then call parent handler to update Firebase
-                            props.onDismiss?.(`bridge_${bridge.id}`);
-                        }
-                    }}
-                    class="absolute top-2 right-2 p-1 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all z-10"
-                    title="Dismiss"
-                >
-                    <X class="w-3.5 h-3.5" />
-                </button>
+        <For each={visibleBridges()}>
+            {(bridge) => {
+                const statusInfo = () => getStatusInfo(bridge.status);
+                return (
+                    <Motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        class="relative flex flex-col rounded-2xl border backdrop-blur-xl overflow-hidden bg-purple-500/10 border-purple-500/30 min-w-[200px] max-w-[280px] shadow-2xl shadow-black/40 cursor-pointer hover:border-purple-500/50 transition-colors"
+                        onClick={(e: MouseEvent) => {
+                            // Don't trigger if clicking dismiss button
+                            if ((e.target as HTMLElement).closest('button')) return;
+                            props.onClick?.(`bridge_${bridge.id}`);
+                        }}
+                    >
+                        {/* Dismiss Button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // Immediately hide from local state
+                                setBridges(prev => prev.map(b =>
+                                    b.id === bridge.id ? { ...b, hiddenFromDesk: true } : b
+                                ));
+                                // Then call parent handler to update Firebase
+                                props.onDismiss?.(`bridge_${bridge.id}`);
+                            }}
+                            class="absolute top-2 right-2 p-1 rounded-lg bg-white/5 hover:bg-red-500/20 text-gray-500 hover:text-red-400 transition-all z-10"
+                            title="Dismiss"
+                        >
+                            <X class="w-3.5 h-3.5" />
+                        </button>
 
-                {/* Single Bridge Display */}
-                <div class="p-3 space-y-2">
-                    {/* Header */}
-                    <div class="flex items-center gap-2.5 pr-6">
-                        <div class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
-                            <Show when={activeBridges().length > 0} fallback={<ArrowRightLeft class="w-4 h-4 text-purple-400" />}>
-                                <Loader2 class="w-4 h-4 text-purple-400 animate-spin" />
-                            </Show>
-                        </div>
-                        <div class="flex flex-col items-start min-w-0">
-                            <span class="text-[10px] font-black text-white uppercase tracking-widest">
-                                Bridge Agent
-                            </span>
-                            <Show when={latestBridge()}>
-                                {(bridge) => {
-                                    const statusInfo = getStatusInfo(bridge().status);
-                                    return (
-                                        <span class={`text-[9px] font-bold ${statusInfo.color} ${statusInfo.pulse ? 'animate-pulse' : ''}`}>
-                                            {statusInfo.label}
-                                        </span>
-                                    );
-                                }}
-                            </Show>
-                        </div>
-                    </div>
+                        {/* Bridge Display */}
+                        <div class="p-3 space-y-2">
+                            {/* Header */}
+                            <div class="flex items-center gap-2.5 pr-6">
+                                <div class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                                    <Show
+                                        when={['PENDING', 'SUBMITTED', 'COMMITTED', 'LOCKED', 'PROCESSING'].includes(bridge.status)}
+                                        fallback={<ArrowRightLeft class="w-4 h-4 text-purple-400" />}
+                                    >
+                                        <Loader2 class="w-4 h-4 text-purple-400 animate-spin" />
+                                    </Show>
+                                </div>
+                                <div class="flex flex-col items-start min-w-0">
+                                    <span class="text-[10px] font-black text-white uppercase tracking-widest">
+                                        Bridge Agent
+                                    </span>
+                                    <span class={`text-[9px] font-bold ${statusInfo().color} ${statusInfo().pulse ? 'animate-pulse' : ''}`}>
+                                        {statusInfo().label}
+                                    </span>
+                                </div>
+                            </div>
 
-                    {/* Bridge Info */}
-                    <Show when={latestBridge()}>
-                        {(bridge) => (
+                            {/* Bridge Info */}
                             <div class="space-y-1.5">
                                 <div class="flex items-center justify-between">
                                     <span class="text-sm font-black text-white">
-                                        {formatAmount(bridge().amount)} VCN
+                                        {formatAmount(bridge.amount)} VCN
                                     </span>
                                     <span class="text-[9px] text-gray-600">
-                                        {getTimeAgo(bridge().createdAt)}
+                                        {getTimeAgo(bridge.createdAt)}
                                     </span>
                                 </div>
                                 <div class="flex items-center gap-1.5 text-[9px] text-gray-500">
-                                    <span class="font-bold">{getChainName(bridge().srcChainId)}</span>
+                                    <span class="font-bold">{getChainName(bridge.srcChainId)}</span>
                                     <ArrowRightLeft class="w-2.5 h-2.5 text-purple-400" />
-                                    <span class="font-bold">{getChainName(bridge().dstChainId)}</span>
+                                    <span class="font-bold">{getChainName(bridge.dstChainId)}</span>
                                 </div>
                                 {/* Progress Bar */}
                                 <div class="flex gap-0.5">
-                                    <div class={`h-0.5 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'LOCKED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                    <div class={`h-0.5 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'LOCKED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status)
                                         ? 'bg-blue-500' : 'bg-gray-800'}`} />
-                                    <div class={`h-0.5 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                    <div class={`h-0.5 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status)
                                         ? 'bg-amber-500' : 'bg-gray-800'}`} />
-                                    <div class={`h-0.5 flex-1 rounded-full ${['COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                    <div class={`h-0.5 flex-1 rounded-full ${['COMPLETED', 'FINALIZED'].includes(bridge.status)
                                         ? 'bg-green-500' : 'bg-gray-800'}`} />
                                 </div>
                                 {/* Estimated Time (only for active) */}
-                                <Show when={bridge().status === 'COMMITTED' || bridge().status === 'PROCESSING' || bridge().status === 'PENDING' || bridge().status === 'SUBMITTED' || bridge().status === 'LOCKED'}>
+                                <Show when={['COMMITTED', 'PROCESSING', 'PENDING', 'SUBMITTED', 'LOCKED'].includes(bridge.status)}>
                                     <div class="flex items-center gap-1 pt-0.5">
                                         <Clock class="w-2.5 h-2.5 text-purple-400" />
                                         <span class="text-[8px] text-purple-400 font-bold">
-                                            {getEstimatedCompletion(bridge().createdAt, bridge().status)}
+                                            {getEstimatedCompletion(bridge.createdAt, bridge.status)}
                                         </span>
                                     </div>
                                 </Show>
                             </div>
-                        )}
-                    </Show>
-                </div>
+                        </div>
 
-                {/* Glow Effect */}
-                <div class="absolute -right-4 -top-4 w-12 h-12 rounded-full blur-2xl opacity-10 bg-purple-500" />
-            </Motion.div>
-        </Show>
+                        {/* Glow Effect */}
+                        <div class="absolute -right-4 -top-4 w-12 h-12 rounded-full blur-2xl opacity-10 bg-purple-500" />
+                    </Motion.div>
+                );
+            }}
+        </For>
     );
 };
 
 export default BridgeAgentChip;
+
