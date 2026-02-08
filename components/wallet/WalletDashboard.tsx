@@ -800,6 +800,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
         const batchAgents = props.batchAgents();
         const bridgeTasks = props.bridgeTasks?.() || [];
 
+        console.log('[WalletDashboard] combinedDrawerTasks - queue:', queueTasks.length, 'batch:', batchAgents.length, 'bridge:', bridgeTasks.length);
+        if (bridgeTasks.length > 0) {
+            console.log('[WalletDashboard] bridgeTasks:', bridgeTasks.map((t: any) => ({ id: t.id, type: t.type, status: t.status })));
+        }
+
         // Early return for empty state - performance optimization
         if (queueTasks.length === 0 && batchAgents.length === 0 && bridgeTasks.length === 0) return [];
 
@@ -817,7 +822,10 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 completedAt: agent.completedAt,
                 hiddenFromDesk: agent.hiddenFromDesk || false
             }));
-        return [...queueTasks, ...batchTasks, ...bridgeTasks];
+
+        const result = [...queueTasks, ...batchTasks, ...bridgeTasks];
+        console.log('[WalletDashboard] combinedDrawerTasks result:', result.length);
+        return result;
     });
 
     // Filtered tasks for Agent Desk chips (auto-hide after 1min, respect hiddenFromDesk)
