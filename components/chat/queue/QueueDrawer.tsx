@@ -128,7 +128,10 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     };
 
     const filteredTasks = createMemo(() => {
-        return props.tasks.filter((t: any) => {
+        console.log('[QueueDrawer] props.tasks:', props.tasks.length, 'activeTab:', activeTab());
+        console.log('[QueueDrawer] task types:', props.tasks.map((t: any) => ({ type: t.type, status: t.status, id: t.id })));
+
+        const result = props.tasks.filter((t: any) => {
             // Derive effective status:
             // - FAILED/CANCELLED status should be preserved even if txHash exists
             // - BRIDGE type should use its own status (not derive from txHash)
@@ -154,6 +157,9 @@ const QueueDrawer = (props: QueueDrawerProps) => {
             // SENT, COMPLETED, FINALIZED, FAILED, CANCELLED, EXPIRED
             return ['SENT', 'COMPLETED', 'FINALIZED', 'FAILED', 'CANCELLED', 'EXPIRED'].includes(effectiveStatus);
         }).sort((a, b) => b.timestamp - a.timestamp);
+
+        console.log('[QueueDrawer] filteredTasks:', result.length, result.map((t: any) => t.id));
+        return result;
     });
 
     const resolveName = (address: string | undefined) => {
