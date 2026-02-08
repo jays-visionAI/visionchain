@@ -131,10 +131,18 @@ const QueueDrawer = (props: QueueDrawerProps) => {
         return props.tasks.filter((t: any) => {
             // Derive effective status:
             // - FAILED/CANCELLED status should be preserved even if txHash exists
+            // - BRIDGE type should use its own status (not derive from txHash)
             // - Otherwise, if txHash exists, treat as SENT (completed)
-            const effectiveStatus = ['FAILED', 'CANCELLED'].includes(t.status)
-                ? t.status
-                : (t.txHash ? 'SENT' : t.status);
+            let effectiveStatus = t.status;
+            if (!['FAILED', 'CANCELLED'].includes(t.status)) {
+                if (t.type === 'BRIDGE') {
+                    // Bridge tasks keep their own status (WAITING, EXECUTING, SENT)
+                    effectiveStatus = t.status;
+                } else if (t.txHash) {
+                    // Other types: txHash means completed
+                    effectiveStatus = 'SENT';
+                }
+            }
 
             if (activeTab() === 'ACTIVE') {
                 // Active tab: ONLY processing tasks (WAITING, EXECUTING)
