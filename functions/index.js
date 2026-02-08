@@ -955,11 +955,32 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     }
 
     if (!intentHash) {
-      // Fallback: compute hash manually
-      const userNonce = await intentContract.userNonces(user);
+      // Fallback: Use parseLogs to decode the event
+      try {
+        const iface = new ethers.Interface(INTENT_COMMITMENT_ABI);
+        for (const log of commitReceipt.logs || []) {
+          try {
+            const parsed = iface.parseLog({ topics: log.topics, data: log.data });
+            if (parsed && parsed.name === "IntentCommitted") {
+              intentHash = parsed.args[0]; // First argument is intentHash
+              console.log(`[Paymaster:Bridge] Parsed intentHash from event: ${intentHash}`);
+              break;
+            }
+          } catch (e) {
+            // Not this event, continue
+          }
+        }
+      } catch (parseErr) {
+        console.warn(`[Paymaster:Bridge] Event parsing failed:`, parseErr.message);
+      }
+    }
+
+    if (!intentHash) {
+      // Ultimate fallback: generate a pseudo-hash based on tx hash
+      console.warn(`[Paymaster:Bridge] Could not extract intentHash from events, using tx hash as fallback`);
       intentHash = ethers.keccak256(ethers.solidityPacked(
-        ["address", "address", "uint256", "uint256", "uint256", "uint256"],
-        [user, bridgeRecipient, amountWei, userNonce - 1n, 0, dstChainId],
+        ["bytes32", "address", "uint256", "uint256"],
+        [commitTx.hash, bridgeRecipient, amountWei, dstChainId],
       ));
     }
     console.log(`[Paymaster:Bridge] Intent hash: ${intentHash}`);

@@ -730,7 +730,7 @@ const Wallet = (): JSX.Element => {
 
                 // Map bridge status to AgentTask status
                 let status: 'WAITING' | 'EXECUTING' | 'SENT' | 'FAILED' = 'WAITING';
-                if (bridgeStatus === 'PENDING' || bridgeStatus === 'SUBMITTED' || bridgeStatus === 'COMMITTED') {
+                if (bridgeStatus === 'PENDING' || bridgeStatus === 'SUBMITTED' || bridgeStatus === 'COMMITTED' || bridgeStatus === 'LOCKED') {
                     status = 'WAITING';
                 } else if (bridgeStatus === 'PROCESSING') {
                     status = 'EXECUTING';
