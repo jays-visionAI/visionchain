@@ -3166,30 +3166,32 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     if (intentData.recipient && intentData.amount) setFlowStep(2); // Skip to Confirmation
 
                 } else if (intentData.intent === 'bridge') {
-                    // Cross-Chain Bridge Intent
+                    // Cross-Chain Bridge Intent - Execute directly without confirmation
                     const bridgeData = {
                         amount: String(intentData.amount || '0'),
                         symbol: intentData.symbol || 'VCN',
                         destinationChain: intentData.destinationChain || 'SEPOLIA',
                         intentData: intentData
                     };
-                    setPendingBridge(bridgeData);
 
-                    // Show bridge confirmation in chat
+                    // Show bridge starting message
                     const chainDisplay = bridgeData.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridgeData.destinationChain;
-                    const msg = lastLocale() === 'ko'
-                        ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**로 전송합니다.\n\n처리를 진행하시려면 화면 하단의 **확인** 버튼을 눌러주세요.`
-                        : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**.\n\nPlease click **Confirm** below to proceed.`;
+                    const startMsg = lastLocale() === 'ko'
+                        ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**로 전송합니다.\n\n브릿지 에이전트가 처리 중입니다...`
+                        : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**.\n\nBridge agent is processing...`;
 
                     setMessages(prev => [...prev, {
                         role: 'assistant',
-                        content: msg,
-                        isBridgeReview: true,
-                        bridgeData: bridgeData
+                        content: startMsg,
                     }]);
-                    setThinkingSteps([]); // Clear thinking before returning
-                    setStreamingContent(''); // Clear streaming content
+                    setThinkingSteps([]);
+                    setStreamingContent('');
                     setChatLoading(false);
+
+                    // Execute bridge directly (no confirmation dialog)
+                    setTimeout(() => {
+                        executeBridgeIntent(bridgeData);
+                    }, 500);
                     return;
                 }
             }

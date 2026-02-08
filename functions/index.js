@@ -2668,7 +2668,7 @@ exports.bridgeRelayer = onSchedule({
   schedule: "every 2 minutes",
   timeZone: "Asia/Seoul",
   memory: "256MiB",
-  secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK"],
+  secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK", "VCN_SEPOLIA_ADDRESS"],
 }, async (_event) => {
   console.log("[Bridge Relayer] Starting scheduled execution...");
 
@@ -2718,6 +2718,7 @@ exports.bridgeRelayer = onSchedule({
 
 
     // Process bridges from transactions collection (past challenge period)
+    // Check PENDING status
     const pendingTxBridges = await db.collection("transactions")
       .where("type", "==", "Bridge")
       .where("bridgeStatus", "==", "PENDING")
@@ -2725,15 +2726,27 @@ exports.bridgeRelayer = onSchedule({
       .limit(10)
       .get();
 
-    const totalPending = pendingBridges.size + pendingTxBridges.size;
-    console.log(`[Bridge Relayer] Ready to process: ${pendingBridges.size} from bridgeTransactions, ${pendingTxBridges.size} from transactions`);
+    // Also check LOCKED status (from client-side bridge submissions)
+    const lockedTxBridges = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .where("bridgeStatus", "==", "LOCKED")
+      .where("challengeEndTime", "<=", Date.now())
+      .limit(10)
+      .get();
+
+    console.log(`[Bridge Relayer] PENDING: ${pendingTxBridges.size}, LOCKED: ${lockedTxBridges.size}`);
+
+    // Combine PENDING and LOCKED into one list for processing
+    const allTxBridges = [...pendingTxBridges.docs, ...lockedTxBridges.docs];
+    const totalPending = pendingBridges.size + allTxBridges.length;
+    console.log(`[Bridge Relayer] Ready to process: ${pendingBridges.size} from bridgeTransactions, ${allTxBridges.length} from transactions`);
 
     if (totalPending === 0) {
       console.log("[Bridge Relayer] No pending bridges to process (past cutoff time)");
       return;
     }
 
-    console.log(`[Bridge Relayer] Found ${pendingBridges.size} + ${pendingTxBridges.size} bridges to process`);
+    console.log(`[Bridge Relayer] Found ${pendingBridges.size} + ${allTxBridges.length} bridges to process`);
 
     // 2. Process bridges from bridgeTransactions collection
     for (const docSnap of pendingBridges.docs) {
@@ -2789,8 +2802,8 @@ exports.bridgeRelayer = onSchedule({
       }
     }
 
-    // 3. Process bridges from transactions collection (frontend-created)
-    for (const docSnap of pendingTxBridges.docs) {
+    // 3. Process bridges from transactions collection (frontend-created, PENDING or LOCKED)
+    for (const docSnap of allTxBridges) {
       const txData = docSnap.data();
       const txId = docSnap.id;
 
