@@ -769,6 +769,7 @@ const Wallet = (): JSX.Element => {
                 // Sort by timestamp (newest first)
                 .sort((a, b) => b.timestamp - a.timestamp);
 
+            console.log('[Wallet] Bridge tasks updated:', tasks.length, tasks.map(t => ({ id: t.id, status: t.status, type: t.type })));
             setBridgeTasks(tasks);
         }, (error) => {
             console.error('[Wallet] Bridge tasks subscription error:', error);
