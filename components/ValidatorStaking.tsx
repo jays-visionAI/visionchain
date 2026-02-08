@@ -24,6 +24,7 @@ import { WalletService } from '../services/walletService';
 const BRIDGE_STAKING_ADDRESS = '0xc351628EB244ec633d5f21fBD6621e1a683B1181'; // Fixed APY Contract
 const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // VCN Token address
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy'; // HTTPS RPC Proxy
+const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app'; // Paymaster API
 
 const BRIDGE_STAKING_ABI = [
     'function stake(uint256 amount) external',
@@ -243,7 +244,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         }
     };
 
-    // Handle stake
+    // Handle stake using Paymaster (gasless)
     const handleStake = async () => {
         const amount = parseFloat(stakeAmount());
         if (!amount || amount < parseFloat(minStake().replace(/,/g, ''))) {
@@ -265,28 +266,53 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 const provider = new ethers.JsonRpcProvider(RPC_URL);
                 const signer = new ethers.Wallet(privateKey, provider);
                 const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
-                const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
 
                 const amountWei = ethers.parseEther(stakeAmount());
+                const feeWei = ethers.parseEther('1'); // 1 VCN fee
+                const totalAmount = amountWei + feeWei;
 
-                // Check allowance
-                const allowance = await vcn.allowance(walletAddress(), BRIDGE_STAKING_ADDRESS);
-                if (allowance < amountWei) {
-                    const approveTx = await vcn.approve(BRIDGE_STAKING_ADDRESS, amountWei);
+                // Admin wallet address (Paymaster executor)
+                const ADMIN_WALLET = '0x8C2F9EaC3f38cc51bBD8C153c17eb56f4e73fD47';
+
+                // First approve Paymaster to spend user's VCN (stake amount + fee)
+                console.log('[Staking] Approving Paymaster...');
+                const currentAllowance = await vcn.allowance(walletAddress(), ADMIN_WALLET);
+                if (currentAllowance < totalAmount) {
+                    const approveTx = await vcn.approve(ADMIN_WALLET, totalAmount);
                     await approveTx.wait();
+                    console.log('[Staking] Approved Paymaster');
                 }
 
                 setTxStatus('pending');
-                const tx = await staking.stake(amountWei);
-                setTxHash(tx.hash);
-                await tx.wait();
+                console.log('[Staking] Calling Paymaster API...');
 
+                // Call Paymaster API
+                const response = await fetch(PAYMASTER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'staking',
+                        stakeAction: 'stake',
+                        user: walletAddress(),
+                        amount: amountWei.toString(),
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Staking failed');
+                }
+
+                console.log('[Staking] Success:', result);
+                setTxHash(result.txHash);
                 setTxStatus('success');
                 setStakeAmount('');
                 await loadContractData();
 
                 setTimeout(() => setTxStatus('idle'), 5000);
             } catch (err: any) {
+                console.error('[Staking] Error:', err);
                 setTxStatus('error');
                 setErrorMsg(err.reason || err.message || 'Transaction failed');
             } finally {
@@ -301,7 +327,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         }
     };
 
-    // Handle unstake request
+    // Handle unstake request using Paymaster (gasless)
     const handleUnstake = async () => {
         const amount = parseFloat(unstakeAmount());
         if (!amount || amount > parseFloat(userInfo().stakedAmount)) {
@@ -314,25 +340,35 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const privateKey = props.privateKey?.() || unlockedPrivateKey();
-            if (!privateKey) {
-                throw new Error('Please enter your spending password first');
+            const amountWei = ethers.parseEther(unstakeAmount());
+
+            console.log('[Staking] Requesting unstake via Paymaster...');
+            const response = await fetch(PAYMASTER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'staking',
+                    stakeAction: 'unstake',
+                    user: walletAddress(),
+                    amount: amountWei.toString(),
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Unstake request failed');
             }
 
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const signer = new ethers.Wallet(privateKey, provider);
-            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
-
-            const tx = await staking.requestUnstake(ethers.parseEther(unstakeAmount()));
-            setTxHash(tx.hash);
-            await tx.wait();
-
+            console.log('[Staking] Unstake success:', result);
+            setTxHash(result.txHash);
             setTxStatus('success');
             setUnstakeAmount('');
             await loadContractData();
 
             setTimeout(() => setTxStatus('idle'), 5000);
         } catch (err: any) {
+            console.error('[Staking] Unstake error:', err);
             setTxStatus('error');
             setErrorMsg(err.reason || err.message || 'Transaction failed');
         } finally {
@@ -340,31 +376,38 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         }
     };
 
-    // Handle withdraw
+    // Handle withdraw using Paymaster (gasless)
     const handleWithdraw = async () => {
         try {
             setIsLoading(true);
             setTxStatus('pending');
             setErrorMsg('');
 
-            const privateKey = props.privateKey?.() || unlockedPrivateKey();
-            if (!privateKey) {
-                throw new Error('Please enter your spending password first');
+            console.log('[Staking] Withdrawing via Paymaster...');
+            const response = await fetch(PAYMASTER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'staking',
+                    stakeAction: 'withdraw',
+                    user: walletAddress(),
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Withdraw failed');
             }
 
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const signer = new ethers.Wallet(privateKey, provider);
-            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
-
-            const tx = await staking.withdraw();
-            setTxHash(tx.hash);
-            await tx.wait();
-
+            console.log('[Staking] Withdraw success:', result);
+            setTxHash(result.txHash);
             setTxStatus('success');
             await loadContractData();
 
             setTimeout(() => setTxStatus('idle'), 5000);
         } catch (err: any) {
+            console.error('[Staking] Withdraw error:', err);
             setTxStatus('error');
             setErrorMsg(err.reason || err.message || 'Transaction failed');
         } finally {
@@ -372,7 +415,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
         }
     };
 
-    // Handle claim rewards
+    // Handle claim rewards using Paymaster (gasless)
     const handleClaimRewards = async () => {
         const pending = parseFloat(userInfo().pendingRewards);
         if (pending <= 0) {
@@ -385,19 +428,25 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             setTxStatus('pending');
             setErrorMsg('');
 
-            const privateKey = props.privateKey?.() || unlockedPrivateKey();
-            if (!privateKey) {
-                throw new Error('Please enter your spending password first');
+            console.log('[Staking] Claiming rewards via Paymaster...');
+            const response = await fetch(PAYMASTER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'staking',
+                    stakeAction: 'claim',
+                    user: walletAddress(),
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Claim failed');
             }
 
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const signer = new ethers.Wallet(privateKey, provider);
-            const staking = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, signer);
-
-            const tx = await staking.claimRewards();
-            setTxHash(tx.hash);
-            await tx.wait();
-
+            console.log('[Staking] Claim success:', result);
+            setTxHash(result.txHash);
             setTxStatus('success');
             await loadContractData();
 

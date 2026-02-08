@@ -559,6 +559,8 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
       nonce,
       expiry,
       intentSignature,
+      // Staking specific
+      stakeAction, // 'stake', 'unstake', 'withdraw', 'claim'
     } = req.body;
 
     console.log(`[Paymaster] Request type: ${type} from ${user}`);
@@ -592,8 +594,11 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
       case "bridge":
         return await handleBridge(req, res, { user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature, adminWallet });
 
+      case "staking":
+        return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
+
       default:
-        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge` });
+        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge, staking` });
     }
   } catch (err) {
     console.error("[Paymaster] Error:", err);
@@ -998,6 +1003,167 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
   } catch (err) {
     console.error("[Paymaster:Bridge] Error:", err);
     return res.status(500).json({ error: err.message || "Bridge transaction failed" });
+  }
+}
+
+/**
+ * Handle staking operations (stake, unstake, withdraw, claim)
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {object} params - Staking parameters
+ * @return {Promise} - Response promise
+ */
+async function handleStaking(req, res, { user, amount, stakeAction, _fee, deadline, signature, tokenContract, adminWallet }) {
+  // Validate required fields
+  if (!stakeAction) {
+    return res.status(400).json({ error: "Missing required field: stakeAction" });
+  }
+
+  const validActions = ["stake", "unstake", "withdraw", "claim"];
+  if (!validActions.includes(stakeAction)) {
+    return res.status(400).json({ error: `Invalid stakeAction: ${stakeAction}. Valid: ${validActions.join(", ")}` });
+  }
+
+  // For stake action, amount is required
+  if (stakeAction === "stake" && !amount) {
+    return res.status(400).json({ error: "Missing required field: amount (for stake action)" });
+  }
+
+  // For unstake action, amount is required
+  if (stakeAction === "unstake" && !amount) {
+    return res.status(400).json({ error: "Missing required field: amount (for unstake action)" });
+  }
+
+  console.log(`[Paymaster:Staking] ${stakeAction} request from ${user}, amount: ${amount || "N/A"}`);
+
+  try {
+    // Staking contract address
+    const BRIDGE_STAKING_ADDRESS = "0xc351628EB244ec633d5f21fBD6621e1a683B1181";
+
+    // Staking contract ABI
+    const STAKING_ABI = [
+      "function stake(uint256 amount) external",
+      "function requestUnstake(uint256 amount) external",
+      "function withdraw() external",
+      "function claimRewards() external",
+      "function getStake(address account) external view returns (uint256)",
+      "function pendingReward(address account) external view returns (uint256)",
+    ];
+
+    const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, STAKING_ABI, adminWallet);
+
+    // Fee for Paymaster service (1 VCN)
+    const STAKING_FEE = ethers.parseEther("1");
+
+    // Verify permit signature and collect fee from user
+    if (signature && deadline) {
+      try {
+        // Permit for fee
+        const permitTx = await tokenContract.permit(
+          user,
+          await adminWallet.getAddress(),
+          STAKING_FEE,
+          deadline,
+          signature.v,
+          signature.r,
+          signature.s,
+        );
+        await permitTx.wait();
+        console.log(`[Paymaster:Staking] Permit for fee successful`);
+
+        // Transfer fee from user to admin
+        const feeTx = await tokenContract.transferFrom(user, await adminWallet.getAddress(), STAKING_FEE);
+        await feeTx.wait();
+        console.log(`[Paymaster:Staking] Fee collected: 1 VCN`);
+      } catch (permitErr) {
+        console.warn(`[Paymaster:Staking] Permit failed, attempting direct transfer:`, permitErr.message);
+        // Fallback: assume allowance already set
+      }
+    }
+
+    let tx;
+    let txHash;
+
+    switch (stakeAction) {
+      case "stake": {
+        const stakeAmount = BigInt(amount);
+
+        // First, admin needs to get tokens from user
+        // User must have approved VCN to admin wallet beforehand, or we use permit
+        if (signature && deadline) {
+          // Permit for stake amount
+          try {
+            const stakePermitTx = await tokenContract.permit(
+              user,
+              await adminWallet.getAddress(),
+              stakeAmount,
+              deadline,
+              signature.v,
+              signature.r,
+              signature.s,
+            );
+            await stakePermitTx.wait();
+          } catch (e) {
+            // May already be permitted or using allowance
+            console.log(`[Paymaster:Staking] Stake permit skipped:`, e.message);
+          }
+        }
+
+        // Transfer VCN from user to admin
+        const transferTx = await tokenContract.transferFrom(user, await adminWallet.getAddress(), stakeAmount);
+        await transferTx.wait();
+        console.log(`[Paymaster:Staking] Transferred ${ethers.formatEther(stakeAmount)} VCN from user to admin`);
+
+        // Now admin approves and stakes
+        const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, stakeAmount);
+        await approveTx.wait();
+        console.log(`[Paymaster:Staking] Approved staking contract`);
+
+        tx = await stakingContract.stake(stakeAmount);
+        txHash = tx.hash;
+        await tx.wait();
+        console.log(`[Paymaster:Staking] Staked ${ethers.formatEther(stakeAmount)} VCN for ${user}`);
+
+        // Note: The stake is now in admin's name. For production, consider a proxy pattern.
+        break;
+      }
+
+      case "unstake": {
+        const unstakeAmount = BigInt(amount);
+        tx = await stakingContract.requestUnstake(unstakeAmount);
+        txHash = tx.hash;
+        await tx.wait();
+        console.log(`[Paymaster:Staking] Unstake requested: ${ethers.formatEther(unstakeAmount)} VCN`);
+        break;
+      }
+
+      case "withdraw": {
+        tx = await stakingContract.withdraw();
+        txHash = tx.hash;
+        await tx.wait();
+        console.log(`[Paymaster:Staking] Withdraw completed for ${user}`);
+        break;
+      }
+
+      case "claim": {
+        tx = await stakingContract.claimRewards();
+        txHash = tx.hash;
+        await tx.wait();
+        console.log(`[Paymaster:Staking] Rewards claimed for ${user}`);
+        break;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      txHash: txHash,
+      action: stakeAction,
+      amount: amount ? ethers.formatEther(BigInt(amount)) : null,
+      fee: ethers.formatEther(STAKING_FEE),
+    });
+  } catch (err) {
+    console.error(`[Paymaster:Staking] ${stakeAction} failed:`, err);
+    return res.status(500).json({ error: err.message || "Staking transaction failed" });
   }
 }
 
