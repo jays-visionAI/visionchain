@@ -2847,11 +2847,51 @@ exports.bridgeRelayer = onSchedule({
 
         console.log(`[Bridge Relayer] transactions/${txId} completed. Dest TX: ${destTxHash}`);
 
-        // Send completion notification
+        // Send completion notification (email + in-app)
         try {
           const userEmail = await getBridgeUserEmail(recipient);
           if (userEmail) {
+            // Email notification
             await sendBridgeCompleteEmail(userEmail, bridge, destTxHash);
+
+            // In-app notification
+            const vcnAmount = ethers.formatEther(BigInt(bridge.amount));
+            const destChain = dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
+            await db.collection("users").doc(userEmail).collection("notifications").add({
+              type: "bridge_complete",
+              title: "Bridge Transfer Complete",
+              content: `${vcnAmount} VCN has been successfully bridged to ${destChain}.`,
+              data: {
+                amount: vcnAmount,
+                destinationChain: destChain,
+                sourceTxHash: txId,
+                destinationTxHash: destTxHash,
+                status: "completed",
+              },
+              email: userEmail,
+              read: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log(`[Bridge Relayer] In-app notification created for ${userEmail}`);
+
+            // Save Sepolia receive record to History
+            await db.collection("transactions").doc(`sepolia_${destTxHash}`).set({
+              hash: destTxHash,
+              from_addr: "bridge:vision-chain",
+              to_addr: recipient.toLowerCase(),
+              value: vcnAmount,
+              timestamp: Date.now(),
+              type: "Bridge Receive",
+              bridgeStatus: "COMPLETED",
+              sourceTxHash: txId,
+              metadata: {
+                sourceChain: "Vision Chain",
+                destinationChain: destChain,
+                srcChainId: 1337,
+                dstChainId: dstChainId,
+              },
+            });
+            console.log(`[Bridge Relayer] Sepolia receive record saved for ${recipient}`);
           }
         } catch (notifyErr) {
           console.warn("[Bridge Relayer] Notification failed:", notifyErr.message);
