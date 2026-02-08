@@ -20,7 +20,7 @@ interface BridgeTransaction {
     recipient: string;
     intentHash?: string;
     txHash: string;
-    status: 'PENDING' | 'SUBMITTED' | 'COMMITTED' | 'PROCESSING' | 'COMPLETED' | 'FINALIZED' | 'FAILED';
+    status: 'PENDING' | 'SUBMITTED' | 'COMMITTED' | 'LOCKED' | 'PROCESSING' | 'COMPLETED' | 'FINALIZED' | 'FAILED';
     createdAt: any;
     completedAt?: any;
     hiddenFromDesk?: boolean;
@@ -194,7 +194,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     // Count active (pending) bridges - include all non-final states
     const activeBridges = () => bridges().filter(b =>
         b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
-        b.status === 'PENDING' || b.status === 'SUBMITTED'
+        b.status === 'PENDING' || b.status === 'SUBMITTED' || b.status === 'LOCKED'
     );
 
     // Filter visible bridges (active + recently completed within 1 minute, respect hiddenFromDesk)
@@ -208,7 +208,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
 
             // Always show active bridges
             if (b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
-                b.status === 'PENDING' || b.status === 'SUBMITTED') {
+                b.status === 'PENDING' || b.status === 'SUBMITTED' || b.status === 'LOCKED') {
                 return true;
             }
 
@@ -243,6 +243,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             case 'PENDING':
             case 'SUBMITTED':
             case 'COMMITTED':
+            case 'LOCKED':
                 return { label: 'Processing', color: 'text-blue-400', bg: 'bg-blue-500/10', pulse: true, icon: Loader2 };
             case 'PROCESSING':
                 return { label: 'Verifying', color: 'text-amber-400', bg: 'bg-amber-500/10', pulse: true, icon: Loader2 };
@@ -336,7 +337,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                                 </div>
                                 {/* Progress Bar */}
                                 <div class="flex gap-0.5">
-                                    <div class={`h-0.5 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
+                                    <div class={`h-0.5 flex-1 rounded-full ${['PENDING', 'SUBMITTED', 'COMMITTED', 'LOCKED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
                                         ? 'bg-blue-500' : 'bg-gray-800'}`} />
                                     <div class={`h-0.5 flex-1 rounded-full ${['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge().status)
                                         ? 'bg-amber-500' : 'bg-gray-800'}`} />
@@ -344,7 +345,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                                         ? 'bg-green-500' : 'bg-gray-800'}`} />
                                 </div>
                                 {/* Estimated Time (only for active) */}
-                                <Show when={bridge().status === 'COMMITTED' || bridge().status === 'PROCESSING' || bridge().status === 'PENDING' || bridge().status === 'SUBMITTED'}>
+                                <Show when={bridge().status === 'COMMITTED' || bridge().status === 'PROCESSING' || bridge().status === 'PENDING' || bridge().status === 'SUBMITTED' || bridge().status === 'LOCKED'}>
                                     <div class="flex items-center gap-1 pt-0.5">
                                         <Clock class="w-2.5 h-2.5 text-purple-400" />
                                         <span class="text-[8px] text-purple-400 font-bold">
