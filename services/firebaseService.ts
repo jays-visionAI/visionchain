@@ -1432,6 +1432,82 @@ export const userLogout = async (): Promise<void> => {
     await signOut(auth);
 };
 
+// ==================== Password Reset (Logged-out) ====================
+
+const getCloudFunctionUrl = (fnName: string) => {
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+    return `https://us-central1-${projectId}.cloudfunctions.net/${fnName}`;
+};
+
+/**
+ * Step 1: Request password reset - sends 6-digit code to email
+ */
+export const requestPasswordReset = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(getCloudFunctionUrl('requestPasswordReset'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim() }),
+    });
+
+    const data = await response.json();
+    if (!response.ok && response.status !== 200) {
+        throw new Error(data.error || 'Failed to send reset code');
+    }
+    return data;
+};
+
+/**
+ * Step 2: Verify reset code - returns whether TOTP is required
+ */
+export const verifyPasswordResetCode = async (email: string, code: string): Promise<{
+    success: boolean;
+    totpRequired: boolean;
+    message: string;
+}> => {
+    const response = await fetch(getCloudFunctionUrl('verifyResetCode'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), code }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify code');
+    }
+    return data;
+};
+
+/**
+ * Step 3: Complete password reset - verify TOTP (if needed) and change password
+ */
+export const completePasswordReset = async (
+    email: string,
+    code: string,
+    newPassword: string,
+    totpCode?: string,
+    useBackupCode?: boolean,
+): Promise<{ success: boolean; message: string }> => {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const response = await fetch(getCloudFunctionUrl('completePasswordReset'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: email.toLowerCase().trim(),
+            code,
+            newPassword,
+            totpCode,
+            useBackupCode,
+            timezone,
+        }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to reset password');
+    }
+    return data;
+};
+
 export const onUserAuthStateChanged = (callback: (user: User | null) => void) => {
     const auth = getFirebaseAuth();
     return onAuthStateChanged(auth, callback);
@@ -1587,6 +1663,18 @@ export const userRegister = async (email: string, password: string, phone?: stri
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
+    }
+
+    // Send welcome email + schedule drip campaign (fire-and-forget)
+    try {
+        const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+        fetch(`https://us-central1-${projectId}.cloudfunctions.net/notifyWelcome`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: emailLower }),
+        }).catch(err => console.warn('[Onboarding] Welcome email failed:', err));
+    } catch (notifyErr) {
+        console.warn('[Onboarding] Welcome email call failed:', notifyErr);
     }
 
     return userCredential.user;
@@ -3933,18 +4021,24 @@ export interface BridgeNetwork {
     icon?: string;
     enabled: boolean;
     order: number;
+    nativeCurrency?: {
+        symbol: string;
+        name: string;
+        decimals: number;
+    };
 }
 
 // Default networks if Firebase is empty
 const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
     {
-        name: 'Vision Testnet',
+        name: 'VisionChain',
         chainId: 20261337,
         rpcUrl: 'https://api.visionchain.co/rpc-proxy',
         explorerUrl: 'https://www.visionchain.co/visionscan',
         icon: 'vision',
         enabled: true,
-        order: 0
+        order: 0,
+        nativeCurrency: { symbol: 'VCN', name: 'VCN Token', decimals: 18 }
     },
     {
         name: 'Ethereum Sepolia',
@@ -3954,7 +4048,8 @@ const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
         vcnTokenAddress: '0x07755968236333B5f8803E9D0fC294608B200d1b',
         icon: 'ethereum',
         enabled: true,
-        order: 1
+        order: 1,
+        nativeCurrency: { symbol: 'ETH', name: 'Ether', decimals: 18 }
     },
     {
         name: 'Polygon Amoy',
@@ -3964,7 +4059,8 @@ const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
         vcnTokenAddress: '',
         icon: 'polygon',
         enabled: false,
-        order: 2
+        order: 2,
+        nativeCurrency: { symbol: 'MATIC', name: 'Polygon', decimals: 18 }
     },
     {
         name: 'Base Sepolia',
@@ -3974,7 +4070,8 @@ const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
         vcnTokenAddress: '',
         icon: 'base',
         enabled: false,
-        order: 3
+        order: 3,
+        nativeCurrency: { symbol: 'ETH', name: 'Ether', decimals: 18 }
     }
 ];
 
@@ -4032,7 +4129,7 @@ export const saveBridgeNetwork = async (network: BridgeNetwork): Promise<void> =
     if (network.id) {
         // Update existing
         const docRef = doc(db, 'bridge_networks', network.id);
-        await updateDoc(docRef, {
+        const updateData: any = {
             name: network.name,
             chainId: network.chainId,
             rpcUrl: network.rpcUrl,
@@ -4042,7 +4139,11 @@ export const saveBridgeNetwork = async (network: BridgeNetwork): Promise<void> =
             enabled: network.enabled,
             order: network.order,
             updatedAt: serverTimestamp()
-        });
+        };
+        if (network.nativeCurrency) {
+            updateData.nativeCurrency = network.nativeCurrency;
+        }
+        await updateDoc(docRef, updateData);
     } else {
         // Create new
         await addDoc(networksRef, {

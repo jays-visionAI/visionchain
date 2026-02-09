@@ -12,7 +12,9 @@ import {
     Wallet,
     RefreshCw,
     Loader2,
-    ChevronRight
+    ChevronRight,
+    ChevronDown,
+    Coins
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
@@ -105,15 +107,21 @@ interface NetworkConfig {
     enabled: boolean;
     order?: number;
     icon?: string;
+    nativeCurrency?: {
+        symbol: string;
+        name: string;
+        decimals: number;
+    };
 }
 
 const NETWORKS: NetworkConfig[] = [
     {
-        name: 'Vision Testnet',
+        name: 'VisionChain',
         chainId: 20261337,
         rpcUrl: 'https://api.visionchain.co/rpc-proxy',
         explorerUrl: 'https://www.visionchain.co/visionscan',
-        enabled: true
+        enabled: true,
+        nativeCurrency: { symbol: 'VCN', name: 'VCN Token', decimals: 18 }
     },
     {
         name: 'Ethereum Sepolia',
@@ -121,7 +129,8 @@ const NETWORKS: NetworkConfig[] = [
         rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
         explorerUrl: 'https://sepolia.etherscan.io',
         vcnTokenAddress: '0x07755968236333B5f8803E9D0fC294608B200d1b',
-        enabled: true
+        enabled: true,
+        nativeCurrency: { symbol: 'ETH', name: 'Ether', decimals: 18 }
     },
     {
         name: 'Polygon Amoy',
@@ -129,7 +138,8 @@ const NETWORKS: NetworkConfig[] = [
         rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com',
         explorerUrl: 'https://amoy.polygonscan.com',
         vcnTokenAddress: '', // TODO: Deploy
-        enabled: false  // Enable after VCN token deployment
+        enabled: false,  // Enable after VCN token deployment
+        nativeCurrency: { symbol: 'MATIC', name: 'Polygon', decimals: 18 }
     },
     {
         name: 'Base Sepolia',
@@ -137,7 +147,8 @@ const NETWORKS: NetworkConfig[] = [
         rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
         explorerUrl: 'https://sepolia.basescan.org',
         vcnTokenAddress: '', // TODO: Deploy
-        enabled: false  // Enable after VCN token deployment
+        enabled: false,  // Enable after VCN token deployment
+        nativeCurrency: { symbol: 'ETH', name: 'Ether', decimals: 18 }
     }
 ];
 
@@ -170,6 +181,29 @@ const Bridge: Component<BridgeProps> = (props) => {
     const [isApproving, setIsApproving] = createSignal(false);
     const [step, setStep] = createSignal(1); // 1: Input, 2: Processing, 3: Success
     const [showNetworkDropdown, setShowNetworkDropdown] = createSignal(false);
+    const [showAssetDropdown, setShowAssetDropdown] = createSignal(false);
+
+    // Get current asset symbol from selected network
+    const getCurrentAssetSymbol = () => fromNetwork().nativeCurrency?.symbol || 'VCN';
+    const getCurrentAssetName = () => fromNetwork().nativeCurrency?.name || 'VCN Token';
+
+    // Get list of available bridge assets from all enabled networks
+    const getAvailableAssets = () => {
+        const seen = new Set<string>();
+        return networks()
+            .filter(n => n.enabled)
+            .map(n => ({
+                symbol: n.nativeCurrency?.symbol || 'VCN',
+                name: n.nativeCurrency?.name || 'VCN Token',
+                network: n.name,
+                chainId: n.chainId
+            }))
+            .filter(a => {
+                if (seen.has(a.symbol)) return false;
+                seen.add(a.symbol);
+                return true;
+            });
+    };
 
     // Get available destination networks (excluding source) - use dynamic list
     const getDestinationNetworks = () => networks().filter(n => n.chainId !== fromNetwork().chainId);
@@ -257,10 +291,21 @@ const Bridge: Component<BridgeProps> = (props) => {
 
     // Get chain name from chainId
     const getChainName = (chainId: number): string => {
+        // Check dynamic networks first
+        const network = networks().find(n => n.chainId === chainId);
+        if (network) return network.name;
         if (chainId === 11155111) return 'Ethereum Sepolia';
-        if (chainId === 1337 || chainId === 20261337) return 'Vision Chain';
+        if (chainId === 1337 || chainId === 20261337) return 'VisionChain';
         return `Chain ${chainId}`;
     };
+
+    // Update selectedAsset when fromNetwork changes
+    createEffect(() => {
+        const network = fromNetwork();
+        if (network.nativeCurrency) {
+            setSelectedAsset(network.nativeCurrency.symbol);
+        }
+    });
 
     // Get time ago string
     const getTimeAgo = (timestamp: any): string => {
@@ -649,7 +694,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                         <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all focus-within:border-blue-500/50">
                                             <div class="flex justify-between items-center mb-3">
                                                 <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">From Network</span>
-                                                <span class="text-[10px] font-bold text-blue-400">Balance: {Number(balance()).toLocaleString()} {selectedAsset()}</span>
+                                                <span class="text-[10px] font-bold text-blue-400">Balance: {Number(balance()).toLocaleString()} {getCurrentAssetSymbol()}</span>
                                             </div>
                                             <div class="flex items-center gap-4">
                                                 <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center border border-blue-500/20">
@@ -657,6 +702,9 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                 </div>
                                                 <div class="flex-1">
                                                     <div class="text-lg font-black italic uppercase tracking-tight">{fromNetwork().name}</div>
+                                                    <div class="text-[11px] text-gray-400 font-medium mt-0.5">
+                                                        {getCurrentAssetSymbol()} ({getCurrentAssetName()})
+                                                    </div>
                                                     <Show when={currentChainId() !== fromNetwork().chainId}>
                                                         <button
                                                             onClick={() => switchNetwork(fromNetwork().chainId)}
@@ -779,10 +827,68 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                     }}
                                                     class="bg-transparent border-none text-3xl font-black text-white focus:outline-none w-full placeholder-gray-600"
                                                 />
-                                                <div class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10">
-                                                    <div class="w-5 h-5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500" />
-                                                    <span class="font-bold text-sm tracking-tight">{selectedAsset()}</span>
+                                                {/* Asset Selector Dropdown */}
+                                                <div class="relative">
+                                                    <button
+                                                        onClick={() => setShowAssetDropdown(!showAssetDropdown())}
+                                                        class="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer min-w-[100px]"
+                                                    >
+                                                        <div class="w-5 h-5 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+                                                            <Coins class="w-3 h-3 text-white" />
+                                                        </div>
+                                                        <span class="font-bold text-sm tracking-tight">{getCurrentAssetSymbol()}</span>
+                                                        <ChevronDown class={`w-3 h-3 text-gray-500 transition-transform ${showAssetDropdown() ? 'rotate-180' : ''}`} />
+                                                    </button>
+
+                                                    {/* Asset Dropdown */}
+                                                    <Show when={showAssetDropdown()}>
+                                                        <div class="absolute right-0 top-full mt-2 bg-[#1a1a1c] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[200px]">
+                                                            <div class="p-2 border-b border-white/5">
+                                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest px-2">Select Asset</span>
+                                                            </div>
+                                                            <For each={getAvailableAssets()}>
+                                                                {(asset) => (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            // Find the network with this asset and switch fromNetwork
+                                                                            const targetNetwork = networks().find(n => n.nativeCurrency?.symbol === asset.symbol && n.enabled);
+                                                                            if (targetNetwork) {
+                                                                                setFromNetwork(targetNetwork);
+                                                                                // Set toNetwork to a different network
+                                                                                const otherNetwork = networks().find(n => n.chainId !== targetNetwork.chainId && n.enabled);
+                                                                                if (otherNetwork) setToNetwork(otherNetwork);
+                                                                                loadBalance();
+                                                                            }
+                                                                            setShowAssetDropdown(false);
+                                                                        }}
+                                                                        class={`w-full flex items-center gap-3 p-3 transition-all hover:bg-white/5 cursor-pointer ${getCurrentAssetSymbol() === asset.symbol ? 'bg-white/5' : ''
+                                                                            }`}
+                                                                    >
+                                                                        <div class={`w-7 h-7 rounded-full flex items-center justify-center ${asset.symbol === 'VCN' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' :
+                                                                                asset.symbol === 'ETH' ? 'bg-gradient-to-r from-indigo-500 to-purple-500' :
+                                                                                    asset.symbol === 'MATIC' ? 'bg-gradient-to-r from-violet-500 to-purple-500' :
+                                                                                        'bg-gradient-to-r from-gray-500 to-gray-600'
+                                                                            }`}>
+                                                                            <Coins class="w-3.5 h-3.5 text-white" />
+                                                                        </div>
+                                                                        <div class="flex-1 text-left">
+                                                                            <div class="text-sm font-bold text-white">{asset.symbol}</div>
+                                                                            <div class="text-[10px] text-gray-500">{asset.name} - {asset.network}</div>
+                                                                        </div>
+                                                                        <Show when={getCurrentAssetSymbol() === asset.symbol}>
+                                                                            <CheckCircle2 class="w-4 h-4 text-green-400" />
+                                                                        </Show>
+                                                                    </button>
+                                                                )}
+                                                            </For>
+                                                        </div>
+                                                    </Show>
                                                 </div>
+                                            </div>
+                                            {/* Asset Balance Info */}
+                                            <div class="mt-3 flex justify-between items-center">
+                                                <span class="text-[10px] text-gray-500 font-medium">Available Balance</span>
+                                                <span class="text-[11px] font-bold text-white tabular-nums">{Number(balance()).toLocaleString()} {getCurrentAssetSymbol()}</span>
                                             </div>
                                         </div>
 

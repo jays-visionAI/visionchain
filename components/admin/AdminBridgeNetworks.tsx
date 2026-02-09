@@ -50,7 +50,8 @@ const AdminBridgeNetworks: Component = () => {
         vcnTokenAddress: '',
         icon: 'ethereum',
         enabled: false,
-        order: 0
+        order: 0,
+        nativeCurrency: { symbol: '', name: '', decimals: 18 }
     });
 
     let unsubscribe: (() => void) | null = null;
@@ -79,7 +80,8 @@ const AdminBridgeNetworks: Component = () => {
             vcnTokenAddress: '',
             icon: 'ethereum',
             enabled: false,
-            order: networks().length
+            order: networks().length,
+            nativeCurrency: { symbol: '', name: '', decimals: 18 }
         });
         setEditingId(null);
         setShowAddForm(false);
@@ -112,7 +114,8 @@ const AdminBridgeNetworks: Component = () => {
                 vcnTokenAddress: data.vcnTokenAddress || '',
                 icon: data.icon || 'ethereum',
                 enabled: data.enabled || false,
-                order: data.order || 0
+                order: data.order || 0,
+                nativeCurrency: data.nativeCurrency?.symbol ? data.nativeCurrency : undefined
             });
 
             setSuccess(editingId() ? 'Network updated successfully' : 'Network added successfully');
@@ -282,6 +285,67 @@ const AdminBridgeNetworks: Component = () => {
                             />
                         </div>
 
+                        {/* Native Currency Section */}
+                        <div class="md:col-span-2 mt-2">
+                            <div class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="8" />
+                                    <path d="M12 8v8M8 12h8" />
+                                </svg>
+                                Native Currency (Asset)
+                            </div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">Symbol *</label>
+                                    <input
+                                        type="text"
+                                        value={formData().nativeCurrency?.symbol || ''}
+                                        onInput={(e) => setFormData({
+                                            ...formData(),
+                                            nativeCurrency: {
+                                                ...formData().nativeCurrency || { name: '', decimals: 18 },
+                                                symbol: e.currentTarget.value.toUpperCase()
+                                            }
+                                        })}
+                                        placeholder="VCN"
+                                        class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">Name</label>
+                                    <input
+                                        type="text"
+                                        value={formData().nativeCurrency?.name || ''}
+                                        onInput={(e) => setFormData({
+                                            ...formData(),
+                                            nativeCurrency: {
+                                                ...formData().nativeCurrency || { symbol: '', decimals: 18 },
+                                                name: e.currentTarget.value
+                                            }
+                                        })}
+                                        placeholder="VCN Token"
+                                        class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-1">Decimals</label>
+                                    <input
+                                        type="number"
+                                        value={formData().nativeCurrency?.decimals ?? 18}
+                                        onInput={(e) => setFormData({
+                                            ...formData(),
+                                            nativeCurrency: {
+                                                ...formData().nativeCurrency || { symbol: '', name: '' },
+                                                decimals: parseInt(e.currentTarget.value) || 18
+                                            }
+                                        })}
+                                        placeholder="18"
+                                        class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Enabled Toggle */}
                         <div class="md:col-span-2 flex items-center gap-3">
                             <button
@@ -359,19 +423,26 @@ const AdminBridgeNetworks: Component = () => {
                                         <Zap class="w-5 h-5 text-purple-400" />
                                     </div>
 
-                                    {/* Network Info */}
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center gap-2">
                                             <span class="font-bold">{network.name}</span>
+                                            <Show when={network.nativeCurrency?.symbol}>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400">
+                                                    {network.nativeCurrency?.symbol}
+                                                </span>
+                                            </Show>
                                             <span class={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${network.enabled
-                                                    ? 'bg-green-500/20 text-green-400'
-                                                    : 'bg-gray-500/20 text-gray-400'
+                                                ? 'bg-green-500/20 text-green-400'
+                                                : 'bg-gray-500/20 text-gray-400'
                                                 }`}>
                                                 {network.enabled ? 'Active' : 'Disabled'}
                                             </span>
                                         </div>
                                         <div class="flex items-center gap-4 mt-1 text-xs text-gray-500">
                                             <span>Chain ID: {network.chainId}</span>
+                                            <Show when={network.nativeCurrency?.name}>
+                                                <span>{network.nativeCurrency?.name}</span>
+                                            </Show>
                                             <span class="truncate max-w-[200px]">{network.rpcUrl}</span>
                                         </div>
                                     </div>
@@ -393,8 +464,8 @@ const AdminBridgeNetworks: Component = () => {
                                         <button
                                             onClick={() => handleToggleEnabled(network)}
                                             class={`p-2 rounded-lg transition-colors ${network.enabled
-                                                    ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-                                                    : 'bg-gray-500/10 text-gray-400 hover:bg-gray-500/20'
+                                                ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                                                : 'bg-gray-500/10 text-gray-400 hover:bg-gray-500/20'
                                                 }`}
                                             title={network.enabled ? 'Disable' : 'Enable'}
                                         >
@@ -439,6 +510,7 @@ const AdminBridgeNetworks: Component = () => {
                 <ul class="text-sm text-gray-400 space-y-1">
                     <li>- **Enabled** networks appear as selectable options in the Bridge UI</li>
                     <li>- **Disabled** networks show as "Coming Soon"</li>
+                    <li>- **Native Currency** defines the asset symbol (e.g., VCN, ETH) shown in the Bridge asset selector</li>
                     <li>- **VCN Token Address** is required for destination chains (where VCN is bridged to)</li>
                     <li>- **Order** determines the display sequence (lower numbers first)</li>
                     <li>- Changes are reflected in real-time on the Bridge page</li>
