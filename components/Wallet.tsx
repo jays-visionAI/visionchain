@@ -2561,6 +2561,30 @@ const Wallet = (): JSX.Element => {
                 ...prev
             ]);
 
+            // Resolve recipient name to Ethereum address if specified
+            let resolvedRecipientAddr = userAddr; // Default: bridge to self
+            if (bridge.recipient) {
+                // Check if it's already a valid Ethereum address
+                if (ethers.isAddress(bridge.recipient)) {
+                    resolvedRecipientAddr = bridge.recipient;
+                    console.log(`[Bridge] Recipient is already an address: ${resolvedRecipientAddr}`);
+                } else {
+                    // Resolve name to address via contacts/users
+                    console.log(`[Bridge] Resolving recipient name: ${bridge.recipient}`);
+                    const resolved = await resolveRecipient(bridge.recipient, userProfile().email);
+                    if (resolved && resolved.address) {
+                        resolvedRecipientAddr = resolved.address;
+                        console.log(`[Bridge] Resolved "${bridge.recipient}" -> ${resolvedRecipientAddr}`);
+                    } else {
+                        throw new Error(lastLocale() === 'ko'
+                            ? `"${bridge.recipient}" 수신자를 찾을 수 없습니다. 연락처에 등록되어 있는지 확인해주세요.`
+                            : `Recipient "${bridge.recipient}" not found. Please check your contact list.`);
+                    }
+                }
+            }
+
+            console.log(`[Bridge] Final recipient address: ${resolvedRecipientAddr}`);
+
             // Call Paymaster API to execute bridge (gasless)
             const response = await fetch(PAYMASTER_URL, {
                 method: 'POST',
@@ -2568,7 +2592,7 @@ const Wallet = (): JSX.Element => {
                 body: JSON.stringify({
                     type: 'bridge',
                     user: userAddr,
-                    recipient: bridge.recipient || userAddr,
+                    recipient: resolvedRecipientAddr,
                     amount: amountWei,
                     srcChainId: VISION_CHAIN_ID,
                     dstChainId: dstChainId,
