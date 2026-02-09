@@ -467,8 +467,10 @@ const Wallet = (): JSX.Element => {
         referralCount: 0,
         totalRewardsVCN: 0,
         totalRewardsUSD: 0,
-        photoURL: auth.user()?.photoURL || ''
+        photoURL: auth.user()?.photoURL || '',
+        createdAt: ''
     });
+    const [txSentCount, setTxSentCount] = createSignal(0);
     // Profile Image & Crop State
     const [imageToCrop, setImageToCrop] = createSignal<string | null>(null);
     const [isCropping, setIsCropping] = createSignal(false);
@@ -1795,7 +1797,8 @@ const Wallet = (): JSX.Element => {
                     referralCount: data.referralCount || 0,
                     totalRewardsVCN: data.totalRewardsVCN || 0,
                     totalRewardsUSD: data.totalRewardsUSD || 0,
-                    photoURL: data.photoURL || user.photoURL || ''
+                    photoURL: data.photoURL || user.photoURL || '',
+                    createdAt: data.createdAt || user.metadata?.creationTime || ''
                 });
 
                 // Check if wallet exists in backend OR locally
@@ -1985,6 +1988,23 @@ const Wallet = (): JSX.Element => {
         if (auth.user() && addr) {
             fetchPortfolioData();
         }
+    });
+
+    // Fetch TX sent count from Firebase transactions collection
+    createEffect(() => {
+        const addr = walletAddress();
+        if (!addr) return;
+        const normalizedAddr = addr.toLowerCase();
+        const db = getFirebaseDb();
+        const txRef = collection(db, 'transactions');
+        const q = query(txRef, where('from_addr', '==', normalizedAddr));
+        // Use onSnapshot for real-time updates
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setTxSentCount(snapshot.size);
+        }, (err) => {
+            console.warn('[Profile] TX count query failed:', err);
+        });
+        onCleanup(() => unsubscribe());
     });
 
     const getAssetData = (symbol: string): AssetData => {
@@ -4010,19 +4030,58 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                         <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">Network Activity</h3>
                                                         <div class="grid grid-cols-2 gap-4">
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
-                                                                <div class="text-2xl font-black text-white">0</div>
+                                                                <div class="text-2xl font-black text-white">{txSentCount()}</div>
                                                                 <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">TX Sent</div>
                                                             </div>
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
-                                                                <div class="text-2xl font-black text-white">100%</div>
+                                                                <div class="text-2xl font-black text-white">{(() => {
+                                                                    // Trust score: base 100%, reduce by failed tx ratio
+                                                                    // For now, all verified users start at 100%
+                                                                    const verified = userProfile().isVerified;
+                                                                    return verified ? '100%' : '0%';
+                                                                })()}</div>
                                                                 <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Trust Score</div>
                                                             </div>
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
-                                                                <div class="text-2xl font-black">Level {userProfile().tier + 1}</div>
+                                                                <div class="text-lg font-black">{(() => {
+                                                                    const count = userProfile().referralCount || 0;
+                                                                    let level = 1;
+                                                                    if (count < 20) { level = count + 1; }
+                                                                    else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
+                                                                    else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
+                                                                    else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                    if (level > 100) level = 100;
+
+                                                                    const getRankName = (lvl: number) => {
+                                                                        if (lvl >= 90) return 'Visionary';
+                                                                        if (lvl >= 80) return 'Titan';
+                                                                        if (lvl >= 70) return 'Warlord';
+                                                                        if (lvl >= 60) return 'Commander';
+                                                                        if (lvl >= 50) return 'Captain';
+                                                                        if (lvl >= 40) return 'Elite';
+                                                                        if (lvl >= 30) return 'Guardian';
+                                                                        if (lvl >= 20) return 'Ranger';
+                                                                        if (lvl >= 10) return 'Scout';
+                                                                        return 'Novice';
+                                                                    };
+
+                                                                    return `${getRankName(level)} Lvl.${level}`;
+                                                                })()}</div>
                                                                 <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Account Tier</div>
                                                             </div>
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-purple-400">
-                                                                <div class="text-2xl font-black">0d</div>
+                                                                <div class="text-2xl font-black">{(() => {
+                                                                    const created = userProfile().createdAt;
+                                                                    if (!created) return '0d';
+                                                                    const createdDate = new Date(created);
+                                                                    if (isNaN(createdDate.getTime())) return '0d';
+                                                                    const now = new Date();
+                                                                    const diffMs = now.getTime() - createdDate.getTime();
+                                                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                                                    if (diffDays >= 365) return `${Math.floor(diffDays / 365)}y ${diffDays % 365}d`;
+                                                                    if (diffDays >= 30) return `${Math.floor(diffDays / 30)}m ${diffDays % 30}d`;
+                                                                    return `${diffDays}d`;
+                                                                })()}</div>
                                                                 <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Age</div>
                                                             </div>
                                                         </div>

@@ -1298,6 +1298,7 @@ export const getUserData = async (email: string): Promise<UserData | null> => {
             twitter: user?.twitter || '',
             discord: user?.discord || '',
             walletReady: user?.walletReady || sale?.walletReady || false,
+            createdAt: user?.createdAt || sale?.date || sale?.createdAt || '',
             // Referral Fields
             referralCode: referralCode,
             referrerId: user?.referrerId || '',
@@ -1832,6 +1833,7 @@ export interface UserData {
     discord?: string;
     walletReady?: boolean;
     photoURL?: string;
+    createdAt?: string;        // Account creation date (ISO string)
 
     // Referral System Fields
     referralCode?: string;
