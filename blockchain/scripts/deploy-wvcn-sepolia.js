@@ -14,7 +14,7 @@ async function main() {
     console.log("Balance:", hre.ethers.formatEther(await hre.ethers.provider.getBalance(deployer.address)), "ETH");
 
     // Bridge Relayer address (Firebase Cloud Function's wallet)
-    const BRIDGE_RELAYER = "0x96542992F727359BAed707A0d8C1fA63Eb56dD8C";
+    const BRIDGE_RELAYER = "0xc6176B597d40f9Db62ED60149FB7625CCa56990b";
 
     console.log("Bridge Relayer:", BRIDGE_RELAYER);
 

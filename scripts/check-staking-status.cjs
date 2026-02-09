@@ -95,7 +95,7 @@ async function checkStakingStatus() {
         const knownAddresses = [
             '0x6872E5cda7a24Fa38d8861Efe961fdF5E801d31d', // sangky94
             '0x6605Acc98E5F9dE16D82885ad84a25D95C94F794', // TSS
-            '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'  // Hardhat default
+            '0xd4FeD8Fe5946aDA714bb664D6B5F2C954acf6B15'  // Admin wallet
         ];
 
         for (const addr of knownAddresses) {
