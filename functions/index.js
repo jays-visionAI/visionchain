@@ -1056,7 +1056,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
  * @param {object} params - Staking parameters
  * @return {Promise} - Response promise
  */
-async function handleStaking(req, res, { user, amount, stakeAction, _fee, deadline, signature, tokenContract, adminWallet }) {
+async function handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet }) {
   // Validate required fields
   if (!stakeAction) {
     return res.status(400).json({ error: "Missing required field: stakeAction" });
@@ -1096,33 +1096,8 @@ async function handleStaking(req, res, { user, amount, stakeAction, _fee, deadli
     const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, STAKING_ABI, adminWallet);
 
     // Fee for Paymaster service (1 VCN)
-    const STAKING_FEE = ethers.parseEther("1");
-
-    // Verify permit signature and collect fee from user
-    if (signature && deadline) {
-      try {
-        // Permit for fee
-        const permitTx = await tokenContract.permit(
-          user,
-          await adminWallet.getAddress(),
-          STAKING_FEE,
-          deadline,
-          signature.v,
-          signature.r,
-          signature.s,
-        );
-        await permitTx.wait();
-        console.log(`[Paymaster:Staking] Permit for fee successful`);
-
-        // Transfer fee from user to admin
-        const feeTx = await tokenContract.transferFrom(user, await adminWallet.getAddress(), STAKING_FEE);
-        await feeTx.wait();
-        console.log(`[Paymaster:Staking] Fee collected: 1 VCN`);
-      } catch (permitErr) {
-        console.warn(`[Paymaster:Staking] Permit failed, attempting direct transfer:`, permitErr.message);
-        // Fallback: assume allowance already set
-      }
-    }
+    const STAKING_FEE = fee ? BigInt(fee) : ethers.parseEther("1");
+    const adminAddress = await adminWallet.getAddress();
 
     let tx;
     let txHash;
@@ -1130,34 +1105,46 @@ async function handleStaking(req, res, { user, amount, stakeAction, _fee, deadli
     switch (stakeAction) {
       case "stake": {
         const stakeAmount = BigInt(amount);
+        const totalAmount = stakeAmount + STAKING_FEE;
 
-        // First, admin needs to get tokens from user
-        // User must have approved VCN to admin wallet beforehand, or we use permit
+        // Single Permit for totalAmount (stakeAmount + fee) - matches frontend signature
         if (signature && deadline) {
-          // Permit for stake amount
-          try {
-            const stakePermitTx = await tokenContract.permit(
-              user,
-              await adminWallet.getAddress(),
-              stakeAmount,
-              deadline,
-              signature.v,
-              signature.r,
-              signature.s,
-            );
-            await stakePermitTx.wait();
-          } catch (e) {
-            // May already be permitted or using allowance
-            console.log(`[Paymaster:Staking] Stake permit skipped:`, e.message);
+          const { v, r, s } = parseSignature(signature);
+          if (v) {
+            try {
+              console.log(`[Paymaster:Staking] Executing permit for totalAmount: ${ethers.formatEther(totalAmount)} VCN`);
+              const permitTx = await tokenContract.permit(
+                user,
+                adminAddress,
+                totalAmount,
+                deadline,
+                v, r, s,
+              );
+              await permitTx.wait();
+              console.log(`[Paymaster:Staking] Permit successful`);
+            } catch (permitErr) {
+              console.error(`[Paymaster:Staking] Permit failed:`, permitErr.message);
+              return res.status(400).json({ error: `Permit verification failed: ${permitErr.reason || permitErr.message}` });
+            }
           }
         }
 
-        // Transfer VCN from user to admin
-        const transferTx = await tokenContract.transferFrom(user, await adminWallet.getAddress(), stakeAmount);
+        // Transfer fee from user to admin
+        try {
+          const feeTx = await tokenContract.transferFrom(user, adminAddress, STAKING_FEE);
+          await feeTx.wait();
+          console.log(`[Paymaster:Staking] Fee collected: ${ethers.formatEther(STAKING_FEE)} VCN`);
+        } catch (feeErr) {
+          console.error(`[Paymaster:Staking] Fee collection failed:`, feeErr.message);
+          return res.status(400).json({ error: `Fee collection failed. Please ensure VCN allowance is set.` });
+        }
+
+        // Transfer stakeAmount from user to admin
+        const transferTx = await tokenContract.transferFrom(user, adminAddress, stakeAmount);
         await transferTx.wait();
         console.log(`[Paymaster:Staking] Transferred ${ethers.formatEther(stakeAmount)} VCN from user to admin`);
 
-        // Now admin approves and stakes
+        // Now admin approves staking contract and stakes
         const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, stakeAmount);
         await approveTx.wait();
         console.log(`[Paymaster:Staking] Approved staking contract`);
@@ -1167,7 +1154,6 @@ async function handleStaking(req, res, { user, amount, stakeAction, _fee, deadli
         await tx.wait();
         console.log(`[Paymaster:Staking] Staked ${ethers.formatEther(stakeAmount)} VCN for ${user}`);
 
-        // Note: The stake is now in admin's name. For production, consider a proxy pattern.
         break;
       }
 

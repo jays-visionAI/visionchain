@@ -265,36 +265,72 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
 
                 const provider = new ethers.JsonRpcProvider(RPC_URL);
                 const signer = new ethers.Wallet(privateKey, provider);
-                const vcn = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, signer);
+                const userAddress = await signer.getAddress();
 
                 const amountWei = ethers.parseEther(stakeAmount());
                 const feeWei = ethers.parseEther('1'); // 1 VCN fee
                 const totalAmount = amountWei + feeWei;
+                const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
 
-                // Admin wallet address (Paymaster executor)
-                const ADMIN_WALLET = '0x8c2f9eAc3f38cc51bbd8C153c17eb56F4e73FD47';
+                // EIP-712 Permit signing (gasless - no on-chain tx needed from user)
+                const vcnContract = new ethers.Contract(VCN_TOKEN_ADDRESS, [
+                    ...ERC20_ABI,
+                    'function nonces(address owner) view returns (uint256)',
+                    'function name() view returns (string)'
+                ], signer);
 
-                // First approve Paymaster to spend user's VCN (stake amount + fee)
-                console.log('[Staking] Approving Paymaster...');
-                const currentAllowance = await vcn.allowance(walletAddress(), ADMIN_WALLET);
-                if (currentAllowance < totalAmount) {
-                    const approveTx = await vcn.approve(ADMIN_WALLET, totalAmount);
-                    await approveTx.wait();
-                    console.log('[Staking] Approved Paymaster');
-                }
+                const [tokenName, nonce] = await Promise.all([
+                    vcnContract.name(),
+                    vcnContract.nonces(userAddress)
+                ]);
+
+                // Paymaster admin address (spender who will transferFrom)
+                const PAYMASTER_ADMIN = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
+
+                const domain = {
+                    name: tokenName,
+                    version: '1',
+                    chainId: 3151909, // Vision Chain v2
+                    verifyingContract: VCN_TOKEN_ADDRESS
+                };
+
+                const types = {
+                    Permit: [
+                        { name: 'owner', type: 'address' },
+                        { name: 'spender', type: 'address' },
+                        { name: 'value', type: 'uint256' },
+                        { name: 'nonce', type: 'uint256' },
+                        { name: 'deadline', type: 'uint256' }
+                    ]
+                };
+
+                const values = {
+                    owner: userAddress,
+                    spender: PAYMASTER_ADMIN,
+                    value: totalAmount,
+                    nonce: nonce,
+                    deadline: deadline
+                };
+
+                console.log('[Staking] Signing EIP-712 Permit...');
+                const signature = await signer.signTypedData(domain, types, values);
+                console.log('[Staking] Permit signed successfully');
 
                 setTxStatus('pending');
                 console.log('[Staking] Calling Paymaster API...');
 
-                // Call Paymaster API
+                // Call Paymaster API (admin pays gas, user pays via permit)
                 const response = await fetch(PAYMASTER_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         type: 'staking',
                         stakeAction: 'stake',
-                        user: walletAddress(),
+                        user: userAddress,
                         amount: amountWei.toString(),
+                        fee: feeWei.toString(),
+                        deadline: deadline,
+                        signature: signature
                     })
                 });
 
