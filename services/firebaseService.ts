@@ -3630,7 +3630,7 @@ const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
         chainId: 11155111,
         rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
         explorerUrl: 'https://sepolia.etherscan.io',
-        vcnTokenAddress: '0x5e532BC8F19c4BA22aB0443229d3732aCE217d57',
+        vcnTokenAddress: '0x07755968236333B5f8803E9D0fC294608B200d1b',
         icon: 'ethereum',
         enabled: true,
         order: 1

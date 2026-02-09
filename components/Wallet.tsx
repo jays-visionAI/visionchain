@@ -586,7 +586,7 @@ const Wallet = (): JSX.Element => {
             (async () => {
                 try {
                     const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
-                    const SEPOLIA_VCN_TOKEN = '0x5e532BC8F19c4BA22aB0443229d3732aCE217d57';
+                    const SEPOLIA_VCN_TOKEN = '0x07755968236333B5f8803E9D0fC294608B200d1b';
                     const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
                     const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
                     const contract = new ethers.Contract(SEPOLIA_VCN_TOKEN, ERC20_ABI, provider);

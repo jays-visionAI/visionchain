@@ -45,7 +45,7 @@ const PAYMASTER_API = `https://us-central1-${firebaseProjectId}.cloudfunctions.n
 
 // VCN Token Addresses per Chain (for bridging destinations)
 const VCN_TOKEN_ADDRESSES: Record<number, string> = {
-    [SEPOLIA_CHAIN_ID]: '0x5e532BC8F19c4BA22aB0443229d3732aCE217d57',      // Ethereum Sepolia
+    [SEPOLIA_CHAIN_ID]: '0x07755968236333B5f8803E9D0fC294608B200d1b',      // Ethereum Sepolia
     [POLYGON_AMOY_CHAIN_ID]: '',   // TODO: Deploy VCN Token to Polygon Amoy
     [BASE_SEPOLIA_CHAIN_ID]: '',   // TODO: Deploy VCN Token to Base Sepolia
 };
@@ -120,7 +120,7 @@ const NETWORKS: NetworkConfig[] = [
         chainId: 11155111,
         rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
         explorerUrl: 'https://sepolia.etherscan.io',
-        vcnTokenAddress: '0x5e532BC8F19c4BA22aB0443229d3732aCE217d57',
+        vcnTokenAddress: '0x07755968236333B5f8803E9D0fC294608B200d1b',
         enabled: true
     },
     {
