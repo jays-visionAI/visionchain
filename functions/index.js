@@ -2677,7 +2677,7 @@ exports.bridgeRelayer = onSchedule({
   schedule: "every 2 minutes",
   timeZone: "Asia/Seoul",
   memory: "256MiB",
-  secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK", "VCN_SEPOLIA_ADDRESS"],
+  secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK", "VCN_SEPOLIA_ADDRESS", "EMAIL_USER", "EMAIL_APP_PASSWORD"],
 }, async (_event) => {
   console.log("[Bridge Relayer] Starting scheduled execution...");
 
@@ -3278,7 +3278,7 @@ async function sendBridgeCompleteEmail(email, bridge, destTxHash) {
 // =============================================================================
 // BRIDGE RELAYER - Manual Trigger (For Testing)
 // =============================================================================
-exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public", secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK"] }, async (req, res) => {
+exports.triggerBridgeRelayer = onRequest({ cors: true, invoker: "public", secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
@@ -3394,7 +3394,10 @@ const VCN_TOKEN_SEPOLIA_ABI = [
  * 3. Wait for challenge period
  * 4. Finalize and mint on destination
  */
-exports.secureBridgeRelayer = onSchedule("every 2 minutes", async () => {
+exports.secureBridgeRelayer = onSchedule({
+  schedule: "every 2 minutes",
+  secrets: ["SEPOLIA_RELAYER_PK", "VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async () => {
   console.log("[Secure Bridge] Starting optimistic bridge relayer...");
 
   try {
