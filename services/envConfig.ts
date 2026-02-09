@@ -8,15 +8,9 @@
 type Environment = 'development' | 'staging' | 'production';
 
 // Detect current environment from URL or env variable
-// This runs at runtime, not build time
+// Hostname detection takes priority (runtime truth), env variable is fallback
 const detectEnvironment = (): Environment => {
-    // Check env variable first (build-time override)
-    const envVar = import.meta.env.VITE_CHAIN_ENV as Environment;
-    if (envVar && ['development', 'staging', 'production'].includes(envVar)) {
-        return envVar;
-    }
-
-    // Auto-detect from hostname at runtime
+    // 1. Auto-detect from hostname at runtime (most reliable)
     if (typeof window !== 'undefined' && window.location) {
         const hostname = window.location.hostname;
 
@@ -34,6 +28,12 @@ const detectEnvironment = (): Environment => {
         if (hostname.includes('visionchain.co')) {
             return 'production';
         }
+    }
+
+    // 2. Fallback to env variable (build-time override)
+    const envVar = import.meta.env.VITE_CHAIN_ENV as Environment;
+    if (envVar && ['development', 'staging', 'production'].includes(envVar)) {
+        return envVar;
     }
 
     // Default fallback

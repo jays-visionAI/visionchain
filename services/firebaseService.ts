@@ -1522,6 +1522,22 @@ export const userRegister = async (email: string, password: string, phone?: stri
             });
 
             console.log(`[Referral] User ${emailLower} referred by ${referrerId}. Bi-directional contacts created.`);
+
+            // Send referral signup notification email to referrer (fire-and-forget)
+            try {
+                const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+                fetch(`https://us-central1-${projectId}.cloudfunctions.net/notifyReferralSignup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        referrerEmail: referrerId,
+                        newUserEmail: emailLower,
+                        referralCode: referralCode,
+                    }),
+                }).catch(err => console.warn('[Referral] Email notification failed:', err));
+            } catch (notifyErr) {
+                console.warn('[Referral] Email notification call failed:', notifyErr);
+            }
         }
     }
 
