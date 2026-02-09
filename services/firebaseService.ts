@@ -1508,6 +1508,52 @@ export const completePasswordReset = async (
     return data;
 };
 
+// ==================== Email Preferences ====================
+
+export interface EmailCategory {
+    key: string;
+    label: string;
+    description: string;
+    locked?: boolean;
+}
+
+export interface EmailPreferencesResponse {
+    success: boolean;
+    preferences: Record<string, boolean>;
+    categories: EmailCategory[];
+}
+
+export const getEmailPreferences = async (email: string): Promise<EmailPreferencesResponse> => {
+    const response = await fetch(
+        `${getCloudFunctionUrl('getEmailPreferences')}?email=${encodeURIComponent(email.toLowerCase().trim())}`,
+        { method: 'GET' },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to get email preferences');
+    }
+    return data;
+};
+
+export const updateEmailPreferences = async (
+    email: string,
+    preferences: Record<string, boolean>,
+): Promise<{ success: boolean; preferences: Record<string, boolean> }> => {
+    const response = await fetch(getCloudFunctionUrl('updateEmailPreferences'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: email.toLowerCase().trim(),
+            preferences,
+        }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error || 'Failed to update email preferences');
+    }
+    return data;
+};
+
 export const onUserAuthStateChanged = (callback: (user: User | null) => void) => {
     const auth = getFirebaseAuth();
     return onAuthStateChanged(auth, callback);

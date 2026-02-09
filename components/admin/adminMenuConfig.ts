@@ -19,7 +19,8 @@ import {
     UserPlus,
     Zap,
     Megaphone,
-    Network
+    Network,
+    Mail
 } from 'lucide-solid';
 
 
@@ -44,7 +45,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     UserPlus,
     Zap,
     Megaphone,
-    Network
+    Network,
+    Mail
 };
 
 // Menu item interface with optional children for sub-menus
@@ -197,6 +199,15 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 11
+    },
+    {
+        id: 'email-management',
+        path: '/adminsystem/email',
+        label: 'Email Management',
+        icon: 'Mail',
+        badge: 'NEW',
+        category: 'custom',
+        order: 12
     },
 
     // ===== DEVELOPER PAGES =====

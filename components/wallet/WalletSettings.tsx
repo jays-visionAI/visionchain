@@ -22,7 +22,8 @@ import {
     Cloud,
     RefreshCw,
 } from 'lucide-solid';
-import { getUserPreset, saveUserPreset, getUserData, updateUserData } from '../../services/firebaseService';
+import { getUserPreset, saveUserPreset, getUserData, updateUserData, getEmailPreferences, updateEmailPreferences } from '../../services/firebaseService';
+import type { EmailCategory } from '../../services/firebaseService';
 import { CloudWalletService, calculatePasswordStrength } from '../../services/cloudWalletService';
 import { WalletService } from '../../services/walletService';
 import { countries, Country } from './CountryData';
@@ -97,6 +98,70 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [backupCodesRemaining, setBackupCodesRemaining] = createSignal(0);
     const [totpDisableMode, setTotpDisableMode] = createSignal(false);
     const [totpDisableCode, setTotpDisableCode] = createSignal('');
+
+    // Email preferences state
+    const [emailCategories, setEmailCategories] = createSignal<EmailCategory[]>([]);
+    const [emailPrefs, setEmailPrefs] = createSignal<Record<string, boolean>>({});
+    const [emailPrefsLoading, setEmailPrefsLoading] = createSignal(false);
+    const [emailPrefsError, setEmailPrefsError] = createSignal('');
+    const [emailPrefsSaving, setEmailPrefsSaving] = createSignal<string | null>(null);
+    const [emailPrefsLoaded, setEmailPrefsLoaded] = createSignal(false);
+
+    // Load email preferences when notifications tab becomes active
+    const loadEmailPreferences = async () => {
+        const userEmail = auth.user()?.email;
+        if (!userEmail || emailPrefsLoaded()) return;
+
+        setEmailPrefsLoading(true);
+        setEmailPrefsError('');
+        try {
+            const data = await getEmailPreferences(userEmail);
+            setEmailCategories(data.categories);
+            setEmailPrefs(data.preferences);
+            setEmailPrefsLoaded(true);
+        } catch (err: any) {
+            console.error('[EmailPrefs] Load failed:', err);
+            setEmailPrefsError(err.message || 'Failed to load email preferences');
+        } finally {
+            setEmailPrefsLoading(false);
+        }
+    };
+
+    const handleToggleEmailPref = async (key: string, value: boolean) => {
+        const userEmail = auth.user()?.email;
+        if (!userEmail) return;
+
+        // Optimistic update
+        const prev = { ...emailPrefs() };
+        setEmailPrefs({ ...prev, [key]: value });
+        setEmailPrefsSaving(key);
+
+        try {
+            const result = await updateEmailPreferences(userEmail, { ...prev, [key]: value });
+            setEmailPrefs(result.preferences);
+        } catch (err: any) {
+            // Revert on error
+            setEmailPrefs(prev);
+            setEmailPrefsError(err.message || 'Failed to update preference');
+            setTimeout(() => setEmailPrefsError(''), 3000);
+        } finally {
+            setEmailPrefsSaving(null);
+        }
+    };
+
+    // Category icon mapping
+    const getCategoryIcon = (key: string) => {
+        const icons: Record<string, () => any> = {
+            security: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+            staking: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" /><rect x="2" y="14" width="20" height="8" rx="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>,
+            referral: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+            bridge: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21" /><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>,
+            weeklyReport: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>,
+            lifecycle: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
+            announcements: () => <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
+        };
+        return icons[key] || icons.announcements;
+    };
 
     const handleChangePassword = (e: Event) => {
         e.preventDefault();
@@ -687,39 +752,117 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
             {/* Notifications Tab */}
             <Show when={activeTab() === 'notifications'}>
+                {(() => { loadEmailPreferences(); return null; })()}
                 <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                    <div class="flex items-center gap-3 p-6 border-b border-white/5">
-                        <div class="p-2 rounded-xl bg-cyan-500/20">
-                            <Bell class="w-5 h-5 text-cyan-400" />
+                    <div class="flex items-center justify-between p-6 border-b border-white/5">
+                        <div class="flex items-center gap-3">
+                            <div class="p-2 rounded-xl bg-cyan-500/20">
+                                <Bell class="w-5 h-5 text-cyan-400" />
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-semibold text-white">Email Subscriptions</h2>
+                                <p class="text-gray-500 text-xs mt-0.5">Manage which emails you receive from Vision Chain</p>
+                            </div>
                         </div>
-                        <h2 class="text-lg font-semibold text-white">Notification Settings</h2>
+                        <Show when={emailPrefsLoading()}>
+                            <div class="w-5 h-5 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                        </Show>
                     </div>
+
+                    {/* Error */}
+                    <Show when={emailPrefsError()}>
+                        <div class="mx-6 mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-2">
+                            <AlertCircle class="w-4 h-4 text-red-400 flex-shrink-0" />
+                            <span class="text-red-400 text-sm">{emailPrefsError()}</span>
+                        </div>
+                    </Show>
+
+                    {/* Categories */}
                     <div class="divide-y divide-white/5">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Mail class="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">Email Notifications</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Receive important updates via email</p>
-                                </div>
-                            </div>
-                            <Toggle checked={emailNotifications()} onChange={setEmailNotifications} />
-                        </div>
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
-                            <div class="flex items-start gap-4">
-                                <div class="p-2 rounded-lg bg-white/5">
-                                    <Smartphone class="w-5 h-5 text-gray-400" />
-                                </div>
-                                <div>
-                                    <p class="text-white font-medium">Push Notifications</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Get instant notifications on your device</p>
-                                </div>
-                            </div>
-                            <Toggle checked={pushNotifications()} onChange={setPushNotifications} />
-                        </div>
+                        <For each={emailCategories()}>
+                            {(category) => {
+                                const IconComponent = getCategoryIcon(category.key);
+                                const isLocked = category.locked === true;
+                                const isEnabled = () => emailPrefs()[category.key] !== false;
+                                const isSaving = () => emailPrefsSaving() === category.key;
+
+                                return (
+                                    <div class={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 transition-colors ${isLocked ? 'bg-white/[0.01]' : 'hover:bg-white/[0.01]'}`}>
+                                        <div class="flex items-start gap-4 flex-1 min-w-0">
+                                            <div class={`p-2 rounded-lg shrink-0 ${isLocked
+                                                    ? 'bg-amber-500/10'
+                                                    : isEnabled()
+                                                        ? 'bg-cyan-500/10'
+                                                        : 'bg-white/5'
+                                                }`}>
+                                                <div class={isLocked ? 'text-amber-400' : isEnabled() ? 'text-cyan-400' : 'text-gray-500'}>
+                                                    {IconComponent()}
+                                                </div>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <p class="text-white font-medium">{category.label}</p>
+                                                    <Show when={isLocked}>
+                                                        <span class="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[9px] font-black rounded uppercase tracking-wider flex items-center gap-1">
+                                                            <Lock class="w-2.5 h-2.5" />
+                                                            Required
+                                                        </span>
+                                                    </Show>
+                                                    <Show when={isSaving()}>
+                                                        <div class="w-3.5 h-3.5 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                                                    </Show>
+                                                </div>
+                                                <p class="text-gray-500 text-sm mt-0.5">{category.description}</p>
+                                            </div>
+                                        </div>
+                                        <div class="shrink-0">
+                                            <Show
+                                                when={!isLocked}
+                                                fallback={
+                                                    <div class="w-12 h-6 rounded-full bg-amber-500/30 flex items-center justify-end px-1 cursor-not-allowed" title="Security emails cannot be disabled">
+                                                        <div class="w-4 h-4 rounded-full bg-amber-400 shadow-lg" />
+                                                    </div>
+                                                }
+                                            >
+                                                <Toggle
+                                                    checked={isEnabled()}
+                                                    onChange={(val) => handleToggleEmailPref(category.key, val)}
+                                                />
+                                            </Show>
+                                        </div>
+                                    </div>
+                                );
+                            }}
+                        </For>
                     </div>
+
+                    {/* Empty state */}
+                    <Show when={!emailPrefsLoading() && emailCategories().length === 0 && !emailPrefsError()}>
+                        <div class="p-12 text-center">
+                            <Mail class="w-10 h-10 text-gray-600 mx-auto mb-3" />
+                            <p class="text-gray-500 text-sm">No email categories available</p>
+                        </div>
+                    </Show>
+
+                    {/* Push notifications section */}
+                    <Show when={emailCategories().length > 0}>
+                        <div class="border-t border-white/5">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
+                                <div class="flex items-start gap-4">
+                                    <div class="p-2 rounded-lg bg-white/5">
+                                        <Smartphone class="w-5 h-5 text-gray-400" />
+                                    </div>
+                                    <div>
+                                        <p class="text-white font-medium">Push Notifications</p>
+                                        <p class="text-gray-500 text-sm mt-0.5">Browser push notifications (coming soon)</p>
+                                    </div>
+                                </div>
+                                <div class="w-12 h-6 rounded-full bg-white/5 flex items-center px-1 cursor-not-allowed opacity-50" title="Coming soon">
+                                    <div class="w-4 h-4 rounded-full bg-gray-600 shadow-lg" />
+                                </div>
+                            </div>
+                        </div>
+                    </Show>
                 </div>
             </Show>
 

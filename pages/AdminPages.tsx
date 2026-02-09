@@ -19,6 +19,7 @@ export const PaymasterAdmin = lazy(() => import('../components/admin/PaymasterAd
 export const AdminDeFi = lazy(() => import('../components/admin/AdminDeFi'));
 export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
 export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminBridgeNetworks'));
+export const AdminEmail = lazy(() => import('../components/admin/AdminEmail'));
 
 
 // Loading spinner component
@@ -212,6 +213,17 @@ export function AdminBridgeNetworksPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminBridgeNetworks />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminEmailPage() {
+    document.title = 'Email Management | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminEmail />
             </AdminLayout>
         </Suspense>
     );

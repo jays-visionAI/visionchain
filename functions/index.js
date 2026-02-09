@@ -4603,6 +4603,285 @@ exports.completePasswordReset = onRequest({ cors: true, invoker: "public", secre
 });
 
 // =============================================================================
+// ADMIN EMAIL MANAGEMENT
+// =============================================================================
+
+/**
+ * Admin: Get email template previews with dummy data
+ */
+exports.adminEmailPreview = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  try {
+    // Verify admin auth
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const token = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    const adminDoc = await db.collection("admins").doc(decoded.uid).get();
+    if (!adminDoc.exists) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const templateId = req.query.template || req.body?.template;
+
+    // Define all templates with dummy data
+    const templates = {
+      verification: {
+        id: "verification",
+        name: "Device Verification",
+        category: "security",
+        description: "Sent when user logs in from a new device",
+        html: generateVerificationEmailHtml("847291", {
+          browser: "Chrome 120",
+          os: "macOS 14.2",
+          ip: "203.230.xxx.xxx",
+          location: "Seoul, South Korea",
+          timestamp: new Date().toISOString(),
+        }),
+      },
+      suspicious: {
+        id: "suspicious",
+        name: "Suspicious Activity Alert",
+        category: "security",
+        description: "Sent when unusual login behavior is detected",
+        html: generateSuspiciousActivityEmailHtml("Multiple failed login attempts detected", {
+          ip: "185.220.xxx.xxx",
+          location: "Unknown Location",
+          attempts: 5,
+          timestamp: new Date().toISOString(),
+        }),
+      },
+      passwordReset: {
+        id: "passwordReset",
+        name: "Password Reset Code",
+        category: "security",
+        description: "Sent when user requests a password reset",
+        html: generatePasswordResetEmailHtml("593721", "user@example.com"),
+      },
+      passwordChanged: {
+        id: "passwordChanged",
+        name: "Password Changed Confirmation",
+        category: "security",
+        description: "Sent after password is successfully changed",
+        html: generatePasswordChangedEmailHtml("user@example.com", "02/10/2026, 08:00 AM KST"),
+      },
+      weeklyReport: {
+        id: "weeklyReport",
+        name: "Weekly Activity Report",
+        category: "weeklyReport",
+        description: "Weekly summary of user's activity and portfolio",
+        html: generateWeeklyReportEmailHtml({
+          weekStart: "Feb 3, 2026",
+          weekEnd: "Feb 9, 2026",
+          stakingActions: 3,
+          totalStaked: "10,000",
+          totalUnstaked: "0",
+          rewardsClaimed: "125",
+          bridgeTransfers: 1,
+          bridgeVolume: "5,000",
+          newReferrals: 2,
+          totalReferrals: 8,
+          walletBalance: "45,230",
+        }),
+      },
+    };
+
+    if (templateId) {
+      if (!templates[templateId]) {
+        return res.status(404).json({ error: `Template '${templateId}' not found` });
+      }
+      return res.status(200).json({ success: true, template: templates[templateId] });
+    }
+
+    // Return all template metadata (without full HTML for list view)
+    const templateList = Object.values(templates).map((t) => ({
+      id: t.id,
+      name: t.name,
+      category: t.category,
+      description: t.description,
+    }));
+
+    return res.status(200).json({ success: true, templates: templateList, allTemplates: templates });
+  } catch (err) {
+    console.error("[AdminEmail] Preview failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to generate preview" });
+  }
+});
+
+/**
+ * Admin: Get email subscription statistics
+ */
+exports.adminEmailStats = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  try {
+    // Verify admin auth
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const token = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    const adminDoc = await db.collection("admins").doc(decoded.uid).get();
+    if (!adminDoc.exists) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    // Get all users and aggregate email preference stats
+    const usersSnapshot = await db.collection("users").get();
+    const totalUsers = usersSnapshot.size;
+
+    const categories = ["security", "staking", "referral", "bridge", "weeklyReport", "lifecycle", "announcements"];
+    const stats = {};
+
+    for (const cat of categories) {
+      stats[cat] = { optedIn: 0, optedOut: 0 };
+    }
+
+    usersSnapshot.forEach((doc) => {
+      const prefs = doc.data().emailPreferences || {};
+      for (const cat of categories) {
+        // Default is true (opted in) if not explicitly set
+        const isOptedIn = prefs[cat] !== false;
+        if (isOptedIn) {
+          stats[cat].optedIn++;
+        } else {
+          stats[cat].optedOut++;
+        }
+      }
+    });
+
+    // Get recent password reset tokens count (last 24h)
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recentResetsSnapshot = await db.collection("password_reset_tokens")
+      .where("createdAt", ">=", oneDayAgo)
+      .get();
+
+    // Get drip queue stats
+    let dripStats = { pending: 0, sent: 0, skipped: 0 };
+    try {
+      const dripSnapshot = await db.collection("drip_queue").get();
+      dripSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.sent) dripStats.sent++;
+        else if (data.skippedReason) dripStats.skipped++;
+        else dripStats.pending++;
+      });
+    } catch (e) {
+      console.warn("[AdminEmail] Drip stats error:", e);
+    }
+
+    return res.status(200).json({
+      success: true,
+      totalUsers,
+      categoryStats: stats,
+      recentPasswordResets: recentResetsSnapshot.size,
+      dripQueue: dripStats,
+    });
+  } catch (err) {
+    console.error("[AdminEmail] Stats failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to get email stats" });
+  }
+});
+
+/**
+ * Admin: Send test email to admin's own email
+ */
+exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    // Verify admin auth
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const token = authHeader.split("Bearer ")[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    const adminDoc = await db.collection("admins").doc(decoded.uid).get();
+    if (!adminDoc.exists) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
+    const { templateId, targetEmail } = req.body;
+    if (!templateId) {
+      return res.status(400).json({ error: "Missing templateId" });
+    }
+
+    // Use admin's email or specified target
+    const sendTo = targetEmail || decoded.email;
+    if (!sendTo) {
+      return res.status(400).json({ error: "No target email available" });
+    }
+
+    // Generate template HTML with dummy data
+    let html = "";
+    let subject = "Vision Chain - Test Email";
+
+    switch (templateId) {
+      case "verification":
+        html = generateVerificationEmailHtml("847291", {
+          browser: "Chrome 120", os: "macOS 14.2",
+          ip: "203.230.xxx.xxx", location: "Seoul, South Korea",
+          timestamp: new Date().toISOString(),
+        });
+        subject = "[TEST] Vision Chain - Device Verification";
+        break;
+      case "suspicious":
+        html = generateSuspiciousActivityEmailHtml("Multiple failed login attempts", {
+          ip: "185.220.xxx.xxx", location: "Unknown", attempts: 5,
+          timestamp: new Date().toISOString(),
+        });
+        subject = "[TEST] Vision Chain - Suspicious Activity";
+        break;
+      case "passwordReset":
+        html = generatePasswordResetEmailHtml("593721", sendTo);
+        subject = "[TEST] Vision Chain - Password Reset Code";
+        break;
+      case "passwordChanged":
+        html = generatePasswordChangedEmailHtml(sendTo, new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul", timeZoneName: "short" }));
+        subject = "[TEST] Vision Chain - Password Changed";
+        break;
+      case "weeklyReport":
+        html = generateWeeklyReportEmailHtml({
+          weekStart: "Feb 3, 2026", weekEnd: "Feb 9, 2026",
+          stakingActions: 3, totalStaked: "10,000", totalUnstaked: "0",
+          rewardsClaimed: "125", bridgeTransfers: 1, bridgeVolume: "5,000",
+          newReferrals: 2, totalReferrals: 8, walletBalance: "45,230",
+        });
+        subject = "[TEST] Vision Chain - Weekly Report";
+        break;
+      default:
+        return res.status(400).json({ error: `Unknown template: ${templateId}` });
+    }
+
+    await sendSecurityEmail(sendTo, subject, html);
+    console.log(`[AdminEmail] Test email '${templateId}' sent to ${sendTo}`);
+
+    return res.status(200).json({ success: true, message: `Test email sent to ${sendTo}` });
+  } catch (err) {
+    console.error("[AdminEmail] Send test failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to send test email" });
+  }
+});
+
+// =============================================================================
 // EMAIL PREFERENCES - User subscription management
 // =============================================================================
 

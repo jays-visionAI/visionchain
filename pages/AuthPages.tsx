@@ -5,6 +5,7 @@ export const Login = lazy(() => import('../components/auth/Login'));
 export const Signup = lazy(() => import('../components/auth/Signup'));
 export const AdminLogin = lazy(() => import('../components/auth/AdminLogin'));
 export const ActivateAccount = lazy(() => import('../components/auth/ActivateAccount'));
+export const ResetPassword = lazy(() => import('../components/auth/ResetPassword'));
 
 // Loading spinner component
 function PageLoader() {
@@ -47,6 +48,15 @@ export function ActivatePage() {
     return (
         <Suspense fallback={<PageLoader />}>
             <ActivateAccount />
+        </Suspense>
+    );
+}
+
+export function ResetPasswordPage() {
+    document.title = 'Reset Password | Vision Chain';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <ResetPassword />
         </Suspense>
     );
 }

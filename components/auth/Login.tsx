@@ -140,6 +140,14 @@ export default function Login() {
                                     </Show>
                                 </button>
                             </div>
+                            <div class="text-right mt-1.5">
+                                <a
+                                    href="/reset-password"
+                                    class="text-xs text-gray-500 hover:text-cyan-400 transition-colors"
+                                >
+                                    Forgot Password?
+                                </a>
+                            </div>
                         </div>
 
                         {/* Error Message */}

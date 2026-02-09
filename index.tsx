@@ -67,6 +67,7 @@ render(() => (
       <Route path="/signup" component={Auth.SignupPage} />
       <Route path="/admin-login" component={Auth.AdminLoginPage} />
       <Route path="/activate" component={Auth.ActivatePage} />
+      <Route path="/reset-password" component={Auth.ResetPasswordPage} />
 
       {/* Public Routes */}
       <Route path="/" component={HomePage} />
@@ -106,6 +107,7 @@ render(() => (
       <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
       <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
       <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
+      <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />
 
     </Router>
   </AuthProvider>
