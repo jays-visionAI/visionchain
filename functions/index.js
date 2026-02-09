@@ -2837,11 +2837,70 @@ exports.bridgeRelayer = onSchedule({
 
         console.log(`[Bridge Relayer] Bridge ${bridgeId} completed. Dest TX: ${destTxHash}`);
 
-        // 5. Send completion notification
+        // 5. Send completion notification (email + in-app) to sender and recipient
         try {
-          const userEmail = await getBridgeUserEmail(bridge.recipient);
-          if (userEmail) {
-            await sendBridgeCompleteEmail(userEmail, bridge, destTxHash);
+          const vcnAmount = ethers.formatEther(BigInt(bridge.amount));
+          const destChain = bridge.dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
+
+          // Save Sepolia receive record to History
+          await db.collection("transactions").doc(`sepolia_${destTxHash}`).set({
+            hash: destTxHash,
+            from_addr: `bridge:${destChain === "Ethereum Sepolia" ? "vision-chain" : "sepolia"}`,
+            to_addr: bridge.recipient.toLowerCase(),
+            value: vcnAmount,
+            timestamp: Date.now(),
+            type: "Bridge Receive",
+            bridgeStatus: "COMPLETED",
+            sourceTxHash: bridgeId,
+            recipient: bridge.recipient.toLowerCase(),
+            metadata: {
+              sourceChain: destChain === "Ethereum Sepolia" ? "Vision Chain" : "Sepolia",
+              destinationChain: destChain,
+              srcChainId: bridge.srcChainId,
+              dstChainId: bridge.dstChainId,
+            },
+          });
+          console.log(`[Bridge Relayer] History record saved for bridge ${bridgeId}`);
+
+          // Notify sender
+          const senderAddr = bridge.sender || bridge.from;
+          if (senderAddr) {
+            const senderEmail = await getBridgeUserEmail(senderAddr);
+            if (senderEmail) {
+              await sendBridgeCompleteEmail(senderEmail, bridge, destTxHash);
+              await db.collection("users").doc(senderEmail).collection("notifications").add({
+                type: "bridge_complete",
+                title: "Bridge Transfer Complete",
+                content: `${vcnAmount} VCN has been successfully bridged to ${destChain}.`,
+                data: {
+                  amount: vcnAmount, destinationChain: destChain,
+                  sourceTxHash: bridgeId, destinationTxHash: destTxHash, status: "completed",
+                },
+                email: senderEmail, read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log(`[Bridge Relayer] Sender notification sent to ${senderEmail}`);
+            }
+          }
+
+          // Notify recipient (if different from sender)
+          if (!senderAddr || bridge.recipient.toLowerCase() !== senderAddr.toLowerCase()) {
+            const recipientEmail = await getBridgeUserEmail(bridge.recipient);
+            if (recipientEmail) {
+              await sendBridgeCompleteEmail(recipientEmail, bridge, destTxHash);
+              await db.collection("users").doc(recipientEmail).collection("notifications").add({
+                type: "bridge_receive",
+                title: "Bridge Transfer Received",
+                content: `You received ${vcnAmount} VCN via cross-chain bridge.`,
+                data: {
+                  amount: vcnAmount, destinationChain: destChain,
+                  sourceTxHash: bridgeId, destinationTxHash: destTxHash, status: "completed",
+                },
+                email: recipientEmail, read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log(`[Bridge Relayer] Recipient notification sent to ${recipientEmail}`);
+            }
           }
         } catch (notifyErr) {
           console.warn("[Bridge Relayer] Notification failed:", notifyErr.message);
@@ -2902,17 +2961,37 @@ exports.bridgeRelayer = onSchedule({
 
         console.log(`[Bridge Relayer] transactions/${txId} completed. Dest TX: ${destTxHash}`);
 
-        // Send completion notification (email + in-app)
+        // Send completion notification (email + in-app) to BOTH sender and recipient
         try {
-          const userEmail = await getBridgeUserEmail(recipient);
-          if (userEmail) {
-            // Email notification
-            await sendBridgeCompleteEmail(userEmail, bridge, destTxHash);
+          const vcnAmount = ethers.formatEther(BigInt(bridge.amount));
+          const destChain = dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
 
-            // In-app notification
-            const vcnAmount = ethers.formatEther(BigInt(bridge.amount));
-            const destChain = dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
-            await db.collection("users").doc(userEmail).collection("notifications").add({
+          // Always save Sepolia receive record to History (regardless of email lookup)
+          await db.collection("transactions").doc(`sepolia_${destTxHash}`).set({
+            hash: destTxHash,
+            from_addr: "bridge:vision-chain",
+            to_addr: recipient.toLowerCase(),
+            value: vcnAmount,
+            timestamp: Date.now(),
+            type: "Bridge Receive",
+            bridgeStatus: "COMPLETED",
+            sourceTxHash: txId,
+            recipient: recipient.toLowerCase(),
+            metadata: {
+              sourceChain: "Vision Chain",
+              destinationChain: destChain,
+              srcChainId: 1337,
+              dstChainId: dstChainId,
+            },
+          });
+          console.log(`[Bridge Relayer] Sepolia receive record saved for ${recipient}`);
+
+          // Notify sender (the person who initiated the bridge)
+          const senderAddr = txData.from_addr;
+          const senderEmail = await getBridgeUserEmail(senderAddr);
+          if (senderEmail) {
+            await sendBridgeCompleteEmail(senderEmail, bridge, destTxHash);
+            await db.collection("users").doc(senderEmail).collection("notifications").add({
               type: "bridge_complete",
               title: "Bridge Transfer Complete",
               content: `${vcnAmount} VCN has been successfully bridged to ${destChain}.`,
@@ -2923,30 +3002,35 @@ exports.bridgeRelayer = onSchedule({
                 destinationTxHash: destTxHash,
                 status: "completed",
               },
-              email: userEmail,
+              email: senderEmail,
               read: false,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
             });
-            console.log(`[Bridge Relayer] In-app notification created for ${userEmail}`);
+            console.log(`[Bridge Relayer] Sender notification sent to ${senderEmail}`);
+          }
 
-            // Save Sepolia receive record to History
-            await db.collection("transactions").doc(`sepolia_${destTxHash}`).set({
-              hash: destTxHash,
-              from_addr: "bridge:vision-chain",
-              to_addr: recipient.toLowerCase(),
-              value: vcnAmount,
-              timestamp: Date.now(),
-              type: "Bridge Receive",
-              bridgeStatus: "COMPLETED",
-              sourceTxHash: txId,
-              metadata: {
-                sourceChain: "Vision Chain",
-                destinationChain: destChain,
-                srcChainId: 1337,
-                dstChainId: dstChainId,
-              },
-            });
-            console.log(`[Bridge Relayer] Sepolia receive record saved for ${recipient}`);
+          // Notify recipient (if different from sender)
+          if (recipient.toLowerCase() !== senderAddr.toLowerCase()) {
+            const recipientEmail = await getBridgeUserEmail(recipient);
+            if (recipientEmail) {
+              await sendBridgeCompleteEmail(recipientEmail, bridge, destTxHash);
+              await db.collection("users").doc(recipientEmail).collection("notifications").add({
+                type: "bridge_receive",
+                title: "Bridge Transfer Received",
+                content: `You received ${vcnAmount} VCN via cross-chain bridge from ${destChain === "Ethereum Sepolia" ? "Vision Chain" : "Sepolia"}.`,
+                data: {
+                  amount: vcnAmount,
+                  destinationChain: destChain,
+                  sourceTxHash: txId,
+                  destinationTxHash: destTxHash,
+                  status: "completed",
+                },
+                email: recipientEmail,
+                read: false,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log(`[Bridge Relayer] Recipient notification sent to ${recipientEmail}`);
+            }
           }
         } catch (notifyErr) {
           console.warn("[Bridge Relayer] Notification failed:", notifyErr.message);
@@ -3362,39 +3446,84 @@ exports.secureBridgeRelayer = onSchedule("every 2 minutes", async () => {
 
           // Send notification - both email and Firestore
           try {
-            const userEmail = await getBridgeUserEmail(txData.from_addr);
-            if (userEmail) {
-              // 1. Send email notification
-              await sendBridgeCompleteEmail(userEmail, {
+            const destChain = (txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID) === SEPOLIA_CHAIN_ID ?
+              "Ethereum Sepolia" : "Vision Chain";
+            const bridgeRecipient = txData.recipient || txData.from_addr;
+
+            // Always save History record
+            await db.collection("transactions").doc(`sepolia_${destTxHash}`).set({
+              hash: destTxHash,
+              from_addr: `bridge:${destChain === "Ethereum Sepolia" ? "vision-chain" : "sepolia"}`,
+              to_addr: bridgeRecipient.toLowerCase(),
+              value: txData.value,
+              timestamp: Date.now(),
+              type: "Bridge Receive",
+              bridgeStatus: "COMPLETED",
+              sourceTxHash: txId,
+              recipient: bridgeRecipient.toLowerCase(),
+              metadata: {
+                sourceChain: destChain === "Ethereum Sepolia" ? "Vision Chain" : "Sepolia",
+                destinationChain: destChain,
+                srcChainId: txData.metadata?.srcChainId || 1337,
+                dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID,
+              },
+            });
+            console.log(`[Secure Bridge] History record saved`);
+
+            // Notify sender
+            const senderEmail = await getBridgeUserEmail(txData.from_addr);
+            if (senderEmail) {
+              await sendBridgeCompleteEmail(senderEmail, {
                 amount: ethers.parseEther(txData.value || "0").toString(),
                 recipient: txData.from_addr,
                 dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID,
               }, destTxHash);
 
-              // 2. Create in-app notification in Firestore
-              const destChain = (txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID) === SEPOLIA_CHAIN_ID ?
-                "Ethereum Sepolia" : "Vision Chain";
-              const explorerUrl = (txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID) === SEPOLIA_CHAIN_ID ?
-                `https://sepolia.etherscan.io/tx/${destTxHash}` :
-                `https://www.visionchain.co/visionscan/tx/${destTxHash}`;
-
-              await db.collection("notifications").add({
-                email: userEmail,
-                type: "bridge_completed",
+              await db.collection("users").doc(senderEmail).collection("notifications").add({
+                email: senderEmail,
+                type: "bridge_complete",
                 title: "Bridge Transfer Complete",
-                content: `${txData.value} VCN successfully bridged to ${destChain}. View on explorer.`,
+                content: `${txData.value} VCN successfully bridged to ${destChain}.`,
                 data: {
                   amount: txData.value,
                   destinationChain: destChain,
                   sourceTxHash: txId,
                   destinationTxHash: destTxHash,
-                  explorerUrl: explorerUrl,
                   status: "completed",
                 },
-                createdAt: admin.firestore.Timestamp.now(),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 read: false,
               });
-              console.log(`[Secure Bridge] Notification created for ${userEmail}`);
+              console.log(`[Secure Bridge] Sender notification created for ${senderEmail}`);
+            }
+
+            // Notify recipient if different from sender
+            if (bridgeRecipient.toLowerCase() !== txData.from_addr.toLowerCase()) {
+              const recipientEmail = await getBridgeUserEmail(bridgeRecipient);
+              if (recipientEmail) {
+                await sendBridgeCompleteEmail(recipientEmail, {
+                  amount: ethers.parseEther(txData.value || "0").toString(),
+                  recipient: bridgeRecipient,
+                  dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID,
+                }, destTxHash);
+
+                await db.collection("users").doc(recipientEmail).collection("notifications").add({
+                  email: recipientEmail,
+                  type: "bridge_receive",
+                  title: "Bridge Transfer Received",
+                  content: `You received ${txData.value} VCN via cross-chain bridge.`,
+                  data: {
+                    amount: txData.value,
+                    destinationChain: destChain,
+                    sourceTxHash: txId,
+                    destinationTxHash: destTxHash,
+                    status: "completed",
+                  },
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                  read: false,
+                });
+                console.log(`[Secure Bridge] Recipient notification sent to ${recipientEmail}`);
+              }
             }
           } catch (notifyErr) {
             console.warn("[Secure Bridge] Notification failed:", notifyErr.message);
