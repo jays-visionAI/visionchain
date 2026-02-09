@@ -2769,10 +2769,27 @@ exports.bridgeRelayer = onSchedule({
       .limit(10)
       .get();
 
-    console.log(`[Bridge Relayer] PENDING: ${pendingTxBridges.size}, LOCKED: ${lockedTxBridges.size}`);
+    // Retry recently FAILED bridges (failed due to config issues, retry within 1 hour)
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    const failedTxBridges = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .where("bridgeStatus", "==", "FAILED")
+      .where("challengeEndTime", ">=", oneHourAgo)
+      .limit(5)
+      .get();
 
-    // Combine PENDING and LOCKED into one list for processing
-    const allTxBridges = [...pendingTxBridges.docs, ...lockedTxBridges.docs];
+    if (failedTxBridges.size > 0) {
+      console.log(`[Bridge Relayer] Retrying ${failedTxBridges.size} recently FAILED bridges`);
+      // Reset them to LOCKED for reprocessing
+      for (const doc of failedTxBridges.docs) {
+        await doc.ref.update({ bridgeStatus: "LOCKED" });
+      }
+    }
+
+    console.log(`[Bridge Relayer] PENDING: ${pendingTxBridges.size}, LOCKED: ${lockedTxBridges.size}, FAILED(retry): ${failedTxBridges.size}`);
+
+    // Combine PENDING, LOCKED, and retried FAILED into one list for processing
+    const allTxBridges = [...pendingTxBridges.docs, ...lockedTxBridges.docs, ...failedTxBridges.docs];
     const totalPending = pendingBridges.size + allTxBridges.length;
     console.log(`[Bridge Relayer] Ready to process: ${pendingBridges.size} from bridgeTransactions, ${allTxBridges.length} from transactions`);
 
