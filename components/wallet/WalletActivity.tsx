@@ -1,9 +1,9 @@
-import { Show, For, createSignal, onMount, createEffect } from 'solid-js';
+import { Show, For, createSignal, onMount, createEffect, onCleanup } from 'solid-js';
 import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink, ArrowRightLeft } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { contractService } from '../../services/contractService';
 import { getFirebaseDb } from '../../services/firebaseService';
-import { collection, query, where, limit, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
 
 interface WalletActivityProps {
     purchases: () => any[];
@@ -120,6 +120,59 @@ export const WalletActivity = (props: WalletActivityProps) => {
 
     createEffect(() => {
         if (props.walletAddress) fetchHistory(1);
+    });
+
+    // Real-time listener for bridge status updates (Sepolia completion detection)
+    // When bridgeRelayer completes on Sepolia, it updates Firestore with:
+    //   bridgeStatus: 'COMPLETED', destinationTxHash: '0x...'
+    // This onSnapshot catches those updates immediately.
+    createEffect(() => {
+        if (!props.walletAddress) return;
+        const db = getFirebaseDb();
+        const txRef = collection(db, 'transactions');
+        const normalizedAddress = props.walletAddress.toLowerCase();
+
+        // Listen to bridge transactions where user is sender
+        const bridgeQuery = query(
+            txRef,
+            where('from_addr', '==', normalizedAddress),
+            where('type', '==', 'Bridge'),
+            limit(10)
+        );
+
+        const unsubscribe = onSnapshot(bridgeQuery, (snapshot) => {
+            if (snapshot.empty) return;
+
+            // Merge updated bridge statuses into current transactions
+            setTransactions(prev => {
+                const updated = [...prev];
+                let changed = false;
+
+                snapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const idx = updated.findIndex(t => t.hash === data.hash);
+                    if (idx >= 0) {
+                        const oldStatus = updated[idx].bridgeStatus;
+                        const newStatus = data.bridgeStatus;
+                        if (oldStatus !== newStatus || !updated[idx].destinationTxHash && data.destinationTxHash) {
+                            updated[idx] = {
+                                ...updated[idx],
+                                bridgeStatus: newStatus,
+                                destinationTxHash: data.destinationTxHash || updated[idx].destinationTxHash,
+                            };
+                            changed = true;
+                            console.log(`[WalletActivity] Bridge ${data.hash?.slice(0, 10)} status updated: ${oldStatus} -> ${newStatus}`);
+                        }
+                    }
+                });
+
+                return changed ? updated : prev;
+            });
+        }, (err) => {
+            console.warn('[WalletActivity] Bridge listener error:', err.message);
+        });
+
+        onCleanup(() => unsubscribe());
     });
 
     const handleNext = () => {
@@ -319,9 +372,9 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                         {/* Bridge Status Badge */}
                                         <Show when={isBridge}>
                                             <div class={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isBridgeComplete ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                                    isBridgeFailed ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                        isBridgePending ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                                            'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                                                isBridgeFailed ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                    isBridgePending ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                                        'bg-gray-500/10 text-gray-400 border border-gray-500/20'
                                                 }`}>
                                                 <Show when={isBridgePending}>
                                                     <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
