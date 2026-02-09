@@ -30,7 +30,7 @@ export interface LanguageConfig {
             // Returns [amount, token, destinationChain]
             bridge: {
                 regex: RegExp;
-                mapping: { amount: number; token: number; chain: number };
+                mapping: { amount: number; token: number; chain: number; recipient?: number };
             }[];
         };
         intentNames: Record<string, string>;
@@ -71,12 +71,17 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
                     }
                 ],
                 bridge: [
-                    // Standard bridge pattern
+                    // Bridge to recipient: "bridge 2 VCN to sepolia for @jays"
+                    {
+                        regex: /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z0-9-]+)\s+(?:for|to)\s+(@?[a-zA-Z0-9@.]+)/i,
+                        mapping: { amount: 1, token: 2, chain: 3, recipient: 4 }
+                    },
+                    // Standard bridge pattern (no recipient)
                     {
                         regex: /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z0-9-]+)/i,
                         mapping: { amount: 1, token: 2, chain: 3 }
                     },
-                    // "Convert to Ethereum" pattern - treat as bridge to Sepolia
+                    // "Convert to Ethereum" pattern
                     {
                         regex: /(?:convert|change|swap)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+(?:ethereum|eth|erc-?20|sepolia)/i,
                         mapping: { amount: 1, token: 2, chain: 3 }
@@ -128,6 +133,16 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
                     }
                 ],
                 bridge: [
+                    // 수신자 + 브릿지 패턴: "박지현에게 2vcn 세폴리아로 브릿징해서 보내줘"
+                    {
+                        regex: /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s*(?:을|를)?\s*(?:이더리움|이더|erc-?20|세폴리아)(?:으로|로)?\s*(?:브릿지|브릿징|옮겨|이동)(?:해서)?\s*(?:보내|전송)/i,
+                        mapping: { recipient: 1, amount: 2, token: 3, chain: 4 }
+                    },
+                    // 수신자 + 브릿지 패턴2: "박지현에게 2 VCN 브릿지 전송해줘" (세폴리아 = default)
+                    {
+                        regex: /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s*(?:브릿지|브릿징)\s*(?:보내|전송)/i,
+                        mapping: { recipient: 1, amount: 2, token: 3, chain: 4 }
+                    },
                     // 기본 브릿지 패턴: "1 VCN 브릿지 to Ethereum"
                     {
                         regex: /([0-9.]+)\s+([a-zA-Z]+)\s+(?:브릿지|옮겨|이동)\s+(?:to|로|으로)\s+([a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣0-9-]+)/i,

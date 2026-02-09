@@ -227,6 +227,7 @@ const Wallet = (): JSX.Element => {
         amount: string;
         symbol: string;
         destinationChain: string;
+        recipient?: string;
         intentData?: any;
     } | null>(null);
     const [isBridging, setIsBridging] = createSignal(false);
@@ -1680,7 +1681,7 @@ const Wallet = (): JSX.Element => {
                 alert("Rewards Claimed Successfully!");
             } else if (action.type === 'bridge') {
                 // Execute Bridge via the separated function
-                const bridgeData = action.data as { amount: string; destinationChain: string };
+                const bridgeData = action.data as { amount: string; destinationChain: string; recipient?: string };
                 await executeBridgeIntent(bridgeData);
             }
         } catch (error: any) {
@@ -2516,7 +2517,7 @@ const Wallet = (): JSX.Element => {
     };
 
     // === Actual Bridge Execution (After Password Verified) ===
-    const executeBridgeIntent = async (bridge: { amount: string; destinationChain: string }) => {
+    const executeBridgeIntent = async (bridge: { amount: string; destinationChain: string; recipient?: string }) => {
         setIsBridging(true);
         try {
             const userAddr = walletAddress();
@@ -2548,7 +2549,7 @@ const Wallet = (): JSX.Element => {
                 body: JSON.stringify({
                     type: 'bridge',
                     user: userAddr,
-                    recipient: userAddr, // Bridge to own wallet on destination chain
+                    recipient: bridge.recipient || userAddr,
                     amount: amountWei,
                     srcChainId: VISION_CHAIN_ID,
                     dstChainId: dstChainId,
@@ -2787,17 +2788,19 @@ If the user wants to send assets to another blockchain (Ethereum, Sepolia, Polyg
 Keywords that indicate bridge: "세폴리아", "이더리움", "폴리곤", "Sepolia", "Ethereum", "Polygon", "다른 체인", "브릿지", "bridge", "크로스체인"
 
 IMPORTANT: When user says "세폴리아로 보내줘" or "Sepolia로 전송" WITHOUT specifying a recipient address, this means BRIDGE to their OWN wallet on the destination chain (same address). Do NOT ask for recipient address.
+IMPORTANT: When user says "박지현에게 2vcn 세폴리아로 브릿징해서 보내줘" WITH a recipient name, include the "recipient" field in the JSON.
 
 \`\`\`json
 {
   "intent": "bridge",
   "amount": "100",
   "symbol": "VCN",
-  "destinationChain": "SEPOLIA"
+  "destinationChain": "SEPOLIA",
+  "recipient": "박지현"
 }
 \`\`\`
 Valid destinationChain values: "SEPOLIA", "ETHEREUM", "POLYGON"
-Note: Bridge transfers are from Vision Chain to the user's own wallet on the destination chain.
+Note: If "recipient" is omitted, bridges to user's own wallet. If "recipient" is provided, bridges to that person's wallet on the destination chain.
 
 [REFERRAL GUIDELINE]
 If the user asks about inviting friends, missions, or rewards, explain that they can share their referral link to earn rewards. 
@@ -3173,6 +3176,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         amount: String(intentData.amount || '0'),
                         symbol: intentData.symbol || 'VCN',
                         destinationChain: intentData.destinationChain || 'SEPOLIA',
+                        recipient: intentData.recipient || undefined,
                         intentData: intentData
                     };
 

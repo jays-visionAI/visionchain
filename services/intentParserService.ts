@@ -160,14 +160,17 @@ export class IntentParserService {
 
         const amount = match[mapping.amount];
         const token = match[mapping.token];
-        const chain = match[mapping.chain];
+        const chain = match[mapping.chain] || 'SEPOLIA'; // Default to Sepolia if not captured
+        const recipient = mapping.recipient ? match[mapping.recipient] : undefined;
 
         return {
             action: 'BRIDGE',
-            params: { token: token.toUpperCase(), amount: amount, destinationChain: chain.toUpperCase() },
+            params: { to: recipient, token: token.toUpperCase(), amount: amount, destinationChain: chain.toUpperCase() },
             raw: input,
             confidence: 0.9,
-            explanation: `Bridging ${amount} ${token} from Vision Chain to ${chain}.`
+            explanation: recipient
+                ? `Bridging ${amount} ${token} from Vision Chain to ${chain} for ${recipient}.`
+                : `Bridging ${amount} ${token} from Vision Chain to ${chain}.`
         };
     }
 }

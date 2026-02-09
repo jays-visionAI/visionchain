@@ -198,8 +198,23 @@ export class ActionResolverService {
     }
 
     private async resolveBridge(intent: UserIntent, userAddress: string): Promise<ProposedAction> {
-        const { amount, token, destinationChain } = intent.params;
+        const { amount, token, destinationChain, to } = intent.params;
         if (!amount || !destinationChain) throw new Error("Missing Bridge params");
+
+        // Resolve recipient if specified (e.g., contact name -> address)
+        let bridgeRecipient = userAddress;
+        let recipientLabel = '';
+        if (to) {
+            const resolved = await resolveRecipient(to);
+            if (!resolved) {
+                throw new Error(`Recipient "${to}" not found. Please provide a valid address or contact name.`);
+            }
+            bridgeRecipient = resolved.address;
+            recipientLabel = to;
+            if (!ethers.isAddress(bridgeRecipient)) {
+                throw new Error(`Recipient "${to}" resolved to an invalid address: ${bridgeRecipient}.`);
+            }
+        }
 
         // Vision Chain - Secure Bridge (Phase 1) Contracts
         const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
@@ -233,16 +248,20 @@ export class ActionResolverService {
             "function lockVCN(bytes32 intentHash, address recipient, uint256 destChainId) payable"
         ];
 
+        const summary = recipientLabel
+            ? `Bridge ${amount} VCN from Vision Chain to ${destinationChain} for ${recipientLabel}`
+            : `Bridge ${amount} VCN from Vision Chain to ${destinationChain}`;
+
         return {
             type: 'TRANSACTION',
-            summary: `Bridge ${amount} VCN from Vision Chain to ${destinationChain}`,
+            summary,
             data: {
                 bridgeType: 'SECURE_BRIDGE_V1',
                 step1: {
                     contractAddress: INTENT_COMMITMENT_ADDRESS,
                     abi: INTENT_COMMITMENT_ABI,
                     method: 'commitIntent',
-                    args: [userAddress, amountWei.toString(), dstChainId]
+                    args: [bridgeRecipient, amountWei.toString(), dstChainId]
                 },
                 step2: {
                     contractAddress: VISION_BRIDGE_SECURE_ADDRESS,
@@ -250,7 +269,7 @@ export class ActionResolverService {
                     method: 'lockVCN',
                     value: amountWei.toString()
                 },
-                recipient: userAddress,
+                recipient: bridgeRecipient,
                 amount: amountWei.toString(),
                 dstChainId: dstChainId
             },
@@ -259,7 +278,8 @@ export class ActionResolverService {
                 asset: token || 'VCN',
                 amount: amount,
                 fromChain: 'Vision Chain',
-                toChain: destinationChain
+                toChain: destinationChain,
+                recipient: recipientLabel || undefined
             }
         };
     }
