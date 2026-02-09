@@ -41,8 +41,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
     const referralUrl = () => `${window.location.origin}/signup?ref=${props.userProfile().referralCode}`;
 
     const invitationMessage = () => {
-        const url = referralUrl();
-        return url; // URL only, title is added separately in navigator.share()
+        return `Join me on Vision Chain! Create your Vision ID and participate in the AI blockchain ecosystem.`;
     };
 
     const getDynamicLevelData = (count: number, cfg: ReferralConfig) => {
@@ -120,7 +119,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
     });
 
     const copyLink = () => {
-        navigator.clipboard.writeText(invitationMessage());
+        navigator.clipboard.writeText(referralUrl());
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -198,7 +197,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                     <code class="text-blue-400 font-mono text-sm truncate">{referralUrl()}</code>
                                     <button
                                         onClick={() => {
-                                            navigator.clipboard.writeText(invitationMessage());
+                                            navigator.clipboard.writeText(referralUrl());
                                             setCopied(true);
                                             setTimeout(() => setCopied(false), 2000);
                                         }}
@@ -214,7 +213,8 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                         if (navigator.share) {
                                             navigator.share({
                                                 title: 'Join Vision Chain',
-                                                text: invitationMessage()
+                                                text: invitationMessage(),
+                                                url: referralUrl()
                                             });
                                         } else {
                                             copyLink();

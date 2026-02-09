@@ -272,7 +272,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 const totalAmount = amountWei + feeWei;
 
                 // Admin wallet address (Paymaster executor)
-                const ADMIN_WALLET = '0x8C2F9EaC3f38cc51bBD8C153c17eb56f4e73fD47';
+                const ADMIN_WALLET = '0x8c2f9eAc3f38cc51bbd8C153c17eb56F4e73FD47';
 
                 // First approve Paymaster to spend user's VCN (stake amount + fee)
                 console.log('[Staking] Approving Paymaster...');
@@ -487,7 +487,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             {/* Password Modal */}
             <Show when={showPasswordModal()}>
                 <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div class="bg-[#1a1a1c] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4">
+                    <div class="bg-[#1a1a1c] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 overflow-hidden">
                         <h3 class="text-lg font-black text-white mb-4 flex items-center gap-2">
                             <Lock class="w-5 h-5 text-amber-400" />
                             Spending Password Required
@@ -501,7 +501,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                             onInput={(e) => setPassword(e.currentTarget.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
                             placeholder="Enter spending password"
-                            class="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none mb-4"
+                            class="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none mb-4 box-border"
                         />
                         <Show when={errorMsg()}>
                             <p class="text-red-400 text-sm mb-4">{errorMsg()}</p>

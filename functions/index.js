@@ -913,7 +913,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
   const bridgeRecipient = recipient || user;
   const srcChain = srcChainId || 1337; // Default to Vision Chain
 
-  console.log(`[Paymaster:Bridge] ${user} bridging ${amount} to chain ${dstChainId}`);
+  console.log(`[Paymaster:Bridge] ${user} bridging ${amount} to chain ${dstChainId}, recipient: ${bridgeRecipient}`);
 
   try {
     // Contract addresses (Vision Chain v2 Testnet)

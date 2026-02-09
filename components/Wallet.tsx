@@ -2652,6 +2652,7 @@ const Wallet = (): JSX.Element => {
                 await setDoc(txRef, {
                     hash: resultTxHash,
                     from_addr: walletAddress()?.toLowerCase(),
+                    recipient: resolvedRecipientAddr.toLowerCase(), // CRITICAL: include resolved recipient
                     to_addr: 'bridge:sepolia', // Special address for bridge
                     value: bridge.amount,
                     timestamp: Date.now(),
@@ -2666,7 +2667,7 @@ const Wallet = (): JSX.Element => {
                         srcChainId: 1337,
                         dstChainId: dstChainId
                     }
-                });
+                }, { merge: true }); // merge: true to preserve server-side fields
                 console.log('[Bridge] Saved to Firestore for History');
             } catch (historyErr) {
                 console.warn('[Bridge] Failed to save history (non-critical):', historyErr);
@@ -2764,7 +2765,7 @@ ${tokens().map((t: any) => `- ${t.symbol}: ${t.balance} (${t.value})`).join('\n'
 
 [Referral Info]
 Referral Code: ${userProfile().referralCode || 'N/A'}
-Referral Link: https://www.visionchain.co/wallet?ref=${userProfile().referralCode || ''}
+Referral Link: ${window.location.origin}/signup?ref=${userProfile().referralCode || ''}
 `;
 
             // Excel/CSV Context
