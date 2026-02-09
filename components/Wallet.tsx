@@ -2542,6 +2542,25 @@ const Wallet = (): JSX.Element => {
             console.log('[Bridge] Calling Paymaster API for gasless bridge...');
             console.log(`[Bridge] User: ${userAddr}, Amount: ${amountWei}, DstChain: ${dstChainId}`);
 
+            // Immediately add an optimistic bridge task so Agent Chip shows loading state
+            const optimisticId = `bridge_optimistic_${Date.now()}`;
+            const dstChainName = dstChainId === SEPOLIA_CHAIN_ID ? 'Sepolia' : 'Vision';
+            const recipientLabel = bridge.recipient || '';
+            setBridgeTasks(prev => [
+                {
+                    id: optimisticId,
+                    type: 'BRIDGE' as const,
+                    summary: `${bridge.amount} VCN → ${dstChainName}${recipientLabel ? ` (${recipientLabel})` : ''}`,
+                    status: 'WAITING' as const,
+                    timestamp: Date.now(),
+                    recipient: bridge.recipient || 'Bridge',
+                    amount: bridge.amount,
+                    token: 'VCN',
+                    hiddenFromDesk: false
+                },
+                ...prev
+            ]);
+
             // Call Paymaster API to execute bridge (gasless)
             const response = await fetch(PAYMASTER_URL, {
                 method: 'POST',
@@ -2563,6 +2582,9 @@ const Wallet = (): JSX.Element => {
             }
 
             console.log('[Bridge] Paymaster response:', result);
+
+            // Remove optimistic task (Firestore onSnapshot will create the real one)
+            setBridgeTasks(prev => prev.filter(t => t.id !== optimisticId));
 
             const resultTxHash = result.lockTxHash || result.commitTxHash;
             const intentHash = result.intentHash;
@@ -2633,6 +2655,8 @@ const Wallet = (): JSX.Element => {
 
         } catch (error: any) {
             console.error('[Bridge] Error:', error);
+            // Remove optimistic task on error
+            setBridgeTasks(prev => prev.filter(t => !t.id.startsWith('bridge_optimistic_')));
             const errMsg = lastLocale() === 'ko'
                 ? `브릿지 실패: ${error.message || '알 수 없는 오류'}`
                 : `Bridge failed: ${error.message || 'Unknown error'}`;
