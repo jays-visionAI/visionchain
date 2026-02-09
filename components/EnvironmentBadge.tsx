@@ -1,4 +1,3 @@
-import { Show } from 'solid-js';
 import { ENV, CONFIG } from '../services/envConfig';
 
 /**
@@ -11,12 +10,25 @@ export const EnvironmentBadge = () => {
     // Don't show in production
     if (ENV === 'production') return null;
 
-    const badgeColor = ENV === 'staging'
-        ? 'bg-amber-500 text-black'
-        : 'bg-indigo-500 text-white';
+    const isStaging = ENV === 'staging';
 
     return (
-        <div class={`fixed bottom-4 left-4 z-[9999] px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-widest shadow-lg ${badgeColor}`}>
+        <div style={{
+            position: 'fixed',
+            top: '12px',
+            right: '12px',
+            'z-index': '99999',
+            padding: '4px 12px',
+            'border-radius': '9999px',
+            'font-size': '11px',
+            'font-weight': '900',
+            'text-transform': 'uppercase',
+            'letter-spacing': '0.1em',
+            'box-shadow': '0 4px 12px rgba(0,0,0,0.3)',
+            background: isStaging ? '#f59e0b' : '#6366f1',
+            color: isStaging ? '#000' : '#fff',
+            'pointer-events': 'none',
+        }}>
             {CONFIG.name}
         </div>
     );
