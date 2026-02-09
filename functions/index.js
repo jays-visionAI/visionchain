@@ -1147,7 +1147,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
         user: user.toLowerCase(),
         srcChainId: srcChain,
         dstChainId: dstChainId,
-        amount: amount,
+        amount: ethers.formatEther(amountWei),
         recipient: bridgeRecipient,
         intentHash: intentHash,
         commitTxHash: commitTx.hash,
@@ -1660,6 +1660,10 @@ exports.updateWalletAddress = onCall({ cors: true }, async (request) => {
     if (isVerified !== undefined) updateData.isVerified = isVerified;
 
     await db.collection("users").doc(emailLower).set(updateData, { merge: true });
+
+    // Send wallet created email (fire-and-forget)
+    sendWalletCreatedEmail(emailLower, walletAddress)
+      .catch((e) => console.warn("[Email] Wallet created email failed:", e.message));
 
     // 2. Update Token Sales (if exists)
     const tokenSaleRef = db.collection("token_sales").doc(emailLower);
@@ -3482,6 +3486,12 @@ async function getUserEmailByWallet(walletAddress) {
  * Send staking confirmation email
  */
 async function sendStakingEmail(email, { amount, txHash }) {
+  // Check email opt-in
+  if (!(await checkEmailOptIn(email, "staking"))) {
+    console.log(`[Email] Staking email skipped for ${email} (opted out)`);
+    return;
+  }
+
   const formattedAmount = ethers.formatEther(BigInt(amount));
   const explorerUrl = `https://www.visionchain.co/visionscan/tx/${txHash}`;
 
@@ -3507,6 +3517,12 @@ async function sendStakingEmail(email, { amount, txHash }) {
  * Send unstaking + cooldown notice email
  */
 async function sendUnstakeEmail(email, { amount, txHash, cooldownDays = 7 }) {
+  // Check email opt-in
+  if (!(await checkEmailOptIn(email, "staking"))) {
+    console.log(`[Email] Unstake email skipped for ${email} (opted out)`);
+    return;
+  }
+
   const formattedAmount = ethers.formatEther(BigInt(amount));
   const explorerUrl = `https://www.visionchain.co/visionscan/tx/${txHash}`;
   const cooldownEnd = new Date(Date.now() + cooldownDays * 24 * 60 * 60 * 1000);
@@ -3536,6 +3552,12 @@ async function sendUnstakeEmail(email, { amount, txHash, cooldownDays = 7 }) {
  * Send reward claim confirmation email
  */
 async function sendClaimRewardEmail(email, { txHash }) {
+  // Check email opt-in
+  if (!(await checkEmailOptIn(email, "staking"))) {
+    console.log(`[Email] Claim reward email skipped for ${email} (opted out)`);
+    return;
+  }
+
   const explorerUrl = `https://www.visionchain.co/visionscan/tx/${txHash}`;
 
   const body = `
@@ -3563,6 +3585,12 @@ async function sendClaimRewardEmail(email, { txHash }) {
  * Send referral signup notification to the referrer
  */
 async function sendReferralSignupEmail(referrerEmail, { newUserEmail, totalReferrals, referralCode }) {
+  // Check email opt-in
+  if (!(await checkEmailOptIn(referrerEmail, "referral"))) {
+    console.log(`[Email] Referral email skipped for ${referrerEmail} (opted out)`);
+    return;
+  }
+
   const maskedEmail = newUserEmail.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + "*".repeat(Math.min(b.length, 6)) + c);
   const dashboardUrl = "https://visionchain.co/wallet";
   const shareUrl = `https://visionchain.co/signup?ref=${referralCode}`;
@@ -3594,6 +3622,12 @@ async function sendReferralSignupEmail(referrerEmail, { newUserEmail, totalRefer
  * @param {string} destTxHash - Destination transaction hash
  */
 async function sendBridgeCompleteEmail(email, bridge, destTxHash) {
+  // Check email opt-in
+  if (!(await checkEmailOptIn(email, "bridge"))) {
+    console.log(`[Email] Bridge email skipped for ${email} (opted out)`);
+    return;
+  }
+
   const amount = ethers.formatEther(BigInt(bridge.amount));
   const destChain = bridge.dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
   const sourceChain = bridge.dstChainId === SEPOLIA_CHAIN_ID ? "Vision Chain" : "Ethereum Sepolia";
@@ -3624,6 +3658,1400 @@ async function sendBridgeCompleteEmail(email, bridge, destTxHash) {
 
   await sendSecurityEmail(email, "Vision Chain - Bridge Transfer Complete", emailBaseLayout(body, `${amount} VCN bridged to ${destChain}`));
 }
+
+// =============================================================================
+// EMAIL TEMPLATES - Welcome & Onboarding (Phase 2 - GTM Lifecycle)
+// =============================================================================
+
+/**
+ * Send welcome email on user registration
+ */
+async function sendWelcomeEmail(email) {
+  const body = `
+    <div style="text-align:center;margin:0 0 24px;">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="32" cy="32" r="28" stroke="#22d3ee" stroke-width="2" fill="none" opacity="0.3"/>
+        <circle cx="32" cy="32" r="20" stroke="#22d3ee" stroke-width="2" fill="none"/>
+        <path d="M32 18L38 32L32 46L26 32Z" fill="#22d3ee" opacity="0.3"/>
+        <path d="M32 24L36 32L32 40L28 32Z" fill="#22d3ee"/>
+      </svg>
+    </div>
+    ${emailComponents.sectionTitle("Welcome to Vision Chain")}
+    ${emailComponents.subtitle("Your account has been created. You're now part of the Vision Chain ecosystem.")}
+    ${emailComponents.alertBox("Your next step: Create your wallet to start sending, staking, and earning VCN.", "info")}
+    ${emailComponents.infoCard([
+    ["Account", email, false],
+    ["Network", "Vision Chain Testnet", false],
+    ["Status", emailComponents.statusBadge("Active", "success"), false],
+  ])}
+    ${emailComponents.button("Create Your Wallet", "https://visionchain.co/wallet")}
+    ${emailComponents.divider()}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      <tr><td style="padding:8px 0;">
+        <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#ccc;">What you can do on Vision Chain:</p>
+        <table role="presentation" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:4px 0;font-size:13px;color:#888;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:8px;"><circle cx="8" cy="8" r="7" stroke="#22d3ee" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Send VCN to anyone, gasless
+          </td></tr>
+          <tr><td style="padding:4px 0;font-size:13px;color:#888;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:8px;"><circle cx="8" cy="8" r="7" stroke="#22d3ee" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Stake VCN and earn rewards
+          </td></tr>
+          <tr><td style="padding:4px 0;font-size:13px;color:#888;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:8px;"><circle cx="8" cy="8" r="7" stroke="#22d3ee" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Bridge tokens across chains
+          </td></tr>
+          <tr><td style="padding:4px 0;font-size:13px;color:#888;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:8px;"><circle cx="8" cy="8" r="7" stroke="#22d3ee" stroke-width="1.5" fill="none"/><path d="M5 8l2 2 4-4" stroke="#22d3ee" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Invite friends and earn rewards
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  `;
+
+  await sendSecurityEmail(email, "Welcome to Vision Chain!", emailBaseLayout(body, "Welcome to Vision Chain - Your account is ready"));
+}
+
+/**
+ * Send wallet created confirmation email
+ */
+async function sendWalletCreatedEmail(email, walletAddress) {
+  const shortenedAddr = `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}`;
+  const explorerUrl = `https://www.visionchain.co/visionscan/address/${walletAddress}`;
+
+  const body = `
+    ${emailComponents.sectionTitle("Wallet Created")}
+    ${emailComponents.subtitle("Your Vision Chain wallet is ready. You can now send, receive, and stake VCN tokens.")}
+    ${emailComponents.alertBox("Your wallet has been secured with end-to-end encryption. Only you can access it.", "success")}
+    ${emailComponents.infoCard([
+    ["Wallet Address", emailComponents.monoText(shortenedAddr), false],
+    ["Network", "Vision Chain Testnet", false],
+    ["Status", emailComponents.statusBadge("Ready", "success"), false],
+  ])}
+    ${emailComponents.button("Open Wallet Dashboard", "https://visionchain.co/wallet")}
+    ${emailComponents.divider()}
+    <p style="margin:0 0 6px;font-size:13px;color:#ccc;font-weight:600;">Recommended next steps:</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 0 8px;">
+      <tr><td style="padding:4px 0;font-size:13px;color:#888;">1. Visit the Faucet to get test VCN tokens</td></tr>
+      <tr><td style="padding:4px 0;font-size:13px;color:#888;">2. Try staking to start earning rewards</td></tr>
+      <tr><td style="padding:4px 0;font-size:13px;color:#888;">3. Invite a friend with your referral link</td></tr>
+    </table>
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Wallet Created!", emailBaseLayout(body, `Your Vision Chain wallet is ready: ${shortenedAddr}`));
+}
+
+
+// =============================================================================
+// EMAIL TEMPLATES - Referral Reward (Phase 2)
+// =============================================================================
+
+/**
+ * Send referral reward notification email
+ */
+async function sendReferralRewardEmail(email, { rewardAmount, fromUser, tier, event }) {
+  if (!(await checkEmailOptIn(email, "referral"))) {
+    console.log(`[Email] Referral reward email skipped for ${email} (opted out)`);
+    return;
+  }
+
+  const tierLabel = tier === 1 ? "Direct Referral" : "2nd-Tier Referral";
+  const maskedFrom = fromUser.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + "*".repeat(Math.min(b.length, 6)) + c);
+  const rewardLabel = rewardAmount + " VCN";
+  const alertMsg = "<strong>" + rewardAmount + " VCN</strong> has been credited to your wallet.";
+  const previewText = "You earned " + rewardAmount + " VCN from your referral network";
+
+  const body = `
+    ${emailComponents.sectionTitle("Referral Reward Earned!")}
+    ${emailComponents.subtitle("You've earned a reward from your referral network activity.")}
+    ${emailComponents.alertBox(alertMsg, "success")}
+    ${emailComponents.infoCard([
+    ["Reward", rewardLabel, true],
+    ["Tier", tierLabel, false],
+    ["From", maskedFrom, false],
+    ["Event", event || "User Activity", false],
+  ], "#22c55e")}
+    ${emailComponents.button("View Rewards", "https://visionchain.co/wallet?tab=referrals")}
+    ${emailComponents.divider()}
+    <p style="margin:0;font-size:12px;color:#888;">
+      Keep inviting friends to earn more rewards!
+      <a href="https://visionchain.co/wallet?tab=referrals" style="color:#22d3ee;text-decoration:none;"> Share your referral link</a>
+    </p>
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Referral Reward Earned!", emailBaseLayout(body, previewText));
+}
+
+// =============================================================================
+// EMAIL TEMPLATES - Drip / Lifecycle (Phase 2)
+// =============================================================================
+
+/**
+ * Send first staking guide email (24h after signup, if user hasn't staked)
+ */
+async function sendFirstStakingGuideEmail(email) {
+  if (!(await checkEmailOptIn(email, "lifecycle"))) return;
+
+  const body = `
+    ${emailComponents.sectionTitle("Start Earning with Staking")}
+    ${emailComponents.subtitle("You've been on Vision Chain for a day now. Ready to put your VCN to work?")}
+    ${emailComponents.infoCard([
+    ["What is Staking?", "Lock your VCN to earn rewards", false],
+    ["Minimum Amount", "No minimum required", false],
+    ["Rewards", "Earn APY on your staked VCN", true],
+  ])}
+    <div style="background:rgba(34,211,238,0.05);border:1px solid rgba(34,211,238,0.1);border-radius:12px;padding:20px;margin:0 0 24px;">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:600;color:#fff;">How to stake in 3 steps:</p>
+      <table role="presentation" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:6px 0;font-size:13px;color:#aaa;">
+          <span style="display:inline-block;width:24px;height:24px;background:rgba(34,211,238,0.15);border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#22d3ee;margin-right:10px;">1</span>
+          Open your Wallet Dashboard
+        </td></tr>
+        <tr><td style="padding:6px 0;font-size:13px;color:#aaa;">
+          <span style="display:inline-block;width:24px;height:24px;background:rgba(34,211,238,0.15);border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#22d3ee;margin-right:10px;">2</span>
+          Navigate to the Staking section
+        </td></tr>
+        <tr><td style="padding:6px 0;font-size:13px;color:#aaa;">
+          <span style="display:inline-block;width:24px;height:24px;background:rgba(34,211,238,0.15);border-radius:50%;text-align:center;line-height:24px;font-size:12px;font-weight:700;color:#22d3ee;margin-right:10px;">3</span>
+          Enter the amount and confirm
+        </td></tr>
+      </table>
+    </div>
+    ${emailComponents.button("Start Staking Now", "https://visionchain.co/wallet?tab=staking")}
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Start Earning with Staking", emailBaseLayout(body, "Ready to earn rewards? Start staking your VCN today"));
+}
+
+/**
+ * Send referral program introduction email (48h after signup)
+ */
+async function sendReferralIntroEmail(email, referralCode) {
+  if (!(await checkEmailOptIn(email, "lifecycle"))) return;
+
+  const shareUrl = `https://visionchain.co/signup?ref=${referralCode}`;
+
+  const body = `
+    ${emailComponents.sectionTitle("Invite & Earn Rewards")}
+    ${emailComponents.subtitle("Did you know you can earn VCN by inviting friends to Vision Chain?")}
+    ${emailComponents.infoCard([
+    ["Direct Referral", "10% commission", true],
+    ["2nd-Tier Referral", "5% commission", false],
+    ["Reward Points", "10 RP per referral", false],
+  ], "#22c55e")}
+    ${emailComponents.alertBox("For every friend who joins through your link, you earn a percentage of their activity rewards. It's passive income, powered by your network.", "info")}
+    <div style="margin:24px 0;">
+      <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Your Referral Link</p>
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:14px 16px;border-radius:10px;">
+        <p style="margin:0;font-size:12px;font-family:'SF Mono',monospace;color:#22d3ee;word-break:break-all;">${shareUrl}</p>
+      </div>
+    </div>
+    ${emailComponents.button("Share Your Link", "https://visionchain.co/wallet?tab=referrals")}
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Invite Friends, Earn Rewards", emailBaseLayout(body, "Earn VCN by inviting friends to Vision Chain"));
+}
+
+/**
+ * Send inactivity nudge email (7+ days inactive)
+ */
+async function sendInactivityNudgeEmail(email) {
+  if (!(await checkEmailOptIn(email, "lifecycle"))) return;
+
+  const body = `
+    ${emailComponents.sectionTitle("We Miss You!")}
+    ${emailComponents.subtitle("It's been a while since you visited Vision Chain. Here's what you might be missing.")}
+    ${emailComponents.infoCard([
+    ["Staking Rewards", "Your VCN could be earning APY", true],
+    ["Referral Program", "Invite friends to earn rewards", false],
+    ["Bridge", "Transfer between chains seamlessly", false],
+  ])}
+    ${emailComponents.alertBox("Your wallet is still secure and ready. Come back and check your balance.", "info")}
+    ${emailComponents.button("Return to Wallet", "https://visionchain.co/wallet")}
+    ${emailComponents.divider()}
+    <div style="text-align:center;">
+      <p style="margin:0;font-size:11px;color:#444;">
+        Don't want these reminders?
+        <a href="https://visionchain.co/wallet?tab=settings" style="color:#22d3ee;text-decoration:none;">Manage preferences</a>
+      </p>
+    </div>
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Your Wallet Awaits", emailBaseLayout(body, "Your Vision Chain wallet misses you"));
+}
+
+// =============================================================================
+// CLOUD FUNCTIONS - Onboarding & Drip Campaign
+// =============================================================================
+
+/**
+ * Welcome email trigger - called after user registration
+ */
+exports.notifyWelcome = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Missing email" });
+
+    const emailLower = email.toLowerCase();
+
+    // 1. Send welcome email immediately
+    await sendWelcomeEmail(emailLower);
+    console.log(`[Onboarding] Welcome email sent to ${emailLower}`);
+
+    // 2. Schedule drip emails
+    const now = Date.now();
+
+    // First Staking Guide (24h later)
+    await db.collection("drip_queue").add({
+      userEmail: emailLower,
+      templateId: "first_staking_guide",
+      scheduledAt: admin.firestore.Timestamp.fromMillis(now + 24 * 60 * 60 * 1000),
+      sent: false,
+      sentAt: null,
+      skippedReason: null,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+
+    // Referral Program Intro (48h later)
+    await db.collection("drip_queue").add({
+      userEmail: emailLower,
+      templateId: "referral_intro",
+      scheduledAt: admin.firestore.Timestamp.fromMillis(now + 48 * 60 * 60 * 1000),
+      sent: false,
+      sentAt: null,
+      skippedReason: null,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+
+    console.log(`[Onboarding] Drip emails scheduled for ${emailLower}`);
+
+    return res.status(200).json({ success: true, message: "Welcome email sent, drip scheduled" });
+  } catch (err) {
+    console.error("[Onboarding] Failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to process welcome" });
+  }
+});
+
+/**
+ * Drip Email Processor - runs every hour
+ * Processes scheduled drip emails from the drip_queue collection
+ */
+exports.dripEmailProcessor = onSchedule({
+  schedule: "0 * * * *", // Every hour at :00
+  timeZone: "Asia/Seoul",
+  secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async (event) => {
+  console.log("[Drip] Processing drip email queue...");
+
+  try {
+    const now = admin.firestore.Timestamp.now();
+
+    // Get all unsent drip emails that are due
+    const queueSnap = await db.collection("drip_queue")
+      .where("sent", "==", false)
+      .where("skippedReason", "==", null)
+      .where("scheduledAt", "<=", now)
+      .limit(50)
+      .get();
+
+    console.log(`[Drip] Found ${queueSnap.size} emails to process`);
+
+    let sentCount = 0;
+    let skippedCount = 0;
+
+    for (const qDoc of queueSnap.docs) {
+      const q = qDoc.data();
+
+      try {
+        const userEmail = q.userEmail;
+        const templateId = q.templateId;
+
+        // Get user data to check conditions
+        const userDoc = await db.collection("users").doc(userEmail).get();
+        if (!userDoc.exists) {
+          await qDoc.ref.update({ skippedReason: "user_not_found", sent: true });
+          skippedCount++;
+          continue;
+        }
+
+        const userData = userDoc.data();
+
+        switch (templateId) {
+          case "first_staking_guide": {
+            // Skip if user has already staked
+            const stakingNotifs = await db.collection("users").doc(userEmail)
+              .collection("notifications")
+              .where("type", "==", "staking")
+              .limit(1)
+              .get();
+
+            if (!stakingNotifs.empty) {
+              await qDoc.ref.update({ skippedReason: "already_staked", sent: true });
+              skippedCount++;
+              continue;
+            }
+
+            await sendFirstStakingGuideEmail(userEmail);
+            break;
+          }
+
+          case "referral_intro": {
+            const referralCode = userData.referralCode || "";
+            if (!referralCode) {
+              await qDoc.ref.update({ skippedReason: "no_referral_code", sent: true });
+              skippedCount++;
+              continue;
+            }
+
+            await sendReferralIntroEmail(userEmail, referralCode);
+            break;
+          }
+
+          default:
+            await qDoc.ref.update({ skippedReason: `unknown_template: ${templateId}`, sent: true });
+            skippedCount++;
+            continue;
+        }
+
+        // Mark as sent
+        await qDoc.ref.update({ sent: true, sentAt: admin.firestore.Timestamp.now() });
+        sentCount++;
+        console.log(`[Drip] Sent ${templateId} to ${userEmail}`);
+      } catch (dripErr) {
+        console.warn(`[Drip] Failed for ${qDoc.id}:`, dripErr.message);
+        await qDoc.ref.update({ skippedReason: `error: ${dripErr.message}`, sent: true });
+        skippedCount++;
+      }
+    }
+
+    console.log(`[Drip] Complete: ${sentCount} sent, ${skippedCount} skipped`);
+  } catch (err) {
+    console.error("[Drip] Processor failed:", err);
+  }
+});
+
+/**
+ * Inactivity Nudge - runs every Monday (same schedule as weekly report)
+ * Sends nudge to users who haven't logged in for 7+ days
+ */
+exports.inactivityNudge = onSchedule({
+  schedule: "30 0 * * 1", // Every Monday at 00:30 UTC = 09:30 KST (30 min after weekly report)
+  timeZone: "Asia/Seoul",
+  secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async (event) => {
+  console.log("[Inactivity] Checking for inactive users...");
+
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Get users with wallets who haven't been active
+    const usersSnap = await db.collection("users")
+      .where("walletReady", "==", true)
+      .get();
+
+    let sentCount = 0;
+    let skippedCount = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const userData = userDoc.data();
+      const userEmail = userDoc.id;
+
+      try {
+        // Skip users who have been active recently
+        const lastActive = userData.lastActiveAt || userData.updatedAt || userData.createdAt || "";
+        if (lastActive && lastActive > sevenDaysAgo) {
+          skippedCount++;
+          continue;
+        }
+
+        // Check opt-in
+        const optedIn = await checkEmailOptIn(userEmail, "lifecycle");
+        if (!optedIn) {
+          skippedCount++;
+          continue;
+        }
+
+        // Don't send too frequently - check if we sent a nudge in the last 14 days
+        const recentNudge = await db.collection("drip_queue")
+          .where("userEmail", "==", userEmail)
+          .where("templateId", "==", "inactivity_nudge")
+          .where("sent", "==", true)
+          .orderBy("sentAt", "desc")
+          .limit(1)
+          .get();
+
+        if (!recentNudge.empty) {
+          const lastNudge = recentNudge.docs[0].data();
+          const lastNudgeTime = lastNudge.sentAt?.toDate?.() || new Date(0);
+          const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+          if (lastNudgeTime > fourteenDaysAgo) {
+            skippedCount++;
+            continue;
+          }
+        }
+
+        await sendInactivityNudgeEmail(userEmail);
+
+        // Log in drip_queue for tracking
+        await db.collection("drip_queue").add({
+          userEmail,
+          templateId: "inactivity_nudge",
+          scheduledAt: admin.firestore.Timestamp.now(),
+          sent: true,
+          sentAt: admin.firestore.Timestamp.now(),
+          skippedReason: null,
+          createdAt: admin.firestore.Timestamp.now(),
+        });
+
+        sentCount++;
+      } catch (e) {
+        console.warn(`[Inactivity] Failed for ${userEmail}:`, e.message);
+        skippedCount++;
+      }
+    }
+
+    console.log(`[Inactivity] Complete: ${sentCount} sent, ${skippedCount} skipped`);
+  } catch (err) {
+    console.error("[Inactivity] Job failed:", err);
+  }
+});
+
+// =============================================================================
+// CLOUD FUNCTION - Admin Broadcast
+// =============================================================================
+
+/**
+ * Admin broadcast email to all users (or filtered subset)
+ */
+exports.sendAdminBroadcast = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { adminEmail, title, message, ctaText, ctaUrl, filter } = req.body;
+
+    // Basic admin verification
+    if (!adminEmail) {
+      return res.status(400).json({ error: "Missing adminEmail" });
+    }
+
+    const adminDoc = await db.collection("users").doc(adminEmail.toLowerCase()).get();
+    if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+      return res.status(403).json({ error: "Unauthorized: Admin access required" });
+    }
+
+    if (!title || !message) {
+      return res.status(400).json({ error: "Missing required fields: title, message" });
+    }
+
+    // Build email body
+    const ctaSection = ctaText && ctaUrl ? emailComponents.button(ctaText, ctaUrl) : "";
+
+    const body = `
+      ${emailComponents.sectionTitle(title)}
+      <div style="margin:0 0 24px;">
+        <p style="margin:0;font-size:14px;color:#ccc;line-height:1.7;">${message.replace(/\n/g, "<br/>")}</p>
+      </div>
+      ${ctaSection}
+      ${emailComponents.divider()}
+      <div style="text-align:center;">
+        <p style="margin:0;font-size:11px;color:#444;">
+          This is an announcement from the Vision Chain team.
+          <a href="https://visionchain.co/wallet?tab=settings" style="color:#22d3ee;text-decoration:none;">Manage preferences</a>
+        </p>
+      </div>
+    `;
+
+    const emailHtml = emailBaseLayout(body, title);
+
+    // Get target users
+    let usersQuery = db.collection("users");
+    if (filter === "walletReady") {
+      usersQuery = usersQuery.where("walletReady", "==", true);
+    }
+
+    const usersSnap = await usersQuery.get();
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    // Send in batches with rate limiting
+    const batchSize = 10;
+    const userDocs = usersSnap.docs;
+
+    for (let i = 0; i < userDocs.length; i += batchSize) {
+      const batch = userDocs.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(async (userDoc) => {
+          const userEmail = userDoc.id;
+
+          // Check announcements opt-in
+          const optedIn = await checkEmailOptIn(userEmail, "announcements");
+          if (!optedIn) return;
+
+          await sendSecurityEmail(userEmail, `Vision Chain - ${title}`, emailHtml);
+        }),
+      );
+
+      results.forEach((r) => {
+        if (r.status === "fulfilled") sentCount++;
+        else failedCount++;
+      });
+
+      // Rate limit: wait 1 second between batches
+      if (i + batchSize < userDocs.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    // Log broadcast
+    await db.collection("admin_broadcasts").add({
+      adminEmail: adminEmail.toLowerCase(),
+      title,
+      message,
+      ctaText: ctaText || null,
+      ctaUrl: ctaUrl || null,
+      filter: filter || "all",
+      sentCount,
+      failedCount,
+      totalTargeted: usersSnap.size,
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+
+    console.log(`[Broadcast] "${title}" sent: ${sentCount}/${usersSnap.size}, failed: ${failedCount}`);
+
+    return res.status(200).json({
+      success: true,
+      sentCount,
+      failedCount,
+      totalTargeted: usersSnap.size,
+    });
+  } catch (err) {
+    console.error("[Broadcast] Failed:", err);
+    return res.status(500).json({ error: err.message || "Broadcast failed" });
+  }
+});
+
+// =============================================================================
+// PASSWORD RESET - Forgot Password Flow (Logged-out)
+// =============================================================================
+
+/**
+ * Password reset email template
+ */
+function generatePasswordResetEmailHtml(code, email) {
+  const body = `
+    <div style="text-align:center;margin:0 0 24px;">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="28" cy="28" r="26" stroke="#f59e0b" stroke-width="2" fill="none" opacity="0.3"/>
+        <rect x="20" y="18" width="16" height="20" rx="3" stroke="#f59e0b" stroke-width="2" fill="none"/>
+        <circle cx="28" cy="28" r="2" fill="#f59e0b"/>
+        <line x1="28" y1="30" x2="28" y2="34" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <path d="M22 18v-4a6 6 0 0112 0v4" stroke="#f59e0b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    ${emailComponents.sectionTitle("Password Reset Request")}
+    ${emailComponents.subtitle("Use the verification code below to reset your Vision Chain password.")}
+    ${emailComponents.alertBox("If you did not request this password reset, please ignore this email. Your account remains secure.", "warning")}
+    ${emailComponents.codeBox(code)}
+    ${emailComponents.infoCard([
+    ["Account", email, false],
+    ["Valid For", "15 minutes", false],
+    ["Status", emailComponents.statusBadge("Pending", "warning"), false],
+  ])}
+    ${emailComponents.divider()}
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0;">
+      <tr><td style="padding:4px 0;font-size:12px;color:#888;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:6px;"><circle cx="8" cy="8" r="7" stroke="#f59e0b" stroke-width="1.5" fill="none"/><line x1="8" y1="5" x2="8" y2="9" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#f59e0b"/></svg>
+        Never share this code with anyone.
+      </td></tr>
+      <tr><td style="padding:4px 0;font-size:12px;color:#888;">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="vertical-align:middle;margin-right:6px;"><circle cx="8" cy="8" r="7" stroke="#f59e0b" stroke-width="1.5" fill="none"/><line x1="8" y1="5" x2="8" y2="9" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.8" fill="#f59e0b"/></svg>
+        Vision Chain will never ask for your password via email.
+      </td></tr>
+    </table>
+  `;
+
+  return emailBaseLayout(body, "Your Vision Chain password reset code");
+}
+
+/**
+ * Password changed confirmation email
+ */
+function generatePasswordChangedEmailHtml(targetEmail, timestamp) {
+  const body = `
+    ${emailComponents.sectionTitle("Password Changed Successfully")}
+    ${emailComponents.subtitle("Your Vision Chain account password has been updated.")}
+    ${emailComponents.alertBox("If you did not make this change, please contact support immediately and secure your account.", "warning")}
+    ${emailComponents.infoCard([
+    ["Account", targetEmail, false],
+    ["Changed At", timestamp, false],
+    ["Status", emailComponents.statusBadge("Confirmed", "success"), false],
+  ])}
+    ${emailComponents.button("Login to Vision Chain", "https://visionchain.co/login")}
+    ${emailComponents.divider()}
+    <p style="margin:0;font-size:11px;color:#555;">
+      For security reasons, you may need to log in again on all devices.
+    </p>
+  `;
+
+  return emailBaseLayout(body, "Your Vision Chain password has been changed");
+}
+
+/**
+ * Step 1: Request password reset - sends verification code to email
+ */
+exports.requestPasswordReset = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: "Missing email" });
+
+    const emailLower = email.toLowerCase().trim();
+
+    // Rate limiting: max 3 requests per hour
+    const rateLimitKey = "pw_reset_" + emailLower;
+    const rlDoc = await db.collection("rate_limits").doc(rateLimitKey).get();
+    if (rlDoc.exists) {
+      const rlData = rlDoc.data();
+      const hourAgo = Date.now() - 60 * 60 * 1000;
+      if (rlData.count >= 3 && rlData.lastAttempt > hourAgo) {
+        return res.status(429).json({ error: "Too many reset requests. Please try again later." });
+      }
+    }
+
+    // Check if user exists in Firebase Auth
+    try {
+      await admin.auth().getUserByEmail(emailLower);
+    } catch (authErr) {
+      // Don't reveal whether email exists (security best practice)
+      console.log(`[PasswordReset] Email not found: ${emailLower}`);
+      return res.status(200).json({ success: true, message: "If this email exists, a reset code has been sent." });
+    }
+
+    // Generate 6-digit code
+    const code = crypto.randomInt(100000, 999999).toString();
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+    // Store reset token
+    await db.collection("password_reset_tokens").doc(emailLower).set({
+      codeHash,
+      expiresAt,
+      attempts: 0,
+      used: false,
+      createdAt: Date.now(),
+      ip: req.ip || req.headers["x-forwarded-for"] || "unknown",
+    });
+
+    // Update rate limit
+    const currentCount = (rlDoc.exists ? rlDoc.data().count : 0) + 1;
+    const shouldReset = rlDoc.exists && rlDoc.data().lastAttempt < Date.now() - 60 * 60 * 1000;
+    await db.collection("rate_limits").doc(rateLimitKey).set({
+      count: shouldReset ? 1 : currentCount,
+      lastAttempt: Date.now(),
+    });
+
+    // Send email
+    const emailHtml = generatePasswordResetEmailHtml(code, emailLower);
+    await sendSecurityEmail(emailLower, "Vision Chain - Password Reset Code", emailHtml);
+
+    await logSecurityEvent(emailLower, "PASSWORD_RESET_REQUESTED", { ip: req.ip }, db);
+    console.log(`[PasswordReset] Code sent to ${emailLower}`);
+
+    return res.status(200).json({ success: true, message: "If this email exists, a reset code has been sent." });
+  } catch (err) {
+    console.error("[PasswordReset] Request failed:", err);
+    return res.status(500).json({ error: "Failed to process password reset request." });
+  }
+});
+
+/**
+ * Step 2: Verify reset code - checks code validity and returns whether TOTP is required
+ */
+exports.verifyResetCode = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) return res.status(400).json({ error: "Missing email or code" });
+
+    const emailLower = email.toLowerCase().trim();
+
+    // Get reset token
+    const tokenDoc = await db.collection("password_reset_tokens").doc(emailLower).get();
+    if (!tokenDoc.exists) {
+      return res.status(400).json({ error: "No password reset request found. Please request a new code." });
+    }
+
+    const tokenData = tokenDoc.data();
+
+    // Check if already used
+    if (tokenData.used) {
+      return res.status(400).json({ error: "This code has already been used. Please request a new one." });
+    }
+
+    // Check expiry
+    if (Date.now() > tokenData.expiresAt) {
+      return res.status(400).json({ error: "Code has expired. Please request a new one." });
+    }
+
+    // Check attempts (max 5)
+    if (tokenData.attempts >= 5) {
+      await db.collection("password_reset_tokens").doc(emailLower).update({ used: true });
+      await logSecurityEvent(emailLower, "PASSWORD_RESET_TOO_MANY_ATTEMPTS", {}, db);
+      return res.status(400).json({ error: "Too many failed attempts. Please request a new code." });
+    }
+
+    // Verify code
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    if (codeHash !== tokenData.codeHash) {
+      await db.collection("password_reset_tokens").doc(emailLower).update({
+        attempts: admin.firestore.FieldValue.increment(1),
+      });
+      return res.status(400).json({ error: "Invalid code. Please check and try again." });
+    }
+
+    // Check if user has TOTP enabled
+    const totpDoc = await db.collection("security_totp").doc(emailLower).get();
+    const totpRequired = totpDoc.exists && totpDoc.data().enabled === true;
+
+    console.log(`[PasswordReset] Code verified for ${emailLower}, TOTP required: ${totpRequired}`);
+
+    return res.status(200).json({
+      success: true,
+      totpRequired,
+      message: totpRequired
+        ? "Code verified. Please enter your Google Authenticator code to continue."
+        : "Code verified. Please enter your new password.",
+    });
+  } catch (err) {
+    console.error("[PasswordReset] Verify failed:", err);
+    return res.status(500).json({ error: "Failed to verify code." });
+  }
+});
+
+/**
+ * Step 3: Complete password reset - verify TOTP (if required) and change password
+ */
+exports.completePasswordReset = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { email, code, newPassword, totpCode, useBackupCode, timezone } = req.body;
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ error: "Missing required fields: email, code, newPassword" });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+
+    const emailLower = email.toLowerCase().trim();
+
+    // Re-verify reset token
+    const tokenDoc = await db.collection("password_reset_tokens").doc(emailLower).get();
+    if (!tokenDoc.exists) {
+      return res.status(400).json({ error: "No password reset request found." });
+    }
+
+    const tokenData = tokenDoc.data();
+
+    if (tokenData.used) {
+      return res.status(400).json({ error: "This reset code has already been used." });
+    }
+
+    if (Date.now() > tokenData.expiresAt) {
+      return res.status(400).json({ error: "Code has expired. Please request a new one." });
+    }
+
+    // Verify code again
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    if (codeHash !== tokenData.codeHash) {
+      return res.status(400).json({ error: "Invalid code." });
+    }
+
+    // Check TOTP if required
+    const totpDoc = await db.collection("security_totp").doc(emailLower).get();
+    const has2FA = totpDoc.exists && totpDoc.data().enabled === true;
+
+    if (has2FA) {
+      if (!totpCode) {
+        return res.status(400).json({ error: "Google Authenticator code is required.", totpRequired: true });
+      }
+
+      const totpData = totpDoc.data();
+
+      if (useBackupCode) {
+        // Verify backup code
+        const backupCodes = totpData.backupCodes || [];
+        const matchingCode = backupCodes.find((bc) => {
+          if (bc.used) return false;
+          const decrypted = serverDecrypt(bc.code);
+          return decrypted === totpCode.toUpperCase();
+        });
+
+        if (!matchingCode) {
+          await logSecurityEvent(emailLower, "PASSWORD_RESET_BACKUP_FAILED", { code: totpCode }, db);
+          return res.status(400).json({ error: "Invalid or already used backup code." });
+        }
+
+        // Mark backup code as used
+        const updatedCodes = backupCodes.map((bc) => {
+          const decrypted = serverDecrypt(bc.code);
+          if (decrypted === totpCode.toUpperCase()) {
+            return { ...bc, used: true, usedAt: Date.now() };
+          }
+          return bc;
+        });
+
+        await db.collection("security_totp").doc(emailLower).update({
+          backupCodes: updatedCodes,
+        });
+
+        console.log(`[PasswordReset] Backup code used for ${emailLower}`);
+      } else {
+        // Verify TOTP code
+        const totpAuth = getAuthenticator();
+        const secret = serverDecrypt(totpData.secret);
+        const isValid = totpAuth.check(totpCode, secret);
+
+        if (!isValid) {
+          await logSecurityEvent(emailLower, "PASSWORD_RESET_TOTP_FAILED", { code: totpCode }, db);
+          return res.status(400).json({ error: "Invalid authenticator code. Please try again." });
+        }
+      }
+    }
+
+    // Update password via Firebase Admin SDK
+    const userRecord = await admin.auth().getUserByEmail(emailLower);
+    await admin.auth().updateUser(userRecord.uid, {
+      password: newPassword,
+    });
+
+    // Mark token as used
+    await db.collection("password_reset_tokens").doc(emailLower).update({
+      used: true,
+      usedAt: Date.now(),
+    });
+
+    // Send confirmation email with user's locale timezone
+    const userTimezone = timezone || "UTC";
+    let timestamp;
+    try {
+      timestamp = new Intl.DateTimeFormat("en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: userTimezone,
+        timeZoneName: "short",
+      }).format(new Date());
+    } catch (tzErr) {
+      // Fallback to UTC if invalid timezone
+      timestamp = new Date().toISOString().replace("T", " ").substring(0, 16) + " UTC";
+    }
+    const confirmHtml = generatePasswordChangedEmailHtml(emailLower, timestamp);
+    await sendSecurityEmail(emailLower, "Vision Chain - Password Changed", confirmHtml);
+
+    await logSecurityEvent(emailLower, "PASSWORD_RESET_COMPLETED", {
+      ip: req.ip,
+      had2FA: has2FA,
+      usedBackup: useBackupCode || false,
+    }, db);
+
+    // Revoke all refresh tokens to force re-login
+    await admin.auth().revokeRefreshTokens(userRecord.uid);
+
+    console.log(`[PasswordReset] Password changed for ${emailLower}`);
+
+    return res.status(200).json({ success: true, message: "Password has been changed successfully." });
+  } catch (err) {
+    console.error("[PasswordReset] Complete failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to reset password." });
+  }
+});
+
+// =============================================================================
+// EMAIL PREFERENCES - User subscription management
+// =============================================================================
+
+/**
+ * Email preference categories and defaults
+ */
+const EMAIL_PREFERENCE_DEFAULTS = {
+  security: true,       // Device verification, suspicious activity, 2FA (always on)
+  staking: true,        // Stake, unstake, cooldown, reward claim
+  referral: true,       // New referral signups, referral rewards
+  bridge: true,         // Bridge transfer completion
+  weeklyReport: true,   // Weekly activity digest
+  lifecycle: true,      // Onboarding drip emails (welcome, guides)
+  announcements: true,  // Admin broadcasts and announcements
+
+};
+
+/**
+ * Get user email preferences from Firestore
+ * @param {string} userEmail - User email (doc ID)
+ * @return {Promise<object>} Merged preferences with defaults
+ */
+async function getEmailPrefs(userEmail) {
+  if (!userEmail) return { ...EMAIL_PREFERENCE_DEFAULTS };
+  try {
+    const doc = await db.collection("users").doc(userEmail.toLowerCase()).get();
+    if (doc.exists && doc.data().emailPreferences) {
+      return { ...EMAIL_PREFERENCE_DEFAULTS, ...doc.data().emailPreferences };
+    }
+  } catch (e) {
+    console.warn("[Email] Failed to get preferences:", e.message);
+  }
+  return { ...EMAIL_PREFERENCE_DEFAULTS };
+}
+
+/**
+ * Check if user has opted in to a specific email category
+ * @param {string} userEmail - User email
+ * @param {string} category - Email category key
+ * @return {Promise<boolean>} True if opted in
+ */
+async function checkEmailOptIn(userEmail, category) {
+  // Security emails are always sent (cannot opt out)
+  if (category === "security") return true;
+  const prefs = await getEmailPrefs(userEmail);
+  return prefs[category] !== false;
+}
+
+/**
+ * Update email preferences endpoint
+ */
+exports.updateEmailPreferences = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { email, preferences } = req.body;
+
+    if (!email || !preferences || typeof preferences !== "object") {
+      return res.status(400).json({ error: "Missing required fields: email, preferences (object)" });
+    }
+
+    // Validate preference keys
+    const validKeys = Object.keys(EMAIL_PREFERENCE_DEFAULTS);
+    const sanitized = {};
+    for (const [key, value] of Object.entries(preferences)) {
+      if (validKeys.includes(key) && typeof value === "boolean") {
+        // Security cannot be disabled
+        if (key === "security") {
+          sanitized[key] = true;
+        } else {
+          sanitized[key] = value;
+        }
+      }
+    }
+
+    await db.collection("users").doc(email.toLowerCase()).set(
+      { emailPreferences: sanitized, updatedAt: new Date().toISOString() },
+      { merge: true },
+    );
+
+    console.log(`[Email] Preferences updated for ${email}:`, sanitized);
+
+    return res.status(200).json({
+      success: true,
+      preferences: { ...EMAIL_PREFERENCE_DEFAULTS, ...sanitized },
+    });
+  } catch (err) {
+    console.error("[Email] Update preferences failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to update preferences" });
+  }
+});
+
+/**
+ * Get email preferences endpoint
+ */
+exports.getEmailPreferences = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  try {
+    const email = req.query.email || req.body?.email;
+    if (!email) {
+      return res.status(400).json({ error: "Missing required field: email" });
+    }
+
+    const prefs = await getEmailPrefs(email);
+
+    return res.status(200).json({
+      success: true,
+      preferences: prefs,
+      categories: [
+        { key: "security", label: "Security Alerts", description: "Device verification, suspicious activity, 2FA changes, password reset", locked: true },
+        { key: "staking", label: "Staking Notifications", description: "Stake/unstake confirmations, cooldown notices, reward claims" },
+        { key: "referral", label: "Referral Updates", description: "New referral signups and referral reward notifications" },
+        { key: "bridge", label: "Bridge Transfers", description: "Cross-chain bridge transfer completion notifications" },
+        { key: "weeklyReport", label: "Weekly Report", description: "Weekly activity summary and portfolio overview" },
+        { key: "lifecycle", label: "Onboarding & Tips", description: "Welcome emails, staking guides, and helpful tips" },
+        { key: "announcements", label: "Announcements", description: "Platform updates and news from the Vision Chain team" },
+      ],
+    });
+  } catch (err) {
+    console.error("[Email] Get preferences failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to get preferences" });
+  }
+});
+
+// =============================================================================
+// EMAIL TEMPLATES - Weekly Activity Report
+// =============================================================================
+
+/**
+ * Generate weekly activity report email HTML
+ * @param {object} data - Aggregated weekly data
+ * @return {string} Complete HTML email
+ */
+function generateWeeklyReportEmailHtml(data) {
+  const {
+    weekStart,
+    weekEnd,
+    stakingActions = 0,
+    totalStaked = "0",
+    totalUnstaked = "0",
+    rewardsClaimed = "0",
+    bridgeTransfers = 0,
+    bridgeVolume = "0",
+    newReferrals = 0,
+    totalReferrals = 0,
+    walletBalance = null,
+  } = data;
+
+  // Activity summary items
+  const hasStaking = stakingActions > 0;
+  const hasBridge = bridgeTransfers > 0;
+  const hasReferrals = newReferrals > 0;
+  const hasAnyActivity = hasStaking || hasBridge || hasReferrals;
+
+  // Build staking section
+  let stakingSection = "";
+  if (hasStaking) {
+    stakingSection = `
+      ${emailComponents.sectionTitle("Staking Activity")}
+      ${emailComponents.infoCard([
+      ["Staking Actions", `${stakingActions}`, false],
+      ...(totalStaked !== "0" ? [["Total Staked", `${totalStaked} VCN`, true]] : []),
+      ...(totalUnstaked !== "0" ? [["Total Unstaked", `${totalUnstaked} VCN`, false]] : []),
+      ...(rewardsClaimed !== "0" ? [["Rewards Claimed", `${rewardsClaimed} VCN`, true]] : []),
+    ])}
+    `;
+  }
+
+  // Build bridge section
+  let bridgeSection = "";
+  if (hasBridge) {
+    bridgeSection = `
+      ${emailComponents.divider()}
+      ${emailComponents.sectionTitle("Bridge Transfers")}
+      ${emailComponents.infoCard([
+      ["Transfers", `${bridgeTransfers}`, false],
+      ["Volume", `${bridgeVolume} VCN`, true],
+    ], "#a855f7")}
+    `;
+  }
+
+  // Build referral section
+  let referralSection = "";
+  if (hasReferrals) {
+    referralSection = `
+      ${emailComponents.divider()}
+      ${emailComponents.sectionTitle("Referral Network")}
+      ${emailComponents.infoCard([
+      ["New Signups This Week", `+${newReferrals}`, true],
+      ["Total Referrals", `${totalReferrals}`, false],
+    ], "#22c55e")}
+    `;
+  }
+
+  // No activity fallback
+  let noActivitySection = "";
+  if (!hasAnyActivity) {
+    noActivitySection = `
+      <div style="text-align:center;padding:24px 0;">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px;">
+          <circle cx="24" cy="24" r="20" stroke="#333" stroke-width="2" fill="none"/>
+          <path d="M24 14v12M24 30v2" stroke="#555" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <p style="margin:0;font-size:14px;color:#666;">No activity recorded this week.</p>
+        <p style="margin:8px 0 0;font-size:12px;color:#555;">Start staking, bridging, or inviting friends to see your weekly stats here.</p>
+      </div>
+    `;
+  }
+
+  // Wallet balance section
+  let balanceSection = "";
+  if (walletBalance !== null) {
+    balanceSection = `
+      ${emailComponents.divider()}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+        <tr><td>
+          <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:1px;">Current Balance</p>
+          <p style="margin:0;font-size:28px;font-weight:800;color:#22d3ee;">${walletBalance} <span style="font-size:14px;color:#888;">VCN</span></p>
+        </td></tr>
+      </table>
+    `;
+  }
+
+  const body = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr>
+        <td>
+          <h2 style="margin:0 0 4px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Weekly Activity Report</h2>
+          <p style="margin:0;font-size:12px;color:#666;">${weekStart} - ${weekEnd}</p>
+        </td>
+        <td align="right">
+          ${emailComponents.statusBadge("Weekly", "success")}
+        </td>
+      </tr>
+    </table>
+
+    ${hasAnyActivity ? "" : noActivitySection}
+    ${stakingSection}
+    ${bridgeSection}
+    ${referralSection}
+    ${balanceSection}
+
+    ${emailComponents.button("Open Wallet Dashboard", "https://visionchain.co/wallet")}
+
+    <div style="text-align:center;margin:16px 0 0;">
+      <p style="margin:0;font-size:11px;color:#444;">
+        You're receiving this because you have weekly reports enabled.
+        <a href="https://visionchain.co/wallet?tab=settings" style="color:#22d3ee;text-decoration:none;">Manage preferences</a>
+      </p>
+    </div>
+  `;
+
+  return emailBaseLayout(body, `Your Vision Chain weekly report: ${weekStart} - ${weekEnd}`);
+}
+
+/**
+ * Weekly Activity Report - Scheduled Cloud Function
+ * Runs every Monday at 9:00 AM KST (00:00 UTC)
+ */
+exports.weeklyActivityReport = onSchedule({
+  schedule: "0 0 * * 1", // Every Monday at 00:00 UTC = 09:00 KST
+  timeZone: "Asia/Seoul",
+  secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"],
+}, async (event) => {
+  console.log("[WeeklyReport] Starting weekly activity report job...");
+
+  const now = new Date();
+  const weekEnd = new Date(now);
+  weekEnd.setHours(0, 0, 0, 0);
+  const weekStart = new Date(weekEnd);
+  weekStart.setDate(weekStart.getDate() - 7);
+
+  const weekStartStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, "0")}-${String(weekStart.getDate()).padStart(2, "0")}`;
+  const weekEndStr = `${weekEnd.getFullYear()}-${String(weekEnd.getMonth() + 1).padStart(2, "0")}-${String(weekEnd.getDate()).padStart(2, "0")}`;
+
+  console.log(`[WeeklyReport] Period: ${weekStartStr} ~ ${weekEndStr}`);
+
+  try {
+    // Get all users with wallets
+    const usersSnap = await db.collection("users")
+      .where("walletReady", "==", true)
+      .get();
+
+    console.log(`[WeeklyReport] Found ${usersSnap.size} users with wallets`);
+
+    let sentCount = 0;
+    let skippedCount = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const userEmail = userDoc.id;
+      const userData = userDoc.data();
+      const walletAddress = userData.walletAddress;
+
+      try {
+        // Check if user has weekly report enabled
+        const optedIn = await checkEmailOptIn(userEmail, "weeklyReport");
+        if (!optedIn) {
+          skippedCount++;
+          continue;
+        }
+
+        // Aggregate staking activity
+        let stakingActions = 0;
+        let totalStakedWei = BigInt(0);
+        let totalUnstakedWei = BigInt(0);
+        let rewardsClaimedWei = BigInt(0);
+
+        // Query notifications for staking events in the past week
+        const notifSnap = await db.collection("users").doc(userEmail)
+          .collection("notifications")
+          .where("timestamp", ">=", admin.firestore.Timestamp.fromDate(weekStart))
+          .where("timestamp", "<=", admin.firestore.Timestamp.fromDate(weekEnd))
+          .get();
+
+        for (const notifDoc of notifSnap.docs) {
+          const notif = notifDoc.data();
+          const notifType = (notif.type || "").toLowerCase();
+
+          if (notifType.includes("stake") && !notifType.includes("unstake")) {
+            stakingActions++;
+            if (notif.amount) {
+              try { totalStakedWei += BigInt(notif.amount); } catch (e) { /* ignore parse errors */ }
+            }
+          } else if (notifType.includes("unstake")) {
+            stakingActions++;
+            if (notif.amount) {
+              try { totalUnstakedWei += BigInt(notif.amount); } catch (e) { /* ignore */ }
+            }
+          } else if (notifType.includes("claim") || notifType.includes("reward")) {
+            stakingActions++;
+            if (notif.amount) {
+              try { rewardsClaimedWei += BigInt(notif.amount); } catch (e) { /* ignore */ }
+            }
+          }
+        }
+
+        // Aggregate bridge activity
+        let bridgeTransfers = 0;
+        let bridgeVolumeWei = BigInt(0);
+
+        if (walletAddress) {
+          // Check bridge_intents for this user
+          const bridgeSnap = await db.collection("bridge_intents")
+            .where("sender", "==", walletAddress.toLowerCase())
+            .where("bridgeStatus", "==", "DELIVERED")
+            .get();
+
+          for (const bDoc of bridgeSnap.docs) {
+            const bData = bDoc.data();
+            const bTime = bData.executedAt?.toDate?.() || bData.createdAt?.toDate?.();
+            if (bTime && bTime >= weekStart && bTime <= weekEnd) {
+              bridgeTransfers++;
+              if (bData.amount) {
+                try { bridgeVolumeWei += BigInt(bData.amount); } catch (e) { /* ignore */ }
+              }
+            }
+          }
+        }
+
+        // Aggregate referral activity
+        let newReferrals = 0;
+        const totalReferrals = userData.referralCount || 0;
+
+        // Check users collection for referrals that joined this week
+        if (userData.referralCode) {
+          const refSnap = await db.collection("users")
+            .where("referrerId", "==", userEmail)
+            .get();
+
+          for (const rDoc of refSnap.docs) {
+            const rData = rDoc.data();
+            const joinDate = rData.createdAt ? new Date(rData.createdAt) : null;
+            if (joinDate && joinDate >= weekStart && joinDate <= weekEnd) {
+              newReferrals++;
+            }
+          }
+        }
+
+        // Get wallet balance (optional, may fail)
+        let walletBalance = null;
+        if (walletAddress) {
+          try {
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
+            const balance = await tokenContract.balanceOf(walletAddress);
+            walletBalance = parseFloat(ethers.formatEther(balance)).toFixed(2);
+          } catch (e) {
+            // Balance fetch is optional, don't block
+          }
+        }
+
+        const hasAnyActivity = stakingActions > 0 || bridgeTransfers > 0 || newReferrals > 0;
+
+        // Skip users with no activity and no balance (to avoid spamming inactive users)
+        if (!hasAnyActivity && !walletBalance) {
+          skippedCount++;
+          continue;
+        }
+
+        // Format amounts
+        const formatVCN = (wei) => {
+          if (wei === BigInt(0)) return "0";
+          return parseFloat(ethers.formatEther(wei)).toFixed(2);
+        };
+
+        // Generate and send email
+        const emailHtml = generateWeeklyReportEmailHtml({
+          weekStart: weekStartStr,
+          weekEnd: weekEndStr,
+          stakingActions,
+          totalStaked: formatVCN(totalStakedWei),
+          totalUnstaked: formatVCN(totalUnstakedWei),
+          rewardsClaimed: formatVCN(rewardsClaimedWei),
+          bridgeTransfers,
+          bridgeVolume: formatVCN(bridgeVolumeWei),
+          newReferrals,
+          totalReferrals,
+          walletBalance,
+        });
+
+        await sendSecurityEmail(
+          userEmail,
+          `Vision Chain - Weekly Report (${weekStartStr})`,
+          emailHtml,
+        );
+
+        sentCount++;
+        console.log(`[WeeklyReport] Sent to ${userEmail}`);
+      } catch (userErr) {
+        console.warn(`[WeeklyReport] Failed for ${userEmail}:`, userErr.message);
+        skippedCount++;
+      }
+    }
+
+    console.log(`[WeeklyReport] Complete: ${sentCount} sent, ${skippedCount} skipped`);
+  } catch (err) {
+    console.error("[WeeklyReport] Job failed:", err);
+  }
+});
 
 // =============================================================================
 // BRIDGE RELAYER - Manual Trigger (For Testing)

@@ -98,6 +98,20 @@ interface BridgeTransaction {
     completedAt?: any;
 }
 
+// Format bridge amount - handles both wei (legacy) and ether (new) formats
+const formatBridgeAmount = (amount: string): string => {
+    try {
+        const num = parseFloat(amount);
+        // If the number is larger than 1e15, it's likely in wei (1 VCN = 1e18 wei)
+        if (num > 1e15) {
+            return parseFloat(ethers.formatEther(BigInt(amount.split('.')[0]))).toLocaleString(undefined, { maximumFractionDigits: 4 });
+        }
+        return num.toLocaleString(undefined, { maximumFractionDigits: 4 });
+    } catch {
+        return amount;
+    }
+};
+
 interface NetworkConfig {
     name: string;
     chainId: number;
@@ -865,9 +879,9 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                                             }`}
                                                                     >
                                                                         <div class={`w-7 h-7 rounded-full flex items-center justify-center ${asset.symbol === 'VCN' ? 'bg-gradient-to-r from-blue-500 to-cyan-500' :
-                                                                                asset.symbol === 'ETH' ? 'bg-gradient-to-r from-indigo-500 to-purple-500' :
-                                                                                    asset.symbol === 'MATIC' ? 'bg-gradient-to-r from-violet-500 to-purple-500' :
-                                                                                        'bg-gradient-to-r from-gray-500 to-gray-600'
+                                                                            asset.symbol === 'ETH' ? 'bg-gradient-to-r from-indigo-500 to-purple-500' :
+                                                                                asset.symbol === 'MATIC' ? 'bg-gradient-to-r from-violet-500 to-purple-500' :
+                                                                                    'bg-gradient-to-r from-gray-500 to-gray-600'
                                                                             }`}>
                                                                             <Coins class="w-3.5 h-3.5 text-white" />
                                                                         </div>
@@ -1077,7 +1091,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                         <div class="flex justify-between items-start">
                                                             <div>
                                                                 <span class="text-sm font-black text-white">
-                                                                    {parseFloat(bridge.amount).toLocaleString()} VCN
+                                                                    {formatBridgeAmount(bridge.amount)} VCN
                                                                 </span>
                                                                 <div class="text-[10px] text-gray-500 mt-0.5">
                                                                     {getChainName(bridge.srcChainId)} → {getChainName(bridge.dstChainId)}
