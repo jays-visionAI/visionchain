@@ -3180,11 +3180,12 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         intentData: intentData
                     };
 
-                    // Show bridge starting message
+                    // Show bridge confirmation message
                     const chainDisplay = bridgeData.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridgeData.destinationChain;
+                    const recipientDisplay = bridgeData.recipient ? ` (${bridgeData.recipient})` : '';
                     const startMsg = lastLocale() === 'ko'
-                        ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**로 전송합니다.\n\n브릿지 에이전트가 처리 중입니다...`
-                        : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**.\n\nBridge agent is processing...`;
+                        ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**${recipientDisplay}로 전송합니다.\n\n브릿지 에이전트가 처리 중입니다...`
+                        : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**${recipientDisplay}.\n\nBridge agent is processing...`;
 
                     setMessages(prev => [...prev, {
                         role: 'assistant',
@@ -3194,9 +3195,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     setStreamingContent('');
                     setChatLoading(false);
 
-                    // Execute bridge directly (no confirmation dialog)
+                    // Set pending bridge and trigger password confirmation flow
+                    setPendingBridge(bridgeData);
                     setTimeout(() => {
-                        executeBridgeIntent(bridgeData);
+                        handleExecuteBridge();
                     }, 500);
                     return;
                 }
