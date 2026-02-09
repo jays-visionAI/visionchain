@@ -82,7 +82,7 @@ import {
     uploadProfileImage
 } from '../services/firebaseService';
 
-import { collection, query, where, onSnapshot, doc, setDoc, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc, limit, orderBy } from 'firebase/firestore';
 import { WalletService } from '../services/walletService';
 import { CloudWalletService, calculatePasswordStrength } from '../services/cloudWalletService';
 import { ethers } from 'ethers';
@@ -720,6 +720,7 @@ const Wallet = (): JSX.Element => {
             txRef,
             where('from_addr', '==', normalizedAddr),
             where('type', '==', 'Bridge'),
+            orderBy('timestamp', 'desc'),
             limit(10)
         );
 
