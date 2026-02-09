@@ -1,8 +1,9 @@
 import { createSignal, For, Show, onMount } from 'solid-js';
-import { Mail, Eye, Send, RefreshCw, AlertCircle, Check, X, ChevronDown, BarChart3 } from 'lucide-solid';
-import { getAdminFirebaseAuth } from '../../services/firebaseService';
+import { Mail, Eye, Send, RefreshCw, AlertCircle, Check, X, ChevronDown } from 'lucide-solid';
+import { getFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
+import { collection, getDocs } from 'firebase/firestore';
 
-const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-testnet';
+const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
 
 function getAdminCloudFunctionUrl(fnName: string) {
     return `https://us-central1-${PROJECT_ID}.cloudfunctions.net/${fnName}`;
@@ -15,14 +16,6 @@ async function getAdminToken(): Promise<string> {
     return user.getIdToken();
 }
 
-interface TemplateInfo {
-    id: string;
-    name: string;
-    category: string;
-    description: string;
-    html?: string;
-}
-
 interface CategoryStat {
     optedIn: number;
     optedOut: number;
@@ -31,9 +24,23 @@ interface CategoryStat {
 interface EmailStats {
     totalUsers: number;
     categoryStats: Record<string, CategoryStat>;
-    recentPasswordResets: number;
-    dripQueue: { pending: number; sent: number; skipped: number };
 }
+
+// Template definitions with dummy data (rendered client-side)
+interface TemplateInfo {
+    id: string;
+    name: string;
+    category: string;
+    description: string;
+}
+
+const TEMPLATE_LIST: TemplateInfo[] = [
+    { id: 'verification', name: 'Device Verification', category: 'security', description: 'Sent when user logs in from a new device' },
+    { id: 'suspicious', name: 'Suspicious Activity Alert', category: 'security', description: 'Sent when unusual login behavior is detected' },
+    { id: 'passwordReset', name: 'Password Reset Code', category: 'security', description: 'Sent when user requests a password reset' },
+    { id: 'passwordChanged', name: 'Password Changed Confirmation', category: 'security', description: 'Sent after password is successfully changed' },
+    { id: 'weeklyReport', name: 'Weekly Activity Report', category: 'weeklyReport', description: 'Weekly summary of user activity and portfolio' },
+];
 
 // Category display info
 const CATEGORY_INFO: Record<string, { label: string; color: string }> = {
@@ -46,56 +53,78 @@ const CATEGORY_INFO: Record<string, { label: string; color: string }> = {
     announcements: { label: 'Announcements', color: 'orange' },
 };
 
+const CATEGORIES = ['security', 'staking', 'referral', 'bridge', 'weeklyReport', 'lifecycle', 'announcements'];
+
 export default function AdminEmail() {
     const [activeTab, setActiveTab] = createSignal<'dashboard' | 'templates' | 'subscriptions'>('dashboard');
-    const [templates, setTemplates] = createSignal<TemplateInfo[]>([]);
-    const [allTemplates, setAllTemplates] = createSignal<Record<string, TemplateInfo>>({});
     const [selectedTemplate, setSelectedTemplate] = createSignal<string | null>(null);
     const [stats, setStats] = createSignal<EmailStats | null>(null);
-    const [loading, setLoading] = createSignal(false);
     const [statsLoading, setStatsLoading] = createSignal(false);
     const [error, setError] = createSignal('');
     const [sendingTest, setSendingTest] = createSignal<string | null>(null);
     const [sendSuccess, setSendSuccess] = createSignal('');
+    const [previewHtml, setPreviewHtml] = createSignal<Record<string, string>>({});
+    const [previewLoading, setPreviewLoading] = createSignal<string | null>(null);
 
-    // Load data on mount
     onMount(async () => {
-        await Promise.all([loadTemplates(), loadStats()]);
+        await loadStats();
     });
 
-    const loadTemplates = async () => {
-        setLoading(true);
+    // Load stats directly from Firestore (same pattern as other admin components)
+    const loadStats = async () => {
+        setStatsLoading(true);
         setError('');
         try {
-            const token = await getAdminToken();
-            const response = await fetch(getAdminCloudFunctionUrl('adminEmailPreview'), {
-                headers: { 'Authorization': `Bearer ${token}` },
+            const db = getFirebaseDb();
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const totalUsers = usersSnapshot.size;
+
+            const categoryStats: Record<string, CategoryStat> = {};
+            for (const cat of CATEGORIES) {
+                categoryStats[cat] = { optedIn: 0, optedOut: 0 };
+            }
+
+            usersSnapshot.forEach((doc) => {
+                const prefs = doc.data().emailPreferences || {};
+                for (const cat of CATEGORIES) {
+                    const isOptedIn = prefs[cat] !== false;
+                    if (isOptedIn) {
+                        categoryStats[cat].optedIn++;
+                    } else {
+                        categoryStats[cat].optedOut++;
+                    }
+                }
             });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
-            setTemplates(data.templates);
-            setAllTemplates(data.allTemplates);
+
+            setStats({ totalUsers, categoryStats });
         } catch (err: any) {
-            setError(err.message || 'Failed to load templates');
+            console.error('[AdminEmail] Stats load error:', err);
+            setError(err.message || 'Failed to load statistics');
         } finally {
-            setLoading(false);
+            setStatsLoading(false);
         }
     };
 
-    const loadStats = async () => {
-        setStatsLoading(true);
+    // Load preview via Cloud Function (only when user clicks)
+    const loadPreview = async (templateId: string) => {
+        if (previewHtml()[templateId]) return; // Already loaded
+
+        setPreviewLoading(templateId);
         try {
             const token = await getAdminToken();
-            const response = await fetch(getAdminCloudFunctionUrl('adminEmailStats'), {
-                headers: { 'Authorization': `Bearer ${token}` },
-            });
+            const response = await fetch(
+                `${getAdminCloudFunctionUrl('adminEmailPreview')}?template=${templateId}`,
+                { headers: { 'Authorization': `Bearer ${token}` } },
+            );
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
-            setStats(data);
+            setPreviewHtml((prev) => ({ ...prev, [templateId]: data.template.html }));
         } catch (err: any) {
-            console.error('[AdminEmail] Stats error:', err);
+            console.error('[AdminEmail] Preview error:', err);
+            setError(err.message || 'Failed to load preview');
+            setTimeout(() => setError(''), 5000);
         } finally {
-            setStatsLoading(false);
+            setPreviewLoading(null);
         }
     };
 
@@ -151,8 +180,15 @@ export default function AdminEmail() {
         return Math.round((cat.optedIn / total) * 100);
     };
 
+    // Tab config
+    const tabs = [
+        { id: 'dashboard' as const, label: 'Dashboard', iconSvg: () => <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+        { id: 'templates' as const, label: 'Templates', iconSvg: () => <Eye class="w-4 h-4" /> },
+        { id: 'subscriptions' as const, label: 'Subscriptions', iconSvg: () => <Mail class="w-4 h-4" /> },
+    ];
+
     return (
-        <div class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div class="space-y-6">
             {/* Header */}
             <div>
                 <div class="flex items-center gap-3 mb-2">
@@ -168,22 +204,20 @@ export default function AdminEmail() {
 
             {/* Tabs */}
             <div class="flex gap-2 border-b border-white/10 pb-4">
-                {[
-                    { id: 'dashboard' as const, label: 'Dashboard', icon: BarChart3 },
-                    { id: 'templates' as const, label: 'Templates', icon: Eye },
-                    { id: 'subscriptions' as const, label: 'Subscriptions', icon: Mail },
-                ].map((tab) => (
-                    <button
-                        onClick={() => setActiveTab(tab.id)}
-                        class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap ${activeTab() === tab.id
-                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
-                                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                            }`}
-                    >
-                        <tab.icon class="w-4 h-4" />
-                        {tab.label}
-                    </button>
-                ))}
+                <For each={tabs}>
+                    {(tab) => (
+                        <button
+                            onClick={() => setActiveTab(tab.id)}
+                            class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap ${activeTab() === tab.id
+                                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                }`}
+                        >
+                            {tab.iconSvg()}
+                            {tab.label}
+                        </button>
+                    )}
+                </For>
             </div>
 
             {/* Alert messages */}
@@ -208,28 +242,24 @@ export default function AdminEmail() {
             <Show when={activeTab() === 'dashboard'}>
                 <Show when={statsLoading()}>
                     <div class="flex items-center justify-center py-12">
-                        <div class="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                        <div class="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
                     </div>
                 </Show>
 
                 <Show when={stats() && !statsLoading()}>
                     {/* Top Stats Cards */}
-                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-4">
                         <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
                             <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Total Users</p>
                             <p class="text-3xl font-black text-white">{stats()!.totalUsers.toLocaleString()}</p>
                         </div>
                         <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Password Resets (24h)</p>
-                            <p class="text-3xl font-black text-cyan-400">{stats()!.recentPasswordResets}</p>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Email Templates</p>
+                            <p class="text-3xl font-black text-cyan-400">{TEMPLATE_LIST.length}</p>
                         </div>
                         <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Drip Queue Pending</p>
-                            <p class="text-3xl font-black text-amber-400">{stats()!.dripQueue.pending}</p>
-                        </div>
-                        <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Drip Emails Sent</p>
-                            <p class="text-3xl font-black text-green-400">{stats()!.dripQueue.sent}</p>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-2">Categories</p>
+                            <p class="text-3xl font-black text-purple-400">{CATEGORIES.length}</p>
                         </div>
                     </div>
 
@@ -293,71 +323,76 @@ export default function AdminEmail() {
 
             {/* ==================== TEMPLATES TAB ==================== */}
             <Show when={activeTab() === 'templates'}>
-                <Show when={loading()}>
-                    <div class="flex items-center justify-center py-12">
-                        <div class="w-8 h-8 border-3 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
-                    </div>
-                </Show>
+                <div class="grid grid-cols-1 gap-4">
+                    <For each={TEMPLATE_LIST}>
+                        {(template) => {
+                            const isExpanded = () => selectedTemplate() === template.id;
 
-                <Show when={!loading()}>
-                    <div class="grid grid-cols-1 gap-4">
-                        <For each={templates()}>
-                            {(template) => {
-                                const isExpanded = () => selectedTemplate() === template.id;
-                                const templateData = () => allTemplates()[template.id];
-
-                                return (
-                                    <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                                        {/* Template Header */}
-                                        <div
-                                            class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/[0.01] transition-colors"
-                                            onClick={() => setSelectedTemplate(isExpanded() ? null : template.id)}
-                                        >
-                                            <div class="flex items-center gap-4">
-                                                <div class="p-2 rounded-lg bg-white/5">
-                                                    <Mail class="w-5 h-5 text-gray-400" />
-                                                </div>
-                                                <div>
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="text-white font-semibold">{template.name}</span>
-                                                        {getCategoryBadge(template.category)}
-                                                    </div>
-                                                    <p class="text-gray-500 text-sm mt-0.5">{template.description}</p>
-                                                </div>
+                            return (
+                                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                                    {/* Template Header */}
+                                    <div
+                                        class="flex items-center justify-between p-5 cursor-pointer hover:bg-white/[0.01] transition-colors"
+                                        onClick={() => {
+                                            if (isExpanded()) {
+                                                setSelectedTemplate(null);
+                                            } else {
+                                                setSelectedTemplate(template.id);
+                                                loadPreview(template.id);
+                                            }
+                                        }}
+                                    >
+                                        <div class="flex items-center gap-4">
+                                            <div class="p-2 rounded-lg bg-white/5">
+                                                <Mail class="w-5 h-5 text-gray-400" />
                                             </div>
-                                            <div class="flex items-center gap-2">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleSendTest(template.id);
-                                                    }}
-                                                    disabled={sendingTest() === template.id}
-                                                    class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 disabled:opacity-40"
-                                                    title="Send test email to your admin email"
-                                                >
-                                                    <Show
-                                                        when={sendingTest() !== template.id}
-                                                        fallback={<RefreshCw class="w-3 h-3 animate-spin" />}
-                                                    >
-                                                        <Send class="w-3 h-3" />
-                                                    </Show>
-                                                    Test Send
-                                                </button>
-                                                <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform ${isExpanded() ? 'rotate-180' : ''}`} />
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-white font-semibold">{template.name}</span>
+                                                    {getCategoryBadge(template.category)}
+                                                </div>
+                                                <p class="text-gray-500 text-sm mt-0.5">{template.description}</p>
                                             </div>
                                         </div>
+                                        <div class="flex items-center gap-2">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSendTest(template.id);
+                                                }}
+                                                disabled={sendingTest() === template.id}
+                                                class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 disabled:opacity-40"
+                                                title="Send test email to your admin email"
+                                            >
+                                                <Show
+                                                    when={sendingTest() !== template.id}
+                                                    fallback={<RefreshCw class="w-3 h-3 animate-spin" />}
+                                                >
+                                                    <Send class="w-3 h-3" />
+                                                </Show>
+                                                Test Send
+                                            </button>
+                                            <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform ${isExpanded() ? 'rotate-180' : ''}`} />
+                                        </div>
+                                    </div>
 
-                                        {/* Template Preview */}
-                                        <Show when={isExpanded() && templateData()?.html}>
-                                            <div class="border-t border-white/5">
-                                                <div class="p-4 bg-white/[0.01]">
+                                    {/* Template Preview */}
+                                    <Show when={isExpanded()}>
+                                        <div class="border-t border-white/5">
+                                            <div class="p-4 bg-white/[0.01]">
+                                                <Show when={previewLoading() === template.id}>
+                                                    <div class="flex items-center justify-center py-12">
+                                                        <div class="w-6 h-6 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                                                    </div>
+                                                </Show>
+                                                <Show when={previewHtml()[template.id]}>
                                                     <div class="flex items-center justify-between mb-3">
                                                         <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Email Preview</span>
                                                         <button
                                                             onClick={() => {
                                                                 const w = window.open('', '_blank');
                                                                 if (w) {
-                                                                    w.document.write(templateData()!.html!);
+                                                                    w.document.write(previewHtml()[template.id]);
                                                                     w.document.close();
                                                                 }
                                                             }}
@@ -369,29 +404,27 @@ export default function AdminEmail() {
                                                     </div>
                                                     <div class="rounded-xl overflow-hidden border border-white/10 bg-white">
                                                         <iframe
-                                                            srcdoc={templateData()!.html}
+                                                            srcdoc={previewHtml()[template.id]}
                                                             class="w-full border-0"
                                                             style={{ height: '600px' }}
                                                             sandbox="allow-same-origin"
                                                             title={`${template.name} preview`}
                                                         />
                                                     </div>
-                                                </div>
+                                                </Show>
+                                                <Show when={!previewLoading() && !previewHtml()[template.id]}>
+                                                    <div class="text-center py-8 text-gray-500 text-sm">
+                                                        Preview could not be loaded. The admin Cloud Functions may need deployment.
+                                                    </div>
+                                                </Show>
                                             </div>
-                                        </Show>
-                                    </div>
-                                );
-                            }}
-                        </For>
-                    </div>
-
-                    <Show when={templates().length === 0 && !error()}>
-                        <div class="text-center py-12">
-                            <Mail class="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                            <p class="text-gray-500">No templates available</p>
-                        </div>
-                    </Show>
-                </Show>
+                                        </div>
+                                    </Show>
+                                </div>
+                            );
+                        }}
+                    </For>
+                </div>
             </Show>
 
             {/* ==================== SUBSCRIPTIONS TAB ==================== */}
@@ -418,9 +451,7 @@ export default function AdminEmail() {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-0 divide-y md:divide-y-0 md:divide-x divide-white/5">
                             <For each={Object.entries(stats()!.categoryStats)}>
                                 {([key, stat]) => {
-                                    const info = CATEGORY_INFO[key];
                                     const pct = getOptInPercentage(stat);
-                                    const total = stat.optedIn + stat.optedOut;
 
                                     return (
                                         <div class="p-6 hover:bg-white/[0.01] transition-colors">
@@ -462,27 +493,15 @@ export default function AdminEmail() {
                             </For>
                         </div>
                     </div>
+                </Show>
 
-                    {/* Drip Queue Stats */}
-                    <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                        <div class="p-6 border-b border-white/5">
-                            <h2 class="text-lg font-bold text-white">Drip Campaign Queue</h2>
-                            <p class="text-gray-500 text-sm mt-0.5">Onboarding email automation status</p>
-                        </div>
-                        <div class="grid grid-cols-3 divide-x divide-white/5">
-                            <div class="p-6 text-center">
-                                <p class="text-3xl font-black text-amber-400">{stats()!.dripQueue.pending}</p>
-                                <p class="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">Pending</p>
-                            </div>
-                            <div class="p-6 text-center">
-                                <p class="text-3xl font-black text-green-400">{stats()!.dripQueue.sent}</p>
-                                <p class="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">Sent</p>
-                            </div>
-                            <div class="p-6 text-center">
-                                <p class="text-3xl font-black text-gray-400">{stats()!.dripQueue.skipped}</p>
-                                <p class="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">Skipped</p>
-                            </div>
-                        </div>
+                <Show when={!stats() && !statsLoading()}>
+                    <div class="text-center py-12">
+                        <Mail class="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                        <p class="text-gray-500">No statistics available</p>
+                        <button onClick={loadStats} class="mt-3 px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg text-sm font-bold hover:bg-cyan-500/30 transition-colors">
+                            Load Stats
+                        </button>
                     </div>
                 </Show>
             </Show>
