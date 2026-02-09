@@ -6,7 +6,7 @@ const { ethers } = require('ethers');
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 // Use the admin key from root .env
-const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const ADMIN_KEY = process.env.VISION_ADMIN_PK;
 const TSS_ADDRESS = '0x6605Acc98E5F9dE16D82885ad84a25D95C94F794';
 const MESSAGE_INBOX = process.env.DST_MESSAGE_INBOX;
 const VISION_RPC = process.env.VISION_RPC;

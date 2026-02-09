@@ -171,7 +171,7 @@ app.post('/rpc/paymaster/transfer', async (req, res) => {
        WE USE HARDCODED KEYS FOR DEMO PURPOSES ONLY.
     */
     const PAYMASTER_ADDRESS = process.env.PAYMASTER_ADDRESS || "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf";
-    const PAYMASTER_PK = process.env.PAYMASTER_PK || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // Account #0 (Owner)
+    const PAYMASTER_PK = process.env.PAYMASTER_PK || process.env.VISION_ADMIN_PK; // Account #0 (Owner)
     const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS || "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"; // Account #2
 
     try {

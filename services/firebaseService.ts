@@ -1862,7 +1862,15 @@ export const subscribeToQueue = (
             }
 
             // Calculate relative time or formatted time
-            const unlockTime = data.unlockTime; // Unix timestamp (seconds)
+            let unlockTime = data.unlockTime; // Unix timestamp (seconds)
+            // Validate unlockTime - if it's too large, it's corrupted data
+            if (!unlockTime || unlockTime > 1e12) {
+                if (unlockTime > 1e15) {
+                    unlockTime = 0; // Corrupted - will show "Invalid Date"
+                } else if (unlockTime > 1e12) {
+                    unlockTime = Math.floor(unlockTime / 1000); // Convert ms to seconds
+                }
+            }
             const now = Math.floor(Date.now() / 1000);
             const diff = unlockTime - now;
             let timeLeft = '';
@@ -1882,18 +1890,34 @@ export const subscribeToQueue = (
                 timeLeft = new Date(unlockTime * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             }
 
+            // Normalize amount - detect if stored as wei (very large number) and convert
+            let displayAmount = data.amount;
+            if (displayAmount && typeof displayAmount === 'string' && displayAmount.length > 15 && !displayAmount.includes('.')) {
+                try {
+                    // Convert wei string to ether (divide by 1e18)
+                    const wei = BigInt(displayAmount);
+                    const ether = Number(wei) / 1e18;
+                    displayAmount = ether % 1 === 0 ? ether.toString() : ether.toFixed(6).replace(/\.?0+$/, '');
+                } catch { /* keep original */ }
+            } else if (typeof displayAmount === 'number' && displayAmount > 1e15) {
+                try {
+                    const ether = displayAmount / 1e18;
+                    displayAmount = ether % 1 === 0 ? ether.toString() : ether.toFixed(6).replace(/\.?0+$/, '');
+                } catch { /* keep original */ }
+            }
+
             return {
                 id: doc.id,
                 dbStatus: data.status,
                 type: data.type || 'TIMELOCK',
-                summary: `${data.amount} ${data.token} → ${data.recipient.slice(0, 6)}...`,
+                summary: `${displayAmount} ${data.token} → ${data.recipient.slice(0, 6)}...`,
                 status: status,
                 timeLeft: timeLeft,
                 timestamp: data.timestamp || (unlockTime * 1000),
                 executeAt: unlockTime * 1000,
                 completedAt: data.executedAt ? new Date(data.executedAt).getTime() : undefined,
                 recipient: data.recipient,
-                amount: data.amount,
+                amount: displayAmount,
                 token: data.token,
                 scheduleId: data.scheduleId,
                 txHash: data.executionTx || data.executedTxHash || data.txHash || data.creationTx,
@@ -1936,11 +1960,27 @@ export const saveScheduledTransfer = async (task: {
 }) => {
     try {
         const db = getFirestore();
+
+        // Validate unlockTime - must be a reasonable Unix timestamp (seconds)
+        let safeUnlockTime = task.unlockTime;
+        if (!safeUnlockTime || safeUnlockTime > 1e12) {
+            // If > 1e12, it's likely in milliseconds or corrupted - normalize to seconds
+            if (safeUnlockTime > 1e15) {
+                // Clearly corrupted (wei value or similar) - default to 5 min from now
+                console.warn('[saveScheduledTransfer] Invalid unlockTime detected:', safeUnlockTime, '- defaulting to 5 min');
+                safeUnlockTime = Math.floor(Date.now() / 1000) + 300;
+            } else if (safeUnlockTime > 1e12) {
+                // Likely milliseconds instead of seconds
+                safeUnlockTime = Math.floor(safeUnlockTime / 1000);
+            }
+        }
+
         const data: any = {
             ...task,
             scheduleId: task.scheduleId || 0,
             status: task.status || 'WAITING',
-            unlockTimeTs: Timestamp.fromMillis(task.unlockTime * 1000),
+            unlockTime: safeUnlockTime,
+            unlockTimeTs: Timestamp.fromMillis(safeUnlockTime * 1000),
             nextRetryAt: Timestamp.now(),
             retryCount: 0,
             userEmail: task.userEmail.toLowerCase(),
@@ -3590,7 +3630,7 @@ const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
         chainId: 11155111,
         rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
         explorerUrl: 'https://sepolia.etherscan.io',
-        vcnTokenAddress: '0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f',
+        vcnTokenAddress: '0x5e532BC8F19c4BA22aB0443229d3732aCE217d57',
         icon: 'ethereum',
         enabled: true,
         order: 1

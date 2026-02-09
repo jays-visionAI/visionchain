@@ -9,7 +9,7 @@ const CHAIN_ID = parseInt(process.env.CHAIN_ID || "1337"); // Vision Testnet ID
 
 // Private key of the Master Faucet (In a real scenario, use environment variables)
 // Using a placeholder for now - User should provide this or we use a known testnet faucet
-const MASTER_KEY = process.env.MASTER_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const MASTER_KEY = process.env.MASTER_KEY || process.env.VISION_ADMIN_PK;
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const masterWallet = new ethers.Wallet(MASTER_KEY, provider);

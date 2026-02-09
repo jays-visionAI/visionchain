@@ -8,7 +8,7 @@ const path = require('path');
 
 // Configuration
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-const ADMIN_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const ADMIN_KEY = process.env.VISION_ADMIN_PK;
 const CHAIN_ID = 3151909;
 
 // Deployed addresses

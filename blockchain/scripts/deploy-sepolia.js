@@ -80,8 +80,12 @@ async function main() {
     const vcnArtifact = loadArtifact('VCNToken');
     const VCNFactory = new ethers.ContractFactory(vcnArtifact.abi, vcnArtifact.bytecode, wallet);
 
-    // Admin and Bridge Relayer are same for now (can be changed later)
-    const vcn = await VCNFactory.deploy(wallet.address, wallet.address);
+    // Admin = deployer (user's secure wallet), Bridge Relayer = dedicated relayer wallet
+    const BRIDGE_RELAYER = "0xc6176B597d40f9Db62ED60149FB7625CCa56990b";
+    console.log("Admin:", wallet.address);
+    console.log("Bridge Relayer:", BRIDGE_RELAYER);
+
+    const vcn = await VCNFactory.deploy(wallet.address, BRIDGE_RELAYER);
     await vcn.waitForDeployment();
 
     const vcnAddress = await vcn.getAddress();

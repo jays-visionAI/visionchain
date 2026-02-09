@@ -5,7 +5,7 @@ const { ethers } = require('ethers');
 // Admin Private Key (VerifyingSigner & Deployer)
 // IMPORTANT: This key MUST match the 'signer' that the Backend uses to sign Paymaster requests.
 // For MVP/Testnet, we assume Admin = Backend Signer.
-const ADMIN_PK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const ADMIN_PK = process.env.VISION_ADMIN_PK;
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
 
 // EntryPoint v0.7 Address (Standard)

@@ -5,11 +5,9 @@ async function main() {
     // NOTE: If running from your Mac, point to the remote RPC
     const provider = new ethers.JsonRpcProvider("https://rpc.visionchain.co");
 
-    // 2. Setup Admin Wallet (Account #0 - The Whale)
-    // In Hardhat default: 0xf39F...2266 
-    // PK: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-    // WE USE THIS TO FUND OTHERS
-    const adminPrivateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    // 2. Setup Admin Wallet
+    // Set VISION_ADMIN_PK environment variable before running
+    const adminPrivateKey = process.env.VISION_ADMIN_PK;
     const adminWallet = new ethers.Wallet(adminPrivateKey, provider);
 
     console.log(`💰 Funding from Admin: ${adminWallet.address}`);

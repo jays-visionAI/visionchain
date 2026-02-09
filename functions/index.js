@@ -997,6 +997,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
 
     // Save to Firestore for tracking
     try {
+      // Save to bridgeTransactions (legacy)
       await db.collection("bridgeTransactions").add({
         user: user.toLowerCase(),
         srcChainId: srcChain,
@@ -1009,6 +1010,26 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
         status: "LOCKED",
         createdAt: admin.firestore.Timestamp.now(),
         type: "BRIDGE_PAYMASTER",
+      });
+
+      // ALSO save to transactions collection (for unified relayer processing)
+      await db.collection("transactions").doc(lockTx.hash).set({
+        hash: lockTx.hash,
+        from_addr: user.toLowerCase(),
+        to_addr: "bridge:sepolia",
+        value: ethers.formatEther(amountWei),
+        timestamp: Date.now(),
+        type: "Bridge",
+        bridgeStatus: "LOCKED",
+        intentHash: intentHash,
+        commitTxHash: commitTx.hash,
+        lockTxHash: lockTx.hash,
+        challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
+        metadata: {
+          destinationChain: dstChainId === 11155111 ? "Sepolia" : "Unknown",
+          srcChainId: srcChain,
+          dstChainId: dstChainId,
+        },
       });
       console.log(`[Paymaster:Bridge] Firestore record created`);
     } catch (firestoreErr) {
@@ -2693,6 +2714,20 @@ exports.bridgeRelayer = onSchedule({
       .get();
     console.log(`[Bridge Relayer] transactions PENDING Bridges: ${allPendingBridges.size}`);
 
+    // DEBUG: Check ALL Bridge type transactions (regardless of status)
+    const allBridgeTypeTxs = await db.collection("transactions")
+      .where("type", "==", "Bridge")
+      .limit(20)
+      .get();
+    console.log(`[Bridge Relayer] ALL Bridge type transactions: ${allBridgeTypeTxs.size}`);
+    if (allBridgeTypeTxs.size > 0) {
+      allBridgeTypeTxs.docs.slice(0, 5).forEach((doc) => {
+        const data = doc.data();
+        console.log(`[Bridge Relayer] DEBUG tx/${doc.id}: bridgeStatus=${data.bridgeStatus}, challengeEndTime=${data.challengeEndTime}, now=${Date.now()}`);
+      });
+    }
+
+
     if (allCommittedBridges.size > 0) {
       allCommittedBridges.docs.forEach((doc) => {
         const data = doc.data();
@@ -3229,7 +3264,7 @@ const _SECURE_INTENT_COMMITMENT = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
 const SECURE_MESSAGE_INBOX = "0x8A791620dd6260079BF849Dc5567aDC3F2FdC318";
 // eslint-disable-next-line no-unused-vars
 const _SECURE_VISION_BRIDGE = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
-const VCN_TOKEN_SEPOLIA = "0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f";
+const VCN_TOKEN_SEPOLIA = "0x5e532BC8F19c4BA22aB0443229d3732aCE217d57";
 
 // MessageInbox ABI
 const MESSAGE_INBOX_ABI = [

@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const RPC_URL = 'http://46.224.221.201:8545';
-const ADMIN_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const ADMIN_PRIVATE_KEY = process.env.VISION_ADMIN_PK;
 
 // Read compiled artifacts
 function loadArtifact(contractName) {

@@ -30,7 +30,7 @@ const ADDRESSES = {
     VISION_BRIDGE_SECURE: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
 
     // Sepolia Contracts
-    VCN_TOKEN_SEPOLIA: "0xC068eD2b45DbD3894A72F0e4985DF8ba1299AB0f",
+    VCN_TOKEN_SEPOLIA: "0x5e532BC8F19c4BA22aB0443229d3732aCE217d57",
 
     // Legacy (kept for compatibility)
     TIME_LOCK_AGENT: "0x367761085BF3C12e5DA2Df99AC6E1a824612b8fb",
@@ -403,38 +403,41 @@ export class ContractService {
     }
 
     /**
-     * Native VCN transfer using Admin Private Key.
-     * Sends VCN Token (ERC-20) to the specified address.
-     * Note: This sends VCN Token, not Native VCN.
+     * Admin VCN transfer via server-side Paymaster API.
+     * Private key is NEVER exposed to the browser.
      */
     async adminSendVCN(toAddress: string, amountStr: string) {
         if (!toAddress || !toAddress.startsWith('0x')) {
             throw new Error(`Invalid recipient address: "${toAddress}". The user has not connected their wallet properly.`);
         }
 
-        const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-        const rpcProvider = await this.getRobustProvider();
-        const wallet = new ethers.Wallet(adminPK, rpcProvider);
-        const adminAddress = await wallet.getAddress();
+        // Use Paymaster API (server-side) instead of client-side private key
+        const response = await fetch(ADDRESSES.PAYMASTER_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'admin_transfer',
+                recipient: toAddress,
+                amount: ethers.parseEther(amountStr).toString(),
+            })
+        });
 
-        // VCN Token Transfer (ERC-20)
-        const vcnToken = new ethers.Contract(ADDRESSES.VCN_TOKEN, VCNTokenABI.abi, wallet);
-        const amountWei = ethers.parseEther(amountStr);
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(`Admin Transfer Failed: ${error.error || response.statusText}`);
+        }
 
-        const tx = await vcnToken.transfer(toAddress, amountWei);
-        console.log(`[Admin] VCN Token Transfer sent: ${tx.hash}`);
+        const result = await response.json();
+        console.log(`[Admin] VCN Token Transfer via Paymaster: ${result.txHash}`);
 
-        const receipt = await tx.wait();
-
-        // Index transaction directly to Firestore for VisionScan visibility
-        // Using client-side Firebase SDK (same project as client)
+        // Index transaction to Firestore
         try {
             const db = getFirebaseDb();
-            await setDoc(doc(db, 'transactions', tx.hash), {
-                hash: tx.hash,
+            await setDoc(doc(db, 'transactions', result.txHash), {
+                hash: result.txHash,
                 chainId: 3151909,
                 type: 'Transfer',
-                from_addr: adminAddress.toLowerCase(),
+                from_addr: (result.from || 'admin').toLowerCase(),
                 to_addr: toAddress.toLowerCase(),
                 value: amountStr,
                 timestamp: Date.now(),
@@ -447,12 +450,11 @@ export class ContractService {
                     source: 'admin_panel'
                 }
             });
-            console.log(`[Admin] Transaction indexed to Firestore: ${tx.hash}`);
         } catch (indexErr) {
             console.warn('[Admin] Transaction indexing failed (non-critical):', indexErr);
         }
 
-        return receipt;
+        return result;
     }
 
     /**
@@ -597,7 +599,7 @@ export class ContractService {
             const gasLimit = await provider.estimateGas({
                 to: ADDRESSES.VCN_TOKEN,
                 data: vcnContract.interface.encodeFunctionData('transfer', [to, amountWei]),
-                from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Admin for estimation
+                from: ADDRESSES.PAYMASTER_ADMIN // Executor for estimation
             });
 
             const feeData = await provider.getFeeData();
@@ -644,7 +646,7 @@ export class ContractService {
                 to: timelockAddress,
                 data: contract.interface.encodeFunctionData('scheduleTransferNative', [recipient, unlockTime]),
                 value: amountWei,
-                from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" // Admin for estimation
+                from: ADDRESSES.PAYMASTER_ADMIN // Executor for estimation
             });
 
             const feeData = await provider.getFeeData();
@@ -692,7 +694,7 @@ export class ContractService {
                 const gasLimit = await provider.estimateGas({
                     to: ADDRESSES.VCN_TOKEN,
                     data: vcnContract.interface.encodeFunctionData('transfer', [tx.recipient, amountWei]),
-                    from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+                    from: ADDRESSES.PAYMASTER_ADMIN
                 });
                 totalGasLimit += gasLimit;
                 breakdown.push({
@@ -1033,11 +1035,10 @@ export class ContractService {
         vestingMonths: number,
         startTime: number
     ) {
-        // Ensure contract is ready locally
-        const adminPK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+        // Use connected signer (must be admin wallet)
+        if (!this.signer) throw new Error("Admin wallet must be connected to create vesting schedules");
         const rpcProvider = await this.getRobustProvider();
-        const wallet = new ethers.Wallet(adminPK, rpcProvider);
-        const vestingContract = this.vcnVesting || new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, wallet);
+        const vestingContract = this.vcnVesting || new ethers.Contract(ADDRESSES.VCN_VESTING, VCNVestingABI.abi, this.signer);
 
         const amountWei = ethers.parseEther(totalAmount.toString());
 

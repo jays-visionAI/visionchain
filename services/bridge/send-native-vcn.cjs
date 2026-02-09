@@ -8,7 +8,7 @@ const VISION_RPC = 'https://api.visionchain.co/rpc-proxy';
 const TSS_ADDRESS = '0x6605Acc98E5F9dE16D82885ad84a25D95C94F794';
 
 // From .env
-const ADMIN_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const ADMIN_KEY = process.env.VISION_ADMIN_PK;
 
 async function sendNativeVCN() {
     const provider = new ethers.JsonRpcProvider(VISION_RPC);

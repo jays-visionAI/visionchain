@@ -10,7 +10,7 @@ async function main() {
 
     // Connect to network
     const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-    const ADMIN_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+    const ADMIN_KEY = process.env.VISION_ADMIN_PK;
     const VCN_TOKEN = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);

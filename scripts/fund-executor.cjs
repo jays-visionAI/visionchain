@@ -1,7 +1,7 @@
 const { ethers } = require('ethers');
 
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
-const ADMIN_PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const ADMIN_PK = process.env.VISION_ADMIN_PK;
 const EXECUTOR_ADDRESS = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
 
 async function main() {

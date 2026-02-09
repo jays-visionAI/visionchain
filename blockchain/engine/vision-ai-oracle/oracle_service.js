@@ -32,7 +32,7 @@ async function main() {
     // Be careful with Private Keys in code. In prod, use secure vault.
     // For this demo, we assume the deployer (Account 0) is the Oracle.
     // Hardhat Account #0 Private Key for dev/testnet (matches setup_node.sh)
-    const wallet = new ethers.Wallet("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", provider);
+    const wallet = new ethers.Wallet(process.env.VISION_ADMIN_PK, provider);
 
     const miningPool = new ethers.Contract(MINING_POOL_ADDRESS, MiningPoolABI, wallet);
     const nodeLicense = new ethers.Contract(NODE_LICENSE_ADDRESS, NodeLicenseABI, wallet);
