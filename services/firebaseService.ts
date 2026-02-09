@@ -682,22 +682,31 @@ export interface RoundParticipant {
     claimed: boolean;
 }
 
+// Referral Rush Epoch - Round 1 starts on this date
+const REFERRAL_RUSH_EPOCH = '2026-02-09T00:00:00Z';
+
 /**
  * Calculates the current round number based on UTC time.
  * Rounds are daily (24 hours), starting at 00:00 UTC.
+ * Round 1 = roundId 0 (epoch day)
  */
 export const calculateCurrentRoundId = (): number => {
     const now = new Date();
-    const epoch = new Date('2024-01-01T00:00:00Z').getTime();
+    const epoch = new Date(REFERRAL_RUSH_EPOCH).getTime();
     const msPerRound = 24 * 60 * 60 * 1000; // 24 hours (daily)
     return Math.floor((now.getTime() - epoch) / msPerRound);
 };
 
 /**
+ * Converts internal roundId to display number (Round 1, 2, 3...)
+ */
+export const getRoundDisplayNumber = (roundId: number): number => roundId + 1;
+
+/**
  * Gets the start and end time for a given round.
  */
 export const getRoundTimeRange = (roundId: number): { start: Date; end: Date } => {
-    const epoch = new Date('2024-01-01T00:00:00Z').getTime();
+    const epoch = new Date(REFERRAL_RUSH_EPOCH).getTime();
     const msPerRound = 24 * 60 * 60 * 1000; // 24 hours (daily)
     const start = new Date(epoch + roundId * msPerRound);
     const end = new Date(epoch + (roundId + 1) * msPerRound);

@@ -13,6 +13,7 @@ import {
     getRoundLeaderboard,
     getCurrentRound,
     calculateCurrentRoundId,
+    getRoundDisplayNumber,
     type ReferralRound,
     type RoundParticipant
 } from '../../services/firebaseService';
@@ -130,7 +131,7 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
                         <path d="M20 10H300L320 30L300 50H20L0 30L20 10Z" fill="#1e40af" />
                         <path d="M30 0H290L310 30L290 60H30L10 30L30 0Z" fill="#2563eb" />
                         <text x="160" y="38" text-anchor="middle" fill="white" font-weight="900" font-size="14" font-style="italic" letter-spacing="0.2em" filter="url(#glow)">
-                            ROUND #{currentRound()?.roundId || calculateCurrentRoundId()}
+                            ROUND #{getRoundDisplayNumber(currentRound()?.roundId ?? calculateCurrentRoundId())}
                         </text>
                         <defs>
                             <filter id="glow">

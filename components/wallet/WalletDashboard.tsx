@@ -1221,34 +1221,74 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 />
                                             </Show>
 
-                                            {/* Cross-Chain Bridge Review UI */}
+                                            {/* Cross-Chain Bridge Review UI - MultiReviewCard Style */}
                                             <Show when={msg.role === 'assistant' && msg.isBridgeReview && msg.bridgeData && props.pendingBridge?.()}>
-                                                <div class="mt-4 p-4 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20">
-                                                    <div class="flex items-center gap-3 mb-4">
-                                                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                                                            <svg class="w-5 h-5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                                <path d="M17 3v18" />
-                                                                <path d="M10 18l7-6-7-6" />
-                                                                <path d="M7 3v18" />
-                                                            </svg>
-                                                        </div>
-                                                        <div>
-                                                            <div class="text-sm font-bold text-white">Cross-Chain Bridge</div>
-                                                            <div class="text-xs text-gray-400">Vision Chain → {msg.bridgeData.destinationChain}</div>
+                                                <Motion.div
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    class="mt-4 bg-[#0d0d0f]/60 backdrop-blur-2xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl w-full max-w-md"
+                                                >
+                                                    {/* Header Strip */}
+                                                    <div class="p-4 border-b border-white/5 bg-gradient-to-r from-purple-500/10 to-transparent">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center gap-2">
+                                                                <svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                                                    <path d="M17 3v18" /><path d="M10 18l7-6-7-6" /><path d="M7 3v18" />
+                                                                </svg>
+                                                                <span class="text-[11px] font-black text-white uppercase tracking-widest">Bridge Review</span>
+                                                            </div>
+                                                            <span class="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                                                                CROSS-CHAIN
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <div class="flex items-center justify-between mb-4 p-3 rounded-xl bg-black/30">
-                                                        <span class="text-xs text-gray-400">Amount</span>
-                                                        <span class="text-lg font-bold text-white">{msg.bridgeData.amount} <span class="text-purple-400">{msg.bridgeData.symbol}</span></span>
+
+                                                    {/* Chain Route + Amount */}
+                                                    <div class="p-4 space-y-3">
+                                                        {/* Chain Routing Visualization */}
+                                                        <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                                            <div class="flex flex-col items-center gap-1">
+                                                                <div class="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                                                                    <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><path d="M12 6v12" /><path d="M8 10l4-4 4 4" /></svg>
+                                                                </div>
+                                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-wider">Vision</span>
+                                                            </div>
+                                                            <div class="flex items-center gap-1.5 px-3">
+                                                                <div class="w-6 h-px bg-gradient-to-r from-blue-500/40 to-transparent" />
+                                                                <svg class="w-4 h-4 text-purple-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                                                                <div class="w-6 h-px bg-gradient-to-r from-transparent to-purple-500/40" />
+                                                            </div>
+                                                            <div class="flex flex-col items-center gap-1">
+                                                                <div class="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                                                                    <svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9" /><path d="M21 3v6h-6" /></svg>
+                                                                </div>
+                                                                <span class="text-[9px] font-black text-purple-400 uppercase tracking-wider">{msg.bridgeData.destinationChain}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Amount */}
+                                                        <div class="flex items-center justify-between group">
+                                                            <div class="flex items-center gap-3">
+                                                                <div class="w-8 h-8 rounded-lg bg-white/[0.03] flex items-center justify-center border border-white/5">
+                                                                    <svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                                                                </div>
+                                                                <div class="flex flex-col">
+                                                                    <span class="text-[12px] font-bold text-gray-200">Transfer Amount</span>
+                                                                    <span class="text-[10px] text-gray-500 font-mono italic">Lock on Vision, Mint on {msg.bridgeData.destinationChain}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="text-right">
+                                                                <div class="text-[14px] font-black text-white">{msg.bridgeData.amount}</div>
+                                                                <div class="text-[9px] font-bold text-purple-400 uppercase">{msg.bridgeData.symbol}</div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    {/* Bridge Delay Slider - inspired by Batch Transfer interval UI */}
-                                                    <div class="mb-4 p-3 rounded-xl bg-black/30 border border-white/5">
+
+                                                    {/* Bridge Delay Setting - Same pattern as Batch Interval */}
+                                                    <div class="px-4 py-3 bg-white/[0.02] border-t border-white/5">
                                                         <div class="flex items-center justify-between mb-2">
                                                             <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Bridge Delay</span>
-                                                            <span class="text-[10px] font-bold text-purple-400">
-                                                                {props.bridgeDelay?.() || 2}min
-                                                                <span class="text-gray-600"> challenge</span>
-                                                            </span>
+                                                            <span class="text-[10px] font-bold text-purple-400">{props.bridgeDelay?.() || 2}min <span class="text-gray-600">/ Challenge</span></span>
                                                         </div>
                                                         <div class="flex items-center gap-3">
                                                             <span class="text-[9px] font-bold text-gray-600">2m</span>
@@ -1263,24 +1303,41 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             />
                                                             <span class="text-[9px] font-bold text-gray-600">10m</span>
                                                         </div>
-                                                        <div class="mt-1.5 text-[9px] text-gray-600 italic">
-                                                            Tokens arrive after the challenge period. Longer = more secure.
+                                                        {/* Quick Presets */}
+                                                        <div class="flex gap-1.5 mt-2">
+                                                            {[2, 5, 10].map(v => (
+                                                                <button
+                                                                    onClick={() => props.onBridgeDelayChange?.(v)}
+                                                                    class={`flex-1 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all ${(props.bridgeDelay?.() || 2) === v
+                                                                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:border-purple-500/20 hover:text-purple-400'
+                                                                        }`}
+                                                                >
+                                                                    {v === 2 ? 'Fast' : v === 5 ? 'Standard' : 'Secure'}
+                                                                    <span class="block text-[8px] opacity-60 mt-0.5">{v}min</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <div class="mt-2 text-[9px] text-gray-600 italic">
+                                                            Challenge period before tokens arrive. Longer = more secure.
                                                         </div>
                                                     </div>
-                                                    <div class="flex gap-3">
+
+                                                    {/* Action Footer */}
+                                                    <div class="p-3 bg-black/40 border-t border-white/5 flex gap-2">
                                                         <button
                                                             onClick={() => props.onCancelBridge?.()}
-                                                            class="flex-1 px-4 py-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all text-sm font-medium"
+                                                            class="flex-1 py-2 rounded-xl text-[11px] font-black text-gray-500 hover:text-white hover:bg-white/5 transition-all uppercase tracking-widest"
                                                         >
                                                             Cancel
                                                         </button>
                                                         <button
                                                             onClick={() => props.onExecuteBridge?.(props.bridgeDelay?.() || 2)}
                                                             disabled={props.isBridging?.()}
-                                                            class="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                                            class="flex-[2] py-2 bg-purple-500 hover:bg-purple-600 rounded-xl text-[11px] font-black text-white shadow-lg shadow-purple-500/20 transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                                         >
-                                                            <Show when={props.isBridging?.()} fallback="Confirm & Sign">
-                                                                <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <Show when={props.isBridging?.()} fallback="Confirm Bridge">
+                                                                <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                                                     <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
                                                                     <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round" />
                                                                 </svg>
@@ -1288,7 +1345,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             </Show>
                                                         </button>
                                                     </div>
-                                                </div>
+                                                </Motion.div>
                                             </Show>
 
                                             {/* Specialized Batch Report UI */}
