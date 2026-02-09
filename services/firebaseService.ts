@@ -1094,6 +1094,101 @@ export const awardReferralRP = async (
 };
 
 /**
+ * Backfill RP for all existing users based on their current referralCount.
+ * Calculates: (referralCount * 10 RP) + (level-up bonuses for every 10th level milestone)
+ * Only awards the difference if user already has some RP.
+ * Should be called once from admin to retroactively award RP.
+ */
+export const backfillAllUsersRP = async (): Promise<{
+    processed: number;
+    awarded: number;
+    skipped: number;
+    details: Array<{ email: string; referrals: number; level: number; rpAwarded: number; levelBonuses: number }>;
+}> => {
+    const db = getFirebaseDb();
+    const usersRef = collection(db, 'users');
+    const snapshot = await getDocs(usersRef);
+
+    let processed = 0;
+    let awarded = 0;
+    let skipped = 0;
+    const details: Array<{ email: string; referrals: number; level: number; rpAwarded: number; levelBonuses: number }> = [];
+
+    for (const userDoc of snapshot.docs) {
+        const userData = userDoc.data();
+        const email = userData.email || userDoc.id;
+        const referralCount = userData.referralCount || 0;
+
+        if (referralCount <= 0) {
+            skipped++;
+            continue;
+        }
+
+        processed++;
+
+        // Calculate expected total RP
+        const referralRP = referralCount * RP_PER_REFERRAL;
+
+        // Calculate level-up bonuses
+        const currentLevel = calculateLevelFromRefs(referralCount);
+        let levelupRP = 0;
+        for (let lvl = 1; lvl <= currentLevel; lvl++) {
+            if (lvl % LEVELUP_INTERVAL === 0) {
+                levelupRP += RP_LEVELUP_BONUS;
+            }
+        }
+
+        const expectedTotalRP = referralRP + levelupRP;
+
+        // Check existing RP
+        const existingRP = await getUserRP(email);
+        const rpToAward = expectedTotalRP - existingRP.totalRP;
+
+        if (rpToAward <= 0) {
+            skipped++;
+            details.push({ email, referrals: referralCount, level: currentLevel, rpAwarded: 0, levelBonuses: 0 });
+            continue;
+        }
+
+        // Award backfill referral RP
+        const backfillReferralRP = Math.max(0, referralRP - (existingRP.totalRP > 0 ? existingRP.totalRP : 0));
+        if (backfillReferralRP > 0) {
+            await addRewardPoints(
+                email,
+                backfillReferralRP,
+                'referral',
+                `Backfill: ${referralCount} referrals`
+            );
+        }
+
+        // Award backfill level-up bonuses
+        const backfillLevelupRP = rpToAward - backfillReferralRP;
+        if (backfillLevelupRP > 0) {
+            await addRewardPoints(
+                email,
+                backfillLevelupRP,
+                'levelup',
+                `Backfill: Level milestones up to LVL ${currentLevel}`
+            );
+        }
+
+        awarded++;
+        details.push({
+            email,
+            referrals: referralCount,
+            level: currentLevel,
+            rpAwarded: rpToAward,
+            levelBonuses: levelupRP
+        });
+
+        console.log(`[RP Backfill] ${email}: ${referralCount} refs, LVL ${currentLevel}, +${rpToAward} RP (ref: ${backfillReferralRP}, lvlup: ${backfillLevelupRP})`);
+    }
+
+    console.log(`[RP Backfill] Complete: ${processed} processed, ${awarded} awarded, ${skipped} skipped`);
+    return { processed, awarded, skipped, details };
+};
+
+/**
 
  * Resolves a recipient identifier (phone, email, name, handle) to a VID and Address.
  */

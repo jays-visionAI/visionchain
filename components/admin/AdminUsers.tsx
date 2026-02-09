@@ -4,9 +4,10 @@ import {
     Filter,
     ShieldCheck,
     RefreshCw,
-    UserPlus
+    UserPlus,
+    Award
 } from 'lucide-solid';
-import { getAllUsers, resendActivationEmail, manualInviteUser, UserData } from '../../services/firebaseService';
+import { getAllUsers, resendActivationEmail, manualInviteUser, UserData, backfillAllUsersRP } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
 
 // Sub-components
@@ -23,6 +24,7 @@ const AdminUsers = () => {
     const [isInviting, setIsInviting] = createSignal(false);
     const [resendingEmail, setResendingEmail] = createSignal<string | null>(null);
     const [isSending, setIsSending] = createSignal(false);
+    const [isBackfilling, setIsBackfilling] = createSignal(false);
     const [successModal, setSuccessModal] = createSignal({
         isOpen: false,
         txHash: '',
@@ -30,6 +32,24 @@ const AdminUsers = () => {
         recipientAddress: '',
         amount: 0
     });
+
+    const handleBackfillRP = async () => {
+        if (isBackfilling()) return;
+        if (!confirm('Backfill RP for ALL users based on their current referral count? This cannot be undone.')) return;
+        setIsBackfilling(true);
+        try {
+            const result = await backfillAllUsersRP();
+            const summary = result.details
+                .filter(d => d.rpAwarded > 0)
+                .map(d => `${d.email}: +${d.rpAwarded} RP (${d.referrals} refs, LVL ${d.level})`)
+                .join('\n');
+            alert(`RP Backfill Complete\n\nProcessed: ${result.processed}\nAwarded: ${result.awarded}\nSkipped: ${result.skipped}\n\n${summary || 'No new RP awarded.'}`);
+        } catch (e: any) {
+            alert(`Backfill failed: ${e.message}`);
+        } finally {
+            setIsBackfilling(false);
+        }
+    };
 
     const filteredUsers = () => {
         if (!users()) return [];
@@ -153,6 +173,15 @@ const AdminUsers = () => {
                         title="Refresh"
                     >
                         <RefreshCw class={`w-5 h-5 ${users.loading ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                        onClick={handleBackfillRP}
+                        disabled={isBackfilling()}
+                        class="flex items-center gap-2 px-4 py-3 bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all border border-amber-500/20"
+                        title="Retroactively award RP to all users based on referral count"
+                    >
+                        <Award class={`w-4 h-4 ${isBackfilling() ? 'animate-spin' : ''}`} />
+                        {isBackfilling() ? 'Processing...' : 'Backfill RP'}
                     </button>
                     <button
                         onClick={() => setIsInviteModalOpen(true)}

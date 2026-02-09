@@ -174,40 +174,203 @@ async function sendSecurityEmail(to, subject, htmlContent) {
  * @param {string} deviceInfo - Device details
  * @return {string} HTML content
  */
-function generateVerificationEmailHtml(code, deviceInfo) {
-  /* eslint-disable max-len */
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0b; color: #fff; padding: 40px; }
-        .container { max-width: 500px; margin: 0 auto; background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; }
-        .logo { font-size: 24px; font-weight: bold; color: #22d3ee; margin-bottom: 24px; }
-        .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #22d3ee; background: rgba(34,211,238,0.1); padding: 16px 24px; border-radius: 12px; display: inline-block; margin: 24px 0; }
-        .warning { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); padding: 16px; border-radius: 12px; margin-top: 24px; }
-        .footer { margin-top: 32px; font-size: 12px; color: #888; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="logo">Vision Chain</div>
-        <h2>New Device Verification</h2>
-        <p>A new device is trying to access your wallet. Enter this code to verify:</p>
-        <div class="code">${code}</div>
-        <p>This code expires in 15 minutes.</p>
-        <div class="warning">
-          <strong>Device Info:</strong><br/>
-          ${deviceInfo || "Unknown device"}
-        </div>
-        <p class="footer">
-          If you didn't request this, someone may be trying to access your account.
-          Please secure your account immediately.
-        </p>
+/**
+ * Base email layout wrapper - premium dark theme, inline styles for email client compatibility
+ * @param {string} bodyContent - Inner HTML content
+ * @param {string} previewText - Preview text for email clients
+ * @return {string} Complete HTML email
+ */
+function emailBaseLayout(bodyContent, previewText = "") {
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Vision Chain</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#08080a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  ${previewText ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${previewText}</div>` : ""}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#08080a;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:linear-gradient(145deg,#111113,#0d0d0f);border:1px solid rgba(255,255,255,0.06);border-radius:20px;overflow:hidden;">
+        <!-- Logo Header -->
+        <tr><td style="padding:28px 32px 20px;border-bottom:1px solid rgba(255,255,255,0.04);">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td>
+                <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;">
+                  <circle cx="16" cy="16" r="15" stroke="#22d3ee" stroke-width="2" fill="none"/>
+                  <path d="M16 6 L22 16 L16 26 L10 16 Z" fill="#22d3ee" opacity="0.3"/>
+                  <path d="M16 10 L20 16 L16 22 L12 16 Z" fill="#22d3ee"/>
+                </svg>
+                <span style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:0.5px;margin-left:10px;vertical-align:middle;">Vision Chain</span>
+              </td>
+              <td align="right">
+                <span style="font-size:10px;font-weight:700;color:#22d3ee;background:rgba(34,211,238,0.1);padding:4px 10px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;">Testnet</span>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Body Content -->
+        <tr><td style="padding:32px;">
+          ${bodyContent}
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:20px 32px 28px;border-top:1px solid rgba(255,255,255,0.04);">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td>
+              <p style="margin:0 0 8px;font-size:11px;color:#555;line-height:1.5;">
+                This is an automated message from Vision Chain. Do not reply to this email.
+              </p>
+              <p style="margin:0;font-size:10px;color:#333;">
+                &copy; ${new Date().getFullYear()} Vision Chain &middot; Powered by VISAI
+              </p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Reusable email UI components (inline-styled for email client compatibility)
+ */
+const emailComponents = {
+  /** Section title with icon indicator */
+  sectionTitle: (text, color = "#22d3ee") => `
+    <h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">${text}</h2>
+  `,
+
+  /** Subtitle / description */
+  subtitle: (text) => `
+    <p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">${text}</p>
+  `,
+
+  /** Info card (key-value pairs) */
+  infoCard: (rows, accentColor = "#22d3ee") => {
+    const rowsHtml = rows.map(([label, value, highlight]) => `
+      <tr>
+        <td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">${label}</td>
+        <td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:${highlight ? accentColor : "#fff"};">${value}</td>
+      </tr>
+    `).join("");
+    return `
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+        ${rowsHtml}
+      </table>
+    `;
+  },
+
+  /** Highlighted code/value box */
+  codeBox: (value, accentColor = "#22d3ee") => `
+    <div style="text-align:center;margin:24px 0;">
+      <div style="display:inline-block;font-size:32px;font-weight:800;letter-spacing:6px;color:${accentColor};background:rgba(${accentColor === "#22d3ee" ? "34,211,238" : "168,85,247"},0.08);padding:16px 32px;border-radius:12px;border:1px solid rgba(${accentColor === "#22d3ee" ? "34,211,238" : "168,85,247"},0.15);">
+        ${value}
       </div>
-    </body>
-    </html>
+    </div>
+  `,
+
+  /** Primary CTA button */
+  button: (text, url, color = "#22d3ee", textColor = "#000") => `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+      <tr><td align="center">
+        <a href="${url}" target="_blank" style="display:inline-block;background:${color};color:${textColor};font-size:13px;font-weight:800;text-decoration:none;padding:14px 32px;border-radius:10px;letter-spacing:0.5px;text-transform:uppercase;">${text}</a>
+      </td></tr>
+    </table>
+  `,
+
+  /** Warning/alert box */
+  alertBox: (content, type = "warning") => {
+    const colors = {
+      warning: { bg: "rgba(239,68,68,0.08)", border: "rgba(239,68,68,0.2)", accent: "#ef4444" },
+      info: { bg: "rgba(34,211,238,0.08)", border: "rgba(34,211,238,0.15)", accent: "#22d3ee" },
+      success: { bg: "rgba(34,197,94,0.08)", border: "rgba(34,197,94,0.15)", accent: "#22c55e" },
+    };
+    const c = colors[type] || colors.warning;
+    return `
+      <div style="background:${c.bg};border:1px solid ${c.border};border-radius:12px;padding:16px 20px;margin:16px 0;">
+        <p style="margin:0;font-size:13px;color:${c.accent};line-height:1.5;">${content}</p>
+      </div>
+    `;
+  },
+
+  /** Chain route visualization (Vision -> Destination) */
+  chainRoute: (fromChain, toChain) => `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr>
+        <td align="center" width="38%">
+          <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);border-radius:12px;padding:16px 12px;">
+            <div style="font-size:20px;margin-bottom:6px;">
+              <svg width="24" height="24" viewBox="0 0 32 32" fill="none" style="display:inline-block;vertical-align:middle;">
+                <circle cx="16" cy="16" r="12" stroke="#3b82f6" stroke-width="2" fill="none"/>
+                <path d="M16 10v12M12 14l4-4 4 4" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div style="font-size:10px;font-weight:800;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;">${fromChain}</div>
+          </div>
+        </td>
+        <td align="center" width="24%">
+          <div style="font-size:18px;color:#a855f7;">
+            <svg width="24" height="12" viewBox="0 0 24 12" fill="none" style="display:inline-block;vertical-align:middle;">
+              <path d="M0 6h20M16 1l5 5-5 5" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </td>
+        <td align="center" width="38%">
+          <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.15);border-radius:12px;padding:16px 12px;">
+            <div style="font-size:20px;margin-bottom:6px;">
+              <svg width="24" height="24" viewBox="0 0 32 32" fill="none" style="display:inline-block;vertical-align:middle;">
+                <circle cx="16" cy="16" r="12" stroke="#a855f7" stroke-width="2" fill="none"/>
+                <path d="M22 16a6 6 0 1 1-6-6M22 10v6h-6" stroke="#a855f7" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div style="font-size:10px;font-weight:800;color:#a855f7;text-transform:uppercase;letter-spacing:1px;">${toChain}</div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  `,
+
+  /** Status badge */
+  statusBadge: (text, type = "success") => {
+    const colors = { success: "#22c55e", pending: "#f59e0b", error: "#ef4444" };
+    const c = colors[type] || colors.success;
+    return `<span style="display:inline-block;font-size:10px;font-weight:800;color:${c};background:rgba(${type === "success" ? "34,197,94" : type === "pending" ? "245,158,11" : "239,68,68"},0.12);padding:4px 12px;border-radius:20px;letter-spacing:1px;text-transform:uppercase;">${text}</span>`;
+  },
+
+  /** Divider */
+  divider: () => `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+      <tr><td style="border-top:1px solid rgba(255,255,255,0.04);"></td></tr>
+    </table>
+  `,
+
+  /** Mono text (for hashes, addresses) */
+  monoText: (text) => `<span style="font-family:'SF Mono',SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;color:#666;">${text}</span>`,
+};
+
+/**
+ * Generate device verification email HTML
+ * @param {string} code - Verification code
+ * @param {string} deviceInfo - Device details
+ * @return {string} HTML content
+ */
+function generateVerificationEmailHtml(code, deviceInfo) {
+  const body = `
+    ${emailComponents.sectionTitle("Device Verification")}
+    ${emailComponents.subtitle("A new device is attempting to access your wallet. Enter the code below to verify this login.")}
+    ${emailComponents.codeBox(code)}
+    ${emailComponents.alertBox(`<strong>Device Info:</strong><br/>${deviceInfo || "Unknown device"}`, "info")}
+    ${emailComponents.alertBox("This code expires in <strong>15 minutes</strong>. If you didn't request this, someone may be trying to access your account. Secure your account immediately.", "warning")}
   `;
+  return emailBaseLayout(body, `Your Vision Chain verification code: ${code}`);
 }
 
 /**
@@ -217,44 +380,25 @@ function generateVerificationEmailHtml(code, deviceInfo) {
  * @return {string} HTML content
  */
 function generateSuspiciousActivityEmailHtml(reason, details) {
-  /* eslint-disable max-len */
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0b; color: #fff; padding: 40px; }
-        .container { max-width: 500px; margin: 0 auto; background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; }
-        .logo { font-size: 24px; font-weight: bold; color: #22d3ee; margin-bottom: 24px; }
-        .alert { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); padding: 20px; border-radius: 12px; margin: 24px 0; }
-        .details { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; }
-        .footer { margin-top: 32px; font-size: 12px; color: #888; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="logo">Vision Chain</div>
-        <h2>Security Alert</h2>
-        <div class="alert">
-          <strong>Suspicious Activity Detected</strong><br/>
-          ${reason}
-        </div>
-        <div class="details">
-          ${details}
-        </div>
-        <p>If this wasn't you, please:</p>
-        <ul>
-          <li>Change your password immediately</li>
-          <li>Review your recent account activity</li>
-          <li>Enable two-factor authentication</li>
-        </ul>
-        <p class="footer">
-          This is an automated security alert from Vision Chain.
-        </p>
-      </div>
-    </body>
-    </html>
+  const body = `
+    ${emailComponents.sectionTitle("Security Alert")}
+    ${emailComponents.subtitle("We detected suspicious activity on your Vision Chain account.")}
+    ${emailComponents.alertBox(`<strong>Reason:</strong> ${reason}`, "warning")}
+    ${emailComponents.infoCard([
+    ["Activity Details", "", false],
+  ], "#ef4444")}
+    <div style="background:rgba(255,255,255,0.03);padding:14px 16px;border-radius:10px;margin:0 0 20px;">
+      <p style="margin:0;font-size:12px;font-family:'SF Mono',monospace;color:#888;line-height:1.6;word-break:break-all;">${details}</p>
+    </div>
+    ${emailComponents.divider()}
+    <p style="margin:0 0 6px;font-size:13px;color:#ccc;font-weight:600;">If this wasn't you, please:</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 0 8px;">
+      <tr><td style="padding:4px 0;font-size:13px;color:#888;">&bull; Change your password immediately</td></tr>
+      <tr><td style="padding:4px 0;font-size:13px;color:#888;">&bull; Review your recent account activity</td></tr>
+      <tr><td style="padding:4px 0;font-size:13px;color:#888;">&bull; Enable two-factor authentication</td></tr>
+    </table>
   `;
+  return emailBaseLayout(body, `Security Alert: ${reason}`);
 }
 
 // =============================================================================
@@ -535,7 +679,7 @@ const VCN_TOKEN_ABI = [
  *   transactions?: Array<{recipient, amount, name?}>
  * }
  */
-exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK"] }, async (req, res) => {
+exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -1184,6 +1328,31 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
       }
     }
 
+    // Send email notification (don't block the response)
+    try {
+      const userEmail = await getUserEmailByWallet(user);
+      if (userEmail) {
+        switch (stakeAction) {
+          case "stake":
+            await sendStakingEmail(userEmail, { amount, txHash });
+            break;
+          case "unstake":
+            await sendUnstakeEmail(userEmail, { amount, txHash });
+            break;
+          case "claim":
+            await sendClaimRewardEmail(userEmail, { txHash });
+            break;
+          case "withdraw":
+            // Withdraw uses same template as claim
+            await sendClaimRewardEmail(userEmail, { txHash });
+            break;
+        }
+        console.log(`[Paymaster:Staking] Email notification sent to ${userEmail} for ${stakeAction}`);
+      }
+    } catch (emailErr) {
+      console.warn(`[Paymaster:Staking] Email notification failed:`, emailErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       txHash: txHash,
@@ -1205,6 +1374,46 @@ exports.paymasterTimeLock = exports.paymaster;
 // Legacy alias for bridgeWithPaymaster (backward compatibility)
 exports.bridgeWithPaymaster = exports.paymaster;
 
+
+// =============================================================================
+// REFERRAL SIGNUP NOTIFICATION (HTTPS)
+// =============================================================================
+exports.notifyReferralSignup = onRequest({ cors: true, invoker: "public", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  try {
+    const { referrerEmail, newUserEmail, referralCode } = req.body;
+
+    if (!referrerEmail || !newUserEmail) {
+      return res.status(400).json({ error: "Missing required fields: referrerEmail, newUserEmail" });
+    }
+
+    // Get referrer's current referral count
+    const referrerDoc = await db.collection("users").doc(referrerEmail.toLowerCase()).get();
+    const referrerData = referrerDoc.exists ? referrerDoc.data() : {};
+    const totalReferrals = referrerData.referralCount || 1;
+    const code = referralCode || referrerData.referralCode || "";
+
+    // Send email
+    await sendReferralSignupEmail(referrerEmail.toLowerCase(), {
+      newUserEmail,
+      totalReferrals,
+      referralCode: code,
+    });
+
+    console.log(`[Referral] Signup notification sent to ${referrerEmail} for new user ${newUserEmail}`);
+
+    return res.status(200).json({ success: true, message: "Referral notification sent" });
+  } catch (err) {
+    console.error("[Referral] Notification failed:", err);
+    return res.status(500).json({ error: err.message || "Failed to send notification" });
+  }
+});
 
 // --- Admin: Update VisionBridgeSecure Limits ---
 const VISION_BRIDGE_SECURE_ADDRESS = "0xFDA890183E1e18eE7b02A94d9DF195515D914655";
@@ -2416,20 +2625,18 @@ exports.enableTOTP = onCall({ cors: true, invoker: "public" }, async (request) =
     await logSecurityEvent(email, "TOTP_ENABLED", {}, db);
 
     // Send confirmation email
-    const emailHtml = `
-      <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: auto; padding: 40px; background: #111; color: #fff; border-radius: 16px;">
-        <h2 style="color: #22d3ee;">2FA Enabled Successfully</h2>
-        <p>Two-factor authentication has been enabled on your Vision Chain account.</p>
-        <p>Please save your backup codes in a secure location:</p>
-        <div style="background: #1a1a1a; padding: 16px; border-radius: 8px; font-family: monospace; margin: 24px 0;">
-          ${backupCodes.map((c) => `<div style="padding:4px 0;">${c}</div>`).join("")}
-        </div>
-        <p style="color: #888; font-size: 12px;">Each backup code can only be used once.</p>
-        <p style="color: #888; font-size: 12px; margin-top: 24px;">If you did not enable 2FA, please contact support immediately.</p>
+    const emailBody = `
+      ${emailComponents.sectionTitle("2FA Enabled Successfully")}
+      ${emailComponents.subtitle("Two-factor authentication has been enabled on your Vision Chain account.")}
+      ${emailComponents.alertBox("Your account is now protected with an additional layer of security.", "success")}
+      <p style="margin:0 0 12px;font-size:13px;color:#ccc;font-weight:600;">Save your backup codes in a secure location:</p>
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:16px 20px;border-radius:12px;margin:0 0 20px;">
+        ${backupCodes.map((c) => `<div style="padding:5px 0;font-family:'SF Mono',SFMono-Regular,Menlo,monospace;font-size:13px;color:#22d3ee;letter-spacing:1px;">${c}</div>`).join("")}
       </div>
+      ${emailComponents.alertBox("Each backup code can only be used <strong>once</strong>. If you did not enable 2FA, contact support immediately.", "warning")}
     `;
 
-    await sendSecurityEmail(email, "Vision Chain - 2FA Enabled", emailHtml);
+    await sendSecurityEmail(email, "Vision Chain - 2FA Enabled", emailBaseLayout(emailBody, "2FA has been enabled on your Vision Chain account"));
 
     console.log(`[TOTP] Enabled for ${email}`);
 
@@ -2629,16 +2836,18 @@ exports.disableTOTP = onCall({ cors: true, invoker: "public" }, async (request) 
     await logSecurityEvent(email, "TOTP_DISABLED", {}, db);
 
     // Send notification email
-    const emailHtml = `
-      <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: auto; padding: 40px; background: #111; color: #fff; border-radius: 16px;">
-        <h2 style="color: #ef4444;">2FA Disabled</h2>
-        <p>Two-factor authentication has been disabled on your Vision Chain account.</p>
-        <p style="color: #888; font-size: 12px;">If you did not make this change, please contact support immediately and change your password.</p>
-        <p style="color: #888; font-size: 12px; margin-top: 24px;">Time: ${new Date().toISOString()}</p>
-      </div>
+    const emailBody = `
+      ${emailComponents.sectionTitle("2FA Disabled")}
+      ${emailComponents.subtitle("Two-factor authentication has been disabled on your Vision Chain account.")}
+      ${emailComponents.alertBox("Your account no longer has two-factor authentication protection. We strongly recommend re-enabling 2FA.", "warning")}
+      ${emailComponents.infoCard([
+      ["Event", "2FA Disabled", false],
+      ["Time", new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC", false],
+    ], "#ef4444")}
+      ${emailComponents.alertBox("If you did not make this change, please contact support immediately and change your password.", "warning")}
     `;
 
-    await sendSecurityEmail(email, "Vision Chain - 2FA Disabled", emailHtml);
+    await sendSecurityEmail(email, "Vision Chain - 2FA Disabled", emailBaseLayout(emailBody, "2FA has been disabled on your Vision Chain account"));
 
     console.log(`[TOTP] Disabled for ${email}`);
 
@@ -3240,6 +3449,145 @@ async function getBridgeUserEmail(address) {
 }
 
 /**
+ * Get user email by wallet address (reusable across all notification types)
+ * @param {string} walletAddress - The wallet address
+ * @return {Promise<string|null>} User email or null
+ */
+async function getUserEmailByWallet(walletAddress) {
+  if (!walletAddress) return null;
+  try {
+    const snap = await db.collection("users")
+      .where("walletAddress", "==", walletAddress.toLowerCase())
+      .limit(1)
+      .get();
+    if (!snap.empty) return snap.docs[0].id;
+
+    // Try checksum format
+    const snapCS = await db.collection("users")
+      .where("walletAddress", "==", walletAddress)
+      .limit(1)
+      .get();
+    if (!snapCS.empty) return snapCS.docs[0].id;
+  } catch (e) {
+    console.warn("[Email] getUserEmailByWallet failed:", e.message);
+  }
+  return null;
+}
+
+// =============================================================================
+// EMAIL TEMPLATES - Staking Notifications
+// =============================================================================
+
+/**
+ * Send staking confirmation email
+ */
+async function sendStakingEmail(email, { amount, txHash }) {
+  const formattedAmount = ethers.formatEther(BigInt(amount));
+  const explorerUrl = `https://www.visionchain.co/visionscan/tx/${txHash}`;
+
+  const body = `
+    ${emailComponents.sectionTitle("Staking Confirmed")}
+    ${emailComponents.subtitle("Your VCN tokens have been successfully staked on Vision Chain.")}
+    ${emailComponents.alertBox("Your tokens are now earning rewards. You can view your staking status in the wallet dashboard.", "success")}
+    ${emailComponents.infoCard([
+    ["Staked Amount", `${formattedAmount} VCN`, true],
+    ["Status", emailComponents.statusBadge("Active", "success"), false],
+  ])}
+    ${emailComponents.button("View Transaction", explorerUrl)}
+    ${emailComponents.divider()}
+    <p style="margin:0;font-size:11px;color:#555;">
+      TX: ${emailComponents.monoText(`${txHash.slice(0, 14)}...${txHash.slice(-8)}`)}
+    </p>
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Staking Confirmed", emailBaseLayout(body, `${formattedAmount} VCN staked successfully`));
+}
+
+/**
+ * Send unstaking + cooldown notice email
+ */
+async function sendUnstakeEmail(email, { amount, txHash, cooldownDays = 7 }) {
+  const formattedAmount = ethers.formatEther(BigInt(amount));
+  const explorerUrl = `https://www.visionchain.co/visionscan/tx/${txHash}`;
+  const cooldownEnd = new Date(Date.now() + cooldownDays * 24 * 60 * 60 * 1000);
+  const endDateStr = `${cooldownEnd.getFullYear()}-${String(cooldownEnd.getMonth() + 1).padStart(2, "0")}-${String(cooldownEnd.getDate()).padStart(2, "0")} ${String(cooldownEnd.getHours()).padStart(2, "0")}:${String(cooldownEnd.getMinutes()).padStart(2, "0")} KST`;
+
+  const body = `
+    ${emailComponents.sectionTitle("Unstaking Requested")}
+    ${emailComponents.subtitle("Your unstaking request has been submitted. A cooldown period is now active.")}
+    ${emailComponents.infoCard([
+    ["Unstake Amount", `${formattedAmount} VCN`, true],
+    ["Cooldown Period", `${cooldownDays} Days`, false],
+    ["Available After", endDateStr, false],
+    ["Status", emailComponents.statusBadge("Cooling Down", "pending"), false],
+  ])}
+    ${emailComponents.alertBox(`Your tokens will be available for withdrawal after <strong>${endDateStr}</strong>. You will receive another email when your tokens are ready.`, "info")}
+    ${emailComponents.button("View Transaction", explorerUrl)}
+    ${emailComponents.divider()}
+    <p style="margin:0;font-size:11px;color:#555;">
+      TX: ${emailComponents.monoText(`${txHash.slice(0, 14)}...${txHash.slice(-8)}`)}
+    </p>
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Unstaking Cooldown Started", emailBaseLayout(body, `${formattedAmount} VCN unstaking - ${cooldownDays} day cooldown`));
+}
+
+/**
+ * Send reward claim confirmation email
+ */
+async function sendClaimRewardEmail(email, { txHash }) {
+  const explorerUrl = `https://www.visionchain.co/visionscan/tx/${txHash}`;
+
+  const body = `
+    ${emailComponents.sectionTitle("Rewards Claimed")}
+    ${emailComponents.subtitle("Your staking rewards have been successfully claimed and sent to your wallet.")}
+    ${emailComponents.alertBox("The claimed VCN has been deposited to your wallet balance.", "success")}
+    ${emailComponents.infoCard([
+    ["Status", emailComponents.statusBadge("Claimed", "success"), false],
+  ])}
+    ${emailComponents.button("View Transaction", explorerUrl)}
+    ${emailComponents.divider()}
+    <p style="margin:0;font-size:11px;color:#555;">
+      TX: ${emailComponents.monoText(`${txHash.slice(0, 14)}...${txHash.slice(-8)}`)}
+    </p>
+  `;
+
+  await sendSecurityEmail(email, "Vision Chain - Staking Rewards Claimed", emailBaseLayout(body, "Your staking rewards have been claimed"));
+}
+
+// =============================================================================
+// EMAIL TEMPLATES - Referral Notifications
+// =============================================================================
+
+/**
+ * Send referral signup notification to the referrer
+ */
+async function sendReferralSignupEmail(referrerEmail, { newUserEmail, totalReferrals, referralCode }) {
+  const maskedEmail = newUserEmail.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + "*".repeat(Math.min(b.length, 6)) + c);
+  const dashboardUrl = "https://visionchain.co/wallet";
+  const shareUrl = `https://visionchain.co/signup?ref=${referralCode}`;
+
+  const body = `
+    ${emailComponents.sectionTitle("New Referral Signup!")}
+    ${emailComponents.subtitle("Someone signed up using your referral code. Your network is growing!")}
+    ${emailComponents.alertBox("A new user has joined Vision Chain through your referral link.", "success")}
+    ${emailComponents.infoCard([
+    ["New Member", maskedEmail, true],
+    ["Total Referrals", `${totalReferrals}`, false],
+    ["Your Code", referralCode, false],
+  ])}
+    ${emailComponents.button("View Dashboard", dashboardUrl)}
+    ${emailComponents.divider()}
+    <p style="margin:0 0 12px;font-size:12px;color:#888;">Share your referral link to invite more members:</p>
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:12px 16px;border-radius:10px;">
+      <p style="margin:0;font-size:11px;font-family:'SF Mono',monospace;color:#22d3ee;word-break:break-all;">${shareUrl}</p>
+    </div>
+  `;
+
+  await sendSecurityEmail(referrerEmail, "Vision Chain - New Referral Signup!", emailBaseLayout(body, `New referral! You now have ${totalReferrals} referrals`));
+}
+
+/**
  * Send bridge completion notification email
  * @param {string} email - User email
  * @param {object} bridge - Bridge transaction data
@@ -3248,31 +3596,33 @@ async function getBridgeUserEmail(address) {
 async function sendBridgeCompleteEmail(email, bridge, destTxHash) {
   const amount = ethers.formatEther(BigInt(bridge.amount));
   const destChain = bridge.dstChainId === SEPOLIA_CHAIN_ID ? "Ethereum Sepolia" : "Vision Chain";
+  const sourceChain = bridge.dstChainId === SEPOLIA_CHAIN_ID ? "Vision Chain" : "Ethereum Sepolia";
   const explorerUrl = bridge.dstChainId === SEPOLIA_CHAIN_ID ?
     `https://sepolia.etherscan.io/tx/${destTxHash}` :
     `https://www.visionchain.co/visionscan/tx/${destTxHash}`;
 
-  const emailHtml = `
-    <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: auto; padding: 40px; background: #111; color: #fff; border-radius: 16px;">
-      <h2 style="color: #22d3ee;">Bridge Complete!</h2>
-      <p>Your cross-chain transfer has been successfully completed.</p>
-      
-      <div style="background: rgba(34,211,238,0.1); padding: 20px; border-radius: 12px; margin: 20px 0;">
-        <p style="margin: 0;"><strong>Amount:</strong> ${amount} VCN</p>
-        <p style="margin: 8px 0 0 0;"><strong>Destination:</strong> ${destChain}</p>
-      </div>
-      
-      <a href="${explorerUrl}" style="display: inline-block; background: #22d3ee; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 8px; text-decoration: none;">
-        View Transaction
-      </a>
-      
-      <p style="color: #888; font-size: 12px; margin-top: 24px;">
-        Transaction: ${destTxHash.slice(0, 10)}...${destTxHash.slice(-8)}
-      </p>
-    </div>
+  const body = `
+    ${emailComponents.sectionTitle("Bridge Transfer Complete")}
+    ${emailComponents.subtitle("Your cross-chain transfer has been successfully completed and finalized.")}
+    
+    ${emailComponents.chainRoute(sourceChain, destChain)}
+    
+    ${emailComponents.infoCard([
+    ["Amount", `${amount} VCN`, true],
+    ["Source Chain", sourceChain, false],
+    ["Destination", destChain, false],
+    ["Status", emailComponents.statusBadge("Delivered", "success"), false],
+  ], "#a855f7")}
+    
+    ${emailComponents.button("View on Explorer", explorerUrl, "#a855f7", "#fff")}
+    
+    ${emailComponents.divider()}
+    <p style="margin:0;font-size:11px;color:#555;">
+      Destination TX: ${emailComponents.monoText(`${destTxHash.slice(0, 14)}...${destTxHash.slice(-8)}`)}
+    </p>
   `;
 
-  await sendSecurityEmail(email, "Vision Chain - Bridge Transfer Complete", emailHtml);
+  await sendSecurityEmail(email, "Vision Chain - Bridge Transfer Complete", emailBaseLayout(body, `${amount} VCN bridged to ${destChain}`));
 }
 
 // =============================================================================
