@@ -231,6 +231,7 @@ const Wallet = (): JSX.Element => {
         intentData?: any;
     } | null>(null);
     const [isBridging, setIsBridging] = createSignal(false);
+    const [bridgeDelay, setBridgeDelay] = createSignal(2); // Default 2 minutes bridge challenge period
 
 
     // PWA Install State
@@ -2491,9 +2492,12 @@ const Wallet = (): JSX.Element => {
     };
 
     // === Cross-Chain Bridge Confirmation (Request Password) ===
-    const handleExecuteBridge = async () => {
+    const handleExecuteBridge = async (delay?: number) => {
         const bridge = pendingBridge();
         if (!bridge || isBridging()) return;
+
+        // Store the user-selected delay
+        if (delay !== undefined) setBridgeDelay(delay);
 
         // Check if local wallet exists
         const encrypted = WalletService.getEncryptedWallet(userProfile().email);
@@ -2510,7 +2514,7 @@ const Wallet = (): JSX.Element => {
 
         // Request password for signing
         setPasswordMode('verify');
-        setPendingAction({ type: 'bridge', data: bridge });
+        setPendingAction({ type: 'bridge', data: { ...bridge, bridgeDelayMinutes: delay || bridgeDelay() } });
         setWalletPassword('');
         setConfirmWalletPassword('');
         setShowPasswordModal(true);
@@ -2607,8 +2611,16 @@ const Wallet = (): JSX.Element => {
 
             console.log('[Bridge] Paymaster response:', result);
 
-            // Remove optimistic task (Firestore onSnapshot will create the real one)
-            setBridgeTasks(prev => prev.filter(t => t.id !== optimisticId));
+            // Update optimistic task with real data (keep it until Firestore onSnapshot picks up the real doc)
+            setBridgeTasks(prev => prev.map(t =>
+                t.id === optimisticId
+                    ? { ...t, status: 'LOCKED' as const, summary: `${bridge.amount} VCN → ${bridge.destinationChain === 'SEPOLIA' ? 'Sepolia' : bridge.destinationChain}${bridge.recipient ? ` (${bridge.recipient})` : ''}` }
+                    : t
+            ));
+            // Remove optimistic task after 10s (Firestore onSnapshot should have it by then)
+            setTimeout(() => {
+                setBridgeTasks(prev => prev.filter(t => t.id !== optimisticId));
+            }, 10000);
 
             const resultTxHash = result.lockTxHash || result.commitTxHash;
             const intentHash = result.intentHash;
@@ -2661,7 +2673,7 @@ const Wallet = (): JSX.Element => {
                     intentHash: intentHash,
                     commitTxHash: result.commitTxHash,
                     lockTxHash: result.lockTxHash,
-                    challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
+                    challengeEndTime: Date.now() + (bridgeDelay() * 60 * 1000), // User-selected challenge period
                     metadata: {
                         destinationChain: bridge.destinationChain,
                         srcChainId: 1337,
@@ -3510,6 +3522,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 isBridging={isBridging}
                                 onExecuteBridge={handleExecuteBridge}
                                 onCancelBridge={handleCancelBridge}
+                                bridgeDelay={bridgeDelay}
+                                onBridgeDelayChange={setBridgeDelay}
                             />
                         </div>
 

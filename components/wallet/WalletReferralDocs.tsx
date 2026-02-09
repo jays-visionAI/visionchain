@@ -14,7 +14,8 @@ import {
     ArrowRight,
     Target,
     Gift,
-    BarChart3
+    BarChart3,
+    UserPlus
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { Motion } from 'solid-motionone';
@@ -96,6 +97,69 @@ export const WalletReferralDocs = () => {
                                     </div>
                                     <p class="text-xs text-gray-400 font-mono">
                                         *Fixed rate across all ranks.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="h-[1px] bg-white/5 w-full" />
+
+                {/* Section: Reward Points (RP) */}
+                <section class="space-y-8">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                            <Award class="w-5 h-5 text-amber-400" />
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-black text-white uppercase italic tracking-tight">Reward <span class="text-amber-500">Points</span></h2>
+                            <p class="text-gray-500 text-sm">Earn RP through referrals and milestones. Claim Native VCN with your points.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Per Referral RP */}
+                        <div class="bg-[#111113] border border-amber-500/30 rounded-[32px] p-8 relative overflow-hidden group hover:border-amber-500/50 transition-colors">
+                            <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                                <UserPlus class="w-40 h-40 text-amber-500" />
+                            </div>
+                            <div class="relative z-10">
+                                <div class="text-amber-400 text-xs font-black uppercase tracking-widest mb-2">Per Referral</div>
+                                <h3 class="text-3xl font-black text-white mb-4">+10 RP</h3>
+                                <p class="text-gray-400 leading-relaxed mb-6">
+                                    Every time a new user joins through your invite link, you earn 10 Reward Points instantly.
+                                </p>
+                                <div class="bg-amber-500/10 rounded-2xl p-6 border border-amber-500/20">
+                                    <div class="flex items-baseline gap-2 mb-1">
+                                        <span class="text-4xl font-black text-white">10</span>
+                                        <span class="text-sm font-bold text-amber-400 uppercase">RP per Invite</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 font-mono">
+                                        *1 RP = 1 VCN claimable value
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Level-Up Bonus RP */}
+                        <div class="bg-[#111113] border border-purple-500/30 rounded-[32px] p-8 relative overflow-hidden group hover:border-purple-500/50 transition-colors">
+                            <div class="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                                <Trophy class="w-40 h-40 text-purple-500" />
+                            </div>
+                            <div class="relative z-10">
+                                <div class="text-purple-400 text-xs font-black uppercase tracking-widest mb-2">Level-Up Bonus</div>
+                                <h3 class="text-3xl font-black text-white mb-4">+100 RP</h3>
+                                <p class="text-gray-400 leading-relaxed mb-6">
+                                    Reach every 10th level milestone to earn a massive RP bonus. Level 10, 20, 30 and beyond!
+                                </p>
+                                <div class="bg-purple-500/10 rounded-2xl p-6 border border-purple-500/20">
+                                    <div class="flex items-baseline gap-2 mb-1">
+                                        <span class="text-4xl font-black text-white">100</span>
+                                        <span class="text-sm font-bold text-purple-400 uppercase">RP per Milestone</span>
+                                    </div>
+                                    <p class="text-xs text-gray-400 font-mono">
+                                        *Every 10 levels (LVL 10, 20, 30...)
                                     </p>
                                 </div>
                             </div>

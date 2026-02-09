@@ -2705,14 +2705,29 @@ exports.bridgeRelayer = onSchedule({
     // DEBUG: Check ALL Bridge type transactions (regardless of status)
     const allBridgeTypeTxs = await db.collection("transactions")
       .where("type", "==", "Bridge")
-      .limit(20)
+      .limit(50)
       .get();
     console.log(`[Bridge Relayer] ALL Bridge type transactions: ${allBridgeTypeTxs.size}`);
-    if (allBridgeTypeTxs.size > 0) {
-      allBridgeTypeTxs.docs.slice(0, 5).forEach((doc) => {
+
+    // Group by bridgeStatus for summary
+    const statusCounts = {};
+    allBridgeTypeTxs.docs.forEach((doc) => {
+      const data = doc.data();
+      const st = data.bridgeStatus || "UNKNOWN";
+      statusCounts[st] = (statusCounts[st] || 0) + 1;
+    });
+    console.log(`[Bridge Relayer] Status breakdown: ${JSON.stringify(statusCounts)}`);
+
+    // Show ALL LOCKED transactions (the ones we're supposed to process)
+    const lockedDocs = allBridgeTypeTxs.docs.filter((d) => d.data().bridgeStatus === "LOCKED");
+    if (lockedDocs.length > 0) {
+      console.log(`[Bridge Relayer] FOUND ${lockedDocs.length} LOCKED docs in full scan:`);
+      lockedDocs.forEach((doc) => {
         const data = doc.data();
-        console.log(`[Bridge Relayer] DEBUG tx/${doc.id}: bridgeStatus=${data.bridgeStatus}, challengeEndTime=${data.challengeEndTime}, now=${Date.now()}`);
+        console.log(`[Bridge Relayer] LOCKED tx/${doc.id}: challengeEndTime=${data.challengeEndTime}, now=${Date.now()}, pastChallenge=${data.challengeEndTime <= Date.now()}, recipient=${data.recipient}`);
       });
+    } else {
+      console.log(`[Bridge Relayer] No LOCKED docs found in full scan`);
     }
 
 

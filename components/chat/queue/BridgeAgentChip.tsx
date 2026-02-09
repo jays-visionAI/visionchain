@@ -159,7 +159,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
                         srcChainId: data.metadata?.srcChainId || 1337,
                         dstChainId: data.metadata?.dstChainId || 11155111,
                         amount: String(parseFloat(data.value || '0') * 1e18),
-                        recipient: data.from_addr,
+                        recipient: data.recipient || data.from_addr,
                         txHash: data.hash,
                         intentHash: data.intentHash,
                         status: status as BridgeTransaction['status'],
@@ -200,7 +200,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     // Filter visible bridges (active + recently completed within 1 minute, respect hiddenFromDesk)
     const visibleBridges = () => {
         const now = Date.now();
-        const oneMinute = 60 * 1000;
+        const fiveMinutes = 5 * 60 * 1000;
 
         return bridges().filter(b => {
             // Skip if user dismissed from desk
@@ -216,7 +216,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
             if (b.status === 'COMPLETED' || b.status === 'FINALIZED') {
                 const completedTime = b.completedAt?.toDate?.()?.getTime() ||
                     b.createdAt?.toDate?.()?.getTime() || 0; // Fallback to createdAt if completedAt is missing
-                return (now - completedTime) < oneMinute;
+                return (now - completedTime) < fiveMinutes;
             }
 
             // Show failed bridges (unless hidden)

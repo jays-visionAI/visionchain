@@ -1,5 +1,5 @@
 import { Show, For, createSignal, onMount, createEffect } from 'solid-js';
-import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink } from 'lucide-solid';
+import { Plus, ArrowUpRight, ArrowDownLeft, RefreshCw, ExternalLink, ArrowRightLeft } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { contractService } from '../../services/contractService';
 import { getFirebaseDb } from '../../services/firebaseService';
@@ -21,8 +21,10 @@ interface Transaction {
     status: 'success' | 'pending' | 'challenged' | 'reverted';
     metadata?: any;
     blockNumber: number;
-    bridgeStatus?: 'PENDING' | 'CHALLENGED' | 'FINALIZED' | 'REVERTED';
+    bridgeStatus?: 'PENDING' | 'LOCKED' | 'PROCESSING' | 'COMPLETED' | 'CHALLENGED' | 'FINALIZED' | 'REVERTED' | 'FAILED';
     challengeEndTime?: number;
+    destinationTxHash?: string;  // Sepolia tx hash after bridge completion
+    recipient?: string;          // Bridge recipient address
 }
 
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
@@ -99,7 +101,10 @@ export const WalletActivity = (props: WalletActivityProps) => {
                 status: 'success' as const,
                 blockNumber: tx.block_number || 0,
                 bridgeStatus: tx.bridgeStatus || undefined,
-                challengeEndTime: tx.challengeEndTime || undefined
+                challengeEndTime: tx.challengeEndTime || undefined,
+                destinationTxHash: tx.destinationTxHash || tx.sepoliaTxHash || undefined,
+                recipient: tx.recipient || undefined,
+                metadata: tx.metadata || undefined
             }));
 
             setTransactions(mapped);
@@ -211,6 +216,22 @@ export const WalletActivity = (props: WalletActivityProps) => {
                             const isBridge = tx.type === 'Bridge' || tx.to_addr.startsWith('bridge:');
                             const date = new Date(tx.timestamp).toLocaleString();
                             const shortHash = `${tx.hash.slice(0, 6)}...${tx.hash.slice(-4)}`;
+                            const destChainName = isBridge ? (tx.to_addr.replace('bridge:', '') || tx.metadata?.destinationChain || 'Sepolia') : '';
+                            const sepoliaExplorerUrl = tx.destinationTxHash ? `https://sepolia.etherscan.io/tx/${tx.destinationTxHash}` : null;
+                            const isBridgeComplete = tx.bridgeStatus === 'COMPLETED' || tx.bridgeStatus === 'FINALIZED';
+                            const isBridgePending = tx.bridgeStatus === 'PENDING' || tx.bridgeStatus === 'LOCKED' || tx.bridgeStatus === 'PROCESSING';
+                            const isBridgeFailed = tx.bridgeStatus === 'FAILED';
+
+                            // Find recipient contact name for bridge
+                            const bridgeRecipientAddr = tx.recipient;
+                            const bridgeRecipientContact = bridgeRecipientAddr ? props.contacts?.find((c: any) =>
+                                c.address?.toLowerCase() === bridgeRecipientAddr?.toLowerCase()
+                            ) : null;
+                            const bridgeRecipientDisplay = bridgeRecipientContact
+                                ? (bridgeRecipientContact.internalName || bridgeRecipientContact.name)
+                                : (bridgeRecipientAddr && bridgeRecipientAddr !== tx.from_addr
+                                    ? `${bridgeRecipientAddr.slice(0, 6)}...${bridgeRecipientAddr.slice(-4)}`
+                                    : null);
 
                             return (
                                 <div
@@ -223,17 +244,27 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                             : isIncoming
                                                 ? 'bg-green-500/10 text-green-400'
                                                 : 'bg-blue-500/10 text-blue-400'}`}>
-                                            {isBridge ? <RefreshCw class="w-5 h-5" /> : isIncoming ? <ArrowDownLeft class="w-5 h-5" /> : <ArrowUpRight class="w-5 h-5" />}
+                                            {isBridge ? <ArrowRightLeft class="w-5 h-5" /> : isIncoming ? <ArrowDownLeft class="w-5 h-5" /> : <ArrowUpRight class="w-5 h-5" />}
                                         </div>
                                         <div class="flex-1 min-w-0 pr-2">
                                             <div class="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">
                                                 {isBridge ? (
-                                                    <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                                        <span class="text-purple-400 font-bold">Bridge</span>
-                                                        <span class="text-gray-400">to</span>
-                                                        <span class="text-purple-300 font-black uppercase tracking-tight">
-                                                            {tx.to_addr.replace('bridge:', '')}
-                                                        </span>
+                                                    <div class="flex flex-col gap-0.5">
+                                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                            <span class="text-purple-400 font-bold">Bridge</span>
+                                                            <span class="text-gray-500 text-[10px]">Vision</span>
+                                                            <svg class="w-3 h-3 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                                                            <span class="text-purple-300 font-black uppercase tracking-tight">
+                                                                {destChainName}
+                                                            </span>
+                                                        </div>
+                                                        {/* Show recipient if bridging to someone else */}
+                                                        <Show when={bridgeRecipientDisplay}>
+                                                            <div class="flex items-center gap-1 text-[10px]">
+                                                                <span class="text-gray-500">To:</span>
+                                                                <span class="text-purple-300 font-bold">{bridgeRecipientDisplay}</span>
+                                                            </div>
+                                                        </Show>
                                                     </div>
                                                 ) : (() => {
                                                     const counterpartyAddr = isIncoming ? tx.from_addr : tx.to_addr;
@@ -262,24 +293,51 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                         <div class={`text-sm font-bold ${isIncoming ? 'text-green-400' : 'text-white'}`}>
                                             {isIncoming ? '+' : '-'}{parseFloat(tx.value).toLocaleString(undefined, { maximumFractionDigits: 6 })} VCN
                                         </div>
+                                        {/* Source Chain (Vision) tx link */}
                                         <a
                                             href={`/visionscan?tx=${tx.hash}`}
                                             target="_blank"
                                             class="text-[10px] font-mono text-gray-500 hover:text-white flex items-center justify-end gap-1 mt-1 transition-colors"
                                             onClick={(e) => e.stopPropagation()}
                                         >
+                                            <Show when={isBridge}><span class="text-gray-600">SRC</span></Show>
                                             {shortHash} <ExternalLink class="w-2.5 h-2.5" />
                                         </a>
+                                        {/* Destination Chain (Sepolia) tx link - LayerZero-style dual hash */}
+                                        <Show when={isBridge && sepoliaExplorerUrl}>
+                                            <a
+                                                href={sepoliaExplorerUrl!}
+                                                target="_blank"
+                                                class="text-[10px] font-mono text-purple-400/70 hover:text-purple-300 flex items-center justify-end gap-1 mt-0.5 transition-colors"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <span class="text-purple-500/50">DST</span>
+                                                {tx.destinationTxHash!.slice(0, 6)}...{tx.destinationTxHash!.slice(-4)}
+                                                <ExternalLink class="w-2.5 h-2.5" />
+                                            </a>
+                                        </Show>
                                         {/* Bridge Status Badge */}
-                                        <Show when={tx.bridgeStatus && tx.bridgeStatus !== 'FINALIZED'}>
-                                            <div class={`mt-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ${tx.bridgeStatus === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                                tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                    'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                                        <Show when={isBridge}>
+                                            <div class={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${isBridgeComplete ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                    isBridgeFailed ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                        isBridgePending ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                                            'bg-gray-500/10 text-gray-400 border border-gray-500/20'
                                                 }`}>
-                                                <span class={`w-1.5 h-1.5 rounded-full animate-pulse ${tx.bridgeStatus === 'PENDING' ? 'bg-amber-400' :
-                                                    tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-400' : 'bg-gray-400'
-                                                    }`} />
-                                                {tx.bridgeStatus === 'PENDING' ? 'Pending' : tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : tx.bridgeStatus}
+                                                <Show when={isBridgePending}>
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                                </Show>
+                                                <Show when={isBridgeComplete}>
+                                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                                                </Show>
+                                                <Show when={isBridgeFailed}>
+                                                    <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+                                                </Show>
+                                                {
+                                                    isBridgeComplete ? 'Delivered' :
+                                                        isBridgeFailed ? 'Failed' :
+                                                            isBridgePending ? 'In Flight' :
+                                                                tx.bridgeStatus || 'Pending'
+                                                }
                                             </div>
                                         </Show>
                                     </div>

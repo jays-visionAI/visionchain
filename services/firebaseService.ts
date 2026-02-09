@@ -778,7 +778,7 @@ export const getRoundLeaderboard = async (roundId?: number): Promise<{
 };
 
 /**
- * Records a new referral for the current round.
+ * Records a new referral for the current round and awards RP.
  */
 export const recordRoundReferral = async (referrerId: string, newUserEmail: string): Promise<void> => {
     const db = getFirebaseDb();
@@ -796,10 +796,26 @@ export const recordRoundReferral = async (referrerId: string, newUserEmail: stri
         totalNewUsers: (roundSnap.data()?.totalNewUsers || 0) + 1
     });
 
-    // Update participant record
+    // Update participant record and track previous count for RP
     const participantId = `${roundId}_${referrerId.toLowerCase()}`;
     const participantRef = doc(db, 'referral_round_participants', participantId);
     const participantSnap = await getDoc(participantRef);
+
+    let previousTotalRefs = 0;
+    let newTotalRefs = 0;
+
+    // Get user's total referral count from user profile for level calculation
+    try {
+        const usersRef = collection(db, 'users');
+        const userQuery = query(usersRef, where('email', '==', referrerId.toLowerCase()));
+        const userSnap = await getDocs(userQuery);
+        if (!userSnap.empty) {
+            previousTotalRefs = userSnap.docs[0].data().referralCount || 0;
+            newTotalRefs = previousTotalRefs + 1;
+        }
+    } catch (e) {
+        console.warn('[Referral Round] Could not fetch user referral count for RP:', e);
+    }
 
     if (participantSnap.exists()) {
         const data = participantSnap.data();
@@ -818,6 +834,14 @@ export const recordRoundReferral = async (referrerId: string, newUserEmail: stri
             claimed: false
         };
         await setDoc(participantRef, newParticipant);
+    }
+
+    // Award RP (10 RP per referral + level-up bonus if applicable)
+    try {
+        const result = await awardReferralRP(referrerId, newUserEmail, previousTotalRefs, newTotalRefs);
+        console.log(`[Referral Round] RP awarded: referral=${result.referralRP}, levelup=${result.levelupRP}`);
+    } catch (e) {
+        console.error('[Referral Round] Failed to award RP:', e);
     }
 
     console.log(`[Referral Round] Recorded referral in round ${roundId}: ${referrerId} -> ${newUserEmail}`);
@@ -876,6 +900,188 @@ export const getUserClaimableRewards = async (email: string): Promise<{
         console.error("Error fetching claimable rewards:", e);
         return { totalClaimable: 0, rounds: [] };
     }
+};
+
+// ==================== Reward Point (RP) System ====================
+
+export interface RPEntry {
+    id?: string;
+    userId: string;         // email
+    type: 'referral' | 'levelup';
+    amount: number;         // RP earned
+    source: string;         // e.g. "user@email.com" or "Reached LVL 10"
+    roundId?: number;
+    timestamp: string;
+}
+
+export interface UserRP {
+    totalRP: number;
+    claimedRP: number;
+    availableRP: number;    // totalRP - claimedRP
+}
+
+const RP_PER_REFERRAL = 10;
+const RP_LEVELUP_BONUS = 100;
+const LEVELUP_INTERVAL = 10; // Every 10 levels
+
+/**
+ * Calculates level from referral count using triangular number formula.
+ */
+const calculateLevelFromRefs = (count: number): number => {
+    let level = Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2);
+    return Math.min(level, 100);
+};
+
+/**
+ * Adds RP to a user and logs the entry.
+ */
+export const addRewardPoints = async (
+    userId: string,
+    amount: number,
+    type: 'referral' | 'levelup',
+    source: string,
+    roundId?: number
+): Promise<void> => {
+    const db = getFirebaseDb();
+    const userRPRef = doc(db, 'user_reward_points', userId.toLowerCase());
+
+    // Add RP history entry
+    const entry: RPEntry = {
+        userId: userId.toLowerCase(),
+        type,
+        amount,
+        source,
+        roundId,
+        timestamp: new Date().toISOString()
+    };
+    await addDoc(collection(db, 'rp_history'), entry);
+
+    // Update user's total RP
+    const userSnap = await getDoc(userRPRef);
+    if (userSnap.exists()) {
+        const data = userSnap.data();
+        await updateDoc(userRPRef, {
+            totalRP: (data.totalRP || 0) + amount,
+            availableRP: (data.availableRP || 0) + amount,
+            updatedAt: new Date().toISOString()
+        });
+    } else {
+        await setDoc(userRPRef, {
+            userId: userId.toLowerCase(),
+            totalRP: amount,
+            claimedRP: 0,
+            availableRP: amount,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        });
+    }
+
+    console.log(`[RP] +${amount} RP to ${userId} (${type}: ${source})`);
+};
+
+/**
+ * Gets a user's RP summary.
+ */
+export const getUserRP = async (userId: string): Promise<UserRP> => {
+    try {
+        const db = getFirebaseDb();
+        const userRPRef = doc(db, 'user_reward_points', userId.toLowerCase());
+        const snap = await getDoc(userRPRef);
+
+        if (snap.exists()) {
+            const data = snap.data();
+            return {
+                totalRP: data.totalRP || 0,
+                claimedRP: data.claimedRP || 0,
+                availableRP: data.availableRP || 0
+            };
+        }
+        return { totalRP: 0, claimedRP: 0, availableRP: 0 };
+    } catch (e) {
+        console.error('[RP] Error fetching user RP:', e);
+        return { totalRP: 0, claimedRP: 0, availableRP: 0 };
+    }
+};
+
+/**
+ * Gets RP history for a user.
+ */
+export const getRPHistory = async (userId: string, limitCount: number = 50): Promise<RPEntry[]> => {
+    try {
+        const db = getFirebaseDb();
+        const q = query(
+            collection(db, 'rp_history'),
+            where('userId', '==', userId.toLowerCase()),
+            orderBy('timestamp', 'desc'),
+            limit(limitCount)
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RPEntry));
+    } catch (e) {
+        console.error('[RP] Error fetching RP history:', e);
+        // Fallback without orderBy (composite index may not exist yet)
+        try {
+            const db = getFirebaseDb();
+            const q = query(
+                collection(db, 'rp_history'),
+                where('userId', '==', userId.toLowerCase())
+            );
+            const snapshot = await getDocs(q);
+            return snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as RPEntry))
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                .slice(0, limitCount);
+        } catch (e2) {
+            console.error('[RP] Fallback also failed:', e2);
+            return [];
+        }
+    }
+};
+
+/**
+ * Awards RP for a referral and checks for level-up bonus.
+ * Called after recording a round referral.
+ */
+export const awardReferralRP = async (
+    referrerId: string,
+    newUserEmail: string,
+    previousRefCount: number,
+    newRefCount: number
+): Promise<{ referralRP: number; levelupRP: number }> => {
+    let referralRP = 0;
+    let levelupRP = 0;
+    const roundId = calculateCurrentRoundId();
+
+    // 1. Award referral RP (10 RP per referral)
+    referralRP = RP_PER_REFERRAL;
+    await addRewardPoints(
+        referrerId,
+        referralRP,
+        'referral',
+        newUserEmail.toLowerCase(),
+        roundId
+    );
+
+    // 2. Check for level-up bonus (100 RP every 10 levels)
+    const prevLevel = calculateLevelFromRefs(previousRefCount);
+    const newLevel = calculateLevelFromRefs(newRefCount);
+
+    if (newLevel > prevLevel) {
+        for (let lvl = prevLevel + 1; lvl <= newLevel; lvl++) {
+            if (lvl % LEVELUP_INTERVAL === 0) {
+                levelupRP += RP_LEVELUP_BONUS;
+                await addRewardPoints(
+                    referrerId,
+                    RP_LEVELUP_BONUS,
+                    'levelup',
+                    `Reached LVL ${lvl}`,
+                    roundId
+                );
+            }
+        }
+    }
+
+    return { referralRP, levelupRP };
 };
 
 /**

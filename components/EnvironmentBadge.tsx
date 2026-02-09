@@ -15,8 +15,8 @@ export const EnvironmentBadge = () => {
     return (
         <div style={{
             position: 'fixed',
-            top: '12px',
-            right: '12px',
+            bottom: '12px',
+            left: '12px',
             'z-index': '99999',
             padding: '4px 12px',
             'border-radius': '9999px',

@@ -19,7 +19,7 @@ import {
     Trophy,
     Crosshair
 } from 'lucide-solid';
-import { getReferralConfig, getUserReferrals, UserData, ReferralConfig, RankInfo, LevelThreshold } from '../../services/firebaseService';
+import { getReferralConfig, getUserReferrals, getUserRP, getRPHistory, UserData, ReferralConfig, RankInfo, LevelThreshold, type UserRP, type RPEntry } from '../../services/firebaseService';
 
 import { WalletViewHeader } from './WalletViewHeader';
 
@@ -37,6 +37,8 @@ export const WalletReferral = (props: WalletReferralProps) => {
     const [copied, setCopied] = createSignal(false);
     const [isLoading, setIsLoading] = createSignal(true);
     const [config, setConfig] = createSignal<ReferralConfig | null>(null);
+    const [userRP, setUserRP] = createSignal<UserRP>({ totalRP: 0, claimedRP: 0, availableRP: 0 });
+    const [rpHistory, setRPHistory] = createSignal<RPEntry[]>([]);
 
     const referralUrl = () => `${window.location.origin}/signup?ref=${props.userProfile().referralCode}`;
 
@@ -96,6 +98,23 @@ export const WalletReferral = (props: WalletReferralProps) => {
             console.error(e);
         } finally {
             setIsLoading(false);
+        }
+    });
+
+    // Fetch RP data
+    onMount(async () => {
+        const email = props.userProfile()?.email;
+        if (email) {
+            try {
+                const [rp, history] = await Promise.all([
+                    getUserRP(email),
+                    getRPHistory(email, 20)
+                ]);
+                setUserRP(rp);
+                setRPHistory(history);
+            } catch (e) {
+                console.error('Failed to load RP:', e);
+            }
         }
     });
 
@@ -269,9 +288,9 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                     <div class="text-xl font-black text-white">{currentReferralCount()}</div>
                                 </div>
                                 <div class="bg-black/20 rounded-2xl p-4 border border-white/5">
-                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">XP Multiplier</div>
-                                    <div class={`text-xl font-black ${stats().rank.color}`}>
-                                        {(1 + (stats().level * 0.05)).toFixed(2)}x
+                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">Reward Points</div>
+                                    <div class="text-xl font-black text-amber-400">
+                                        {userRP().totalRP.toLocaleString()} <span class="text-xs font-bold text-gray-600">RP</span>
                                     </div>
                                 </div>
                             </div>
@@ -378,6 +397,112 @@ export const WalletReferral = (props: WalletReferralProps) => {
                             </div>
                         </Show>
                     </div>
+                </div>
+
+                {/* RP (Reward Points) Section */}
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between px-2">
+                        <h3 class="text-xl font-black text-white italic uppercase tracking-tight">REWARD <span class="text-amber-400">POINTS</span></h3>
+                        <div class="flex items-center gap-2">
+                            <span class="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                                {userRP().totalRP.toLocaleString()} RP
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* RP Summary Cards */}
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-[#111113] border border-amber-500/10 rounded-[24px] p-6 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 blur-[30px]" />
+                            <div class="relative z-10">
+                                <div class="text-[9px] font-black text-amber-500/60 uppercase tracking-widest mb-2">Total Earned</div>
+                                <div class="text-2xl font-black text-amber-400">{userRP().totalRP.toLocaleString()}</div>
+                                <div class="text-[10px] font-bold text-gray-600 mt-1">Reward Points</div>
+                            </div>
+                        </div>
+                        <div class="bg-[#111113] border border-emerald-500/10 rounded-[24px] p-6 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 blur-[30px]" />
+                            <div class="relative z-10">
+                                <div class="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest mb-2">Available</div>
+                                <div class="text-2xl font-black text-emerald-400">{userRP().availableRP.toLocaleString()}</div>
+                                <div class="text-[10px] font-bold text-gray-600 mt-1">Claimable Points</div>
+                            </div>
+                        </div>
+                        <div class="bg-[#111113] border border-blue-500/10 rounded-[24px] p-6 relative overflow-hidden">
+                            <div class="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 blur-[30px]" />
+                            <div class="relative z-10">
+                                <div class="text-[9px] font-black text-blue-500/60 uppercase tracking-widest mb-2">Claimed</div>
+                                <div class="text-2xl font-black text-blue-400">{userRP().claimedRP.toLocaleString()}</div>
+                                <div class="text-[10px] font-bold text-gray-600 mt-1">Converted to VCN</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* How RP Works */}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-[#111113] border border-white/[0.06] rounded-[24px] p-5 flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                                <UserPlus class="w-5 h-5 text-amber-400" />
+                            </div>
+                            <div>
+                                <div class="text-xs font-black text-white uppercase tracking-wider mb-1">Per Referral</div>
+                                <div class="text-lg font-black text-amber-400">+10 RP</div>
+                                <p class="text-[10px] text-gray-500 mt-1">Earned for each new user you invite</p>
+                            </div>
+                        </div>
+                        <div class="bg-[#111113] border border-white/[0.06] rounded-[24px] p-5 flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+                                <Trophy class="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div>
+                                <div class="text-xs font-black text-white uppercase tracking-wider mb-1">Level-Up Bonus</div>
+                                <div class="text-lg font-black text-purple-400">+100 RP</div>
+                                <p class="text-[10px] text-gray-500 mt-1">Every 10 levels (LVL 10, 20, 30...)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* RP History List */}
+                    <Show when={rpHistory().length > 0}>
+                        <div class="bg-[#111113] border border-white/[0.08] rounded-[32px] overflow-hidden">
+                            <div class="p-5 border-b border-white/5">
+                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Recent Activity</div>
+                            </div>
+                            <div class="divide-y divide-white/[0.03]">
+                                <For each={rpHistory()}>
+                                    {(entry) => (
+                                        <div class="px-5 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
+                                            <div class="flex items-center gap-3">
+                                                <div class={`w-8 h-8 rounded-lg flex items-center justify-center ${entry.type === 'referral' ? 'bg-amber-500/10' : 'bg-purple-500/10'
+                                                    }`}>
+                                                    {entry.type === 'referral'
+                                                        ? <UserPlus class="w-4 h-4 text-amber-400" />
+                                                        : <Trophy class="w-4 h-4 text-purple-400" />
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <div class="text-xs font-bold text-gray-200">
+                                                        {entry.type === 'referral' ? 'Referral Bonus' : 'Level-Up Bonus'}
+                                                    </div>
+                                                    <div class="text-[10px] text-gray-600 font-mono truncate max-w-[200px]">
+                                                        {entry.source}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class={`text-sm font-black ${entry.type === 'referral' ? 'text-amber-400' : 'text-purple-400'}`}>
+                                                    +{entry.amount} RP
+                                                </div>
+                                                <div class="text-[9px] text-gray-600">
+                                                    {new Date(entry.timestamp).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                        </div>
+                    </Show>
                 </div>
 
                 {/* Footer Logic / Security */}

@@ -109,8 +109,10 @@ interface WalletDashboardProps {
         intentData?: any;
     } | null;
     isBridging?: () => boolean;
-    onExecuteBridge?: () => void;
+    onExecuteBridge?: (delay?: number) => void;
     onCancelBridge?: () => void;
+    bridgeDelay?: () => number;
+    onBridgeDelayChange?: (val: number) => void;
 }
 
 
@@ -1239,6 +1241,32 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                         <span class="text-xs text-gray-400">Amount</span>
                                                         <span class="text-lg font-bold text-white">{msg.bridgeData.amount} <span class="text-purple-400">{msg.bridgeData.symbol}</span></span>
                                                     </div>
+                                                    {/* Bridge Delay Slider - inspired by Batch Transfer interval UI */}
+                                                    <div class="mb-4 p-3 rounded-xl bg-black/30 border border-white/5">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Bridge Delay</span>
+                                                            <span class="text-[10px] font-bold text-purple-400">
+                                                                {props.bridgeDelay?.() || 2}min
+                                                                <span class="text-gray-600"> challenge</span>
+                                                            </span>
+                                                        </div>
+                                                        <div class="flex items-center gap-3">
+                                                            <span class="text-[9px] font-bold text-gray-600">2m</span>
+                                                            <input
+                                                                type="range"
+                                                                min="2"
+                                                                max="10"
+                                                                step="1"
+                                                                value={props.bridgeDelay?.() || 2}
+                                                                onInput={(e) => props.onBridgeDelayChange?.(parseInt(e.currentTarget.value))}
+                                                                class="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                            />
+                                                            <span class="text-[9px] font-bold text-gray-600">10m</span>
+                                                        </div>
+                                                        <div class="mt-1.5 text-[9px] text-gray-600 italic">
+                                                            Tokens arrive after the challenge period. Longer = more secure.
+                                                        </div>
+                                                    </div>
                                                     <div class="flex gap-3">
                                                         <button
                                                             onClick={() => props.onCancelBridge?.()}
@@ -1247,7 +1275,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                             Cancel
                                                         </button>
                                                         <button
-                                                            onClick={() => props.onExecuteBridge?.()}
+                                                            onClick={() => props.onExecuteBridge?.(props.bridgeDelay?.() || 2)}
                                                             disabled={props.isBridging?.()}
                                                             class="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                                         >
