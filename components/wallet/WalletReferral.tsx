@@ -40,7 +40,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
     const [userRP, setUserRP] = createSignal<UserRP>({ totalRP: 0, claimedRP: 0, availableRP: 0 });
     const [rpHistory, setRPHistory] = createSignal<RPEntry[]>([]);
 
-    const referralUrl = () => `${window.location.origin}/signup?ref=${props.userProfile().referralCode}`;
+    const referralUrl = () => `https://visionchain.co/signup?ref=${props.userProfile().referralCode}`;
 
     const invitationMessage = () => {
         return `Join me on Vision Chain! Create your Vision ID and participate in the AI blockchain ecosystem.`;
