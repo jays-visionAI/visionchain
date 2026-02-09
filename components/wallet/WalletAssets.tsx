@@ -352,28 +352,56 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     // Styling based on network type
                                     const isTestnetStyle = item.network === 'testnet';
 
-                                    // Chain logos/colors
-                                    const chainConfig: Record<string, { icon: string, color: string, bgColor: string }> = {
-                                        vision: { icon: 'V', color: 'text-blue-400', bgColor: 'from-blue-600 to-cyan-500' },
-                                        ethereum: { icon: 'E', color: 'text-indigo-400', bgColor: 'from-indigo-500 to-purple-600' },
-                                        polygon: { icon: 'P', color: 'text-purple-400', bgColor: 'from-purple-500 to-indigo-600' },
-                                        base: { icon: 'B', color: 'text-blue-400', bgColor: 'from-blue-500 to-blue-700' },
-                                        sepolia: { icon: 'S', color: 'text-amber-400', bgColor: 'from-amber-500/20 to-orange-500/20' },
-                                        amoy: { icon: 'A', color: 'text-purple-400', bgColor: 'from-purple-500/20 to-indigo-500/20' },
-                                        base_test: { icon: 'B', color: 'text-blue-400', bgColor: 'from-blue-500/20 to-blue-700/20' },
+                                    // Chain logos/colors - using actual crypto SVG icons
+                                    const chainIcons: Record<string, { svg: any, color: string, bgColor: string }> = {
+                                        vision: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><path d="M16 4L6 28h4l6-14 6 14h4L16 4z" fill="currentColor" /><path d="M16 10l-3 7h6l-3-7z" fill="currentColor" opacity="0.5" /></svg>,
+                                            color: 'text-cyan-400',
+                                            bgColor: 'from-blue-600 to-cyan-500'
+                                        },
+                                        ethereum: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><path d="M16 2l-9 15 9 5.5 9-5.5L16 2z" fill="currentColor" opacity="0.6" /><path d="M16 2v12.87l9 5.13L16 2z" fill="currentColor" opacity="0.8" /><path d="M16 2v12.87l-9 5.13L16 2z" fill="currentColor" opacity="0.5" /><path d="M7 19l9 11 9-11-9 5.5L7 19z" fill="currentColor" opacity="0.8" /><path d="M16 24.5L7 19l9 11V24.5z" fill="currentColor" opacity="0.6" /><path d="M16 24.5l9-5.5-9 11V24.5z" fill="currentColor" opacity="0.9" /></svg>,
+                                            color: 'text-indigo-300',
+                                            bgColor: 'from-indigo-500 to-purple-600'
+                                        },
+                                        polygon: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><path d="M21.5 11.5c-.6-.3-1.3-.3-1.9 0l-3.1 1.8-2.1 1.2-3.1 1.8c-.6.3-1.3.3-1.9 0l-2.4-1.4c-.6-.3-.9-.9-.9-1.6V10c0-.6.3-1.2.9-1.6l2.4-1.4c.6-.3 1.3-.3 1.9 0l2.4 1.4c.6.3.9.9.9 1.6v1.8l2.1-1.2V8.8c0-.6-.3-1.2-.9-1.6l-4.5-2.6c-.6-.3-1.3-.3-1.9 0l-4.6 2.6c-.6.4-.9.9-.9 1.6v5.3c0 .6.3 1.2.9 1.6l4.5 2.6c.6.3 1.3.3 1.9 0l3.1-1.8 2.1-1.2 3.1-1.8c.6-.3 1.3-.3 1.9 0l2.4 1.4c.6.3.9.9.9 1.6v3.3c0 .6-.3 1.2-.9 1.6l-2.4 1.4c-.6.3-1.3.3-1.9 0l-2.4-1.4c-.6-.3-.9-.9-.9-1.6v-1.8l-2.1 1.2v1.8c0 .6.3 1.2.9 1.6l4.5 2.6c.6.3 1.3.3 1.9 0l4.5-2.6c.6-.3.9-.9.9-1.6v-5.3c0-.6-.3-1.2-.9-1.6l-4.5-2.5z" fill="currentColor" /></svg>,
+                                            color: 'text-purple-400',
+                                            bgColor: 'from-purple-500 to-indigo-600'
+                                        },
+                                        base: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2.5" /><path d="M16 8c-4.4 0-8 3.6-8 8s3.6 8 8 8c3.7 0 6.8-2.5 7.7-6H16v-4h7.7c-.9-3.5-4-6-7.7-6z" fill="currentColor" /></svg>,
+                                            color: 'text-blue-400',
+                                            bgColor: 'from-blue-500 to-blue-700'
+                                        },
+                                        sepolia: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><path d="M16 2l-9 15 9 5.5 9-5.5L16 2z" fill="currentColor" opacity="0.6" /><path d="M16 2v12.87l9 5.13L16 2z" fill="currentColor" opacity="0.8" /><path d="M16 2v12.87l-9 5.13L16 2z" fill="currentColor" opacity="0.5" /><path d="M7 19l9 11 9-11-9 5.5L7 19z" fill="currentColor" opacity="0.8" /><path d="M16 24.5L7 19l9 11V24.5z" fill="currentColor" opacity="0.6" /><path d="M16 24.5l9-5.5-9 11V24.5z" fill="currentColor" opacity="0.9" /></svg>,
+                                            color: 'text-amber-400',
+                                            bgColor: 'from-amber-500/20 to-orange-500/20'
+                                        },
+                                        amoy: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><path d="M21.5 11.5c-.6-.3-1.3-.3-1.9 0l-3.1 1.8-2.1 1.2-3.1 1.8c-.6.3-1.3.3-1.9 0l-2.4-1.4c-.6-.3-.9-.9-.9-1.6V10c0-.6.3-1.2.9-1.6l2.4-1.4c.6-.3 1.3-.3 1.9 0l2.4 1.4c.6.3.9.9.9 1.6v1.8l2.1-1.2V8.8c0-.6-.3-1.2-.9-1.6l-4.5-2.6c-.6-.3-1.3-.3-1.9 0l-4.6 2.6c-.6.4-.9.9-.9 1.6v5.3c0 .6.3 1.2.9 1.6l4.5 2.6c.6.3 1.3.3 1.9 0l3.1-1.8 2.1-1.2 3.1-1.8c.6-.3 1.3-.3 1.9 0l2.4 1.4c.6.3.9.9.9 1.6v3.3c0 .6-.3 1.2-.9 1.6l-2.4 1.4c-.6.3-1.3.3-1.9 0l-2.4-1.4c-.6-.3-.9-.9-.9-1.6v-1.8l-2.1 1.2v1.8c0 .6.3 1.2.9 1.6l4.5 2.6c.6.3 1.3.3 1.9 0l4.5-2.6c.6-.3.9-.9.9-1.6v-5.3c0-.6-.3-1.2-.9-1.6l-4.5-2.5z" fill="currentColor" /></svg>,
+                                            color: 'text-purple-400',
+                                            bgColor: 'from-purple-500/20 to-indigo-500/20'
+                                        },
+                                        base_test: {
+                                            svg: <svg viewBox="0 0 32 32" class="w-5 h-5 md:w-6 md:h-6"><circle cx="16" cy="16" r="12" fill="none" stroke="currentColor" stroke-width="2.5" /><path d="M16 8c-4.4 0-8 3.6-8 8s3.6 8 8 8c3.7 0 6.8-2.5 7.7-6H16v-4h7.7c-.9-3.5-4-6-7.7-6z" fill="currentColor" /></svg>,
+                                            color: 'text-blue-400',
+                                            bgColor: 'from-blue-500/20 to-blue-700/20'
+                                        },
                                     };
-                                    const config = chainConfig[item.chain] || chainConfig.vision;
+                                    const config = chainIcons[item.chain] || chainIcons.vision;
 
                                     return (
                                         <div class={`flex items-center justify-between px-4 sm:px-8 py-5 md:py-6 border-b border-white/[0.03] hover:bg-white/[0.03] transition-all duration-300 cursor-pointer group/row ${isTestnetStyle ? 'bg-amber-500/[0.02]' : ''}`}>
                                             {/* Left side: Token Info */}
                                             <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
                                                 <div class="relative flex-shrink-0">
-                                                    <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-white font-bold text-xs md:text-sm shadow-lg ${isTestnetStyle
-                                                        ? 'bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-500 border border-amber-500/30'
-                                                        : `bg-gradient-to-br ${config.bgColor}`
+                                                    <div class={`w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center font-bold text-xs md:text-sm shadow-lg ${isTestnetStyle
+                                                        ? `${config.color} bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30`
+                                                        : `text-white bg-gradient-to-br ${config.bgColor}`
                                                         }`}>
-                                                        {config.icon}
+                                                        {config.svg}
                                                     </div>
                                                     <Show when={isTestnetStyle}>
                                                         <div class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#0a0a0b] flex items-center justify-center">
