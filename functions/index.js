@@ -1017,6 +1017,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
         hash: lockTx.hash,
         from_addr: user.toLowerCase(),
         to_addr: "bridge:sepolia",
+        recipient: bridgeRecipient.toLowerCase(),
         value: ethers.formatEther(amountWei),
         timestamp: Date.now(),
         type: "Bridge",
@@ -2863,7 +2864,7 @@ exports.bridgeRelayer = onSchedule({
         console.log(`[Bridge Relayer] Processing transactions/${txId}`);
         const dstChainId = txData.metadata?.dstChainId || 11155111; // Default to Sepolia
         const amount = txData.value || "0";
-        const recipient = txData.from_addr; // Bridge back to sender
+        const recipient = txData.recipient || txData.from_addr; // Use stored recipient, fallback to sender
 
         console.log(`[Bridge Relayer] Amount: ${amount} VCN, Recipient: ${recipient}, DstChain: ${dstChainId}`);
 
