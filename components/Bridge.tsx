@@ -397,11 +397,39 @@ const Bridge: Component<BridgeProps> = (props) => {
 
         try {
             console.log('[Bridge] Loading balance for:', addr, 'RPC:', VISION_RPC_URL);
-            // Native VCN - get native balance
             const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
-            const bal = await provider.getBalance(addr);
-            console.log('[Bridge] Balance loaded:', ethers.formatEther(bal), 'VCN');
-            setBalance(ethers.formatEther(bal));
+
+            // VCN is an ERC-20 token on Vision Chain v2
+            const VCN_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+            const ERC20_BALANCE_ABI = ['function balanceOf(address account) view returns (uint256)'];
+
+            let tokenBalance = '0';
+            let nativeBalance = '0';
+
+            // 1. Try ERC-20 VCN token balance first
+            try {
+                const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_BALANCE_ABI, provider);
+                const bal = await tokenContract.balanceOf(addr);
+                tokenBalance = ethers.formatEther(bal);
+                console.log('[Bridge] VCN Token balance:', tokenBalance);
+            } catch (tokenErr) {
+                console.warn('[Bridge] Token balance fetch failed:', tokenErr);
+            }
+
+            // 2. Also check native balance (in case VCN is native on some chain configs)
+            try {
+                const nativeBal = await provider.getBalance(addr);
+                nativeBalance = ethers.formatEther(nativeBal);
+                console.log('[Bridge] Native balance:', nativeBalance);
+            } catch (nativeErr) {
+                console.warn('[Bridge] Native balance fetch failed:', nativeErr);
+            }
+
+            // Use whichever is higher (token balance takes priority if non-zero)
+            const finalBalance = parseFloat(tokenBalance) > 0 ? tokenBalance :
+                parseFloat(nativeBalance) > 0 ? nativeBalance : '0';
+            console.log('[Bridge] Final balance:', finalBalance, 'VCN');
+            setBalance(finalBalance);
         } catch (err) {
             console.error('[Bridge] Failed to load balance:', err);
             setBalance('0');
