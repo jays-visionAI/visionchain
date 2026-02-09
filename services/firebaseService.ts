@@ -448,12 +448,7 @@ export const getReferralConfig = async (): Promise<ReferralConfig> => {
         enabledEvents: ['subscription', 'token_sale', 'staking'],
         baseXpMultiplier: 1.0,
         xpMultiplierPerLevel: 0.05,
-        levelThresholds: [
-            { minLevel: 1, maxLevel: 20, invitesPerLevel: 1 },
-            { minLevel: 21, maxLevel: 50, invitesPerLevel: 2 },
-            { minLevel: 51, maxLevel: 80, invitesPerLevel: 5 },
-            { minLevel: 81, maxLevel: 100, invitesPerLevel: 10 }
-        ],
+        levelThresholds: [], // Legacy - level calculation now uses triangular number formula directly
         ranks: [
             { name: 'Novice', minLvl: 1, color: 'text-gray-400', bg: 'bg-gray-500', gradient: 'from-gray-600 to-gray-500', iconName: 'Users' },
             { name: 'Scout', minLvl: 10, color: 'text-blue-400', bg: 'bg-blue-500', gradient: 'from-blue-600 to-cyan-500', iconName: 'ExternalLink' },
@@ -689,12 +684,12 @@ export interface RoundParticipant {
 
 /**
  * Calculates the current round number based on UTC time.
- * Rounds start at 0, 4, 8, 12, 16, 20 UTC.
+ * Rounds are daily (24 hours), starting at 00:00 UTC.
  */
 export const calculateCurrentRoundId = (): number => {
     const now = new Date();
     const epoch = new Date('2024-01-01T00:00:00Z').getTime();
-    const msPerRound = 4 * 60 * 60 * 1000; // 4 hours
+    const msPerRound = 24 * 60 * 60 * 1000; // 24 hours (daily)
     return Math.floor((now.getTime() - epoch) / msPerRound);
 };
 
@@ -703,7 +698,7 @@ export const calculateCurrentRoundId = (): number => {
  */
 export const getRoundTimeRange = (roundId: number): { start: Date; end: Date } => {
     const epoch = new Date('2024-01-01T00:00:00Z').getTime();
-    const msPerRound = 4 * 60 * 60 * 1000;
+    const msPerRound = 24 * 60 * 60 * 1000; // 24 hours (daily)
     const start = new Date(epoch + roundId * msPerRound);
     const end = new Date(epoch + (roundId + 1) * msPerRound);
     return { start, end };
@@ -730,7 +725,7 @@ export const getCurrentRound = async (): Promise<ReferralRound> => {
         endTime: end.toISOString(),
         status: 'active',
         totalNewUsers: 0,
-        totalRewardPool: 10000 // Base pool: 10,000 VCN per round
+        totalRewardPool: 1000 // Base pool: 1,000 VCN per round
     };
 
     await setDoc(roundRef, newRound);

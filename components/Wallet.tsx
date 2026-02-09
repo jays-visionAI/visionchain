@@ -3273,11 +3273,12 @@ If they say "Yes", output the navigate intent JSON for "referral".
             // This ensures the message appears AFTER thinking visually completes
             setThinkingSteps([]);
 
-            setMessages(prev => [...prev, { role: 'assistant', content: cleanResponse, responseTime }]);
+            const newMessages = [...messages(), { role: 'assistant' as const, content: cleanResponse, responseTime }];
+            setMessages(newMessages);
 
-            // SAVE CONVERSATION
+            // SAVE CONVERSATION - use newMessages directly to avoid SolidJS signal timing issues
             if (userProfile().email) {
-                const convMessages = [...messages()].map(m => ({
+                const convMessages = newMessages.map(m => ({
                     role: m.role,
                     text: m.content,
                     timestamp: new Date().toISOString()
@@ -3826,42 +3827,16 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             {/* XP / Level Progress Bar */}
                                                             {(() => {
                                                                 const count = userProfile().referralCount || 0;
-                                                                // Logic duplication for isolated calculation
-                                                                let level = 1;
-                                                                let nextLevelRefs = 1;
-                                                                let currentLevelBaseRefs = 0;
-                                                                let refsPerLevel = 1;
-
-                                                                if (count < 20) {
-                                                                    level = count + 1;
-                                                                    refsPerLevel = 1;
-                                                                    currentLevelBaseRefs = count;
-                                                                    nextLevelRefs = count + 1;
-                                                                } else if (count < 80) {
-                                                                    const surplus = count - 20;
-                                                                    const levelGain = Math.floor(surplus / 2);
-                                                                    level = 20 + levelGain + 1;
-                                                                    refsPerLevel = 2;
-                                                                    currentLevelBaseRefs = 20 + (levelGain * 2);
-                                                                    nextLevelRefs = currentLevelBaseRefs + 2;
-                                                                } else if (count < 230) {
-                                                                    const surplus = count - 80;
-                                                                    const levelGain = Math.floor(surplus / 5);
-                                                                    level = 50 + levelGain + 1;
-                                                                    refsPerLevel = 5;
-                                                                    currentLevelBaseRefs = 80 + (levelGain * 5);
-                                                                    nextLevelRefs = currentLevelBaseRefs + 5;
-                                                                } else {
-                                                                    const surplus = count - 230;
-                                                                    const levelGain = Math.floor(surplus / 10);
-                                                                    level = 80 + levelGain + 1;
-                                                                    refsPerLevel = 10;
-                                                                    currentLevelBaseRefs = 230 + (levelGain * 10);
-                                                                    nextLevelRefs = currentLevelBaseRefs + 10;
-                                                                }
+                                                                // Triangular number formula: Level L requires L*(L-1)/2 total referrals
+                                                                // To go from level N to N+1, you need N more referrals
+                                                                let level = Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2);
                                                                 if (level > 100) level = 100;
+
+                                                                const currentLevelBaseRefs = level * (level - 1) / 2;
+                                                                const refsPerLevel = level;
+                                                                const nextLevelRefs = level >= 100 ? currentLevelBaseRefs : currentLevelBaseRefs + level;
                                                                 const progressIntoLevel = count - currentLevelBaseRefs;
-                                                                const progressPercent = Math.min(100, Math.max(0, (progressIntoLevel / refsPerLevel) * 100));
+                                                                const progressPercent = level >= 100 ? 100 : Math.min(100, Math.max(0, (progressIntoLevel / refsPerLevel) * 100));
                                                                 const refsToNext = Math.max(0, nextLevelRefs - count);
 
                                                                 // Rank Gradient Helper

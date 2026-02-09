@@ -553,7 +553,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                 onClick={handlePasswordSubmit}
                                 class="flex-1 py-3 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors"
                             >
-                                Unlock
+                                Confirm
                             </button>
                         </div>
                     </div>

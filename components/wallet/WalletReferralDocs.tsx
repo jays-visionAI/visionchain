@@ -21,16 +21,16 @@ import { Motion } from 'solid-motionone';
 
 // 1. Define Tier/Rank Data for Documentation
 const RANK_DETAILS = [
-    { name: 'Novice', minLvl: 1, color: 'text-gray-400', bg: 'bg-gray-500', icon: Users, desc: 'Your journey begins. Start building your network.', benefits: ['Standard 10% Direct Referral Reward', 'Access to Community Channels'] },
-    { name: 'Scout', minLvl: 10, color: 'text-blue-400', bg: 'bg-blue-500', icon: ExternalLink, desc: 'Recognized for network growth.', benefits: ['+2% Bonus on Direct Rewards (12% Total)', 'Scout Identity Badge'] },
-    { name: 'Ranger', minLvl: 20, color: 'text-emerald-400', bg: 'bg-emerald-500', icon: TrendingUp, desc: 'Proven ability to expand reach.', benefits: ['+3% Bonus on Direct Rewards (13% Total)', 'Access to Ranger-only Discord'] },
-    { name: 'Guardian', minLvl: 30, color: 'text-cyan-400', bg: 'bg-cyan-500', icon: Shield, desc: 'A pillar of the community.', benefits: ['+4% Bonus on Direct Rewards (14% Total)', 'Priority Support Access'] },
-    { name: 'Elite', minLvl: 40, color: 'text-indigo-400', bg: 'bg-indigo-500', icon: Zap, desc: 'Elite status among peers.', benefits: ['+5% Bonus on Direct Rewards (15% Total)', 'Elite NFT Airdrop Eligibility'] },
-    { name: 'Captain', minLvl: 50, color: 'text-violet-400', bg: 'bg-violet-500', icon: Award, desc: 'Commanding a significant network.', benefits: ['+6% Bonus on Direct Rewards (16% Total)', 'Beta Access to New Features'] },
-    { name: 'Commander', minLvl: 60, color: 'text-orange-400', bg: 'bg-orange-500', icon: Trophy, desc: 'Leading the charge.', benefits: ['+8% Bonus on Direct Rewards (18% Total)', 'Direct line to Community Managers'] },
-    { name: 'Warlord', minLvl: 70, color: 'text-red-400', bg: 'bg-red-500', icon: Crosshair, desc: 'Aggressive expansion and dominance.', benefits: ['+10% Bonus on Direct Rewards (20% Total)', 'Warlord Exclusive Meridians'] },
-    { name: 'Titan', minLvl: 80, color: 'text-rose-400', bg: 'bg-rose-500', icon: Crown, desc: 'A giant in the ecosystem.', benefits: ['+12% Bonus on Direct Rewards (22% Total)', 'Governance Voting Multiplier (1.2x)'] },
-    { name: 'Visionary', minLvl: 90, color: 'text-yellow-400', bg: 'bg-yellow-500', icon: Star, desc: 'The pinnacle of influence.', benefits: ['Max 25% Direct Referral Reward', 'Revenue Share Pool Eligibility', 'Custom "Visionary" Profile Skin'] }
+    { name: 'Novice', minLvl: 1, totalRefs: 0, color: 'text-gray-400', bg: 'bg-gray-500', icon: Users, desc: 'Your journey begins. Start building your network.', benefits: ['Basic Community Access', 'Standard Referral Rewards'] },
+    { name: 'Scout', minLvl: 10, totalRefs: 45, color: 'text-blue-400', bg: 'bg-blue-500', icon: ExternalLink, desc: 'Recognized for network growth.', benefits: ['Scout Identity Badge', 'Enhanced Community Access'] },
+    { name: 'Ranger', minLvl: 20, totalRefs: 190, color: 'text-emerald-400', bg: 'bg-emerald-500', icon: TrendingUp, desc: 'Proven ability to expand reach.', benefits: ['Ranger Badge', 'Access to Ranger-only Discord'] },
+    { name: 'Guardian', minLvl: 30, totalRefs: 435, color: 'text-cyan-400', bg: 'bg-cyan-500', icon: Shield, desc: 'A pillar of the community.', benefits: ['Guardian Badge', 'Priority Support Access'] },
+    { name: 'Elite', minLvl: 40, totalRefs: 780, color: 'text-indigo-400', bg: 'bg-indigo-500', icon: Zap, desc: 'Elite status among peers.', benefits: ['Elite Badge', 'NFT Airdrop Eligibility'] },
+    { name: 'Captain', minLvl: 50, totalRefs: 1225, color: 'text-violet-400', bg: 'bg-violet-500', icon: Award, desc: 'Commanding a significant network.', benefits: ['Captain Badge', 'Beta Access to New Features'] },
+    { name: 'Commander', minLvl: 60, totalRefs: 1770, color: 'text-orange-400', bg: 'bg-orange-500', icon: Trophy, desc: 'Leading the charge.', benefits: ['Commander Badge', 'Direct line to Community Managers'] },
+    { name: 'Warlord', minLvl: 70, totalRefs: 2415, color: 'text-red-400', bg: 'bg-red-500', icon: Crosshair, desc: 'Aggressive expansion and dominance.', benefits: ['Warlord Badge', 'Exclusive Meridians Access'] },
+    { name: 'Titan', minLvl: 80, totalRefs: 3160, color: 'text-rose-400', bg: 'bg-rose-500', icon: Crown, desc: 'A giant in the ecosystem.', benefits: ['Titan Badge', 'Governance Voting Multiplier (1.2x)'] },
+    { name: 'Visionary', minLvl: 90, totalRefs: 4005, color: 'text-yellow-400', bg: 'bg-yellow-500', icon: Star, desc: 'The pinnacle of influence.', benefits: ['Visionary Badge', 'Revenue Share Pool Eligibility', 'Custom Profile Skin'] }
 ];
 
 export const WalletReferralDocs = () => {
@@ -72,7 +72,7 @@ export const WalletReferralDocs = () => {
                                         <span class="text-sm font-bold text-blue-400 uppercase">Base Commission</span>
                                     </div>
                                     <p class="text-xs text-gray-400 font-mono">
-                                        *Increases up to 25% based on your Rank.
+                                        *Rate is set by admin and applies equally across all ranks.
                                     </p>
                                 </div>
                             </div>
@@ -124,7 +124,8 @@ export const WalletReferralDocs = () => {
                                     <tr class="border-b border-white/5 bg-white/[0.02]">
                                         <th class="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[200px]">Rank Identity</th>
                                         <th class="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[120px]">Level Requirement</th>
-                                        <th class="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Benefits & Multipliers</th>
+                                        <th class="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[120px]">Total Referrals</th>
+                                        <th class="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-widest">Benefits & Perks</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-white/[0.02]">
@@ -146,6 +147,9 @@ export const WalletReferralDocs = () => {
                                                     <div class="inline-flex items-center gap-2 px-3 py-1 bg-white/5 rounded-lg border border-white/5">
                                                         <span class="text-xs font-black text-white">LVL {rank.minLvl}+</span>
                                                     </div>
+                                                </td>
+                                                <td class="px-8 py-6">
+                                                    <span class="text-xs font-bold text-gray-300">{rank.totalRefs?.toLocaleString() || '0'}+</span>
                                                 </td>
                                                 <td class="px-8 py-6">
                                                     <div class="space-y-2">

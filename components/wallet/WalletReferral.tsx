@@ -45,39 +45,20 @@ export const WalletReferral = (props: WalletReferralProps) => {
     };
 
     const getDynamicLevelData = (count: number, cfg: ReferralConfig) => {
-        let level = 1;
-        let currentLevelBaseRefs = 0;
-        let refsPerLevel = 1;
-        let nextLevelRefs = 1;
+        // New formula: Level L requires L*(L-1)/2 total referrals (triangular number)
+        // To go from level N to N+1, you need N more referrals
+        // Level 1: 0 refs, Level 2: 1 ref, Level 3: 3 refs, Level 4: 6 refs, Level 10: 45 refs, etc.
 
-        const thresholds = cfg.levelThresholds || [];
+        // Calculate level from count using inverse triangular number: L = floor((1 + sqrt(1 + 8*count)) / 2)
+        let level = Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2);
+        if (level > 100) level = 100;
 
-        let runningRefs = 0;
-        let runningLevel = 1;
-
-        for (const t of thresholds) {
-            const levelsInRange = t.maxLevel - t.minLevel + 1;
-            const refsNeededForRange = levelsInRange * t.invitesPerLevel;
-
-            if (count >= runningRefs + refsNeededForRange) {
-                runningRefs += refsNeededForRange;
-                runningLevel = t.maxLevel;
-            } else {
-                const surplusInRange = count - runningRefs;
-                const levelsGainedInRange = Math.floor(surplusInRange / t.invitesPerLevel);
-                runningLevel = t.minLevel + levelsGainedInRange;
-                refsPerLevel = t.invitesPerLevel;
-                currentLevelBaseRefs = runningRefs + (levelsGainedInRange * t.invitesPerLevel);
-                nextLevelRefs = currentLevelBaseRefs + t.invitesPerLevel;
-                break;
-            }
-        }
-
-        level = Math.min(100, runningLevel);
-        if (level === 100) {
-            nextLevelRefs = currentLevelBaseRefs;
-            refsPerLevel = 1;
-        }
+        // Total refs needed to reach current level
+        const currentLevelBaseRefs = level * (level - 1) / 2;
+        // Refs needed for next level = current level number
+        const refsPerLevel = level;
+        // Total refs needed to reach next level
+        const nextLevelRefs = level >= 100 ? currentLevelBaseRefs : currentLevelBaseRefs + level;
 
         const progressIntoLevel = count - currentLevelBaseRefs;
         const progressPercent = level >= 100 ? 100 : Math.min(100, (progressIntoLevel / refsPerLevel) * 100);

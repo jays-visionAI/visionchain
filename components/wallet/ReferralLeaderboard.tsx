@@ -36,9 +36,9 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
     const updateCountdown = () => {
         const now = new Date();
         const nextPayout = new Date();
-        // Set to next 4-hour mark (0, 4, 8, 12, 16, 20, 24)
-        const nextHour = Math.ceil((now.getUTCHours() + 0.001) / 4) * 4;
-        nextPayout.setUTCHours(nextHour, 0, 0, 0);
+        // Set to next midnight UTC (daily round)
+        nextPayout.setUTCDate(now.getUTCDate() + 1);
+        nextPayout.setUTCHours(0, 0, 0, 0);
 
         const diff = nextPayout.getTime() - now.getTime();
         if (diff <= 0) {
@@ -155,7 +155,7 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
                     <div class="flex items-center gap-2">
                         <Trophy class="w-4 h-4 text-amber-500" />
                         <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pool:</span>
-                        <span class="text-sm font-black text-amber-500">{(currentRound()?.totalRewardPool || 10000).toLocaleString()} VCN</span>
+                        <span class="text-sm font-black text-amber-500">{(currentRound()?.totalRewardPool || 1000).toLocaleString()} VCN</span>
                     </div>
                     <div class="w-px h-4 bg-white/10 hidden sm:block" />
                     <div class="flex items-center gap-2">
