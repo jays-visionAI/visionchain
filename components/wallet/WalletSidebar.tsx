@@ -52,8 +52,8 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
     const allMenuItems = [
         { id: 'chat' as ViewType, label: 'Chat', icon: AiChatIcon },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
-        { id: 'bridge' as ViewType, label: 'Bridge', icon: ArrowLeftRight },
-        { id: 'staking' as ViewType, label: 'Staking', icon: Shield },
+        { id: 'bridge' as ViewType, label: 'Swap', icon: ArrowLeftRight },
+        { id: 'staking' as ViewType, label: 'Earn', icon: Shield },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },

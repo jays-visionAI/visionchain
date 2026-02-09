@@ -4445,9 +4445,9 @@ exports.verifyResetCode = onRequest({ cors: true, invoker: "public" }, async (re
     return res.status(200).json({
       success: true,
       totpRequired,
-      message: totpRequired
-        ? "Code verified. Please enter your Google Authenticator code to continue."
-        : "Code verified. Please enter your new password.",
+      message: totpRequired ?
+        "Code verified. Please enter your Google Authenticator code to continue." :
+        "Code verified. Please enter your new password.",
     });
   } catch (err) {
     console.error("[PasswordReset] Verify failed:", err);
@@ -4769,7 +4769,7 @@ exports.adminEmailStats = onRequest({ cors: true, invoker: "public" }, async (re
       .get();
 
     // Get drip queue stats
-    let dripStats = { pending: 0, sent: 0, skipped: 0 };
+    const dripStats = { pending: 0, sent: 0, skipped: 0 };
     try {
       const dripSnapshot = await db.collection("drip_queue").get();
       dripSnapshot.forEach((doc) => {
@@ -4889,13 +4889,13 @@ exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets:
  * Email preference categories and defaults
  */
 const EMAIL_PREFERENCE_DEFAULTS = {
-  security: true,       // Device verification, suspicious activity, 2FA (always on)
-  staking: true,        // Stake, unstake, cooldown, reward claim
-  referral: true,       // New referral signups, referral rewards
-  bridge: true,         // Bridge transfer completion
-  weeklyReport: true,   // Weekly activity digest
-  lifecycle: true,      // Onboarding drip emails (welcome, guides)
-  announcements: true,  // Admin broadcasts and announcements
+  security: true, // Device verification, suspicious activity, 2FA (always on)
+  staking: true, // Stake, unstake, cooldown, reward claim
+  referral: true, // New referral signups, referral rewards
+  bridge: true, // Bridge transfer completion
+  weeklyReport: true, // Weekly activity digest
+  lifecycle: true, // Onboarding drip emails (welcome, guides)
+  announcements: true, // Admin broadcasts and announcements
 
 };
 
@@ -5213,17 +5213,23 @@ exports.weeklyActivityReport = onSchedule({
           if (notifType.includes("stake") && !notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
-              try { totalStakedWei += BigInt(notif.amount); } catch (e) { /* ignore parse errors */ }
+              try {
+ totalStakedWei += BigInt(notif.amount);
+} catch (e) {/* ignore parse errors */}
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
-              try { totalUnstakedWei += BigInt(notif.amount); } catch (e) { /* ignore */ }
+              try {
+ totalUnstakedWei += BigInt(notif.amount);
+} catch (e) {/* ignore */}
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
-              try { rewardsClaimedWei += BigInt(notif.amount); } catch (e) { /* ignore */ }
+              try {
+ rewardsClaimedWei += BigInt(notif.amount);
+} catch (e) {/* ignore */}
             }
           }
         }
@@ -5245,7 +5251,9 @@ exports.weeklyActivityReport = onSchedule({
             if (bTime && bTime >= weekStart && bTime <= weekEnd) {
               bridgeTransfers++;
               if (bData.amount) {
-                try { bridgeVolumeWei += BigInt(bData.amount); } catch (e) { /* ignore */ }
+                try {
+ bridgeVolumeWei += BigInt(bData.amount);
+} catch (e) {/* ignore */}
               }
             }
           }

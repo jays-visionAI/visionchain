@@ -565,7 +565,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 <WalletViewHeader
                     tag="Bridge Security"
                     title="VALIDATOR"
-                    titleAccent="STAKING"
+                    titleAccent="EARN"
                     description="Stake VCN to become a bridge validator. Secure cross-chain transfers and earn rewards."
                     icon={Shield}
                     hideDescriptionOnMobile={true}

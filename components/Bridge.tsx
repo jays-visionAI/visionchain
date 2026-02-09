@@ -704,7 +704,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                 <WalletViewHeader
                     tag="Cross-Chain Transfer"
                     title="VISION"
-                    titleAccent="BRIDGE"
+                    titleAccent="SWAP"
                     description="Transfer assets between Ethereum and Vision Chain with optimistic finality security."
                     icon={ArrowRightLeft}
                     hideDescriptionOnMobile={true}

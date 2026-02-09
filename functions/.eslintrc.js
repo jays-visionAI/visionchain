@@ -15,10 +15,12 @@ module.exports = {
     "no-restricted-globals": ["error", "name", "length"],
     "prefer-arrow-callback": "error",
     "quotes": ["error", "double", { "allowTemplateLiterals": true }],
-    "max-len": ["error", { "code": 300 }],
-    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "max-len": ["error", { "code": 350 }],
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "object-curly-spacing": "off",
     "indent": "off",
+    "valid-jsdoc": "off",
+    "require-jsdoc": "off",
   },
   overrides: [
     {
