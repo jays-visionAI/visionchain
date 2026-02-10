@@ -1061,8 +1061,8 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                 </span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
-                                                <span>Bridge Fee (Est.)</span>
-                                                <span class="text-gray-300">0.1% + Gas</span>
+                                                <span>Bridge Fee</span>
+                                                <span class="text-gray-300">1 VCN</span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
                                                 <span>Minimum Bridge</span>
