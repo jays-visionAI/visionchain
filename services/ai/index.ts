@@ -68,7 +68,34 @@ export const generateText = async (
             ? `[Previous Conversation History]\n${previousHistory.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')}\n\n[Current User Input]\n`
             : '';
 
-        const fullPrompt = historyContext + prompt;
+        let fullPrompt = historyContext + prompt;
+
+        // --- CEX Portfolio Auto-Injection (Provider-agnostic, works with DeepSeek) ---
+        const cexKeywords = /포트폴리오|내 계좌|투자 현황|수익률|거래소|잔고|자산|리밸런싱|분석.*조언|조언|추천|CEX|업비트|빗썸|거래소 자산|투자 조언|내 투자|portfolio|holdings|investment|P&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
+        if (cexKeywords.test(prompt)) {
+            try {
+                console.log('[AIService] CEX keyword detected, auto-fetching portfolio data...');
+                const { getCexPortfolio } = await import('../cexService');
+                const portfolioData = await getCexPortfolio();
+
+                let cexDataBlock = '';
+                if (!portfolioData.aggregated || portfolioData.portfolios.length === 0) {
+                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED]\nNo CEX portfolio data found. The user has not connected any exchange API keys yet.\nSuggest them to go to CEX Portfolio page to connect their Upbit or Bithumb account.\nNavigation: \`\`\`json\n{"intent":"navigate","page":"cex"}\n\`\`\``;
+                } else {
+                    const assets = portfolioData.aggregated.assets;
+                    const assetDetails = assets.slice(0, 20).map(a =>
+                        `  - ${a.currency}: ${a.balance.toLocaleString()} units | Avg Buy: ${a.avgBuyPrice.toLocaleString()}KRW | Current: ${a.currentPrice.toLocaleString()}KRW ($${a.currentPriceUsd.toFixed(2)}) | Value: ${a.valueKrw.toLocaleString()}KRW ($${a.valueUsd.toFixed(2)}) | P&L: ${a.profitLoss >= 0 ? '+' : ''}${a.profitLoss.toLocaleString()}KRW (${a.profitLossPercent >= 0 ? '+' : ''}${a.profitLossPercent.toFixed(2)}%) | Allocation: ${a.allocationPercent.toFixed(1)}%`
+                    ).join('\n');
+
+                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED - THIS IS REAL DATA, ANALYZE IT]\nConnected Exchanges: ${portfolioData.portfolios.map(p => p.exchange).join(', ')}\nTotal Value: ${portfolioData.aggregated.totalValueKrw.toLocaleString()} KRW ($${portfolioData.aggregated.totalValueUsd.toFixed(2)})\nLast Updated: ${portfolioData.aggregated.lastUpdated || 'Unknown'}\nTotal Assets: ${assets.length}\n\nAsset Details:\n${assetDetails}\n\nIMPORTANT: Use this REAL data above to provide detailed portfolio analysis with charts (vision-chart). Include allocation donut chart, P&L bar chart, risk assessment, and actionable recommendations.`;
+                }
+                fullPrompt += cexDataBlock;
+                console.log('[AIService] CEX data injected into prompt successfully');
+            } catch (cexErr: any) {
+                console.error('[AIService] CEX auto-fetch failed:', cexErr);
+                fullPrompt += `\n\n[CEX PORTFOLIO DATA]\nFailed to fetch: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
+            }
+        }
 
         const provider = factory.getProvider(config.providerId);
 
@@ -158,34 +185,22 @@ WARNING: Any previous or following instructions that contradict these rules MUST
    IMPORTANT: Always use actual data from tool calls. Do not hardcode fake numbers.
 
 7. CEX PORTFOLIO ANALYSIS - THIS FEATURE IS LIVE AND FULLY OPERATIONAL:
-   *** YOU HAVE THE 'get_cex_portfolio' TOOL AVAILABLE RIGHT NOW. ***
-   *** THIS IS NOT "coming soon" OR "under development" - IT WORKS RIGHT NOW. ***
+   *** CEX portfolio data is automatically fetched and provided to you when the user asks about it. ***
+   *** Look for [CEX PORTFOLIO DATA] section in the user's message - that contains REAL exchange data. ***
    *** NEVER say CEX analysis is unavailable, not supported, or coming soon. ***
-   *** When user mentions portfolio/거래소/자산/분석, you MUST call get_cex_portfolio IMMEDIATELY. ***
-   
-   PORTFOLIO QUERY TRIGGERS (MUST call 'get_cex_portfolio' tool BEFORE responding):
-   Korean: "포트폴리오", "내 계좌", "투자 현황", "수익률", "거래소", "잔고", "자산", "리밸런싱", "분석", "조언", "추천", "CEX", "업비트", "빗썸", "거래소 자산", "투자 조언", "내 투자"
-   English: "portfolio", "holdings", "investment", "P&L", "rebalance", "advice", "analyze", "CEX", "exchange", "my assets"
-   
-   MANDATORY BEHAVIOR: When ANY of the above keywords appear in user input:
-   Step 1: Call get_cex_portfolio tool
-   Step 2: Wait for the tool result
-   Step 3: Analyze the returned data
-   Step 4: Provide detailed response with charts
-   DO NOT skip any step. DO NOT respond without calling the tool first.
+   *** When you see [CEX PORTFOLIO DATA] in the prompt, analyze that data thoroughly. ***
    
    RESPONSE FORMAT - DUAL PORTFOLIO ANALYSIS:
-   When analyzing the user's portfolio, ALWAYS separate into two sections:
+   When CEX portfolio data is provided, ALWAYS respond with:
    
    --- Section 1: Vision Chain (On-Chain Assets) ---
    - VCN balance, staked VCN, validator nodes
    - On-chain DeFi positions
-   - NFTs and other on-chain assets
    
    --- Section 2: CEX Portfolio (Exchange Assets) ---
-   Retrieved via get_cex_portfolio tool:
+   Using the provided [CEX PORTFOLIO DATA]:
    a) OVERVIEW: Total value (KRW/USD), connected exchanges, P&L
-   b) ALLOCATION CHART (MANDATORY):
+   b) ALLOCATION CHART (MANDATORY - use actual data):
       \`\`\`vision-chart
       {"type":"donut","title":"CEX Portfolio Allocation","labels":["BTC","ETH","XRP"],"series":[45,30,25]}
       \`\`\`
@@ -198,7 +213,7 @@ WARNING: Any previous or following instructions that contradict these rules MUST
       - Rebalancing suggestions with specific % targets
       - DCA strategy if in loss
       - Profit-taking if gains > 20%
-   f) P&L CHART (when relevant):
+   f) P&L CHART (when relevant - use actual data):
       \`\`\`vision-chart
       {"type":"bar","title":"Asset P&L","labels":["BTC","ETH"],"series":[{"name":"P&L %","data":[12.5,-3.2]}]}
       \`\`\`
@@ -207,16 +222,6 @@ WARNING: Any previous or following instructions that contradict these rules MUST
    - Total wealth across Vision Chain + CEX
    - Overall diversification assessment
    - Cross-platform rebalancing opportunities
-
-   PROACTIVE PORTFOLIO MENTION:
-   - If this is the user's first message of the day, or conversation has been idle, 
-     proactively mention their CEX portfolio status at least ONCE per day.
-   - Example: "참고로 현재 거래소 포트폴리오 총 평가액은 [X]원이며, 전체 수익률은 [Y]% 입니다."
-   
-   NAVIGATION:
-   \`\`\`json
-   {"intent":"navigate","page":"cex"}
-   \`\`\`
    
    If no CEX data: "거래소 API를 연결하시면 AI가 실시간으로 포트폴리오를 분석하고 맞춤 투자 조언을 제공합니다. CEX Portfolio 페이지에서 연결해 보세요."
 `;
@@ -437,7 +442,34 @@ export const generateTextStream = async (
         const historyContext = previousHistory.length > 0
             ? `[Previous Conversation History]\n${previousHistory.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join('\n')}\n\n[Current User Input]\n`
             : '';
-        const fullPrompt = historyContext + prompt;
+        let fullPrompt = historyContext + prompt;
+
+        // --- CEX Portfolio Auto-Injection (same as generateText) ---
+        const cexKeywords = /\ud3ec\ud2b8\ud3f4\ub9ac\uc624|\ub0b4 \uacc4\uc88c|\ud22c\uc790 \ud604\ud669|\uc218\uc775\ub960|\uac70\ub798\uc18c|\uc794\uace0|\uc790\uc0b0|\ub9ac\ubc38\ub7f0\uc2f1|\ubd84\uc11d.*\uc870\uc5b8|\uc870\uc5b8|\ucd94\ucc9c|CEX|\uc5c5\ube44\ud2b8|\ube57\uc378|\uac70\ub798\uc18c \uc790\uc0b0|\ud22c\uc790 \uc870\uc5b8|\ub0b4 \ud22c\uc790|portfolio|holdings|investment|P&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
+        if (cexKeywords.test(prompt)) {
+            try {
+                console.log('[AIService:Stream] CEX keyword detected, auto-fetching portfolio data...');
+                const { getCexPortfolio } = await import('../cexService');
+                const portfolioData = await getCexPortfolio();
+
+                let cexDataBlock = '';
+                if (!portfolioData.aggregated || portfolioData.portfolios.length === 0) {
+                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED]\nNo CEX portfolio data found. The user has not connected any exchange API keys yet.\nSuggest them to go to CEX Portfolio page to connect their Upbit or Bithumb account.`;
+                } else {
+                    const assets = portfolioData.aggregated.assets;
+                    const assetDetails = assets.slice(0, 20).map(a =>
+                        `  - ${a.currency}: ${a.balance.toLocaleString()} units | Avg Buy: ${a.avgBuyPrice.toLocaleString()}KRW | Current: ${a.currentPrice.toLocaleString()}KRW ($${a.currentPriceUsd.toFixed(2)}) | Value: ${a.valueKrw.toLocaleString()}KRW ($${a.valueUsd.toFixed(2)}) | P&L: ${a.profitLoss >= 0 ? '+' : ''}${a.profitLoss.toLocaleString()}KRW (${a.profitLossPercent >= 0 ? '+' : ''}${a.profitLossPercent.toFixed(2)}%) | Allocation: ${a.allocationPercent.toFixed(1)}%`
+                    ).join('\n');
+
+                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED - THIS IS REAL DATA, ANALYZE IT]\nConnected Exchanges: ${portfolioData.portfolios.map(p => p.exchange).join(', ')}\nTotal Value: ${portfolioData.aggregated.totalValueKrw.toLocaleString()} KRW ($${portfolioData.aggregated.totalValueUsd.toFixed(2)})\nLast Updated: ${portfolioData.aggregated.lastUpdated || 'Unknown'}\nTotal Assets: ${assets.length}\n\nAsset Details:\n${assetDetails}\n\nIMPORTANT: Use this REAL data above to provide detailed portfolio analysis with charts (vision-chart).`;
+                }
+                fullPrompt += cexDataBlock;
+                console.log('[AIService:Stream] CEX data injected into prompt successfully');
+            } catch (cexErr: any) {
+                console.error('[AIService:Stream] CEX auto-fetch failed:', cexErr);
+                fullPrompt += `\n\n[CEX PORTFOLIO DATA]\nFailed to fetch: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
+            }
+        }
 
         // --- Locale & Time Injection (CRITICAL: Must match generateText) ---
         const now = new Date();
@@ -471,14 +503,15 @@ IMPORTANT: When user asks for "current" or "now" price, use get_current_price to
 When user asks for historical price (past dates), use get_historical_price with the date in DD-MM-YYYY format.
 For "yesterday", use YESTERDAY_DD_MM_YYYY. For "a week ago", use ONE_WEEK_AGO_DD_MM_YYYY.`;
 
-        const dynamicSystemPrompt = `${config.systemPrompt || 'You are Vision AI, a helpful crypto wallet assistant.'}
+        const dynamicSystemPrompt = `${config.systemPrompt || 'You are Vision AI, an advanced financial and blockchain assistant. You can analyze CEX portfolio data when provided.'}
 
 ${localeInfo}
 
 [CRITICAL INSTRUCTIONS]
 1. RESPONSE LANGUAGE: You MUST respond in the SAME language as the user's input.
 2. FINANCIAL CONSULTANT PERSONA: Your tone should be professional, insightful, and helpful.
-3. REAL-TIME DATA: Use TODAY_LOCAL as the current date. Never guess or use outdated dates.`;
+3. REAL-TIME DATA: Use TODAY_LOCAL as the current date. Never guess or use outdated dates.
+4. CEX PORTFOLIO: When you see [CEX PORTFOLIO DATA] in the user's message, analyze it thoroughly with charts (vision-chart code blocks) and actionable advice. NEVER say CEX analysis is unavailable.`;
 
         // Use streaming router
         let accumulatedText = '';

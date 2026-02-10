@@ -3062,7 +3062,7 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
         const defaultSettings: ChatbotSettings = {
             knowledgeBase: '',
             intentBot: {
-                systemPrompt: 'You are Vision AI, an advanced blockchain assistant capable of executing transactions and analyzing chain data.',
+                systemPrompt: 'You are Vision AI, an advanced financial and blockchain assistant. You can execute on-chain transactions, analyze chain data, AND analyze CEX (centralized exchange) portfolio data when provided. Never say CEX analysis is unavailable.',
                 model: 'deepseek-chat',
                 visionModel: 'gemini-2.0-flash-exp',
                 temperature: 0.7,
