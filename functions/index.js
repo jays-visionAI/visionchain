@@ -356,13 +356,60 @@ const emailComponents = {
   monoText: (text) => `<span style="font-family:'SF Mono',SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;color:#666;">${text}</span>`,
 };
 
+// =============================================================================
+// FIRESTORE TEMPLATE SYSTEM - Load admin-editable templates with {{variable}} support
+// =============================================================================
+
+/**
+ * Load a custom email template from Firestore emailTemplates collection.
+ * Returns { subject, bodyHtml } if found, or null if not found.
+ * @param {string} templateId - Template document ID
+ * @return {Promise<{subject: string, bodyHtml: string}|null>}
+ */
+async function loadCustomTemplate(templateId) {
+  try {
+    const templateDoc = await db.collection("emailTemplates").doc(templateId).get();
+    if (templateDoc.exists) {
+      const data = templateDoc.data();
+      if (data.bodyHtml) {
+        return { subject: data.subject || "", bodyHtml: data.bodyHtml };
+      }
+    }
+    return null;
+  } catch (err) {
+    console.error(`[Email] Failed to load custom template "${templateId}":`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Replace {{variable}} placeholders in a template string with actual values.
+ * @param {string} template - Template string with {{var}} placeholders
+ * @param {Object} variables - Key-value pairs for replacement
+ * @return {string} Rendered string
+ */
+function renderTemplate(template, variables) {
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), value || "");
+  }
+  return result;
+}
+
 /**
  * Generate device verification email HTML
+ * Checks Firestore for custom template first, falls back to hardcoded.
  * @param {string} code - Verification code
  * @param {string} deviceInfo - Device details
- * @return {string} HTML content
+ * @return {Promise<string>|string} HTML content
  */
-function generateVerificationEmailHtml(code, deviceInfo) {
+async function generateVerificationEmailHtml(code, deviceInfo) {
+  const custom = await loadCustomTemplate("verification");
+  if (custom) {
+    const body = renderTemplate(custom.bodyHtml, { code, deviceInfo: deviceInfo || "Unknown device" });
+    const subject = renderTemplate(custom.subject, { code });
+    return emailBaseLayout(body, subject);
+  }
   const body = `
     ${emailComponents.sectionTitle("Device Verification")}
     ${emailComponents.subtitle("A new device is attempting to access your wallet. Enter the code below to verify this login.")}
@@ -377,9 +424,15 @@ function generateVerificationEmailHtml(code, deviceInfo) {
  * Generate suspicious activity alert email HTML
  * @param {string} reason - Alert reason
  * @param {string} details - Activity details
- * @return {string} HTML content
+ * @return {Promise<string>} HTML content
  */
-function generateSuspiciousActivityEmailHtml(reason, details) {
+async function generateSuspiciousActivityEmailHtml(reason, details) {
+  const custom = await loadCustomTemplate("suspicious");
+  if (custom) {
+    const body = renderTemplate(custom.bodyHtml, { reason, details });
+    const subject = renderTemplate(custom.subject, { reason });
+    return emailBaseLayout(body, subject);
+  }
   const body = `
     ${emailComponents.sectionTitle("Security Alert")}
     ${emailComponents.subtitle("We detected suspicious activity on your Vision Chain account.")}
@@ -1877,7 +1930,7 @@ exports.loadWalletFromCloud = onCall({ cors: true }, async (request) => {
 
       // Send verification email
       const deviceInfo = `IP: ${ipAddress}<br/>Device ID: ${deviceFingerprint || "Unknown"}`;
-      const emailHtml = generateVerificationEmailHtml(deviceCheck.verificationCode, deviceInfo);
+      const emailHtml = await generateVerificationEmailHtml(deviceCheck.verificationCode, deviceInfo);
       await sendSecurityEmail(
         email,
         "Vision Chain - New Device Verification Required",
@@ -4250,9 +4303,15 @@ exports.sendAdminBroadcast = onRequest({ cors: true, invoker: "public", secrets:
 // =============================================================================
 
 /**
- * Password reset email template
+ * Password reset email template - checks Firestore first
  */
-function generatePasswordResetEmailHtml(code, email) {
+async function generatePasswordResetEmailHtml(code, email) {
+  const custom = await loadCustomTemplate("passwordReset");
+  if (custom) {
+    const body = renderTemplate(custom.bodyHtml, { code, email });
+    const subject = renderTemplate(custom.subject, { code });
+    return emailBaseLayout(body, subject);
+  }
   const body = `
     <div style="text-align:center;margin:0 0 24px;">
       <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -4289,9 +4348,15 @@ function generatePasswordResetEmailHtml(code, email) {
 }
 
 /**
- * Password changed confirmation email
+ * Password changed confirmation email - checks Firestore first
  */
-function generatePasswordChangedEmailHtml(targetEmail, timestamp) {
+async function generatePasswordChangedEmailHtml(targetEmail, timestamp) {
+  const custom = await loadCustomTemplate("passwordChanged");
+  if (custom) {
+    const body = renderTemplate(custom.bodyHtml, { email: targetEmail, timestamp });
+    const subject = renderTemplate(custom.subject, { email: targetEmail });
+    return emailBaseLayout(body, subject);
+  }
   const body = `
     ${emailComponents.sectionTitle("Password Changed Successfully")}
     ${emailComponents.subtitle("Your Vision Chain account password has been updated.")}
@@ -4372,7 +4437,7 @@ exports.requestPasswordReset = onRequest({ cors: true, invoker: "public", secret
     });
 
     // Send email
-    const emailHtml = generatePasswordResetEmailHtml(code, emailLower);
+    const emailHtml = await generatePasswordResetEmailHtml(code, emailLower);
     await sendSecurityEmail(emailLower, "Vision Chain - Password Reset Code", emailHtml);
 
     await logSecurityEvent(emailLower, "PASSWORD_RESET_REQUESTED", { ip: req.ip }, db);
@@ -4581,7 +4646,7 @@ exports.completePasswordReset = onRequest({ cors: true, invoker: "public", secre
       // Fallback to UTC if invalid timezone
       timestamp = new Date().toISOString().replace("T", " ").substring(0, 16) + " UTC";
     }
-    const confirmHtml = generatePasswordChangedEmailHtml(emailLower, timestamp);
+    const confirmHtml = await generatePasswordChangedEmailHtml(emailLower, timestamp);
     await sendSecurityEmail(emailLower, "Vision Chain - Password Changed", confirmHtml);
 
     await logSecurityEvent(emailLower, "PASSWORD_RESET_COMPLETED", {
@@ -4638,7 +4703,7 @@ exports.adminEmailPreview = onRequest({ cors: true, invoker: "public" }, async (
         name: "Device Verification",
         category: "security",
         description: "Sent when user logs in from a new device",
-        html: generateVerificationEmailHtml("847291", {
+        html: await generateVerificationEmailHtml("847291", {
           browser: "Chrome 120",
           os: "macOS 14.2",
           ip: "203.230.xxx.xxx",
@@ -4651,7 +4716,7 @@ exports.adminEmailPreview = onRequest({ cors: true, invoker: "public" }, async (
         name: "Suspicious Activity Alert",
         category: "security",
         description: "Sent when unusual login behavior is detected",
-        html: generateSuspiciousActivityEmailHtml("Multiple failed login attempts detected", {
+        html: await generateSuspiciousActivityEmailHtml("Multiple failed login attempts detected", {
           ip: "185.220.xxx.xxx",
           location: "Unknown Location",
           attempts: 5,
@@ -4663,21 +4728,21 @@ exports.adminEmailPreview = onRequest({ cors: true, invoker: "public" }, async (
         name: "Password Reset Code",
         category: "security",
         description: "Sent when user requests a password reset",
-        html: generatePasswordResetEmailHtml("593721", "user@example.com"),
+        html: await generatePasswordResetEmailHtml("593721", "user@example.com"),
       },
       passwordChanged: {
         id: "passwordChanged",
         name: "Password Changed Confirmation",
         category: "security",
         description: "Sent after password is successfully changed",
-        html: generatePasswordChangedEmailHtml("user@example.com", "02/10/2026, 08:00 AM KST"),
+        html: await generatePasswordChangedEmailHtml("user@example.com", "02/10/2026, 08:00 AM KST"),
       },
       weeklyReport: {
         id: "weeklyReport",
         name: "Weekly Activity Report",
         category: "weeklyReport",
         description: "Weekly summary of user's activity and portfolio",
-        html: generateWeeklyReportEmailHtml({
+        html: await generateWeeklyReportEmailHtml({
           weekStart: "Feb 3, 2026",
           weekEnd: "Feb 9, 2026",
           stakingActions: 3,
@@ -4836,7 +4901,7 @@ exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets:
 
     switch (templateId) {
       case "verification":
-        html = generateVerificationEmailHtml("847291", {
+        html = await generateVerificationEmailHtml("847291", {
           browser: "Chrome 120", os: "macOS 14.2",
           ip: "203.230.xxx.xxx", location: "Seoul, South Korea",
           timestamp: new Date().toISOString(),
@@ -4844,22 +4909,22 @@ exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets:
         subject = "[TEST] Vision Chain - Device Verification";
         break;
       case "suspicious":
-        html = generateSuspiciousActivityEmailHtml("Multiple failed login attempts", {
+        html = await generateSuspiciousActivityEmailHtml("Multiple failed login attempts", {
           ip: "185.220.xxx.xxx", location: "Unknown", attempts: 5,
           timestamp: new Date().toISOString(),
         });
         subject = "[TEST] Vision Chain - Suspicious Activity";
         break;
       case "passwordReset":
-        html = generatePasswordResetEmailHtml("593721", sendTo);
+        html = await generatePasswordResetEmailHtml("593721", sendTo);
         subject = "[TEST] Vision Chain - Password Reset Code";
         break;
       case "passwordChanged":
-        html = generatePasswordChangedEmailHtml(sendTo, new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul", timeZoneName: "short" }));
+        html = await generatePasswordChangedEmailHtml(sendTo, new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul", timeZoneName: "short" }));
         subject = "[TEST] Vision Chain - Password Changed";
         break;
       case "weeklyReport":
-        html = generateWeeklyReportEmailHtml({
+        html = await generateWeeklyReportEmailHtml({
           weekStart: "Feb 3, 2026", weekEnd: "Feb 9, 2026",
           stakingActions: 3, totalStaked: "10,000", totalUnstaked: "0",
           rewardsClaimed: "125", bridgeTransfers: 1, bridgeVolume: "5,000",
@@ -5023,9 +5088,23 @@ exports.getEmailPreferences = onRequest({ cors: true, invoker: "public" }, async
 /**
  * Generate weekly activity report email HTML
  * @param {object} data - Aggregated weekly data
- * @return {string} Complete HTML email
+ * @return {Promise<string>} Complete HTML email
  */
-function generateWeeklyReportEmailHtml(data) {
+async function generateWeeklyReportEmailHtml(data) {
+  const custom = await loadCustomTemplate("weeklyReport");
+  if (custom) {
+    const vars = {
+      weekRange: `${data.weekStart} - ${data.weekEnd}`,
+      walletAddress: data.walletAddress || "N/A",
+      vcnBalance: data.walletBalance || "0",
+      stakingActions: String(data.stakingActions || 0),
+      bridgeTransfers: String(data.bridgeTransfers || 0),
+      newReferrals: String(data.newReferrals || 0),
+    };
+    const body = renderTemplate(custom.bodyHtml, vars);
+    const subject = renderTemplate(custom.subject, vars);
+    return emailBaseLayout(body, subject);
+  }
   const {
     weekStart,
     weekEnd,
@@ -5214,22 +5293,22 @@ exports.weeklyActivityReport = onSchedule({
             stakingActions++;
             if (notif.amount) {
               try {
- totalStakedWei += BigInt(notif.amount);
-} catch (e) {/* ignore parse errors */}
+                totalStakedWei += BigInt(notif.amount);
+              } catch (e) {/* ignore parse errors */}
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
- totalUnstakedWei += BigInt(notif.amount);
-} catch (e) {/* ignore */}
+                totalUnstakedWei += BigInt(notif.amount);
+              } catch (e) {/* ignore */}
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
- rewardsClaimedWei += BigInt(notif.amount);
-} catch (e) {/* ignore */}
+                rewardsClaimedWei += BigInt(notif.amount);
+              } catch (e) {/* ignore */}
             }
           }
         }
@@ -5252,8 +5331,8 @@ exports.weeklyActivityReport = onSchedule({
               bridgeTransfers++;
               if (bData.amount) {
                 try {
- bridgeVolumeWei += BigInt(bData.amount);
-} catch (e) {/* ignore */}
+                  bridgeVolumeWei += BigInt(bData.amount);
+                } catch (e) {/* ignore */}
               }
             }
           }
@@ -5306,7 +5385,7 @@ exports.weeklyActivityReport = onSchedule({
         };
 
         // Generate and send email
-        const emailHtml = generateWeeklyReportEmailHtml({
+        const emailHtml = await generateWeeklyReportEmailHtml({
           weekStart: weekStartStr,
           weekEnd: weekEndStr,
           stakingActions,
