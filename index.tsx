@@ -108,6 +108,7 @@ render(() => (
       <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
       <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
       <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />
+      <Route path="/adminsystem/cex-portfolio" component={Admin.AdminCexPortfolioPage} />
 
     </Router>
   </AuthProvider>

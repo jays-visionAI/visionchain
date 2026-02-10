@@ -20,7 +20,8 @@ import {
     Zap,
     Megaphone,
     Network,
-    Mail
+    Mail,
+    LineChart
 } from 'lucide-solid';
 
 
@@ -46,7 +47,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Zap,
     Megaphone,
     Network,
-    Mail
+    Mail,
+    LineChart
 };
 
 // Menu item interface with optional children for sub-menus
@@ -208,6 +210,15 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 12
+    },
+    {
+        id: 'cex-portfolio',
+        path: '/adminsystem/cex-portfolio',
+        label: 'CEX Portfolio',
+        icon: 'LineChart',
+        badge: 'NEW',
+        category: 'custom',
+        order: 13
     },
 
     // ===== DEVELOPER PAGES =====

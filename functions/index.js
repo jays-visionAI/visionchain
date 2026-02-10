@@ -6801,3 +6801,223 @@ exports.getCexPortfolio = onCall({
     },
   };
 });
+
+// =============================================================================
+// ADMIN CEX STATISTICS (onCall)
+// =============================================================================
+
+/**
+ * Get CEX portfolio usage statistics for admin dashboard.
+ * Requires admin role.
+ */
+exports.getAdminCexStats = onCall({
+  region: "asia-northeast3",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
+  }
+  const uid = request.auth.uid;
+
+  // Verify admin role
+  const userEmail = request.auth.token?.email;
+  if (!userEmail) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+  const adminDoc = await db.collection("users").doc(userEmail.toLowerCase()).get();
+  if (!adminDoc.exists || adminDoc.data().role !== "admin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  console.log(`[AdminCEX] Fetching CEX statistics for admin ${userEmail}`);
+
+  try {
+    // 1. Fetch ALL users who have cex_credentials subcollection
+    const usersSnap = await db.collection("users").get();
+    const userList = [];
+
+    for (const userDoc of usersSnap.docs) {
+      const credSnap = await db.collection(`users/${userDoc.id}/cex_credentials`).get();
+      if (credSnap.empty) continue;
+
+      const userData = userDoc.data();
+      const credentials = [];
+
+      for (const credDoc of credSnap.docs) {
+        const cred = credDoc.data();
+        credentials.push({
+          id: credDoc.id,
+          exchange: cred.exchange,
+          label: cred.label || "",
+          status: cred.status || "unknown",
+          registeredAt: cred.registeredAt?.toDate?.()?.toISOString() || null,
+          lastSyncAt: cred.lastSyncAt?.toDate?.()?.toISOString() || null,
+          lastSyncStatus: cred.lastSyncStatus || "never",
+        });
+      }
+
+      // Fetch the latest snapshot for portfolio value
+      const snapshotSnap = await db.collection(`users/${userDoc.id}/cex_snapshots`).get();
+      let totalValueKrw = 0;
+      let totalValueUsd = 0;
+      let assetCount = 0;
+      let lastSyncTime = null;
+      const snapshotAssets = [];
+
+      for (const snapDoc of snapshotSnap.docs) {
+        const snap = snapDoc.data();
+        totalValueKrw += snap.totalValueKrw || 0;
+        totalValueUsd += snap.totalValueUsd || 0;
+        const snapTime = snap.snapshotAt?.toDate?.();
+        if (snapTime && (!lastSyncTime || snapTime > lastSyncTime)) {
+          lastSyncTime = snapTime;
+        }
+        if (snap.assets && Array.isArray(snap.assets)) {
+          assetCount += snap.assets.filter((a) => a.currency !== "KRW").length;
+          snap.assets.forEach((a) => snapshotAssets.push(a));
+        }
+      }
+
+      userList.push({
+        email: userDoc.id,
+        name: userData.name || "",
+        walletAddress: userData.walletAddress || "",
+        credentials,
+        exchangeCount: credentials.length,
+        exchanges: [...new Set(credentials.map((c) => c.exchange))],
+        totalValueKrw,
+        totalValueUsd,
+        assetCount,
+        lastSync: lastSyncTime?.toISOString() || null,
+        registeredAt: credentials[0]?.registeredAt || null,
+        status: credentials.some((c) => c.status === "active") ? "active" : "inactive",
+        assets: snapshotAssets,
+      });
+    }
+
+    // 2. Compute aggregate statistics
+    const totalUsers = userList.length;
+    const activeUsers = userList.filter((u) => u.status === "active").length;
+    const totalCredentials = userList.reduce((sum, u) => sum + u.exchangeCount, 0);
+    const totalAumKrw = userList.reduce((sum, u) => sum + u.totalValueKrw, 0);
+    const totalAumUsd = userList.reduce((sum, u) => sum + u.totalValueUsd, 0);
+
+    // Exchange breakdown
+    const exchangeBreakdown = {};
+    userList.forEach((u) => {
+      u.credentials.forEach((c) => {
+        if (!exchangeBreakdown[c.exchange]) {
+          exchangeBreakdown[c.exchange] = { connections: 0, active: 0 };
+        }
+        exchangeBreakdown[c.exchange].connections++;
+        if (c.status === "active") exchangeBreakdown[c.exchange].active++;
+      });
+    });
+
+    // Exchange AUM
+    const exchangeAum = {};
+    userList.forEach((u) => {
+      u.assets.forEach((a) => {
+        // Aggregate AUM by exchange from credentials
+      });
+      u.credentials.forEach((c) => {
+        if (!exchangeAum[c.exchange]) exchangeAum[c.exchange] = 0;
+      });
+    });
+
+    // Top coins across all users
+    const coinMap = {};
+    userList.forEach((u) => {
+      u.assets.forEach((a) => {
+        if (a.currency === "KRW") return;
+        if (!coinMap[a.currency]) {
+          coinMap[a.currency] = { symbol: a.currency, holders: 0, totalValueKrw: 0, totalBalance: 0 };
+        }
+        coinMap[a.currency].totalValueKrw += a.valueKrw || 0;
+        coinMap[a.currency].totalBalance += a.balance || 0;
+      });
+    });
+    // Count unique holders per coin
+    userList.forEach((u) => {
+      const seenCoins = new Set();
+      u.assets.forEach((a) => {
+        if (a.currency !== "KRW" && !seenCoins.has(a.currency)) {
+          seenCoins.add(a.currency);
+          if (coinMap[a.currency]) coinMap[a.currency].holders++;
+        }
+      });
+    });
+    const topCoins = Object.values(coinMap)
+      .sort((a, b) => b.totalValueKrw - a.totalValueKrw)
+      .slice(0, 20);
+
+    // Asset size distribution
+    const sizeDistribution = {
+      under1m: 0,     // < 1,000,000 KRW
+      m1to5m: 0,      // 1M ~ 5M
+      m5to10m: 0,     // 5M ~ 10M
+      m10to50m: 0,    // 10M ~ 50M
+      m50to100m: 0,   // 50M ~ 100M
+      over100m: 0,    // > 100M
+    };
+    userList.forEach((u) => {
+      const v = u.totalValueKrw;
+      if (v < 1000000) sizeDistribution.under1m++;
+      else if (v < 5000000) sizeDistribution.m1to5m++;
+      else if (v < 10000000) sizeDistribution.m5to10m++;
+      else if (v < 50000000) sizeDistribution.m10to50m++;
+      else if (v < 100000000) sizeDistribution.m50to100m++;
+      else sizeDistribution.over100m++;
+    });
+
+    // Recent registrations (last 7 days)
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const recentRegistrations = userList.filter((u) => {
+      if (!u.registeredAt) return false;
+      return new Date(u.registeredAt) >= weekAgo;
+    }).length;
+
+    // Today's registrations
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayRegistrations = userList.filter((u) => {
+      if (!u.registeredAt) return false;
+      return new Date(u.registeredAt) >= todayStart;
+    }).length;
+
+    // Strip assets from user list to reduce payload size
+    const usersSummary = userList.map((u) => ({
+      email: u.email,
+      name: u.name,
+      walletAddress: u.walletAddress,
+      exchanges: u.exchanges,
+      exchangeCount: u.exchangeCount,
+      credentials: u.credentials,
+      totalValueKrw: u.totalValueKrw,
+      totalValueUsd: u.totalValueUsd,
+      assetCount: u.assetCount,
+      lastSync: u.lastSync,
+      registeredAt: u.registeredAt,
+      status: u.status,
+    }));
+
+    return {
+      overview: {
+        totalUsers,
+        activeUsers,
+        inactiveUsers: totalUsers - activeUsers,
+        totalCredentials,
+        totalAumKrw,
+        totalAumUsd,
+        recentRegistrations,
+        todayRegistrations,
+      },
+      exchangeBreakdown,
+      topCoins,
+      sizeDistribution,
+      users: usersSummary,
+    };
+  } catch (err) {
+    console.error("[AdminCEX] Failed to get stats:", err);
+    throw new HttpsError("internal", "Failed to fetch CEX statistics.");
+  }
+});

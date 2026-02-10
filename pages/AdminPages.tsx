@@ -20,6 +20,7 @@ export const AdminDeFi = lazy(() => import('../components/admin/AdminDeFi'));
 export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAnnouncements').then(m => ({ default: m.AdminAnnouncements })));
 export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminBridgeNetworks'));
 export const AdminEmail = lazy(() => import('../components/admin/AdminEmail'));
+export const AdminCexPortfolio = lazy(() => import('../components/admin/AdminCexPortfolio'));
 
 
 // Loading spinner component
@@ -224,6 +225,17 @@ export function AdminEmailPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminEmail />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminCexPortfolioPage() {
+    document.title = 'CEX Portfolio | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminCexPortfolio />
             </AdminLayout>
         </Suspense>
     );
