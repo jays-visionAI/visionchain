@@ -1,4 +1,5 @@
 import { createSignal, For, Show, onMount } from 'solid-js';
+import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import {
     Settings,
     Bell,
@@ -77,6 +78,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [showConfirmPassword, setShowConfirmPassword] = createSignal(false);
     const [passwordError, setPasswordError] = createSignal('');
     const [passwordSuccess, setPasswordSuccess] = createSignal(false);
+    const [passwordLoading, setPasswordLoading] = createSignal(false);
 
     // Cloud Sync state
     const [cloudSyncStatus, setCloudSyncStatus] = createSignal<'none' | 'synced' | 'error'>('none');
@@ -163,10 +165,16 @@ export function WalletSettings(props: { onBack?: () => void }) {
         return icons[key] || icons.announcements;
     };
 
-    const handleChangePassword = (e: Event) => {
+    const handleChangePassword = async (e: Event) => {
         e.preventDefault();
         setPasswordError('');
         setPasswordSuccess(false);
+
+        // Validate current password is provided
+        if (!currentPassword()) {
+            setPasswordError('Please enter your current password');
+            return;
+        }
 
         // Validate new password
         if (newPassword().length < 8) {
@@ -180,16 +188,52 @@ export function WalletSettings(props: { onBack?: () => void }) {
             return;
         }
 
-        // Save new password logic would go here
-        setPasswordSuccess(true);
+        // Prevent same password
+        if (currentPassword() === newPassword()) {
+            setPasswordError('New password must be different from current password');
+            return;
+        }
 
-        // Reset form
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+        setPasswordLoading(true);
+        try {
+            const user = auth.user();
+            if (!user || !user.email) {
+                throw new Error('User not found. Please re-login and try again.');
+            }
 
-        // Hide success after 3 seconds
-        setTimeout(() => setPasswordSuccess(false), 3000);
+            // Step 1: Re-authenticate with current password
+            const credential = EmailAuthProvider.credential(user.email, currentPassword());
+            await reauthenticateWithCredential(user, credential);
+
+            // Step 2: Update to new password
+            await updatePassword(user, newPassword());
+
+            // Success
+            setPasswordSuccess(true);
+
+            // Reset form
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+
+            // Hide success after 5 seconds
+            setTimeout(() => setPasswordSuccess(false), 5000);
+        } catch (err: any) {
+            console.error('[ChangePassword] Error:', err);
+            if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                setPasswordError('Current password is incorrect. Please try again.');
+            } else if (err.code === 'auth/too-many-requests') {
+                setPasswordError('Too many failed attempts. Please try again later.');
+            } else if (err.code === 'auth/requires-recent-login') {
+                setPasswordError('For security, please logout and login again before changing your password.');
+            } else if (err.code === 'auth/weak-password') {
+                setPasswordError('New password is too weak. Please use a stronger password.');
+            } else {
+                setPasswordError(err.message || 'Failed to change password. Please try again.');
+            }
+        } finally {
+            setPasswordLoading(false);
+        }
     };
 
     // Cloud Sync Handler
@@ -790,10 +834,10 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     <div class={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 transition-colors ${isLocked ? 'bg-white/[0.01]' : 'hover:bg-white/[0.01]'}`}>
                                         <div class="flex items-start gap-4 flex-1 min-w-0">
                                             <div class={`p-2 rounded-lg shrink-0 ${isLocked
-                                                    ? 'bg-amber-500/10'
-                                                    : isEnabled()
-                                                        ? 'bg-cyan-500/10'
-                                                        : 'bg-white/5'
+                                                ? 'bg-amber-500/10'
+                                                : isEnabled()
+                                                    ? 'bg-cyan-500/10'
+                                                    : 'bg-white/5'
                                                 }`}>
                                                 <div class={isLocked ? 'text-amber-400' : isEnabled() ? 'text-cyan-400' : 'text-gray-500'}>
                                                     {IconComponent()}
@@ -1281,10 +1325,12 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                         <button
                             type="submit"
-                            class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap"
+                            disabled={passwordLoading()}
+                            class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Save class="w-4 h-4" />
-                            Update Password
+                            <Show when={passwordLoading()} fallback={<><Save class="w-4 h-4" /> Update Password</>}>
+                                <RefreshCw class="w-4 h-4 animate-spin" /> Updating...
+                            </Show>
                         </button>
                     </form>
                 </div>
