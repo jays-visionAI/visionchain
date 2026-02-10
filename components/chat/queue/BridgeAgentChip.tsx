@@ -202,20 +202,24 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         const now = Date.now();
         const fiveMinutes = 5 * 60 * 1000;
 
-        return bridges().filter(b => {
+        const allBridges = bridges();
+        console.log('[BridgeAgentChip] visibleBridges filter - total:', allBridges.length,
+            'statuses:', allBridges.map(b => ({ id: b.id, status: b.status, hidden: b.hiddenFromDesk })));
+
+        return allBridges.filter(b => {
             // Skip if user dismissed from desk
             if (b.hiddenFromDesk) return false;
 
-            // Always show active bridges
+            // Always show active bridges (including FULFILLED which relayer sets)
             if (b.status === 'COMMITTED' || b.status === 'PROCESSING' ||
                 b.status === 'PENDING' || b.status === 'SUBMITTED' || b.status === 'LOCKED') {
                 return true;
             }
 
-            // Show completed within last minute
+            // Show completed within last 5 minutes
             if (b.status === 'COMPLETED' || b.status === 'FINALIZED') {
                 const completedTime = b.completedAt?.toDate?.()?.getTime() ||
-                    b.createdAt?.toDate?.()?.getTime() || 0; // Fallback to createdAt if completedAt is missing
+                    b.createdAt?.toDate?.()?.getTime() || 0;
                 return (now - completedTime) < fiveMinutes;
             }
 
