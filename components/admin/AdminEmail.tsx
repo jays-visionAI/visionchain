@@ -173,6 +173,282 @@ const DEFAULT_TEMPLATES: TemplateDefinition[] = [
             { name: 'newReferrals', description: 'Number of new referrals', example: '2' },
         ],
     },
+    // ========== SECURITY - 2FA ==========
+    {
+        id: '2faEnabled',
+        name: '2FA Enabled Notification',
+        category: 'security',
+        description: 'Sent when user enables TOTP two-factor authentication',
+        subject: 'Vision Chain - Two-Factor Authentication Enabled',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">2FA Enabled</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Two-factor authentication has been successfully enabled on your Vision Chain account.</p>
+<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.5;">Your account is now protected with an additional layer of security. You will need your authenticator app to log in.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Enabled</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Changed At</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{timestamp}}</td></tr>
+</table>`,
+        variables: [
+            { name: 'timestamp', description: 'Date/time of change', example: '2026-02-10 09:15 KST' },
+        ],
+    },
+    {
+        id: '2faDisabled',
+        name: '2FA Disabled Notification',
+        category: 'security',
+        description: 'Sent when user disables TOTP two-factor authentication',
+        subject: 'Vision Chain - Two-Factor Authentication Disabled',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">2FA Disabled</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Two-factor authentication has been disabled on your Vision Chain account.</p>
+<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#ef4444;line-height:1.5;">Your account no longer requires a second factor to log in. We strongly recommend keeping 2FA enabled for maximum security.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#ef4444;">Disabled</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Changed At</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{timestamp}}</td></tr>
+</table>
+<p style="margin:0;font-size:11px;color:#555;">If you did not make this change, please secure your account immediately.</p>`,
+        variables: [
+            { name: 'timestamp', description: 'Date/time of change', example: '2026-02-10 09:15 KST' },
+        ],
+    },
+    // ========== STAKING ==========
+    {
+        id: 'stakingConfirmed',
+        name: 'Staking Confirmed',
+        category: 'staking',
+        description: 'Sent when VCN tokens are successfully staked',
+        subject: 'Vision Chain - Staking Confirmed',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Staking Confirmed</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Your VCN tokens have been successfully staked on Vision Chain.</p>
+<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.5;">Your tokens are now earning rewards. View your staking status in the wallet dashboard.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Staked Amount</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22d3ee;">{{amount}} VCN</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Active</td></tr>
+</table>
+<p style="margin:0;font-size:11px;color:#555;">TX: <span style="font-family:'SF Mono',monospace;color:#888;">{{txHash}}</span></p>`,
+        variables: [
+            { name: 'amount', description: 'Staked VCN amount', example: '10,000' },
+            { name: 'txHash', description: 'Transaction hash', example: '0x1a2b3c4d5e6f...7890' },
+        ],
+    },
+    {
+        id: 'unstakingCooldown',
+        name: 'Unstaking Cooldown Started',
+        category: 'staking',
+        description: 'Sent when unstaking request is submitted',
+        subject: 'Vision Chain - Unstaking Cooldown Started',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Unstaking Requested</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Your unstaking request has been submitted. A cooldown period is now active.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Unstake Amount</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22d3ee;">{{amount}} VCN</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Cooldown Period</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{cooldownDays}} Days</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#f59e0b;">Cooling Down</td></tr>
+</table>
+<p style="margin:0;font-size:11px;color:#555;">TX: <span style="font-family:'SF Mono',monospace;color:#888;">{{txHash}}</span></p>`,
+        variables: [
+            { name: 'amount', description: 'Unstake VCN amount', example: '5,000' },
+            { name: 'cooldownDays', description: 'Cooldown period in days', example: '7' },
+            { name: 'txHash', description: 'Transaction hash', example: '0x1a2b3c4d5e6f...7890' },
+        ],
+    },
+    {
+        id: 'rewardsClaimed',
+        name: 'Rewards Claimed',
+        category: 'staking',
+        description: 'Sent when staking rewards are claimed',
+        subject: 'Vision Chain - Staking Rewards Claimed',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Rewards Claimed</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Your staking rewards have been successfully claimed and sent to your wallet.</p>
+<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.5;">The claimed VCN has been deposited to your wallet balance.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Claimed</td></tr>
+</table>
+<p style="margin:0;font-size:11px;color:#555;">TX: <span style="font-family:'SF Mono',monospace;color:#888;">{{txHash}}</span></p>`,
+        variables: [
+            { name: 'txHash', description: 'Transaction hash', example: '0x1a2b3c4d5e6f...7890' },
+        ],
+    },
+    // ========== REFERRAL ==========
+    {
+        id: 'referralSignup',
+        name: 'Referral Signup Notification',
+        category: 'referral',
+        description: 'Sent to referrer when a new user signs up with their code',
+        subject: 'Vision Chain - New Referral Signup!',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">New Referral Signup!</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Someone signed up using your referral code. Your network is growing!</p>
+<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.5;">A new user has joined Vision Chain through your referral link.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">New Member</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{newUserEmail}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Total Referrals</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{totalReferrals}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Your Code</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22d3ee;">{{referralCode}}</td></tr>
+</table>`,
+        variables: [
+            { name: 'newUserEmail', description: 'New user email (masked)', example: 'u***@example.com' },
+            { name: 'totalReferrals', description: 'Total referral count', example: '5' },
+            { name: 'referralCode', description: 'Referral code', example: 'VCN-ABC123' },
+        ],
+    },
+    {
+        id: 'referralReward',
+        name: 'Referral Reward Earned',
+        category: 'referral',
+        description: 'Sent when referral reward is credited to wallet',
+        subject: 'Vision Chain - Referral Reward Earned!',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Referral Reward Earned!</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">You've earned a reward from your referral network activity.</p>
+<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.5;"><strong>{{rewardAmount}} VCN</strong> has been credited to your wallet.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Reward</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">{{rewardAmount}} VCN</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Tier</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{tier}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">From</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{fromUser}}</td></tr>
+</table>`,
+        variables: [
+            { name: 'rewardAmount', description: 'Reward amount in VCN', example: '500' },
+            { name: 'tier', description: 'Referral tier', example: 'Direct Referral' },
+            { name: 'fromUser', description: 'Referral user (masked)', example: 'u***@example.com' },
+        ],
+    },
+    // ========== BRIDGE ==========
+    {
+        id: 'bridgeComplete',
+        name: 'Bridge Transfer Completed',
+        category: 'bridge',
+        description: 'Sent when cross-chain bridge transfer completes',
+        subject: 'Vision Chain - Bridge Transfer Complete',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Bridge Transfer Complete</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Your cross-chain transfer has been successfully completed and finalized.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Amount</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#a855f7;">{{amount}} VCN</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Source Chain</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{sourceChain}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Destination</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{destChain}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Delivered</td></tr>
+</table>
+<p style="margin:0;font-size:11px;color:#555;">TX: <span style="font-family:'SF Mono',monospace;color:#888;">{{txHash}}</span></p>`,
+        variables: [
+            { name: 'amount', description: 'Transfer amount', example: '5,000' },
+            { name: 'sourceChain', description: 'Source blockchain', example: 'Ethereum Sepolia' },
+            { name: 'destChain', description: 'Destination blockchain', example: 'Vision Chain' },
+            { name: 'txHash', description: 'Transaction hash', example: '0x1a2b3c4d5e6f...7890' },
+        ],
+    },
+    // ========== LIFECYCLE ==========
+    {
+        id: 'welcome',
+        name: 'Welcome Email',
+        category: 'lifecycle',
+        description: 'Sent immediately after user registration',
+        subject: 'Welcome to Vision Chain!',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Welcome to Vision Chain</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Your account has been created. You're now part of the Vision Chain ecosystem.</p>
+<div style="background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.15);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22d3ee;line-height:1.5;">Your next step: Create your wallet to start sending, staking, and earning VCN.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Account</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">{{email}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Network</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Vision Chain Testnet</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Active</td></tr>
+</table>`,
+        variables: [
+            { name: 'email', description: 'User email address', example: 'user@example.com' },
+        ],
+    },
+    {
+        id: 'walletCreated',
+        name: 'Wallet Created',
+        category: 'lifecycle',
+        description: 'Sent when wallet is successfully created',
+        subject: 'Vision Chain - Wallet Created!',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Wallet Created</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Your Vision Chain wallet is ready. You can now send, receive, and stake VCN tokens.</p>
+<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22c55e;line-height:1.5;">Your wallet has been secured with end-to-end encryption. Only you can access it.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Wallet Address</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;font-family:'SF Mono',monospace;">{{walletAddress}}</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Network</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Vision Chain Testnet</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Status</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">Ready</td></tr>
+</table>`,
+        variables: [
+            { name: 'walletAddress', description: 'Truncated wallet address', example: '0x6872...1d31' },
+        ],
+    },
+    {
+        id: 'firstStakingGuide',
+        name: 'First Staking Guide',
+        category: 'lifecycle',
+        description: 'Drip email sent 24h after signup if user has not staked',
+        subject: 'Vision Chain - Start Earning with Staking',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Start Earning with Staking</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">You've been on Vision Chain for a day now. Ready to put your VCN to work?</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">What is Staking?</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Lock your VCN to earn rewards</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Minimum Amount</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">No minimum required</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Rewards</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22d3ee;">Earn APY on your staked VCN</td></tr>
+</table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+  <tr><td align="center">
+    <a href="https://visionchain.co/wallet?tab=staking" target="_blank" style="display:inline-block;background:#22d3ee;color:#000;font-size:13px;font-weight:800;text-decoration:none;padding:14px 32px;border-radius:10px;letter-spacing:0.5px;text-transform:uppercase;">Start Staking Now</a>
+  </td></tr>
+</table>`,
+        variables: [],
+    },
+    {
+        id: 'referralIntro',
+        name: 'Referral Program Intro',
+        category: 'lifecycle',
+        description: 'Drip email sent 48h after signup introducing referral program',
+        subject: 'Vision Chain - Invite Friends, Earn Rewards',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Invite & Earn Rewards</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">Did you know you can earn VCN by inviting friends to Vision Chain?</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Direct Referral</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22c55e;">10% commission</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">2nd-Tier Referral</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">5% commission</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Reward Points</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">10 RP per referral</td></tr>
+</table>
+<div style="margin:24px 0;">
+  <p style="margin:0 0 8px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Your Referral Link</p>
+  <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:14px 16px;border-radius:10px;">
+    <p style="margin:0;font-size:12px;font-family:'SF Mono',monospace;color:#22d3ee;word-break:break-all;">https://visionchain.co/signup?ref={{referralCode}}</p>
+  </div>
+</div>`,
+        variables: [
+            { name: 'referralCode', description: 'User referral code', example: 'VCN-ABC123' },
+        ],
+    },
+    {
+        id: 'inactivityNudge',
+        name: 'Inactivity Nudge',
+        category: 'lifecycle',
+        description: 'Sent after 7+ days of user inactivity',
+        subject: 'Vision Chain - Your Wallet Awaits',
+        bodyHtml: `<h2 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">We Miss You!</h2>
+<p style="margin:0 0 24px;font-size:14px;color:#888;line-height:1.6;">It's been a while since you visited Vision Chain. Here's what you might be missing.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin:0 0 24px;overflow:hidden;">
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Staking Rewards</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#22d3ee;">Your VCN could be earning APY</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Referral Program</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Invite friends to earn rewards</td></tr>
+  <tr><td style="padding:10px 16px;font-size:12px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.5px;">Bridge</td><td align="right" style="padding:10px 16px;font-size:14px;font-weight:700;color:#fff;">Transfer between chains seamlessly</td></tr>
+</table>
+<div style="background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.15);border-radius:12px;padding:16px 20px;margin:16px 0;">
+  <p style="margin:0;font-size:13px;color:#22d3ee;line-height:1.5;">Your wallet is still secure and ready. Come back and check your balance.</p>
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+  <tr><td align="center">
+    <a href="https://visionchain.co/wallet" target="_blank" style="display:inline-block;background:#22d3ee;color:#000;font-size:13px;font-weight:800;text-decoration:none;padding:14px 32px;border-radius:10px;letter-spacing:0.5px;text-transform:uppercase;">Return to Wallet</a>
+  </td></tr>
+</table>`,
+        variables: [],
+    },
 ];
 
 // Email base layout wrapper

@@ -4932,6 +4932,136 @@ exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets:
         });
         subject = "[TEST] Vision Chain - Weekly Report";
         break;
+      case "2faEnabled": {
+        const body2faOn = `${emailComponents.sectionTitle("2FA Enabled")}${emailComponents.subtitle("Two-factor authentication has been enabled on your account.")}${emailComponents.alertBox("Your account is now protected with an additional layer of security.", "success")}`;
+        html = emailBaseLayout(body2faOn, "2FA has been enabled");
+        subject = "[TEST] Vision Chain - 2FA Enabled";
+        break;
+      }
+      case "2faDisabled": {
+        const body2faOff = `${emailComponents.sectionTitle("2FA Disabled")}${emailComponents.subtitle("Two-factor authentication has been disabled on your account.")}${emailComponents.alertBox("We strongly recommend keeping 2FA enabled for maximum security.", "error")}`;
+        html = emailBaseLayout(body2faOff, "2FA has been disabled");
+        subject = "[TEST] Vision Chain - 2FA Disabled";
+        break;
+      }
+      case "stakingConfirmed": {
+        const bodyStake = emailComponents.sectionTitle("Staking Confirmed") +
+          emailComponents.subtitle("Your VCN tokens have been successfully staked.") +
+          emailComponents.alertBox("Your tokens are now earning rewards.", "success") +
+          emailComponents.infoCard([["Staked Amount", "10,000 VCN", true],
+          ["Status", emailComponents.statusBadge("Active", "success"), false]]);
+        html = emailBaseLayout(bodyStake, "10,000 VCN staked successfully");
+        subject = "[TEST] Vision Chain - Staking Confirmed";
+        break;
+      }
+      case "unstakingCooldown": {
+        const bodyUnstake = emailComponents.sectionTitle("Unstaking Requested") +
+          emailComponents.subtitle("Your unstaking request has been submitted.") +
+          emailComponents.infoCard([["Unstake Amount", "5,000 VCN", true],
+          ["Cooldown", "7 Days", false],
+          ["Status", emailComponents.statusBadge("Cooling Down", "pending"), false]]);
+        html = emailBaseLayout(bodyUnstake, "5,000 VCN unstaking - 7 day cooldown");
+        subject = "[TEST] Vision Chain - Unstaking Cooldown";
+        break;
+      }
+      case "rewardsClaimed": {
+        const bodyClaim = emailComponents.sectionTitle("Rewards Claimed") +
+          emailComponents.subtitle("Your staking rewards have been successfully claimed.") +
+          emailComponents.alertBox("The claimed VCN has been deposited to your wallet.", "success") +
+          emailComponents.infoCard([["Status", emailComponents.statusBadge("Claimed", "success"), false]]);
+        html = emailBaseLayout(bodyClaim, "Staking rewards claimed");
+        subject = "[TEST] Vision Chain - Rewards Claimed";
+        break;
+      }
+      case "referralSignup": {
+        const bodyRef = emailComponents.sectionTitle("New Referral Signup!") +
+          emailComponents.subtitle("Someone signed up using your referral code.") +
+          emailComponents.alertBox("A new user has joined through your referral link.", "success") +
+          emailComponents.infoCard([["New Member", "u***@example.com", true],
+          ["Total Referrals", "5", false], ["Your Code", "VCN-ABC123", false]]);
+        html = emailBaseLayout(bodyRef, "New referral! You now have 5 referrals");
+        subject = "[TEST] Vision Chain - New Referral Signup";
+        break;
+      }
+      case "referralReward": {
+        const bodyRR = emailComponents.sectionTitle("Referral Reward Earned!") +
+          emailComponents.subtitle("You've earned a reward from your referral network.") +
+          emailComponents.alertBox("<strong>500 VCN</strong> has been credited to your wallet.", "success") +
+          emailComponents.infoCard([["Reward", "500 VCN", true],
+          ["Tier", "Direct Referral", false], ["From", "u***@example.com", false]], "#22c55e");
+        html = emailBaseLayout(bodyRR, "You earned 500 VCN from your referral network");
+        subject = "[TEST] Vision Chain - Referral Reward Earned";
+        break;
+      }
+      case "bridgeComplete": {
+        const bodyBridge = emailComponents.sectionTitle("Bridge Transfer Complete") +
+          emailComponents.subtitle("Your cross-chain transfer has been completed.") +
+          emailComponents.chainRoute("Ethereum Sepolia", "Vision Chain") +
+          emailComponents.infoCard([["Amount", "5,000 VCN", true],
+          ["Source", "Ethereum Sepolia", false], ["Destination", "Vision Chain", false],
+          ["Status", emailComponents.statusBadge("Delivered", "success"), false]], "#a855f7");
+        html = emailBaseLayout(bodyBridge, "5,000 VCN bridged to Vision Chain");
+        subject = "[TEST] Vision Chain - Bridge Transfer Complete";
+        break;
+      }
+      case "welcome": {
+        const bodyW = emailComponents.sectionTitle("Welcome to Vision Chain") +
+          emailComponents.subtitle("Your account has been created.") +
+          emailComponents.alertBox("Create your wallet to start sending, staking, and earning VCN.", "info") +
+          emailComponents.infoCard([["Account", sendTo, false],
+          ["Network", "Vision Chain Testnet", false],
+          ["Status", emailComponents.statusBadge("Active", "success"), false]]) +
+          emailComponents.button("Create Your Wallet", "https://visionchain.co/wallet");
+        html = emailBaseLayout(bodyW, "Welcome to Vision Chain");
+        subject = "[TEST] Welcome to Vision Chain!";
+        break;
+      }
+      case "walletCreated": {
+        const bodyWC = emailComponents.sectionTitle("Wallet Created") +
+          emailComponents.subtitle("Your Vision Chain wallet is ready.") +
+          emailComponents.alertBox("Your wallet has been secured with end-to-end encryption.", "success") +
+          emailComponents.infoCard([["Wallet", emailComponents.monoText("0x6872...1d31"), false],
+          ["Network", "Vision Chain Testnet", false],
+          ["Status", emailComponents.statusBadge("Ready", "success"), false]]) +
+          emailComponents.button("Open Wallet Dashboard", "https://visionchain.co/wallet");
+        html = emailBaseLayout(bodyWC, "Your Vision Chain wallet is ready");
+        subject = "[TEST] Vision Chain - Wallet Created!";
+        break;
+      }
+      case "firstStakingGuide": {
+        const bodySG = emailComponents.sectionTitle("Start Earning with Staking") +
+          emailComponents.subtitle("Ready to put your VCN to work?") +
+          emailComponents.infoCard([["What is Staking?", "Lock your VCN to earn rewards", false],
+          ["Minimum", "No minimum required", false],
+          ["Rewards", "Earn APY on your staked VCN", true]]) +
+          emailComponents.button("Start Staking Now", "https://visionchain.co/wallet?tab=staking");
+        html = emailBaseLayout(bodySG, "Start staking your VCN today");
+        subject = "[TEST] Vision Chain - Start Earning with Staking";
+        break;
+      }
+      case "referralIntro": {
+        const bodyRI = emailComponents.sectionTitle("Invite & Earn Rewards") +
+          emailComponents.subtitle("Earn VCN by inviting friends to Vision Chain.") +
+          emailComponents.infoCard([["Direct Referral", "10% commission", true],
+          ["2nd-Tier", "5% commission", false],
+          ["Reward Points", "10 RP per referral", false]], "#22c55e") +
+          emailComponents.button("Share Your Link", "https://visionchain.co/wallet?tab=referrals");
+        html = emailBaseLayout(bodyRI, "Earn VCN by inviting friends");
+        subject = "[TEST] Vision Chain - Invite Friends, Earn Rewards";
+        break;
+      }
+      case "inactivityNudge": {
+        const bodyIN = emailComponents.sectionTitle("We Miss You!") +
+          emailComponents.subtitle("It's been a while since you visited Vision Chain.") +
+          emailComponents.infoCard([["Staking Rewards", "Your VCN could be earning APY", true],
+          ["Referral Program", "Invite friends to earn rewards", false],
+          ["Bridge", "Transfer between chains seamlessly", false]]) +
+          emailComponents.alertBox("Your wallet is still secure and ready.", "info") +
+          emailComponents.button("Return to Wallet", "https://visionchain.co/wallet");
+        html = emailBaseLayout(bodyIN, "Your Vision Chain wallet misses you");
+        subject = "[TEST] Vision Chain - Your Wallet Awaits";
+        break;
+      }
       default:
         return res.status(400).json({ error: `Unknown template: ${templateId}` });
     }
@@ -5294,21 +5424,21 @@ exports.weeklyActivityReport = onSchedule({
             if (notif.amount) {
               try {
                 totalStakedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore parse errors */}
+              } catch (e) {/* ignore parse errors */ }
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 totalUnstakedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore */}
+              } catch (e) {/* ignore */ }
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 rewardsClaimedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore */}
+              } catch (e) {/* ignore */ }
             }
           }
         }
@@ -5332,7 +5462,7 @@ exports.weeklyActivityReport = onSchedule({
               if (bData.amount) {
                 try {
                   bridgeVolumeWei += BigInt(bData.amount);
-                } catch (e) {/* ignore */}
+                } catch (e) {/* ignore */ }
               }
             }
           }
