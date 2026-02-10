@@ -2096,7 +2096,8 @@ const Wallet = (): JSX.Element => {
                     referralCount: freshData.referralCount || 0,
                     totalRewardsVCN: freshData.totalRewardsVCN || 0,
                     totalRewardsUSD: freshData.totalRewardsUSD || 0,
-                    photoURL: freshData.photoURL || ''
+                    photoURL: freshData.photoURL || '',
+                    createdAt: freshData.createdAt || ''
                 });
             }
         } catch (e) {

@@ -33,6 +33,8 @@ interface WalletFlowModalsProps {
     setSwapAmount: (a: string) => void;
     recipientAddress: () => string;
     setRecipientAddress: (a: string) => void;
+    stakeAmount: () => string;
+    setStakeAmount: (a: string) => void;
     batchInput: () => string;
     setBatchInput: (i: string) => void;
     parsedBatchTransactions: () => any[];
