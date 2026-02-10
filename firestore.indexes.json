@@ -91,6 +91,48 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "referral_round_participants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "roundId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "inviteCount",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "rp_history",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "userId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "referral_round_participants",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "referrerId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "claimed",
+                    "order": "ASCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": []
