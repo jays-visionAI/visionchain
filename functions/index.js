@@ -6952,12 +6952,12 @@ exports.getAdminCexStats = onCall({
 
     // Asset size distribution
     const sizeDistribution = {
-      under1m: 0,     // < 1,000,000 KRW
-      m1to5m: 0,      // 1M ~ 5M
-      m5to10m: 0,     // 5M ~ 10M
-      m10to50m: 0,    // 10M ~ 50M
-      m50to100m: 0,   // 50M ~ 100M
-      over100m: 0,    // > 100M
+      under1m: 0, // < 1,000,000 KRW
+      m1to5m: 0, // 1M ~ 5M
+      m5to10m: 0, // 5M ~ 10M
+      m10to50m: 0, // 10M ~ 50M
+      m50to100m: 0, // 50M ~ 100M
+      over100m: 0, // > 100M
     };
     userList.forEach((u) => {
       const v = u.totalValueKrw;
