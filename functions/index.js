@@ -680,7 +680,7 @@ const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 // --- BridgeStaking Contract Config ---
-const BRIDGE_STAKING_ADDRESS = "0xf3c337cA02f3370f85F54e9644890a497cFD762D"; // V2
+const BRIDGE_STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6"; // V3 (with stakeFor)
 
 const BRIDGE_STAKING_ABI = [
   "function setTargetAPY(uint256 _apyBasisPoints) external",
@@ -1355,7 +1355,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
 
   try {
     // Staking contract address
-    const BRIDGE_STAKING_ADDRESS = "0xf3c337cA02f3370f85F54e9644890a497cFD762D"; // V2
+    const BRIDGE_STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6"; // V3 (with stakeFor)
 
     // Staking contract ABI (with Paymaster delegation functions)
     const STAKING_ABI = [

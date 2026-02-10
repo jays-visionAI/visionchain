@@ -23,7 +23,7 @@ import { collection, query, getDocs, limit, orderBy, doc, getDoc } from 'firebas
 import { ethers } from 'ethers';
 
 // ============ Bridge Staking Contract Config ============
-const BRIDGE_STAKING_ADDRESS = '0xf3c337cA02f3370f85F54e9644890a497cFD762D';
+const BRIDGE_STAKING_ADDRESS = '0x593dFDc2e31F32D17B981392786F84b0E1228Ab6';
 
 const BRIDGE_STAKING_ABI = [
     'function totalStaked() external view returns (uint256)',
