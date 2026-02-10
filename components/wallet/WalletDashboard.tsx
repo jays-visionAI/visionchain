@@ -833,19 +833,27 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const deskTasks = createMemo(() => {
         const now = Date.now();
         const AUTO_HIDE_MS = 60 * 1000; // 1 minute after completion
+        const BRIDGE_AUTO_HIDE_MS = 5 * 60 * 1000; // 5 minutes for bridge tasks
 
-        return combinedDrawerTasks().filter((task: any) => {
+        const all = combinedDrawerTasks();
+        const result = all.filter((task: any) => {
             // Already hidden by user
             if (task.hiddenFromDesk) return false;
 
-            // Auto-hide completed tasks after 1 minute
+            // Auto-hide completed tasks (bridge gets longer window)
             if ((task.status === 'SENT' || task.status === 'FINALIZED' || task.status === 'COMPLETED') && task.completedAt) {
-                return (now - task.completedAt) < AUTO_HIDE_MS;
+                const hideMs = task.type === 'BRIDGE' ? BRIDGE_AUTO_HIDE_MS : AUTO_HIDE_MS;
+                return (now - task.completedAt) < hideMs;
             }
 
             // Show all active and failed tasks
             return true;
         });
+
+        console.log('[WalletDashboard] deskTasks:', result.length, 'from total:', all.length,
+            'bridge:', result.filter((t: any) => t.type === 'BRIDGE').length);
+
+        return result;
     });
 
     // Filtered batch agents for Agent Desk (auto-hide after 1min, respect hiddenFromDesk)
