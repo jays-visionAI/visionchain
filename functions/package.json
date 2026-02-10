@@ -19,7 +19,10 @@
     "firebase-functions": "^7.0.5",
     "nodemailer": "^7.0.13",
     "otplib": "^12.0.1",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^10.0.0",
+    "axios": "^1.7.9"
   },
   "devDependencies": {
     "eslint": "^8.15.0",

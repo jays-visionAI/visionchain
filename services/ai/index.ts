@@ -185,6 +185,19 @@ ${localeInfo}
    \`\`\`
 
    IMPORTANT: Always use actual data from tool calls. Do not hardcode fake numbers.
+
+7. CEX PORTFOLIO ANALYSIS:
+   When the user asks about their portfolio, investments, or exchange holdings:
+   - ALWAYS call 'get_cex_portfolio' first to get real data
+   - Provide a comprehensive analysis including:
+     a) Portfolio Overview: Total value, P&L summary
+     b) Allocation Chart: Use vision-chart donut/pie to visualize allocation
+     c) Top Holdings: Analyze the top 5 assets by value
+     d) Risk Assessment: Evaluate concentration risk, diversification
+     e) Recommendations: Suggest rebalancing if heavily concentrated (>40% in one asset)
+   - Korean portfolio analysis keywords: "포트폴리오", "내 계좌", "투자 현황", "수익률", "거래소", "잔고"
+   - English keywords: "portfolio", "my holdings", "investment", "P&L", "exchange balance"
+   - If no portfolio data exists, guide the user to connect their exchange in the CEX Portfolio page
 `;
 
         const router = factory.getRouter();
@@ -292,6 +305,45 @@ ${localeInfo}
                                 matchConfidence: c.score === 100 ? 'Exact' : 'Potential'
                             }));
                             if (toolResult.length === 0) toolResult = "No contacts found.";
+                        } else if (name === 'get_cex_portfolio') {
+                            try {
+                                const { getCexPortfolio } = await import('../cexService');
+                                const portfolioData = await getCexPortfolio();
+                                if (!portfolioData.aggregated || portfolioData.portfolios.length === 0) {
+                                    toolResult = "No CEX portfolio data found. The user has not connected any exchange API keys yet. Suggest them to go to CEX Portfolio page to connect their Upbit or Bithumb account.";
+                                } else {
+                                    let assets = portfolioData.aggregated.assets;
+                                    // Optional exchange filter
+                                    if (args.exchange) {
+                                        const filtered = portfolioData.portfolios.find(p => p.exchange === args.exchange);
+                                        if (filtered) {
+                                            assets = filtered.assets;
+                                        }
+                                    }
+                                    toolResult = {
+                                        totalValueKrw: portfolioData.aggregated.totalValueKrw,
+                                        totalValueUsd: portfolioData.aggregated.totalValueUsd,
+                                        connectedExchanges: portfolioData.portfolios.map(p => p.exchange),
+                                        lastUpdated: portfolioData.aggregated.lastUpdated,
+                                        assetCount: assets.length,
+                                        assets: assets.slice(0, 20).map(a => ({
+                                            symbol: a.currency,
+                                            balance: a.balance,
+                                            avgBuyPrice: a.avgBuyPrice,
+                                            currentPriceKrw: a.currentPrice,
+                                            currentPriceUsd: a.currentPriceUsd,
+                                            valueKrw: a.valueKrw,
+                                            valueUsd: a.valueUsd,
+                                            profitLoss: a.profitLoss,
+                                            profitLossPercent: a.profitLossPercent,
+                                            allocationPercent: a.allocationPercent,
+                                        })),
+                                    };
+                                }
+                            } catch (cexErr: any) {
+                                console.error('[AIService] CEX portfolio fetch failed:', cexErr);
+                                toolResult = `Failed to fetch CEX portfolio: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
+                            }
                         }
 
                         toolResultsParts.push({
