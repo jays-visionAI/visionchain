@@ -533,63 +533,37 @@ const Bridge: Component<BridgeProps> = (props) => {
                 setErrorMsg('');
                 setStep(2);
 
-                // Create provider and signer
-                const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
-                const signer = new ethers.Wallet(privateKey, provider);
                 const userAddr = walletAddress();
-
-                // Get destination chain ID
                 const dstChainId = toNetwork().chainId;
                 const amountWei = ethers.parseEther(amountVal);
 
-                // === STEP 1: Commit Intent on-chain ===
-                console.log('[Bridge] Step 1: Committing intent on-chain...');
-                const intentContract = new ethers.Contract(
-                    INTENT_COMMITMENT_ADDRESS,
-                    INTENT_COMMITMENT_ABI,
-                    signer
-                );
-
-                // Commit intent (returns intentHash)
-                const commitTx = await intentContract.commitIntent(userAddr, amountWei, dstChainId);
-                console.log('[Bridge] Intent commit tx:', commitTx.hash);
-                const commitReceipt = await commitTx.wait();
-
-                // Extract intentHash from event logs
-                const intentCommittedTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
-                const intentLog = commitReceipt.logs.find((log: any) => log.topics[0] === intentCommittedTopic);
-
-                let intentHash: string;
-                if (intentLog) {
-                    intentHash = intentLog.topics[1];
-                } else {
-                    // Fallback: compute hash manually
-                    const nonce = await intentContract.userNonces(userAddr);
-                    intentHash = ethers.keccak256(ethers.solidityPacked(
-                        ['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
-                        [userAddr, userAddr, amountWei, nonce - 1n, 0, dstChainId]
-                    ));
-                }
-                console.log('[Bridge] Intent hash:', intentHash);
+                console.log('[Bridge] Using Paymaster API for gasless bridge...');
+                console.log('[Bridge] User:', userAddr, 'Amount:', amountVal, 'VCN -> Chain:', dstChainId);
 
                 setIsApproving(false);
 
-                // === STEP 2: Lock VCN with intentHash ===
-                console.log('[Bridge] Step 2: Locking VCN...');
-                const bridgeContract = new ethers.Contract(
-                    VISION_BRIDGE_SECURE_ADDRESS,
-                    BRIDGE_SECURE_ABI,
-                    signer
-                );
-
-                const lockTx = await bridgeContract.lockVCN(intentHash, userAddr, dstChainId, {
-                    value: amountWei // Send native VCN
+                // Call Paymaster API (admin pays gas for commitIntent + lockVCN)
+                const response = await fetch(`${PAYMASTER_API}/paymaster`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'bridge',
+                        user: userAddr,
+                        amount: amountWei.toString(),
+                        dstChainId: dstChainId,
+                        recipient: userAddr,
+                        srcChainId: VISION_CHAIN_ID
+                    })
                 });
-                console.log('[Bridge] Lock tx:', lockTx.hash);
-                const lockReceipt = await lockTx.wait();
-                console.log('[Bridge] Lock confirmed in block:', lockReceipt.blockNumber);
 
-                setTxHash(lockTx.hash);
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Bridge transfer failed');
+                }
+
+                console.log('[Bridge] Paymaster success:', result);
+                setTxHash(result.lockTxHash || result.commitTxHash);
 
                 // Create notification
                 const chainDisplay = toNetwork().name;
@@ -597,13 +571,13 @@ const Bridge: Component<BridgeProps> = (props) => {
                     try {
                         await createNotification({
                             userEmail: userEmail,
-                            type: 'transfer_received', // Using existing type for now
+                            type: 'transfer_received',
                             title: 'Bridge Request Started',
-                            content: `${amountVal} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
+                            content: `${amountVal} VCN -> ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
                             data: {
                                 amount: amountVal,
                                 destinationChain: chainDisplay,
-                                txHash: lockTx.hash,
+                                txHash: result.lockTxHash,
                                 status: 'pending'
                             }
                         });
@@ -613,31 +587,8 @@ const Bridge: Component<BridgeProps> = (props) => {
                     }
                 }
 
-                // Save to Firebase for History
-                try {
-                    const db = getFirebaseDb();
-                    const txRef = doc(db, 'transactions', lockTx.hash);
-                    await setDoc(txRef, {
-                        hash: lockTx.hash,
-                        from_addr: userAddr.toLowerCase(),
-                        to_addr: 'bridge:sepolia',
-                        value: amountVal,
-                        timestamp: Date.now(),
-                        type: 'Bridge',
-                        bridgeStatus: 'PENDING',
-                        challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
-                        metadata: {
-                            destinationChain: chainDisplay,
-                            srcChainId: VISION_CHAIN_ID,
-                            dstChainId: dstChainId
-                        }
-                    });
-                    console.log('[Bridge] Saved to Firestore for History');
-                } catch (historyErr) {
-                    console.warn('[Bridge] Failed to save history:', historyErr);
-                }
-
                 // Add to local transaction list
+                const txHashDisplay = result.lockTxHash || result.commitTxHash || '';
                 const newTx: Transaction = {
                     id: Date.now().toString(),
                     from: fromNetwork().name,
@@ -646,7 +597,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                     asset: selectedAsset(),
                     status: 'Processing',
                     time: 'Just now',
-                    hash: lockTx.hash.slice(0, 6) + '...' + lockTx.hash.slice(-4)
+                    hash: txHashDisplay ? txHashDisplay.slice(0, 6) + '...' + txHashDisplay.slice(-4) : ''
                 };
                 setTransactions(prev => [newTx, ...prev]);
 
