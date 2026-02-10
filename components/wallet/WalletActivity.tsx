@@ -388,7 +388,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                 {
                                                     isBridgeComplete ? 'Delivered' :
                                                         isBridgeFailed ? 'Failed' :
-                                                            isBridgePending ? 'In Flight' :
+                                                            isBridgePending ? 'In Progress' :
                                                                 tx.bridgeStatus || 'Pending'
                                                 }
                                             </div>

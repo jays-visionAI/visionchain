@@ -949,6 +949,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     onForceExecute={props.onForceExecute}
                     onRetryTask={props.onRetryTask}
                     userEmail={props.userEmail}
+                    walletAddress={props.walletAddress?.() || props.userProfile()?.address || ''}
+                    userVid={props.userProfile()?.displayName || props.userProfile()?.username || props.userProfile()?.name || ''}
                 />
 
                 <MultiBatchDrawer

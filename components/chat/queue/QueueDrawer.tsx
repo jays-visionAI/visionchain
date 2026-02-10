@@ -27,6 +27,8 @@ interface QueueDrawerProps {
     onRetryTask?: (taskId: string) => void;
     userEmail?: string;
     onClearAll?: () => void;
+    walletAddress?: string;
+    userVid?: string;
 }
 
 const QueueDrawer = (props: QueueDrawerProps) => {
@@ -163,9 +165,18 @@ const QueueDrawer = (props: QueueDrawerProps) => {
     });
 
     const resolveName = (address: string | undefined) => {
-        if (!address || !props.contacts) return 'New Recipient';
+        if (!address || address === 'Bridge') {
+            // Bridge to self - show user's VID
+            if (props.userVid) return props.userVid;
+            return 'Self';
+        }
+        // Check if recipient is user's own wallet
+        if (props.walletAddress && address.toLowerCase() === props.walletAddress.toLowerCase()) {
+            return props.userVid || 'Self';
+        }
+        if (!props.contacts) return address.slice(0, 6) + '...' + address.slice(-4);
         const contact = props.contacts.find((c: any) => c.address?.toLowerCase() === address.toLowerCase());
-        return contact ? contact.name : 'New Recipient';
+        return contact ? contact.name : (address.slice(0, 6) + '...' + address.slice(-4));
     };
 
 
