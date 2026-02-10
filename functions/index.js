@@ -3200,7 +3200,7 @@ exports.bridgeRelayer = onSchedule({
               destinationChain: destChain,
               srcChainId: bridge.srcChainId,
               dstChainId: bridge.dstChainId,
-              sender: (bridge.sender || bridge.from || bridge.user || '').toLowerCase(),
+              sender: (bridge.sender || bridge.from || bridge.user || "").toLowerCase(),
             },
           });
           console.log(`[Bridge Relayer] History record saved for bridge ${bridgeId}`);
@@ -3325,7 +3325,7 @@ exports.bridgeRelayer = onSchedule({
               destinationChain: destChain,
               srcChainId: 1337,
               dstChainId: dstChainId,
-              sender: (txData.from_addr || '').toLowerCase(),
+              sender: (txData.from_addr || "").toLowerCase(),
             },
           });
           console.log(`[Bridge Relayer] Sepolia receive record saved for ${recipient}`);
@@ -5502,21 +5502,21 @@ exports.weeklyActivityReport = onSchedule({
             if (notif.amount) {
               try {
                 totalStakedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore parse errors */ }
+              } catch (_e) {/* ignore parse errors */}
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 totalUnstakedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore */ }
+              } catch (_e) {/* ignore */}
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 rewardsClaimedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore */ }
+              } catch (_e) {/* ignore */}
             }
           }
         }
@@ -5540,7 +5540,7 @@ exports.weeklyActivityReport = onSchedule({
               if (bData.amount) {
                 try {
                   bridgeVolumeWei += BigInt(bData.amount);
-                } catch (_e) {/* ignore */ }
+                } catch (_e) {/* ignore */}
               }
             }
           }
@@ -5821,7 +5821,7 @@ exports.secureBridgeRelayer = onSchedule({
                 destinationChain: destChain,
                 srcChainId: txData.metadata?.srcChainId || 1337,
                 dstChainId: txData.metadata?.dstChainId || SEPOLIA_CHAIN_ID,
-                sender: (txData.from_addr || '').toLowerCase(),
+                sender: (txData.from_addr || "").toLowerCase(),
               },
             });
             console.log(`[Secure Bridge] History record saved`);
