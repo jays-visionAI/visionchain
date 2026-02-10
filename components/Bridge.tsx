@@ -790,7 +790,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                         }`} />
                                                 </div>
                                                 <div class="flex-1 text-left">
-                                                    <div class="text-lg font-black italic uppercase tracking-tight">{toNetwork().name}</div>
+                                                    <div class="text-lg font-black italic uppercase tracking-tight text-white">{toNetwork().name}</div>
                                                     <Show when={!toNetwork().enabled}>
                                                         <span class="text-[10px] text-amber-400 font-bold">Coming Soon</span>
                                                     </Show>
