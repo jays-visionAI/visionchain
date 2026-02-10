@@ -5502,21 +5502,21 @@ exports.weeklyActivityReport = onSchedule({
             if (notif.amount) {
               try {
                 totalStakedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore parse errors */}
+              } catch (_e) {/* ignore parse errors */ }
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 totalUnstakedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore */}
+              } catch (_e) {/* ignore */ }
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 rewardsClaimedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore */}
+              } catch (_e) {/* ignore */ }
             }
           }
         }
@@ -5540,7 +5540,7 @@ exports.weeklyActivityReport = onSchedule({
               if (bData.amount) {
                 try {
                   bridgeVolumeWei += BigInt(bData.amount);
-                } catch (_e) {/* ignore */}
+                } catch (_e) {/* ignore */ }
               }
             }
           }
@@ -6149,4 +6149,647 @@ exports.getBridgeStatus = onRequest({ cors: true }, async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// =============================================================================
+// CEX INTEGRATION - Encrypted API Key Management + Portfolio Sync
+// =============================================================================
+// Security Model:
+//   - API Keys are encrypted with AES-256-GCM using a SEPARATE master key
+//   - Decryption ONLY happens server-side within Cloud Functions
+//   - Client never receives raw API Keys; only metadata is returned
+//   - Only balance-read permission is required from exchanges
+// =============================================================================
+
+// Lazy load CEX dependencies
+let jwt = null;
+let uuidv4 = null;
+let axios = null;
+
+/**
+ * Lazy load jsonwebtoken
+ * @return {object} JWT module
+ */
+function getJwt() {
+  if (!jwt) jwt = require("jsonwebtoken");
+  return jwt;
+}
+
+/**
+ * Lazy load uuid v4
+ * @return {Function} uuidv4 function
+ */
+function getUuidv4() {
+  if (!uuidv4) {
+    const { v4 } = require("uuid");
+    uuidv4 = v4;
+  }
+  return uuidv4;
+}
+
+/**
+ * Lazy load axios
+ * @return {object} Axios module
+ */
+function getAxios() {
+  if (!axios) axios = require("axios");
+  return axios;
+}
+
+// --- CEX Encryption (separate key from wallet encryption) ---
+const CEX_ENCRYPTION_KEY = process.env.CEX_ENCRYPTION_KEY ||
+  "vcn-cex-key-2026-very-secure-32b"; // MUST be 32 bytes for AES-256
+
+/**
+ * CEX API Key AES-256-GCM encryption
+ * @param {string} plainText - Raw API key to encrypt
+ * @return {{encrypted: string, iv: string, authTag: string}} Encrypted data
+ */
+function cexEncrypt(plainText) {
+  const iv = crypto.randomBytes(16);
+  const key = Buffer.from(CEX_ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32));
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  let encrypted = cipher.update(plainText, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  const authTag = cipher.getAuthTag().toString("base64");
+
+  return {
+    encrypted,
+    iv: iv.toString("base64"),
+    authTag,
+  };
+}
+
+/**
+ * CEX API Key AES-256-GCM decryption
+ * @param {string} encryptedData - Base64 encrypted data
+ * @param {string} ivBase64 - Base64 IV
+ * @param {string} authTagBase64 - Base64 auth tag
+ * @return {string} Decrypted plaintext
+ */
+function cexDecrypt(encryptedData, ivBase64, authTagBase64) {
+  const key = Buffer.from(CEX_ENCRYPTION_KEY.padEnd(32, "0").slice(0, 32));
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(ivBase64, "base64"),
+  );
+  decipher.setAuthTag(Buffer.from(authTagBase64, "base64"));
+
+  let decrypted = decipher.update(encryptedData, "base64", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+// =============================================================================
+// CEX API CLIENTS - Upbit & Bithumb
+// =============================================================================
+
+class UpbitClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   */
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.upbit.com/v1";
+  }
+
+  /**
+   * Generate Upbit JWT token
+   * @param {string|null} queryString
+   * @return {string} JWT token
+   */
+  _generateToken(queryString = null) {
+    const jwtLib = getJwt();
+    const uuid = getUuidv4();
+    const payload = {
+      access_key: this.accessKey,
+      nonce: uuid(),
+      timestamp: Date.now(),
+    };
+    if (queryString) {
+      const queryHash = crypto.createHash("sha512")
+        .update(queryString, "utf-8").digest("hex");
+      payload.query_hash = queryHash;
+      payload.query_hash_alg = "SHA512";
+    }
+    return jwtLib.sign(payload, this.secretKey);
+  }
+
+  /**
+   * Get account balances
+   * @return {Promise<Array>} Account balances
+   */
+  async getAccounts() {
+    const http = getAxios();
+    const token = this._generateToken();
+    const response = await http.get(`${this.baseUrl}/accounts`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10000,
+    });
+    return response.data;
+  }
+
+  /**
+   * Get current tickers for given markets
+   * @param {string[]} markets e.g. ["KRW-BTC", "KRW-ETH"]
+   * @return {Promise<Array>} Ticker data
+   */
+  async getTickers(markets) {
+    const http = getAxios();
+    const query = `markets=${markets.join(",")}`;
+    const response = await http.get(
+      `${this.baseUrl}/ticker?${query}`,
+      { timeout: 10000 },
+    );
+    return response.data;
+  }
+}
+
+class BithumbClient {
+  /**
+   * @param {string} accessKey
+   * @param {string} secretKey
+   */
+  constructor(accessKey, secretKey) {
+    this.accessKey = accessKey;
+    this.secretKey = secretKey;
+    this.baseUrl = "https://api.bithumb.com";
+  }
+
+  /**
+   * Generate Bithumb JWT token (API v2)
+   * @return {string} JWT token
+   */
+  _generateToken() {
+    const jwtLib = getJwt();
+    const uuid = getUuidv4();
+    const payload = {
+      access_key: this.accessKey,
+      nonce: uuid(),
+      timestamp: Date.now(),
+    };
+    return jwtLib.sign(payload, this.secretKey);
+  }
+
+  /**
+   * Get account balances (Bithumb Open API v2)
+   * @return {Promise<Array>} Account balances
+   */
+  async getAccounts() {
+    const http = getAxios();
+    const token = this._generateToken();
+    const response = await http.get(
+      `${this.baseUrl}/v2/accounts`, {
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: 10000,
+    },
+    );
+    // Normalize to Upbit-compatible format
+    const data = response.data;
+    if (data && Array.isArray(data)) return data;
+    if (data && data.data && Array.isArray(data.data)) return data.data;
+    return [];
+  }
+
+  /**
+   * Get current tickers
+   * @param {string[]} markets e.g. ["KRW-BTC"]
+   * @return {Promise<Array>} Ticker data
+   */
+  async getTickers(markets) {
+    const http = getAxios();
+    const query = `markets=${markets.join(",")}`;
+    const response = await http.get(
+      `${this.baseUrl}/v2/ticker?${query}`,
+      { timeout: 10000 },
+    );
+    const data = response.data;
+    if (Array.isArray(data)) return data;
+    if (data && data.data && Array.isArray(data.data)) return data.data;
+    return [];
+  }
+}
+
+/**
+ * Validate a CEX API key by attempting a balance query
+ * @param {string} exchange 'upbit' | 'bithumb'
+ * @param {string} accessKey
+ * @param {string} secretKey
+ * @return {Promise<{success: boolean, error?: string}>}
+ */
+async function validateCexApiKey(exchange, accessKey, secretKey) {
+  try {
+    const client = exchange === "upbit"
+      ? new UpbitClient(accessKey, secretKey)
+      : new BithumbClient(accessKey, secretKey);
+    await client.getAccounts();
+    return { success: true };
+  } catch (error) {
+    const status = error.response?.status;
+    const msg = error.response?.data?.error?.message || error.message;
+    if (status === 401) return { success: false, error: "Invalid API key or secret." };
+    if (status === 403) return { success: false, error: "Insufficient API permissions. Please enable balance read access." };
+    return { success: false, error: `Validation failed: ${msg}` };
+  }
+}
+
+// =============================================================================
+// PORTFOLIO SYNC ENGINE
+// =============================================================================
+
+/**
+ * Perform portfolio sync for a single credential
+ * @param {string} uid - Firebase user ID
+ * @param {string} credentialId - Credential document ID
+ * @return {Promise<object>} Snapshot data
+ */
+async function performCexSync(uid, credentialId) {
+  const credDoc = await db.doc(`users/${uid}/cex_credentials/${credentialId}`).get();
+  if (!credDoc.exists) throw new Error("Credential not found.");
+  const cred = credDoc.data();
+
+  // Decrypt keys
+  const accessKey = cexDecrypt(
+    cred.encryptedAccessKey, cred.accessKeyIv, cred.accessKeyAuthTag,
+  );
+  const secretKey = cexDecrypt(
+    cred.encryptedSecretKey, cred.secretKeyIv, cred.secretKeyAuthTag,
+  );
+
+  // Create exchange client
+  const client = cred.exchange === "upbit"
+    ? new UpbitClient(accessKey, secretKey)
+    : new BithumbClient(accessKey, secretKey);
+
+  const startTime = Date.now();
+
+  // 1. Fetch balances
+  const accounts = await client.getAccounts();
+
+  // 2. Filter non-zero assets
+  const nonZeroAssets = accounts.filter((a) =>
+    parseFloat(a.balance || "0") > 0 || parseFloat(a.locked || "0") > 0,
+  );
+
+  // 3. Fetch tickers for KRW-paired markets
+  const markets = nonZeroAssets
+    .filter((a) => a.currency !== "KRW")
+    .map((a) => `KRW-${a.currency}`);
+
+  let tickers = [];
+  if (markets.length > 0) {
+    try {
+      tickers = await client.getTickers(markets);
+    } catch (tickerErr) {
+      console.warn(`[CEX] Ticker fetch partial failure:`, tickerErr.message);
+    }
+  }
+
+  const tickerMap = {};
+  tickers.forEach((t) => {
+    const currency = (t.market || "").replace("KRW-", "");
+    tickerMap[currency] = t;
+  });
+
+  // 4. USD/KRW rate (simple estimation; can upgrade to real-time API later)
+  const USD_KRW_RATE = 1400;
+
+  // 5. Build asset list
+  let totalValueKrw = 0;
+  const assets = nonZeroAssets.map((a) => {
+    const balance = parseFloat(a.balance || "0");
+    const locked = parseFloat(a.locked || "0");
+    const avgBuyPrice = parseFloat(a.avg_buy_price || a.average_purchase_price || "0");
+    const totalBalance = balance + locked;
+
+    let currentPriceKrw = 0;
+    if (a.currency === "KRW") {
+      currentPriceKrw = 1;
+    } else if (tickerMap[a.currency]) {
+      currentPriceKrw = tickerMap[a.currency].trade_price ||
+        tickerMap[a.currency].closing_price || 0;
+    }
+
+    const valueKrw = totalBalance * currentPriceKrw;
+    const valueUsd = valueKrw / USD_KRW_RATE;
+    const costBasis = totalBalance * avgBuyPrice;
+    const profitLoss = a.currency === "KRW" ? 0 : (valueKrw - costBasis);
+    const profitLossPercent = (a.currency !== "KRW" && costBasis > 0)
+      ? ((valueKrw - costBasis) / costBasis) * 100 : 0;
+
+    totalValueKrw += valueKrw;
+
+    return {
+      currency: a.currency,
+      balance: totalBalance,
+      locked,
+      avgBuyPrice,
+      currentPrice: currentPriceKrw,
+      currentPriceUsd: currentPriceKrw / USD_KRW_RATE,
+      valueKrw,
+      valueUsd,
+      profitLoss,
+      profitLossPercent,
+      allocationPercent: 0,
+    };
+  });
+
+  // Calculate allocation
+  assets.forEach((a) => {
+    a.allocationPercent = totalValueKrw > 0
+      ? (a.valueKrw / totalValueKrw) * 100 : 0;
+  });
+
+  // Sort by value descending
+  assets.sort((a, b) => b.valueKrw - a.valueKrw);
+
+  const totalProfitLoss = assets
+    .filter((a) => a.currency !== "KRW")
+    .reduce((sum, a) => sum + a.profitLoss, 0);
+  const totalCostBasis = assets
+    .filter((a) => a.currency !== "KRW")
+    .reduce((sum, a) => sum + (a.balance * a.avgBuyPrice), 0);
+
+  // 6. Save snapshot (overwrite per credentialId)
+  const snapshotData = {
+    exchange: cred.exchange,
+    credentialId,
+    assets,
+    totalValueKrw,
+    totalValueUsd: totalValueKrw / USD_KRW_RATE,
+    totalProfitLoss,
+    totalProfitLossPercent: totalCostBasis > 0
+      ? (totalProfitLoss / totalCostBasis) * 100 : 0,
+    snapshotAt: admin.firestore.FieldValue.serverTimestamp(),
+    syncDurationMs: Date.now() - startTime,
+  };
+
+  await db.doc(`users/${uid}/cex_snapshots/${credentialId}`).set(snapshotData);
+
+  // 7. Update credential status
+  await credDoc.ref.update({
+    lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastSyncStatus: "success",
+    status: "active",
+    statusMessage: "",
+  });
+
+  return snapshotData;
+}
+
+// =============================================================================
+// CEX CLOUD FUNCTIONS (onCall)
+// =============================================================================
+
+/**
+ * Register a new CEX API key
+ * Validates the key against the exchange, encrypts it, and stores it.
+ */
+exports.registerCexApiKey = onCall({
+  region: "asia-northeast3",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
+  }
+  const uid = request.auth.uid;
+
+  const { exchange, accessKey, secretKey, label } = request.data;
+
+  // Input validation
+  if (!["upbit", "bithumb"].includes(exchange)) {
+    throw new HttpsError("invalid-argument", "Unsupported exchange. Use 'upbit' or 'bithumb'.");
+  }
+  if (!accessKey || typeof accessKey !== "string" || accessKey.trim().length < 10) {
+    throw new HttpsError("invalid-argument", "Invalid Access Key.");
+  }
+  if (!secretKey || typeof secretKey !== "string" || secretKey.trim().length < 10) {
+    throw new HttpsError("invalid-argument", "Invalid Secret Key.");
+  }
+
+  // Check max credentials (4 per user)
+  const existing = await db.collection(`users/${uid}/cex_credentials`).get();
+  if (existing.size >= 4) {
+    throw new HttpsError("resource-exhausted", "Maximum 4 API keys allowed per account.");
+  }
+
+  // Validate key against exchange
+  console.log(`[CEX] Validating ${exchange} API key for user ${uid}`);
+  const validation = await validateCexApiKey(exchange, accessKey.trim(), secretKey.trim());
+  if (!validation.success) {
+    throw new HttpsError("invalid-argument", validation.error);
+  }
+
+  // Encrypt and store
+  const encAccess = cexEncrypt(accessKey.trim());
+  const encSecret = cexEncrypt(secretKey.trim());
+
+  const docRef = await db.collection(`users/${uid}/cex_credentials`).add({
+    exchange,
+    encryptedAccessKey: encAccess.encrypted,
+    accessKeyIv: encAccess.iv,
+    accessKeyAuthTag: encAccess.authTag,
+    encryptedSecretKey: encSecret.encrypted,
+    secretKeyIv: encSecret.iv,
+    secretKeyAuthTag: encSecret.authTag,
+    label: label || `My ${exchange.charAt(0).toUpperCase() + exchange.slice(1)}`,
+    permissions: ["balance"],
+    status: "active",
+    statusMessage: "",
+    registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastSyncAt: null,
+    lastSyncStatus: null,
+  });
+
+  console.log(`[CEX] Registered ${exchange} key ${docRef.id} for user ${uid}`);
+
+  // Trigger initial sync
+  try {
+    await performCexSync(uid, docRef.id);
+    console.log(`[CEX] Initial sync completed for ${docRef.id}`);
+  } catch (syncErr) {
+    console.warn(`[CEX] Initial sync failed for ${docRef.id}:`, syncErr.message);
+  }
+
+  return {
+    success: true,
+    credentialId: docRef.id,
+    exchange,
+    label: label || `My ${exchange.charAt(0).toUpperCase() + exchange.slice(1)}`,
+  };
+});
+
+/**
+ * Delete a CEX API key and all related snapshots
+ */
+exports.deleteCexApiKey = onCall({
+  region: "asia-northeast3",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
+  }
+  const uid = request.auth.uid;
+  const { credentialId } = request.data;
+
+  if (!credentialId) {
+    throw new HttpsError("invalid-argument", "credentialId is required.");
+  }
+
+  // Verify ownership
+  const credDoc = await db.doc(`users/${uid}/cex_credentials/${credentialId}`).get();
+  if (!credDoc.exists) {
+    throw new HttpsError("not-found", "Credential not found.");
+  }
+
+  // Delete credential
+  await credDoc.ref.delete();
+
+  // Delete related snapshot
+  const snapshotRef = db.doc(`users/${uid}/cex_snapshots/${credentialId}`);
+  const snapshotDoc = await snapshotRef.get();
+  if (snapshotDoc.exists) {
+    await snapshotRef.delete();
+  }
+
+  console.log(`[CEX] Deleted credential ${credentialId} for user ${uid}`);
+  return { success: true };
+});
+
+/**
+ * List user's CEX API keys (metadata only, never raw keys)
+ */
+exports.listCexApiKeys = onCall({
+  region: "asia-northeast3",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
+  }
+  const uid = request.auth.uid;
+
+  const snapshot = await db.collection(`users/${uid}/cex_credentials`)
+    .orderBy("registeredAt", "desc").get();
+
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    exchange: doc.data().exchange,
+    label: doc.data().label,
+    status: doc.data().status,
+    statusMessage: doc.data().statusMessage || "",
+    permissions: doc.data().permissions || ["balance"],
+    lastSyncAt: doc.data().lastSyncAt?.toDate?.()?.toISOString() || null,
+    lastSyncStatus: doc.data().lastSyncStatus || null,
+    registeredAt: doc.data().registeredAt?.toDate?.()?.toISOString() || null,
+  }));
+});
+
+/**
+ * Manually trigger portfolio sync for a specific credential
+ */
+exports.syncCexPortfolio = onCall({
+  region: "asia-northeast3",
+  timeoutSeconds: 30,
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
+  }
+  const uid = request.auth.uid;
+  const { credentialId } = request.data;
+
+  if (!credentialId) {
+    throw new HttpsError("invalid-argument", "credentialId is required.");
+  }
+
+  // Verify ownership
+  const credDoc = await db.doc(`users/${uid}/cex_credentials/${credentialId}`).get();
+  if (!credDoc.exists) {
+    throw new HttpsError("not-found", "Credential not found.");
+  }
+
+  try {
+    const snapshot = await performCexSync(uid, credentialId);
+    return { success: true, snapshot };
+  } catch (error) {
+    // Update credential status on failure
+    await credDoc.ref.update({
+      lastSyncAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastSyncStatus: "error",
+      statusMessage: error.message || "Sync failed",
+    });
+    throw new HttpsError("internal", `Portfolio sync failed: ${error.message}`);
+  }
+});
+
+/**
+ * Get aggregated portfolio from all connected exchanges
+ */
+exports.getCexPortfolio = onCall({
+  region: "asia-northeast3",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Login required.");
+  }
+  const uid = request.auth.uid;
+
+  // Fetch all snapshots
+  const snapshots = await db.collection(`users/${uid}/cex_snapshots`)
+    .orderBy("snapshotAt", "desc").get();
+
+  if (snapshots.empty) {
+    return { portfolios: [], aggregated: null };
+  }
+
+  const portfolios = snapshots.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+    snapshotAt: doc.data().snapshotAt?.toDate?.()?.toISOString() || null,
+  }));
+
+  // Aggregate across all exchanges
+  const allAssets = {};
+  let grandTotalKrw = 0;
+  let grandTotalUsd = 0;
+
+  portfolios.forEach((p) => {
+    grandTotalKrw += p.totalValueKrw || 0;
+    grandTotalUsd += p.totalValueUsd || 0;
+    (p.assets || []).forEach((a) => {
+      if (a.currency === "KRW") return;
+      if (!allAssets[a.currency]) {
+        allAssets[a.currency] = { ...a, sources: [p.exchange] };
+      } else {
+        allAssets[a.currency].balance += a.balance;
+        allAssets[a.currency].locked += a.locked || 0;
+        allAssets[a.currency].valueKrw += a.valueKrw;
+        allAssets[a.currency].valueUsd += a.valueUsd;
+        allAssets[a.currency].profitLoss += a.profitLoss;
+        if (!allAssets[a.currency].sources.includes(p.exchange)) {
+          allAssets[a.currency].sources.push(p.exchange);
+        }
+      }
+    });
+  });
+
+  // Recalculate allocation and P&L %
+  const nonKrwTotalKrw = Object.values(allAssets)
+    .reduce((sum, a) => sum + (a.valueKrw || 0), 0);
+  Object.values(allAssets).forEach((a) => {
+    a.allocationPercent = nonKrwTotalKrw > 0
+      ? (a.valueKrw / nonKrwTotalKrw) * 100 : 0;
+    const costBasis = a.balance * a.avgBuyPrice;
+    a.profitLossPercent = costBasis > 0
+      ? ((a.valueKrw - costBasis) / costBasis) * 100 : 0;
+  });
+
+  return {
+    portfolios,
+    aggregated: {
+      totalValueKrw: grandTotalKrw,
+      totalValueUsd: grandTotalUsd,
+      assets: Object.values(allAssets).sort((a, b) => b.valueKrw - a.valueKrw),
+      lastUpdated: portfolios[0]?.snapshotAt || null,
+    },
+  };
 });

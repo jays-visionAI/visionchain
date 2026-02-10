@@ -18,12 +18,13 @@ import {
     Clock,
     Bell,
     ArrowLeftRight,
-    Shield
+    Shield,
+    BarChart3
 } from 'lucide-solid';
 import { VisionLogo } from './VisionLogo';
 import { VisionFullLogo } from './VisionFullLogo';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -52,13 +53,14 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
     const allMenuItems = [
         { id: 'chat' as ViewType, label: 'Chat', icon: AiChatIcon },
         { id: 'assets' as ViewType, label: 'My Assets', icon: PieChart },
+        { id: 'cex' as ViewType, label: 'CEX Portfolio', icon: BarChart3 },
         { id: 'bridge' as ViewType, label: 'Swap', icon: ArrowLeftRight },
         { id: 'staking' as ViewType, label: 'Earn', icon: Shield },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },
         { id: 'mint' as ViewType, label: 'Mint', icon: Plus },
-        { id: 'contacts' as ViewType, label: 'Contact List', icon: Users },
+        { id: 'contacts' as ViewType, label: 'Contacts', icon: Users },
         { id: 'history' as ViewType, label: 'History', icon: Clock },
         { id: 'profile' as ViewType, label: 'Profile', icon: User },
         { id: 'notifications' as ViewType, label: 'Notification', icon: Bell },
