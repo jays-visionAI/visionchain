@@ -4884,13 +4884,13 @@ exports.adminSendTestEmail = onRequest({ cors: true, invoker: "public", secrets:
       return res.status(403).json({ error: "Admin access required" });
     }
 
-    const { templateId, targetEmail } = req.body;
+    const { templateId, targetEmail, sendTo: sendToParam } = req.body;
     if (!templateId) {
       return res.status(400).json({ error: "Missing templateId" });
     }
 
-    // Use admin's email or specified target
-    const sendTo = targetEmail || decoded.email;
+    // Use specified target email or admin's email as fallback
+    const sendTo = sendToParam || targetEmail || decoded.email;
     if (!sendTo) {
       return res.status(400).json({ error: "No target email available" });
     }
@@ -5294,21 +5294,21 @@ exports.weeklyActivityReport = onSchedule({
             if (notif.amount) {
               try {
                 totalStakedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore parse errors */}
+              } catch (e) {/* ignore parse errors */ }
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 totalUnstakedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore */}
+              } catch (e) {/* ignore */ }
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 rewardsClaimedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore */}
+              } catch (e) {/* ignore */ }
             }
           }
         }
@@ -5332,7 +5332,7 @@ exports.weeklyActivityReport = onSchedule({
               if (bData.amount) {
                 try {
                   bridgeVolumeWei += BigInt(bData.amount);
-                } catch (e) {/* ignore */}
+                } catch (e) {/* ignore */ }
               }
             }
           }

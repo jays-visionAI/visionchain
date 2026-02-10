@@ -255,6 +255,16 @@ export default function AdminEmail() {
     const [sendingTest, setSendingTest] = createSignal<string | null>(null);
     const [sendSuccess, setSendSuccess] = createSignal('');
     const [showPreview, setShowPreview] = createSignal(false);
+    const [testPopoverFor, setTestPopoverFor] = createSignal<string | null>(null);
+    const [testEmailTarget, setTestEmailTarget] = createSignal('');
+
+    // Initialize test email with admin's email
+    createEffect(() => {
+        const auth = getAdminFirebaseAuth();
+        if (auth.currentUser?.email && !testEmailTarget()) {
+            setTestEmailTarget(auth.currentUser.email);
+        }
+    });
 
     onMount(async () => {
         await loadTemplates();
@@ -337,19 +347,25 @@ export default function AdminEmail() {
         }
     };
 
-    const handleSendTest = async (templateId: string) => {
+    const handleSendTest = async (templateId: string, targetEmail: string) => {
+        if (!targetEmail || !targetEmail.includes('@')) {
+            setError('Please enter a valid email address');
+            setTimeout(() => setError(''), 4000);
+            return;
+        }
         setSendingTest(templateId);
+        setTestPopoverFor(null);
         setSendSuccess('');
         try {
             const token = await getAdminToken();
             const response = await fetch(getAdminCloudFunctionUrl('adminSendTestEmail'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ templateId }),
+                body: JSON.stringify({ templateId, sendTo: targetEmail }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
-            setSendSuccess(data.message || 'Test email sent');
+            setSendSuccess(`Test email sent to ${targetEmail}`);
             setTimeout(() => setSendSuccess(''), 5000);
         } catch (err: any) {
             setError(err.message || 'Failed to send test email');
@@ -426,8 +442,8 @@ export default function AdminEmail() {
                                 if (tab.id === 'subscriptions' && !stats()) loadStats();
                             }}
                             class={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap ${activeTab() === tab.id
-                                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                                : 'text-gray-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
                             {tab.icon()}
@@ -479,8 +495,8 @@ export default function AdminEmail() {
                                     <button
                                         onClick={() => setShowPreview(!showPreview())}
                                         class={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${showPreview()
-                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
-                                                : 'bg-white/5 text-gray-400 hover:text-white'
+                                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                                            : 'bg-white/5 text-gray-400 hover:text-white'
                                             }`}
                                     >
                                         <Eye class="w-3.5 h-3.5" />
@@ -652,16 +668,61 @@ export default function AdminEmail() {
                                                 <Code class="w-3 h-3" />
                                                 Edit
                                             </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleSendTest(template.id); }}
-                                                disabled={sendingTest() === template.id}
-                                                class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 disabled:opacity-40"
-                                            >
-                                                <Show when={sendingTest() !== template.id} fallback={<RefreshCw class="w-3 h-3 animate-spin" />}>
-                                                    <Send class="w-3 h-3" />
+                                            <div class="relative">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setTestPopoverFor(testPopoverFor() === template.id ? null : template.id);
+                                                    }}
+                                                    disabled={sendingTest() === template.id}
+                                                    class="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 disabled:opacity-40"
+                                                >
+                                                    <Show when={sendingTest() !== template.id} fallback={<RefreshCw class="w-3 h-3 animate-spin" />}>
+                                                        <Send class="w-3 h-3" />
+                                                    </Show>
+                                                    Test
+                                                </button>
+                                                {/* Test Email Popover */}
+                                                <Show when={testPopoverFor() === template.id}>
+                                                    <div
+                                                        class="absolute right-0 top-full mt-2 z-50 w-80 bg-[#1a1a1d] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <div class="p-4 border-b border-white/5">
+                                                            <div class="flex items-center justify-between mb-1">
+                                                                <span class="text-xs font-black text-white">Send Test Email</span>
+                                                                <button onClick={() => setTestPopoverFor(null)} class="p-1 hover:bg-white/10 rounded-lg">
+                                                                    <X class="w-3.5 h-3.5 text-gray-500" />
+                                                                </button>
+                                                            </div>
+                                                            <p class="text-[11px] text-gray-500">Send "{template.name}" to a specific address</p>
+                                                        </div>
+                                                        <div class="p-4 space-y-3">
+                                                            <div>
+                                                                <label class="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">Recipient Email</label>
+                                                                <input
+                                                                    type="email"
+                                                                    value={testEmailTarget()}
+                                                                    onInput={(e) => setTestEmailTarget(e.currentTarget.value)}
+                                                                    placeholder="admin@example.com"
+                                                                    class="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 transition-colors"
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleSendTest(template.id, testEmailTarget());
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleSendTest(template.id, testEmailTarget())}
+                                                                disabled={!testEmailTarget() || sendingTest() === template.id}
+                                                                class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl text-white text-xs font-bold hover:opacity-90 transition-all disabled:opacity-40"
+                                                            >
+                                                                <Send class="w-3.5 h-3.5" />
+                                                                Send Test Email
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </Show>
-                                                Test
-                                            </button>
+                                            </div>
                                             <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform ${isExpanded() ? 'rotate-180' : ''}`} />
                                         </div>
                                     </div>
