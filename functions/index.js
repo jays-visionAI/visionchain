@@ -6169,6 +6169,17 @@ exports.getBridgeStatus = onRequest({ cors: true }, async (req, res) => {
 //   - Only balance-read permission is required from exchanges
 // =============================================================================
 
+// VPC Connector config for static IP egress (34.22.69.189)
+// Only applies in production where cex-vpc-connector exists
+const isProduction = (process.env.GCLOUD_PROJECT || "") === "visionchain-d19ed";
+const cexFunctionConfig = {
+  region: "asia-northeast3",
+  ...(isProduction ? {
+    vpcConnector: "cex-vpc-connector",
+    vpcConnectorEgressSettings: "ALL_TRAFFIC",
+  } : {}),
+};
+
 // Lazy load CEX dependencies
 let jwt = null;
 let uuidv4 = null;
@@ -6558,9 +6569,7 @@ async function performCexSync(uid, credentialId) {
  * Validates the key against the exchange, encrypts it, and stores it.
  */
 exports.registerCexApiKey = onCall({
-  region: "asia-northeast3",
-  vpcConnector: "cex-vpc-connector",
-  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+  ...cexFunctionConfig,
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6639,9 +6648,7 @@ exports.registerCexApiKey = onCall({
  * Delete a CEX API key and all related snapshots
  */
 exports.deleteCexApiKey = onCall({
-  region: "asia-northeast3",
-  vpcConnector: "cex-vpc-connector",
-  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+  ...cexFunctionConfig,
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6680,9 +6687,7 @@ exports.deleteCexApiKey = onCall({
  * List user's CEX API keys (metadata only, never raw keys)
  */
 exports.listCexApiKeys = onCall({
-  region: "asia-northeast3",
-  vpcConnector: "cex-vpc-connector",
-  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+  ...cexFunctionConfig,
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6712,10 +6717,8 @@ exports.listCexApiKeys = onCall({
  * Manually trigger portfolio sync for a specific credential
  */
 exports.syncCexPortfolio = onCall({
-  region: "asia-northeast3",
+  ...cexFunctionConfig,
   timeoutSeconds: 30,
-  vpcConnector: "cex-vpc-connector",
-  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6754,9 +6757,7 @@ exports.syncCexPortfolio = onCall({
  * Get aggregated portfolio from all connected exchanges
  */
 exports.getCexPortfolio = onCall({
-  region: "asia-northeast3",
-  vpcConnector: "cex-vpc-connector",
-  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+  ...cexFunctionConfig,
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6836,9 +6837,7 @@ exports.getCexPortfolio = onCall({
  * Requires admin role.
  */
 exports.getAdminCexStats = onCall({
-  region: "asia-northeast3",
-  vpcConnector: "cex-vpc-connector",
-  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+  ...cexFunctionConfig,
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
