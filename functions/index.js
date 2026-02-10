@@ -4496,12 +4496,23 @@ exports.requestPasswordReset = onRequest({ cors: true, invoker: "public", secret
       }
     }
 
-    // Check if user exists in Firebase Auth
+    // Check if user exists in Firebase Auth OR Firestore
+    let userExists = false;
     try {
       await admin.auth().getUserByEmail(emailLower);
+      userExists = true;
     } catch (authErr) {
+      // Not in Firebase Auth, check Firestore users collection
+      const userDoc = await db.collection("users").doc(emailLower).get();
+      if (userDoc.exists) {
+        userExists = true;
+        console.log(`[PasswordReset] User found in Firestore (not in Auth): ${emailLower}`);
+      }
+    }
+
+    if (!userExists) {
       // Don't reveal whether email exists (security best practice)
-      console.log(`[PasswordReset] Email not found: ${emailLower}`);
+      console.log(`[PasswordReset] Email not found anywhere: ${emailLower}`);
       return res.status(200).json({ success: true, message: "If this email exists, a reset code has been sent." });
     }
 
@@ -4709,11 +4720,31 @@ exports.completePasswordReset = onRequest({ cors: true, invoker: "public", secre
       }
     }
 
-    // Update password via Firebase Admin SDK
-    const userRecord = await admin.auth().getUserByEmail(emailLower);
-    await admin.auth().updateUser(userRecord.uid, {
-      password: newPassword,
-    });
+    // Update password via Firebase Admin SDK (or create Auth account if missing)
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(emailLower);
+      await admin.auth().updateUser(userRecord.uid, {
+        password: newPassword,
+      });
+    } catch (authErr) {
+      // User exists in Firestore but not Firebase Auth - create Auth account
+      const userDoc = await db.collection("users").doc(emailLower).get();
+      if (!userDoc.exists) {
+        return res.status(400).json({ error: "User account not found." });
+      }
+      console.log(`[PasswordReset] Creating Firebase Auth account for Firestore-only user: ${emailLower}`);
+      userRecord = await admin.auth().createUser({
+        email: emailLower,
+        password: newPassword,
+        emailVerified: true,
+      });
+      // Update Firestore user doc with the new uid if needed
+      await db.collection("users").doc(emailLower).update({
+        uid: userRecord.uid,
+        updatedAt: Date.now(),
+      });
+    }
 
     // Mark token as used
     await db.collection("password_reset_tokens").doc(emailLower).update({
