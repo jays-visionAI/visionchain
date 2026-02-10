@@ -1683,7 +1683,16 @@ const Wallet = (): JSX.Element => {
                 }));
                 alert("Rewards Claimed Successfully!");
             } else if (action.type === 'bridge') {
-                // Execute Bridge via the separated function
+                // 1. Decrypt wallet and connect internal signer for permit signing
+                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                if (!encrypted) {
+                    throw new Error("Local wallet key not found. Please restore your wallet.");
+                }
+                const mnemonic = await WalletService.decrypt(encrypted!, walletPassword());
+                const { privateKey } = WalletService.deriveEOA(mnemonic);
+                await contractService.connectInternalWallet(privateKey);
+
+                // 2. Execute Bridge via the separated function
                 const bridgeData = action.data as { amount: string; destinationChain: string; recipient?: string };
                 await executeBridgeIntent(bridgeData);
             }

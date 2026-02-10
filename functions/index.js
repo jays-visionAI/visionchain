@@ -1143,12 +1143,23 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     // VCN Token contract for permit/transferFrom
     const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
+    // === DIAGNOSTIC LOGGING ===
+    const userBalance = await tokenContract.balanceOf(user);
+    const currentAllowance = await tokenContract.allowance(user, adminAddress);
+    console.log(`[Paymaster:Bridge] Admin address: ${adminAddress}`);
+    console.log(`[Paymaster:Bridge] User ERC20 VCN balance: ${ethers.formatEther(userBalance)}`);
+    console.log(`[Paymaster:Bridge] Current allowance (user->admin): ${ethers.formatEther(currentAllowance)}`);
+    console.log(`[Paymaster:Bridge] Required total: ${ethers.formatEther(totalAmount)} (amount: ${ethers.formatEther(amountWei)}, fee: ${ethers.formatEther(BRIDGE_FEE)})`);
+    console.log(`[Paymaster:Bridge] Has signature: ${!!signature}, Has deadline: ${!!deadline}`);
+
     // === STEP 0: Execute Permit & Collect Fee via transferFrom ===
     if (signature && deadline) {
       const { v, r, s } = parseSignature(signature);
+      console.log(`[Paymaster:Bridge] Parsed signature - v: ${v}, r: ${r ? r.substring(0, 10) + "..." : "null"}, s: ${s ? s.substring(0, 10) + "..." : "null"}`);
       if (v) {
         try {
           console.log(`[Paymaster:Bridge] Executing permit for ${ethers.formatEther(totalAmount)} VCN (amount + fee)...`);
+          console.log(`[Paymaster:Bridge] Permit params: owner=${user}, spender=${adminAddress}, value=${totalAmount.toString()}, deadline=${deadline}`);
           const permitTx = await tokenContract.permit(
             user,
             adminAddress,
@@ -1158,20 +1169,32 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
           );
           await permitTx.wait();
           console.log(`[Paymaster:Bridge] Permit successful`);
+
+          // Verify allowance after permit
+          const newAllowance = await tokenContract.allowance(user, adminAddress);
+          console.log(`[Paymaster:Bridge] Post-permit allowance: ${ethers.formatEther(newAllowance)}`);
         } catch (permitErr) {
           console.error(`[Paymaster:Bridge] Permit failed:`, permitErr.message);
+          console.error(`[Paymaster:Bridge] Permit reason:`, permitErr.reason);
           return res.status(400).json({ error: `Permit verification failed: ${permitErr.reason || permitErr.message}` });
         }
+      } else {
+        console.warn(`[Paymaster:Bridge] Signature parsed but v is null/undefined, skipping permit`);
       }
+    } else {
+      console.warn(`[Paymaster:Bridge] No signature or deadline provided, skipping permit. Fee collection will likely fail.`);
     }
 
     // Collect fee from user to admin
     try {
+      const preAllowance = await tokenContract.allowance(user, adminAddress);
+      console.log(`[Paymaster:Bridge] Pre-fee allowance: ${ethers.formatEther(preAllowance)}, fee needed: ${ethers.formatEther(BRIDGE_FEE)}`);
       const feeTx = await tokenContract.transferFrom(user, adminAddress, BRIDGE_FEE);
       await feeTx.wait();
       console.log(`[Paymaster:Bridge] Fee collected: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
     } catch (feeErr) {
       console.error(`[Paymaster:Bridge] Fee collection failed:`, feeErr.message);
+      console.error(`[Paymaster:Bridge] Fee collection reason:`, feeErr.reason);
       return res.status(400).json({ error: `Fee collection failed: ${feeErr.reason || feeErr.message}` });
     }
 
@@ -5477,21 +5500,21 @@ exports.weeklyActivityReport = onSchedule({
             if (notif.amount) {
               try {
                 totalStakedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore parse errors */}
+              } catch (_e) {/* ignore parse errors */}
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 totalUnstakedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore */}
+              } catch (_e) {/* ignore */}
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 rewardsClaimedWei += BigInt(notif.amount);
-              } catch (e) {/* ignore */}
+              } catch (_e) {/* ignore */}
             }
           }
         }
@@ -5515,7 +5538,7 @@ exports.weeklyActivityReport = onSchedule({
               if (bData.amount) {
                 try {
                   bridgeVolumeWei += BigInt(bData.amount);
-                } catch (e) {/* ignore */}
+                } catch (_e) {/* ignore */}
               }
             }
           }
