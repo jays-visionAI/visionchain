@@ -1100,8 +1100,7 @@ async function indexTransaction(txHash, { type, from, to, amount, fee, method })
  * @return {Promise} - Response promise
  */
 async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, amount, recipient, _nonce, _expiry, _intentSignature, adminWallet }) {
-  // For testnet, we allow bridge without signature verification for simplicity
-  // In production, we would verify the user's signature
+  // Bridge with Paymaster: admin pays gas, user pays fee via EIP-712 permit
 
   if (!user || !dstChainId || !amount) {
     return res.status(400).json({ error: "Missing required fields: user, dstChainId, amount" });
@@ -1110,6 +1109,9 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
   // Use user's address as recipient if not specified
   const bridgeRecipient = recipient || user;
   const srcChain = srcChainId || 1337; // Default to Vision Chain
+
+  // Get fee, deadline, signature from request body
+  const { fee, deadline, signature } = req.body;
 
   console.log(`[Paymaster:Bridge] ${user} bridging ${amount} to chain ${dstChainId}, recipient: ${bridgeRecipient}`);
 
@@ -1134,6 +1136,54 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, BRIDGE_SECURE_ABI, adminWallet);
 
     const amountWei = BigInt(amount);
+    const BRIDGE_FEE = fee ? BigInt(fee) : ethers.parseEther("1"); // 1 VCN default fee
+    const totalAmount = amountWei + BRIDGE_FEE;
+    const adminAddress = await adminWallet.getAddress();
+
+    // VCN Token contract for permit/transferFrom
+    const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+
+    // === STEP 0: Execute Permit & Collect Fee via transferFrom ===
+    if (signature && deadline) {
+      const { v, r, s } = parseSignature(signature);
+      if (v) {
+        try {
+          console.log(`[Paymaster:Bridge] Executing permit for ${ethers.formatEther(totalAmount)} VCN (amount + fee)...`);
+          const permitTx = await tokenContract.permit(
+            user,
+            adminAddress,
+            totalAmount,
+            deadline,
+            v, r, s,
+          );
+          await permitTx.wait();
+          console.log(`[Paymaster:Bridge] Permit successful`);
+        } catch (permitErr) {
+          console.error(`[Paymaster:Bridge] Permit failed:`, permitErr.message);
+          return res.status(400).json({ error: `Permit verification failed: ${permitErr.reason || permitErr.message}` });
+        }
+      }
+    }
+
+    // Collect fee from user to admin
+    try {
+      const feeTx = await tokenContract.transferFrom(user, adminAddress, BRIDGE_FEE);
+      await feeTx.wait();
+      console.log(`[Paymaster:Bridge] Fee collected: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
+    } catch (feeErr) {
+      console.error(`[Paymaster:Bridge] Fee collection failed:`, feeErr.message);
+      return res.status(400).json({ error: `Fee collection failed: ${feeErr.reason || feeErr.message}` });
+    }
+
+    // Transfer bridge amount from user to admin (admin will lock it)
+    try {
+      const transferTx = await tokenContract.transferFrom(user, adminAddress, amountWei);
+      await transferTx.wait();
+      console.log(`[Paymaster:Bridge] Transferred ${ethers.formatEther(amountWei)} VCN from user to admin for locking`);
+    } catch (transferErr) {
+      console.error(`[Paymaster:Bridge] Bridge amount transfer failed:`, transferErr.message);
+      return res.status(400).json({ error: `Bridge amount transfer failed: ${transferErr.reason || transferErr.message}` });
+    }
 
     // === STEP 1: Commit Intent (Paymaster pays gas) ===
     console.log(`[Paymaster:Bridge] Step 1: Committing intent on-chain...`);
@@ -1183,10 +1233,10 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     }
     console.log(`[Paymaster:Bridge] Intent hash: ${intentHash}`);
 
-    // === STEP 2: Lock VCN with intentHash (Paymaster pays gas) ===
+    // === STEP 2: Lock VCN with intentHash (admin locks the VCN it received from user) ===
     console.log(`[Paymaster:Bridge] Step 2: Locking VCN...`);
     const lockTx = await bridgeContract.lockVCN(intentHash, bridgeRecipient, dstChainId, {
-      value: amountWei, // Send native VCN
+      value: amountWei, // Send native VCN (admin's balance)
       gasLimit: 300000,
     });
     console.log(`[Paymaster:Bridge] Lock TX sent: ${lockTx.hash}`);
@@ -1201,6 +1251,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
         srcChainId: srcChain,
         dstChainId: dstChainId,
         amount: ethers.formatEther(amountWei),
+        fee: ethers.formatEther(BRIDGE_FEE),
         recipient: bridgeRecipient,
         intentHash: intentHash,
         commitTxHash: commitTx.hash,
@@ -1217,6 +1268,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
         to_addr: "bridge:sepolia",
         recipient: bridgeRecipient.toLowerCase(),
         value: ethers.formatEther(amountWei),
+        fee: ethers.formatEther(BRIDGE_FEE),
         timestamp: Date.now(),
         type: "Bridge",
         bridgeStatus: "LOCKED",
@@ -1240,6 +1292,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
       commitTxHash: commitTx.hash,
       lockTxHash: lockTx.hash,
       intentHash: intentHash,
+      fee: ethers.formatEther(BRIDGE_FEE),
     });
   } catch (err) {
     console.error("[Paymaster:Bridge] Error:", err);
