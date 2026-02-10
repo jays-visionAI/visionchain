@@ -1,7 +1,7 @@
 import { createMemo, Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Motion } from 'solid-motionone';
-import { Clock, Check, AlertTriangle, Loader2, X, Repeat, Shield, Wallet, Play, Layers } from 'lucide-solid';
+import { Clock, Check, AlertTriangle, Loader2, X, Repeat, Shield, ArrowRightLeft, Play, Layers } from 'lucide-solid';
 
 export type TaskStatus = 'WAITING' | 'EXECUTING' | 'SENT' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
 export type AgentType = 'TIMELOCK' | 'BRIDGE' | 'SWAP' | 'STAKE' | 'BATCH';
@@ -89,7 +89,7 @@ const STATUS_CONFIG: Record<TaskStatus, any> = {
 const AGENT_ICONS: Record<AgentType, any> = {
     TIMELOCK: Clock,
     BATCH: Layers,
-    BRIDGE: Wallet,
+    BRIDGE: ArrowRightLeft,
     SWAP: Repeat,
     STAKE: Shield
 };
@@ -189,7 +189,7 @@ const AgentChip = (props: AgentChipProps) => {
                         <Dynamic component={DisplayIcon()} class={`w-3.5 h-3.5 ${config().color} ${props.task.status === 'EXECUTING' ? 'animate-spin' : ''}`} />
                     </div>
                     <span class="text-[10px] font-black text-white uppercase tracking-widest opacity-80 truncate">
-                        {props.task.type === 'TIMELOCK' ? 'Time Lock Agent' : 'Batch Agent'}
+                        {props.task.type === 'TIMELOCK' ? 'Time Lock Agent' : props.task.type === 'BRIDGE' ? 'Bridge Agent' : 'Batch Agent'}
                     </span>
                 </div>
                 {/* Dismiss Button - Top Right */}

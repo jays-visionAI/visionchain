@@ -203,8 +203,6 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
         const fiveMinutes = 5 * 60 * 1000;
 
         const allBridges = bridges();
-        console.log('[BridgeAgentChip] visibleBridges filter - total:', allBridges.length,
-            'statuses:', allBridges.map(b => ({ id: b.id, status: b.status, hidden: b.hiddenFromDesk })));
 
         return allBridges.filter(b => {
             // Skip if user dismissed from desk

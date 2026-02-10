@@ -5,7 +5,6 @@ import { parseChartBlocks } from './VisionChart';
 const VisionChart = lazy(() => import('./VisionChart').then(m => ({ default: m.VisionChart })));
 import ChatQueueLine from '../chat/queue/ChatQueueLine';
 import AgentChip from '../chat/queue/AgentChip';
-import BridgeAgentChip from '../chat/queue/BridgeAgentChip';
 import QueueDrawer from '../chat/queue/QueueDrawer';
 import { getQuickActions, QuickAction } from '../../services/firebaseService';
 import {
@@ -868,6 +867,11 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
             return true;
         });
     });
+
+    // Bridge tasks for Agent Desk (from deskTasks, same data source as Agent Queue)
+    const deskBridgeTasks = createMemo(() =>
+        deskTasks().filter((t: any) => t.type === 'BRIDGE')
+    );
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
 
@@ -1309,8 +1313,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                                 <button
                                                                     onClick={() => props.onBridgeDelayChange?.(v)}
                                                                     class={`flex-1 py-1 rounded-md text-[9px] font-black uppercase tracking-wider transition-all ${(props.bridgeDelay?.() || 2) === v
-                                                                            ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
-                                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:border-purple-500/20 hover:text-purple-400'
+                                                                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                                                                        : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:border-purple-500/20 hover:text-purple-400'
                                                                         }`}
                                                                 >
                                                                     {v === 2 ? 'Fast' : v === 5 ? 'Standard' : 'Secure'}
@@ -1570,15 +1574,20 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
 
 
-                                            {/* Bridge Agent - Always render, component handles visibility */}
-                                            <BridgeAgentChip
-                                                walletAddress={props.walletAddress?.() || props.userProfile()?.address || ''}
-                                                onDismiss={(id) => props.onDismissTask?.(id)}
-                                                onClick={(id) => {
-                                                    setSelectedTaskId(id);
-                                                    setIsQueueDrawerOpen(true);
-                                                }}
-                                            />
+                                            {/* Bridge Agents from deskTasks (same data source as Agent Queue) */}
+                                            <For each={deskBridgeTasks()}>
+                                                {(task) => (
+                                                    <AgentChip
+                                                        task={task}
+                                                        isCompact={true}
+                                                        onClick={() => {
+                                                            setSelectedTaskId(task.id);
+                                                            setIsQueueDrawerOpen(true);
+                                                        }}
+                                                        onDismiss={(id) => props.onDismissTask?.(id)}
+                                                    />
+                                                )}
+                                            </For>
                                         </div>
 
                                     </Show>
@@ -1736,15 +1745,20 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
 
 
-                                                            {/* Bridge Agent - Always render */}
-                                                            <BridgeAgentChip
-                                                                walletAddress={props.walletAddress?.() || props.userProfile()?.address || ''}
-                                                                onDismiss={(id) => props.onDismissTask?.(id)}
-                                                                onClick={(id) => {
-                                                                    setSelectedTaskId(id);
-                                                                    setIsQueueDrawerOpen(true);
-                                                                }}
-                                                            />
+                                                            {/* Bridge Agents from deskTasks (same data source as Agent Queue) */}
+                                                            <For each={deskBridgeTasks()}>
+                                                                {(task) => (
+                                                                    <AgentChip
+                                                                        task={task}
+                                                                        isCompact={true}
+                                                                        onClick={() => {
+                                                                            setSelectedTaskId(task.id);
+                                                                            setIsQueueDrawerOpen(true);
+                                                                        }}
+                                                                        onDismiss={(id) => props.onDismissTask?.(id)}
+                                                                    />
+                                                                )}
+                                                            </For>
                                                         </div>
                                                     </Motion.div>
                                                 </Show>
