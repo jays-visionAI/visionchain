@@ -171,8 +171,8 @@ export const WalletContacts = (props: WalletContactsProps) => {
 
                 <WalletViewHeader
                     tag="Network Directory"
-                    title="CONTACT"
-                    titleAccent="LIST"
+                    title="CONTACTS"
+                    titleAccent=""
                     description="Manage your network and map identifiers to Vision IDs for seamless interaction."
                     hideDescriptionOnMobile={true}
                     rightElement={

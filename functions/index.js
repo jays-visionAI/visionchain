@@ -6559,6 +6559,8 @@ async function performCexSync(uid, credentialId) {
  */
 exports.registerCexApiKey = onCall({
   region: "asia-northeast3",
+  vpcConnector: "cex-vpc-connector",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6638,6 +6640,8 @@ exports.registerCexApiKey = onCall({
  */
 exports.deleteCexApiKey = onCall({
   region: "asia-northeast3",
+  vpcConnector: "cex-vpc-connector",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6677,6 +6681,8 @@ exports.deleteCexApiKey = onCall({
  */
 exports.listCexApiKeys = onCall({
   region: "asia-northeast3",
+  vpcConnector: "cex-vpc-connector",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6708,6 +6714,8 @@ exports.listCexApiKeys = onCall({
 exports.syncCexPortfolio = onCall({
   region: "asia-northeast3",
   timeoutSeconds: 30,
+  vpcConnector: "cex-vpc-connector",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6747,6 +6755,8 @@ exports.syncCexPortfolio = onCall({
  */
 exports.getCexPortfolio = onCall({
   region: "asia-northeast3",
+  vpcConnector: "cex-vpc-connector",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
@@ -6827,6 +6837,8 @@ exports.getCexPortfolio = onCall({
  */
 exports.getAdminCexStats = onCall({
   region: "asia-northeast3",
+  vpcConnector: "cex-vpc-connector",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
