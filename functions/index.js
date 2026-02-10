@@ -7181,3 +7181,155 @@ exports.getAdminCexStats = onCall({
     throw new HttpsError("internal", "Failed to fetch CEX statistics.");
   }
 });
+
+// =============================================================================
+// BACKFILL RP - One-time admin function to retroactively award RP
+// =============================================================================
+const RP_PER_REFERRAL_BF = 10;
+const RP_LEVELUP_BONUS_BF = 100;
+const LEVELUP_INTERVAL_BF = 10;
+
+function calcLevelFromRefs(count) {
+  return Math.min(Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2), 100);
+}
+
+exports.backfillRP = onRequest({ cors: true, invoker: "public", timeoutSeconds: 300 }, async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  // Simple admin protection
+  const { adminKey, dryRun } = req.body;
+  if (adminKey !== "visionchain-backfill-2026") {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const usersSnapshot = await db.collection("users").get();
+    console.log(`[RP Backfill] Total users: ${usersSnapshot.size}`);
+
+    let processed = 0;
+    let awarded = 0;
+    let skipped = 0;
+    let totalRPAwarded = 0;
+    const details = [];
+
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      const email = userDoc.id;
+      const referralCount = userData.referralCount || 0;
+
+      if (referralCount <= 0) {
+        skipped++;
+        continue;
+      }
+
+      processed++;
+
+      // Calculate expected referral RP
+      const referralRP = referralCount * RP_PER_REFERRAL_BF;
+
+      // Calculate level & level-up bonuses
+      const currentLevel = calcLevelFromRefs(referralCount);
+      let levelupRP = 0;
+      for (let lvl = 1; lvl <= currentLevel; lvl++) {
+        if (lvl % LEVELUP_INTERVAL_BF === 0) {
+          levelupRP += RP_LEVELUP_BONUS_BF;
+        }
+      }
+
+      const expectedTotalRP = referralRP + levelupRP;
+
+      // Check existing RP
+      const rpDocSnap = await db.collection("user_reward_points").doc(email).get();
+      const existingRP = rpDocSnap.exists ? (rpDocSnap.data().totalRP || 0) : 0;
+      const existingAvailable = rpDocSnap.exists ? (rpDocSnap.data().availableRP || 0) : 0;
+
+      const rpToAward = expectedTotalRP - existingRP;
+
+      if (rpToAward <= 0) {
+        skipped++;
+        details.push({ email, referrals: referralCount, level: currentLevel, existing: existingRP, expected: expectedTotalRP, awarded: 0, status: "SKIP" });
+        continue;
+      }
+
+      const backfillReferralRP = Math.max(0, referralRP - existingRP);
+      const backfillLevelupRP = rpToAward - Math.max(0, backfillReferralRP);
+
+      if (!dryRun) {
+        const now = new Date().toISOString();
+
+        // Add referral RP history
+        if (backfillReferralRP > 0) {
+          await db.collection("rp_history").add({
+            userId: email,
+            type: "referral",
+            amount: backfillReferralRP,
+            source: `Backfill: ${referralCount} referrals`,
+            timestamp: now,
+          });
+        }
+
+        // Add level-up RP history
+        if (backfillLevelupRP > 0) {
+          await db.collection("rp_history").add({
+            userId: email,
+            type: "levelup",
+            amount: backfillLevelupRP,
+            source: `Backfill: Level milestones up to LVL ${currentLevel}`,
+            timestamp: now,
+          });
+        }
+
+        // Update user_reward_points
+        if (rpDocSnap.exists) {
+          await db.collection("user_reward_points").doc(email).update({
+            totalRP: existingRP + rpToAward,
+            availableRP: existingAvailable + rpToAward,
+            updatedAt: now,
+          });
+        } else {
+          await db.collection("user_reward_points").doc(email).set({
+            userId: email,
+            totalRP: rpToAward,
+            claimedRP: 0,
+            availableRP: rpToAward,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+
+      awarded++;
+      totalRPAwarded += rpToAward;
+      details.push({
+        email,
+        referrals: referralCount,
+        level: currentLevel,
+        existing: existingRP,
+        expected: expectedTotalRP,
+        awarded: rpToAward,
+        refRP: backfillReferralRP,
+        lvlRP: backfillLevelupRP,
+        status: dryRun ? "WOULD_AWARD" : "AWARDED",
+      });
+
+      console.log(`[RP Backfill] ${email}: ${referralCount} refs, LVL ${currentLevel}, +${rpToAward} RP`);
+    }
+
+    console.log(`[RP Backfill] Complete: processed=${processed}, awarded=${awarded}, skipped=${skipped}, totalRP=${totalRPAwarded}`);
+
+    return res.status(200).json({
+      success: true,
+      dryRun: !!dryRun,
+      summary: { processed, awarded, skipped, totalRPAwarded },
+      details,
+    });
+  } catch (err) {
+    console.error("[RP Backfill] Failed:", err);
+    return res.status(500).json({ error: err.message || "Backfill failed" });
+  }
+});
