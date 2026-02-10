@@ -209,6 +209,139 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Stake VCN on behalf of a user (Paymaster/Relayer pattern)
+     * @dev Only owner can call. Tokens must already be in this contract (transferred by Paymaster).
+     * @param beneficiary The actual user address to register as validator
+     * @param amount Amount of VCN to stake for the user
+     */
+    function stakeFor(address beneficiary, uint256 amount) external onlyOwner nonReentrant {
+        require(beneficiary != address(0), "Invalid beneficiary");
+        require(amount > 0, "Amount must be > 0");
+        
+        _updateRewards();
+        
+        ValidatorInfo storage validator = validators[beneficiary];
+        
+        // Claim pending rewards before stake changes
+        if (validator.stakedAmount > 0) {
+            uint256 pending = _calculatePending(beneficiary);
+            if (pending > 0) {
+                validator.pendingRewards += pending;
+            }
+        }
+        
+        uint256 newTotal = validator.stakedAmount + amount;
+        require(newTotal >= MINIMUM_STAKE, "Below minimum stake");
+
+        // Tokens already transferred to this contract by the Paymaster
+        // No safeTransferFrom needed here
+
+        if (validator.stakedAmount == 0) {
+            validatorList.push(beneficiary);
+        }
+
+        validator.stakedAmount = newTotal;
+        validator.rewardDebt = (newTotal * accRewardPerShare) / PRECISION;
+        totalStaked += amount;
+
+        // Auto-activate if meeting minimum stake
+        if (!validator.isActive && newTotal >= MINIMUM_STAKE) {
+            validator.isActive = true;
+            emit ValidatorActivated(beneficiary);
+        }
+
+        emit Staked(beneficiary, amount, newTotal);
+    }
+
+    /**
+     * @notice Request unstake on behalf of a user (Paymaster/Relayer pattern)
+     * @param beneficiary The actual user address
+     * @param amount Amount to unstake
+     */
+    function requestUnstakeFor(address beneficiary, uint256 amount) external onlyOwner nonReentrant {
+        require(beneficiary != address(0), "Invalid beneficiary");
+        require(validators[beneficiary].isActive, "Not an active validator");
+        
+        _updateRewards();
+        
+        ValidatorInfo storage validator = validators[beneficiary];
+        require(amount > 0, "Amount must be > 0");
+        require(validator.stakedAmount >= amount, "Insufficient stake");
+
+        // Claim pending rewards before stake changes
+        uint256 pending = _calculatePending(beneficiary);
+        if (pending > 0) {
+            validator.pendingRewards += pending;
+        }
+
+        uint256 remainingStake = validator.stakedAmount - amount;
+        if (remainingStake > 0) {
+            require(remainingStake >= MINIMUM_STAKE, "Would drop below minimum");
+        }
+
+        validator.unstakeRequestTime = block.timestamp;
+        validator.unstakeAmount = amount;
+        validator.rewardDebt = (remainingStake * accRewardPerShare) / PRECISION;
+
+        if (remainingStake == 0) {
+            validator.isActive = false;
+            emit ValidatorDeactivated(beneficiary);
+        }
+
+        emit UnstakeRequested(beneficiary, amount, block.timestamp + COOLDOWN_PERIOD);
+    }
+
+    /**
+     * @notice Withdraw on behalf of a user (Paymaster/Relayer pattern)
+     * @param beneficiary The actual user address
+     */
+    function withdrawFor(address beneficiary) external onlyOwner nonReentrant {
+        require(beneficiary != address(0), "Invalid beneficiary");
+        
+        ValidatorInfo storage validator = validators[beneficiary];
+        require(validator.unstakeAmount > 0, "No pending unstake");
+        require(
+            block.timestamp >= validator.unstakeRequestTime + COOLDOWN_PERIOD,
+            "Cooldown not complete"
+        );
+
+        uint256 amount = validator.unstakeAmount;
+        validator.stakedAmount -= amount;
+        validator.unstakeAmount = 0;
+        validator.unstakeRequestTime = 0;
+        totalStaked -= amount;
+
+        // Send tokens to the actual user, not the caller
+        stakingToken.safeTransfer(beneficiary, amount);
+
+        emit Withdrawn(beneficiary, amount);
+    }
+
+    /**
+     * @notice Claim rewards on behalf of a user (Paymaster/Relayer pattern)
+     * @param beneficiary The actual user address
+     */
+    function claimRewardsFor(address beneficiary) external onlyOwner nonReentrant {
+        require(beneficiary != address(0), "Invalid beneficiary");
+        
+        _updateRewards();
+        
+        ValidatorInfo storage validator = validators[beneficiary];
+        uint256 pending = _calculatePending(beneficiary) + validator.pendingRewards;
+        
+        require(pending > 0, "No rewards to claim");
+        
+        validator.pendingRewards = 0;
+        validator.rewardDebt = (validator.stakedAmount * accRewardPerShare) / PRECISION;
+        totalRewardsPaid += pending;
+        
+        // Send rewards to the actual user
+        stakingToken.safeTransfer(beneficiary, pending);
+        
+        emit RewardsClaimed(beneficiary, pending);
+    }
+
+    /**
      * @notice Request to unstake tokens (starts cooldown period)
      * @param amount Amount to unstake
      */

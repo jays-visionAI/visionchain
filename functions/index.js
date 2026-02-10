@@ -680,7 +680,7 @@ const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 // --- BridgeStaking Contract Config ---
-const BRIDGE_STAKING_ADDRESS = "0x746a48E39dC57Ff14B872B8979E20efE5E5100B1";
+const BRIDGE_STAKING_ADDRESS = "0xf3c337cA02f3370f85F54e9644890a497cFD762D"; // V2
 
 const BRIDGE_STAKING_ABI = [
   "function setTargetAPY(uint256 _apyBasisPoints) external",
@@ -1355,14 +1355,18 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
 
   try {
     // Staking contract address
-    const BRIDGE_STAKING_ADDRESS = "0xc351628EB244ec633d5f21fBD6621e1a683B1181";
+    const BRIDGE_STAKING_ADDRESS = "0xf3c337cA02f3370f85F54e9644890a497cFD762D"; // V2
 
-    // Staking contract ABI
+    // Staking contract ABI (with Paymaster delegation functions)
     const STAKING_ABI = [
       "function stake(uint256 amount) external",
+      "function stakeFor(address beneficiary, uint256 amount) external",
       "function requestUnstake(uint256 amount) external",
+      "function requestUnstakeFor(address beneficiary, uint256 amount) external",
       "function withdraw() external",
+      "function withdrawFor(address beneficiary) external",
       "function claimRewards() external",
+      "function claimRewardsFor(address beneficiary) external",
       "function getStake(address account) external view returns (uint256)",
       "function pendingReward(address account) external view returns (uint256)",
     ];
@@ -1413,46 +1417,42 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
           return res.status(400).json({ error: `Fee collection failed. Please ensure VCN allowance is set.` });
         }
 
-        // Transfer stakeAmount from user to admin
-        const transferTx = await tokenContract.transferFrom(user, adminAddress, stakeAmount);
+        // Transfer stakeAmount from user to the STAKING CONTRACT directly
+        const transferTx = await tokenContract.transferFrom(user, BRIDGE_STAKING_ADDRESS, stakeAmount);
         await transferTx.wait();
-        console.log(`[Paymaster:Staking] Transferred ${ethers.formatEther(stakeAmount)} VCN from user to admin`);
+        console.log(`[Paymaster:Staking] Transferred ${ethers.formatEther(stakeAmount)} VCN from user to staking contract`);
 
-        // Now admin approves staking contract and stakes
-        const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, stakeAmount);
-        await approveTx.wait();
-        console.log(`[Paymaster:Staking] Approved staking contract`);
-
-        tx = await stakingContract.stake(stakeAmount);
+        // Call stakeFor to register the USER (not admin) as the validator
+        tx = await stakingContract.stakeFor(user, stakeAmount);
         txHash = tx.hash;
         await tx.wait();
-        console.log(`[Paymaster:Staking] Staked ${ethers.formatEther(stakeAmount)} VCN for ${user}`);
+        console.log(`[Paymaster:Staking] stakeFor(${user}, ${ethers.formatEther(stakeAmount)}) succeeded`);
 
         break;
       }
 
       case "unstake": {
         const unstakeAmount = BigInt(amount);
-        tx = await stakingContract.requestUnstake(unstakeAmount);
+        tx = await stakingContract.requestUnstakeFor(user, unstakeAmount);
         txHash = tx.hash;
         await tx.wait();
-        console.log(`[Paymaster:Staking] Unstake requested: ${ethers.formatEther(unstakeAmount)} VCN`);
+        console.log(`[Paymaster:Staking] requestUnstakeFor(${user}) - ${ethers.formatEther(unstakeAmount)} VCN`);
         break;
       }
 
       case "withdraw": {
-        tx = await stakingContract.withdraw();
+        tx = await stakingContract.withdrawFor(user);
         txHash = tx.hash;
         await tx.wait();
-        console.log(`[Paymaster:Staking] Withdraw completed for ${user}`);
+        console.log(`[Paymaster:Staking] withdrawFor(${user}) completed`);
         break;
       }
 
       case "claim": {
-        tx = await stakingContract.claimRewards();
+        tx = await stakingContract.claimRewardsFor(user);
         txHash = tx.hash;
         await tx.wait();
-        console.log(`[Paymaster:Staking] Rewards claimed for ${user}`);
+        console.log(`[Paymaster:Staking] claimRewardsFor(${user}) completed`);
         break;
       }
     }
