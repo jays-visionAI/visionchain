@@ -7,6 +7,7 @@ import {
     Clock,
     Copy,
     ChevronRight,
+    ChevronDown,
     Search,
     User,
     Users,
@@ -50,6 +51,12 @@ interface WalletSendProps {
     onContactAdded?: () => void;
 }
 
+// Transferable asset configurations
+const TRANSFERABLE_ASSETS = [
+    { symbol: 'VCN', name: 'Vision Chain', letter: 'V', color: 'blue', bgClass: 'bg-blue-500/20', textClass: 'text-blue-400', borderClass: 'border-blue-500/30', bgActiveClass: 'bg-blue-500/10' },
+    { symbol: 'ETH', name: 'Ethereum', letter: 'E', color: 'indigo', bgClass: 'bg-indigo-500/20', textClass: 'text-indigo-400', borderClass: 'border-indigo-500/30', bgActiveClass: 'bg-indigo-500/10' },
+];
+
 export const WalletSend = (props: WalletSendProps) => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [copied, setCopied] = createSignal(false);
@@ -58,6 +65,9 @@ export const WalletSend = (props: WalletSendProps) => {
     const [multiRecipients, setMultiRecipients] = createSignal<Recipient[]>([]);
     const [selectedContacts, setSelectedContacts] = createSignal<Set<string>>(new Set());
     const [contactSearchQuery, setContactSearchQuery] = createSignal('');
+    const [showAssetPicker, setShowAssetPicker] = createSignal(false);
+
+    const currentAssetConfig = () => TRANSFERABLE_ASSETS.find(a => a.symbol === props.selectedToken()) || TRANSFERABLE_ASSETS[0];
 
     const resolvedRecipientName = createMemo(() => {
         const addr = props.recipientAddress().toLowerCase();
@@ -88,7 +98,7 @@ export const WalletSend = (props: WalletSendProps) => {
     };
 
     return (
-        <div class="flex-1 overflow-y-auto overflow-x-hidden pb-32 custom-scrollbar px-4 py-4 lg:p-8">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden pb-32 custom-scrollbar px-4 py-4 lg:p-8 box-border">
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
                 <div class="flex items-center gap-4 mb-2 lg:hidden">
                     <button
@@ -112,24 +122,75 @@ export const WalletSend = (props: WalletSendProps) => {
                     <Show when={props.flowStep() === 1}>
                         <div class="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                             {/* Asset Selection */}
-                            <div class="space-y-4">
+                            <div class="space-y-4 relative">
                                 <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-left">Select Asset</label>
                                 <div class="w-full">
-                                    <div class="flex items-center justify-between p-4 md:p-5 bg-blue-500/10 border border-blue-500/30 rounded-2xl relative group w-full overflow-hidden">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAssetPicker(!showAssetPicker())}
+                                        class={`flex items-center justify-between p-4 md:p-5 ${currentAssetConfig().bgActiveClass} border ${currentAssetConfig().borderClass} rounded-2xl relative group w-full overflow-hidden cursor-pointer hover:brightness-110 transition-all`}
+                                    >
                                         <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                                                <span class="font-black text-blue-400 text-sm">V</span>
+                                            <div class={`w-10 h-10 rounded-xl ${currentAssetConfig().bgClass} flex items-center justify-center`}>
+                                                <span class={`font-black ${currentAssetConfig().textClass} text-sm`}>{currentAssetConfig().letter}</span>
                                             </div>
                                             <div class="flex-1 min-w-0 text-left">
-                                                <div class="text-sm font-bold text-white uppercase tracking-tight truncate">Vision Chain</div>
-                                                <div class="text-[10px] font-bold text-blue-400/70 uppercase">VCN</div>
+                                                <div class="text-sm font-bold text-white uppercase tracking-tight truncate">{currentAssetConfig().name}</div>
+                                                <div class={`text-[10px] font-bold ${currentAssetConfig().textClass} opacity-70 uppercase`}>{props.selectedToken()}</div>
                                             </div>
                                         </div>
-                                        <div class="text-right shrink-0">
-                                            <div class="text-sm font-black text-white tabular-nums">{props.getAssetData('VCN').liquidBalance.toLocaleString()}</div>
-                                            <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
+                                        <div class="flex items-center gap-3">
+                                            <div class="text-right shrink-0">
+                                                <div class="text-sm font-black text-white tabular-nums">{props.getAssetData(props.selectedToken()).liquidBalance.toLocaleString()}</div>
+                                                <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
+                                            </div>
+                                            <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform ${showAssetPicker() ? 'rotate-180' : ''}`} />
                                         </div>
-                                    </div>
+                                    </button>
+
+                                    {/* Asset Dropdown */}
+                                    <Show when={showAssetPicker()}>
+                                        <div class="absolute z-20 left-0 right-0 mt-2 bg-[#111113] border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <For each={TRANSFERABLE_ASSETS}>
+                                                {(asset) => {
+                                                    const assetData = () => props.getAssetData(asset.symbol);
+                                                    const isSelected = () => props.selectedToken() === asset.symbol;
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                props.setSelectedToken(asset.symbol);
+                                                                props.setSendAmount('');
+                                                                setShowAssetPicker(false);
+                                                            }}
+                                                            class={`w-full flex items-center justify-between p-4 hover:bg-white/[0.04] border-b border-white/[0.03] last:border-0 transition-all ${isSelected() ? 'bg-white/[0.03]' : ''}`}
+                                                        >
+                                                            <div class="flex items-center gap-3">
+                                                                <div class={`w-9 h-9 rounded-xl ${asset.bgClass} flex items-center justify-center`}>
+                                                                    <span class={`font-black ${asset.textClass} text-xs`}>{asset.letter}</span>
+                                                                </div>
+                                                                <div class="text-left">
+                                                                    <div class="text-sm font-bold text-white uppercase tracking-tight">{asset.name}</div>
+                                                                    <div class={`text-[10px] font-bold ${asset.textClass} opacity-60 uppercase`}>{asset.symbol}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center gap-3">
+                                                                <div class="text-right">
+                                                                    <div class="text-sm font-black text-white tabular-nums">{assetData().liquidBalance.toLocaleString()}</div>
+                                                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
+                                                                </div>
+                                                                <Show when={isSelected()}>
+                                                                    <div class={`w-5 h-5 rounded-full ${asset.bgClass} flex items-center justify-center`}>
+                                                                        <Check class={`w-3 h-3 ${asset.textClass}`} />
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                }}
+                                            </For>
+                                        </div>
+                                    </Show>
                                 </div>
                             </div>
 
@@ -254,11 +315,11 @@ export const WalletSend = (props: WalletSendProps) => {
                                                                 }}
                                                                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-lg font-bold font-mono"
                                                             />
-                                                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-600">VCN</span>
+                                                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-600">{props.selectedToken()}</span>
                                                         </div>
                                                         <button
                                                             onClick={() => {
-                                                                const maxPerRecipient = Math.floor(props.getAssetData('VCN').liquidBalance / multiRecipients().length);
+                                                                const maxPerRecipient = Math.floor(props.getAssetData(props.selectedToken()).liquidBalance / multiRecipients().length);
                                                                 setMultiRecipients(prev => prev.map((r, i) =>
                                                                     i === index() ? { ...r, amount: maxPerRecipient.toString() } : r
                                                                 ));
@@ -283,7 +344,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                         <div class="flex items-center justify-between px-2 pt-2 border-t border-white/5">
                                             <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Amount</span>
                                             <span class="text-lg font-black text-white">
-                                                {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-400">VCN</span>
+                                                {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-400">{props.selectedToken()}</span>
                                             </span>
                                         </div>
                                     </div>
@@ -296,7 +357,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="flex flex-col sm:flex-row justify-between items-center sm:items-end px-1 gap-2">
                                         <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Transfer Amount</label>
                                         <button
-                                            onClick={() => props.setSendAmount(props.getAssetData('VCN').liquidBalance.toString())}
+                                            onClick={() => props.setSendAmount(props.getAssetData(props.selectedToken()).liquidBalance.toString())}
                                             class="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-1 rounded-full sm:bg-transparent sm:p-0"
                                         >
                                             Use Max Balance
@@ -317,7 +378,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                             }}
                                             class="w-full bg-[#111113] border border-white/10 rounded-[22px] p-4 md:p-6 text-white placeholder:text-gray-700 outline-none focus:border-blue-500/30 transition-all text-3xl font-bold font-mono box-border min-w-0"
                                         />
-                                        <div class="absolute right-6 top-1/2 -translate-y-1/2 text-lg font-black text-gray-600 tracking-tighter">VCN</div>
+                                        <div class="absolute right-6 top-1/2 -translate-y-1/2 text-lg font-black text-gray-600 tracking-tighter">{props.selectedToken()}</div>
                                     </div>
                                 </div>
                             </Show>
@@ -349,8 +410,8 @@ export const WalletSend = (props: WalletSendProps) => {
                             <Show when={multiRecipients().length === 0}>
                                 <div class="bg-gradient-to-br from-[#1c1c21] to-[#111113] border border-white/10 rounded-[32px] p-8 text-center shadow-3xl">
                                     <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">You are sending</div>
-                                    <div class="text-5xl font-black text-white mb-2 tracking-tighter drop-shadow-sm">{props.sendAmount()} <span class="text-blue-500">VCN</span></div>
-                                    <div class="text-sm font-bold text-gray-500">≈ ${(Number(props.sendAmount().replace(/,/g, '')) * props.getAssetData('VCN').price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>
+                                    <div class="text-5xl font-black text-white mb-2 tracking-tighter drop-shadow-sm">{props.sendAmount()} <span class="text-blue-500">{props.selectedToken()}</span></div>
+                                    <div class="text-sm font-bold text-gray-500">≈ ${(Number(props.sendAmount().replace(/,/g, '')) * props.getAssetData(props.selectedToken()).price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>
 
                                     <div class="mt-8 pt-8 border-t border-white/[0.04] space-y-4">
                                         <div class="flex justify-between items-center px-2">
@@ -376,7 +437,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                         </div>
                                         <div class="flex justify-between items-center px-2">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Network Fee</span>
-                                            <span class="text-sm font-bold text-green-400">0.00021 VCN <span class="text-[10px] text-gray-500 ml-1">($0.45)</span></span>
+                                            <span class="text-sm font-bold text-green-400">0.00021 {props.selectedToken()} <span class="text-[10px] text-gray-500 ml-1">($0.45)</span></span>
                                         </div>
                                         <div class="flex justify-between items-center px-2">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Estimated Time</span>
@@ -395,7 +456,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="text-center mb-6">
                                         <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-2">Batch Transfer</div>
                                         <div class="text-3xl font-black text-white tracking-tighter">
-                                            {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-500">VCN</span>
+                                            {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-500">{props.selectedToken()}</span>
                                         </div>
                                         <div class="text-sm font-bold text-gray-500 mt-1">
                                             to {multiRecipients().length} recipients
@@ -416,7 +477,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                                         </div>
                                                     </div>
                                                     <div class="text-right">
-                                                        <div class="text-sm font-black text-white">{parseFloat(recipient.amount).toLocaleString()} <span class="text-blue-400">VCN</span></div>
+                                                        <div class="text-sm font-black text-white">{parseFloat(recipient.amount).toLocaleString()} <span class="text-blue-400">{props.selectedToken()}</span></div>
                                                     </div>
                                                 </div>
                                             )}
@@ -426,7 +487,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="mt-6 pt-6 border-t border-white/5 space-y-3">
                                         <div class="flex justify-between items-center px-2">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Est. Total Fee</span>
-                                            <span class="text-sm font-bold text-green-400">{(0.00021 * multiRecipients().length).toFixed(5)} VCN</span>
+                                            <span class="text-sm font-bold text-green-400">{(0.00021 * multiRecipients().length).toFixed(5)} {props.selectedToken()}</span>
                                         </div>
                                         <div class="flex justify-between items-center px-2">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Est. Time</span>
@@ -499,7 +560,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="p-6 space-y-4 text-left">
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Amount</span>
-                                            <span class="text-lg font-black text-white italic">{props.sendAmount()} VCN</span>
+                                            <span class="text-lg font-black text-white italic">{props.sendAmount()} {props.selectedToken()}</span>
                                         </div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">To Address</span>
@@ -582,7 +643,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="p-6 space-y-4 text-left">
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Amount</span>
-                                            <span class="text-lg font-black text-white italic">{props.sendAmount()} VCN</span>
+                                            <span class="text-lg font-black text-white italic">{props.sendAmount()} {props.selectedToken()}</span>
                                         </div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">To Address</span>

@@ -273,14 +273,14 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 {/* Contact List View */}
                 <div class="bg-white/[0.01] border border-white/[0.06] rounded-[32px] overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full">
+                        <table class="w-full table-fixed">
                             <thead class="hidden md:table-header-group">
                                 <tr class="text-left border-b border-white/[0.04]">
-                                    <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Name</th>
-                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Info</th>
-                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Vision ID / Address</th>
-                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                                    <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Actions</th>
+                                    <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[20%]">Name</th>
+                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[20%]">Contact Info</th>
+                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[22%]">Vision ID / Address</th>
+                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[12%]">Status</th>
+                                    <th class="px-4 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right w-[26%]">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -383,8 +383,8 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                         </div>
                                                     </Show>
                                                 </td>
-                                                <td class="px-8 py-4 text-right">
-                                                    <div class="flex items-center justify-end gap-2">
+                                                <td class="px-4 py-4 text-right">
+                                                    <div class="flex items-center justify-end gap-1.5 flex-nowrap">
                                                         <Show when={contact.address} fallback={
                                                             <button
                                                                 onClick={() => handleInvite(contact)}

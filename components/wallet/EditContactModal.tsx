@@ -78,7 +78,7 @@ export const EditContactModal = (props: EditContactModalProps) => {
                         initial={{ opacity: 0, scale: 0.95, y: 10 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                        class="relative w-full max-w-md bg-[#0d0d0f] border border-white/[0.08] rounded-[32px] shadow-3xl overflow-hidden flex flex-col"
+                        class="relative w-full max-w-md bg-[#0d0d0f] border border-white/[0.08] rounded-[32px] shadow-3xl overflow-hidden flex flex-col max-h-[90vh]"
                     >
                         {/* Header */}
                         <div class="px-8 py-6 border-b border-white/[0.06] flex items-center justify-between">
@@ -100,7 +100,7 @@ export const EditContactModal = (props: EditContactModalProps) => {
                         </div>
 
                         {/* Body */}
-                        <div class="p-8 space-y-6">
+                        <div class="p-8 space-y-6 overflow-hidden">
                             <Show when={error()}>
                                 <div class="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-bold">
                                     <AlertCircle class="w-4 h-4" />
@@ -116,7 +116,7 @@ export const EditContactModal = (props: EditContactModalProps) => {
                                         value={name()}
                                         onInput={(e) => setName(e.currentTarget.value)}
                                         placeholder="e.g. John Doe"
-                                        class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm outline-none transition-all placeholder:text-gray-700"
+                                        class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm outline-none transition-all placeholder:text-gray-700 box-border"
                                     />
                                 </div>
 
@@ -127,7 +127,7 @@ export const EditContactModal = (props: EditContactModalProps) => {
                                         value={alias()}
                                         onInput={(e) => setAlias(e.currentTarget.value)}
                                         placeholder="e.g. Work, Family"
-                                        class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm outline-none transition-all placeholder:text-gray-700"
+                                        class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm outline-none transition-all placeholder:text-gray-700 box-border"
                                     />
                                 </div>
 
@@ -138,7 +138,7 @@ export const EditContactModal = (props: EditContactModalProps) => {
                                         value={phone()}
                                         onInput={(e) => setPhone(e.currentTarget.value)}
                                         placeholder="010-0000-0000"
-                                        class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm font-mono outline-none transition-all placeholder:text-gray-700"
+                                        class="w-full bg-white/[0.02] border border-white/[0.08] focus:border-blue-500/50 rounded-2xl px-5 py-4 text-white text-sm font-mono outline-none transition-all placeholder:text-gray-700 box-border"
                                     />
                                 </div>
                             </div>
