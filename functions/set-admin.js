@@ -17,4 +17,7 @@ async function setAdmin() {
     process.exit(0);
 }
 
-setAdmin().catch((e) => { console.error("Error:", e.message); process.exit(1); });
+setAdmin().catch((e) => {
+    console.error("Error:", e.message);
+    process.exit(1);
+});
