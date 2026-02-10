@@ -13,7 +13,10 @@ import {
     X,
     TrendingUp,
     TrendingDown,
-    Key
+    Key,
+    HelpCircle,
+    Copy,
+    ExternalLink
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import {
@@ -163,6 +166,21 @@ const WalletCexPortfolio = (): JSX.Element => {
     const [registerError, setRegisterError] = createSignal('');
     const [registerSuccess, setRegisterSuccess] = createSignal('');
 
+    // IP Guide modal
+    const [showIpGuide, setShowIpGuide] = createSignal(false);
+    const [ipCopied, setIpCopied] = createSignal(false);
+    const STATIC_IP = '34.22.69.189';
+
+    const copyIpAddress = async () => {
+        try {
+            await navigator.clipboard.writeText(STATIC_IP);
+            setIpCopied(true);
+            setTimeout(() => setIpCopied(false), 2000);
+        } catch (e) {
+            console.error('Copy failed:', e);
+        }
+    };
+
     // Delete confirmation
     const [deletingId, setDeletingId] = createSignal<string | null>(null);
 
@@ -307,6 +325,13 @@ const WalletCexPortfolio = (): JSX.Element => {
                             >
                                 <Plus class="w-3.5 h-3.5" />
                                 Connect
+                            </button>
+                            <button
+                                onClick={() => setShowIpGuide(true)}
+                                class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg transition-all text-xs font-bold text-gray-400 hover:text-white"
+                                title="IP Setup Guide"
+                            >
+                                <HelpCircle class="w-3.5 h-3.5" />
                             </button>
                         </div>
                     }
@@ -770,6 +795,141 @@ const WalletCexPortfolio = (): JSX.Element => {
                                         <RefreshCw class="w-3.5 h-3.5 animate-spin" />
                                         Validating...
                                     </Show>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Show>
+
+                {/* IP Setup Guide Modal */}
+                <Show when={showIpGuide()}>
+                    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowIpGuide(false); }}>
+                        <div class="w-full max-w-lg bg-[#111113] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl max-h-[85vh] overflow-y-auto">
+                            {/* Header */}
+                            <div class="flex items-center justify-between p-5 border-b border-white/[0.04] sticky top-0 bg-[#111113] z-10">
+                                <div class="flex items-center gap-3">
+                                    <div class="p-2 bg-amber-500/10 rounded-xl">
+                                        <Shield class="w-5 h-5 text-amber-400" />
+                                    </div>
+                                    <div>
+                                        <h3 class="text-sm font-black text-white">IP Whitelist Setup Guide</h3>
+                                        <p class="text-[10px] text-gray-500">Required for API Key registration</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowIpGuide(false)} class="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
+                                    <X class="w-4 h-4 text-gray-500" />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div class="p-5 space-y-5">
+                                {/* Static IP Card */}
+                                <div class="p-4 bg-gradient-to-br from-cyan-500/8 to-purple-500/5 rounded-2xl border border-cyan-500/15">
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Vision Chain Server IP</div>
+                                    <div class="flex items-center gap-3">
+                                        <code class="text-2xl font-black text-white tracking-wider flex-1">{STATIC_IP}</code>
+                                        <button
+                                            onClick={copyIpAddress}
+                                            class={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${ipCopied()
+                                                    ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                                                    : 'bg-white/[0.05] hover:bg-white/[0.1] text-gray-400 hover:text-white border border-white/[0.08]'
+                                                }`}
+                                        >
+                                            {ipCopied() ? <Check class="w-3.5 h-3.5" /> : <Copy class="w-3.5 h-3.5" />}
+                                            {ipCopied() ? 'Copied!' : 'Copy'}
+                                        </button>
+                                    </div>
+                                    <p class="text-[10px] text-gray-500 mt-2">Copy this IP address and add it to your exchange API whitelist.</p>
+                                </div>
+
+                                {/* Why IP Whitelist */}
+                                <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl">
+                                    <div class="flex items-start gap-2.5">
+                                        <AlertCircle class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                        <div>
+                                            <p class="text-xs font-bold text-amber-400 mb-1">Why is this required?</p>
+                                            <p class="text-[11px] text-gray-400 leading-relaxed">
+                                                Korean exchanges (Upbit, Bithumb) require IP whitelisting for security. Only requests from whitelisted IPs can access your account data. Our server uses a fixed IP to securely fetch your portfolio.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Upbit Guide */}
+                                <div class="space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-1.5 bg-[#093687]/20 rounded-lg"><UpbitIcon /></div>
+                                        <h4 class="text-sm font-black text-white">Upbit Setup</h4>
+                                    </div>
+                                    <div class="space-y-2 pl-2">
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                                            <p class="text-xs text-gray-400">Open API Management page at <a href="https://upbit.com/mypage/open_api_management" target="_blank" rel="noopener" class="text-cyan-400 hover:underline inline-flex items-center gap-0.5">upbit.com <ExternalLink class="w-2.5 h-2.5" /></a></p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                                            <p class="text-xs text-gray-400">Click <span class="font-bold text-white">"Open API Key"</span> and select <span class="font-bold text-white">"Balance inquiry"</span> permission only.</p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                                            <p class="text-xs text-gray-400">In the <span class="font-bold text-white">"IP Address"</span> field, enter: <code class="px-1.5 py-0.5 bg-white/5 rounded text-cyan-400 font-mono text-[11px]">{STATIC_IP}</code></p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+                                            <p class="text-xs text-gray-400">Complete verification and copy the <span class="font-bold text-white">Access Key</span> and <span class="font-bold text-white">Secret Key</span>.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Divider */}
+                                <div class="border-t border-white/[0.04]" />
+
+                                {/* Bithumb Guide */}
+                                <div class="space-y-3">
+                                    <div class="flex items-center gap-2">
+                                        <div class="p-1.5 bg-[#F37021]/20 rounded-lg"><BithumbIcon /></div>
+                                        <h4 class="text-sm font-black text-white">Bithumb Setup</h4>
+                                    </div>
+                                    <div class="space-y-2 pl-2">
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                                            <p class="text-xs text-gray-400">Go to API Management at <a href="https://www.bithumb.com/api_support/management_api" target="_blank" rel="noopener" class="text-orange-400 hover:underline inline-flex items-center gap-0.5">bithumb.com <ExternalLink class="w-2.5 h-2.5" /></a></p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                                            <p class="text-xs text-gray-400">Click <span class="font-bold text-white">"API Key"</span> and select <span class="font-bold text-white">"Account Info"</span> permission only.</p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                                            <p class="text-xs text-gray-400">In <span class="font-bold text-white">"Allowed IPs"</span>, enter: <code class="px-1.5 py-0.5 bg-white/5 rounded text-orange-400 font-mono text-[11px]">{STATIC_IP}</code></p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+                                            <p class="text-xs text-gray-400">Complete registration and copy the <span class="font-bold text-white">API Key</span> and <span class="font-bold text-white">Secret Key</span>.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Security note */}
+                                <div class="flex items-start gap-2.5 p-3 bg-green-500/5 border border-green-500/10 rounded-xl">
+                                    <Shield class="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <p class="text-[11px] text-green-400 font-bold mb-0.5">Security Best Practice</p>
+                                        <p class="text-[10px] text-gray-500 leading-relaxed">
+                                            Always grant only <span class="text-white font-bold">read-only (balance inquiry)</span> permissions. Never enable withdrawal or trading permissions for third-party services.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div class="p-5 border-t border-white/[0.04] sticky bottom-0 bg-[#111113]">
+                                <button
+                                    onClick={() => { setShowIpGuide(false); setShowAddModal(true); setRegisterError(''); setRegisterSuccess(''); }}
+                                    class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 rounded-xl text-sm font-black text-black transition-colors"
+                                >
+                                    <Key class="w-4 h-4" />
+                                    Connect Exchange Now
                                 </button>
                             </div>
                         </div>

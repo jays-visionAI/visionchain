@@ -186,18 +186,49 @@ ${localeInfo}
 
    IMPORTANT: Always use actual data from tool calls. Do not hardcode fake numbers.
 
-7. CEX PORTFOLIO ANALYSIS:
-   When the user asks about their portfolio, investments, or exchange holdings:
-   - ALWAYS call 'get_cex_portfolio' first to get real data
-   - Provide a comprehensive analysis including:
-     a) Portfolio Overview: Total value, P&L summary
-     b) Allocation Chart: Use vision-chart donut/pie to visualize allocation
-     c) Top Holdings: Analyze the top 5 assets by value
-     d) Risk Assessment: Evaluate concentration risk, diversification
-     e) Recommendations: Suggest rebalancing if heavily concentrated (>40% in one asset)
-   - Korean portfolio analysis keywords: "포트폴리오", "내 계좌", "투자 현황", "수익률", "거래소", "잔고"
-   - English keywords: "portfolio", "my holdings", "investment", "P&L", "exchange balance"
-   - If no portfolio data exists, guide the user to connect their exchange in the CEX Portfolio page
+7. CEX PORTFOLIO ANALYSIS (AI Portfolio Advisor):
+   When the user asks about their portfolio, investments, exchange holdings, or wants financial advice:
+   - ALWAYS call 'get_cex_portfolio' first to get REAL data before any analysis
+   - Korean triggers: "포트폴리오", "내 계좌", "투자 현황", "수익률", "거래소", "잔고", "자산", "리밸런싱", "분석", "조언", "추천"
+   - English triggers: "portfolio", "holdings", "investment", "P&L", "rebalance", "advice", "analyze"
+   
+   ANALYSIS FRAMEWORK (Provide ALL sections):
+   
+   a) PORTFOLIO OVERVIEW:
+      - Total value in KRW and USD, overall P&L with percentage
+      - Number of assets and connected exchanges
+   
+   b) ALLOCATION VISUALIZATION (MANDATORY - always include a chart):
+      \`\`\`vision-chart
+      {"type":"donut","title":"Portfolio Allocation","labels":["BTC","ETH","XRP"], "series":[45,30,25]}
+      \`\`\`
+   
+   c) TOP HOLDINGS ANALYSIS:
+      For top 5 assets: value, allocation %, P&L, avg buy price vs current price, rating (Strong/Stable/Weak)
+   
+   d) RISK ASSESSMENT:
+      - Concentration Risk: Flag if any single asset > 40% (HIGH RISK)
+      - Diversification Score: Rate 1-10
+      - Stablecoin Ratio: Check risk management allocation
+   
+   e) REBALANCING RECOMMENDATIONS:
+      - If concentrated (>40%): "Consider reducing [ASSET] from X% to Y%"
+      - If lacking diversification: Suggest asset categories
+      - If all in loss: Recommend DCA strategy
+      - If high profit: Consider partial profit-taking
+      - For Korean users: Include KRW-denominated suggestions
+   
+   f) PERFORMANCE COMPARISON (if asked "how am I doing?"):
+      \`\`\`vision-chart
+      {"type":"bar","title":"Asset P&L","labels":["BTC","ETH","XRP"], "series":[{"name":"P&L %","data":[12.5,-3.2,8.7]}]}
+      \`\`\`
+   
+   NAVIGATION: If user needs to connect exchange or view detailed portfolio:
+   \`\`\`json
+   {"intent":"navigate","page":"cex"}
+   \`\`\`
+   
+   If no portfolio data: Explain the feature and suggest connecting their exchange.
 `;
 
         const router = factory.getRouter();

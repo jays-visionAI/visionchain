@@ -3244,7 +3244,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 // FLOW ROUTING: Single vs Scheduled vs Multi vs Navigate
                 if (intentData.intent === 'navigate' && intentData.page) {
                     const targetPage = intentData.page.toLowerCase();
-                    const validPages = ['referral', 'assets', 'nodes', 'quest', 'campaign', 'mint', 'settings', 'profile', 'history', 'contacts'];
+                    const validPages = ['referral', 'assets', 'nodes', 'quest', 'campaign', 'mint', 'settings', 'profile', 'history', 'contacts', 'cex'];
 
                     if (validPages.includes(targetPage)) {
                         const displayPage = targetPage === 'campaign' ? 'quest' : targetPage;
