@@ -14,8 +14,10 @@ import {
     Loader2,
     ChevronRight,
     ChevronDown,
-    Coins
+    Coins,
+    Lock
 } from 'lucide-solid';
+import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
 import { getFirebaseDb, subscribeToBridgeNetworks, BridgeNetwork } from '../services/firebaseService';
@@ -226,6 +228,57 @@ const Bridge: Component<BridgeProps> = (props) => {
     const [txHash, setTxHash] = createSignal('');
     const [errorMsg, setErrorMsg] = createSignal('');
     const [transactions, setTransactions] = createSignal<Transaction[]>([]);
+
+    // Password unlock state (same pattern as ValidatorStaking)
+    const [password, setPassword] = createSignal('');
+    const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+    const [pendingAction, setPendingAction] = createSignal<(() => Promise<void>) | null>(null);
+    const [unlockedPrivateKey, setUnlockedPrivateKey] = createSignal('');
+
+    // Get private key - either from prop or unlock with password
+    const getPrivateKeyOrPrompt = async (action: () => Promise<void>): Promise<string | null> => {
+        const propKey = props.privateKey?.();
+        if (propKey) return propKey;
+        if (unlockedPrivateKey()) return unlockedPrivateKey();
+        // Need to prompt for password
+        setPendingAction(() => action);
+        setShowPasswordModal(true);
+        return null;
+    };
+
+    // Handle password submit
+    const handlePasswordSubmit = async () => {
+        const userEmail = props.userEmail?.();
+        if (!userEmail) {
+            setErrorMsg('User email not available');
+            return;
+        }
+        try {
+            const encrypted = WalletService.getEncryptedWallet(userEmail);
+            if (!encrypted) {
+                setErrorMsg('Wallet not found. Please restore your wallet.');
+                return;
+            }
+            const mnemonic = await WalletService.decrypt(encrypted, password());
+            if (!WalletService.validateMnemonic(mnemonic)) {
+                setErrorMsg('Invalid password. Please try again.');
+                return;
+            }
+            const { privateKey } = WalletService.deriveEOA(mnemonic);
+            setUnlockedPrivateKey(privateKey);
+            setShowPasswordModal(false);
+            setPassword('');
+            setErrorMsg('');
+            // Execute pending action
+            const action = pendingAction();
+            if (action) {
+                setPendingAction(null);
+                await action();
+            }
+        } catch (e: any) {
+            setErrorMsg(e.message || 'Failed to unlock wallet');
+        }
+    };
 
     // Firebase bridge tracking state
     const [bridgeHistory, setBridgeHistory] = createSignal<BridgeTransaction[]>([]);
@@ -465,168 +518,176 @@ const Bridge: Component<BridgeProps> = (props) => {
             return;
         }
 
-        const privateKey = props.privateKey?.();
-        if (!privateKey) {
-            setErrorMsg('Wallet not unlocked. Please enter your spending password.');
-            return;
-        }
-
-        const userEmail = props.userEmail?.();
-
-        try {
-            setIsBridging(true);
-            setIsApproving(true);
-            setErrorMsg('');
-            setStep(2);
-
-            // Create provider and signer
-            const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
-            const signer = new ethers.Wallet(privateKey, provider);
-            const userAddr = walletAddress();
-
-            // Get destination chain ID
-            const dstChainId = toNetwork().chainId;
-            const amountWei = ethers.parseEther(amountVal);
-
-            // === STEP 1: Commit Intent on-chain ===
-            console.log('[Bridge] Step 1: Committing intent on-chain...');
-            const intentContract = new ethers.Contract(
-                INTENT_COMMITMENT_ADDRESS,
-                INTENT_COMMITMENT_ABI,
-                signer
-            );
-
-            // Commit intent (returns intentHash)
-            const commitTx = await intentContract.commitIntent(userAddr, amountWei, dstChainId);
-            console.log('[Bridge] Intent commit tx:', commitTx.hash);
-            const commitReceipt = await commitTx.wait();
-
-            // Extract intentHash from event logs
-            const intentCommittedTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
-            const intentLog = commitReceipt.logs.find((log: any) => log.topics[0] === intentCommittedTopic);
-
-            let intentHash: string;
-            if (intentLog) {
-                intentHash = intentLog.topics[1];
-            } else {
-                // Fallback: compute hash manually
-                const nonce = await intentContract.userNonces(userAddr);
-                intentHash = ethers.keccak256(ethers.solidityPacked(
-                    ['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
-                    [userAddr, userAddr, amountWei, nonce - 1n, 0, dstChainId]
-                ));
-            }
-            console.log('[Bridge] Intent hash:', intentHash);
-
-            setIsApproving(false);
-
-            // === STEP 2: Lock VCN with intentHash ===
-            console.log('[Bridge] Step 2: Locking VCN...');
-            const bridgeContract = new ethers.Contract(
-                VISION_BRIDGE_SECURE_ADDRESS,
-                BRIDGE_SECURE_ABI,
-                signer
-            );
-
-            const lockTx = await bridgeContract.lockVCN(intentHash, userAddr, dstChainId, {
-                value: amountWei // Send native VCN
-            });
-            console.log('[Bridge] Lock tx:', lockTx.hash);
-            const lockReceipt = await lockTx.wait();
-            console.log('[Bridge] Lock confirmed in block:', lockReceipt.blockNumber);
-
-            setTxHash(lockTx.hash);
-
-            // Create notification
-            const chainDisplay = toNetwork().name;
-            if (userEmail) {
-                try {
-                    await createNotification({
-                        userEmail: userEmail,
-                        type: 'transfer_received', // Using existing type for now
-                        title: 'Bridge Request Started',
-                        content: `${amountVal} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
-                        data: {
-                            amount: amountVal,
-                            destinationChain: chainDisplay,
-                            txHash: lockTx.hash,
-                            status: 'pending'
-                        }
-                    });
-                    console.log('[Bridge] Notification created');
-                } catch (notiErr) {
-                    console.warn('[Bridge] Notification failed:', notiErr);
-                }
+        const executeBridge = async () => {
+            const privateKey = props.privateKey?.() || unlockedPrivateKey();
+            if (!privateKey) {
+                setErrorMsg('Internal error: no private key after unlock');
+                return;
             }
 
-            // Save to Firebase for History
-            try {
-                const db = getFirebaseDb();
-                const txRef = doc(db, 'transactions', lockTx.hash);
-                await setDoc(txRef, {
-                    hash: lockTx.hash,
-                    from_addr: userAddr.toLowerCase(),
-                    to_addr: 'bridge:sepolia',
-                    value: amountVal,
-                    timestamp: Date.now(),
-                    type: 'Bridge',
-                    bridgeStatus: 'PENDING',
-                    challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
-                    metadata: {
-                        destinationChain: chainDisplay,
-                        srcChainId: VISION_CHAIN_ID,
-                        dstChainId: dstChainId
-                    }
-                });
-                console.log('[Bridge] Saved to Firestore for History');
-            } catch (historyErr) {
-                console.warn('[Bridge] Failed to save history:', historyErr);
-            }
-
-            // Add to local transaction list
-            const newTx: Transaction = {
-                id: Date.now().toString(),
-                from: fromNetwork().name,
-                to: toNetwork().name,
-                amount: amountVal,
-                asset: selectedAsset(),
-                status: 'Processing',
-                time: 'Just now',
-                hash: lockTx.hash.slice(0, 6) + '...' + lockTx.hash.slice(-4)
-            };
-            setTransactions(prev => [newTx, ...prev]);
-
-            setStep(3);
-            setAmount('');
-            await loadBalance();
-
-        } catch (err: any) {
-            console.error('[Bridge] Transfer failed:', err);
-            setErrorMsg(err.reason || err.message || 'Bridge transfer failed');
-            setStep(1);
-
-            // Send failure notification
             const userEmail = props.userEmail?.();
-            if (userEmail) {
+
+            try {
+                setIsBridging(true);
+                setIsApproving(true);
+                setErrorMsg('');
+                setStep(2);
+
+                // Create provider and signer
+                const provider = new ethers.JsonRpcProvider(VISION_RPC_URL);
+                const signer = new ethers.Wallet(privateKey, provider);
+                const userAddr = walletAddress();
+
+                // Get destination chain ID
+                const dstChainId = toNetwork().chainId;
+                const amountWei = ethers.parseEther(amountVal);
+
+                // === STEP 1: Commit Intent on-chain ===
+                console.log('[Bridge] Step 1: Committing intent on-chain...');
+                const intentContract = new ethers.Contract(
+                    INTENT_COMMITMENT_ADDRESS,
+                    INTENT_COMMITMENT_ABI,
+                    signer
+                );
+
+                // Commit intent (returns intentHash)
+                const commitTx = await intentContract.commitIntent(userAddr, amountWei, dstChainId);
+                console.log('[Bridge] Intent commit tx:', commitTx.hash);
+                const commitReceipt = await commitTx.wait();
+
+                // Extract intentHash from event logs
+                const intentCommittedTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
+                const intentLog = commitReceipt.logs.find((log: any) => log.topics[0] === intentCommittedTopic);
+
+                let intentHash: string;
+                if (intentLog) {
+                    intentHash = intentLog.topics[1];
+                } else {
+                    // Fallback: compute hash manually
+                    const nonce = await intentContract.userNonces(userAddr);
+                    intentHash = ethers.keccak256(ethers.solidityPacked(
+                        ['address', 'address', 'uint256', 'uint256', 'uint256', 'uint256'],
+                        [userAddr, userAddr, amountWei, nonce - 1n, 0, dstChainId]
+                    ));
+                }
+                console.log('[Bridge] Intent hash:', intentHash);
+
+                setIsApproving(false);
+
+                // === STEP 2: Lock VCN with intentHash ===
+                console.log('[Bridge] Step 2: Locking VCN...');
+                const bridgeContract = new ethers.Contract(
+                    VISION_BRIDGE_SECURE_ADDRESS,
+                    BRIDGE_SECURE_ABI,
+                    signer
+                );
+
+                const lockTx = await bridgeContract.lockVCN(intentHash, userAddr, dstChainId, {
+                    value: amountWei // Send native VCN
+                });
+                console.log('[Bridge] Lock tx:', lockTx.hash);
+                const lockReceipt = await lockTx.wait();
+                console.log('[Bridge] Lock confirmed in block:', lockReceipt.blockNumber);
+
+                setTxHash(lockTx.hash);
+
+                // Create notification
+                const chainDisplay = toNetwork().name;
+                if (userEmail) {
+                    try {
+                        await createNotification({
+                            userEmail: userEmail,
+                            type: 'transfer_received', // Using existing type for now
+                            title: 'Bridge Request Started',
+                            content: `${amountVal} VCN → ${chainDisplay} bridge started. Expected arrival in 10-30 minutes.`,
+                            data: {
+                                amount: amountVal,
+                                destinationChain: chainDisplay,
+                                txHash: lockTx.hash,
+                                status: 'pending'
+                            }
+                        });
+                        console.log('[Bridge] Notification created');
+                    } catch (notiErr) {
+                        console.warn('[Bridge] Notification failed:', notiErr);
+                    }
+                }
+
+                // Save to Firebase for History
                 try {
-                    await createNotification({
-                        userEmail: userEmail,
-                        type: 'alert',
-                        title: 'Bridge Transfer Failed',
-                        content: `Failed to bridge ${amount()} VCN to ${toNetwork().name}. Error: ${(err.reason || err.message || 'Unknown error').slice(0, 50)}`,
-                        data: {
-                            amount: amount(),
-                            destinationChain: toNetwork().name,
-                            error: err.reason || err.message
+                    const db = getFirebaseDb();
+                    const txRef = doc(db, 'transactions', lockTx.hash);
+                    await setDoc(txRef, {
+                        hash: lockTx.hash,
+                        from_addr: userAddr.toLowerCase(),
+                        to_addr: 'bridge:sepolia',
+                        value: amountVal,
+                        timestamp: Date.now(),
+                        type: 'Bridge',
+                        bridgeStatus: 'PENDING',
+                        challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
+                        metadata: {
+                            destinationChain: chainDisplay,
+                            srcChainId: VISION_CHAIN_ID,
+                            dstChainId: dstChainId
                         }
                     });
-                } catch (notifyErr) {
-                    console.warn('[Bridge] Failure notification failed:', notifyErr);
+                    console.log('[Bridge] Saved to Firestore for History');
+                } catch (historyErr) {
+                    console.warn('[Bridge] Failed to save history:', historyErr);
                 }
+
+                // Add to local transaction list
+                const newTx: Transaction = {
+                    id: Date.now().toString(),
+                    from: fromNetwork().name,
+                    to: toNetwork().name,
+                    amount: amountVal,
+                    asset: selectedAsset(),
+                    status: 'Processing',
+                    time: 'Just now',
+                    hash: lockTx.hash.slice(0, 6) + '...' + lockTx.hash.slice(-4)
+                };
+                setTransactions(prev => [newTx, ...prev]);
+
+                setStep(3);
+                setAmount('');
+                await loadBalance();
+
+            } catch (err: any) {
+                console.error('[Bridge] Transfer failed:', err);
+                setErrorMsg(err.reason || err.message || 'Bridge transfer failed');
+                setStep(1);
+
+                // Send failure notification
+                const userEmail = props.userEmail?.();
+                if (userEmail) {
+                    try {
+                        await createNotification({
+                            userEmail: userEmail,
+                            type: 'alert',
+                            title: 'Bridge Transfer Failed',
+                            content: `Failed to bridge ${amount()} VCN to ${toNetwork().name}. Error: ${(err.reason || err.message || 'Unknown error').slice(0, 50)}`,
+                            data: {
+                                amount: amount(),
+                                destinationChain: toNetwork().name,
+                                error: err.reason || err.message
+                            }
+                        });
+                    } catch (notifyErr) {
+                        console.warn('[Bridge] Failure notification failed:', notifyErr);
+                    }
+                }
+            } finally {
+                setIsBridging(false);
+                setIsApproving(false);
             }
-        } finally {
-            setIsBridging(false);
-            setIsApproving(false);
+        };
+
+        // Check if we have privateKey, if not prompt for password
+        const key = await getPrivateKeyOrPrompt(executeBridge);
+        if (key) {
+            await executeBridge();
         }
     };
 
@@ -698,6 +759,46 @@ const Bridge: Component<BridgeProps> = (props) => {
 
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
+            {/* Password Modal */}
+            <Show when={showPasswordModal()}>
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                    <div class="bg-[#1a1a1c] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 overflow-hidden">
+                        <h3 class="text-lg font-black text-white mb-4 flex items-center gap-2">
+                            <Lock class="w-5 h-5 text-blue-400" />
+                            Spending Password Required
+                        </h3>
+                        <p class="text-sm text-gray-400 mb-4">
+                            Enter your spending password to authorize this swap transaction.
+                        </p>
+                        <input
+                            type="password"
+                            value={password()}
+                            onInput={(e) => setPassword(e.currentTarget.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                            placeholder="Enter spending password"
+                            class="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-blue-500/50 focus:outline-none mb-4 box-border"
+                        />
+                        <Show when={errorMsg()}>
+                            <p class="text-red-400 text-sm mb-4">{errorMsg()}</p>
+                        </Show>
+                        <div class="flex gap-3">
+                            <button
+                                onClick={() => { setShowPasswordModal(false); setPassword(''); setErrorMsg(''); }}
+                                class="flex-1 py-3 rounded-xl bg-white/5 text-gray-400 font-bold hover:bg-white/10 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handlePasswordSubmit}
+                                class="flex-1 py-3 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-400 transition-colors"
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 {/* Header */}
