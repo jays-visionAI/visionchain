@@ -1380,6 +1380,9 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
     let tx;
     let txHash;
 
+    // Gas options to bypass estimateGas issues on Vision Chain
+    const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+
     switch (stakeAction) {
       case "stake": {
         const stakeAmount = BigInt(amount);
@@ -1397,6 +1400,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
                 totalAmount,
                 deadline,
                 v, r, s,
+                gasOpts,
               );
               await permitTx.wait();
               console.log(`[Paymaster:Staking] Permit successful`);
@@ -1409,7 +1413,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
 
         // Transfer fee from user to admin
         try {
-          const feeTx = await tokenContract.transferFrom(user, adminAddress, STAKING_FEE);
+          const feeTx = await tokenContract.transferFrom(user, adminAddress, STAKING_FEE, gasOpts);
           await feeTx.wait();
           console.log(`[Paymaster:Staking] Fee collected: ${ethers.formatEther(STAKING_FEE)} VCN`);
         } catch (feeErr) {
@@ -1418,22 +1422,32 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
         }
 
         // Transfer stakeAmount from user to the STAKING CONTRACT directly
-        const transferTx = await tokenContract.transferFrom(user, BRIDGE_STAKING_ADDRESS, stakeAmount);
-        await transferTx.wait();
-        console.log(`[Paymaster:Staking] Transferred ${ethers.formatEther(stakeAmount)} VCN from user to staking contract`);
+        try {
+          const transferTx = await tokenContract.transferFrom(user, BRIDGE_STAKING_ADDRESS, stakeAmount, gasOpts);
+          await transferTx.wait();
+          console.log(`[Paymaster:Staking] Transferred ${ethers.formatEther(stakeAmount)} VCN from user to staking contract`);
+        } catch (transferErr) {
+          console.error(`[Paymaster:Staking] Transfer to staking contract failed:`, transferErr.message);
+          return res.status(500).json({ error: `Token transfer to staking contract failed: ${transferErr.reason || transferErr.message}` });
+        }
 
         // Call stakeFor to register the USER (not admin) as the validator
-        tx = await stakingContract.stakeFor(user, stakeAmount);
-        txHash = tx.hash;
-        await tx.wait();
-        console.log(`[Paymaster:Staking] stakeFor(${user}, ${ethers.formatEther(stakeAmount)}) succeeded`);
+        try {
+          tx = await stakingContract.stakeFor(user, stakeAmount, gasOpts);
+          txHash = tx.hash;
+          await tx.wait();
+          console.log(`[Paymaster:Staking] stakeFor(${user}, ${ethers.formatEther(stakeAmount)}) succeeded`);
+        } catch (stakeErr) {
+          console.error(`[Paymaster:Staking] stakeFor failed:`, stakeErr.message);
+          return res.status(500).json({ error: `stakeFor failed: ${stakeErr.reason || stakeErr.message}` });
+        }
 
         break;
       }
 
       case "unstake": {
         const unstakeAmount = BigInt(amount);
-        tx = await stakingContract.requestUnstakeFor(user, unstakeAmount);
+        tx = await stakingContract.requestUnstakeFor(user, unstakeAmount, gasOpts);
         txHash = tx.hash;
         await tx.wait();
         console.log(`[Paymaster:Staking] requestUnstakeFor(${user}) - ${ethers.formatEther(unstakeAmount)} VCN`);
@@ -1441,7 +1455,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
       }
 
       case "withdraw": {
-        tx = await stakingContract.withdrawFor(user);
+        tx = await stakingContract.withdrawFor(user, gasOpts);
         txHash = tx.hash;
         await tx.wait();
         console.log(`[Paymaster:Staking] withdrawFor(${user}) completed`);
@@ -1449,7 +1463,7 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
       }
 
       case "claim": {
-        tx = await stakingContract.claimRewardsFor(user);
+        tx = await stakingContract.claimRewardsFor(user, gasOpts);
         txHash = tx.hash;
         await tx.wait();
         console.log(`[Paymaster:Staking] claimRewardsFor(${user}) completed`);
