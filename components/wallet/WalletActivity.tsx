@@ -266,16 +266,19 @@ export const WalletActivity = (props: WalletActivityProps) => {
                     <For each={transactions()}>
                         {(tx) => {
                             const isIncoming = tx.to_addr.toLowerCase() === props.walletAddress?.toLowerCase();
-                            const isBridge = tx.type === 'Bridge' || tx.to_addr.startsWith('bridge:');
+                            const isBridgeSend = tx.type === 'Bridge' || tx.to_addr.startsWith('bridge:');
+                            const isBridgeReceive = tx.type === 'Bridge Receive' || tx.from_addr.startsWith('bridge:');
+                            const isBridge = isBridgeSend || isBridgeReceive;
                             const date = new Date(tx.timestamp).toLocaleString();
                             const shortHash = `${tx.hash.slice(0, 6)}...${tx.hash.slice(-4)}`;
-                            const destChainName = isBridge ? (tx.to_addr.replace('bridge:', '') || tx.metadata?.destinationChain || 'Sepolia') : '';
+                            const destChainName = isBridgeSend ? (tx.to_addr.replace('bridge:', '') || tx.metadata?.destinationChain || 'Sepolia') : '';
+                            const sourceChainName = isBridgeReceive ? (tx.metadata?.sourceChain || tx.from_addr.replace('bridge:', '') || 'Vision') : '';
                             const sepoliaExplorerUrl = tx.destinationTxHash ? `https://sepolia.etherscan.io/tx/${tx.destinationTxHash}` : null;
                             const isBridgeComplete = tx.bridgeStatus === 'COMPLETED' || tx.bridgeStatus === 'FINALIZED';
                             const isBridgePending = tx.bridgeStatus === 'PENDING' || tx.bridgeStatus === 'LOCKED' || tx.bridgeStatus === 'PROCESSING';
                             const isBridgeFailed = tx.bridgeStatus === 'FAILED';
 
-                            // Find recipient contact name for bridge
+                            // Find recipient contact name for bridge send
                             const bridgeRecipientAddr = tx.recipient;
                             const bridgeRecipientContact = bridgeRecipientAddr ? props.contacts?.find((c: any) =>
                                 c.address?.toLowerCase() === bridgeRecipientAddr?.toLowerCase()
@@ -285,6 +288,18 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                 : (bridgeRecipientAddr && bridgeRecipientAddr !== tx.from_addr
                                     ? `${bridgeRecipientAddr.slice(0, 6)}...${bridgeRecipientAddr.slice(-4)}`
                                     : null);
+
+                            // Find sender contact name for bridge receive
+                            const bridgeSenderAddr = tx.metadata?.sender;
+                            const bridgeSenderContact = bridgeSenderAddr ? props.contacts?.find((c: any) =>
+                                c.address?.toLowerCase() === bridgeSenderAddr?.toLowerCase()
+                            ) : null;
+                            const isSelfBridge = bridgeSenderAddr && bridgeSenderAddr.toLowerCase() === props.walletAddress?.toLowerCase();
+                            const bridgeSenderDisplay = bridgeSenderContact
+                                ? (bridgeSenderContact.internalName || bridgeSenderContact.name)
+                                : isSelfBridge
+                                    ? null // Self-bridge, no need to show sender
+                                    : (bridgeSenderAddr ? `${bridgeSenderAddr.slice(0, 6)}...${bridgeSenderAddr.slice(-4)}` : null);
 
                             return (
                                 <div
@@ -301,7 +316,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                         </div>
                                         <div class="flex-1 min-w-0 pr-2">
                                             <div class="text-sm font-medium text-white group-hover:text-blue-400 transition-colors">
-                                                {isBridge ? (
+                                                {isBridgeSend ? (
                                                     <div class="flex flex-col gap-0.5">
                                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                                                             <span class="text-purple-400 font-bold">Bridge</span>
@@ -319,13 +334,31 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                             </div>
                                                         </Show>
                                                     </div>
+                                                ) : isBridgeReceive ? (
+                                                    <div class="flex flex-col gap-0.5">
+                                                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                                            <span class="text-green-400 font-bold">Bridge Receive</span>
+                                                            <span class="text-gray-500 text-[10px]">{sourceChainName}</span>
+                                                            <svg class="w-3 h-3 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                                                            <span class="text-green-300 font-black uppercase tracking-tight">
+                                                                {tx.metadata?.destinationChain || 'Sepolia'}
+                                                            </span>
+                                                        </div>
+                                                        {/* Show sender if bridge from someone else */}
+                                                        <Show when={bridgeSenderDisplay}>
+                                                            <div class="flex items-center gap-1 text-[10px]">
+                                                                <span class="text-gray-500">From:</span>
+                                                                <span class="text-green-300 font-bold">{bridgeSenderDisplay}</span>
+                                                            </div>
+                                                        </Show>
+                                                    </div>
                                                 ) : (() => {
                                                     const counterpartyAddr = isIncoming ? tx.from_addr : tx.to_addr;
                                                     const contact = props.contacts?.find((c: any) =>
                                                         c.address?.toLowerCase() === counterpartyAddr?.toLowerCase()
                                                     );
                                                     const shortAddr = counterpartyAddr ? `${counterpartyAddr.slice(0, 6)}...${counterpartyAddr.slice(-4)}` : 'unknown';
-                                                    const displayName = contact ? (contact.internalName || contact.name) : 'unknown';
+                                                    const displayName = contact ? (contact.internalName || contact.name) : shortAddr;
                                                     const prefix = isIncoming ? 'Received from' : 'Sent to';
 
                                                     return (
