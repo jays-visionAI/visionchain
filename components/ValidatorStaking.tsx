@@ -648,7 +648,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 <Show when={!isConnected()} fallback={
                     <div class="grid lg:grid-cols-2 gap-8">
                         {/* Stake/Unstake Form */}
-                        <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-8">
+                        <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-8 min-w-0 overflow-hidden">
                             {/* User Balance Display */}
                             <div class="mb-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
                                 <div class="flex items-center justify-between mb-2">
@@ -729,7 +729,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                                 value={stakeAmount()}
                                                 onInput={(e) => setStakeAmount(e.currentTarget.value)}
                                                 placeholder={`Min: ${minStake()} VCN`}
-                                                class="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+                                                class="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50 box-border"
                                             />
                                             <button
                                                 onClick={() => setStakeAmount(userInfo().vcnBalance)}
