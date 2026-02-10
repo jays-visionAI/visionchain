@@ -1,6 +1,6 @@
 import { createSignal, Show, For, onMount, createEffect, onCleanup } from 'solid-js';
 import { A, useLocation, useNavigate, Navigate } from '@solidjs/router';
-import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity, Globe } from 'lucide-solid';
+import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity } from 'lucide-solid';
 import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
 import { onAdminAuthStateChanged, adminLogout } from '../../services/firebaseService';
 import { User } from 'firebase/auth';
@@ -206,14 +206,6 @@ export default function AdminLayout(props: AdminLayoutProps) {
                             </div>
                         </div>
 
-                        <A
-                            href="/"
-                            class="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-300 group"
-                        >
-                            <Globe class="w-5 h-5 group-hover:text-cyan-400" />
-                            <span class="font-medium text-sm">Public Website</span>
-                            <ChevronRight class="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
-                        </A>
 
                         <button
                             onClick={handleLogout}
