@@ -5502,21 +5502,27 @@ exports.weeklyActivityReport = onSchedule({
             if (notif.amount) {
               try {
                 totalStakedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore parse errors */}
+              } catch (_e) {
+                // ignore parse errors
+              }
             }
           } else if (notifType.includes("unstake")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 totalUnstakedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore */}
+              } catch (_e) {
+                // ignore
+              }
             }
           } else if (notifType.includes("claim") || notifType.includes("reward")) {
             stakingActions++;
             if (notif.amount) {
               try {
                 rewardsClaimedWei += BigInt(notif.amount);
-              } catch (_e) {/* ignore */}
+              } catch (_e) {
+                // ignore
+              }
             }
           }
         }
@@ -5540,7 +5546,9 @@ exports.weeklyActivityReport = onSchedule({
               if (bData.amount) {
                 try {
                   bridgeVolumeWei += BigInt(bData.amount);
-                } catch (_e) {/* ignore */}
+                } catch (_e) {
+                  // ignore
+                }
               }
             }
           }
