@@ -6563,7 +6563,10 @@ exports.registerCexApiKey = onCall({
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
   }
-  const uid = request.auth.uid;
+  const userEmail = request.auth.token?.email?.toLowerCase();
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "Email not found in auth token.");
+  }
 
   const { exchange, accessKey, secretKey, label } = request.data;
 
@@ -6579,13 +6582,13 @@ exports.registerCexApiKey = onCall({
   }
 
   // Check max credentials (4 per user)
-  const existing = await db.collection(`users/${uid}/cex_credentials`).get();
+  const existing = await db.collection(`users/${userEmail}/cex_credentials`).get();
   if (existing.size >= 4) {
     throw new HttpsError("resource-exhausted", "Maximum 4 API keys allowed per account.");
   }
 
   // Validate key against exchange
-  console.log(`[CEX] Validating ${exchange} API key for user ${uid}`);
+  console.log(`[CEX] Validating ${exchange} API key for user ${userEmail}`);
   const validation = await validateCexApiKey(exchange, accessKey.trim(), secretKey.trim());
   if (!validation.success) {
     throw new HttpsError("invalid-argument", validation.error);
@@ -6595,7 +6598,7 @@ exports.registerCexApiKey = onCall({
   const encAccess = cexEncrypt(accessKey.trim());
   const encSecret = cexEncrypt(secretKey.trim());
 
-  const docRef = await db.collection(`users/${uid}/cex_credentials`).add({
+  const docRef = await db.collection(`users/${userEmail}/cex_credentials`).add({
     exchange,
     encryptedAccessKey: encAccess.encrypted,
     accessKeyIv: encAccess.iv,
@@ -6612,11 +6615,11 @@ exports.registerCexApiKey = onCall({
     lastSyncStatus: null,
   });
 
-  console.log(`[CEX] Registered ${exchange} key ${docRef.id} for user ${uid}`);
+  console.log(`[CEX] Registered ${exchange} key ${docRef.id} for user ${userEmail}`);
 
   // Trigger initial sync
   try {
-    await performCexSync(uid, docRef.id);
+    await performCexSync(userEmail, docRef.id);
     console.log(`[CEX] Initial sync completed for ${docRef.id}`);
   } catch (syncErr) {
     console.warn(`[CEX] Initial sync failed for ${docRef.id}:`, syncErr.message);
@@ -6639,7 +6642,10 @@ exports.deleteCexApiKey = onCall({
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
   }
-  const uid = request.auth.uid;
+  const userEmail = request.auth.token?.email?.toLowerCase();
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "Email not found in auth token.");
+  }
   const { credentialId } = request.data;
 
   if (!credentialId) {
@@ -6647,7 +6653,7 @@ exports.deleteCexApiKey = onCall({
   }
 
   // Verify ownership
-  const credDoc = await db.doc(`users/${uid}/cex_credentials/${credentialId}`).get();
+  const credDoc = await db.doc(`users/${userEmail}/cex_credentials/${credentialId}`).get();
   if (!credDoc.exists) {
     throw new HttpsError("not-found", "Credential not found.");
   }
@@ -6656,13 +6662,13 @@ exports.deleteCexApiKey = onCall({
   await credDoc.ref.delete();
 
   // Delete related snapshot
-  const snapshotRef = db.doc(`users/${uid}/cex_snapshots/${credentialId}`);
+  const snapshotRef = db.doc(`users/${userEmail}/cex_snapshots/${credentialId}`);
   const snapshotDoc = await snapshotRef.get();
   if (snapshotDoc.exists) {
     await snapshotRef.delete();
   }
 
-  console.log(`[CEX] Deleted credential ${credentialId} for user ${uid}`);
+  console.log(`[CEX] Deleted credential ${credentialId} for user ${userEmail}`);
   return { success: true };
 });
 
@@ -6675,9 +6681,12 @@ exports.listCexApiKeys = onCall({
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
   }
-  const uid = request.auth.uid;
+  const userEmail = request.auth.token?.email?.toLowerCase();
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "Email not found in auth token.");
+  }
 
-  const snapshot = await db.collection(`users/${uid}/cex_credentials`)
+  const snapshot = await db.collection(`users/${userEmail}/cex_credentials`)
     .orderBy("registeredAt", "desc").get();
 
   return snapshot.docs.map((doc) => ({
@@ -6703,7 +6712,10 @@ exports.syncCexPortfolio = onCall({
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
   }
-  const uid = request.auth.uid;
+  const userEmail = request.auth.token?.email?.toLowerCase();
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "Email not found in auth token.");
+  }
   const { credentialId } = request.data;
 
   if (!credentialId) {
@@ -6711,13 +6723,13 @@ exports.syncCexPortfolio = onCall({
   }
 
   // Verify ownership
-  const credDoc = await db.doc(`users/${uid}/cex_credentials/${credentialId}`).get();
+  const credDoc = await db.doc(`users/${userEmail}/cex_credentials/${credentialId}`).get();
   if (!credDoc.exists) {
     throw new HttpsError("not-found", "Credential not found.");
   }
 
   try {
-    const snapshot = await performCexSync(uid, credentialId);
+    const snapshot = await performCexSync(userEmail, credentialId);
     return { success: true, snapshot };
   } catch (error) {
     // Update credential status on failure
@@ -6739,10 +6751,13 @@ exports.getCexPortfolio = onCall({
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Login required.");
   }
-  const uid = request.auth.uid;
+  const userEmail = request.auth.token?.email?.toLowerCase();
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "Email not found in auth token.");
+  }
 
   // Fetch all snapshots
-  const snapshots = await db.collection(`users/${uid}/cex_snapshots`)
+  const snapshots = await db.collection(`users/${userEmail}/cex_snapshots`)
     .orderBy("snapshotAt", "desc").get();
 
   if (snapshots.empty) {
