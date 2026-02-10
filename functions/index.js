@@ -1491,9 +1491,82 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
             break;
         }
         console.log(`[Paymaster:Staking] Email notification sent to ${userEmail} for ${stakeAction}`);
+
+        // Add in-app notification
+        try {
+          const formattedAmount = amount ? ethers.formatEther(BigInt(amount)) : "0";
+          let notifType;
+          let notifTitle;
+          let notifContent;
+
+          switch (stakeAction) {
+            case "stake":
+              notifType = "staking_deposit";
+              notifTitle = "Staking Confirmed";
+              notifContent = `Successfully staked ${Number(formattedAmount).toLocaleString()} VCN as a bridge validator.`;
+              break;
+            case "unstake":
+              notifType = "staking_withdrawal";
+              notifTitle = "Unstake Requested";
+              notifContent = `Unstake request for ${Number(formattedAmount).toLocaleString()} VCN submitted. Cooldown period started.`;
+              break;
+            case "withdraw":
+              notifType = "staking_withdrawal";
+              notifTitle = "Withdrawal Complete";
+              notifContent = `Successfully withdrawn your unstaked VCN tokens.`;
+              break;
+            case "claim":
+              notifType = "staking_reward";
+              notifTitle = "Rewards Claimed";
+              notifContent = `Successfully claimed your staking rewards.`;
+              break;
+          }
+
+          await db.collection("users").doc(userEmail).collection("notifications").add({
+            type: notifType,
+            title: notifTitle,
+            content: notifContent,
+            data: { amount: formattedAmount, txHash, action: stakeAction },
+            email: userEmail,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log(`[Paymaster:Staking] In-app notification created for ${userEmail}`);
+        } catch (notifErr) {
+          console.warn(`[Paymaster:Staking] In-app notification failed:`, notifErr.message);
+        }
       }
     } catch (emailErr) {
       console.warn(`[Paymaster:Staking] Email notification failed:`, emailErr.message);
+    }
+
+    // Record in transactions collection for History page
+    try {
+      const userEmail = await getUserEmailByWallet(user);
+      const formattedAmount = amount ? ethers.formatEther(BigInt(amount)) : "0";
+      const actionLabels = {
+        stake: "Validator Stake",
+        unstake: "Unstake Request",
+        withdraw: "Stake Withdrawal",
+        claim: "Reward Claim",
+      };
+
+      await db.collection("transactions").doc(txHash).set({
+        hash: txHash,
+        from_addr: user.toLowerCase(),
+        to_addr: BRIDGE_STAKING_ADDRESS.toLowerCase(),
+        value: formattedAmount,
+        timestamp: Date.now(),
+        type: actionLabels[stakeAction] || "Staking",
+        status: "success",
+        block_number: 0,
+        source: "PAYMASTER_STAKING",
+        userEmail: userEmail || "",
+        stakeAction: stakeAction,
+      });
+      console.log(`[Paymaster:Staking] Transaction history recorded: ${txHash}`);
+    } catch (historyErr) {
+      console.warn(`[Paymaster:Staking] Transaction history save failed:`, historyErr.message);
     }
 
     return res.status(200).json({
@@ -1550,6 +1623,22 @@ exports.notifyReferralSignup = onRequest({ cors: true, invoker: "public", secret
     });
 
     console.log(`[Referral] Signup notification sent to ${referrerEmail} for new user ${newUserEmail}`);
+
+    // Add in-app notification to referrer's subcollection
+    try {
+      await db.collection("users").doc(referrerEmail.toLowerCase()).collection("notifications").add({
+        type: "referral_signup",
+        title: "New Referral Signup!",
+        content: `${newUserEmail} joined Vision Chain using your invite link!`,
+        data: { referredUser: newUserEmail, referralCode: code, totalReferrals },
+        email: referrerEmail.toLowerCase(),
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      console.log(`[Referral] In-app notification created for ${referrerEmail}`);
+    } catch (notifErr) {
+      console.warn(`[Referral] In-app notification failed:`, notifErr.message);
+    }
 
     return res.status(200).json({ success: true, message: "Referral notification sent" });
   } catch (err) {
