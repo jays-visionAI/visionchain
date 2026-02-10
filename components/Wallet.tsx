@@ -1782,6 +1782,14 @@ const Wallet = (): JSX.Element => {
         loadContacts();
     });
 
+    // Reload contacts when navigating to send view (so Contact Picker is always fresh)
+    createEffect(() => {
+        const view = activeView();
+        if (view === 'send') {
+            loadContacts();
+        }
+    });
+
     const fetchFullProfile = async () => {
         const user = auth.user();
         if (!user || !user.email) return;
@@ -4696,6 +4704,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 userProfile={userProfile}
                                 startFlow={setActiveFlow}
                                 setRecipientAddress={setRecipientAddress}
+                                onContactsChanged={loadContacts}
                             />
                         </Show>
 

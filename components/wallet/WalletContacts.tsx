@@ -31,6 +31,7 @@ interface WalletContactsProps {
     userProfile: () => any;
     startFlow: (flow: string) => void;
     setRecipientAddress: (addr: string) => void;
+    onContactsChanged?: () => void;
 }
 
 export const WalletContacts = (props: WalletContactsProps) => {
@@ -51,6 +52,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
         try {
             const data = await getUserContacts(props.userProfile().email);
             setContacts(data);
+            props.onContactsChanged?.();
         } catch (e) {
             console.error("Failed to load contacts:", e);
         } finally {
