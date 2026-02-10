@@ -2618,7 +2618,66 @@ const Wallet = (): JSX.Element => {
 
             console.log(`[Bridge] Final recipient address: ${resolvedRecipientAddr}`);
 
-            // Call Paymaster API to execute bridge (gasless)
+            // === Generate EIP-712 Permit Signature for Paymaster fee collection ===
+            const BRIDGE_FEE = ethers.parseEther("1"); // 1 VCN fee
+            const bridgeAmountBn = ethers.parseEther(bridge.amount);
+            const totalAmount = bridgeAmountBn + BRIDGE_FEE; // amount + fee
+            const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
+
+            // Get VCN token contract via signer for permit
+            const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+            const PAYMASTER_ADMIN = "0x08A1B183a53a0f8f1D875945D504272738E3AF34";
+
+            const tokenAbi = [
+                "function nonces(address owner) view returns (uint256)",
+                "function name() view returns (string)"
+            ];
+            const signer = contractService.getSigner();
+            if (!signer) {
+                throw new Error("Signer not available. Please unlock your wallet.");
+            }
+            const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, tokenAbi, signer);
+
+            const tokenName = await tokenContract.name();
+            const nonce = await tokenContract.nonces(userAddr);
+
+            const domain = {
+                name: tokenName,
+                version: "1",
+                chainId: 3151909, // Vision Chain v2
+                verifyingContract: VCN_TOKEN_ADDRESS
+            };
+
+            const types = {
+                Permit: [
+                    { name: "owner", type: "address" },
+                    { name: "spender", type: "address" },
+                    { name: "value", type: "uint256" },
+                    { name: "nonce", type: "uint256" },
+                    { name: "deadline", type: "uint256" }
+                ]
+            };
+
+            const values = {
+                owner: userAddr,
+                spender: PAYMASTER_ADMIN,
+                value: totalAmount,
+                nonce: nonce,
+                deadline: deadline
+            };
+
+            console.log('[Bridge] Signing EIP-712 permit...', {
+                owner: userAddr,
+                spender: PAYMASTER_ADMIN,
+                value: ethers.formatEther(totalAmount),
+                nonce: nonce.toString(),
+                deadline
+            });
+
+            const signature = await signer.signTypedData(domain, types, values);
+            console.log('[Bridge] Permit signature generated successfully');
+
+            // Call Paymaster API to execute bridge (gasless) with permit signature
             const response = await fetch(PAYMASTER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2629,6 +2688,9 @@ const Wallet = (): JSX.Element => {
                     amount: amountWei,
                     srcChainId: VISION_CHAIN_ID,
                     dstChainId: dstChainId,
+                    fee: BRIDGE_FEE.toString(),
+                    deadline: deadline,
+                    signature: signature,
                 })
             });
 
