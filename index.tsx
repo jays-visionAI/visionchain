@@ -89,6 +89,8 @@ render(() => (
         <Route path="/bridge" component={Public.BridgePage} />
         <Route path="/staking" component={ValidatorStaking} />
         <Route path="/paymaster" component={Public.PaymasterPage} />
+        <Route path="/agent" component={Public.AgentGatewayPage} />
+        <Route path="/agent/*" component={Public.AgentGatewayPage} />
 
         {/* Admin Routes */}
         <Route path="/adminsystem" component={Admin.AdminDashboardPage} />

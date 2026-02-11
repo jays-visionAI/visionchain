@@ -16,6 +16,7 @@ export const TrafficSimulator = lazy(() => import('../components/TrafficSimulato
 export const Testnet = lazy(() => import('../components/Testnet'));
 export const Bridge = lazy(() => import('../components/Bridge'));
 export const Paymaster = lazy(() => import('../components/Paymaster'));
+export const AgentGateway = lazy(() => import('../components/AgentGateway'));
 
 // Page Wrapper Components
 export const ResearchPage = () => {
@@ -91,4 +92,9 @@ export const BridgePage = () => {
 export const PaymasterPage = () => {
     document.title = 'Vision Paymaster | Gasless Transaction Hub';
     return <div id="paymaster"><Paymaster /></div>;
+};
+
+export const AgentGatewayPage = () => {
+    document.title = 'Agent Gateway | Vision Chain';
+    return <div id="agent-gateway"><AgentGateway /></div>;
 };
