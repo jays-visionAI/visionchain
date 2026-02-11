@@ -27,6 +27,7 @@ import {
     VcnPurchase
 } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
+import { useAdminRole } from './adminRoleContext';
 
 // Lazy-loaded tab components for better code-splitting
 const ApiKeysTab = lazy(() => import('./tabs/ApiKeysTab').then(m => ({ default: m.ApiKeysTab })));
@@ -86,6 +87,9 @@ Vision Chain is the first Agentic AI Blockchain (Layer 1).
 Your goal is to explain Vision Chain's technology, ecosystem, and vision to users based on the official Whitepaper v1.0.`;
 
 export default function AdminAIManagement() {
+    // Role check
+    const { isAdmin } = useAdminRole();
+
     // Navigation
     const [activeTab, setActiveTab] = createSignal('apikeys');
 
@@ -197,6 +201,7 @@ export default function AdminAIManagement() {
     };
 
     const handleDistributeTestnet = async () => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
         // CRITICAL: Prevent duplicate execution
         if (isDistributing()) {
             console.warn('[AdminAI] Distribution already in progress');

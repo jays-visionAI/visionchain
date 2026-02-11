@@ -7,8 +7,10 @@ import { getFirebaseDb } from '../../services/firebaseService';
 import { doc, updateDoc } from 'firebase/firestore';
 import { contractService } from '../../services/contractService';
 import ChainRegistrationWizard from './ChainRegistrationWizard';
+import { useAdminRole } from './adminRoleContext';
 
 const PaymasterAdmin: Component = () => {
+    const { isAdmin } = useAdminRole();
     const [stats, setStats] = createSignal<any>(null);
     const [chains, setChains] = createSignal<ChainConfig[]>([]);
     const [pools, setPools] = createSignal<Record<number, PaymasterPool>>({});
@@ -126,17 +128,20 @@ const PaymasterAdmin: Component = () => {
     });
 
     const handlePausePool = async (chainId: number) => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
         if (!confirm("Are you sure you want to PAUSE this pool? DApps will be blocked instantly.")) return;
         await AdminService.setPoolMode("admin_1", chainId, 'PAUSED');
         refreshData();
     };
 
     const handleResumePool = async (chainId: number) => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
         await AdminService.setPoolMode("admin_1", chainId, 'NORMAL');
         refreshData();
     };
 
     const handleSimulateDrain = async (chainId: number) => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
         // Drain to 0.1 ETH (below 1 ETH min)
         if (!confirm("Simulate Critical Balance Drop? This should trigger SAFE_MODE.")) return;
 

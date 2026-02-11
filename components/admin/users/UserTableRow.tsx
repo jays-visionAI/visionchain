@@ -23,6 +23,7 @@ interface UserTableRowProps {
     user: UserData;
     onSendVCN: (user: UserData) => void;
     onResendEmail: (email: string) => void;
+    onSetRole?: (email: string, role: 'partner' | 'user') => void;
     resendingEmail: string | null;
     copyToClipboard: (text: string) => void;
     shortAddress: (addr?: string) => string;
@@ -93,6 +94,23 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
                         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/10 text-[8px] font-black text-green-500 uppercase tracking-widest border border-green-500/20 whitespace-nowrap">
                             <CheckCircle class="w-2.5 h-2.5" />
                             Reg
+                        </span>
+                    </Show>
+                </div>
+
+                {/* Role Badge */}
+                <div class="md:col-span-1 flex items-center">
+                    <Show when={props.user.role === 'partner'} fallback={
+                        <Show when={props.user.role === 'admin'}>
+                            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/10 text-[8px] font-black text-red-400 uppercase tracking-widest border border-red-500/20 whitespace-nowrap">
+                                <Shield class="w-2.5 h-2.5" />
+                                Admin
+                            </span>
+                        </Show>
+                    }>
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-violet-500/10 text-[8px] font-black text-violet-400 uppercase tracking-widest border border-violet-500/20 whitespace-nowrap">
+                            <Shield class="w-2.5 h-2.5" />
+                            Partner
                         </span>
                     </Show>
                 </div>
@@ -207,6 +225,29 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
                             <Send class="w-2.5 h-2.5" />
                             Send VCN
                         </button>
+                    </Show>
+
+                    {/* Role Toggle */}
+                    <Show when={props.onSetRole && props.user.role !== 'admin'}>
+                        <Show when={props.user.role === 'partner'} fallback={
+                            <button
+                                onClick={() => props.onSetRole?.(props.user.email, 'partner')}
+                                class="px-2 py-1 bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white rounded-lg transition-all border border-violet-500/20 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest"
+                                title="Grant Partner Role"
+                            >
+                                <Shield class="w-2.5 h-2.5" />
+                                Partner
+                            </button>
+                        }>
+                            <button
+                                onClick={() => props.onSetRole?.(props.user.email, 'user')}
+                                class="px-2 py-1 bg-gray-600/10 hover:bg-gray-600 text-gray-400 hover:text-white rounded-lg transition-all border border-gray-500/20 flex items-center gap-1 text-[9px] font-black uppercase tracking-widest"
+                                title="Revoke Partner Role"
+                            >
+                                <X class="w-2.5 h-2.5" />
+                                Revoke
+                            </button>
+                        </Show>
                     </Show>
 
                     <Show when={!isRegistered()}>

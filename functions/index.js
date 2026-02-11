@@ -765,8 +765,8 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
 
     console.log(`[Paymaster] Request type: ${type} from ${user}`);
 
-    // Basic validation
-    if (!user) {
+    // Basic validation (skip for info-only endpoints)
+    if (!user && type !== "reverse_bridge_info") {
       return res.status(400).json({ error: "Missing required field: user" });
     }
 
