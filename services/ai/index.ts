@@ -71,8 +71,11 @@ export const generateText = async (
         let fullPrompt = historyContext + prompt;
 
         // --- CEX Portfolio Auto-Injection (Provider-agnostic, works with DeepSeek) ---
-        const cexKeywords = /포트폴리오|내 계좌|투자 현황|수익률|거래소|잔고|자산|리밸런싱|분석.*조언|조언|추천|CEX|업비트|빗썸|거래소 자산|투자 조언|내 투자|portfolio|holdings|investment|P&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
-        if (cexKeywords.test(prompt)) {
+        // Skip CEX injection if user intent is clearly bridge/transfer/swap/stake (not asset management)
+        const actionKeywords = /브릿지|브릿징|전송|보내|송금|스왑|스테이킹|언스테이킹|bridge|bridging|transfer|send|swap|stake|unstake|mint/i;
+        const cexKeywords = /포트폴리오|내 계좌|투자 현황|수익률|거래소 자산|리밸런싱|분석.*조언|투자 조언|내 투자|CEX|업비트|빗썸|portfolio|holdings|investment|P\&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
+        const shouldInjectCex = cexKeywords.test(prompt) && !actionKeywords.test(prompt);
+        if (shouldInjectCex) {
             try {
                 console.log('[AIService] CEX keyword detected, auto-fetching portfolio data...');
                 const { getCexPortfolio } = await import('../cexService');
@@ -445,8 +448,11 @@ export const generateTextStream = async (
         let fullPrompt = historyContext + prompt;
 
         // --- CEX Portfolio Auto-Injection (same as generateText) ---
-        const cexKeywords = /\ud3ec\ud2b8\ud3f4\ub9ac\uc624|\ub0b4 \uacc4\uc88c|\ud22c\uc790 \ud604\ud669|\uc218\uc775\ub960|\uac70\ub798\uc18c|\uc794\uace0|\uc790\uc0b0|\ub9ac\ubc38\ub7f0\uc2f1|\ubd84\uc11d.*\uc870\uc5b8|\uc870\uc5b8|\ucd94\ucc9c|CEX|\uc5c5\ube44\ud2b8|\ube57\uc378|\uac70\ub798\uc18c \uc790\uc0b0|\ud22c\uc790 \uc870\uc5b8|\ub0b4 \ud22c\uc790|portfolio|holdings|investment|P&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
-        if (cexKeywords.test(prompt)) {
+        // Skip CEX injection if user intent is clearly bridge/transfer/swap/stake
+        const actionKeywords = /브릿지|브릿징|전송|보내|송금|스왑|스테이킹|언스테이킹|bridge|bridging|transfer|send|swap|stake|unstake|mint/i;
+        const cexKeywords = /포트폴리오|내 계좌|투자 현황|수익률|거래소 자산|리밸런싱|분석.*조언|투자 조언|내 투자|CEX|업비트|빗썸|portfolio|holdings|investment|P\&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
+        const shouldInjectCex = cexKeywords.test(prompt) && !actionKeywords.test(prompt);
+        if (shouldInjectCex) {
             try {
                 console.log('[AIService:Stream] CEX keyword detected, auto-fetching portfolio data...');
                 const { getCexPortfolio } = await import('../cexService');
