@@ -159,10 +159,59 @@ export class IntentParserService {
         }
 
         const amount = match[mapping.amount];
-        const token = match[mapping.token];
-        const chain = match[mapping.chain] || 'SEPOLIA'; // Default to Sepolia if not captured
-        const recipient = mapping.recipient ? match[mapping.recipient] : undefined;
+        const token = match[mapping.token] || 'VCN';
+        const chain = mapping.chain && mapping.chain > 0 && match[mapping.chain] ? match[mapping.chain] : 'SEPOLIA';
+        const recipient = mapping.recipient && mapping.recipient > 0 ? match[mapping.recipient] : undefined;
 
+        // Detect reverse bridge direction
+        // sourceChain === -1 means "Sepolia is implied" (no capture group, but pattern is known reverse)
+        // sourceChain > 0 means a regex capture group captured the source chain
+        const hasSourceChain = mapping.sourceChain !== undefined;
+
+        if (hasSourceChain) {
+            // This is a REVERSE bridge (Sepolia/Ethereum -> Vision Chain)
+            const capturedSource = mapping.sourceChain > 0 ? match[mapping.sourceChain] : 'SEPOLIA';
+            const sourceChainNorm = (capturedSource || 'SEPOLIA').toUpperCase();
+
+            return {
+                action: 'BRIDGE',
+                params: {
+                    to: recipient,
+                    token: token.toUpperCase(),
+                    amount: amount,
+                    sourceChain: sourceChainNorm,
+                    destinationChain: 'VISION'
+                },
+                raw: input,
+                confidence: 0.95,
+                explanation: `Reverse bridging ${amount} ${token} from ${sourceChainNorm} to Vision Chain.`
+            };
+        }
+
+        // Additional safety: check if the destination chain looks like Vision Chain
+        // This catches cases where the regex matched but didn't explicitly set sourceChain
+        const chainUpper = chain.toUpperCase();
+        const visionKeywords = ['VISION', 'VCN', 'VISIONCHAIN', '비전', '비전체인'];
+        const isDestVision = visionKeywords.some(kw => chainUpper.includes(kw));
+
+        if (isDestVision) {
+            // Destination is Vision Chain => this must be a reverse bridge
+            return {
+                action: 'BRIDGE',
+                params: {
+                    to: recipient,
+                    token: token.toUpperCase(),
+                    amount: amount,
+                    sourceChain: 'SEPOLIA',
+                    destinationChain: 'VISION'
+                },
+                raw: input,
+                confidence: 0.9,
+                explanation: `Reverse bridging ${amount} ${token} from Sepolia to Vision Chain.`
+            };
+        }
+
+        // Standard forward bridge (Vision Chain -> Sepolia/Ethereum)
         return {
             action: 'BRIDGE',
             params: { to: recipient, token: token.toUpperCase(), amount: amount, destinationChain: chain.toUpperCase() },

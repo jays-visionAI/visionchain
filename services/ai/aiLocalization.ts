@@ -27,10 +27,10 @@ export interface LanguageConfig {
                 regex: RegExp;
                 mapping: { amount: number; token: number; recipient: number; timeVal: number; timeUnit: number };
             }[];
-            // Returns [amount, token, destinationChain]
+            // Returns [amount, token, destinationChain] or [amount, token, sourceChain, destinationChain]
             bridge: {
                 regex: RegExp;
-                mapping: { amount: number; token: number; chain: number; recipient?: number };
+                mapping: { amount: number; token: number; chain: number; recipient?: number; sourceChain?: number };
             }[];
         };
         intentNames: Record<string, string>;
@@ -71,6 +71,16 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
                     }
                 ],
                 bridge: [
+                    // Reverse bridge: "bridge 1.1 VCN from sepolia to vision chain"
+                    {
+                        regex: /(?:bridge|move|transfer)\s+([0-9.]+)\s+([a-zA-Z]+)\s+(?:from|on)\s+(sepolia|ethereum|eth|erc-?20)\s+to\s+(vision\s*chain|vcn|vision)/i,
+                        mapping: { amount: 1, token: 2, sourceChain: 3, chain: 4 }
+                    },
+                    // Reverse bridge with "sepolia VCN": "bridge 1.1 sepolia VCN to vision chain"
+                    {
+                        regex: /(?:bridge|move|transfer)\s+([0-9.]+)\s+(?:sepolia|ethereum|eth)\s+([a-zA-Z]+)\s+to\s+(vision\s*chain|vcn|vision)/i,
+                        mapping: { amount: 1, token: 2, chain: 3, sourceChain: -1 }
+                    },
                     // Bridge to recipient: "bridge 2 VCN to sepolia for @jays"
                     {
                         regex: /(?:bridge|move)\s+([0-9.]+)\s+([a-zA-Z]+)\s+to\s+([a-zA-Z0-9-]+)\s+(?:for|to)\s+(@?[a-zA-Z0-9@.]+)/i,
@@ -110,7 +120,7 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
         intents: {
             keywords: {
                 // 테스트넷에서는 이더리움 = Sepolia로 매핑
-                bridge: ['브릿지', '옮겨', '이동', '이더리움', '이더로', '이더계열', 'erc-20', 'erc20', '세폴리아'],
+                bridge: ['브릿지', '브릿징', '옮겨', '이동', '이더리움', '이더로', '이더계열', 'erc-20', 'erc20', '세폴리아', '비전체인', '비전체인으로', '비전으로'],
                 schedule: [' 뒤에', ' 후에', ' 예약'],
                 send: ['보내', '이체', '송금', '결제', '전송'],
                 timeAfter: ['뒤에', '후에', '이후에']
@@ -133,6 +143,35 @@ export const AI_LOCALIZATION: Record<string, LanguageConfig> = {
                     }
                 ],
                 bridge: [
+                    // ===== REVERSE BRIDGE PATTERNS (Sepolia -> Vision Chain) =====
+                    // 핵심 역브릿지 패턴: "내 1.1 VCN 세폴리아를 비전체인으로 브릿징 해줘"
+                    // "VCN 세폴리아" = Sepolia VCN (소스), "비전체인으로" = to Vision Chain (목적지)
+                    {
+                        regex: /(?:내\s+)?([0-9.]+)\s*(?:VCN|vcn)\s*(?:세폴리아|이더리움|이더)\s*(?:를|을)?\s*(?:비전체인|비전|vision\s*chain|vision)\s*(?:으로|로)?\s*(?:브릿지|브릿징|옮겨|이동|보내|전송)/i,
+                        mapping: { amount: 1, token: 2, sourceChain: -1, chain: 3 }
+                    },
+                    // "세폴리아 VCN을 비전체인으로 브릿징 해줘"
+                    {
+                        regex: /(?:내\s+)?(?:세폴리아|이더리움|이더)\s*(?:VCN|vcn)\s+([0-9.]+)\s*(?:를|을)?\s*(?:비전체인|비전|vision\s*chain|vision)\s*(?:으로|로)?\s*(?:브릿지|브릿징|옮겨|이동|보내|전송)/i,
+                        mapping: { amount: 1, token: 2, sourceChain: -1, chain: 3 }
+                    },
+                    // "세폴리아에서 비전체인으로 1.1 VCN 브릿지"
+                    {
+                        regex: /(?:세폴리아|이더리움|이더)\s*(?:에서|부터)?\s*(?:비전체인|비전|vision\s*chain|vision)\s*(?:으로|로)?\s*([0-9.]+)\s*([a-zA-Z]+)\s*(?:브릿지|브릿징|옮겨|이동|보내|전송)/i,
+                        mapping: { amount: 1, token: 2, sourceChain: -1, chain: 3 }
+                    },
+                    // "1.1 VCN을 세폴리아에서 비전체인으로 브릿지"
+                    {
+                        regex: /([0-9.]+)\s*([a-zA-Z]+)\s*(?:을|를)?\s*(?:세폴리아|이더리움|이더)\s*(?:에서|부터)\s*(?:비전체인|비전|vision\s*chain|vision)\s*(?:으로|로)?\s*(?:브릿지|브릿징|옮겨|이동|보내|전송)/i,
+                        mapping: { amount: 1, token: 2, sourceChain: -1, chain: 3 }
+                    },
+                    // "비전체인으로 1.1 세폴리아 VCN 브릿지"
+                    {
+                        regex: /(?:비전체인|비전|vision\s*chain|vision)\s*(?:으로|로)\s+([0-9.]+)\s*(?:세폴리아|이더리움|이더)?\s*([a-zA-Z]+)\s*(?:브릿지|브릿징|옮겨|이동|보내|전송)/i,
+                        mapping: { amount: 1, token: 2, sourceChain: -1, chain: 3 }
+                    },
+
+                    // ===== FORWARD BRIDGE PATTERNS (Vision Chain -> Sepolia) =====
                     // 수신자 + 브릿지 패턴: "박지현에게 2vcn 세폴리아로 브릿징해서 보내줘"
                     {
                         regex: /(@?[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ가-힣@.]+)(?:에게|께)\s+([0-9.]+)\s*([a-zA-Z]+)\s*(?:을|를)?\s*(?:이더리움|이더|erc-?20|세폴리아)(?:으로|로)?\s*(?:브릿지|브릿징|옮겨|이동)(?:해서)?\s*(?:보내|전송)/i,
