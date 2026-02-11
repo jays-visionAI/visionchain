@@ -2002,6 +2002,76 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
         throw err;
     }
 };
+
+// ==================== Agent Management ====================
+
+export interface AgentData {
+    agent_name: string;
+    platform: string;
+    platform_id?: string;
+    owner_email?: string;
+    wallet_address: string;
+    api_key: string;
+    referral_code: string;
+    rp: number;
+    referral_count: number;
+    total_transfers: number;
+    total_transfer_volume: string;
+    status: string;
+    created_at: string;
+    referred_by?: string;
+}
+
+export const getAllAgents = async (limitCount = 500): Promise<AgentData[]> => {
+    console.log('[Performance] getAllAgents started');
+    let currentDb: Firestore;
+    try {
+        currentDb = getFirebaseDb();
+    } catch (e) {
+        initializeFirebase();
+        currentDb = getFirebaseDb();
+    }
+
+    try {
+        const agentsQ = query(collection(currentDb, 'agents'), limit(limitCount));
+        const snapshot = await getDocs(agentsQ);
+
+        const agents: AgentData[] = [];
+        snapshot.forEach((docSnap: any) => {
+            const data = docSnap.data();
+            agents.push({
+                agent_name: data.agent_name || docSnap.id,
+                platform: data.platform || 'unknown',
+                platform_id: data.platform_id || '',
+                owner_email: data.owner_email || '',
+                wallet_address: data.wallet_address || '',
+                api_key: data.api_key || '',
+                referral_code: data.referral_code || '',
+                rp: data.rp || 0,
+                referral_count: data.referral_count || 0,
+                total_transfers: data.total_transfers || 0,
+                total_transfer_volume: data.total_transfer_volume || '0',
+                status: data.status || 'active',
+                created_at: data.created_at || '',
+                referred_by: data.referred_by || '',
+            });
+        });
+
+        // Sort by RP descending
+        agents.sort((a, b) => b.rp - a.rp);
+        console.log(`[Performance] getAllAgents completed: ${agents.length} agents`);
+        return agents;
+    } catch (err) {
+        console.error('[getAllAgents] Failed:', err);
+        throw err;
+    }
+};
+
+export const deleteAgent = async (agentName: string): Promise<void> => {
+    const db = getFirebaseDb();
+    await deleteDoc(doc(db, 'agents', agentName));
+};
+
 export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'partner'> => {
     try {
         const db = getFirebaseDb();

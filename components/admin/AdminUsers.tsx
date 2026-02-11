@@ -1,11 +1,13 @@
-import { createSignal, createResource, Show, For } from 'solid-js';
+import { createSignal, createResource, Show, For, lazy, Suspense } from 'solid-js';
 import {
     Search,
     Filter,
     ShieldCheck,
     RefreshCw,
     UserPlus,
-    Award
+    Award,
+    Bot,
+    Users
 } from 'lucide-solid';
 import { getAllUsers, resendActivationEmail, manualInviteUser, updateUserData, UserData, backfillAllUsersRP } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
@@ -17,8 +19,11 @@ import { ManualInviteModal } from './users/ManualInviteModal';
 import { TransferSuccessModal } from './users/TransferSuccessModal';
 import { useAdminRole } from './adminRoleContext';
 
+const AgentTable = lazy(() => import('./users/AgentTable'));
+
 export default function AdminUsers() {
     const { isAdmin } = useAdminRole();
+    const [activeTab, setActiveTab] = createSignal<'users' | 'agents'>('users');
     const [searchQuery, setSearchQuery] = createSignal('');
     const [statusFilter, setStatusFilter] = createSignal('all');
     const [users, { mutate, refetch }] = createResource(() => getAllUsers());
@@ -172,7 +177,7 @@ export default function AdminUsers() {
 
     return (
         <div class="p-6 max-w-7xl mx-auto text-white">
-            <header class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+            <header class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                 <div>
                     <h1 class="text-4xl font-black italic tracking-tighter mb-2">USER MANAGEMENT</h1>
                     <div class="flex items-center gap-2 text-gray-500 text-[10px] font-black uppercase tracking-[0.2em]">
@@ -181,107 +186,148 @@ export default function AdminUsers() {
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <button
-                        onClick={() => refetch()}
-                        class="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-gray-400 hover:text-white transition-all"
-                        title="Refresh"
-                    >
-                        <RefreshCw class={`w-5 h-5 ${users.loading ? 'animate-spin' : ''}`} />
-                    </button>
-                    <button
-                        onClick={handleBackfillRP}
-                        disabled={isBackfilling()}
-                        class="flex items-center gap-2 px-4 py-3 bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all border border-amber-500/20"
-                        title="Retroactively award RP to all users based on referral count"
-                    >
-                        <Award class={`w-4 h-4 ${isBackfilling() ? 'animate-spin' : ''}`} />
-                        {isBackfilling() ? 'Processing...' : 'Backfill RP'}
-                    </button>
-                    <button
-                        onClick={() => setIsInviteModalOpen(true)}
-                        class="flex items-center gap-2 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-cyan-600/20"
-                    >
-                        <UserPlus class="w-4 h-4" />
-                        Manual Invite
-                    </button>
-                </div>
+                <Show when={activeTab() === 'users'}>
+                    <div class="flex items-center gap-3">
+                        <button
+                            onClick={() => refetch()}
+                            class="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 text-gray-400 hover:text-white transition-all"
+                            title="Refresh"
+                        >
+                            <RefreshCw class={`w-5 h-5 ${users.loading ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button
+                            onClick={handleBackfillRP}
+                            disabled={isBackfilling()}
+                            class="flex items-center gap-2 px-4 py-3 bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all border border-amber-500/20"
+                            title="Retroactively award RP to all users based on referral count"
+                        >
+                            <Award class={`w-4 h-4 ${isBackfilling() ? 'animate-spin' : ''}`} />
+                            {isBackfilling() ? 'Processing...' : 'Backfill RP'}
+                        </button>
+                        <button
+                            onClick={() => setIsInviteModalOpen(true)}
+                            class="flex items-center gap-2 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-cyan-600/20"
+                        >
+                            <UserPlus class="w-4 h-4" />
+                            Manual Invite
+                        </button>
+                    </div>
+                </Show>
             </header>
 
-            {/* Filters */}
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8">
-                <div class="md:col-span-8 relative group">
-                    <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Search by name, email or address"
-                        value={searchQuery()}
-                        onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                        class="w-full pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
-                    />
-                </div>
-                <div class="md:col-span-4 relative group">
-                    <Filter class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
-                    <select
-                        value={statusFilter()}
-                        onChange={(e) => setStatusFilter(e.currentTarget.value)}
-                        class="w-full appearance-none pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="Registered">Registered</option>
-                        <option value="WalletCreated">Wallet Created</option>
-                        <option value="VestingDeployed">Vesting Deployed</option>
-                        <option value="Pending">Pending</option>
-                    </select>
-                </div>
+            {/* Tab Switcher */}
+            <div class="flex items-center gap-1 mb-8 bg-white/[0.03] rounded-xl p-1 w-fit border border-white/5">
+                <button
+                    onClick={() => setActiveTab('users')}
+                    class={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab() === 'users'
+                            ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20'
+                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                >
+                    <Users class="w-4 h-4" />
+                    Users
+                </button>
+                <button
+                    onClick={() => setActiveTab('agents')}
+                    class={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab() === 'agents'
+                            ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
+                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                >
+                    <Bot class="w-4 h-4" />
+                    Agents
+                </button>
             </div>
 
-            {/* Users Table */}
-            <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
-                <UserTableHead />
-
-                {/* Table Body */}
-                <div class="divide-y divide-white/5">
-                    <Show when={users.loading}>
-                        <div class="p-8 text-center text-gray-500">
-                            <div class="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-2" />
-                            Loading users...
-                        </div>
-                    </Show>
-
-                    <For each={filteredUsers()}>
-                        {(user) => (
-                            <UserTableRow
-                                user={user}
-                                onSendVCN={handleSendVCN}
-                                onResendEmail={handleResendEmail}
-                                onSetRole={isAdmin() ? handleSetRole : undefined}
-                                resendingEmail={resendingEmail()}
-                                copyToClipboard={copyToClipboard}
-                                shortAddress={shortAddress}
-                            />
-                        )}
-                    </For>
+            {/* Users Tab Content */}
+            <Show when={activeTab() === 'users'}>
+                {/* Filters */}
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-8">
+                    <div class="md:col-span-8 relative group">
+                        <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
+                        <input
+                            type="text"
+                            placeholder="Search by name, email or address"
+                            value={searchQuery()}
+                            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                            class="w-full pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
+                        />
+                    </div>
+                    <div class="md:col-span-4 relative group">
+                        <Filter class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
+                        <select
+                            value={statusFilter()}
+                            onChange={(e) => setStatusFilter(e.currentTarget.value)}
+                            class="w-full appearance-none pl-12 pr-4 py-4 bg-[#0B0E14] border border-white/10 rounded-2xl text-sm text-white focus:outline-none focus:border-cyan-500/50 transition-all cursor-pointer"
+                        >
+                            <option value="all">All Status</option>
+                            <option value="Registered">Registered</option>
+                            <option value="WalletCreated">Wallet Created</option>
+                            <option value="VestingDeployed">Vesting Deployed</option>
+                            <option value="Pending">Pending</option>
+                        </select>
+                    </div>
                 </div>
-            </div>
 
-            {/* Modals extracted */}
-            <ManualInviteModal
-                isOpen={isInviteModalOpen()}
-                onClose={() => setIsInviteModalOpen(false)}
-                onInvite={handleInviteSubmit}
-                isInviting={isInviting()}
-            />
+                {/* Users Table */}
+                <div class="rounded-2xl bg-white/[0.02] border border-white/5 overflow-hidden">
+                    <UserTableHead />
 
-            <TransferSuccessModal
-                isOpen={successModal().isOpen}
-                txHash={successModal().txHash}
-                recipient={successModal().recipient}
-                recipientAddress={successModal().recipientAddress}
-                amount={successModal().amount}
-                onClose={() => setSuccessModal(prev => ({ ...prev, isOpen: false }))}
-                copyToClipboard={copyToClipboard}
-            />
+                    {/* Table Body */}
+                    <div class="divide-y divide-white/5">
+                        <Show when={users.loading}>
+                            <div class="p-8 text-center text-gray-500">
+                                <div class="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-2" />
+                                Loading users...
+                            </div>
+                        </Show>
+
+                        <For each={filteredUsers()}>
+                            {(user) => (
+                                <UserTableRow
+                                    user={user}
+                                    onSendVCN={handleSendVCN}
+                                    onResendEmail={handleResendEmail}
+                                    onSetRole={isAdmin() ? handleSetRole : undefined}
+                                    resendingEmail={resendingEmail()}
+                                    copyToClipboard={copyToClipboard}
+                                    shortAddress={shortAddress}
+                                />
+                            )}
+                        </For>
+                    </div>
+                </div>
+
+                {/* Modals extracted */}
+                <ManualInviteModal
+                    isOpen={isInviteModalOpen()}
+                    onClose={() => setIsInviteModalOpen(false)}
+                    onInvite={handleInviteSubmit}
+                    isInviting={isInviting()}
+                />
+
+                <TransferSuccessModal
+                    isOpen={successModal().isOpen}
+                    txHash={successModal().txHash}
+                    recipient={successModal().recipient}
+                    recipientAddress={successModal().recipientAddress}
+                    amount={successModal().amount}
+                    onClose={() => setSuccessModal(prev => ({ ...prev, isOpen: false }))}
+                    copyToClipboard={copyToClipboard}
+                />
+            </Show>
+
+            {/* Agents Tab Content */}
+            <Show when={activeTab() === 'agents'}>
+                <Suspense fallback={
+                    <div class="p-8 text-center text-gray-500">
+                        <div class="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-2" />
+                        Loading Agent Management...
+                    </div>
+                }>
+                    <AgentTable />
+                </Suspense>
+            </Show>
         </div>
     );
 }
