@@ -3342,11 +3342,23 @@ If you detect multiple recipients in one request, ALWAYS use the "multi" format.
 
 Format (Cross-Chain Bridge):
 If the user wants to send assets to another blockchain (Ethereum, Sepolia, Polygon, etc.), use the BRIDGE intent.
-Keywords that indicate bridge: "세폴리아", "이더리움", "폴리곤", "Sepolia", "Ethereum", "Polygon", "다른 체인", "브릿지", "bridge", "크로스체인"
+Keywords that indicate bridge: "세폴리아", "이더리움", "폴리곤", "Sepolia", "Ethereum", "Polygon", "다른 체인", "브릿지", "bridge", "크로스체인", "비전체인", "비전"
 
+IMPORTANT BRIDGE DIRECTION RULES:
+1. FORWARD BRIDGE (Vision Chain -> Sepolia): When user wants to move VCN FROM Vision Chain TO Sepolia/Ethereum.
+   - Examples: "1 VCN을 세폴리아로 보내줘", "이더리움으로 브릿지", "세폴리아로 브릿지"
+   - Set: "destinationChain": "SEPOLIA", NO sourceChain field
+2. REVERSE BRIDGE (Sepolia -> Vision Chain): When user wants to move VCN FROM Sepolia/Ethereum TO Vision Chain.
+   - Examples: "내 VCN 세폴리아를 비전체인으로 브릿징 해줘", "세폴리아에서 비전체인으로 옮겨줘", "세폴리아 VCN을 비전으로 브릿지"
+   - Set: "sourceChain": "SEPOLIA", "destinationChain": "VISION"
+   - Key indicators: "비전체인으로", "비전으로", "to Vision Chain", "VCN 세폴리아를", "세폴리아에서"
+
+IMPORTANT: Pay close attention to the DIRECTION! "세폴리아로" means TO Sepolia (forward). "세폴리아를 비전체인으로" or "세폴리아에서" means FROM Sepolia (reverse).
+IMPORTANT: When user says "VCN 세폴리아" it means their VCN tokens that are ON Sepolia network.
 IMPORTANT: When user says "세폴리아로 보내줘" or "Sepolia로 전송" WITHOUT specifying a recipient address, this means BRIDGE to their OWN wallet on the destination chain (same address). Do NOT ask for recipient address.
 IMPORTANT: When user says "박지현에게 2vcn 세폴리아로 브릿징해서 보내줘" WITH a recipient name, include the "recipient" field in the JSON.
 
+Forward Bridge Format:
 \`\`\`json
 {
   "intent": "bridge",
@@ -3356,7 +3368,19 @@ IMPORTANT: When user says "박지현에게 2vcn 세폴리아로 브릿징해서 
   "recipient": "박지현"
 }
 \`\`\`
-Valid destinationChain values: "SEPOLIA", "ETHEREUM", "POLYGON"
+
+Reverse Bridge Format (Sepolia -> Vision Chain):
+\`\`\`json
+{
+  "intent": "bridge",
+  "amount": "1.1",
+  "symbol": "VCN",
+  "sourceChain": "SEPOLIA",
+  "destinationChain": "VISION"
+}
+\`\`\`
+
+Valid destinationChain values: "SEPOLIA", "ETHEREUM", "POLYGON", "VISION"
 Note: If "recipient" is omitted, bridges to user's own wallet. If "recipient" is provided, bridges to that person's wallet on the destination chain.
 
 [REFERRAL GUIDELINE]
@@ -3729,20 +3753,46 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                 } else if (intentData.intent === 'bridge') {
                     // Cross-Chain Bridge Intent - Execute directly without confirmation
+
+                    // Detect bridge direction from intentData
+                    const srcChain = intentData.sourceChain || '';
+                    const dstChain = intentData.destinationChain || 'SEPOLIA';
+                    const srcUpper = srcChain.toUpperCase();
+                    const dstUpper = dstChain.toUpperCase();
+
+                    // Vision Chain keywords
+                    const visionKW = ['VISION', 'VCN', 'VISIONCHAIN'];
+                    // Ethereum/Sepolia keywords
+                    const ethKW = ['SEPOLIA', 'ETHEREUM', 'ETH', 'ERC20', 'ERC-20'];
+
+                    const isReverseBridge =
+                        ethKW.some(kw => srcUpper.includes(kw)) ||
+                        visionKW.some(kw => dstUpper.includes(kw));
+
                     const bridgeData = {
                         amount: String(intentData.amount || '0'),
                         symbol: intentData.symbol || 'VCN',
-                        destinationChain: intentData.destinationChain || 'SEPOLIA',
+                        sourceChain: isReverseBridge ? 'SEPOLIA' : 'VISION',
+                        destinationChain: isReverseBridge ? 'VISION' : (intentData.destinationChain || 'SEPOLIA'),
                         recipient: intentData.recipient || undefined,
+                        bridgeDirection: isReverseBridge ? 'reverse' : 'forward',
+                        bridgeType: isReverseBridge ? 'REVERSE_BRIDGE' : 'FORWARD_BRIDGE',
                         intentData: intentData
                     };
 
-                    // Show bridge confirmation message
-                    const chainDisplay = bridgeData.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridgeData.destinationChain;
-                    const recipientDisplay = bridgeData.recipient ? ` (${bridgeData.recipient})` : '';
-                    const startMsg = lastLocale() === 'ko'
-                        ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**${recipientDisplay}로 전송합니다.\n\n브릿지 에이전트가 처리 중입니다...`
-                        : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**${recipientDisplay}.\n\nBridge agent is processing...`;
+                    // Show bridge confirmation message with correct direction
+                    let startMsg: string;
+                    if (isReverseBridge) {
+                        startMsg = lastLocale() === 'ko'
+                            ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Ethereum Sepolia → **Vision Chain**으로 전송합니다.\n\n브릿지 에이전트가 처리 중입니다...`
+                            : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Ethereum Sepolia → **Vision Chain**.\n\nBridge agent is processing...`;
+                    } else {
+                        const chainDisplay = bridgeData.destinationChain === 'SEPOLIA' ? 'Ethereum Sepolia' : bridgeData.destinationChain;
+                        const recipientDisplay = bridgeData.recipient ? ` (${bridgeData.recipient})` : '';
+                        startMsg = lastLocale() === 'ko'
+                            ? `크로스체인 브릿지 요청을 확인했습니다.\n\n**${bridgeData.amount} ${bridgeData.symbol}**을 Vision Chain → **${chainDisplay}**${recipientDisplay}로 전송합니다.\n\n브릿지 에이전트가 처리 중입니다...`
+                            : `Cross-chain bridge request confirmed.\n\nBridging **${bridgeData.amount} ${bridgeData.symbol}** from Vision Chain → **${chainDisplay}**${recipientDisplay}.\n\nBridge agent is processing...`;
+                    }
 
                     setMessages(prev => [...prev, {
                         role: 'assistant',
