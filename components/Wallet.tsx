@@ -2971,6 +2971,8 @@ const Wallet = (): JSX.Element => {
             console.log('[ReverseBridge] Starting Sepolia → Vision Chain bridge...');
             console.log(`[ReverseBridge] Amount: ${bridge.amount}, Sepolia Balance: ${currentSepoliaBalance}`);
 
+            setLoadingMessage(lastLocale() === 'ko' ? '역방향 브릿지 준비 중...' : 'Preparing reverse bridge...');
+
             // Optimistic task
             const optimisticId = `rbridge_optimistic_${Date.now()}`;
             setBridgeTasks(prev => [
@@ -3007,28 +3009,52 @@ const Wallet = (): JSX.Element => {
 
             // === STEP 1: Call reverse_bridge_prepare for gas sponsorship + relayer address ===
             console.log('[ReverseBridge] Step 1: Preparing (gas sponsorship)...');
-            setLoadingMessage(lastLocale() === 'ko' ? '가스비 준비 중...' : 'Preparing gas...');
+            setLoadingMessage(lastLocale() === 'ko' ? '가스비 준비 중... (1/3)' : 'Preparing gas... (1/3)');
 
-            const prepareRes = await fetch(PAYMASTER_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'reverse_bridge_prepare', user: userAddr })
-            });
-            const prepareData = await prepareRes.json();
+            const prepController = new AbortController();
+            const prepTimeout = setTimeout(() => prepController.abort(), 60000); // 60s timeout for prepare
+            let prepareData;
+            try {
+                const prepareRes = await fetch(PAYMASTER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: prepController.signal,
+                    body: JSON.stringify({ type: 'reverse_bridge_prepare', user: userAddr })
+                });
+                prepareData = await prepareRes.json();
+                clearTimeout(prepTimeout);
 
-            if (!prepareRes.ok || !prepareData.success) {
-                throw new Error(prepareData.error || 'Failed to prepare reverse bridge');
+                if (!prepareRes.ok || !prepareData.success) {
+                    throw new Error(prepareData.error || 'Failed to prepare reverse bridge');
+                }
+            } catch (prepErr: any) {
+                clearTimeout(prepTimeout);
+                if (prepErr.name === 'AbortError') {
+                    throw new Error(lastLocale() === 'ko'
+                        ? '가스비 준비 시간이 초과되었습니다. 다시 시도해주세요.'
+                        : 'Gas preparation timed out. Please try again.');
+                }
+                throw prepErr;
             }
 
             const relayerAddress = prepareData.relayerAddress;
             console.log(`[ReverseBridge] Relayer: ${relayerAddress}, Gas refill: ${prepareData.gasRefillTxHash || 'skipped'}`);
 
+            // If gas was refilled, wait a moment for the tx to be mined
+            if (prepareData.gasRefillTxHash) {
+                console.log('[ReverseBridge] Gas refill sent, waiting for confirmation...');
+                setLoadingMessage(lastLocale() === 'ko' ? '가스비 전송 확인 중...' : 'Confirming gas refill...');
+                await new Promise(r => setTimeout(r, 3000)); // Wait 3s for mining
+            }
+
             // === STEP 2: Create Sepolia signer and approve relayer ===
             console.log('[ReverseBridge] Step 2: Approving relayer on Sepolia...');
-            setLoadingMessage(lastLocale() === 'ko' ? '세폴리아 승인 처리 중...' : 'Approving on Sepolia...');
+            setLoadingMessage(lastLocale() === 'ko' ? '세폴리아 승인 처리 중... (2/3)' : 'Approving on Sepolia... (2/3)');
 
             if (!bridge.privateKey) {
-                throw new Error('Private key not available for Sepolia signer');
+                throw new Error(lastLocale() === 'ko'
+                    ? '개인 키를 사용할 수 없습니다. 지갑을 복원해주세요.'
+                    : 'Private key not available for Sepolia signer');
             }
 
             const sepoliaProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
@@ -3057,34 +3083,65 @@ const Wallet = (): JSX.Element => {
 
             // === STEP 3: Call Paymaster for reverse bridge execution ===
             console.log('[ReverseBridge] Step 3: Executing reverse bridge...');
-            setLoadingMessage(lastLocale() === 'ko' ? '역브릿지 실행 중...' : 'Executing reverse bridge...');
+            setLoadingMessage(lastLocale() === 'ko' ? '역브릿지 실행 중... (3/3)' : 'Executing reverse bridge... (3/3)');
+
+            // Send bridge_started notification BEFORE execution
+            try {
+                await createNotification(userProfile().email, {
+                    type: 'bridge_started',
+                    title: lastLocale() === 'ko' ? '역방향 브릿지 시작' : 'Reverse Bridge Started',
+                    content: lastLocale() === 'ko'
+                        ? `${bridge.amount} VCN Sepolia → Vision Chain 브릿지가 시작되었습니다.`
+                        : `${bridge.amount} VCN Sepolia → Vision Chain bridge started.`,
+                    data: {
+                        amount: bridge.amount,
+                        sourceChain: 'Ethereum Sepolia',
+                        destinationChain: 'Vision Chain',
+                        direction: 'reverse',
+                        status: 'pending'
+                    }
+                });
+            } catch (notiErr) {
+                console.warn('[ReverseBridge] Start notification failed:', notiErr);
+            }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 180000);
-            const response = await fetch(PAYMASTER_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                signal: controller.signal,
-                body: JSON.stringify({
-                    type: 'reverse_bridge',
-                    user: userAddr,
-                    recipient: resolvedRecipientAddr,
-                    amount: bridgeAmountBn.toString(),
-                    fee: BRIDGE_FEE.toString(),
-                    // No signature/deadline - using approve-based flow
-                })
-            });
-            clearTimeout(timeoutId);
+            const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
+            let result;
+            try {
+                const response = await fetch(PAYMASTER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                        type: 'reverse_bridge',
+                        user: userAddr,
+                        recipient: resolvedRecipientAddr,
+                        amount: bridgeAmountBn.toString(),
+                        fee: BRIDGE_FEE.toString(),
+                        // No signature/deadline - using approve-based flow
+                    })
+                });
+                clearTimeout(timeoutId);
 
-            const result = await response.json();
+                result = await response.json();
 
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Reverse bridge request failed');
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Reverse bridge request failed');
+                }
+            } catch (fetchErr: any) {
+                clearTimeout(timeoutId);
+                if (fetchErr.name === 'AbortError') {
+                    throw new Error(lastLocale() === 'ko'
+                        ? '역브릿지 실행 시간이 초과되었습니다 (90초). 네트워크가 혼잡할 수 있습니다. 잠시 후 다시 시도해주세요.'
+                        : 'Reverse bridge execution timed out (90s). Network may be congested. Please try again later.');
+                }
+                throw fetchErr;
             }
 
             console.log('[ReverseBridge] Success:', result);
 
-            // Update optimistic task
+            // Update optimistic task to COMPLETED
             setBridgeTasks(prev => prev.map(t =>
                 t.id === optimisticId
                     ? { ...t, status: 'COMPLETED' as const, summary: `${bridge.amount} VCN Sepolia → Vision Chain` }
@@ -3094,23 +3151,28 @@ const Wallet = (): JSX.Element => {
                 setBridgeTasks(prev => prev.filter(t => t.id !== optimisticId));
             }, 10000);
 
+            const resultTxHash = result.visionTxHash || result.sepoliaLockTxHash || '';
+
+            // Success message
             const successMsg = lastLocale() === 'ko'
-                ? `역방향 브릿지가 성공적으로 완료되었습니다!\n\n**${bridge.amount} VCN** Sepolia → Vision Chain\n\n수수료: ${result.fee} VCN Sepolia\n\nVision Chain TX: ${result.visionTxHash?.substring(0, 16)}...`
-                : `Reverse bridge completed successfully!\n\n**${bridge.amount} VCN** Sepolia → Vision Chain\n\nFee: ${result.fee} VCN Sepolia\n\nVision Chain TX: ${result.visionTxHash?.substring(0, 16)}...`;
+                ? `역방향 브릿지가 성공적으로 완료되었습니다!\n\n**${bridge.amount} VCN** Sepolia → Vision Chain\n\n수수료: ${result.fee || '1'} VCN Sepolia${resultTxHash ? `\n\nVision Chain TX: ${resultTxHash.substring(0, 16)}...` : ''}`
+                : `Reverse bridge completed successfully!\n\n**${bridge.amount} VCN** Sepolia → Vision Chain\n\nFee: ${result.fee || '1'} VCN Sepolia${resultTxHash ? `\n\nVision Chain TX: ${resultTxHash.substring(0, 16)}...` : ''}`;
 
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content: successMsg,
-                bridgeTxHash: result.visionTxHash,
+                bridgeTxHash: resultTxHash,
                 bridgeDestination: 'VISION'
             }]);
 
-            // Notification
+            // Send bridge_completed notification
             try {
                 await createNotification(userProfile().email, {
                     type: 'bridge_completed',
-                    title: 'Reverse Bridge Complete',
-                    content: `${bridge.amount} VCN bridged from Sepolia to Vision Chain.`,
+                    title: lastLocale() === 'ko' ? '역방향 브릿지 완료' : 'Reverse Bridge Complete',
+                    content: lastLocale() === 'ko'
+                        ? `${bridge.amount} VCN이 Sepolia에서 Vision Chain으로 브릿지되었습니다.`
+                        : `${bridge.amount} VCN bridged from Sepolia to Vision Chain.`,
                     data: {
                         amount: bridge.amount,
                         sourceChain: 'Ethereum Sepolia',
@@ -3122,7 +3184,37 @@ const Wallet = (): JSX.Element => {
                     }
                 });
             } catch (notiErr) {
-                console.warn('[ReverseBridge] Notification failed:', notiErr);
+                console.warn('[ReverseBridge] Completion notification failed:', notiErr);
+            }
+
+            // Save to Firestore for History display
+            try {
+                const db = getFirebaseDb();
+                const txId = resultTxHash || `rbridge_${Date.now()}`;
+                const txRef = doc(db, 'transactions', txId);
+                await setDoc(txRef, {
+                    hash: txId,
+                    from_addr: userAddr.toLowerCase(),
+                    recipient: resolvedRecipientAddr.toLowerCase(),
+                    to_addr: 'bridge:vision', // Reverse bridge destination
+                    value: bridge.amount,
+                    timestamp: Date.now(),
+                    type: 'ReverseBridge',
+                    bridgeStatus: 'COMPLETED',
+                    sepoliaLockTxHash: result.sepoliaLockTxHash,
+                    visionTxHash: result.visionTxHash,
+                    metadata: {
+                        sourceChain: 'Ethereum Sepolia',
+                        destinationChain: 'Vision Chain',
+                        srcChainId: 11155111,
+                        dstChainId: 3151909,
+                        fee: result.fee || '1',
+                        direction: 'reverse'
+                    }
+                }, { merge: true });
+                console.log('[ReverseBridge] Saved to Firestore for History');
+            } catch (historyErr) {
+                console.warn('[ReverseBridge] Failed to save history (non-critical):', historyErr);
             }
 
             setPendingBridge(null);
@@ -3143,6 +3235,7 @@ const Wallet = (): JSX.Element => {
             }]);
         } finally {
             setIsBridging(false);
+            setLoadingMessage('');
         }
     };
 
