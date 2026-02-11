@@ -3,6 +3,7 @@ import { A, useLocation, useNavigate, Navigate } from '@solidjs/router';
 import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity } from 'lucide-solid';
 import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
 import { onAdminAuthStateChanged, adminLogout } from '../../services/firebaseService';
+import { AdminRoleProvider, useAdminRole } from './adminRoleContext';
 import { User } from 'firebase/auth';
 
 interface AdminLayoutProps {
@@ -10,6 +11,14 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
+    return (
+        <AdminRoleProvider>
+            <AdminLayoutInner {...props} />
+        </AdminRoleProvider>
+    );
+}
+
+function AdminLayoutInner(props: AdminLayoutProps) {
     const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
     const [expandedMenus, setExpandedMenus] = createSignal<Set<string>>(new Set());
     const location = useLocation();
@@ -120,7 +129,9 @@ export default function AdminLayout(props: AdminLayoutProps) {
         );
     };
 
-    const menuItems = getSortedMenuItems();
+    const { adminRole, isAdmin } = useAdminRole();
+
+    const menuItems = getSortedMenuItems(adminRole());
 
     return (
         <Show
@@ -206,6 +217,14 @@ export default function AdminLayout(props: AdminLayoutProps) {
                             </div>
                         </div>
 
+
+                        {/* Role Badge */}
+                        <div class={`mb-3 px-4 py-2 rounded-lg text-center text-[10px] font-black uppercase tracking-[0.2em] ${isAdmin()
+                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            }`}>
+                            {isAdmin() ? 'Admin' : 'Partner'}
+                        </div>
 
                         <button
                             onClick={handleLogout}

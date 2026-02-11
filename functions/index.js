@@ -1526,7 +1526,7 @@ async function handleReverseBridge(req, res, { user, recipient, amount, fee, dea
           console.log(`[ReverseBridge] Executing Sepolia permit for ${ethers.formatEther(totalAmount)} VCN...`);
           const permitTx = await sepoliaVcnToken.permit(
             user, relayerAddress, totalAmount, deadline, v, r, s,
-            { gasLimit: 100000 }
+            { gasLimit: 100000 },
           );
           await permitTx.wait();
           console.log(`[ReverseBridge] Sepolia permit successful`);
@@ -1793,7 +1793,7 @@ async function handleSepoliaTransfer(req, res, { user, recipient, amount, fee, d
         txHash,
         chain: "sepolia",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        status: "completed"
+        status: "completed",
       });
     } catch (dbErr) {
       console.warn("[SepoliaTransfer] Firestore record failed:", dbErr.message);
@@ -1806,7 +1806,6 @@ async function handleSepoliaTransfer(req, res, { user, recipient, amount, fee, d
       fee: ethers.formatEther(feeAmount),
       recipient,
     });
-
   } catch (err) {
     console.error("[SepoliaTransfer] Error:", err);
     return res.status(500).json({ error: err.message || "Sepolia transfer failed" });

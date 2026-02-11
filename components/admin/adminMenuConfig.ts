@@ -62,6 +62,8 @@ export interface AdminMenuItem {
     children?: AdminMenuItem[];
     badge?: string;
     disabled?: boolean;
+    /** If set, only users with this role can see this menu item */
+    requiredRole?: 'admin';
 }
 
 /**
@@ -126,7 +128,8 @@ export const adminMenuConfig: AdminMenuItem[] = [
         icon: 'Zap',
         badge: 'NEW',
         category: 'core',
-        order: 5
+        order: 5,
+        requiredRole: 'admin'
     },
     {
         id: 'wallet-management',
@@ -134,7 +137,8 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Wallet Control',
         icon: 'Wallet',
         category: 'core',
-        order: 6
+        order: 6,
+        requiredRole: 'admin'
     },
     {
         id: 'campaign-management',
@@ -158,7 +162,8 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'VCN Distribution',
         icon: 'Activity',
         category: 'core',
-        order: 9
+        order: 9,
+        requiredRole: 'admin'
     },
     {
         id: 'documents',
@@ -183,7 +188,8 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Security Settings',
         icon: 'Shield',
         category: 'custom',
-        order: 10
+        order: 10,
+        requiredRole: 'admin'
     },
     {
         id: 'paymaster',
@@ -191,7 +197,8 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Paymaster Ops',
         icon: 'Database',
         category: 'custom',
-        order: 9
+        order: 9,
+        requiredRole: 'admin'
     },
     {
         id: 'bridge-networks',
@@ -259,7 +266,8 @@ export const adminMenuConfig: AdminMenuItem[] = [
         label: 'Traffic Simulation',
         icon: 'Activity',
         category: 'developer',
-        order: 11
+        order: 11,
+        requiredRole: 'admin'
     },
     // ===== SETTINGS (always last) =====
     {
@@ -272,9 +280,13 @@ export const adminMenuConfig: AdminMenuItem[] = [
     }
 ];
 
-// Helper function to get menu items sorted by order
-export const getSortedMenuItems = () => {
-    return [...adminMenuConfig].sort((a, b) => (a.order || 0) - (b.order || 0));
+// Helper function to get menu items sorted by order, optionally filtered by role
+export const getSortedMenuItems = (role?: 'admin' | 'partner' | 'user') => {
+    let items = [...adminMenuConfig];
+    if (role && role !== 'admin') {
+        items = items.filter(item => !item.requiredRole);
+    }
+    return items.sort((a, b) => (a.order || 0) - (b.order || 0));
 };
 
 // Helper function to get icon component by name

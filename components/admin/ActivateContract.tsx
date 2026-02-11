@@ -2,8 +2,10 @@ import { createSignal, createResource, For, Show } from 'solid-js';
 import { getAllUsers, deployVestingStatus } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
 import { Search, X } from 'lucide-solid';
+import { useAdminRole } from './adminRoleContext';
 
-export const ActivateContract = () => {
+export default function ActivateContract() {
+    const { isAdmin } = useAdminRole();
     const [participants, { refetch }] = createResource(async () => await getAllUsers(500));
     const [deployingFor, setDeployingFor] = createSignal<string | null>(null);
     const [sendingFor, setSendingFor] = createSignal<string | null>(null);
@@ -36,6 +38,7 @@ export const ActivateContract = () => {
     ) || [];
 
     const handleDeploy = async (email: string, walletAddress: string, amount: number, unlockRatio: number, cliff: number, duration: number) => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
         setDeployingFor(email);
         try {
             // 1. Call Smart Contract
@@ -55,7 +58,7 @@ export const ActivateContract = () => {
             refetch();
         } catch (error: any) {
             console.error(error);
-            alert(`Failed to deploy: ${error.message}`);
+            alert(`Failed to deploy: ${error.message} `);
         } finally {
             setDeployingFor(null);
         }
@@ -180,7 +183,7 @@ export const ActivateContract = () => {
                                             <td class="p-4 text-center space-x-2 flex justify-center">
                                                 {/* Testnet Token Button */}
                                                 <button
-                                                    class={`px-4 py-2 text-white rounded-lg text-xs font-bold shadow-lg transition-all ${sendingFor() === user.email ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+                                                    class={`px - 4 py - 2 text - white rounded - lg text - xs font - bold shadow - lg transition - all ${sendingFor() === user.email ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} `}
                                                     title="Send 10% Testnet VCN"
                                                     disabled={sendingFor() === user.email}
                                                     onClick={async () => {
@@ -191,7 +194,7 @@ export const ActivateContract = () => {
                                                         }
 
                                                         const amount = Math.floor((user.amountToken || 1000) * 0.1);
-                                                        if (!confirm(`Send ${amount.toLocaleString()} VCN (10%) to ${user.email}?`)) return;
+                                                        if (!confirm(`Send ${amount.toLocaleString()} VCN(10 %) to ${user.email}?`)) return;
 
                                                         setSendingFor(user.email);
                                                         try {
@@ -199,10 +202,10 @@ export const ActivateContract = () => {
                                                                 user.walletAddress!,
                                                                 amount.toString()
                                                             );
-                                                            alert(`Successfully sent ${amount} VCN to ${user.email}`);
+                                                            alert(`Successfully sent ${amount} VCN to ${user.email} `);
                                                         } catch (e: any) {
                                                             console.error(e);
-                                                            alert(`Failed: ${e.message}`);
+                                                            alert(`Failed: ${e.message} `);
                                                         } finally {
                                                             setSendingFor(null);
                                                         }
@@ -213,10 +216,10 @@ export const ActivateContract = () => {
 
                                                 {/* Deploy Vesting Button */}
                                                 <button
-                                                    class={`px-4 py-2 rounded-lg text-xs font-bold shadow-lg transition-all ${deployingFor() === user.email
+                                                    class={`px - 4 py - 2 rounded - lg text - xs font - bold shadow - lg transition - all ${deployingFor() === user.email
                                                         ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
                                                         : 'bg-green-600 hover:bg-green-500 text-white shadow-green-500/20'
-                                                        }`}
+                                                        } `}
                                                     onClick={() => handleDeploy(
                                                         user.email,
                                                         user.walletAddress!,
@@ -264,10 +267,10 @@ export const ActivateContract = () => {
                                         <td class="p-4 text-slate-500">{user.partnerCode || 'SELF'}</td>
                                         <td class="p-4 text-right font-mono text-slate-400">{(user.amountToken || 0).toLocaleString()}</td>
                                         <td class="p-4 text-right">
-                                            <span class={`text-xs font-bold px-2 py-1 rounded-full ${user.vestingTx ? 'bg-green-900/30 text-green-400' :
+                                            <span class={`text - xs font - bold px - 2 py - 1 rounded - full ${user.vestingTx ? 'bg-green-900/30 text-green-400' :
                                                 user.status === 'WalletCreated' ? 'bg-indigo-900/30 text-indigo-400' :
                                                     'bg-slate-800 text-slate-500'
-                                                }`}>
+                                                } `}>
                                                 {user.vestingTx ? 'ACTIVE' : (user.status || 'PENDING')}
                                             </span>
                                         </td>

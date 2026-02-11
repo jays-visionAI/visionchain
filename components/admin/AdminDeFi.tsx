@@ -21,6 +21,7 @@ import {
 import { getFirebaseDb, DefiConfig, getDefiConfig, updateDefiConfig } from '../../services/firebaseService';
 import { collection, query, getDocs, limit, orderBy, doc, getDoc } from 'firebase/firestore';
 import { ethers } from 'ethers';
+import { useAdminRole } from './adminRoleContext';
 
 // ============ Bridge Staking Contract Config ============
 const BRIDGE_STAKING_ADDRESS = '0x593dFDc2e31F32D17B981392786F84b0E1228Ab6';
@@ -63,6 +64,9 @@ interface ValidatorInfo {
 }
 
 export default function AdminDeFi() {
+    // Role check
+    const { isAdmin: isAdminRole } = useAdminRole();
+
     // Tab State
     const [activeTab, setActiveTab] = createSignal<'liquid' | 'bridge'>('liquid');
 
@@ -225,6 +229,7 @@ export default function AdminDeFi() {
 
     // Handle Slash Validator
     const handleSlash = async () => {
+        if (!isAdminRole()) { alert('Access denied. Admin privileges required.'); return; }
         if (!slashAddress() || !slashIntentHash()) {
             alert('Please enter validator address and intent hash');
             return;
@@ -252,6 +257,7 @@ export default function AdminDeFi() {
 
     // Handle Set Target APY (Server-Side API)
     const handleSetAPY = async () => {
+        if (!isAdminRole()) { alert('Access denied. Admin privileges required.'); return; }
         if (newTargetAPY() <= 0 || newTargetAPY() > 50) {
             alert('Please enter a valid APY (1-50%)');
             return;
@@ -282,6 +288,7 @@ export default function AdminDeFi() {
 
     // Handle Fund Reward Pool (Server-Side API)
     const handleFundPool = async () => {
+        if (!isAdminRole()) { alert('Access denied. Admin privileges required.'); return; }
         const amount = parseFloat(fundAmount());
         if (!amount || amount <= 0) {
             alert('Please enter a valid amount');
@@ -330,6 +337,7 @@ export default function AdminDeFi() {
 
     // Connect wallet for admin functions
     const connectWallet = async () => {
+        if (!isAdminRole()) { alert('Access denied. Admin privileges required.'); return; }
         console.log('[Admin] connectWallet called');
 
         if (!window.ethereum) {

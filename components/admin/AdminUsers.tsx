@@ -15,8 +15,10 @@ import { UserTableRow } from './users/UserTableRow';
 import { UserTableHead } from './users/UserTableHead';
 import { ManualInviteModal } from './users/ManualInviteModal';
 import { TransferSuccessModal } from './users/TransferSuccessModal';
+import { useAdminRole } from './adminRoleContext';
 
-const AdminUsers = () => {
+export default function AdminUsers() {
+    const { isAdmin } = useAdminRole();
     const [searchQuery, setSearchQuery] = createSignal('');
     const [statusFilter, setStatusFilter] = createSignal('all');
     const [users, { mutate, refetch }] = createResource(() => getAllUsers());
@@ -101,6 +103,7 @@ const AdminUsers = () => {
     };
 
     const handleSendVCN = async (user: UserData) => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
         // CRITICAL: Prevent duplicate execution
         if (isSending()) {
             console.warn('[AdminUsers] Already sending, ignoring duplicate call');
@@ -268,6 +271,4 @@ const AdminUsers = () => {
             />
         </div>
     );
-};
-
-export default AdminUsers;
+}
