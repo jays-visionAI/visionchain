@@ -2,6 +2,7 @@ import { render } from 'solid-js/web';
 import { Router, Route, useLocation } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import { AuthProvider, useAuth } from './components/auth/authContext';
+import { I18nProvider } from './i18n/i18nContext';
 
 // Core layout components
 import Navbar from './components/Navbar';
@@ -60,56 +61,58 @@ if (!rootElement) {
 
 render(() => (
   <AuthProvider>
-    <Router root={Layout}>
-      {/* Auth Routes */}
-      <Route path="/login" component={Auth.LoginPage} />
-      <Route path="/newlogin" component={Auth.LoginPage} />
-      <Route path="/signup" component={Auth.SignupPage} />
-      <Route path="/admin-login" component={Auth.AdminLoginPage} />
-      <Route path="/activate" component={Auth.ActivatePage} />
-      <Route path="/reset-password" component={Auth.ResetPasswordPage} />
+    <I18nProvider>
+      <Router root={Layout}>
+        {/* Auth Routes */}
+        <Route path="/login" component={Auth.LoginPage} />
+        <Route path="/newlogin" component={Auth.LoginPage} />
+        <Route path="/signup" component={Auth.SignupPage} />
+        <Route path="/admin-login" component={Auth.AdminLoginPage} />
+        <Route path="/activate" component={Auth.ActivatePage} />
+        <Route path="/reset-password" component={Auth.ResetPasswordPage} />
 
-      {/* Public Routes */}
-      <Route path="/" component={HomePage} />
-      <Route path="/research" component={Public.ResearchPage} />
-      <Route path="/technology" component={Public.TechnologyPage} />
-      <Route path="/community" component={Public.CommunityPage} />
-      <Route path="/academy" component={Public.AcademyPage} />
-      <Route path="/developer-community" component={Public.DeveloperCommunityPage} />
-      <Route path="/contact" component={Public.ContactPage} />
-      <Route path="/privacy" component={Public.PrivacyPage} />
-      <Route path="/terms" component={Public.TermsPage} />
-      <Route path="/cookies" component={Public.CookiesPage} />
-      <Route path="/wallet/*" component={Public.WalletPage} />
-      <Route path="/trafficsim" component={Public.TrafficSimulatorPage} />
-      <Route path="/visionscan" component={Public.VisionScanPage} />
-      <Route path="/testnet" component={Public.TestnetPage} />
-      <Route path="/bridge" component={Public.BridgePage} />
-      <Route path="/staking" component={ValidatorStaking} />
-      <Route path="/paymaster" component={Public.PaymasterPage} />
+        {/* Public Routes */}
+        <Route path="/" component={HomePage} />
+        <Route path="/research" component={Public.ResearchPage} />
+        <Route path="/technology" component={Public.TechnologyPage} />
+        <Route path="/community" component={Public.CommunityPage} />
+        <Route path="/academy" component={Public.AcademyPage} />
+        <Route path="/developer-community" component={Public.DeveloperCommunityPage} />
+        <Route path="/contact" component={Public.ContactPage} />
+        <Route path="/privacy" component={Public.PrivacyPage} />
+        <Route path="/terms" component={Public.TermsPage} />
+        <Route path="/cookies" component={Public.CookiesPage} />
+        <Route path="/wallet/*" component={Public.WalletPage} />
+        <Route path="/trafficsim" component={Public.TrafficSimulatorPage} />
+        <Route path="/visionscan" component={Public.VisionScanPage} />
+        <Route path="/testnet" component={Public.TestnetPage} />
+        <Route path="/bridge" component={Public.BridgePage} />
+        <Route path="/staking" component={ValidatorStaking} />
+        <Route path="/paymaster" component={Public.PaymasterPage} />
 
-      {/* Admin Routes */}
-      <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
-      <Route path="/adminsystem/users" component={Admin.AdminUsersPage} />
-      <Route path="/adminsystem/wallet" component={Admin.AdminWalletPage} />
-      <Route path="/adminsystem/campaigns" component={Admin.AdminCampaignPage} />
-      <Route path="/adminsystem/activity" component={Admin.AdminActivityPage} />
-      <Route path="/adminsystem/vcn" component={Admin.AdminVCNDistributionPage} />
-      <Route path="/adminsystem/vcn-settings" component={Admin.AdminSettingsPage} />
-      <Route path="/adminsystem/traffic" component={Admin.AdminTrafficPage} />
-      <Route path="/adminsystem/documents" component={Admin.AdminDocumentsPage} />
-      <Route path="/adminsystem/referrals" component={Admin.AdminReferralsPage} />
-      <Route path="/adminsystem/defi" component={Admin.AdminDeFiPage} />
-      <Route path="/adminsystem/ai" component={Admin.AdminAIManagementPage} />
-      <Route path="/adminsystem/api-docs" component={Admin.AdminApiDocsPage} />
-      <Route path="/adminsystem/api-docs/*" component={Admin.AdminApiDocsPage} />
-      <Route path="/adminsystem/settings" component={Admin.AdminSettingsPage} />
-      <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
-      <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
-      <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
-      <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />
-      <Route path="/adminsystem/cex-portfolio" component={Admin.AdminCexPortfolioPage} />
+        {/* Admin Routes */}
+        <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
+        <Route path="/adminsystem/users" component={Admin.AdminUsersPage} />
+        <Route path="/adminsystem/wallet" component={Admin.AdminWalletPage} />
+        <Route path="/adminsystem/campaigns" component={Admin.AdminCampaignPage} />
+        <Route path="/adminsystem/activity" component={Admin.AdminActivityPage} />
+        <Route path="/adminsystem/vcn" component={Admin.AdminVCNDistributionPage} />
+        <Route path="/adminsystem/vcn-settings" component={Admin.AdminSettingsPage} />
+        <Route path="/adminsystem/traffic" component={Admin.AdminTrafficPage} />
+        <Route path="/adminsystem/documents" component={Admin.AdminDocumentsPage} />
+        <Route path="/adminsystem/referrals" component={Admin.AdminReferralsPage} />
+        <Route path="/adminsystem/defi" component={Admin.AdminDeFiPage} />
+        <Route path="/adminsystem/ai" component={Admin.AdminAIManagementPage} />
+        <Route path="/adminsystem/api-docs" component={Admin.AdminApiDocsPage} />
+        <Route path="/adminsystem/api-docs/*" component={Admin.AdminApiDocsPage} />
+        <Route path="/adminsystem/settings" component={Admin.AdminSettingsPage} />
+        <Route path="/adminsystem/paymaster" component={Admin.PaymasterAdminPage} />
+        <Route path="/adminsystem/announcements" component={Admin.AdminAnnouncementsPage} />
+        <Route path="/adminsystem/bridge-networks" component={Admin.AdminBridgeNetworksPage} />
+        <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />
+        <Route path="/adminsystem/cex-portfolio" component={Admin.AdminCexPortfolioPage} />
 
-    </Router>
+      </Router>
+    </I18nProvider>
   </AuthProvider>
 ), rootElement);

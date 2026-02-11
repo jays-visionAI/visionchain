@@ -883,9 +883,120 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     let fileInputRef: HTMLInputElement | undefined;
     let messagesContainerRef: HTMLDivElement | undefined;
 
-    const LANGUAGES = [
-        { code: 'en-US', label: 'English' }
+    const [langSearch, setLangSearch] = createSignal('');
+    const [showLangDropdown, setShowLangDropdown] = createSignal(false);
+
+    const LANGUAGES: { code: string; label: string; native: string; group: 'priority' | 'all' }[] = [
+        // === Priority: Asia (Blockchain-heavy) ===
+        { code: 'ko-KR', label: 'Korean', native: '한국어', group: 'priority' },
+        { code: 'ja-JP', label: 'Japanese', native: '日本語', group: 'priority' },
+        { code: 'zh-CN', label: 'Chinese (Simplified)', native: '中文(简体)', group: 'priority' },
+        { code: 'zh-TW', label: 'Chinese (Traditional)', native: '中文(繁體)', group: 'priority' },
+        { code: 'ms-MY', label: 'Malay', native: 'Bahasa Melayu', group: 'priority' },
+        { code: 'th-TH', label: 'Thai', native: 'ไทย', group: 'priority' },
+        { code: 'vi-VN', label: 'Vietnamese', native: 'Tiếng Việt', group: 'priority' },
+        { code: 'km-KH', label: 'Khmer', native: 'ខ្មែរ', group: 'priority' },
+        { code: 'lo-LA', label: 'Lao', native: 'ລາວ', group: 'priority' },
+        { code: 'my-MM', label: 'Myanmar', native: 'မြန်မာ', group: 'priority' },
+        { code: 'id-ID', label: 'Indonesian', native: 'Bahasa Indonesia', group: 'priority' },
+        { code: 'fil-PH', label: 'Filipino', native: 'Filipino', group: 'priority' },
+        // === Priority: Europe & Global ===
+        { code: 'en-US', label: 'English', native: 'English', group: 'priority' },
+        { code: 'fr-FR', label: 'French', native: 'Français', group: 'priority' },
+        { code: 'es-ES', label: 'Spanish', native: 'Español', group: 'priority' },
+        { code: 'de-DE', label: 'German', native: 'Deutsch', group: 'priority' },
+        { code: 'pt-BR', label: 'Portuguese (BR)', native: 'Português', group: 'priority' },
+        { code: 'ru-RU', label: 'Russian', native: 'Русский', group: 'priority' },
+        { code: 'tr-TR', label: 'Turkish', native: 'Türkçe', group: 'priority' },
+        { code: 'hi-IN', label: 'Hindi', native: 'हिन्दी', group: 'priority' },
+        // === All other Chrome-supported languages ===
+        { code: 'af-ZA', label: 'Afrikaans', native: 'Afrikaans', group: 'all' },
+        { code: 'am-ET', label: 'Amharic', native: 'አማርኛ', group: 'all' },
+        { code: 'ar-SA', label: 'Arabic', native: 'العربية', group: 'all' },
+        { code: 'az-AZ', label: 'Azerbaijani', native: 'Azərbaycan', group: 'all' },
+        { code: 'bg-BG', label: 'Bulgarian', native: 'Български', group: 'all' },
+        { code: 'bn-IN', label: 'Bengali', native: 'বাংলা', group: 'all' },
+        { code: 'bs-BA', label: 'Bosnian', native: 'Bosanski', group: 'all' },
+        { code: 'ca-ES', label: 'Catalan', native: 'Català', group: 'all' },
+        { code: 'cs-CZ', label: 'Czech', native: 'Čeština', group: 'all' },
+        { code: 'cy-GB', label: 'Welsh', native: 'Cymraeg', group: 'all' },
+        { code: 'da-DK', label: 'Danish', native: 'Dansk', group: 'all' },
+        { code: 'el-GR', label: 'Greek', native: 'Ελληνικά', group: 'all' },
+        { code: 'en-GB', label: 'English (UK)', native: 'English (UK)', group: 'all' },
+        { code: 'en-AU', label: 'English (AU)', native: 'English (AU)', group: 'all' },
+        { code: 'en-IN', label: 'English (IN)', native: 'English (IN)', group: 'all' },
+        { code: 'es-MX', label: 'Spanish (MX)', native: 'Español (MX)', group: 'all' },
+        { code: 'et-EE', label: 'Estonian', native: 'Eesti', group: 'all' },
+        { code: 'eu-ES', label: 'Basque', native: 'Euskara', group: 'all' },
+        { code: 'fa-IR', label: 'Persian', native: 'فارسی', group: 'all' },
+        { code: 'fi-FI', label: 'Finnish', native: 'Suomi', group: 'all' },
+        { code: 'gl-ES', label: 'Galician', native: 'Galego', group: 'all' },
+        { code: 'gu-IN', label: 'Gujarati', native: 'ગુજરાતી', group: 'all' },
+        { code: 'he-IL', label: 'Hebrew', native: 'עברית', group: 'all' },
+        { code: 'hr-HR', label: 'Croatian', native: 'Hrvatski', group: 'all' },
+        { code: 'hu-HU', label: 'Hungarian', native: 'Magyar', group: 'all' },
+        { code: 'hy-AM', label: 'Armenian', native: 'Հայերեն', group: 'all' },
+        { code: 'is-IS', label: 'Icelandic', native: 'Íslenska', group: 'all' },
+        { code: 'it-IT', label: 'Italian', native: 'Italiano', group: 'all' },
+        { code: 'jv-ID', label: 'Javanese', native: 'Basa Jawa', group: 'all' },
+        { code: 'ka-GE', label: 'Georgian', native: 'ქართული', group: 'all' },
+        { code: 'kk-KZ', label: 'Kazakh', native: 'Қазақ', group: 'all' },
+        { code: 'kn-IN', label: 'Kannada', native: 'ಕನ್ನಡ', group: 'all' },
+        { code: 'lt-LT', label: 'Lithuanian', native: 'Lietuvių', group: 'all' },
+        { code: 'lv-LV', label: 'Latvian', native: 'Latviešu', group: 'all' },
+        { code: 'mk-MK', label: 'Macedonian', native: 'Македонски', group: 'all' },
+        { code: 'ml-IN', label: 'Malayalam', native: 'മലയാളം', group: 'all' },
+        { code: 'mn-MN', label: 'Mongolian', native: 'Монгол', group: 'all' },
+        { code: 'mr-IN', label: 'Marathi', native: 'मराठी', group: 'all' },
+        { code: 'ne-NP', label: 'Nepali', native: 'नेपाली', group: 'all' },
+        { code: 'nl-NL', label: 'Dutch', native: 'Nederlands', group: 'all' },
+        { code: 'no-NO', label: 'Norwegian', native: 'Norsk', group: 'all' },
+        { code: 'pa-IN', label: 'Punjabi', native: 'ਪੰਜਾਬੀ', group: 'all' },
+        { code: 'pl-PL', label: 'Polish', native: 'Polski', group: 'all' },
+        { code: 'pt-PT', label: 'Portuguese (PT)', native: 'Português (PT)', group: 'all' },
+        { code: 'ro-RO', label: 'Romanian', native: 'Română', group: 'all' },
+        { code: 'si-LK', label: 'Sinhala', native: 'සිංහල', group: 'all' },
+        { code: 'sk-SK', label: 'Slovak', native: 'Slovenčina', group: 'all' },
+        { code: 'sl-SI', label: 'Slovenian', native: 'Slovenščina', group: 'all' },
+        { code: 'sq-AL', label: 'Albanian', native: 'Shqip', group: 'all' },
+        { code: 'sr-RS', label: 'Serbian', native: 'Српски', group: 'all' },
+        { code: 'su-ID', label: 'Sundanese', native: 'Basa Sunda', group: 'all' },
+        { code: 'sv-SE', label: 'Swedish', native: 'Svenska', group: 'all' },
+        { code: 'sw-TZ', label: 'Swahili', native: 'Kiswahili', group: 'all' },
+        { code: 'ta-IN', label: 'Tamil', native: 'தமிழ்', group: 'all' },
+        { code: 'te-IN', label: 'Telugu', native: 'తెలుగు', group: 'all' },
+        { code: 'uk-UA', label: 'Ukrainian', native: 'Українська', group: 'all' },
+        { code: 'ur-PK', label: 'Urdu', native: 'اردو', group: 'all' },
+        { code: 'uz-UZ', label: 'Uzbek', native: "O'zbek", group: 'all' },
+        { code: 'zu-ZA', label: 'Zulu', native: 'isiZulu', group: 'all' },
     ];
+
+    const filteredLanguages = createMemo(() => {
+        const q = langSearch().toLowerCase();
+        if (!q) return LANGUAGES;
+        return LANGUAGES.filter(l =>
+            l.label.toLowerCase().includes(q) ||
+            l.native.toLowerCase().includes(q) ||
+            l.code.toLowerCase().includes(q)
+        );
+    });
+
+    const priorityLangs = createMemo(() => filteredLanguages().filter(l => l.group === 'priority'));
+    const allLangs = createMemo(() => filteredLanguages().filter(l => l.group === 'all'));
+
+    const currentLangInfo = createMemo(() =>
+        LANGUAGES.find(l => l.code === props.voiceLang()) || { code: props.voiceLang(), label: props.voiceLang(), native: '', group: 'all' as const }
+    );
+
+    // Close language dropdown on outside click
+    let langDropdownRef: HTMLDivElement | undefined;
+    const handleLangClickOutside = (e: MouseEvent) => {
+        if (langDropdownRef && !langDropdownRef.contains(e.target as Node)) {
+            setShowLangDropdown(false);
+        }
+    };
+    onMount(() => document.addEventListener('mousedown', handleLangClickOutside));
+    onCleanup(() => document.removeEventListener('mousedown', handleLangClickOutside));
 
     const selectedBatchAgent = createMemo(() =>
         props.batchAgents().find(a => a.id === selectedBatchId())
@@ -1880,25 +1991,79 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 />
 
                                                 {/* Language Selection Popover */}
-                                                <div class="relative group/lang">
-                                                    <button class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
-                                                        <span>{props.voiceLang().split('-')[0]}</span>
-                                                        <ChevronDown class="w-3 h-3" />
+                                                <div class="relative" ref={langDropdownRef}>
+                                                    <button
+                                                        onClick={() => { setShowLangDropdown(!showLangDropdown()); setLangSearch(''); }}
+                                                        class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest"
+                                                    >
+                                                        <span>{currentLangInfo().native || currentLangInfo().label}</span>
+                                                        <svg class={`w-3 h-3 transition-transform ${showLangDropdown() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9" /></svg>
                                                     </button>
-                                                    <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                                        <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
-                                                            <For each={LANGUAGES}>
-                                                                {(lang) => (
-                                                                    <button
-                                                                        onClick={() => props.setVoiceLang(lang.code)}
-                                                                        class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
-                                                                    >
-                                                                        {lang.label}
-                                                                    </button>
-                                                                )}
-                                                            </For>
+                                                    <Show when={showLangDropdown()}>
+                                                        <div class="absolute bottom-full right-0 mb-2 w-64 bg-[#121214] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50" style="animation: fadeIn 0.15s ease-out">
+                                                            {/* Search input */}
+                                                            <div class="p-2 border-b border-white/5">
+                                                                <div class="relative">
+                                                                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Search language..."
+                                                                        value={langSearch()}
+                                                                        onInput={(e) => setLangSearch(e.currentTarget.value)}
+                                                                        class="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-3 py-2.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            {/* Language list */}
+                                                            <div class="max-h-[280px] overflow-y-auto scrollbar-hide">
+                                                                <Show when={priorityLangs().length > 0}>
+                                                                    <div class="px-3 pt-2 pb-1">
+                                                                        <span class="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.25em]">Priority</span>
+                                                                    </div>
+                                                                    <For each={priorityLangs()}>
+                                                                        {(lang) => (
+                                                                            <button
+                                                                                onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
+                                                                                class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
+                                                                            >
+                                                                                <div class="flex flex-col">
+                                                                                    <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
+                                                                                    <span class="text-[9px] text-gray-600">{lang.label}</span>
+                                                                                </div>
+                                                                                <Show when={props.voiceLang() === lang.code}>
+                                                                                    <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
+                                                                                </Show>
+                                                                            </button>
+                                                                        )}
+                                                                    </For>
+                                                                </Show>
+                                                                <Show when={allLangs().length > 0}>
+                                                                    <div class="px-3 pt-3 pb-1 border-t border-white/5">
+                                                                        <span class="text-[8px] font-black text-gray-500/60 uppercase tracking-[0.25em]">All Languages</span>
+                                                                    </div>
+                                                                    <For each={allLangs()}>
+                                                                        {(lang) => (
+                                                                            <button
+                                                                                onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
+                                                                                class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
+                                                                            >
+                                                                                <div class="flex flex-col">
+                                                                                    <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
+                                                                                    <span class="text-[9px] text-gray-600">{lang.label}</span>
+                                                                                </div>
+                                                                                <Show when={props.voiceLang() === lang.code}>
+                                                                                    <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
+                                                                                </Show>
+                                                                            </button>
+                                                                        )}
+                                                                    </For>
+                                                                </Show>
+                                                                <Show when={filteredLanguages().length === 0}>
+                                                                    <div class="px-4 py-6 text-center text-gray-600 text-[10px] font-bold">No languages found</div>
+                                                                </Show>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    </Show>
                                                 </div>
 
                                                 {/* Voice Button */}
@@ -1954,25 +2119,79 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             />
 
                                             {/* Language Selection Popover */}
-                                            <div class="relative group/lang">
-                                                <button class="w-11 h-11 flex items-center justify-center gap-1 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest">
-                                                    <span>{props.voiceLang().split('-')[0]}</span>
-                                                    <ChevronDown class="w-2.5 h-2.5" />
+                                            <div class="relative" ref={(el: HTMLDivElement) => langDropdownRef = el}>
+                                                <button
+                                                    onClick={() => { setShowLangDropdown(!showLangDropdown()); setLangSearch(''); }}
+                                                    class="w-11 h-11 flex items-center justify-center gap-1 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest"
+                                                >
+                                                    <span>{currentLangInfo().code.split('-')[0]}</span>
+                                                    <svg class={`w-2.5 h-2.5 transition-transform ${showLangDropdown() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9" /></svg>
                                                 </button>
-                                                <div class="absolute bottom-full right-0 mb-2 pb-2 w-32 bg-transparent hidden group-hover/lang:block z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                                                    <div class="bg-[#121214] border border-white/10 rounded-2xl shadow-3xl overflow-hidden">
-                                                        <For each={LANGUAGES}>
-                                                            {(lang) => (
-                                                                <button
-                                                                    onClick={() => props.setVoiceLang(lang.code)}
-                                                                    class={`w-full text-left px-4 py-3 text-[11px] font-bold uppercase tracking-widest hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-500'}`}
-                                                                >
-                                                                    {lang.label}
-                                                                </button>
-                                                            )}
-                                                        </For>
+                                                <Show when={showLangDropdown()}>
+                                                    <div class="absolute bottom-full right-0 mb-2 w-64 bg-[#121214] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50" style="animation: fadeIn 0.15s ease-out">
+                                                        {/* Search input */}
+                                                        <div class="p-2 border-b border-white/5">
+                                                            <div class="relative">
+                                                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Search language..."
+                                                                    value={langSearch()}
+                                                                    onInput={(e) => setLangSearch(e.currentTarget.value)}
+                                                                    class="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-3 py-2.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        {/* Language list */}
+                                                        <div class="max-h-[280px] overflow-y-auto scrollbar-hide">
+                                                            <Show when={priorityLangs().length > 0}>
+                                                                <div class="px-3 pt-2 pb-1">
+                                                                    <span class="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.25em]">Priority</span>
+                                                                </div>
+                                                                <For each={priorityLangs()}>
+                                                                    {(lang) => (
+                                                                        <button
+                                                                            onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
+                                                                            class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
+                                                                        >
+                                                                            <div class="flex flex-col">
+                                                                                <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
+                                                                                <span class="text-[9px] text-gray-600">{lang.label}</span>
+                                                                            </div>
+                                                                            <Show when={props.voiceLang() === lang.code}>
+                                                                                <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
+                                                                            </Show>
+                                                                        </button>
+                                                                    )}
+                                                                </For>
+                                                            </Show>
+                                                            <Show when={allLangs().length > 0}>
+                                                                <div class="px-3 pt-3 pb-1 border-t border-white/5">
+                                                                    <span class="text-[8px] font-black text-gray-500/60 uppercase tracking-[0.25em]">All Languages</span>
+                                                                </div>
+                                                                <For each={allLangs()}>
+                                                                    {(lang) => (
+                                                                        <button
+                                                                            onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
+                                                                            class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
+                                                                        >
+                                                                            <div class="flex flex-col">
+                                                                                <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
+                                                                                <span class="text-[9px] text-gray-600">{lang.label}</span>
+                                                                            </div>
+                                                                            <Show when={props.voiceLang() === lang.code}>
+                                                                                <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
+                                                                            </Show>
+                                                                        </button>
+                                                                    )}
+                                                                </For>
+                                                            </Show>
+                                                            <Show when={filteredLanguages().length === 0}>
+                                                                <div class="px-4 py-6 text-center text-gray-600 text-[10px] font-bold">No languages found</div>
+                                                            </Show>
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                </Show>
                                             </div>
 
                                             {/* Row 2: Mic + Send */}

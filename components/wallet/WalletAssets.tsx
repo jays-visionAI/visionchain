@@ -16,6 +16,7 @@ import {
 import { WalletViewHeader } from './WalletViewHeader';
 import { WalletActivity } from './WalletActivity';
 import { getEthPrice, getMaticPrice } from '../../services/vcnPriceService';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletAssetsProps {
     totalValueStr: () => string;
@@ -41,19 +42,20 @@ interface WalletAssetsProps {
 }
 
 export const WalletAssets = (props: WalletAssetsProps) => {
+    const { t } = useI18n();
     const [networkFilter, setNetworkFilter] = createSignal<'all' | 'mainnet' | 'testnet'>('all');
 
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <WalletViewHeader
-                    tag="Portfolio Overview"
-                    title="MY"
-                    titleAccent="ASSETS"
-                    description="Manage your digital assets and view your portfolio performance across multiple networks."
+                    tag={t('wallet.assets.tag')}
+                    title={t('wallet.assets.title')}
+                    titleAccent={t('wallet.assets.titleAccent')}
+                    description={t('wallet.assets.description')}
                     rightElement={
                         <div class="flex flex-col items-center md:items-end w-full">
-                            <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Total Value</div>
+                            <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">{t('wallet.assets.totalValue')}</div>
                             <div class="text-2xl font-black text-white tracking-tighter drop-shadow-sm">
                                 {(() => {
                                     const vcn = props.getAssetData('VCN');
@@ -78,25 +80,25 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         onClick={() => props.startFlow('send')}
                         class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
                         <ArrowUpRight class="w-4 h-4 text-blue-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        <span class="text-xs font-black text-white uppercase tracking-widest">Send</span>
+                        <span class="text-xs font-black text-white uppercase tracking-widest">{t('wallet.assets.send')}</span>
                     </button>
                     <button
                         onClick={() => props.startFlow('receive')}
                         class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
                         <ArrowDownLeft class="w-4 h-4 text-green-400 group-hover:-translate-x-0.5 group-hover:translate-y-0.5 transition-transform" />
-                        <span class="text-xs font-black text-white uppercase tracking-widest">Receive</span>
+                        <span class="text-xs font-black text-white uppercase tracking-widest">{t('wallet.assets.receive')}</span>
                     </button>
                     <button
                         onClick={() => props.startFlow('swap')}
                         class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
                         <RefreshCw class="w-4 h-4 text-purple-400 group-hover:rotate-180 transition-transform duration-700" />
-                        <span class="text-xs font-black text-white uppercase tracking-widest">Swap</span>
+                        <span class="text-xs font-black text-white uppercase tracking-widest">{t('wallet.assets.swap')}</span>
                     </button>
                     <button
                         onClick={() => props.setActiveView('mint')}
                         class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
                         <Sparkles class="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-                        <span class="text-xs font-black text-white uppercase tracking-widest">Mint</span>
+                        <span class="text-xs font-black text-white uppercase tracking-widest">{t('wallet.assets.mint')}</span>
                     </button>
                 </div>
             </div>
@@ -112,7 +114,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <Shield class="w-6 h-6 text-amber-400" />
                             </div>
                             <div>
-                                <h3 class="text-lg font-bold text-white mb-1">Local Wallet Data Missing</h3>
+                                <h3 class="text-lg font-bold text-white mb-1">{t('wallet.assets.localMissing')}</h3>
                                 <p class="text-sm text-amber-200/70 leading-relaxed max-w-xl">
                                     Your account address is recognized, but the encrypted key is not found on this device.
                                     You are in <span class="text-white font-bold">view-only mode</span>. To send tokens or stake,
@@ -131,8 +133,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 >
                                     <Cloud class="w-5 h-5" />
                                     <div class="text-left">
-                                        <div class="text-sm">Restore from Cloud</div>
-                                        <div class="text-[10px] opacity-80 font-medium">Just enter your password</div>
+                                        <div class="text-sm">{t('wallet.assets.restoreFromCloud')}</div>
+                                        <div class="text-[10px] opacity-80 font-medium">{t('wallet.assets.justEnterPassword')}</div>
                                     </div>
                                 </button>
                             </Show>
@@ -147,8 +149,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                             >
                                 <Shield class="w-5 h-5" />
                                 <div class="text-left">
-                                    <div class="text-sm">Use Recovery Phrase</div>
-                                    <div class={`text-[10px] font-medium ${props.cloudWalletAvailable ? 'opacity-60' : 'opacity-80'}`}>15-word seed phrase</div>
+                                    <div class="text-sm">{t('wallet.assets.useRecoveryPhrase')}</div>
+                                    <div class={`text-[10px] font-medium ${props.cloudWalletAvailable ? 'opacity-60' : 'opacity-80'}`}>{t('wallet.assets.seedPhrase')}</div>
                                 </div>
                             </button>
                         </div>
@@ -188,7 +190,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 shadow-inner">
                                     <WalletIcon class="w-5 h-5" />
                                 </div>
-                                <span class="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest">Purchased (VCN)</span>
+                                <span class="text-[10px] md:text-[11px] font-bold text-gray-500 uppercase tracking-widest">{t('wallet.assets.purchased')}</span>
                             </div>
                             <div class="text-2xl md:text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-blue-400 transition-colors">
                                 {props.portfolioStats().total.toLocaleString()}
@@ -205,7 +207,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                 <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 shadow-inner">
                                     <Shield class="w-5 h-5" />
                                 </div>
-                                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Locked (VCN)</span>
+                                <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{t('wallet.assets.locked')}</span>
                             </div>
                             <div class="text-3xl font-bold text-white tracking-tight tabular-nums group-hover:text-amber-400 transition-colors">
                                 0
@@ -223,7 +225,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 shadow-inner">
                                         <Zap class="w-5 h-5" />
                                     </div>
-                                    <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Vesting</span>
+                                    <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{t('wallet.assets.vesting')}</span>
                                 </div>
                                 <span class="text-xs font-bold text-purple-400">0.0%</span>
                             </div>
@@ -249,7 +251,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                     <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 shadow-inner">
                                         <Sparkles class="w-5 h-5" />
                                     </div>
-                                    <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Next Unlock</span>
+                                    <span class="text-[11px] font-bold text-gray-500 uppercase tracking-widest">{t('wallet.assets.nextUnlock')}</span>
                                 </div>
                                 <span class="text-xs font-bold text-cyan-400 tracking-wide">
                                     N/A
@@ -301,11 +303,11 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                             {/* Table Header - Hidden on mobile, visible on sm+ */}
                             <div class="hidden sm:flex items-center px-8 py-4 border-b border-white/[0.04] text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] bg-white/[0.01]">
-                                <div class="flex-1">Asset</div>
-                                <div class="w-24 text-right hidden lg:block">Market Price</div>
-                                <div class="w-24 text-right hidden xl:block">24h Change</div>
-                                <div class="w-32 text-right">Holdings</div>
-                                <div class="w-32 text-right">Value</div>
+                                <div class="flex-1">{t('wallet.assets.assetColumn')}</div>
+                                <div class="w-24 text-right hidden lg:block">{t('wallet.assets.marketPrice')}</div>
+                                <div class="w-24 text-right hidden xl:block">{t('wallet.assets.change24h')}</div>
+                                <div class="w-32 text-right">{t('wallet.assets.holdings')}</div>
+                                <div class="w-32 text-right">{t('wallet.assets.value')}</div>
                             </div>
 
                             {/* Dynamic Token Rows */}
@@ -464,7 +466,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                     <div class="lg:col-span-4 space-y-8">
                         <div class="relative group">
                             <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Portfolio Allocation</h3>
+                                <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">{t('wallet.assets.portfolioAllocation')}</h3>
                                 <div class="p-2 hover:bg-white/5 rounded-lg transition-colors cursor-pointer">
                                     <Menu class="w-3.5 h-3.5 text-gray-500" />
                                 </div>
@@ -508,7 +510,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         })()}
                                     </svg>
                                     <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                        <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total</div>
+                                        <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('common.total')}</div>
                                         <div class="text-2xl font-bold text-white tracking-tighter">
                                             {props.totalValue() > 0 ? '100%' : '0%'}
                                         </div>
@@ -542,7 +544,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
 
                         {/* Quick Actions */}
                         <div class="space-y-4">
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-2">Earning Opportunities</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-2">{t('wallet.assets.earningOpportunities')}</div>
                             <div class="grid grid-cols-1 gap-3">
                                 <button
                                     onClick={() => props.setActiveView('staking')}
@@ -554,8 +556,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                             <TrendingUp class="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <div class="text-[15px] font-bold text-white group-hover:text-blue-400 transition-colors">Stake VCN Tokens</div>
-                                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Earn up to 12% APY</div>
+                                            <div class="text-[15px] font-bold text-white group-hover:text-blue-400 transition-colors">{t('wallet.assets.stakeVcn')}</div>
+                                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">{t('wallet.assets.earnApy')}</div>
                                         </div>
                                     </div>
                                     <ChevronRight class="w-5 h-5 text-gray-600 group-hover:text-white group-hover:translate-x-1 transition-all" />
@@ -571,8 +573,8 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                             <Sparkles class="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <div class="text-[15px] font-bold text-white group-hover:text-purple-400 transition-colors">Claim Rewards</div>
-                                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Check for available rewards</div>
+                                            <div class="text-[15px] font-bold text-white group-hover:text-purple-400 transition-colors">{t('wallet.assets.claimRewards')}</div>
+                                            <div class="text-[11px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">{t('wallet.assets.checkRewards')}</div>
                                         </div>
                                     </div>
                                     <ChevronRight class="w-5 h-5 text-gray-600 group-hover:text-white group-hover:translate-x-1 transition-all" />

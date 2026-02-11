@@ -30,6 +30,7 @@ import { WalletService } from '../../services/walletService';
 import { countries, Country } from './CountryData';
 import { useAuth } from '../auth/authContext';
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 
 // Storage key for user settings (using different key than admin)
 const USER_SETTINGS_KEY = 'visionhub_user_settings';
@@ -56,6 +57,7 @@ function Toggle(props: ToggleProps) {
 }
 
 export function WalletSettings(props: { onBack?: () => void }) {
+    const { t, locale, setLocale, availableLocales } = useI18n();
     const [activeTab, setActiveTab] = createSignal('general');
     const [emailNotifications, setEmailNotifications] = createSignal(true);
     const [pushNotifications, setPushNotifications] = createSignal(false);
@@ -172,25 +174,25 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
         // Validate current password is provided
         if (!currentPassword()) {
-            setPasswordError('Please enter your current password');
+            setPasswordError(t('settings.password.enterCurrent'));
             return;
         }
 
         // Validate new password
         if (newPassword().length < 8) {
-            setPasswordError('New password must be at least 8 characters');
+            setPasswordError(t('settings.password.tooShort'));
             return;
         }
 
         // Validate confirmation
         if (newPassword() !== confirmPassword()) {
-            setPasswordError('Passwords do not match');
+            setPasswordError(t('settings.password.mismatch'));
             return;
         }
 
         // Prevent same password
         if (currentPassword() === newPassword()) {
-            setPasswordError('New password must be different from current password');
+            setPasswordError(t('settings.password.samePassword'));
             return;
         }
 
@@ -221,15 +223,15 @@ export function WalletSettings(props: { onBack?: () => void }) {
         } catch (err: any) {
             console.error('[ChangePassword] Error:', err);
             if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-                setPasswordError('Current password is incorrect. Please try again.');
+                setPasswordError(t('settings.password.wrongPassword'));
             } else if (err.code === 'auth/too-many-requests') {
-                setPasswordError('Too many failed attempts. Please try again later.');
+                setPasswordError(t('settings.password.tooManyAttempts'));
             } else if (err.code === 'auth/requires-recent-login') {
-                setPasswordError('For security, please logout and login again before changing your password.');
+                setPasswordError(t('settings.password.requiresRelogin'));
             } else if (err.code === 'auth/weak-password') {
-                setPasswordError('New password is too weak. Please use a stronger password.');
+                setPasswordError(t('settings.password.weakPassword'));
             } else {
-                setPasswordError(err.message || 'Failed to change password. Please try again.');
+                setPasswordError(err.message || t('settings.password.generic'));
             }
         } finally {
             setPasswordLoading(false);
@@ -375,11 +377,11 @@ export function WalletSettings(props: { onBack?: () => void }) {
     };
 
     const tabs = [
-        { id: 'general', label: 'General', icon: Settings },
-        { id: 'presets', label: 'Payment Presets', icon: Globe },
-        { id: 'notifications', label: 'Notifications', icon: Bell },
-        { id: 'security', label: 'Security', icon: Shield },
-        { id: 'password', label: 'Password', icon: Lock },
+        { id: 'general', label: t('settings.tabs.general'), icon: Settings },
+        { id: 'presets', label: t('settings.tabs.presets'), icon: Globe },
+        { id: 'notifications', label: t('settings.tabs.notifications'), icon: Bell },
+        { id: 'security', label: t('settings.tabs.security'), icon: Shield },
+        { id: 'password', label: t('settings.tabs.password'), icon: Lock },
     ];
 
     // Preset State
@@ -506,15 +508,15 @@ export function WalletSettings(props: { onBack?: () => void }) {
                     >
                         <ArrowLeft class="w-5 h-5" />
                     </button>
-                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Back to Assets</span>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">{t('common.backToAssets')}</span>
                 </div>
             </Show>
 
             <WalletViewHeader
-                tag="Core configuration"
-                title="WALLET"
-                titleAccent="SETTINGS"
-                description="Manage your identity, security protocols, and payment preferences."
+                tag={t('settings.tag')}
+                title={t('settings.title')}
+                titleAccent={t('settings.titleAccent')}
+                description={t('settings.description')}
                 icon={Settings}
             />
 
@@ -543,7 +545,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                         <div class="p-2 rounded-xl bg-cyan-500/20">
                             <Settings class="w-5 h-5 text-cyan-400" />
                         </div>
-                        <h2 class="text-lg font-semibold text-white">General Settings</h2>
+                        <h2 class="text-lg font-semibold text-white">{t('settings.general.title')}</h2>
                     </div>
                     <div class="divide-y divide-white/5">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors">
@@ -552,8 +554,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     <Moon class="w-5 h-5 text-gray-400" />
                                 </div>
                                 <div>
-                                    <p class="text-white font-medium">Dark Mode</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Enable dark theme across the dashboard</p>
+                                    <p class="text-white font-medium">{t('settings.general.darkMode')}</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">{t('settings.general.darkModeDesc')}</p>
                                 </div>
                             </div>
                             <Toggle checked={darkMode()} onChange={setDarkMode} />
@@ -564,8 +566,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     <Clock class="w-5 h-5 text-gray-400" />
                                 </div>
                                 <div>
-                                    <p class="text-white font-medium">Show Response Time</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Display AI response time below chat messages</p>
+                                    <p class="text-white font-medium">{t('settings.general.showResponseTime')}</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">{t('settings.general.showResponseTimeDesc')}</p>
                                 </div>
                             </div>
                             <Toggle checked={showResponseTime()} onChange={handleShowResponseTimeChange} />
@@ -576,15 +578,20 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     <Globe class="w-5 h-5 text-gray-400" />
                                 </div>
                                 <div>
-                                    <p class="text-white font-medium">Language</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Choose your preferred language</p>
+                                    <p class="text-white font-medium">{t('settings.general.language')}</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">{t('settings.general.languageDesc')}</p>
                                 </div>
                             </div>
-                            <select class="appearance-none px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 cursor-pointer">
-                                <option value="en">English</option>
-                                <option value="ko">Korean</option>
-                                <option value="ja">Japanese</option>
-                                <option value="zh">Chinese</option>
+                            <select
+                                value={locale()}
+                                onChange={(e) => setLocale(e.currentTarget.value)}
+                                class="appearance-none px-4 py-2 bg-white/[0.05] border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50 cursor-pointer"
+                            >
+                                <For each={availableLocales}>
+                                    {(loc) => (
+                                        <option value={loc.code}>{loc.native} ({loc.label})</option>
+                                    )}
+                                </For>
                             </select>
                         </div>
                         <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 p-6 hover:bg-white/[0.01] transition-colors border-t border-white/5">
@@ -593,8 +600,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     <Smartphone class="w-5 h-5 text-gray-400" />
                                 </div>
                                 <div class="flex-1">
-                                    <p class="text-white font-medium">Phone Number</p>
-                                    <p class="text-gray-400 text-sm mt-0.5">Used for user identification and VID mapping</p>
+                                    <p class="text-white font-medium">{t('settings.general.phoneNumber')}</p>
+                                    <p class="text-gray-400 text-sm mt-0.5">{t('settings.general.phoneNumberDesc')}</p>
 
                                     <div class="mt-4 flex flex-col sm:flex-row gap-3 max-w-lg w-full">
                                         {/* Country Selector */}
@@ -619,7 +626,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                                         <Search class="w-3.5 h-3.5 text-gray-500" />
                                                         <input
                                                             type="text"
-                                                            placeholder="Search country..."
+                                                            placeholder={t('settings.general.searchCountry')}
                                                             onInput={(e) => setCountrySearchTerm(e.currentTarget.value)}
                                                             class="w-full bg-transparent text-xs outline-none text-white"
                                                             autofocus
@@ -694,20 +701,20 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         <LogOut class="w-5 h-5 text-red-500" />
                                     </div>
                                     <div>
-                                        <p class="text-white font-medium">Session Management</p>
-                                        <p class="text-gray-400 text-sm mt-0.5">Sign out of your account on this device</p>
+                                        <p class="text-white font-medium">{t('settings.general.sessionManagement')}</p>
+                                        <p class="text-gray-400 text-sm mt-0.5">{t('settings.general.sessionManagementDesc')}</p>
                                     </div>
                                 </div>
                                 <button
                                     onClick={async () => {
-                                        if (confirm('Are you sure you want to logout?')) {
+                                        if (confirm(t('settings.general.logoutConfirm'))) {
                                             await auth.logout();
                                             window.location.href = 'https://www.visionchain.co';
                                         }
                                     }}
                                     class="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs uppercase tracking-widest transition-all whitespace-nowrap"
                                 >
-                                    Logout Session
+                                    {t('settings.general.logoutButton')}
                                 </button>
                             </div>
                         </div>
@@ -722,17 +729,17 @@ export function WalletSettings(props: { onBack?: () => void }) {
                         <div class="p-2 rounded-xl bg-cyan-500/20">
                             <Globe class="w-5 h-5 text-cyan-400" />
                         </div>
-                        <h2 class="text-lg font-semibold text-white">Payment Preferences</h2>
+                        <h2 class="text-lg font-semibold text-white">{t('settings.presets.title')}</h2>
                     </div>
                     <div class="p-6 space-y-6">
                         <p class="text-gray-400 text-sm">
-                            Configure which assets you prefer to receive. Vision AI will try to auto-swap incoming payments to these preferences.
+                            {t('settings.presets.description')}
                         </p>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Primary Asset */}
                             <div>
-                                <label class="text-white font-medium block mb-2">Primary Asset</label>
+                                <label class="text-white font-medium block mb-2">{t('settings.presets.primaryAsset')}</label>
                                 <select
                                     value={primaryAsset()}
                                     onChange={(e) => setPrimaryAsset(e.currentTarget.value)}
@@ -748,7 +755,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                             {/* Secondary Asset */}
                             <div>
-                                <label class="text-white font-medium block mb-2">Secondary Asset</label>
+                                <label class="text-white font-medium block mb-2">{t('settings.presets.secondaryAsset')}</label>
                                 <select
                                     value={secondaryAsset()}
                                     onChange={(e) => setSecondaryAsset(e.currentTarget.value)}
@@ -763,7 +770,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                             {/* Preferred Network */}
                             <div class="md:col-span-2">
-                                <label class="text-white font-medium block mb-2">Preferred Network</label>
+                                <label class="text-white font-medium block mb-2">{t('settings.presets.preferredNetwork')}</label>
                                 <div class="flex flex-col sm:flex-row gap-3">
                                     <button
                                         onClick={() => setPreferredChain('Vision Chain')}
@@ -787,7 +794,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 disabled={presetLoading()}
                                 class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50 whitespace-nowrap"
                             >
-                                {presetLoading() ? 'Saving...' : <><Save class="w-4 h-4" /> Save Preferences</>}
+                                {presetLoading() ? t('settings.presets.savingButton') : <><Save class="w-4 h-4" /> {t('settings.presets.saveButton')}</>}
                             </button>
                         </div>
                     </div>
@@ -804,8 +811,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 <Bell class="w-5 h-5 text-cyan-400" />
                             </div>
                             <div>
-                                <h2 class="text-lg font-semibold text-white">Email Subscriptions</h2>
-                                <p class="text-gray-500 text-xs mt-0.5">Manage which emails you receive from Vision Chain</p>
+                                <h2 class="text-lg font-semibold text-white">{t('settings.notifications.emailPreferences')}</h2>
+                                <p class="text-gray-500 text-xs mt-0.5">{t('settings.notifications.emailPreferencesDesc')}</p>
                             </div>
                         </div>
                         <Show when={emailPrefsLoading()}>
@@ -897,8 +904,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         <Smartphone class="w-5 h-5 text-gray-400" />
                                     </div>
                                     <div>
-                                        <p class="text-white font-medium">Push Notifications</p>
-                                        <p class="text-gray-500 text-sm mt-0.5">Browser push notifications (coming soon)</p>
+                                        <p class="text-white font-medium">{t('settings.notifications.pushNotifications')}</p>
+                                        <p class="text-gray-500 text-sm mt-0.5">{t('settings.notifications.pushNotificationsDesc')}</p>
                                     </div>
                                 </div>
                                 <div class="w-12 h-6 rounded-full bg-white/5 flex items-center px-1 cursor-not-allowed opacity-50" title="Coming soon">
@@ -917,7 +924,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                         <div class="p-2 rounded-xl bg-cyan-500/20">
                             <Shield class="w-5 h-5 text-cyan-400" />
                         </div>
-                        <h2 class="text-lg font-semibold text-white">Security Settings</h2>
+                        <h2 class="text-lg font-semibold text-white">{t('settings.security.title')}</h2>
                     </div>
                     <div class="divide-y divide-white/5">
                         {/* Two-Factor Authentication Section */}
@@ -929,7 +936,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     </div>
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2">
-                                            <p class="text-white font-medium">Two-Factor Authentication</p>
+                                            <p class="text-white font-medium">{t('settings.security.twoFactor')}</p>
                                             <Show when={totpEnabled()}>
                                                 <span class="px-2 py-0.5 bg-green-500/20 text-green-400 text-[10px] font-bold rounded-full uppercase">Active</span>
                                             </Show>
@@ -968,7 +975,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         disabled={totpLoading()}
                                         class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
                                     >
-                                        <Show when={totpLoading()} fallback={<><Shield class="w-4 h-4" /> Enable 2FA</>}>
+                                        <Show when={totpLoading()} fallback={<><Shield class="w-4 h-4" /> {t('settings.security.totpEnable')}</>}>
                                             <RefreshCw class="w-4 h-4 animate-spin" /> Setting up...
                                         </Show>
                                     </button>
@@ -978,7 +985,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 <Show when={totpSetupMode()}>
                                     <div class="p-6 bg-white/[0.03] rounded-2xl border border-white/10 space-y-6">
                                         <div class="text-center space-y-4">
-                                            <h3 class="text-lg font-bold text-white">Scan QR Code</h3>
+                                            <h3 class="text-lg font-bold text-white">{t('settings.security.totpScanQR')}</h3>
                                             <p class="text-gray-400 text-sm">Open Google Authenticator and scan this QR code</p>
 
                                             {/* QR Code */}
@@ -1009,7 +1016,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                                         {/* Verification Code Input */}
                                         <div class="space-y-3">
-                                            <label class="text-gray-400 text-sm block">Enter the 6-digit code from your app</label>
+                                            <label class="text-gray-400 text-sm block">{t('settings.security.totpEnterCode')}</label>
                                             <input
                                                 type="text"
                                                 value={totpCode()}
@@ -1031,7 +1038,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                                 }}
                                                 class="flex-1 px-4 py-3 bg-white/5 border border-white/10 text-white font-medium rounded-xl hover:bg-white/10 transition-all"
                                             >
-                                                Cancel
+                                                {t('common.cancel')}
                                             </button>
                                             <button
                                                 onClick={handleEnableTOTP}
@@ -1052,9 +1059,9 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         <div class="flex items-start gap-3">
                                             <AlertCircle class="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                                             <div>
-                                                <h3 class="text-amber-400 font-bold">Save Your Backup Codes</h3>
+                                                <h3 class="text-amber-400 font-bold">{t('settings.security.totpBackupCodes')}</h3>
                                                 <p class="text-amber-300/70 text-sm mt-1">
-                                                    These codes can be used if you lose access to Google Authenticator. Each code can only be used once.
+                                                    {t('settings.security.totpBackupCodesWarning')}
                                                 </p>
                                             </div>
                                         </div>
@@ -1100,7 +1107,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                             onClick={() => setTotpDisableMode(true)}
                                             class="w-full sm:w-auto px-6 py-3 bg-red-500/10 border border-red-500/30 text-red-400 font-bold rounded-xl hover:bg-red-500/20 transition-all"
                                         >
-                                            Disable 2FA
+                                            {t('settings.security.totpDisable')}
                                         </button>
                                     </Show>
 
@@ -1132,7 +1139,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                                     }}
                                                     class="px-4 py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-all"
                                                 >
-                                                    Cancel
+                                                    {t('common.cancel')}
                                                 </button>
                                             </div>
                                         </div>
@@ -1149,7 +1156,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                         <Cloud class="w-5 h-5 text-blue-400" />
                                     </div>
                                     <div>
-                                        <p class="text-white font-medium">Cloud Wallet Sync</p>
+                                        <p class="text-white font-medium">{t('settings.security.cloudSync')}</p>
                                         <p class="text-gray-400 text-sm mt-0.5">
                                             Backup your wallet to the cloud for cross-browser access.
                                             Your wallet is protected by double encryption.
@@ -1164,7 +1171,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center gap-3">
                                         <Check class="w-5 h-5 text-green-400" />
                                         <div>
-                                            <p class="text-green-400 font-medium">Wallet synced to cloud</p>
+                                            <p class="text-green-400 font-medium">{t('settings.security.cloudSynced')}</p>
                                             <p class="text-green-300/60 text-xs">You can access your wallet from any browser</p>
                                         </div>
                                     </div>
@@ -1236,18 +1243,18 @@ export function WalletSettings(props: { onBack?: () => void }) {
                         <div class="p-2 rounded-xl bg-cyan-500/20">
                             <Lock class="w-5 h-5 text-cyan-400" />
                         </div>
-                        <h2 class="text-lg font-semibold text-white">Change Password</h2>
+                        <h2 class="text-lg font-semibold text-white">{t('settings.password.title')}</h2>
                     </div>
                     <form onSubmit={handleChangePassword} class="p-6 space-y-6">
                         {/* Current Password */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block">Current Password</label>
+                            <label class="text-gray-400 text-sm mb-2 block">{t('settings.password.currentPassword')}</label>
                             <div class="relative">
                                 <input
                                     type={showCurrentPassword() ? 'text' : 'password'}
                                     value={currentPassword()}
                                     onInput={(e) => setCurrentPassword(e.currentTarget.value)}
-                                    placeholder="Enter current password"
+                                    placeholder={t('settings.password.currentPasswordPlaceholder')}
                                     class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
                                 />
                                 <button
@@ -1264,13 +1271,13 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                         {/* New Password */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block">New Password</label>
+                            <label class="text-gray-400 text-sm mb-2 block">{t('settings.password.newPassword')}</label>
                             <div class="relative">
                                 <input
                                     type={showNewPassword() ? 'text' : 'password'}
                                     value={newPassword()}
                                     onInput={(e) => setNewPassword(e.currentTarget.value)}
-                                    placeholder="Enter new password (min. 8 characters)"
+                                    placeholder={t('settings.password.newPasswordPlaceholder')}
                                     class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
                                 />
                                 <button
@@ -1287,13 +1294,13 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
                         {/* Confirm Password */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block">Confirm New Password</label>
+                            <label class="text-gray-400 text-sm mb-2 block">{t('settings.password.confirmPassword')}</label>
                             <div class="relative">
                                 <input
                                     type={showConfirmPassword() ? 'text' : 'password'}
                                     value={confirmPassword()}
                                     onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                                    placeholder="Confirm new password"
+                                    placeholder={t('settings.password.confirmPasswordPlaceholder')}
                                     class="w-full p-3 pr-10 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50"
                                 />
                                 <button
@@ -1319,7 +1326,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                         <Show when={passwordSuccess()}>
                             <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-2">
                                 <Check class="w-4 h-4" />
-                                Password changed successfully!
+                                {t('settings.password.success')}
                             </div>
                         </Show>
 
@@ -1328,8 +1335,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
                             disabled={passwordLoading()}
                             class="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-xl hover:shadow-lg hover:shadow-cyan-500/25 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Show when={passwordLoading()} fallback={<><Save class="w-4 h-4" /> Update Password</>}>
-                                <RefreshCw class="w-4 h-4 animate-spin" /> Updating...
+                            <Show when={passwordLoading()} fallback={<><Save class="w-4 h-4" /> {t('settings.password.changeButton')}</>}>
+                                <RefreshCw class="w-4 h-4 animate-spin" /> {t('settings.password.changing')}
                             </Show>
                         </button>
                     </form>

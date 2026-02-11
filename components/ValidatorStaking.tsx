@@ -366,8 +366,22 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
     // Handle unstake request using Paymaster (gasless)
     const handleUnstake = async () => {
         const amount = parseFloat(unstakeAmount());
-        if (!amount || amount > parseFloat(userInfo().stakedAmount)) {
-            setErrorMsg('Invalid unstake amount');
+        const staked = parseFloat(userInfo().stakedAmount);
+        const minStakeNum = parseFloat(minStake().replace(/,/g, ''));
+
+        if (!amount || amount <= 0) {
+            setErrorMsg('Please enter a valid amount');
+            return;
+        }
+        if (amount > staked) {
+            setErrorMsg('Unstake amount exceeds staked balance');
+            return;
+        }
+
+        // Minimum stake constraint: remaining must be 0 or >= MINIMUM_STAKE
+        const remaining = staked - amount;
+        if (remaining > 0 && remaining < minStakeNum) {
+            setErrorMsg(`Remaining stake would be ${remaining.toLocaleString()} VCN, below minimum ${minStakeNum.toLocaleString()} VCN. Unstake all or keep at least ${minStakeNum.toLocaleString()} VCN staked.`);
             return;
         }
 
@@ -393,7 +407,12 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
             const result = await response.json();
 
             if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Unstake request failed');
+                // Extract meaningful error message from Paymaster response
+                let errMsg = result.error || 'Unstake request failed';
+                if (errMsg.includes('Would drop below minimum')) {
+                    errMsg = `Cannot unstake: remaining balance would drop below minimum stake (${minStakeNum.toLocaleString()} VCN). Unstake the full amount instead.`;
+                }
+                throw new Error(errMsg);
             }
 
             console.log('[Staking] Unstake success:', result);
@@ -781,6 +800,29 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                         </div>
                                     </div>
 
+                                    {/* Minimum stake warning */}
+                                    <Show when={unstakeAmount() && parseFloat(unstakeAmount()) > 0 && parseFloat(unstakeAmount()) < parseFloat(userInfo().stakedAmount)}>
+                                        {(() => {
+                                            const remaining = parseFloat(userInfo().stakedAmount) - parseFloat(unstakeAmount());
+                                            const minStakeNum = parseFloat(minStake().replace(/,/g, ''));
+                                            const isInvalid = remaining > 0 && remaining < minStakeNum;
+                                            return (
+                                                <Show when={isInvalid}>
+                                                    <div class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                                        <div class="flex items-center gap-2 text-red-400 text-xs font-bold">
+                                                            <AlertTriangle class="w-4 h-4" />
+                                                            Below Minimum Stake
+                                                        </div>
+                                                        <p class="text-[11px] text-gray-400 mt-2">
+                                                            Remaining stake ({remaining.toLocaleString()} VCN) would be below minimum ({minStake()} VCN).
+                                                            Use "Max" to unstake all, or keep at least {minStake()} VCN staked.
+                                                        </p>
+                                                    </div>
+                                                </Show>
+                                            );
+                                        })()}
+                                    </Show>
+
                                     <div class="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
                                         <div class="flex items-center gap-2 text-blue-400 text-xs font-bold">
                                             <Timer class="w-4 h-4" />
@@ -793,7 +835,11 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
 
                                     <button
                                         onClick={handleUnstake}
-                                        disabled={isLoading() || !unstakeAmount() || parseFloat(unstakeAmount()) > parseFloat(userInfo().stakedAmount)}
+                                        disabled={isLoading() || !unstakeAmount() || parseFloat(unstakeAmount()) > parseFloat(userInfo().stakedAmount) || (() => {
+                                            const remaining = parseFloat(userInfo().stakedAmount) - parseFloat(unstakeAmount() || '0');
+                                            const minStakeNum = parseFloat(minStake().replace(/,/g, ''));
+                                            return remaining > 0 && remaining < minStakeNum;
+                                        })()}
                                         class="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/10 text-white font-black text-sm uppercase tracking-widest rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
                                         <Show when={isLoading()} fallback={<>

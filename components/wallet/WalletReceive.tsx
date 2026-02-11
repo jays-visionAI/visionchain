@@ -9,6 +9,7 @@ import {
     Shield
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletReceiveProps {
     onBack: () => void;
@@ -20,6 +21,8 @@ interface WalletReceiveProps {
 }
 
 export const WalletReceive = (props: WalletReceiveProps) => {
+    const { t } = useI18n();
+
     return (
         <div class="flex-1 overflow-y-auto pb-32 custom-scrollbar p-4 lg:p-8">
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -30,21 +33,21 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                     >
                         <ArrowLeft class="w-5 h-5" />
                     </button>
-                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Back to Assets</span>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">{t('common.backToAssets')}</span>
                 </div>
 
                 <WalletViewHeader
-                    tag="Inbound Transfers"
-                    title="RECEIVE"
-                    titleAccent="ASSETS"
-                    description="Your permanent on-chain identity. Scan or copy your address to receive tokens from any network."
+                    tag={t('wallet.receive.tag')}
+                    title={t('wallet.receive.title')}
+                    titleAccent={t('wallet.receive.titleAccent')}
+                    description={t('wallet.receive.description')}
                     icon={ArrowDownLeft}
                 />
 
                 <div class="w-full space-y-8">
                     {/* Network Selector */}
                     <div class="w-full">
-                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-4 text-center">Select Destination Network</label>
+                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-4 text-center">{t('wallet.receive.scanQR')}</label>
                         <div class="flex flex-wrap justify-center gap-2">
                             <For each={['Vision Chain', 'Ethereum', 'Polygon', 'Base']}>
                                 {(net) => (
@@ -93,16 +96,16 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                             onClick={props.copyAddress}
                         >
                             <div class="absolute inset-0 bg-green-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">Your Wallet Address</div>
-                            <div class="text-white font-mono break-all text-sm lg:text-base tracking-tight leading-relaxed px-4 select-all">{props.walletAddress() || 'Fetching address...'}</div>
+                            <div class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-3">{t('wallet.receive.yourAddress')}</div>
+                            <div class="text-white font-mono break-all text-sm lg:text-base tracking-tight leading-relaxed px-4 select-all">{props.walletAddress() || t('common.loading')}</div>
                         </div>
 
                         <button
                             onClick={props.copyAddress}
                             class="w-full py-6 bg-white text-black font-black rounded-2xl transition-all hover:bg-white/90 active:scale-[0.98] flex items-center justify-center gap-3 shadow-2xl shadow-white/5 uppercase tracking-widest text-sm"
                         >
-                            <Show when={props.copied()} fallback={<><Copy class="w-5 h-5" /> Copy Your Address</>}>
-                                <Check class="w-5 h-5 text-green-600" /> Copied to Clipboard
+                            <Show when={props.copied()} fallback={<><Copy class="w-5 h-5" /> {t('wallet.receive.copyAddress')}</>}>
+                                <Check class="w-5 h-5 text-green-600" /> {t('wallet.receive.addressCopied')}
                             </Show>
                         </button>
                     </div>

@@ -686,6 +686,8 @@ const BRIDGE_STAKING_ABI = [
   "function setTargetAPY(uint256 _apyBasisPoints) external",
   "function fundRewardPool(uint256 amount) external",
   "function withdrawRewardPool(uint256 amount) external",
+  "function depositFees(uint256 amount) external",
+  "function setBridge(address _bridge) external",
   // eslint-disable-next-line max-len
   "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
   "function owner() external view returns (address)",
@@ -795,14 +797,60 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EX
       case "staking":
         return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
 
+      case "admin_transfer":
+        return await handleAdminTransfer(req, res, { recipient, amount, tokenContract, adminWallet });
+
       default:
-        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge, staking` });
+        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge, staking, admin_transfer` });
     }
   } catch (err) {
     console.error("[Paymaster] Error:", err);
     return res.status(500).json({ error: err.message || "Internal server error" });
   }
 });
+
+/**
+ * Handle admin VCN distribution (foundation wallet -> user)
+ * No permit or fee required - admin wallet sends directly
+ */
+async function handleAdminTransfer(req, res, { recipient, amount, tokenContract, adminWallet }) {
+  if (!recipient || !amount) {
+    return res.status(400).json({ error: "Missing required fields: recipient, amount" });
+  }
+
+  const amountBigInt = BigInt(amount);
+  console.log(`[Paymaster:AdminTransfer] Admin -> ${recipient}, Amount: ${ethers.formatEther(amountBigInt)} VCN`);
+
+  // Check admin balance
+  const adminBalance = await tokenContract.balanceOf(adminWallet.address);
+  if (adminBalance < amountBigInt) {
+    return res.status(400).json({ error: `Insufficient admin VCN balance: ${ethers.formatEther(adminBalance)}` });
+  }
+
+  // Direct transfer from admin wallet (no permit needed)
+  const tx = await tokenContract.transfer(recipient, amountBigInt);
+  console.log(`[Paymaster:AdminTransfer] TX sent: ${tx.hash}`);
+
+  const receipt = await tx.wait();
+  console.log(`[Paymaster:AdminTransfer] Confirmed in block ${receipt.blockNumber}`);
+
+  // Index to Firestore
+  await indexTransaction(tx.hash, {
+    type: "Admin Transfer",
+    from: adminWallet.address,
+    to: recipient,
+    amount: ethers.formatEther(amountBigInt),
+    fee: "0",
+    method: "Admin VCN Distribution",
+  });
+
+  return res.status(200).json({
+    success: true,
+    txHash: tx.hash,
+    from: adminWallet.address,
+    blockNumber: receipt.blockNumber,
+  });
+}
 
 /**
  * Handle immediate transfer
@@ -1192,6 +1240,18 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
       const feeTx = await tokenContract.transferFrom(user, adminAddress, BRIDGE_FEE);
       await feeTx.wait();
       console.log(`[Paymaster:Bridge] Fee collected: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
+
+      // Forward fee to staking contract for validator rewards
+      try {
+        const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+        const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, BRIDGE_FEE);
+        await approveTx.wait();
+        const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
+        await depositTx.wait();
+        console.log(`[Paymaster:Bridge] Fee forwarded to staking: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
+      } catch (fwdErr) {
+        console.warn(`[Paymaster:Bridge] Fee forwarding to staking failed:`, fwdErr.message);
+      }
     } catch (feeErr) {
       console.error(`[Paymaster:Bridge] Fee collection failed:`, feeErr.message);
       console.error(`[Paymaster:Bridge] Fee collection reason:`, feeErr.reason);
@@ -1416,6 +1476,18 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
           const feeTx = await tokenContract.transferFrom(user, adminAddress, STAKING_FEE, gasOpts);
           await feeTx.wait();
           console.log(`[Paymaster:Staking] Fee collected: ${ethers.formatEther(STAKING_FEE)} VCN`);
+
+          // Forward fee to staking contract for validator rewards
+          try {
+            const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+            const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, STAKING_FEE, gasOpts);
+            await approveTx.wait();
+            const depositTx = await stakingContract.depositFees(STAKING_FEE, gasOpts);
+            await depositTx.wait();
+            console.log(`[Paymaster:Staking] Fee forwarded to staking: ${ethers.formatEther(STAKING_FEE)} VCN`);
+          } catch (fwdErr) {
+            console.warn(`[Paymaster:Staking] Fee forwarding to staking failed:`, fwdErr.message);
+          }
         } catch (feeErr) {
           console.error(`[Paymaster:Staking] Fee collection failed:`, feeErr.message);
           return res.status(400).json({ error: `Fee collection failed. Please ensure VCN allowance is set.` });
@@ -1447,10 +1519,16 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
 
       case "unstake": {
         const unstakeAmount = BigInt(amount);
-        tx = await stakingContract.requestUnstakeFor(user, unstakeAmount, gasOpts);
-        txHash = tx.hash;
-        await tx.wait();
-        console.log(`[Paymaster:Staking] requestUnstakeFor(${user}) - ${ethers.formatEther(unstakeAmount)} VCN`);
+        try {
+          tx = await stakingContract.requestUnstakeFor(user, unstakeAmount, gasOpts);
+          txHash = tx.hash;
+          await tx.wait();
+          console.log(`[Paymaster:Staking] requestUnstakeFor(${user}) - ${ethers.formatEther(unstakeAmount)} VCN`);
+        } catch (unstakeErr) {
+          const reason = unstakeErr.reason || unstakeErr.message || "Unknown error";
+          console.error(`[Paymaster:Staking] requestUnstakeFor failed:`, reason);
+          return res.status(400).json({ error: `Unstake failed: ${reason}` });
+        }
         break;
       }
 

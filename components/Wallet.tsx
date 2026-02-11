@@ -2474,7 +2474,7 @@ const Wallet = (): JSX.Element => {
     const toggleRecording = () => {
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert("Your browser does not support Speech Recognition.");
+            alert("Your browser does not support Speech Recognition. Please use Chrome or Edge.");
             return;
         }
 
@@ -2487,14 +2487,24 @@ const Wallet = (): JSX.Element => {
         const recognitionInstance = new SpeechRecognition();
         recognitionInstance.lang = voiceLang();
         recognitionInstance.interimResults = true;
+        recognitionInstance.continuous = true;
+        recognitionInstance.maxAlternatives = 1;
+
         recognitionInstance.onstart = () => setIsRecording(true);
+
         recognitionInstance.onresult = (event: any) => {
             let finalTranscript = '';
+            let interimTranscript = '';
+
             for (let i = event.resultIndex; i < event.results.length; ++i) {
+                const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
+                    finalTranscript += transcript;
+                } else {
+                    interimTranscript += transcript;
                 }
             }
+
             if (finalTranscript) {
                 setInput(prev => {
                     const cleanPrev = prev.trim();
@@ -2502,10 +2512,33 @@ const Wallet = (): JSX.Element => {
                 });
             }
         };
-        recognitionInstance.onerror = () => setIsRecording(false);
-        recognitionInstance.onend = () => setIsRecording(false);
-        recognitionInstance.start();
-        setRecognition(recognitionInstance);
+
+        recognitionInstance.onerror = (event: any) => {
+            console.warn('[Speech] Recognition error:', event.error);
+            if (event.error === 'not-allowed') {
+                alert('Microphone access denied. Please allow microphone permission in your browser settings.');
+            }
+            setIsRecording(false);
+        };
+
+        recognitionInstance.onend = () => {
+            // Auto-restart if still in recording mode (continuous dictation)
+            if (isRecording()) {
+                try {
+                    recognitionInstance.start();
+                } catch (e) {
+                    setIsRecording(false);
+                }
+            }
+        };
+
+        try {
+            recognitionInstance.start();
+            setRecognition(recognitionInstance);
+        } catch (e) {
+            console.error('[Speech] Failed to start:', e);
+            setIsRecording(false);
+        }
     };
 
     const resetFlow = () => {

@@ -21,6 +21,7 @@ import { WalletViewHeader } from './WalletViewHeader';
 import { ethers } from 'ethers';
 import { saveUserContacts } from '../../services/firebaseService';
 import { Motion } from 'solid-motionone';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface Recipient {
     contact: any;
@@ -59,6 +60,7 @@ const TRANSFERABLE_ASSETS = [
 
 export const WalletSend = (props: WalletSendProps) => {
     const [searchQuery, setSearchQuery] = createSignal('');
+    const { t } = useI18n();
     const [copied, setCopied] = createSignal(false);
     const [isAddingContact, setIsAddingContact] = createSignal(false);
     const [showContactPicker, setShowContactPicker] = createSignal(false);
@@ -107,14 +109,14 @@ export const WalletSend = (props: WalletSendProps) => {
                     >
                         <ArrowLeft class="w-5 h-5" />
                     </button>
-                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Back to Assets</span>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">{t('common.backToAssets')}</span>
                 </div>
 
                 <WalletViewHeader
-                    tag="Transfer Protocol"
-                    title="SEND"
-                    titleAccent="ASSETS"
-                    description="Securely transfer your digital assets across the Vision network with near-instant settlement."
+                    tag={t('wallet.send.tag')}
+                    title={t('wallet.send.title')}
+                    titleAccent={t('wallet.send.titleAccent')}
+                    description={t('wallet.send.description')}
                     icon={ArrowUpRight}
                 />
 
@@ -123,7 +125,7 @@ export const WalletSend = (props: WalletSendProps) => {
                         <div class="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
                             {/* Asset Selection */}
                             <div class="space-y-4 relative">
-                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-left">Select Asset</label>
+                                <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-left">{t('wallet.send.selectAsset')}</label>
                                 <div class="w-full">
                                     <button
                                         type="button"
@@ -142,7 +144,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                         <div class="flex items-center gap-3">
                                             <div class="text-right shrink-0">
                                                 <div class="text-sm font-black text-white tabular-nums">{props.getAssetData(props.selectedToken()).liquidBalance.toLocaleString()}</div>
-                                                <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
+                                                <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('wallet.send.available')}</div>
                                             </div>
                                             <ChevronDown class={`w-4 h-4 text-gray-500 transition-transform ${showAssetPicker() ? 'rotate-180' : ''}`} />
                                         </div>
@@ -177,7 +179,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                                             <div class="flex items-center gap-3">
                                                                 <div class="text-right">
                                                                     <div class="text-sm font-black text-white tabular-nums">{assetData().liquidBalance.toLocaleString()}</div>
-                                                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Available</div>
+                                                                    <div class="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{t('wallet.send.available')}</div>
                                                                 </div>
                                                                 <Show when={isSelected()}>
                                                                     <div class={`w-5 h-5 rounded-full ${asset.bgClass} flex items-center justify-center`}>
@@ -198,14 +200,14 @@ export const WalletSend = (props: WalletSendProps) => {
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between px-1">
                                     <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block text-left">
-                                        {multiRecipients().length > 0 ? 'Recipients' : 'Recipient Address'}
+                                        {multiRecipients().length > 0 ? t('wallet.send.recipients') : t('wallet.send.recipientAddress')}
                                     </label>
                                     <button
                                         onClick={() => setShowContactPicker(true)}
                                         class="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg transition-all text-[10px] font-black uppercase tracking-widest border border-blue-500/20"
                                     >
                                         <Users class="w-3.5 h-3.5" />
-                                        Contact List
+                                        {t('wallet.send.contactList')}
                                     </button>
                                 </div>
 
@@ -214,7 +216,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="relative group">
                                         <input
                                             type="text"
-                                            placeholder="0x... or Search Contacts"
+                                            placeholder={t('wallet.send.recipientPlaceholder')}
                                             value={props.recipientAddress()}
                                             onInput={(e) => {
                                                 props.setRecipientAddress(e.currentTarget.value);
@@ -253,7 +255,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                                 )}
                                             </For>
                                             <Show when={filteredContacts().length === 0}>
-                                                <div class="p-4 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest italic">No contacts found</div>
+                                                <div class="p-4 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest italic">{t('wallet.send.noContactsFound')}</div>
                                             </Show>
                                         </div>
                                     </Show>
@@ -338,11 +340,11 @@ export const WalletSend = (props: WalletSendProps) => {
                                             class="w-full py-4 border-2 border-dashed border-white/10 hover:border-blue-500/30 rounded-2xl text-gray-500 hover:text-blue-400 transition-all flex items-center justify-center gap-2 group"
                                         >
                                             <Plus class="w-4 h-4 group-hover:rotate-90 transition-transform" />
-                                            <span class="text-[10px] font-black uppercase tracking-widest">Add More Recipients</span>
+                                            <span class="text-[10px] font-black uppercase tracking-widest">{t('wallet.send.addMoreRecipients')}</span>
                                         </button>
 
                                         <div class="flex items-center justify-between px-2 pt-2 border-t border-white/5">
-                                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Amount</span>
+                                            <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('wallet.send.totalAmount')}</span>
                                             <span class="text-lg font-black text-white">
                                                 {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-400">{props.selectedToken()}</span>
                                             </span>
@@ -355,12 +357,12 @@ export const WalletSend = (props: WalletSendProps) => {
                             <Show when={multiRecipients().length === 0}>
                                 <div class="space-y-4">
                                     <div class="flex flex-col sm:flex-row justify-between items-center sm:items-end px-1 gap-2">
-                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Transfer Amount</label>
+                                        <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">{t('wallet.send.transferAmount')}</label>
                                         <button
                                             onClick={() => props.setSendAmount(props.getAssetData(props.selectedToken()).liquidBalance.toString())}
                                             class="text-[10px] font-black text-blue-400 uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-400/10 px-3 py-1 rounded-full sm:bg-transparent sm:p-0"
                                         >
-                                            Use Max Balance
+                                            {t('wallet.send.useMaxBalance')}
                                         </button>
                                     </div>
                                     <div class="relative">
@@ -398,7 +400,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                     onClick={() => props.setFlowStep(2)}
                                     class="w-full py-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-2xl transition-all shadow-2xl shadow-blue-500/20 active:scale-[0.98] disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed uppercase tracking-widest"
                                 >
-                                    Review Transaction
+                                    {t('wallet.send.reviewTransaction')}
                                 </button>
                             </Show>
                         </div>
@@ -409,20 +411,20 @@ export const WalletSend = (props: WalletSendProps) => {
                             {/* Single Recipient Review */}
                             <Show when={multiRecipients().length === 0}>
                                 <div class="bg-gradient-to-br from-[#1c1c21] to-[#111113] border border-white/10 rounded-[32px] p-8 text-center shadow-3xl">
-                                    <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">You are sending</div>
+                                    <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-4">{t('wallet.send.youAreSending')}</div>
                                     <div class="text-5xl font-black text-white mb-2 tracking-tighter drop-shadow-sm">{props.sendAmount()} <span class="text-blue-500">{props.selectedToken()}</span></div>
                                     <div class="text-sm font-bold text-gray-500">≈ ${(Number(props.sendAmount().replace(/,/g, '')) * props.getAssetData(props.selectedToken()).price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>
 
                                     <div class="mt-8 pt-8 border-t border-white/[0.04] space-y-4">
                                         <div class="flex justify-between items-center px-2">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Recipient</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.recipientLabel')}</span>
                                             <div class="flex flex-col items-end">
                                                 <Show when={resolvedRecipientName()} fallback={
                                                     <button
                                                         onClick={() => setIsAddingContact(true)}
                                                         class="flex items-center gap-2 group/save"
                                                     >
-                                                        <span class="text-sm font-black text-amber-400 uppercase italic tracking-tighter group-hover/save:text-amber-300 transition-colors">New Recipient</span>
+                                                        <span class="text-sm font-black text-amber-400 uppercase italic tracking-tighter group-hover/save:text-amber-300 transition-colors">{t('wallet.send.newRecipient')}</span>
                                                         <div class="w-5 h-5 rounded-md bg-amber-400/10 flex items-center justify-center group-hover/save:bg-amber-400/20 transition-all">
                                                             <Plus class="w-3 h-3 text-amber-400" />
                                                         </div>
@@ -436,11 +438,11 @@ export const WalletSend = (props: WalletSendProps) => {
                                             </div>
                                         </div>
                                         <div class="flex justify-between items-center px-2">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Network Fee</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.networkFee')}</span>
                                             <span class="text-sm font-bold text-green-400">0.00021 {props.selectedToken()} <span class="text-[10px] text-gray-500 ml-1">($0.45)</span></span>
                                         </div>
                                         <div class="flex justify-between items-center px-2">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Estimated Time</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.estimatedTime')}</span>
                                             <span class="text-sm font-bold text-white flex items-center gap-2">
                                                 <Clock class="w-3.5 h-3.5 text-blue-400" />
                                                 ~12 Seconds
@@ -454,7 +456,7 @@ export const WalletSend = (props: WalletSendProps) => {
                             <Show when={multiRecipients().length > 0}>
                                 <div class="bg-gradient-to-br from-[#1c1c21] to-[#111113] border border-white/10 rounded-[32px] p-6 md:p-8 shadow-3xl">
                                     <div class="text-center mb-6">
-                                        <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-2">Batch Transfer</div>
+                                        <div class="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] mb-2">{t('wallet.send.batchTransfer')}</div>
                                         <div class="text-3xl font-black text-white tracking-tighter">
                                             {multiRecipients().reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0).toLocaleString()} <span class="text-blue-500">{props.selectedToken()}</span>
                                         </div>
@@ -486,11 +488,11 @@ export const WalletSend = (props: WalletSendProps) => {
 
                                     <div class="mt-6 pt-6 border-t border-white/5 space-y-3">
                                         <div class="flex justify-between items-center px-2">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Est. Total Fee</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.estTotalFee')}</span>
                                             <span class="text-sm font-bold text-green-400">{(0.00021 * multiRecipients().length).toFixed(5)} {props.selectedToken()}</span>
                                         </div>
                                         <div class="flex justify-between items-center px-2">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Est. Time</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.estTime')}</span>
                                             <span class="text-sm font-bold text-white flex items-center gap-2">
                                                 <Clock class="w-3.5 h-3.5 text-blue-400" />
                                                 ~{multiRecipients().length * 12} Seconds
@@ -501,7 +503,7 @@ export const WalletSend = (props: WalletSendProps) => {
                             </Show>
 
                             <div class="flex flex-col sm:flex-row gap-4">
-                                <button onClick={() => props.setFlowStep(1)} class="flex-1 py-5 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-2xl transition-all border border-white/5 uppercase tracking-widest text-xs">Modify Details</button>
+                                <button onClick={() => props.setFlowStep(1)} class="flex-1 py-5 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-2xl transition-all border border-white/5 uppercase tracking-widest text-xs">{t('wallet.send.modifyDetails')}</button>
                                 <button
                                     onClick={() => {
                                         if (multiRecipients().length > 0 && props.onMultiTransaction) {
@@ -521,10 +523,10 @@ export const WalletSend = (props: WalletSendProps) => {
                                     class="flex-[2] py-5 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-2xl shadow-blue-500/30 flex items-center justify-center gap-3 uppercase tracking-widest"
                                 >
                                     <Show when={props.flowLoading()} fallback={
-                                        multiRecipients().length > 0 ? `Send to ${multiRecipients().length} Recipients` : "Confirm & Send Tokens"
+                                        multiRecipients().length > 0 ? t('wallet.send.sendToRecipients', { count: multiRecipients().length }) : t('wallet.send.confirmAndSend')
                                     }>
                                         <RefreshCw class="w-5 h-5 animate-spin" />
-                                        Processing...
+                                        {t('wallet.send.processing')}
                                     </Show>
                                 </button>
                             </div>
@@ -544,8 +546,8 @@ export const WalletSend = (props: WalletSendProps) => {
                                 </div>
 
                                 <div>
-                                    <h4 class="text-3xl font-black text-white italic tracking-tighter uppercase mb-2">Transfer Complete</h4>
-                                    <p class="text-gray-500 font-medium">Your tokens have been successfully transferred.</p>
+                                    <h4 class="text-3xl font-black text-white italic tracking-tighter uppercase mb-2">{t('wallet.send.transferComplete')}</h4>
+                                    <p class="text-gray-500 font-medium">{t('wallet.send.transferCompleteDesc')}</p>
                                 </div>
 
                                 {/* Success Card */}
@@ -553,24 +555,24 @@ export const WalletSend = (props: WalletSendProps) => {
                                     <div class="p-6 border-b border-emerald-500/20">
                                         <div class="flex items-center gap-3">
                                             <div class="w-3 h-3 bg-emerald-400 rounded-full" />
-                                            <span class="text-sm font-black text-emerald-400 uppercase tracking-widest">Confirmed</span>
+                                            <span class="text-sm font-black text-emerald-400 uppercase tracking-widest">{t('wallet.send.confirmed')}</span>
                                         </div>
                                     </div>
 
                                     <div class="p-6 space-y-4 text-left">
                                         <div class="flex justify-between items-center">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Amount</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.amount')}</span>
                                             <span class="text-lg font-black text-white italic">{props.sendAmount()} {props.selectedToken()}</span>
                                         </div>
                                         <div class="flex justify-between items-center">
-                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">To Address</span>
+                                            <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.send.toAddress')}</span>
                                             <span class="text-xs font-mono text-blue-400">{props.recipientAddress().slice(0, 12)}...{props.recipientAddress().slice(-8)}</span>
                                         </div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Status</span>
                                             <span class="text-xs font-black text-emerald-400 uppercase flex items-center gap-2">
                                                 <span class="w-2 h-2 bg-emerald-400 rounded-full" />
-                                                Completed
+                                                {t('wallet.send.completed')}
                                             </span>
                                         </div>
                                         <div class="h-px bg-white/[0.04] w-full my-2" />
@@ -584,7 +586,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                                     }}
                                                     class="text-[10px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5 hover:text-white transition-colors"
                                                 >
-                                                    {copied() ? 'Copied!' : 'Copy Hash'}
+                                                    {copied() ? t('wallet.send.copied') : t('wallet.send.copyHash')}
                                                     <Copy class="w-3 h-3" />
                                                 </button>
                                             </div>
@@ -599,13 +601,13 @@ export const WalletSend = (props: WalletSendProps) => {
                                         target="_blank"
                                         class="py-5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5 flex items-center justify-center gap-2"
                                     >
-                                        Track on VisionScan
+                                        {t('wallet.send.trackOnVisionScan')}
                                     </a>
                                     <button
                                         onClick={props.resetFlow}
                                         class="py-5 bg-white text-black font-black rounded-2xl transition-all hover:bg-white/90 uppercase tracking-widest shadow-xl shadow-white/5"
                                     >
-                                        Done
+                                        {t('wallet.send.done')}
                                     </button>
                                 </div>
                             </div>
@@ -620,8 +622,8 @@ export const WalletSend = (props: WalletSendProps) => {
                                 </div>
 
                                 <div>
-                                    <h4 class="text-3xl font-black text-white italic tracking-tighter uppercase mb-2">Time Lock Scheduled</h4>
-                                    <p class="text-gray-500 font-medium">Your scheduled transfer is now in the challenge period.</p>
+                                    <h4 class="text-3xl font-black text-white italic tracking-tighter uppercase mb-2">{t('wallet.send.timeLockScheduled')}</h4>
+                                    <p class="text-gray-500 font-medium">{t('wallet.send.timeLockScheduledDesc')}</p>
                                 </div>
 
                                 {/* Time Lock Status Card */}
@@ -630,14 +632,14 @@ export const WalletSend = (props: WalletSendProps) => {
                                         <div class="flex items-center justify-between">
                                             <div class="flex items-center gap-3">
                                                 <div class="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
-                                                <span class="text-sm font-black text-amber-400 uppercase tracking-widest">Challenge Period</span>
+                                                <span class="text-sm font-black text-amber-400 uppercase tracking-widest">{t('wallet.send.challengePeriod')}</span>
                                             </div>
                                             <span class="text-lg font-black text-white tabular-nums">15:00</span>
                                         </div>
                                         <div class="mt-3 h-2 bg-black/30 rounded-full overflow-hidden">
                                             <div class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full w-0 animate-[progress_900s_linear]" style="width: 0%" />
                                         </div>
-                                        <p class="text-[10px] text-amber-400/60 mt-2 uppercase tracking-widest">Finalization after challenge period ends</p>
+                                        <p class="text-[10px] text-amber-400/60 mt-2 uppercase tracking-widest">{t('wallet.send.finalizationAfter')}</p>
                                     </div>
 
                                     <div class="p-6 space-y-4 text-left">
@@ -653,7 +655,7 @@ export const WalletSend = (props: WalletSendProps) => {
                                             <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Status</span>
                                             <span class="text-xs font-black text-amber-400 uppercase flex items-center gap-2">
                                                 <span class="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
-                                                Pending Finalization
+                                                {t('wallet.send.pendingFinalization')}
                                             </span>
                                         </div>
                                         <div class="h-px bg-white/[0.04] w-full my-2" />
@@ -685,10 +687,9 @@ export const WalletSend = (props: WalletSendProps) => {
                                             </svg>
                                         </div>
                                         <div>
-                                            <div class="text-xs font-bold text-white mb-1">Time Lock Agent Active</div>
+                                            <div class="text-xs font-bold text-white mb-1">{t('wallet.send.timeLockAgentActive')}</div>
                                             <p class="text-[11px] text-gray-500 leading-relaxed">
-                                                Your scheduled transfer is managed by the Time Lock Agent.
-                                                You can track its status in the Agent Desk below.
+                                                {t('wallet.send.timeLockAgentDesc')}
                                             </p>
                                         </div>
                                     </div>

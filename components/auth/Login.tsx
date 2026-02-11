@@ -10,6 +10,7 @@ import {
 } from 'lucide-solid';
 import { useAuth } from './authContext';
 import { getUserRole, getUserData } from '../../services/firebaseService';
+import { useI18n } from '../../i18n/i18nContext';
 
 export default function Login() {
     const [email, setEmail] = createSignal('');
@@ -20,6 +21,7 @@ export default function Login() {
 
     const auth = useAuth();
     const navigate = useNavigate();
+    const { t } = useI18n();
 
     const handleSubmit = async (e: Event) => {
         e.preventDefault();
@@ -66,13 +68,13 @@ export default function Login() {
 
             // Error mapping
             if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-                setError('Account not found or incorrect credentials.');
+                setError(t('auth.login.errorNotFound'));
             } else if (err.code === 'auth/wrong-password') {
-                setError('Incorrect password.');
+                setError(t('auth.login.errorWrongPassword'));
             } else if (err.code === 'auth/invalid-email') {
-                setError('Invalid email format.');
+                setError(t('auth.login.errorInvalidEmail'));
             } else {
-                setError('Login failed. Please try again.');
+                setError(t('auth.login.errorGeneric'));
             }
         } finally {
             setIsLoading(false);
@@ -94,23 +96,23 @@ export default function Login() {
                             <Lock class="w-10 h-10 text-cyan-400" />
                         </div>
                         <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
-                            Vision Wallet
+                            {t('auth.login.title')}
                         </h1>
-                        <p class="text-[10px] text-gray-500 mt-2 font-black uppercase tracking-[0.2em]">Personal Account Access</p>
+                        <p class="text-[10px] text-gray-500 mt-2 font-black uppercase tracking-[0.2em]">{t('auth.login.subtitle')}</p>
                     </div>
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} class="space-y-5">
                         {/* Email Input */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block font-medium">Email</label>
+                            <label class="text-gray-400 text-sm mb-2 block font-medium">{t('auth.login.emailLabel')}</label>
                             <div class="relative">
                                 <Mail class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                                 <input
                                     type="email"
                                     value={email()}
                                     onInput={(e) => setEmail(e.currentTarget.value)}
-                                    placeholder="your@email.com"
+                                    placeholder={t('auth.login.emailPlaceholder')}
                                     class="w-full p-4 pl-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] transition-all box-border"
                                     required
                                 />
@@ -119,14 +121,14 @@ export default function Login() {
 
                         {/* Password Input */}
                         <div>
-                            <label class="text-gray-400 text-sm mb-2 block font-medium">Password</label>
+                            <label class="text-gray-400 text-sm mb-2 block font-medium">{t('auth.login.passwordLabel')}</label>
                             <div class="relative">
                                 <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                                 <input
                                     type={showPassword() ? 'text' : 'password'}
                                     value={password()}
                                     onInput={(e) => setPassword(e.currentTarget.value)}
-                                    placeholder="Enter your password"
+                                    placeholder={t('auth.login.passwordPlaceholder')}
                                     class="w-full p-4 pl-12 pr-12 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 focus:bg-white/[0.07] transition-all box-border"
                                     required
                                 />
@@ -145,7 +147,7 @@ export default function Login() {
                                     href="/reset-password"
                                     class="text-xs text-gray-500 hover:text-cyan-400 transition-colors"
                                 >
-                                    Forgot Password?
+                                    {t('auth.login.forgotPassword')}
                                 </a>
                             </div>
                         </div>
@@ -164,9 +166,9 @@ export default function Login() {
                             disabled={isLoading()}
                             class="w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold hover:shadow-lg hover:shadow-cyan-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            <Show when={isLoading()} fallback="Log In">
+                            <Show when={isLoading()} fallback={t('auth.login.loginButton')}>
                                 <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                Logging in...
+                                {t('auth.login.loggingIn')}
                             </Show>
                         </button>
 
@@ -175,7 +177,7 @@ export default function Login() {
                                 href="/signup"
                                 class="block w-full py-3 rounded-xl border border-white/10 text-gray-300 font-medium hover:bg-white/5 hover:border-white/20 transition-all text-sm"
                             >
-                                Create Account
+                                {t('auth.login.createAccount')}
                             </a>
                         </div>
                     </form>
@@ -187,7 +189,7 @@ export default function Login() {
                             class="inline-flex items-center gap-2 text-gray-400 hover:text-cyan-400 text-sm transition-colors"
                         >
                             <ArrowLeft class="w-4 h-4" />
-                            Back to Home
+                            {t('auth.login.backToHome')}
                         </a>
                     </div>
                 </div>

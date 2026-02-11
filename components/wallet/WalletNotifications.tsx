@@ -67,6 +67,7 @@ import {
 } from 'firebase/firestore';
 
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 
 
 // Notification types enumeration for better type safety
@@ -155,6 +156,7 @@ export interface Notification {
 
 export function WalletNotifications() {
     const auth = useAuth();
+    const { t } = useI18n();
     const [notifications, setNotifications] = createSignal<Notification[]>([]);
     const [contacts, setContacts] = createSignal<Contact[]>([]);
     const [isLoading, setIsLoading] = createSignal(true);
@@ -489,10 +491,10 @@ export function WalletNotifications() {
             <div class="shrink-0">
                 <div class="max-w-5xl mx-auto p-4 lg:p-8 pb-0">
                     <WalletViewHeader
-                        tag="Communication Hub"
-                        title="NOTIFICATION"
+                        tag={t('wallet.notifications.tag')}
+                        title={t('wallet.notifications.title')}
                         titleAccent=""
-                        description="Stay informed with real-time updates on your assets, security signals, and ecosystem alerts."
+                        description={t('wallet.notifications.description')}
                         icon={Bell}
                         hideDescriptionOnMobile={true}
                     />
@@ -504,8 +506,8 @@ export function WalletNotifications() {
                             class={`flex-1 px-2 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative flex items-center justify-center gap-1 sm:gap-2 ${activeTab() === 'announcements' ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                         >
                             <Megaphone class="w-4 h-4 shrink-0" />
-                            <span class="sm:hidden">News</span>
-                            <span class="hidden sm:inline">Announcements</span>
+                            <span class="sm:hidden">{t('wallet.notifications.news')}</span>
+                            <span class="hidden sm:inline">{t('wallet.notifications.announcements')}</span>
                             <Show when={unreadAnnouncementsCount() > 0}>
                                 <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] sm:min-w-[20px] sm:h-5 bg-red-500 text-white text-[9px] sm:text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                                     {unreadAnnouncementsCount()}
@@ -517,8 +519,8 @@ export function WalletNotifications() {
                             class={`flex-1 px-2 sm:px-6 py-3 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest transition-all relative flex items-center justify-center gap-1 sm:gap-2 ${activeTab() === 'notifications' ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                         >
                             <Bell class="w-4 h-4 shrink-0" />
-                            <span class="sm:hidden">Alerts</span>
-                            <span class="hidden sm:inline">My Notifications</span>
+                            <span class="sm:hidden">{t('wallet.notifications.alerts')}</span>
+                            <span class="hidden sm:inline">{t('wallet.notifications.myNotifications')}</span>
                             <Show when={notifications().some(n => !n.read)}>
                                 <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
                             </Show>
@@ -534,13 +536,13 @@ export function WalletNotifications() {
                                     onClick={() => setFilter('all')}
                                     class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all ${filter() === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                                 >
-                                    All
+                                    {t('wallet.notifications.all')}
                                 </button>
                                 <button
                                     onClick={() => setFilter('unread')}
                                     class={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all relative ${filter() === 'unread' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
                                 >
-                                    New
+                                    {t('wallet.notifications.new')}
                                     <Show when={notifications().some(n => !n.read)}>
                                         <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
                                     </Show>
@@ -556,7 +558,7 @@ export function WalletNotifications() {
                                     title="Mark all as read"
                                 >
                                     <Check class="w-4 h-4 sm:hidden" />
-                                    <span class="hidden sm:inline text-[9px] font-black uppercase tracking-wider">Mark Read</span>
+                                    <span class="hidden sm:inline text-[9px] font-black uppercase tracking-wider">{t('wallet.notifications.markRead')}</span>
                                 </button>
                                 <button
                                     onClick={clearAll}
@@ -565,7 +567,7 @@ export function WalletNotifications() {
                                     title="Clear all"
                                 >
                                     <Trash2 class="w-4 h-4 sm:hidden" />
-                                    <span class="hidden sm:inline text-[9px] font-black uppercase tracking-wider">Clear</span>
+                                    <span class="hidden sm:inline text-[9px] font-black uppercase tracking-wider">{t('wallet.notifications.clear')}</span>
                                 </button>
                             </div>
                         </div>
@@ -587,7 +589,7 @@ export function WalletNotifications() {
                             <Show when={!announcementsLoading()} fallback={
                                 <div class="flex flex-col items-center justify-center py-20 gap-4">
                                     <div class="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">Loading Announcements...</span>
+                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">{t('wallet.notifications.loadingAnnouncements')}</span>
                                 </div>
                             }>
                                 <For each={announcements()}>
@@ -643,8 +645,8 @@ export function WalletNotifications() {
                                             <Megaphone class="w-10 h-10 text-gray-800" />
                                         </div>
                                         <div>
-                                            <p class="text-white font-black italic uppercase tracking-tight">No Announcements</p>
-                                            <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">All systems operational. No official announcements at this time.</p>
+                                            <p class="text-white font-black italic uppercase tracking-tight">{t('wallet.notifications.noAnnouncements')}</p>
+                                            <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">{t('wallet.notifications.noAnnouncementsDesc')}</p>
                                         </div>
                                     </div>
                                 </Show>
@@ -656,7 +658,7 @@ export function WalletNotifications() {
                             <Show when={!isLoading()} fallback={
                                 <div class="flex flex-col items-center justify-center py-20 gap-4">
                                     <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">Synchronizing Data...</span>
+                                    <span class="text-[10px] font-black text-gray-600 uppercase tracking-[.2em]">{t('wallet.notifications.synchronizingData')}</span>
                                 </div>
                             }>
                                 <For each={paginatedFiltered()}>
@@ -725,8 +727,8 @@ export function WalletNotifications() {
                                             <Inbox class="w-10 h-10 text-gray-800" />
                                         </div>
                                         <div>
-                                            <p class="text-white font-black italic uppercase tracking-tight">System Status: Idle</p>
-                                            <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">No new signals detected in your sector.</p>
+                                            <p class="text-white font-black italic uppercase tracking-tight">{t('wallet.notifications.systemIdle')}</p>
+                                            <p class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-2 px-12 leading-relaxed">{t('wallet.notifications.noSignals')}</p>
                                         </div>
                                     </div>
                                 </Show>
@@ -749,7 +751,7 @@ export function WalletNotifications() {
                         <Show when={selectedAnnouncement()} fallback={
                             <div class="hidden lg:flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30">
                                 <Megaphone class="w-16 h-16 text-gray-700" />
-                                <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">Select An Announcement</p>
+                                <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">{t('wallet.notifications.selectAnnouncement')}</p>
                             </div>
                         }>
                             {(item) => {
@@ -762,7 +764,7 @@ export function WalletNotifications() {
                                                 onClick={() => setSelectedAnnouncementId(null)}
                                                 class="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-black text-[10px] uppercase tracking-widest"
                                             >
-                                                <ChevronLeft class="w-4 h-4" /> Back
+                                                <ChevronLeft class="w-4 h-4" /> {t('wallet.notifications.back')}
                                             </button>
                                         </div>
 
@@ -787,7 +789,7 @@ export function WalletNotifications() {
                                                             {meta.label}
                                                         </span>
                                                         <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                                                            Official
+                                                            {t('wallet.notifications.official')}
                                                         </span>
                                                     </div>
                                                     <h2 class="text-2xl sm:text-3xl lg:text-4xl font-black italic text-white leading-[0.95] uppercase tracking-tighter mb-4">
@@ -798,7 +800,7 @@ export function WalletNotifications() {
                                                             {formatFullDate(item().createdAt)}
                                                         </p>
                                                         <p class="text-[10px] text-gray-600 font-medium">
-                                                            Posted by: {item().createdBy}
+                                                            {t('wallet.notifications.postedBy')}: {item().createdBy}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -819,7 +821,7 @@ export function WalletNotifications() {
                                                         class="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl text-white font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all"
                                                     >
                                                         <ExternalLink class="w-4 h-4" />
-                                                        {item().actionLabel || 'Learn More'}
+                                                        {item().actionLabel || t('wallet.notifications.learnMore')}
                                                     </a>
                                                 }>
                                                     <a
@@ -827,7 +829,7 @@ export function WalletNotifications() {
                                                         class="flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl text-white font-black text-sm uppercase tracking-widest hover:opacity-90 transition-all"
                                                     >
                                                         <ArrowRight class="w-4 h-4" />
-                                                        {item().actionLabel || 'Go'}
+                                                        {item().actionLabel || t('wallet.notifications.go')}
                                                     </a>
                                                 </Show>
                                             </Show>
@@ -844,7 +846,7 @@ export function WalletNotifications() {
                         <Show when={selectedItem()} fallback={
                             <div class="hidden lg:flex flex-col items-center justify-center h-full text-center space-y-6 opacity-30">
                                 <MailOpen class="w-16 h-16 text-gray-700" />
-                                <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">Selection Required For Decryption</p>
+                                <p class="text-[11px] font-black text-gray-600 uppercase tracking-[.3em]">{t('wallet.notifications.selectionRequired')}</p>
                             </div>
                         }>
                             {(item) => {
@@ -857,7 +859,7 @@ export function WalletNotifications() {
                                                 onClick={() => setSelectedId(null)}
                                                 class="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 font-black text-[10px] uppercase tracking-widest"
                                             >
-                                                <ChevronLeft class="w-4 h-4" /> Back to logs
+                                                <ChevronLeft class="w-4 h-4" /> {t('wallet.notifications.backToLogs')}
                                             </button>
                                         </div>
 
@@ -887,7 +889,7 @@ export function WalletNotifications() {
                                                         )}
                                                         {item().priority === 'urgent' && (
                                                             <span class="px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-[.2em] bg-red-500/20 text-red-400 border border-red-500/20">
-                                                                Urgent
+                                                                {t('wallet.notifications.urgent')}
                                                             </span>
                                                         )}
                                                     </div>
@@ -914,7 +916,7 @@ export function WalletNotifications() {
                                             <Show when={item().data}>
                                                 <div class="p-8 bg-white/[0.02] border border-white/10 rounded-[40px] space-y-6">
                                                     <div class="text-[10px] font-black text-blue-500 uppercase tracking-[.2em] mb-2 border-b border-white/5 pb-4 flex items-center gap-2">
-                                                        <Filter class="w-3 h-3" /> Signal Metadata
+                                                        <Filter class="w-3 h-3" /> {t('wallet.notifications.signalMetadata')}
                                                     </div>
                                                     <div class="grid grid-cols-1 gap-6">
                                                         <For each={Object.entries(item().data || {})}>

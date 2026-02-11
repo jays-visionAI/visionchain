@@ -26,6 +26,7 @@ import { AddContactModal } from './AddContactModal';
 import { EditContactModal } from './EditContactModal';
 
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletContactsProps {
     userProfile: () => any;
@@ -35,6 +36,7 @@ interface WalletContactsProps {
 }
 
 export const WalletContacts = (props: WalletContactsProps) => {
+    const { t } = useI18n();
     const [contacts, setContacts] = createSignal<Contact[]>([]);
     const [searchQuery, setSearchQuery] = createSignal('');
     const [isModalOpen, setIsModalOpen] = createSignal(false);
@@ -139,11 +141,11 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 url: referralLink
             }).catch(() => {
                 navigator.clipboard.writeText(message);
-                alert('Invite message copied to clipboard!');
+                alert(t('wallet.contacts.inviteCopied'));
             });
         } else {
             navigator.clipboard.writeText(message);
-            alert('Invite message copied to clipboard!');
+            alert(t('wallet.contacts.inviteCopied'));
         }
     };
 
@@ -172,10 +174,10 @@ export const WalletContacts = (props: WalletContactsProps) => {
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
                 <WalletViewHeader
-                    tag="Network Directory"
-                    title="CONTACTS"
+                    tag={t('wallet.contacts.tag')}
+                    title={t('wallet.contacts.title')}
                     titleAccent=""
-                    description="Manage your network and map identifiers to Vision IDs for seamless interaction."
+                    description={t('wallet.contacts.description')}
                     hideDescriptionOnMobile={true}
                     rightElement={
                         <div class="flex items-center gap-2">
@@ -184,7 +186,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                 class="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all font-black text-[10px] uppercase tracking-widest active:scale-95 shadow-lg shadow-blue-500/20 whitespace-nowrap"
                             >
                                 <Plus class="w-3.5 h-3.5" />
-                                Add Contact
+                                {t('wallet.contacts.addContact')}
                             </button>
                             <button
                                 onClick={handleSync}
@@ -193,7 +195,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                 title="Sync Contacts"
                             >
                                 <RefreshCw class={`w-3.5 h-3.5 ${isSyncing() ? 'animate-spin' : ''}`} />
-                                Sync Contact
+                                {t('wallet.contacts.syncContact')}
                             </button>
                         </div>
                     }
@@ -214,22 +216,22 @@ export const WalletContacts = (props: WalletContactsProps) => {
                             </div>
                             <div>
                                 <div class="flex items-center justify-center md:justify-start gap-2 mb-1">
-                                    <span class="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-md text-[9px] font-black text-blue-400 uppercase tracking-widest">Active Campaign</span>
+                                    <span class="px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded-md text-[9px] font-black text-blue-400 uppercase tracking-widest">{t('wallet.contacts.activeCampaign')}</span>
                                 </div>
-                                <h3 class="text-xl md:text-2xl font-black text-white leading-tight">Invite Friends & Build Network</h3>
-                                <p class="text-sm text-gray-500 mt-1 max-w-sm">Bring your friends to Vision Chain and grow the decentralized future together.</p>
+                                <h3 class="text-xl md:text-2xl font-black text-white leading-tight">{t('wallet.contacts.inviteFriends')}</h3>
+                                <p class="text-sm text-gray-500 mt-1 max-w-sm">{t('wallet.contacts.inviteFriendsDesc')}</p>
                             </div>
                         </div>
 
                         <div class="w-full xl:w-auto flex items-center justify-around xl:justify-center gap-6 md:gap-12 px-6 md:px-10 py-5 bg-white/[0.02] rounded-[24px] border border-white/[0.04]">
                             <div class="text-center">
                                 <div class="text-2xl md:text-3xl font-black text-white tabular-nums">{(invitationCount() * 0).toLocaleString()}</div>
-                                <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VCN Earned</div>
+                                <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('wallet.contacts.vcnEarned')}</div>
                             </div>
                             <div class="h-10 w-px bg-white/[0.06]" />
                             <div class="text-center">
                                 <div class="text-2xl md:text-3xl font-black text-white tabular-nums">{invitationCount()}</div>
-                                <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">VID Linked</div>
+                                <div class="text-[9px] md:text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('wallet.contacts.vidLinked')}</div>
                             </div>
                         </div>
                     </div>
@@ -242,7 +244,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                             onClick={() => setActiveTab('all')}
                             class={`relative py-4 text-[13px] md:text-sm font-bold transition-colors whitespace-nowrap ${activeTab() === 'all' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
                         >
-                            All Contacts
+                            {t('wallet.contacts.allContacts')}
                             <Show when={activeTab() === 'all'}>
                                 <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
                             </Show>
@@ -251,7 +253,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                             onClick={() => setActiveTab('favorites')}
                             class={`relative py-4 text-[13px] md:text-sm font-bold transition-colors whitespace-nowrap ${activeTab() === 'favorites' ? 'text-white' : 'text-gray-500 hover:text-white'}`}
                         >
-                            Favorites
+                            {t('wallet.contacts.favorites')}
                             <Show when={activeTab() === 'favorites'}>
                                 <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
                             </Show>
@@ -262,7 +264,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                         <Search class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
                         <input
                             type="text"
-                            placeholder="Search names or identifiers..."
+                            placeholder={t('wallet.contacts.searchPlaceholder')}
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
                             class="w-full bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-blue-500/50 rounded-2xl pl-11 pr-4 py-3 text-[13px] md:text-sm text-white outline-none transition-all placeholder:text-gray-600"
@@ -276,11 +278,11 @@ export const WalletContacts = (props: WalletContactsProps) => {
                         <table class="w-full table-fixed">
                             <thead class="hidden md:table-header-group">
                                 <tr class="text-left border-b border-white/[0.04]">
-                                    <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[20%]">Name</th>
-                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[20%]">Contact Info</th>
-                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[22%]">Vision ID / Address</th>
-                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[12%]">Status</th>
-                                    <th class="px-4 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right w-[26%]">Actions</th>
+                                    <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[20%]">{t('wallet.contacts.nameHeader')}</th>
+                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[20%]">{t('wallet.contacts.contactInfoHeader')}</th>
+                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[22%]">{t('wallet.contacts.visionIdHeader')}</th>
+                                    <th class="px-6 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest w-[12%]">{t('wallet.contacts.statusHeader')}</th>
+                                    <th class="px-4 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right w-[26%]">{t('wallet.contacts.actionsHeader')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -288,7 +290,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                     <tr>
                                         <td colspan="5" class="px-8 py-20 text-center">
                                             <Loader2 class="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
-                                            <span class="text-sm font-bold text-gray-600 uppercase tracking-widest">Loading Contact List...</span>
+                                            <span class="text-sm font-bold text-gray-600 uppercase tracking-widest">{t('wallet.contacts.loadingContacts')}</span>
                                         </td>
                                     </tr>
                                 </Show>
@@ -299,8 +301,8 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                             <div class="w-16 h-16 rounded-2xl bg-white/[0.02] flex items-center justify-center mx-auto mb-4">
                                                 <User class="w-8 h-8 text-gray-700" />
                                             </div>
-                                            <h3 class="text-lg font-bold text-white mb-1">No Contacts Found</h3>
-                                            <p class="text-gray-500 text-sm">Add some contacts to get started.</p>
+                                            <h3 class="text-lg font-bold text-white mb-1">{t('wallet.contacts.noContactsFound')}</h3>
+                                            <p class="text-gray-500 text-sm">{t('wallet.contacts.noContactsDesc')}</p>
                                         </td>
                                     </tr>
                                 </Show>
@@ -321,7 +323,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                         <div>
                                                             <div class="font-bold text-white">{contact.internalName}</div>
                                                             <Show when={contact.vchainUserUid}>
-                                                                <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">Verified Network Member</div>
+                                                                <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">{t('wallet.contacts.verifiedMember')}</div>
                                                             </Show>
                                                         </div>
                                                     </div>
@@ -343,13 +345,13 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                 <td class="px-6 py-4">
                                                     <Show when={contact.address} fallback={
                                                         <Show when={contact.syncStatus === 'ambiguous'} fallback={
-                                                            <span class="text-xs font-mono text-gray-600">Wait for sync...</span>
+                                                            <span class="text-xs font-mono text-gray-600">{t('wallet.contacts.waitForSync')}</span>
                                                         }>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setSelectedContact(contact); }}
                                                                 class="text-[10px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-md hover:bg-amber-400/20 transition-all animate-pulse"
                                                             >
-                                                                Select Account
+                                                                {t('wallet.contacts.selectAccount')}
                                                             </button>
                                                         </Show>
                                                     }>
@@ -368,18 +370,18 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                         <Show when={contact.syncStatus === 'ambiguous'} fallback={
                                                             <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-orange-500/5 border border-orange-500/10 rounded-md">
                                                                 <div class="w-1 h-1 rounded-full bg-orange-500" />
-                                                                <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">Pending</span>
+                                                                <span class="text-[9px] font-black text-orange-400/60 uppercase tracking-widest">{t('wallet.contacts.pending')}</span>
                                                             </div>
                                                         }>
                                                             <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-md">
                                                                 <div class="w-1 h-1 rounded-full bg-amber-500 animate-pulse" />
-                                                                <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">Action Required</span>
+                                                                <span class="text-[9px] font-black text-amber-500 uppercase tracking-widest">{t('wallet.contacts.actionRequired')}</span>
                                                             </div>
                                                         </Show>
                                                     }>
                                                         <div class="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/5 border border-green-500/10 rounded-md">
                                                             <div class="w-1 h-1 rounded-full bg-green-500 shadow-[0_0_8px_#10b981]" />
-                                                            <span class="text-[9px] font-black text-green-400 uppercase tracking-widest">Registered</span>
+                                                            <span class="text-[9px] font-black text-green-400 uppercase tracking-widest">{t('wallet.contacts.registered')}</span>
                                                         </div>
                                                     </Show>
                                                 </td>
@@ -392,7 +394,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                                 title="Invite Friend"
                                                             >
                                                                 <Share2 class="w-3.5 h-3.5 group-hover/invite:rotate-12 transition-transform" />
-                                                                <span class="text-[10px] font-black uppercase tracking-wider">Invite</span>
+                                                                <span class="text-[10px] font-black uppercase tracking-wider">{t('wallet.contacts.invite')}</span>
                                                             </button>
                                                         }>
                                                             <button
@@ -448,7 +450,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                                                             <div class="min-w-0 flex-1">
                                                                 <div class="font-bold text-white truncate">{contact.internalName}</div>
                                                                 <Show when={contact.vchainUserUid}>
-                                                                    <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">Verified</div>
+                                                                    <div class="text-[9px] font-black text-blue-400/80 uppercase tracking-tighter mt-0.5">{t('wallet.contacts.verified')}</div>
                                                                 </Show>
                                                             </div>
                                                         </div>
@@ -583,7 +585,7 @@ export const WalletContacts = (props: WalletContactsProps) => {
                 <div class="pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
                     <div class="flex items-center gap-3">
                         <div class="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                        <span class="text-[11px] font-black text-gray-600 uppercase tracking-widest">Security Focused: Data is encrypted on-chain</span>
+                        <span class="text-[11px] font-black text-gray-600 uppercase tracking-widest">{t('wallet.contacts.securityFooter')}</span>
                     </div>
                     <div class="flex items-center gap-6">
                         <div class="flex items-center gap-2">
