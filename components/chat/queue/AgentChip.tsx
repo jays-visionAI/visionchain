@@ -3,7 +3,7 @@ import { Dynamic } from 'solid-js/web';
 import { Motion } from 'solid-motionone';
 import { Clock, Check, AlertTriangle, Loader2, X, Repeat, Shield, ArrowRightLeft, Play, Layers } from 'lucide-solid';
 
-export type TaskStatus = 'WAITING' | 'EXECUTING' | 'SENT' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
+export type TaskStatus = 'WAITING' | 'EXECUTING' | 'SENT' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'COMPLETED' | 'LOCKED';
 export type AgentType = 'TIMELOCK' | 'BRIDGE' | 'SWAP' | 'STAKE' | 'BATCH';
 
 export interface AgentTask {
@@ -83,6 +83,26 @@ const STATUS_CONFIG: Record<TaskStatus, any> = {
         textColor: 'text-neutral-400',
         label: 'Expired',
         animate: {}
+    },
+    COMPLETED: {
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/30',
+        accent: 'bg-emerald-500',
+        color: 'text-emerald-400',
+        textColor: 'text-emerald-50',
+        label: 'Completed',
+        animate: {}
+    },
+    LOCKED: {
+        bg: 'bg-indigo-500/10',
+        border: 'border-indigo-500/50',
+        accent: 'bg-indigo-500',
+        color: 'text-indigo-400',
+        textColor: 'text-indigo-50',
+        label: 'Locked',
+        animate: {
+            borderColor: ['rgba(99,102,241,0.3)', 'rgba(99,102,241,0.8)', 'rgba(99,102,241,0.3)'],
+        }
     }
 };
 
@@ -95,7 +115,7 @@ const AGENT_ICONS: Record<AgentType, any> = {
 };
 
 const AgentChip = (props: AgentChipProps) => {
-    const config = createMemo(() => STATUS_CONFIG[props.task.status]);
+    const config = createMemo(() => STATUS_CONFIG[props.task.status] || STATUS_CONFIG['SENT']);
     const BaseIcon = createMemo(() => AGENT_ICONS[props.task.type] || Clock);
 
     const DisplayIcon = createMemo(() => {
