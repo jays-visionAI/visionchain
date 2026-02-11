@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, createEffect, onCleanup } from 'solid-js';
+import { createSignal, createMemo, Show, For, onMount, createEffect, onCleanup } from 'solid-js';
 import { A, useLocation, useNavigate, Navigate } from '@solidjs/router';
 import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity } from 'lucide-solid';
 import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
@@ -131,7 +131,7 @@ function AdminLayoutInner(props: AdminLayoutProps) {
 
     const { adminRole, isAdmin } = useAdminRole();
 
-    const menuItems = getSortedMenuItems(adminRole());
+    const menuItems = createMemo(() => getSortedMenuItems(adminRole()));
 
     return (
         <Show
@@ -192,7 +192,7 @@ function AdminLayoutInner(props: AdminLayoutProps) {
                     <div class="px-3 py-4 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar">
                         <div class="mb-4 px-3 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Management</div>
                         <nav class="space-y-1.5 px-1">
-                            <For each={menuItems}>
+                            <For each={menuItems()}>
                                 {(item) => <MenuItem item={item} />}
                             </For>
                         </nav>
@@ -220,8 +220,8 @@ function AdminLayoutInner(props: AdminLayoutProps) {
 
                         {/* Role Badge */}
                         <div class={`mb-3 px-4 py-2 rounded-lg text-center text-[10px] font-black uppercase tracking-[0.2em] ${isAdmin()
-                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                             }`}>
                             {isAdmin() ? 'Admin' : 'Partner'}
                         </div>
