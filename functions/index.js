@@ -7828,3 +7828,435 @@ exports.backfillRP = onRequest({ cors: true, invoker: "public", timeoutSeconds: 
     return res.status(500).json({ error: err.message || "Backfill failed" });
   }
 });
+
+// =============================================================================
+// AGENT GATEWAY - AI Agent Onboarding & Interaction API
+// =============================================================================
+// Unified endpoint for AI agents from Moltbook, OpenClaw, etc.
+// Actions: register, balance, transfer, referral, leaderboard, profile
+// =============================================================================
+
+const AGENT_FAUCET_AMOUNT = "100"; // 100 VCN initial funding
+
+/**
+ * Generate a unique API key for an agent
+ * @return {string} API key prefixed with vcn_
+ */
+function generateAgentApiKey() {
+  return "vcn_" + crypto.randomBytes(24).toString("hex");
+}
+
+/**
+ * Generate a referral code for an agent
+ * @param {string} agentName - Agent name
+ * @return {string} Referral code
+ */
+function generateAgentReferralCode(agentName) {
+  const suffix = crypto.randomBytes(3).toString("hex").toUpperCase();
+  const prefix = agentName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase();
+  return `AGENT_${prefix}_${suffix}`;
+}
+
+/**
+ * Authenticate agent by API key
+ * @param {string} apiKey - Agent API key
+ * @return {object|null} Agent data or null
+ */
+async function authenticateAgent(apiKey) {
+  if (!apiKey || !apiKey.startsWith("vcn_")) return null;
+  const snap = await db.collection("agents")
+    .where("apiKey", "==", apiKey)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, ...doc.data() };
+}
+
+exports.agentGateway = onRequest({
+  cors: true,
+  invoker: "public",
+  timeoutSeconds: 120,
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async (req, res) => {
+  // CORS
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.status(204).send("");
+
+  // GET requests serve the skill.md content link
+  if (req.method === "GET") {
+    return res.status(200).json({
+      name: "Vision Chain Agent Gateway",
+      version: "1.0.0",
+      skill_url: "https://visionchain.co/skill.md",
+      docs: "https://visionchain.co/agent",
+      actions: ["register", "balance", "transfer", "referral", "leaderboard", "profile"],
+    });
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const { action, api_key } = req.body;
+
+    if (!action) {
+      return res.status(400).json({ error: "Missing required field: action" });
+    }
+
+    // --- REGISTER ---
+    if (action === "register") {
+      const { agent_name, platform, platform_id, owner_email, referral_code } = req.body;
+
+      if (!agent_name || !platform) {
+        return res.status(400).json({
+          error: "Missing required fields: agent_name, platform",
+        });
+      }
+
+      // Check if agent already exists
+      const existingAgent = await db.collection("agents").doc(agent_name.toLowerCase()).get();
+      if (existingAgent.exists) {
+        const data = existingAgent.data();
+        return res.status(409).json({
+          error: "Agent already registered",
+          agent: {
+            agent_name: data.agentName,
+            wallet_address: data.walletAddress,
+            dashboard_url: `https://visionchain.co/agent/${data.agentName}`,
+          },
+        });
+      }
+
+      // Create new wallet
+      const wallet = ethers.Wallet.createRandom();
+      const apiKey = generateAgentApiKey();
+      const agentReferralCode = generateAgentReferralCode(agent_name);
+
+      // Save agent to Firestore
+      const agentData = {
+        agentName: agent_name.toLowerCase(),
+        displayName: agent_name,
+        platform: platform.toLowerCase(),
+        platformId: platform_id || "",
+        ownerEmail: (owner_email || "").toLowerCase(),
+        walletAddress: wallet.address,
+        privateKey: serverEncrypt(wallet.privateKey), // Encrypted server-side
+        apiKey: apiKey,
+        referralCode: agentReferralCode,
+        referralCount: 0,
+        rpPoints: 0,
+        totalTransferred: "0",
+        totalReceived: "0",
+        transferCount: 0,
+        registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: "active",
+      };
+
+      await db.collection("agents").doc(agent_name.toLowerCase()).set(agentData);
+
+      // Fund the wallet with VCN
+      let fundingTxHash = "";
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+        const amountWei = ethers.parseEther(AGENT_FAUCET_AMOUNT);
+        const tx = await tokenContract.transfer(wallet.address, amountWei);
+        await tx.wait();
+        fundingTxHash = tx.hash;
+        console.log(`[Agent Gateway] Funded ${wallet.address} with ${AGENT_FAUCET_AMOUNT} VCN, tx: ${tx.hash}`);
+      } catch (fundErr) {
+        console.error(`[Agent Gateway] Funding failed for ${wallet.address}:`, fundErr.message);
+      }
+
+      // Process referral if provided
+      if (referral_code) {
+        try {
+          // Find referrer agent
+          const referrerSnap = await db.collection("agents")
+            .where("referralCode", "==", referral_code)
+            .limit(1)
+            .get();
+          if (!referrerSnap.empty) {
+            const referrerDoc = referrerSnap.docs[0];
+            await referrerDoc.ref.update({
+              referralCount: admin.firestore.FieldValue.increment(1),
+              rpPoints: admin.firestore.FieldValue.increment(50),
+            });
+            // Give bonus to new agent too
+            await db.collection("agents").doc(agent_name.toLowerCase()).update({
+              rpPoints: admin.firestore.FieldValue.increment(25),
+            });
+            console.log(`[Agent Gateway] Referral processed: ${referral_code} -> ${agent_name}`);
+          } else {
+            // Check human user referral codes
+            const humanSnap = await db.collection("users")
+              .where("referralCode", "==", referral_code)
+              .limit(1)
+              .get();
+            if (!humanSnap.empty) {
+              const humanDoc = humanSnap.docs[0];
+              await humanDoc.ref.update({
+                referralCount: admin.firestore.FieldValue.increment(1),
+              });
+              await db.collection("agents").doc(agent_name.toLowerCase()).update({
+                rpPoints: admin.firestore.FieldValue.increment(25),
+              });
+              console.log(`[Agent Gateway] Human referral processed: ${referral_code} -> ${agent_name}`);
+            }
+          }
+        } catch (refErr) {
+          console.warn(`[Agent Gateway] Referral processing failed:`, refErr.message);
+        }
+      }
+
+      console.log(`[Agent Gateway] Registered agent: ${agent_name} (${platform}) wallet: ${wallet.address}`);
+
+      return res.status(201).json({
+        success: true,
+        agent: {
+          agent_name: agent_name.toLowerCase(),
+          wallet_address: wallet.address,
+          api_key: apiKey,
+          referral_code: agentReferralCode,
+          initial_balance: `${AGENT_FAUCET_AMOUNT} VCN`,
+          funding_tx: fundingTxHash,
+          dashboard_url: `https://visionchain.co/agent/${agent_name.toLowerCase()}`,
+        },
+      });
+    }
+
+    // --- All other actions require authentication ---
+    if (!api_key) {
+      return res.status(401).json({ error: "Missing api_key. Register first." });
+    }
+    const agent = await authenticateAgent(api_key);
+    if (!agent) {
+      return res.status(401).json({ error: "Invalid api_key" });
+    }
+
+    // Update last active
+    db.collection("agents").doc(agent.id).update({
+      lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => { });
+
+    // --- BALANCE ---
+    if (action === "balance") {
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+      const balanceWei = await tokenContract.balanceOf(agent.walletAddress);
+      const balance = ethers.formatEther(balanceWei);
+
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        wallet_address: agent.walletAddress,
+        balance_vcn: balance,
+        rp_points: agent.rpPoints || 0,
+      });
+    }
+
+    // --- TRANSFER ---
+    if (action === "transfer") {
+      const { to, amount } = req.body;
+      if (!to || !amount) {
+        return res.status(400).json({ error: "Missing required fields: to, amount" });
+      }
+
+      const amountNum = parseFloat(amount);
+      if (isNaN(amountNum) || amountNum <= 0 || amountNum > 10000) {
+        return res.status(400).json({ error: "Invalid amount (must be 0 < amount <= 10000)" });
+      }
+
+      // Decrypt agent private key and send
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+      const amountWei = ethers.parseEther(amount.toString());
+
+      // Check balance first
+      const bal = await tokenContract.balanceOf(agent.walletAddress);
+      if (bal < amountWei) {
+        return res.status(400).json({ error: "Insufficient balance" });
+      }
+
+      // Use admin wallet to transfer on behalf (gasless for agent)
+      // Agent's wallet needs to have approved admin, or we use the admin's own tokens
+      // For simplicity, we use direct transfer from decrypted agent wallet
+      const agentPK = serverDecrypt(agent.privateKey);
+      const agentWallet = new ethers.Wallet(agentPK, provider);
+      const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+      // Agent needs gas - send minimal gas from admin
+      const agentBalance = await provider.getBalance(agent.walletAddress);
+      if (agentBalance < ethers.parseEther("0.001")) {
+        const gasTx = await adminWallet.sendTransaction({
+          to: agent.walletAddress,
+          value: ethers.parseEther("0.01"),
+        });
+        await gasTx.wait();
+      }
+
+      const tx = await agentToken.transfer(to, amountWei);
+      await tx.wait();
+
+      // Update stats
+      await db.collection("agents").doc(agent.id).update({
+        transferCount: admin.firestore.FieldValue.increment(1),
+        rpPoints: admin.firestore.FieldValue.increment(5),
+      });
+
+      // Save transaction record
+      db.collection("agents").doc(agent.id).collection("transactions").add({
+        type: "transfer",
+        to: to,
+        amount: amount.toString(),
+        txHash: tx.hash,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => { });
+
+      console.log(`[Agent Gateway] Transfer: ${agent.agentName} -> ${to}: ${amount} VCN, tx: ${tx.hash}`);
+
+      return res.status(200).json({
+        success: true,
+        tx_hash: tx.hash,
+        from: agent.walletAddress,
+        to: to,
+        amount: amount.toString(),
+        rp_earned: 5,
+      });
+    }
+
+    // --- REFERRAL ---
+    if (action === "referral") {
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        referral_code: agent.referralCode,
+        referral_url: `https://visionchain.co/signup?ref=${agent.referralCode}`,
+        agent_referral_url: `https://visionchain.co/agent/register?ref=${agent.referralCode}`,
+        total_referrals: agent.referralCount || 0,
+        rp_earned: agent.rpPoints || 0,
+      });
+    }
+
+    // --- LEADERBOARD ---
+    if (action === "leaderboard") {
+      const { type: lbType = "rp" } = req.body;
+      let query;
+
+      if (lbType === "rp") {
+        query = db.collection("agents")
+          .orderBy("rpPoints", "desc")
+          .limit(20);
+      } else if (lbType === "referrals") {
+        query = db.collection("agents")
+          .orderBy("referralCount", "desc")
+          .limit(20);
+      } else if (lbType === "transfers") {
+        query = db.collection("agents")
+          .orderBy("transferCount", "desc")
+          .limit(20);
+      } else {
+        query = db.collection("agents")
+          .orderBy("rpPoints", "desc")
+          .limit(20);
+      }
+
+      const snap = await query.get();
+      const leaderboard = [];
+      let rank = 1;
+      snap.forEach((doc) => {
+        const d = doc.data();
+        leaderboard.push({
+          rank: rank++,
+          agent_name: d.agentName || d.displayName,
+          platform: d.platform,
+          rp_points: d.rpPoints || 0,
+          referral_count: d.referralCount || 0,
+          transfer_count: d.transferCount || 0,
+          wallet_address: d.walletAddress,
+        });
+      });
+
+      // Find current agent's rank
+      let myRank = leaderboard.findIndex((a) => a.agent_name === agent.agentName) + 1;
+      if (myRank === 0) myRank = "unranked";
+
+      return res.status(200).json({
+        success: true,
+        type: lbType,
+        your_rank: myRank,
+        total_agents: snap.size,
+        leaderboard: leaderboard,
+      });
+    }
+
+    // --- PROFILE ---
+    if (action === "profile") {
+      // Get recent transactions
+      const txSnap = await db.collection("agents").doc(agent.id)
+        .collection("transactions")
+        .orderBy("timestamp", "desc")
+        .limit(10)
+        .get();
+
+      const recentTxs = [];
+      txSnap.forEach((doc) => {
+        const d = doc.data();
+        recentTxs.push({
+          type: d.type,
+          to: d.to,
+          amount: d.amount,
+          tx_hash: d.txHash,
+          timestamp: d.timestamp?.toDate?.()?.toISOString() || "",
+        });
+      });
+
+      // Get on-chain balance
+      let balance = "0";
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+        const balWei = await tokenContract.balanceOf(agent.walletAddress);
+        balance = ethers.formatEther(balWei);
+      } catch (e) {
+        console.warn("[Agent Gateway] Balance check failed:", e.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        agent: {
+          agent_name: agent.agentName,
+          display_name: agent.displayName,
+          platform: agent.platform,
+          platform_id: agent.platformId,
+          wallet_address: agent.walletAddress,
+          balance_vcn: balance,
+          rp_points: agent.rpPoints || 0,
+          referral_code: agent.referralCode,
+          referral_count: agent.referralCount || 0,
+          transfer_count: agent.transferCount || 0,
+          registered_at: agent.registeredAt?.toDate?.()?.toISOString() || "",
+          last_active: agent.lastActiveAt?.toDate?.()?.toISOString() || "",
+          status: agent.status,
+        },
+        recent_transactions: recentTxs,
+        dashboard_url: `https://visionchain.co/agent/${agent.agentName}`,
+      });
+    }
+
+    return res.status(400).json({
+      error: `Unknown action: ${action}`,
+      available_actions: ["register", "balance", "transfer", "referral", "leaderboard", "profile"],
+    });
+  } catch (err) {
+    console.error("[Agent Gateway] Error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
