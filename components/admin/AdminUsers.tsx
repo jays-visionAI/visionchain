@@ -7,7 +7,7 @@ import {
     UserPlus,
     Award
 } from 'lucide-solid';
-import { getAllUsers, resendActivationEmail, manualInviteUser, UserData, backfillAllUsersRP } from '../../services/firebaseService';
+import { getAllUsers, resendActivationEmail, manualInviteUser, updateUserData, UserData, backfillAllUsersRP } from '../../services/firebaseService';
 import { contractService } from '../../services/contractService';
 
 // Sub-components
@@ -158,6 +158,18 @@ export default function AdminUsers() {
         }
     };
 
+    const handleSetRole = async (email: string, role: 'partner' | 'user') => {
+        if (!isAdmin()) { alert('Access denied. Admin privileges required.'); return; }
+        const action = role === 'partner' ? 'Grant Partner role to' : 'Revoke Partner role from';
+        if (!confirm(`${action} ${email}?`)) return;
+        try {
+            await updateUserData(email, { role });
+            refetch();
+        } catch (e: any) {
+            alert(`Failed to update role: ${e.message}`);
+        }
+    };
+
     return (
         <div class="p-6 max-w-7xl mx-auto text-white">
             <header class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
@@ -243,6 +255,7 @@ export default function AdminUsers() {
                                 user={user}
                                 onSendVCN={handleSendVCN}
                                 onResendEmail={handleResendEmail}
+                                onSetRole={isAdmin() ? handleSetRole : undefined}
                                 resendingEmail={resendingEmail()}
                                 copyToClipboard={copyToClipboard}
                                 shortAddress={shortAddress}

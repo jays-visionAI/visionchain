@@ -799,7 +799,7 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
 
       case "reverse_bridge_info": {
         // Return relayer address for client reference
-        const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+        const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
         if (!sepoliaRelayerPk) {
           return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
         }
@@ -814,7 +814,7 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
       case "reverse_bridge_prepare": {
         // Gas sponsorship: send Sepolia ETH to user so they can call approve()
         // This is needed because VCNTokenSepolia does NOT support ERC-2612 Permit
-        const prepRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+        const prepRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
         if (!prepRelayerPk) {
           return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
         }
@@ -1469,7 +1469,7 @@ async function handleReverseBridge(req, res, { user, recipient, amount, fee, dea
   const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
   const SEPOLIA_CHAIN_ID = 11155111;
   const VISION_CHAIN_ID = 3151909;
-  const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+  const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
   const vcnSepoliaAddress = process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b";
 
   if (!sepoliaRelayerPk) {
@@ -1711,7 +1711,7 @@ async function handleSepoliaTransfer(req, res, { user, recipient, amount, fee, d
     const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 
     // Setup Sepolia relayer
-    const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+    const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
     if (!sepoliaRelayerPk) {
       return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
     }
@@ -3619,7 +3619,7 @@ const CHALLENGE_PERIOD_MINUTES = 2; // 테스트용 (프로덕션: 15분)
 
 // Sepolia Bridge Relayer - MUST be set via Firebase Secrets
 // firebase functions:secrets:set SEPOLIA_RELAYER_PK
-const SEPOLIA_RELAYER_PK = process.env.SEPOLIA_RELAYER_PK;
+const SEPOLIA_RELAYER_PK = (process.env.SEPOLIA_RELAYER_PK || "").trim();
 
 /**
  * Bridge Relayer - Scheduled Function

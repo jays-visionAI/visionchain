@@ -69,7 +69,7 @@ export const UserTableRow: Component<UserTableRowProps> = (props) => {
 
     return (
         <>
-            <div class="grid grid-cols-1 md:grid gap-4 p-4 hover:bg-white/[0.03] transition-colors items-center" style="grid-template-columns: repeat(13, minmax(0, 1fr))">
+            <div class="grid grid-cols-1 md:grid gap-4 p-4 hover:bg-white/[0.03] transition-colors items-center" style="grid-template-columns: repeat(14, minmax(0, 1fr))">
                 {/* User Info */}
                 <div class="md:col-span-2 flex items-center gap-3">
                     <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center text-cyan-400 font-black border border-cyan-500/10 text-xs">
