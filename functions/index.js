@@ -671,10 +671,10 @@ const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2 (Chai
 
 // Vision Chain Executor - MUST be set via Firebase Secrets
 // firebase functions:secrets:set VCN_EXECUTOR_PK
-const VCN_EXECUTOR_PK = process.env.VCN_EXECUTOR_PK;
+const VCN_EXECUTOR_PK = (process.env.VCN_EXECUTOR_PK || "").trim();
 
 // Legacy fallback for existing functions (will be removed after migration)
-const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
+const EXECUTOR_PRIVATE_KEY = VCN_EXECUTOR_PK || (process.env.EXECUTOR_PK || "").trim();
 
 // --- VCN Token Address (Vision Chain v2) ---
 const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";

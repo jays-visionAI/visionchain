@@ -24,6 +24,8 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
     const { t } = useI18n();
     const [selectedQuest, setSelectedQuest] = createSignal<string | null>(null);
     const [totalStaked, setTotalStaked] = createSignal('Loading...');
+    const [myRank, setMyRank] = createSignal<number | null>(null);
+    const [myReward, setMyReward] = createSignal(0);
 
     // Fetch real staking data on mount
     onMount(async () => {
@@ -153,16 +155,22 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                         <div class="flex gap-4">
                                             <div class="bg-black/40 border border-white/10 rounded-2xl px-6 py-4">
                                                 <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('campaign.yourRank')}</div>
-                                                <div class="text-2xl font-black text-white italic">#--</div>
+                                                <div class="text-2xl font-black text-white italic">{myRank() !== null ? `#${myRank()}` : '#--'}</div>
                                             </div>
                                             <div class="bg-black/40 border border-white/10 rounded-2xl px-6 py-4">
                                                 <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('campaign.totalReward')}</div>
-                                                <div class="text-2xl font-black text-emerald-400 italic">0 VCN</div>
+                                                <div class="text-2xl font-black text-emerald-400 italic">{myReward() > 0 ? `${myReward().toLocaleString()} VCN` : '0 VCN'}</div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                                <ReferralLeaderboard currentUserEmail={props.userProfile()?.email || ''} />
+                                <ReferralLeaderboard
+                                    currentUserEmail={props.userProfile()?.email || ''}
+                                    onUserStats={(rank, reward) => {
+                                        setMyRank(rank);
+                                        setMyReward(reward);
+                                    }}
+                                />
                             </div>
                         </Show>
 

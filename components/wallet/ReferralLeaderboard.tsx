@@ -28,7 +28,7 @@ interface LeaderboardUser {
     isCurrentUser?: boolean;
 }
 
-export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
+export const ReferralLeaderboard = (props: { currentUserEmail: string; onUserStats?: (rank: number | null, reward: number) => void }) => {
     const [timeLeft, setTimeLeft] = createSignal('--:--:--');
     const [leaderboardData, setLeaderboardData] = createSignal<LeaderboardUser[]>([]);
     const [currentRound, setCurrentRound] = createSignal<ReferralRound | null>(null);
@@ -70,6 +70,15 @@ export const ReferralLeaderboard = (props: { currentUserEmail: string }) => {
             }));
 
             setLeaderboardData(formatted);
+
+            // Report current user's stats back to parent
+            const currentUser = formatted.find(u => u.isCurrentUser);
+            if (props.onUserStats) {
+                props.onUserStats(
+                    currentUser ? currentUser.rank : null,
+                    currentUser ? currentUser.estimatedReward : 0
+                );
+            }
         } catch (e) {
             console.error('Failed to fetch round data:', e);
         }
