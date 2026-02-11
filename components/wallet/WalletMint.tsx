@@ -12,6 +12,7 @@ import {
 } from 'lucide-solid';
 
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletMintProps {
     mintStep: () => number;
@@ -35,6 +36,7 @@ interface WalletMintProps {
 }
 
 export const WalletMint = (props: WalletMintProps) => {
+    const { t } = useI18n();
     return (
         <div class="flex-1 overflow-y-auto relative h-full custom-scrollbar p-4 lg:p-8">
             {/* Decorative Background Blur */}
@@ -48,13 +50,13 @@ export const WalletMint = (props: WalletMintProps) => {
                     >
                         <ArrowLeft class="w-5 h-5" />
                     </button>
-                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">Back to Assets</span>
+                    <span class="text-sm font-bold text-gray-500 uppercase tracking-widest">{t('mint.backToAssets')}</span>
                 </div>
                 <WalletViewHeader
-                    tag="Asset Generation"
-                    title="TOKEN"
-                    titleAccent="MINT"
-                    description="Create new tokens and cross-chain assets powered by Vision Interoperability."
+                    tag={t('mint.tag')}
+                    title={t('mint.title')}
+                    titleAccent={t('mint.titleAccent')}
+                    description={t('mint.description')}
                     rightElement={
                         <div class="flex items-center gap-3">
                             <For each={[1, 2, 3]}>
@@ -79,12 +81,12 @@ export const WalletMint = (props: WalletMintProps) => {
                         <Show when={props.mintStep() === 1}>
                             <div class="space-y-6">
                                 <div class="space-y-2">
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Token Identity</label>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">{t('mint.tokenIdentity')}</label>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div class="relative group">
                                             <input
                                                 type="text"
-                                                placeholder="Token Name (e.g. Vision Gold)"
+                                                placeholder={t('mint.tokenNamePlaceholder')}
                                                 class="w-full bg-[#111113] border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
                                                 value={props.tokenName()}
                                                 onInput={(e) => props.setTokenName(e.currentTarget.value)}
@@ -93,7 +95,7 @@ export const WalletMint = (props: WalletMintProps) => {
                                         <div class="relative group">
                                             <input
                                                 type="text"
-                                                placeholder="Symbol (e.g. VGOLD)"
+                                                placeholder={t('mint.symbolPlaceholder')}
                                                 class="w-full bg-[#111113] border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600 uppercase"
                                                 value={props.tokenSymbol()}
                                                 onInput={(e) => props.setTokenSymbol(e.currentTarget.value)}
@@ -103,21 +105,21 @@ export const WalletMint = (props: WalletMintProps) => {
                                 </div>
 
                                 <div class="space-y-4">
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">Asset Type</label>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1 block text-center md:text-left">{t('mint.assetType')}</label>
                                     <div class="flex gap-4">
                                         <button
                                             onClick={() => props.setTokenType('fungible')}
                                             class={`flex-1 p-5 rounded-2xl border transition-all flex flex-col items-center gap-3 ${props.tokenType() === 'fungible' ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-lg shadow-cyan-500/5' : 'bg-[#111113] border-white/10 text-gray-500 hover:border-white/20'}`}
                                         >
                                             <Zap class="w-6 h-6" />
-                                            <span class="font-bold">Fungible (ERC-20)</span>
+                                            <span class="font-bold">{t('mint.fungible')}</span>
                                         </button>
                                         <button
                                             onClick={() => props.setTokenType('nft')}
                                             class={`flex-1 p-5 rounded-2xl border transition-all flex flex-col items-center gap-3 ${props.tokenType() === 'nft' ? 'bg-purple-500/10 border-purple-500 text-purple-400 shadow-lg shadow-purple-500/5' : 'bg-[#111113] border-white/10 text-gray-500 hover:border-white/20'}`}
                                         >
                                             <Sparkles class="w-6 h-6" />
-                                            <span class="font-bold">NFT (ERC-721)</span>
+                                            <span class="font-bold">{t('mint.nft')}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -126,7 +128,7 @@ export const WalletMint = (props: WalletMintProps) => {
                                     onClick={() => props.setMintStep(2)}
                                     class="w-full py-5 bg-gradient-to-r from-cyan-600 to-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-cyan-500/20 hover:scale-[1.02] transition-all active:scale-95"
                                 >
-                                    Next: Configuration
+                                    {t('mint.nextConfiguration')}
                                 </button>
                             </div>
                         </Show>
@@ -135,7 +137,7 @@ export const WalletMint = (props: WalletMintProps) => {
                         <Show when={props.mintStep() === 2}>
                             <div class="space-y-6">
                                 <div class="space-y-2">
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Total Supply</label>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">{t('mint.totalSupply')}</label>
                                     <input
                                         type="number"
                                         class="w-full bg-[#111113] border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-cyan-500/50 transition-all"
@@ -145,11 +147,11 @@ export const WalletMint = (props: WalletMintProps) => {
                                 </div>
 
                                 <div class="space-y-4">
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Advanced Settings</label>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">{t('mint.advancedSettings')}</label>
                                     <div class="space-y-4">
                                         <div class="relative group">
                                             <textarea
-                                                placeholder="Description (Optional)"
+                                                placeholder={t('mint.descriptionOptional')}
                                                 class="w-full bg-[#111113] border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600 resize-none h-24"
                                             />
                                         </div>
@@ -159,14 +161,14 @@ export const WalletMint = (props: WalletMintProps) => {
                                                 <div class="relative group">
                                                     <input
                                                         type="number"
-                                                        placeholder="Royalty %"
+                                                        placeholder={t('mint.royaltyPercent')}
                                                         class="w-full bg-[#111113] border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
                                                     />
                                                 </div>
                                                 <div class="relative group">
                                                     <input
                                                         type="text"
-                                                        placeholder="Metadata CID"
+                                                        placeholder={t('mint.metadataCid')}
                                                         class="w-full bg-[#111113] border border-white/10 rounded-2xl px-5 py-4 text-white outline-none focus:border-cyan-500/50 transition-all placeholder:text-gray-600"
                                                     />
                                                 </div>
@@ -176,8 +178,8 @@ export const WalletMint = (props: WalletMintProps) => {
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div class="p-4 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between group/toggle cursor-pointer hover:border-white/10 transition-colors">
                                                 <div class="flex flex-col">
-                                                    <span class="text-sm font-bold text-gray-300">Mintable</span>
-                                                    <span class="text-[10px] text-gray-500 uppercase font-black">Allow future supply</span>
+                                                    <span class="text-sm font-bold text-gray-300">{t('mint.mintable')}</span>
+                                                    <span class="text-[10px] text-gray-500 uppercase font-black">{t('mint.allowFutureSupply')}</span>
                                                 </div>
                                                 <div class="w-10 h-5 bg-cyan-500 rounded-full relative shadow-[0_0_10px_rgba(6,182,212,0.3)]">
                                                     <div class="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm" />
@@ -185,8 +187,8 @@ export const WalletMint = (props: WalletMintProps) => {
                                             </div>
                                             <div class="p-4 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center justify-between group/toggle cursor-pointer hover:border-white/10 transition-colors">
                                                 <div class="flex flex-col">
-                                                    <span class="text-sm font-bold text-gray-300">Burnable</span>
-                                                    <span class="text-[10px] text-gray-500 uppercase font-black">Enable token burning</span>
+                                                    <span class="text-sm font-bold text-gray-300">{t('mint.burnable')}</span>
+                                                    <span class="text-[10px] text-gray-500 uppercase font-black">{t('mint.enableBurning')}</span>
                                                 </div>
                                                 <div class="w-10 h-5 bg-white/10 rounded-full relative">
                                                     <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white/30 rounded-full shadow-sm" />
@@ -197,12 +199,12 @@ export const WalletMint = (props: WalletMintProps) => {
                                 </div>
 
                                 <div class="flex gap-4">
-                                    <button onClick={() => props.setMintStep(1)} class="px-8 py-5 bg-white/5 text-gray-400 font-bold rounded-2xl hover:bg-white/10 transition-all">Back</button>
+                                    <button onClick={() => props.setMintStep(1)} class="px-8 py-5 bg-white/5 text-gray-400 font-bold rounded-2xl hover:bg-white/10 transition-all">{t('mint.back')}</button>
                                     <button
                                         onClick={() => props.setMintStep(3)}
                                         class="flex-1 py-5 bg-gradient-to-r from-cyan-600 to-emerald-500 text-white font-bold rounded-2xl shadow-xl shadow-cyan-500/20 hover:scale-[1.02] transition-all active:scale-95"
                                     >
-                                        Next: Select Networks
+                                        {t('mint.nextNetworks')}
                                     </button>
                                 </div>
                             </div>
@@ -212,7 +214,7 @@ export const WalletMint = (props: WalletMintProps) => {
                         <Show when={props.mintStep() === 3}>
                             <div class="space-y-6">
                                 <div class="space-y-4">
-                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Target Networks (Cross-Chain)</label>
+                                    <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">{t('mint.targetNetworks')}</label>
                                     <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                         <For each={[
                                             { name: 'Ethereum', color: 'from-blue-600 to-indigo-500' },
@@ -247,22 +249,22 @@ export const WalletMint = (props: WalletMintProps) => {
                                 <div class="bg-blue-500/5 border border-blue-500/10 p-5 rounded-2xl">
                                     <div class="flex gap-3">
                                         <Shield class="w-5 h-5 text-blue-400 shrink-0" />
-                                        <p class="text-xs text-blue-300 leading-relaxed font-medium">Vision Chain will automatically handle the cross-chain interoperability proofs. One mint covers all selected networks.</p>
+                                        <p class="text-xs text-blue-300 leading-relaxed font-medium">{t('mint.crossChainInfo')}</p>
                                     </div>
                                 </div>
 
                                 <div class="flex gap-4">
-                                    <button onClick={() => props.setMintStep(2)} class="px-8 py-5 bg-white/5 text-gray-400 font-bold rounded-2xl hover:bg-white/10 transition-all">Back</button>
+                                    <button onClick={() => props.setMintStep(2)} class="px-8 py-5 bg-white/5 text-gray-400 font-bold rounded-2xl hover:bg-white/10 transition-all">{t('mint.back')}</button>
                                     <button
                                         onClick={props.handleMint}
                                         disabled={props.isMinting() || !props.tokenName()}
                                         class="flex-1 py-5 bg-gradient-to-r from-blue-600 to-indigo-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/30 hover:scale-[1.02] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        <Show when={props.isMinting()} fallback={props.mintedSuccess() ? "Mint Complete" : "Launch Token"}>
+                                        <Show when={props.isMinting()} fallback={props.mintedSuccess() ? t('mint.mintComplete') : t('mint.launchToken')}>
                                             <div class="flex flex-col items-center gap-1.5">
                                                 <div class="flex items-center justify-center gap-3">
                                                     <RefreshCw class="w-4 h-4 animate-spin text-white/80" />
-                                                    <span class="text-sm tracking-wide">Launching Studio...</span>
+                                                    <span class="text-sm tracking-wide">{t('mint.launchingStudio')}</span>
                                                 </div>
                                                 <div class="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
                                                     <div class="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.5)] transition-all duration-300" style={{ width: `${props.mintProgress()}%` }} />
@@ -278,7 +280,7 @@ export const WalletMint = (props: WalletMintProps) => {
                     {/* Right Side: Live Preview */}
                     <div class="xl:col-span-5 relative">
                         <div class="sticky top-10 space-y-6">
-                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Token Preview</label>
+                            <label class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">{t('mint.tokenPreview')}</label>
 
                             {/* Premium Token Card */}
                             <div class="relative group">
@@ -297,23 +299,23 @@ export const WalletMint = (props: WalletMintProps) => {
                                         </div>
                                         <div class="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10">
                                             <div class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                                            <span class="text-[10px] font-bold text-white uppercase tracking-tighter">Verified Standard</span>
+                                            <span class="text-[10px] font-bold text-white uppercase tracking-tighter">{t('mint.verifiedStandard')}</span>
                                         </div>
                                     </div>
 
                                     <div class="flex-1 space-y-2">
-                                        <div class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em]">Asset Name</div>
-                                        <h3 class="text-3xl font-bold text-white tracking-tight truncate">{props.tokenName() || 'Vision Asset'}</h3>
+                                        <div class="text-[11px] font-black text-white/30 uppercase tracking-[0.2em]">{t('mint.assetName')}</div>
+                                        <h3 class="text-3xl font-bold text-white tracking-tight truncate">{props.tokenName() || t('mint.defaultAssetName')}</h3>
                                         <div class="flex items-center gap-3">
                                             <span class={`text-sm font-bold px-2 py-0.5 rounded ${props.tokenType() === 'fungible' ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-500/20 text-purple-400'}`}>
                                                 {props.tokenSymbol() || 'SYMBOL'}
                                             </span>
-                                            <span class="text-xs text-gray-500 font-medium font-mono">{(Number(props.tokenSupply()) || 0).toLocaleString()} Initial Supply</span>
+                                            <span class="text-xs text-gray-500 font-medium font-mono">{(Number(props.tokenSupply()) || 0).toLocaleString()} {t('mint.initialSupply')}</span>
                                         </div>
                                     </div>
 
                                     <div class="pt-8 mt-8 border-t border-white/5 space-y-4">
-                                        <div class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Distribution Networks</div>
+                                        <div class="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">{t('mint.distributionNetworks')}</div>
                                         <div class="flex flex-wrap gap-2">
                                             <For each={props.mintingNetworks()}>
                                                 {(network) => (
@@ -328,7 +330,7 @@ export const WalletMint = (props: WalletMintProps) => {
 
                                     {/* Watermark */}
                                     <div class="absolute bottom-8 right-8 text-[10px] font-black text-white/10 uppercase tracking-widest rotate-90 origin-bottom-right">
-                                        Minted via Vision Chain
+                                        {t('mint.mintedVia')}
                                     </div>
                                 </div>
                             </div>
@@ -357,11 +359,11 @@ export const WalletMint = (props: WalletMintProps) => {
                                     <Check class="w-6 h-6 text-white" />
                                 </div>
                                 <div>
-                                    <h4 class="text-white font-bold text-lg">Mint Successful!</h4>
-                                    <p class="text-green-400/80 text-sm">{props.tokenSymbol() || 'Asset'} is now live on {props.mintingNetworks().length} networks.</p>
+                                    <h4 class="text-white font-bold text-lg">{t('mint.mintSuccessful')}</h4>
+                                    <p class="text-green-400/80 text-sm">{props.tokenSymbol() || 'Asset'} {t('mint.mintSuccessDesc')} {props.mintingNetworks().length} {t('mint.mintSuccessNetworks')}</p>
                                 </div>
                                 <div class="flex gap-2 w-full mt-2 relative z-10">
-                                    <button class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5">View Explorer</button>
+                                    <button class="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-white text-[10px] font-black uppercase tracking-widest transition-all border border-white/5">{t('mint.viewExplorer')}</button>
                                     <button
                                         onClick={() => {
                                             props.setMintedSuccess(false);
@@ -373,7 +375,7 @@ export const WalletMint = (props: WalletMintProps) => {
                                         }}
                                         class="flex-1 py-3 bg-green-600 hover:bg-green-500 rounded-xl text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-green-500/20"
                                     >
-                                        New Mint
+                                        {t('mint.newMint')}
                                     </button>
                                 </div>
                             </Motion.div>
@@ -385,10 +387,10 @@ export const WalletMint = (props: WalletMintProps) => {
                 <div class="mt-20 pt-10 border-t border-white/[0.04] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
                     <div class="flex items-center justify-between mb-8">
                         <div>
-                            <h3 class="text-2xl font-bold text-white tracking-tight mb-1">My Collections</h3>
-                            <p class="text-gray-500 text-sm">Manage and track your deployed assets across all chains</p>
+                            <h3 class="text-2xl font-bold text-white tracking-tight mb-1">{t('mint.myCollections')}</h3>
+                            <p class="text-gray-500 text-sm">{t('mint.manageCollections')}</p>
                         </div>
-                        <button class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all border border-white/5">View Full History</button>
+                        <button class="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white transition-all border border-white/5">{t('mint.viewFullHistory')}</button>
                     </div>
 
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
@@ -405,15 +407,15 @@ export const WalletMint = (props: WalletMintProps) => {
                                         <div>
                                             <h4 class="font-bold text-base text-white mb-1 group-hover:text-cyan-400 transition-colors">{collection.name}</h4>
                                             <div class="flex items-center gap-2 mb-4">
-                                                <span class="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">Chain Status:</span>
+                                                <span class="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">{t('mint.chainStatus')}</span>
                                                 <div class="flex items-center gap-1">
                                                     <div class="w-1.5 h-1.5 rounded-full bg-green-500" />
-                                                    <span class="text-[10px] text-green-500/80 font-bold">Synced</span>
+                                                    <span class="text-[10px] text-green-500/80 font-bold">{t('mint.synced')}</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="flex items-center justify-between border-t border-white/5 pt-4">
-                                            <span class="text-xs text-gray-500 font-medium">{collection.items} Items</span>
+                                            <span class="text-xs text-gray-500 font-medium">{collection.items} {t('mint.items')}</span>
                                             <div class="flex -space-x-1.5">
                                                 <div class="w-5 h-5 rounded-full border border-[#111113] bg-blue-500 flex items-center justify-center text-[7px] font-black text-white shadow-sm" title="Ethereum">ETH</div>
                                                 <div class="w-5 h-5 rounded-full border border-[#111113] bg-[#14F195] flex items-center justify-center text-[7px] font-black text-black shadow-sm" title="Solana">SOL</div>

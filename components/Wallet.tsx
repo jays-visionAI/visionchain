@@ -55,6 +55,7 @@ import {
     Trophy,
     ExternalLink
 } from 'lucide-solid';
+import { useI18n } from '../i18n/i18nContext';
 import { AI_LOCALIZATION } from '../services/ai/aiLocalization';
 import {
     updateWalletStatus,
@@ -202,6 +203,7 @@ const AiChatIcon = (props: { class?: string }) => (
 
 const Wallet = (): JSX.Element => {
     const navigate = useNavigate();
+    const { t } = useI18n();
     const auth = useAuth();
     // State Declarations
     const location = useLocation();
@@ -3676,10 +3678,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32 custom-scrollbar">
                                 <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                                     <WalletViewHeader
-                                        tag="Blockchain Ledger"
-                                        title="TRANSACTION"
-                                        titleAccent="HISTORY"
-                                        description="View your on-chain activity, token transfers, and purchase records across the Vision network."
+                                        tag={t('history.tag')}
+                                        title={t('history.title')}
+                                        titleAccent={t('history.titleAccent')}
+                                        description={t('history.description')}
                                         icon={HistoryIcon}
                                     />
                                     <WalletActivity
@@ -3867,10 +3869,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         <Match when={onboardingStep() === 0}>
                                             <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="space-y-6">
                                                 <WalletViewHeader
-                                                    tag="Identity Vault"
-                                                    title="USER"
-                                                    titleAccent="PROFILE"
-                                                    description="Manage your Vision ID, linked socials, and account level metrics."
+                                                    tag={t('profile.tag')}
+                                                    title={t('profile.title')}
+                                                    titleAccent={t('profile.titleAccent')}
+                                                    description={t('profile.description')}
                                                     icon={User}
                                                 />
                                                 {/* Profile Card */}
@@ -3983,7 +3985,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             <div class="flex items-center gap-4 text-sm text-gray-400 font-mono mb-4">
                                                                 <span>{userProfile().email}</span>
                                                                 <span class="w-1 h-1 rounded-full bg-gray-700" />
-                                                                <span>{userProfile().phone || 'No phone linked'}</span>
+                                                                <span>{userProfile().phone || t('profile.noPhoneLinked')}</span>
                                                             </div>
 
                                                             {/* XP / Level Progress Bar */}
@@ -4019,10 +4021,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     <div class="bg-black/20 rounded-xl p-3 border border-white/5 w-full max-w-md">
                                                                         <div class="flex justify-between items-center mb-2">
                                                                             <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                                                                                XP Progress
+                                                                                {t('profile.xpProgress')}
                                                                             </span>
                                                                             <span class="text-[9px] font-bold text-gray-400">
-                                                                                <span class="text-white">{refsToNext}</span> INVITES TO LVL {level + 1}
+                                                                                <span class="text-white">{refsToNext}</span> {t('profile.invitesToLvl')} {level + 1}
                                                                             </span>
                                                                         </div>
                                                                         <div class="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
@@ -4045,7 +4047,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                 onClick={() => setOnboardingStep(0.5)}
                                                                 class="px-6 py-3 bg-white text-black rounded-2xl font-bold text-sm hover:bg-white/90 transition-all flex items-center gap-2"
                                                             >
-                                                                Setup Wallet
+                                                                {t('profile.setupWallet')}
                                                                 <ArrowRight class="w-4 h-4" />
                                                             </button>
                                                             <button onClick={() => setOnboardingStep(3)} class="ml-4 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs rounded-2xl hover:bg-red-500/20 transition-all">
@@ -4065,8 +4067,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             <Trophy class="w-4 h-4 text-yellow-400" />
                                                         </div>
                                                         <div class="text-center">
-                                                            <div class="text-xs font-bold text-white uppercase tracking-wider">Reward Logic</div>
-                                                            <div class="text-[9px] text-gray-400">View Rank Benefits</div>
+                                                            <div class="text-xs font-bold text-white uppercase tracking-wider">{t('profile.rewardLogic')}</div>
+                                                            <div class="text-[9px] text-gray-400">{t('profile.viewRankBenefits')}</div>
                                                         </div>
                                                     </button>
 
@@ -4079,8 +4081,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                 <Download class="w-4 h-4 text-emerald-400" />
                                                             </div>
                                                             <div class="text-center">
-                                                                <div class="text-xs font-bold text-white uppercase tracking-wider">Install App</div>
-                                                                <div class="text-[9px] text-gray-400">Add to Home Screen</div>
+                                                                <div class="text-xs font-bold text-white uppercase tracking-wider">{t('profile.installApp')}</div>
+                                                                <div class="text-[9px] text-gray-400">{t('profile.addToHomeScreen')}</div>
                                                             </div>
                                                         </button>
                                                     </Show>
@@ -4089,7 +4091,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                 {/* Security & Stats */}
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                     <div class="bg-white/[0.02] border border-white/[0.06] rounded-[24px] p-6 space-y-4">
-                                                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">Identity & Security</h3>
+                                                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">{t('profile.identitySecurity')}</h3>
                                                         <div class="space-y-3">
                                                             <div class="flex items-center justify-between p-4 bg-white/[0.03] rounded-2xl">
                                                                 <div class="flex items-center gap-3">
@@ -4097,8 +4099,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                         <Lock class="w-5 h-5 text-blue-400" />
                                                                     </div>
                                                                     <div>
-                                                                        <div class="text-sm font-bold text-white">Seed Phrase</div>
-                                                                        <div class="text-[11px] text-gray-500">{userProfile().isVerified ? 'Securely Vaulted' : 'Not generated'}</div>
+                                                                        <div class="text-sm font-bold text-white">{t('profile.seedPhrase')}</div>
+                                                                        <div class="text-[11px] text-gray-500">{userProfile().isVerified ? t('profile.securelyVaulted') : t('profile.notGenerated')}</div>
                                                                     </div>
                                                                 </div>
                                                                 <Show when={userProfile().isVerified} fallback={<CheckCircle class="w-5 h-5 text-gray-700" />}>
@@ -4111,14 +4113,14 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                         <Phone class="w-5 h-5 text-purple-400" />
                                                                     </div>
                                                                     <div class="flex-1">
-                                                                        <div class="text-sm font-bold text-white">Phone Number</div>
+                                                                        <div class="text-sm font-bold text-white">{t('profile.phoneNumber')}</div>
                                                                         <Show when={onboardingStep() === 0}>
                                                                             <div class="flex items-center gap-2 mt-1">
                                                                                 <input
                                                                                     type="tel"
                                                                                     value={editPhone()}
                                                                                     onInput={(e) => setEditPhone(e.currentTarget.value)}
-                                                                                    placeholder="Add phone for VID Search"
+                                                                                    placeholder={t('profile.addPhonePlaceholder')}
                                                                                     class="flex-1 bg-black/20 border border-white/5 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-purple-500/50"
                                                                                 />
                                                                                 <button
@@ -4126,7 +4128,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                                     disabled={isSavingPhone() || editPhone() === userProfile().phone}
                                                                                     class="p-1 px-2 bg-purple-600 rounded text-[10px] font-bold text-white disabled:opacity-30"
                                                                                 >
-                                                                                    {isSavingPhone() ? '...' : 'Save'}
+                                                                                    {isSavingPhone() ? '...' : t('profile.save')}
                                                                                 </button>
                                                                             </div>
                                                                         </Show>
@@ -4140,7 +4142,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             {/* Wallet Address Card */}
                                                             <Show when={onboardingStep() > 1 || userProfile().isVerified}>
                                                                 <div class="p-4 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
-                                                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">Vision Wallet Address</div>
+                                                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">{t('profile.visionWalletAddress')}</div>
                                                                     <div class="flex items-center gap-3">
                                                                         <code class="text-white font-mono text-[12px] flex-1 truncate">{walletAddress()}</code>
                                                                         <button onClick={copyAddress} class="p-2 hover:bg-white/[0.08] rounded-lg transition-colors">
@@ -4155,11 +4157,11 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                     </div>
 
                                                     <div class="bg-white/[0.02] border border-white/[0.06] rounded-[24px] p-6 space-y-4">
-                                                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">Network Activity</h3>
+                                                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">{t('profile.networkActivity')}</h3>
                                                         <div class="grid grid-cols-2 gap-4">
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
                                                                 <div class="text-2xl font-black text-white">{txSentCount()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">TX Sent</div>
+                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.txSent')}</div>
                                                             </div>
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
                                                                 <div class="text-2xl font-black text-white">{(() => {
@@ -4168,7 +4170,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     const verified = userProfile().isVerified;
                                                                     return verified ? '100%' : '0%';
                                                                 })()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Trust Score</div>
+                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.trustScore')}</div>
                                                             </div>
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
                                                                 <div class="text-lg font-black">{(() => {
@@ -4195,7 +4197,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                                                                     return `${getRankName(level)} Lvl.${level}`;
                                                                 })()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Account Tier</div>
+                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.accountTier')}</div>
                                                             </div>
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-purple-400">
                                                                 <div class="text-2xl font-black">{(() => {
@@ -4210,7 +4212,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     if (diffDays >= 30) return `${Math.floor(diffDays / 30)}m ${diffDays % 30}d`;
                                                                     return `${diffDays}d`;
                                                                 })()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Age</div>
+                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.age')}</div>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4222,8 +4224,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         <Match when={onboardingStep() === 0.5}>
                                             <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto py-12">
                                                 <div class="text-center mb-10">
-                                                    <h2 class="text-3xl font-black text-white mb-2">Wallet Setup</h2>
-                                                    <p class="text-gray-400 font-medium">Choose how you want to set up your Vision ID</p>
+                                                    <h2 class="text-3xl font-black text-white mb-2">{t('profile.walletSetup')}</h2>
+                                                    <p class="text-gray-400 font-medium">{t('profile.walletSetupDesc')}</p>
                                                 </div>
 
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">

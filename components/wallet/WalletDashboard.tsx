@@ -45,6 +45,7 @@ import {
     History,
     X
 } from 'lucide-solid';
+import { useI18n } from '../../i18n/i18nContext';
 
 
 interface WalletDashboardProps {
@@ -715,6 +716,7 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
 ];
 
 export const WalletDashboard = (props: WalletDashboardProps) => {
+    const { t } = useI18n();
     const [scrolled, setScrolled] = createSignal(false);
     const [isAgentBayCollapsed, setIsAgentBayCollapsed] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
     const [isMobile, setIsMobile] = createSignal(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
@@ -1201,9 +1203,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             >
                                 <div class="flex flex-col gap-1">
                                     <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
-                                        Hello, {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || <span class="text-red-400">NO DATA</span>}
+                                        {t('chat.hello')} {props.userProfile()?.displayName || props.userProfile()?.name || props.userProfile()?.username || <span class="text-red-400">NO DATA</span>}
                                     </h2>
-                                    <p class="text-lg text-gray-500 font-medium">How can I help you today?</p>
+                                    <p class="text-lg text-gray-500 font-medium">{t('chat.howCanIHelp')}</p>
                                 </div>
 
                                 <div class="flex flex-col gap-2 w-full items-start">
@@ -1636,7 +1638,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 <div class="mb-3">
                                     {/* Agent Desk Header with Toggle */}
                                     <div class="flex items-center justify-between mb-2">
-                                        <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
+                                        <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">{t('chat.agentDesk')}</span>
                                         <button
                                             onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
                                             class={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1.5 ${isAgentBayCollapsed()
@@ -1719,7 +1721,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             <div class="relative bg-[#121214] rounded-2xl border border-white/10 overflow-hidden">
                                 <textarea
                                     value={props.input()}
-                                    placeholder="Tell Vision AI what to do..."
+                                    placeholder={t('chat.placeholder')}
                                     rows="1"
                                     class="w-full bg-transparent text-white text-base px-4 py-4 pb-14 resize-none focus:outline-none placeholder:text-gray-500"
                                     style="max-height: 200px;"
@@ -1775,7 +1777,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="px-2 mb-2 flex flex-col gap-2 relative group-agents">
                                         {/* Header Row: Agent Desk Label (left) + Toggle Button (right) */}
                                         <div class="hidden md:flex items-center justify-between mb-1">
-                                            <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Agent Desk</span>
+                                            <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">{t('chat.agentDesk')}</span>
                                             <button
                                                 onClick={() => setIsAgentBayCollapsed(!isAgentBayCollapsed())}
                                                 class={`w-[120px] px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border flex items-center justify-center gap-1.5 shadow-2xl backdrop-blur-2xl group/agent-toggle ${isAgentBayCollapsed()
@@ -1784,7 +1786,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     }`}
                                             >
                                                 <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
-                                                <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
+                                                <span>{isAgentBayCollapsed() ? t('chat.expand') : t('chat.minimize')}</span>
                                                 <div class="w-3.5 h-3.5 flex items-center justify-center">
                                                     <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
                                                         <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
@@ -1803,7 +1805,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     }`}
                                             >
                                                 <div class={`w-1.5 h-1.5 rounded-full ${isAgentBayCollapsed() ? 'bg-white animate-pulse' : 'bg-blue-500 ring-4 ring-blue-500/10'}`} />
-                                                <span>{isAgentBayCollapsed() ? 'Show Agents' : 'Minimize'}</span>
+                                                <span>{isAgentBayCollapsed() ? t('chat.expand') : t('chat.minimize')}</span>
                                                 <div class="w-3.5 h-3.5 flex items-center justify-center">
                                                     <Show when={!isAgentBayCollapsed()} fallback={<ChevronUp class="w-full h-full" />}>
                                                         <ChevronDown class="w-full h-full group-hover/agent-toggle:translate-y-0.5 transition-transform" />
@@ -1947,7 +1949,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     <div class="flex-1 px-1 border border-[#1a1a1c] group-focus-within:border-[#2a2a2e] rounded-xl self-stretch mt-1 mb-0 order-1 md:order-2 transition-colors">
                                         <textarea
                                             class="w-full bg-transparent text-white text-[16px] py-3.5 px-3 outline-none resize-none placeholder:text-gray-600 min-h-[48px] max-h-[220px] font-medium leading-relaxed scrollbar-hide"
-                                            placeholder={props.isRecording() ? "Listening..." : "Tell Vision AI what to do..."}
+                                            placeholder={props.isRecording() ? t('chat.listening') : t('chat.placeholder')}
                                             rows={1}
                                             value={props.input()}
                                             onCompositionStart={() => setIsComposing(true)}
@@ -2297,7 +2299,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                     {/* Staking / Rewards (Mirrored from Sidebar logic) */}
                     <div class="space-y-6">
-                        <span class="text-[10px] font-bold text-gray-600 uppercase tracking-[0.2em]">Active Rewards</span>
+                        <span class="text-[10px] font-bold text-gray-600 uppercase tracking-[0.2em]">{t('chat.activeRewards')}</span>
                         <div class="space-y-4">
                             <div
                                 onClick={() => props.setActiveView('nodes')}
@@ -2309,8 +2311,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     </div>
                                     <ChevronRight class="w-4 h-4 text-gray-600 group-hover:text-blue-400 transition-all" />
                                 </div>
-                                <div class="text-[18px] font-bold text-white mb-1">12.5% VCN Yield</div>
-                                <p class="text-[12px] text-gray-500 leading-relaxed">Validator nodes are currently operational with 100% uptime.</p>
+                                <div class="text-[18px] font-bold text-white mb-1">{t('chat.vcnYield')}</div>
+                                <p class="text-[12px] text-gray-500 leading-relaxed">{t('chat.vcnYieldDesc')}</p>
                             </div>
 
                             <div
@@ -2323,8 +2325,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                     </div>
                                     <ChevronRight class="w-4 h-4 text-gray-600 group-hover:text-purple-400 transition-all" />
                                 </div>
-                                <div class="text-[18px] font-bold text-white mb-1">Season 1 Airdrop</div>
-                                <p class="text-[12px] text-gray-500 leading-relaxed">Early contributor multipliers active. Claim rewards soon.</p>
+                                <div class="text-[18px] font-bold text-white mb-1">{t('chat.season1Airdrop')}</div>
+                                <p class="text-[12px] text-gray-500 leading-relaxed">{t('chat.season1AirdropDesc')}</p>
                             </div>
                         </div>
                     </div>
@@ -2336,13 +2338,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 <ShieldCheck class="w-5 h-5 text-blue-400" />
                             </div>
                             <div>
-                                <div class="text-[11px] font-black text-white uppercase tracking-widest">KYC Level 1</div>
-                                <div class="text-[10px] text-gray-500 font-bold uppercase">Basic Account</div>
+                                <div class="text-[11px] font-black text-white uppercase tracking-widest">{t('chat.kycLevel')}</div>
+                                <div class="text-[10px] text-gray-500 font-bold uppercase">{t('chat.basicAccount')}</div>
                             </div>
                         </div>
                         <div class="h-px bg-white/[0.04] w-full" />
                         <div class="text-[10px] text-gray-500 leading-loose">
-                            Your identity is verified on the Vision Chain network. Tier 2 verification unlocks increased limits.
+                            {t('chat.identityVerified')}
                         </div>
                     </div>
                 </div>
