@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { contractService } from '../../services/contractService';
 import { getFirebaseDb } from '../../services/firebaseService';
 import { collection, query, where, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletActivityProps {
     purchases: () => any[];
@@ -31,6 +32,7 @@ const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 export const WalletActivity = (props: WalletActivityProps) => {
+    const { t } = useI18n();
     const [transactions, setTransactions] = createSignal<Transaction[]>([]);
     const [loading, setLoading] = createSignal(false);
     const [page, setPage] = createSignal(1);
@@ -195,13 +197,13 @@ export const WalletActivity = (props: WalletActivityProps) => {
                     <div class="flex items-center justify-between px-1">
                         <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
                             <span class="w-1 h-1 rounded-full bg-purple-500"></span>
-                            Off-chain Records
+                            {t('wallet.activity.offChainRecords')}
                         </h3>
                     </div>
 
                     <Show when={props.purchases().length === 0}>
                         <div class="py-12 text-center bg-white/[0.01] border border-white/[0.04] rounded-2xl border-dashed">
-                            <div class="text-gray-600 font-medium text-xs">No purchase records found</div>
+                            <div class="text-gray-600 font-medium text-xs">{t('wallet.activity.noPurchaseRecords')}</div>
                         </div>
                     </Show>
 
@@ -215,13 +217,13 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                             <Plus class="w-5 h-5 text-purple-400" />
                                         </div>
                                         <div>
-                                            <div class="text-sm font-medium text-white underline-offset-4 decoration-purple-500/30 group-hover:underline">VCN Purchase</div>
-                                            <div class="text-xs text-gray-500 italic">Seed Round • {date}</div>
+                                            <div class="text-sm font-medium text-white underline-offset-4 decoration-purple-500/30 group-hover:underline">{t('wallet.activity.vcnPurchase')}</div>
+                                            <div class="text-xs text-gray-500 italic">{t('wallet.activity.seedRound')} • {date}</div>
                                         </div>
                                     </div>
                                     <div class="text-right">
                                         <div class="text-sm font-bold text-purple-400">+{p.amount.toLocaleString()} VCN</div>
-                                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-1">Allocated Record</div>
+                                        <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mt-1">{t('wallet.activity.allocatedRecord')}</div>
                                     </div>
                                 </div>
                             );
@@ -235,9 +237,9 @@ export const WalletActivity = (props: WalletActivityProps) => {
                 <div class="flex items-center justify-between px-1">
                     <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-2">
                         <span class="w-1 h-1 rounded-full bg-blue-500"></span>
-                        On-chain Activity
+                        {t('wallet.activity.onChainActivity')}
                         <Show when={page() > 1}>
-                            <span class="ml-2 text-blue-400/50 bg-blue-500/10 px-1.5 py-0.5 rounded text-[8px]">Page {page()}</span>
+                            <span class="ml-2 text-blue-400/50 bg-blue-500/10 px-1.5 py-0.5 rounded text-[8px]">{t('wallet.activity.page')} {page()}</span>
                         </Show>
                     </h3>
                     <button
@@ -252,13 +254,13 @@ export const WalletActivity = (props: WalletActivityProps) => {
                 <Show when={loading() && transactions().length === 0}>
                     <div class="py-10 text-center">
                         <RefreshCw class="w-6 h-6 text-blue-500 animate-spin mx-auto" />
-                        <div class="text-[10px] font-bold text-gray-500 mt-2 uppercase tracking-widest">Syncing Blockchain History...</div>
+                        <div class="text-[10px] font-bold text-gray-500 mt-2 uppercase tracking-widest">{t('wallet.activity.syncingHistory')}</div>
                     </div>
                 </Show>
 
                 <Show when={!loading() && transactions().length === 0}>
                     <div class="py-12 text-center bg-white/[0.01] border border-white/[0.04] rounded-2xl border-dashed">
-                        <div class="text-gray-600 font-medium text-xs">No on-chain history found on this page</div>
+                        <div class="text-gray-600 font-medium text-xs">{t('wallet.activity.noOnChainHistory')}</div>
                     </div>
                 </Show>
 
@@ -319,7 +321,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                 {isBridgeSend ? (
                                                     <div class="flex flex-col gap-0.5">
                                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                                            <span class="text-purple-400 font-bold">Bridge</span>
+                                                            <span class="text-purple-400 font-bold">{t('wallet.activity.bridge')}</span>
                                                             <span class="text-gray-500 text-[10px]">Vision</span>
                                                             <svg class="w-3 h-3 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                                                             <span class="text-purple-300 font-black uppercase tracking-tight">
@@ -329,7 +331,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                         {/* Show recipient if bridging to someone else */}
                                                         <Show when={bridgeRecipientDisplay}>
                                                             <div class="flex items-center gap-1 text-[10px]">
-                                                                <span class="text-gray-500">To:</span>
+                                                                <span class="text-gray-500">{t('wallet.activity.to')}:</span>
                                                                 <span class="text-purple-300 font-bold">{bridgeRecipientDisplay}</span>
                                                             </div>
                                                         </Show>
@@ -337,7 +339,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                 ) : isBridgeReceive ? (
                                                     <div class="flex flex-col gap-0.5">
                                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                                            <span class="text-green-400 font-bold">Bridge Receive</span>
+                                                            <span class="text-green-400 font-bold">{t('wallet.activity.bridgeReceive')}</span>
                                                             <span class="text-gray-500 text-[10px]">{sourceChainName}</span>
                                                             <svg class="w-3 h-3 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                                                             <span class="text-green-300 font-black uppercase tracking-tight">
@@ -347,7 +349,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                         {/* Show sender if bridge from someone else */}
                                                         <Show when={bridgeSenderDisplay}>
                                                             <div class="flex items-center gap-1 text-[10px]">
-                                                                <span class="text-gray-500">From:</span>
+                                                                <span class="text-gray-500">{t('wallet.activity.from')}:</span>
                                                                 <span class="text-green-300 font-bold">{bridgeSenderDisplay}</span>
                                                             </div>
                                                         </Show>
@@ -359,7 +361,7 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                     );
                                                     const shortAddr = counterpartyAddr ? `${counterpartyAddr.slice(0, 6)}...${counterpartyAddr.slice(-4)}` : 'unknown';
                                                     const displayName = contact ? (contact.internalName || contact.name) : shortAddr;
-                                                    const prefix = isIncoming ? 'Received from' : 'Sent to';
+                                                    const prefix = isIncoming ? t('wallet.activity.receivedFrom') : t('wallet.activity.sentTo');
 
                                                     return (
                                                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -419,10 +421,10 @@ export const WalletActivity = (props: WalletActivityProps) => {
                                                     <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
                                                 </Show>
                                                 {
-                                                    isBridgeComplete ? 'Delivered' :
-                                                        isBridgeFailed ? 'Failed' :
-                                                            isBridgePending ? 'In Progress' :
-                                                                tx.bridgeStatus || 'Pending'
+                                                    isBridgeComplete ? t('wallet.activity.delivered') :
+                                                        isBridgeFailed ? t('wallet.activity.failed') :
+                                                            isBridgePending ? t('wallet.activity.inProgress') :
+                                                                tx.bridgeStatus || t('wallet.activity.pendingStatus')
                                                 }
                                             </div>
                                         </Show>
@@ -440,17 +442,17 @@ export const WalletActivity = (props: WalletActivityProps) => {
                         disabled={loading() || page() === 1}
                         class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-white/5 transition-all"
                     >
-                        Previous
+                        {t('wallet.activity.previous')}
                     </button>
                     <div class="text-xs font-mono text-gray-500">
-                        Page <span class="text-blue-400 font-bold">{page()}</span>
+                        {t('wallet.activity.page')} <span class="text-blue-400 font-bold">{page()}</span>
                     </div>
                     <button
                         onClick={handleNext}
                         disabled={loading() || !hasMore()}
                         class="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:hover:bg-white/5 transition-all"
                     >
-                        Next
+                        {t('wallet.activity.next')}
                     </button>
                 </div>
             </div>

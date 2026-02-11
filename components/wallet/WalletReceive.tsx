@@ -115,13 +115,13 @@ export const WalletReceive = (props: WalletReceiveProps) => {
                         <div class="p-5 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-4">
                             <Globe class="w-5 h-5 text-blue-400 shrink-0" />
                             <p class="text-[10px] text-blue-300/80 font-bold uppercase tracking-wider leading-relaxed">
-                                Deposits are automatically reconciled across <span class="text-blue-400">Vision Bridge</span> nodes.
+                                {t('wallet.receive.depositReconciled')}
                             </p>
                         </div>
                         <div class="p-5 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex gap-4">
                             <Shield class="w-5 h-5 text-amber-400 shrink-0" />
                             <p class="text-[10px] text-amber-300/80 font-bold uppercase tracking-wider leading-relaxed text-left">
-                                Only send assets supported by <span class="text-amber-400">{props.receiveNetwork()}</span>.
+                                {t('wallet.receive.onlySendSupported')}
                             </p>
                         </div>
                     </div>

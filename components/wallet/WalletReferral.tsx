@@ -20,7 +20,7 @@ import {
     Crosshair
 } from 'lucide-solid';
 import { getReferralConfig, getUserReferrals, getUserRP, getRPHistory, UserData, ReferralConfig, RankInfo, LevelThreshold, type UserRP, type RPEntry } from '../../services/firebaseService';
-
+import { useI18n } from '../../i18n/i18nContext';
 import { WalletViewHeader } from './WalletViewHeader';
 
 interface WalletReferralProps {
@@ -33,6 +33,7 @@ const ICON_MAP: Record<string, any> = {
 };
 
 export const WalletReferral = (props: WalletReferralProps) => {
+    const { t } = useI18n();
     const [referrals, setReferrals] = createSignal<UserData[]>([]);
     const [copied, setCopied] = createSignal(false);
     const [isLoading, setIsLoading] = createSignal(true);
@@ -152,10 +153,10 @@ export const WalletReferral = (props: WalletReferralProps) => {
         <div class="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <WalletViewHeader
-                    tag="Visionary Program"
-                    title="REFERRAL"
-                    titleAccent="LEGENDS"
-                    description="Climb the 100 levels of mastery. Unlock ranks, earn exponential rewards, and become a Visionary Legend."
+                    tag={t('wallet.referral.tag')}
+                    title={t('wallet.referral.title')}
+                    titleAccent={t('wallet.referral.titleAccent')}
+                    description={t('wallet.referral.description')}
                     rightElement={
                         <div class="flex items-center gap-4 bg-[#111113]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-3 pr-6 overflow-hidden relative">
                             {/* Animated Glow based on Rank */}
@@ -171,10 +172,10 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                     </div>
                                 </div>
                                 <div>
-                                    <div class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-0.5">CURRENT RANK</div>
+                                    <div class="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-0.5">{t('wallet.referral.currentRank')}</div>
                                     <div class={`text-xl font-black ${stats().rank.color} uppercase tracking-tight flex flex-col leading-none`}>
                                         {stats().rank.name}
-                                        <span class="text-[10px] text-white/40 font-bold tracking-widest mt-0.5">Level {stats().level} / 100</span>
+                                        <span class="text-[10px] text-white/40 font-bold tracking-widest mt-0.5">{t('wallet.referral.level')} {stats().level} / 100</span>
                                     </div>
                                 </div>
                             </div>
@@ -191,7 +192,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                         </div>
 
                         <div class="relative z-10">
-                            <h3 class="text-xl font-black text-white italic mb-6 uppercase tracking-tight">Your Invite Link</h3>
+                            <h3 class="text-xl font-black text-white italic mb-6 uppercase tracking-tight">{t('wallet.referral.yourInviteLink')}</h3>
                             <div class="flex flex-col gap-3 mb-8">
                                 <div class="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between group/link shadow-inner">
                                     <code class="text-blue-400 font-mono text-sm truncate">{referralUrl()}</code>
@@ -218,19 +219,19 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                             });
                                         } else {
                                             copyLink();
-                                            alert("Invitation link copied to clipboard!");
+                                            alert(t('wallet.referral.inviteCopied'));
                                         }
                                     }}
                                     class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-xl shadow-blue-600/20 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-3 active:scale-95"
                                 >
                                     <ArrowUpRight class="w-4 h-4" />
-                                    Share Link
+                                    {t('wallet.referral.shareLink')}
                                 </button>
                             </div>
 
                             <div class="flex items-center gap-8">
                                 <div>
-                                    <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Your Code</div>
+                                    <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">{t('wallet.referral.yourCode')}</div>
                                     <div class="flex items-center gap-2">
                                         <span class="text-2xl font-black text-white font-mono tracking-tighter">{props.userProfile().referralCode}</span>
                                         <button onClick={copyCode} class="text-gray-600 hover:text-white transition-colors">
@@ -240,7 +241,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                 </div>
                                 <div class="w-[1px] h-10 bg-white/5" />
                                 <div>
-                                    <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">Total Earned</div>
+                                    <div class="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1">{t('wallet.referral.totalEarned')}</div>
                                     <div class="text-2xl font-black text-green-400">{(props.userProfile().totalRewardsVCN || 0).toLocaleString()} <span class="text-xs font-bold text-gray-600">VCN</span></div>
                                 </div>
                             </div>
@@ -255,10 +256,10 @@ export const WalletReferral = (props: WalletReferralProps) => {
                         <div class="relative z-10 flex-1 flex flex-col">
                             <div class="flex items-center justify-between mb-2">
                                 <h4 class="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                                    XP Progress
+                                    {t('wallet.referral.xpProgress')}
                                 </h4>
                                 <span class={`text-xs font-bold ${stats().rank.color}`}>
-                                    Lvl {stats().level} <span class="text-gray-600">to</span> Lvl {stats().level + 1}
+                                    {t('wallet.referral.lvl')} {stats().level} <span class="text-gray-600">{t('wallet.referral.to')}</span> {t('wallet.referral.lvl')} {stats().level + 1}
                                 </span>
                             </div>
 
@@ -277,18 +278,18 @@ export const WalletReferral = (props: WalletReferralProps) => {
                             </div>
 
                             <div class="flex justify-between items-center text-[10px] font-mono text-gray-500 mb-6 font-bold">
-                                <span>{stats().progressPercent.toFixed(0)}% Complete</span>
-                                <span>{stats().refsToNext} XP (Invites) Needed</span>
+                                <span>{stats().progressPercent.toFixed(0)}% {t('wallet.referral.complete')}</span>
+                                <span>{stats().refsToNext} {t('wallet.referral.xpNeeded')}</span>
                             </div>
 
                             {/* Status Grid */}
                             <div class="grid grid-cols-2 gap-3 mt-auto">
                                 <div class="bg-black/20 rounded-2xl p-4 border border-white/5">
-                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">Total Invites</div>
+                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">{t('wallet.referral.totalInvites')}</div>
                                     <div class="text-xl font-black text-white">{currentReferralCount()}</div>
                                 </div>
                                 <div class="bg-black/20 rounded-2xl p-4 border border-white/5">
-                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">Reward Points</div>
+                                    <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">{t('wallet.referral.rewardPoints')}</div>
                                     <div class="text-xl font-black text-amber-400">
                                         {userRP().totalRP.toLocaleString()} <span class="text-xs font-bold text-gray-600">RP</span>
                                     </div>
@@ -299,7 +300,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                             <Show when={stats().level < 100}>
                                 <div class="mt-4 p-3 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-center">
                                     <p class="text-[10px] text-gray-400">
-                                        Next Major Rank: <span class="font-bold text-white">{(config()?.ranks || []).find(r => r.minLvl > stats().level)?.name || 'Max'}</span>
+                                        {t('wallet.referral.nextMajorRank')}: <span class="font-bold text-white">{(config()?.ranks || []).find(r => r.minLvl > stats().level)?.name || 'Max'}</span>
                                     </p>
                                 </div>
                             </Show>
@@ -310,9 +311,9 @@ export const WalletReferral = (props: WalletReferralProps) => {
                 {/* Referrals List Section */}
                 <div class="space-y-6">
                     <div class="flex items-center justify-between px-2">
-                        <h3 class="text-xl font-black text-white italic uppercase tracking-tight">MY <span class="text-blue-400">NETWORK</span></h3>
+                        <h3 class="text-xl font-black text-white italic uppercase tracking-tight">{t('wallet.referral.my')} <span class="text-blue-400">{t('wallet.referral.network')}</span></h3>
                         <div class="flex items-center gap-2 text-gray-600">
-                            <span class="text-[9px] font-black uppercase tracking-widest">Direct Invitations</span>
+                            <span class="text-[9px] font-black uppercase tracking-widest">{t('wallet.referral.directInvitations')}</span>
                             <ChevronRight class="w-4 h-4" />
                         </div>
                     </div>
@@ -324,19 +325,19 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                     <div class="w-16 h-16 rounded-full bg-white/[0.02] flex items-center justify-center mx-auto mb-4 border border-white/5">
                                         <Users class="w-8 h-8 text-gray-700" />
                                     </div>
-                                    <div class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">No invitations found</div>
-                                    <p class="text-xs text-gray-700 max-w-[240px] mx-auto italic">Start sharing your link to build your initial Tier 1 network.</p>
+                                    <div class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">{t('wallet.referral.noInvitations')}</div>
+                                    <p class="text-xs text-gray-700 max-w-[240px] mx-auto italic">{t('wallet.referral.noInvitationsDesc')}</p>
                                 </div>
                             }>
                                 <div class="overflow-x-auto">
                                     <table class="w-full text-left">
                                         <thead>
                                             <tr class="border-b border-white/5 bg-white/[0.02]">
-                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Identity</th>
-                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Contact Info</th>
-                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Rewards Generated</th>
-                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">Join Date</th>
+                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('wallet.referral.identity')}</th>
+                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('wallet.referral.contactInfo')}</th>
+                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('wallet.referral.status')}</th>
+                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('wallet.referral.rewardsGenerated')}</th>
+                                                <th class="px-8 py-5 text-[10px] font-black text-gray-500 uppercase tracking-widest text-right">{t('wallet.referral.joinDate')}</th>
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-white/[0.02]">
@@ -366,7 +367,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                                             <div class="flex items-center gap-2">
                                                                 <div class={`w-1.5 h-1.5 rounded-full ${(ref.isVerified || ref.walletAddress) ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse' : 'bg-yellow-500'}`} />
                                                                 <span class={`text-[10px] font-black uppercase tracking-widest ${(ref.isVerified || ref.walletAddress) ? 'text-green-500' : 'text-yellow-500'}`}>
-                                                                    {(ref.isVerified || ref.walletAddress) ? 'Verified' : 'Pending'}
+                                                                    {(ref.isVerified || ref.walletAddress) ? t('wallet.referral.verified') : t('wallet.referral.pending')}
                                                                 </span>
                                                             </div>
                                                         </td>
@@ -393,7 +394,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                         }>
                             <div class="p-20 flex flex-col items-center justify-center">
                                 <div class="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                                <span class="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mt-4">Loading Network...</span>
+                                <span class="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em] mt-4">{t('wallet.referral.loadingNetwork')}</span>
                             </div>
                         </Show>
                     </div>
@@ -402,7 +403,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                 {/* RP (Reward Points) Section */}
                 <div class="space-y-6">
                     <div class="flex items-center justify-between px-2">
-                        <h3 class="text-xl font-black text-white italic uppercase tracking-tight">REWARD <span class="text-amber-400">POINTS</span></h3>
+                        <h3 class="text-xl font-black text-white italic uppercase tracking-tight">{t('wallet.referral.reward')} <span class="text-amber-400">{t('wallet.referral.points')}</span></h3>
                         <div class="flex items-center gap-2">
                             <span class="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-black text-amber-400 uppercase tracking-widest">
                                 {userRP().totalRP.toLocaleString()} RP
@@ -415,25 +416,25 @@ export const WalletReferral = (props: WalletReferralProps) => {
                         <div class="bg-[#111113] border border-amber-500/10 rounded-[24px] p-6 relative overflow-hidden">
                             <div class="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 blur-[30px]" />
                             <div class="relative z-10">
-                                <div class="text-[9px] font-black text-amber-500/60 uppercase tracking-widest mb-2">Total Earned</div>
+                                <div class="text-[9px] font-black text-amber-500/60 uppercase tracking-widest mb-2">{t('wallet.referral.totalEarned')}</div>
                                 <div class="text-2xl font-black text-amber-400">{userRP().totalRP.toLocaleString()}</div>
-                                <div class="text-[10px] font-bold text-gray-600 mt-1">Reward Points</div>
+                                <div class="text-[10px] font-bold text-gray-600 mt-1">{t('wallet.referral.rewardPoints')}</div>
                             </div>
                         </div>
                         <div class="bg-[#111113] border border-emerald-500/10 rounded-[24px] p-6 relative overflow-hidden">
                             <div class="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 blur-[30px]" />
                             <div class="relative z-10">
-                                <div class="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest mb-2">Available</div>
+                                <div class="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest mb-2">{t('wallet.referral.available')}</div>
                                 <div class="text-2xl font-black text-emerald-400">{userRP().availableRP.toLocaleString()}</div>
-                                <div class="text-[10px] font-bold text-gray-600 mt-1">Claimable Points</div>
+                                <div class="text-[10px] font-bold text-gray-600 mt-1">{t('wallet.referral.claimablePoints')}</div>
                             </div>
                         </div>
                         <div class="bg-[#111113] border border-blue-500/10 rounded-[24px] p-6 relative overflow-hidden">
                             <div class="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 blur-[30px]" />
                             <div class="relative z-10">
-                                <div class="text-[9px] font-black text-blue-500/60 uppercase tracking-widest mb-2">Claimed</div>
+                                <div class="text-[9px] font-black text-blue-500/60 uppercase tracking-widest mb-2">{t('wallet.referral.claimed')}</div>
                                 <div class="text-2xl font-black text-blue-400">{userRP().claimedRP.toLocaleString()}</div>
-                                <div class="text-[10px] font-bold text-gray-600 mt-1">Converted to VCN</div>
+                                <div class="text-[10px] font-bold text-gray-600 mt-1">{t('wallet.referral.convertedToVcn')}</div>
                             </div>
                         </div>
                     </div>
@@ -445,9 +446,9 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                 <UserPlus class="w-5 h-5 text-amber-400" />
                             </div>
                             <div>
-                                <div class="text-xs font-black text-white uppercase tracking-wider mb-1">Per Referral</div>
+                                <div class="text-xs font-black text-white uppercase tracking-wider mb-1">{t('wallet.referral.perReferral')}</div>
                                 <div class="text-lg font-black text-amber-400">+10 RP</div>
-                                <p class="text-[10px] text-gray-500 mt-1">Earned for each new user you invite</p>
+                                <p class="text-[10px] text-gray-500 mt-1">{t('wallet.referral.perReferralDesc')}</p>
                             </div>
                         </div>
                         <div class="bg-[#111113] border border-white/[0.06] rounded-[24px] p-5 flex items-start gap-4">
@@ -455,9 +456,9 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                 <Trophy class="w-5 h-5 text-purple-400" />
                             </div>
                             <div>
-                                <div class="text-xs font-black text-white uppercase tracking-wider mb-1">Level-Up Bonus</div>
+                                <div class="text-xs font-black text-white uppercase tracking-wider mb-1">{t('wallet.referral.levelUpBonus')}</div>
                                 <div class="text-lg font-black text-purple-400">+100 RP</div>
-                                <p class="text-[10px] text-gray-500 mt-1">Every 10 levels (LVL 10, 20, 30...)</p>
+                                <p class="text-[10px] text-gray-500 mt-1">{t('wallet.referral.levelUpBonusDesc')}</p>
                             </div>
                         </div>
                     </div>
@@ -466,7 +467,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                     <Show when={rpHistory().length > 0}>
                         <div class="bg-[#111113] border border-white/[0.08] rounded-[32px] overflow-hidden">
                             <div class="p-5 border-b border-white/5">
-                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Recent Activity</div>
+                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('wallet.referral.recentActivity')}</div>
                             </div>
                             <div class="divide-y divide-white/[0.03]">
                                 <For each={rpHistory()}>
@@ -482,7 +483,7 @@ export const WalletReferral = (props: WalletReferralProps) => {
                                                 </div>
                                                 <div>
                                                     <div class="text-xs font-bold text-gray-200">
-                                                        {entry.type === 'referral' ? 'Referral Bonus' : 'Level-Up Bonus'}
+                                                        {entry.type === 'referral' ? t('wallet.referral.referralBonus') : t('wallet.referral.levelUpBonus')}
                                                     </div>
                                                     <div class="text-[10px] text-gray-600 font-mono truncate max-w-[200px]">
                                                         {entry.source}
@@ -512,8 +513,8 @@ export const WalletReferral = (props: WalletReferralProps) => {
                             <Shield class="w-6 h-6 text-blue-500" />
                         </div>
                         <div>
-                            <h4 class="text-sm font-black text-white italic uppercase mb-1">Referral Security & Integrity</h4>
-                            <p class="text-xs text-gray-500 leading-relaxed font-medium">Vision Chain uses a neural fraud detection system to verify network quality. Self-referrals and bot-driven invitations are automatically suppressed and may result in account restriction. Rewards are distributed in VCN and settled directly to your wallet.</p>
+                            <h4 class="text-sm font-black text-white italic uppercase mb-1">{t('wallet.referral.securityTitle')}</h4>
+                            <p class="text-xs text-gray-500 leading-relaxed font-medium">{t('wallet.referral.securityDesc')}</p>
                         </div>
                     </div>
                 </div>

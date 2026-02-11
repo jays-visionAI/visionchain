@@ -281,7 +281,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
                                         : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
                                 >
-                                    All Networks
+                                    {t('wallet.assets.allNetworks')}
                                 </button>
                                 <button
                                     onClick={() => setNetworkFilter('mainnet')}
@@ -289,7 +289,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         ? 'bg-green-500 text-white shadow-lg shadow-green-500/20'
                                         : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
                                 >
-                                    Mainnet
+                                    {t('wallet.assets.mainnet')}
                                 </button>
                                 <button
                                     onClick={() => setNetworkFilter('testnet')}
@@ -297,7 +297,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                                         ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
                                         : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
                                 >
-                                    Testnet
+                                    {t('wallet.assets.testnet')}
                                 </button>
                             </div>
 
