@@ -807,7 +807,7 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
         return res.status(200).json({
           success: true,
           relayerAddress: relayerWallet.address,
-          vcnSepoliaAddress: process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b",
+          vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
         });
       }
 
@@ -852,7 +852,7 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
         return res.status(200).json({
           success: true,
           relayerAddress: prepRelayerAddress,
-          vcnSepoliaAddress: process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b",
+          vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
           gasRefillTxHash,
           userEthBalance: ethers.formatEther(userEthBalance),
         });
@@ -1470,7 +1470,7 @@ async function handleReverseBridge(req, res, { user, recipient, amount, fee, dea
   const SEPOLIA_CHAIN_ID = 11155111;
   const VISION_CHAIN_ID = 3151909;
   const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
-  const vcnSepoliaAddress = process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b";
+  const vcnSepoliaAddress = (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim();
 
   if (!sepoliaRelayerPk) {
     return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
@@ -1707,7 +1707,7 @@ async function handleSepoliaTransfer(req, res, { user, recipient, amount, fee, d
       return res.status(400).json({ error: "Missing required fields: user, recipient, amount, signature" });
     }
 
-    const VCN_SEPOLIA_ADDRESS = process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b";
+    const VCN_SEPOLIA_ADDRESS = (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim();
     const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 
     // Setup Sepolia relayer
@@ -4029,7 +4029,7 @@ async function executeSepoliaBridgeTransfer(bridge) {
 
   // VCN Token contract on Sepolia (to be deployed)
   // TODO: Update this address after deploying VCNToken on Sepolia
-  const VCN_SEPOLIA_ADDRESS = process.env.VCN_SEPOLIA_ADDRESS || "0x0000000000000000000000000000000000000000";
+  const VCN_SEPOLIA_ADDRESS = (process.env.VCN_SEPOLIA_ADDRESS || "0x0000000000000000000000000000000000000000").trim();
 
   // VCN Token ABI for minting
   const VCN_TOKEN_ABI = [

@@ -1,21 +1,20 @@
 import { Component, createSignal, onCleanup, onMount } from 'solid-js';
 import { ExternalLink, RefreshCw, Zap, Box, Tag } from 'lucide-solid';
+import { getVcnPrice, initPriceService } from '../../../services/vcnPriceService';
 
 export const DashboardHeader: Component = () => {
     // Mock Ticker Data
     const [blockHeight, setBlockHeight] = createSignal(12458923);
     const [gasPrice, setGasPrice] = createSignal(12); // gwei
-    const [vcnPrice, setVcnPrice] = createSignal(0.72); // USD - starts at middle of range
 
-    // Simulate live updates - slower block height, VCN price between $0.6-$0.85
+    onMount(() => {
+        initPriceService();
+    });
+
+    // Simulate live updates - slower block height
     const timer = setInterval(() => {
         setBlockHeight(p => p + 1); // Block height increments by 1 every 5 seconds
         setGasPrice(p => Math.max(5, Math.min(20, p + (Math.random() - 0.5) * 2)));
-        // VCN Price: fluctuate between 0.6 and 0.85
-        setVcnPrice(p => {
-            const change = (Math.random() - 0.5) * 0.02; // Small changes
-            return Math.max(0.6, Math.min(0.85, p + change));
-        });
     }, 5000); // Slower - every 5 seconds
 
     onCleanup(() => clearInterval(timer));
@@ -51,12 +50,12 @@ export const DashboardHeader: Component = () => {
                     </div>
                 </div>
 
-                {/* Token Price */}
+                {/* Token Price - Live from price service */}
                 <div class="flex items-center gap-2">
                     <Tag class="w-3.5 h-3.5 text-green-400" />
                     <div class="flex flex-col">
                         <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">VCN Price</span>
-                        <span class="text-xs font-mono text-white">${vcnPrice().toFixed(3)}</span>
+                        <span class="text-xs font-mono text-white">${getVcnPrice().toFixed(3)}</span>
                     </div>
                 </div>
             </div>
