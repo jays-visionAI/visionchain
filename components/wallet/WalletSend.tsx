@@ -55,6 +55,7 @@ interface WalletSendProps {
 // Transferable asset configurations
 const TRANSFERABLE_ASSETS = [
     { symbol: 'VCN', name: 'Vision Chain', letter: 'V', color: 'blue', bgClass: 'bg-blue-500/20', textClass: 'text-blue-400', borderClass: 'border-blue-500/30', bgActiveClass: 'bg-blue-500/10' },
+    { symbol: 'VCN_SEPOLIA', name: 'Sepolia VCN', letter: 'S', color: 'purple', bgClass: 'bg-purple-500/20', textClass: 'text-purple-400', borderClass: 'border-purple-500/30', bgActiveClass: 'bg-purple-500/10' },
     { symbol: 'ETH', name: 'Ethereum', letter: 'E', color: 'indigo', bgClass: 'bg-indigo-500/20', textClass: 'text-indigo-400', borderClass: 'border-indigo-500/30', bgActiveClass: 'bg-indigo-500/10' },
 ];
 

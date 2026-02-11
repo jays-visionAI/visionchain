@@ -734,7 +734,7 @@ const VCN_TOKEN_ABI = [
  *   transactions?: Array<{recipient, amount, name?}>
  * }
  */
-exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 300, secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 300, secrets: ["VCN_EXECUTOR_PK", "SEPOLIA_RELAYER_PK", "VCN_SEPOLIA_ADDRESS", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -796,6 +796,26 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
 
       case "staking":
         return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
+
+      case "reverse_bridge_info": {
+        // Return relayer address so client can sign Permit with correct spender
+        const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+        if (!sepoliaRelayerPk) {
+          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+        }
+        const relayerWallet = new ethers.Wallet(sepoliaRelayerPk);
+        return res.status(200).json({
+          success: true,
+          relayerAddress: relayerWallet.address,
+          vcnSepoliaAddress: process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b",
+        });
+      }
+
+      case "reverse_bridge":
+        return await handleReverseBridge(req, res, { user, recipient, amount, fee, deadline, signature, adminWallet });
+
+      case "sepolia_transfer":
+        return await handleSepoliaTransfer(req, res, { user, recipient, amount, fee, deadline, signature });
 
       case "admin_transfer":
         return await handleAdminTransfer(req, res, { recipient, amount, tokenContract, adminWallet });
@@ -1380,6 +1400,369 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
   } catch (err) {
     console.error("[Paymaster:Bridge] Error:", err);
     return res.status(500).json({ error: err.message || "Bridge transaction failed" });
+  }
+}
+
+/**
+ * Handle reverse bridge: Sepolia VCN → Vision Chain VCN
+ * User signs EIP-712 Permit on Sepolia VCN token.
+ * Relayer executes permit, collects fee in VCN Sepolia, transfers bridge amount to custody.
+ * Then admin wallet sends VCN on Vision Chain to user.
+ *
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ * @param {object} params - Reverse bridge parameters
+ * @return {Promise} - Response promise
+ */
+async function handleReverseBridge(req, res, { user, recipient, amount, fee, deadline, signature, adminWallet }) {
+  if (!user || !amount) {
+    return res.status(400).json({ error: "Missing required fields: user, amount" });
+  }
+
+  const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+  const SEPOLIA_CHAIN_ID = 11155111;
+  const VISION_CHAIN_ID = 3151909;
+  const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+  const vcnSepoliaAddress = process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b";
+
+  if (!sepoliaRelayerPk) {
+    return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+  }
+
+  // The recipient on Vision Chain (defaults to user's own address)
+  const visionRecipient = recipient || user;
+
+  console.log(`[ReverseBridge] ${user} bridging ${amount} VCN Sepolia → Vision Chain, recipient: ${visionRecipient}`);
+
+  try {
+    // === Setup Sepolia connection ===
+    const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+    const relayerWallet = new ethers.Wallet(sepoliaRelayerPk, sepoliaProvider);
+    const relayerAddress = await relayerWallet.getAddress();
+
+    // VCN Token on Sepolia (ERC20 with Permit)
+    const VCN_SEPOLIA_ABI = [
+      "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
+      "function transferFrom(address from, address to, uint256 amount) external returns (bool)",
+      "function balanceOf(address account) view returns (uint256)",
+      "function allowance(address owner, address spender) view returns (uint256)",
+      "function name() view returns (string)",
+      "function nonces(address owner) view returns (uint256)",
+    ];
+    const sepoliaVcnToken = new ethers.Contract(vcnSepoliaAddress, VCN_SEPOLIA_ABI, relayerWallet);
+
+    const amountWei = BigInt(amount);
+    const BRIDGE_FEE = fee ? BigInt(fee) : ethers.parseEther("1"); // Default 1 VCN Sepolia fee
+    const totalAmount = amountWei + BRIDGE_FEE;
+
+    // === DIAGNOSTIC LOGGING ===
+    const userBalance = await sepoliaVcnToken.balanceOf(user);
+    const relayerEthBalance = await sepoliaProvider.getBalance(relayerAddress);
+    console.log(`[ReverseBridge] Relayer address: ${relayerAddress}`);
+    console.log(`[ReverseBridge] Relayer ETH balance: ${ethers.formatEther(relayerEthBalance)} ETH`);
+    console.log(`[ReverseBridge] User Sepolia VCN balance: ${ethers.formatEther(userBalance)}`);
+    console.log(`[ReverseBridge] Required total: ${ethers.formatEther(totalAmount)} (amount: ${ethers.formatEther(amountWei)}, fee: ${ethers.formatEther(BRIDGE_FEE)})`);
+
+    if (relayerEthBalance < ethers.parseEther("0.001")) {
+      return res.status(503).json({ error: "Relayer ETH balance too low for gas. Please try again later." });
+    }
+
+    if (userBalance < totalAmount) {
+      return res.status(400).json({ error: `Insufficient Sepolia VCN balance. Have: ${ethers.formatEther(userBalance)}, Need: ${ethers.formatEther(totalAmount)}` });
+    }
+
+    // === STEP 0: Execute Permit on Sepolia VCN ===
+    if (signature && deadline) {
+      const { v, r, s } = parseSignature(signature);
+      if (v) {
+        try {
+          console.log(`[ReverseBridge] Executing Sepolia permit for ${ethers.formatEther(totalAmount)} VCN...`);
+          const permitTx = await sepoliaVcnToken.permit(
+            user, relayerAddress, totalAmount, deadline, v, r, s,
+            { gasLimit: 100000 }
+          );
+          await permitTx.wait();
+          console.log(`[ReverseBridge] Sepolia permit successful`);
+        } catch (permitErr) {
+          console.error(`[ReverseBridge] Permit failed:`, permitErr.message);
+          return res.status(400).json({ error: `Sepolia permit failed: ${permitErr.reason || permitErr.message}` });
+        }
+      }
+    } else {
+      console.warn(`[ReverseBridge] No signature/deadline provided, checking existing allowance...`);
+      const existingAllowance = await sepoliaVcnToken.allowance(user, relayerAddress);
+      if (existingAllowance < totalAmount) {
+        return res.status(400).json({ error: "No permit signature provided and insufficient allowance" });
+      }
+    }
+
+    // === STEP 1: Collect fee (VCN Sepolia) ===
+    try {
+      const feeTx = await sepoliaVcnToken.transferFrom(user, relayerAddress, BRIDGE_FEE, { gasLimit: 100000 });
+      await feeTx.wait();
+      console.log(`[ReverseBridge] Fee collected: ${ethers.formatEther(BRIDGE_FEE)} VCN Sepolia`);
+    } catch (feeErr) {
+      console.error(`[ReverseBridge] Fee collection failed:`, feeErr.message);
+      return res.status(400).json({ error: `Fee collection failed: ${feeErr.reason || feeErr.message}` });
+    }
+
+    // === STEP 2: Transfer bridge amount to relayer custody (lock on Sepolia) ===
+    let sepoliaLockTxHash;
+    try {
+      const lockTx = await sepoliaVcnToken.transferFrom(user, relayerAddress, amountWei, { gasLimit: 100000 });
+      const lockReceipt = await lockTx.wait();
+      sepoliaLockTxHash = lockTx.hash;
+      console.log(`[ReverseBridge] Locked ${ethers.formatEther(amountWei)} VCN Sepolia (tx: ${sepoliaLockTxHash})`);
+    } catch (lockErr) {
+      console.error(`[ReverseBridge] Lock failed:`, lockErr.message);
+      return res.status(400).json({ error: `Sepolia VCN lock failed: ${lockErr.reason || lockErr.message}` });
+    }
+
+    // === STEP 3: Send VCN on Vision Chain to user ===
+    let visionTxHash;
+    try {
+      // Admin wallet is already connected to Vision Chain RPC
+      const visionAdminBalance = await adminWallet.provider.getBalance(adminWallet.address);
+      console.log(`[ReverseBridge] Vision Chain admin balance: ${ethers.formatEther(visionAdminBalance)}`);
+
+      // Transfer VCN ERC-20 on Vision Chain
+      const visionVcnToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+      const adminVcnBalance = await visionVcnToken.balanceOf(adminWallet.address);
+      console.log(`[ReverseBridge] Admin VCN ERC-20 balance: ${ethers.formatEther(adminVcnBalance)}`);
+
+      if (adminVcnBalance >= amountWei) {
+        // Transfer ERC-20 VCN
+        const transferTx = await visionVcnToken.transfer(visionRecipient, amountWei, { gasLimit: 100000 });
+        const transferReceipt = await transferTx.wait();
+        visionTxHash = transferTx.hash;
+        console.log(`[ReverseBridge] Vision Chain VCN sent: ${visionTxHash}`);
+      } else {
+        // Fallback: try native VCN transfer
+        const nativeBalance = await adminWallet.provider.getBalance(adminWallet.address);
+        if (nativeBalance >= amountWei + ethers.parseEther("0.01")) {
+          const nativeTx = await adminWallet.sendTransaction({
+            to: visionRecipient,
+            value: amountWei,
+            gasLimit: 21000,
+          });
+          await nativeTx.wait();
+          visionTxHash = nativeTx.hash;
+          console.log(`[ReverseBridge] Vision Chain native VCN sent: ${visionTxHash}`);
+        } else {
+          throw new Error("Admin wallet has insufficient VCN balance on Vision Chain");
+        }
+      }
+    } catch (visionErr) {
+      console.error(`[ReverseBridge] Vision Chain transfer failed:`, visionErr.message);
+      // Critical: Sepolia VCN already locked. Save record for manual resolution.
+      await db.collection("reverseBridgeFailures").add({
+        user: user.toLowerCase(),
+        recipient: visionRecipient.toLowerCase(),
+        amount: ethers.formatEther(amountWei),
+        fee: ethers.formatEther(BRIDGE_FEE),
+        sepoliaLockTxHash,
+        error: visionErr.message,
+        status: "PENDING_MANUAL_RESOLUTION",
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+      return res.status(500).json({
+        error: `Vision Chain transfer failed after Sepolia lock. TX: ${sepoliaLockTxHash}. Manual resolution needed.`,
+        sepoliaLockTxHash,
+      });
+    }
+
+    // === STEP 4: Record to Firestore ===
+    try {
+      // Main transaction record
+      await db.collection("transactions").doc(visionTxHash).set({
+        hash: visionTxHash,
+        from_addr: "bridge:sepolia",
+        to_addr: visionRecipient.toLowerCase(),
+        value: ethers.formatEther(amountWei),
+        timestamp: Date.now(),
+        type: "Bridge Receive",
+        bridgeStatus: "COMPLETED",
+        sepoliaLockTxHash,
+        metadata: {
+          sourceChain: "Ethereum Sepolia",
+          destinationChain: "Vision Chain",
+          srcChainId: SEPOLIA_CHAIN_ID,
+          dstChainId: VISION_CHAIN_ID,
+          fee: ethers.formatEther(BRIDGE_FEE),
+          direction: "reverse",
+        },
+      });
+
+      // Reverse bridge ledger record
+      await db.collection("reverseBridgeTransactions").add({
+        user: user.toLowerCase(),
+        recipient: visionRecipient.toLowerCase(),
+        amount: ethers.formatEther(amountWei),
+        fee: ethers.formatEther(BRIDGE_FEE),
+        sepoliaLockTxHash,
+        visionTxHash,
+        srcChainId: SEPOLIA_CHAIN_ID,
+        dstChainId: VISION_CHAIN_ID,
+        status: "COMPLETED",
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+
+      // Notification to user
+      const senderEmail = await getBridgeUserEmail(user);
+      if (senderEmail) {
+        await db.collection("users").doc(senderEmail).collection("notifications").add({
+          type: "bridge_completed",
+          title: "Reverse Bridge Complete",
+          content: `${ethers.formatEther(amountWei)} VCN has been bridged from Sepolia to Vision Chain.`,
+          data: {
+            amount: ethers.formatEther(amountWei),
+            sourceChain: "Ethereum Sepolia",
+            destinationChain: "Vision Chain",
+            sepoliaLockTxHash,
+            visionTxHash,
+            direction: "reverse",
+            status: "completed",
+          },
+          email: senderEmail,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      console.log(`[ReverseBridge] Firestore records saved`);
+    } catch (firestoreErr) {
+      console.warn(`[ReverseBridge] Firestore write failed (non-critical):`, firestoreErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      sepoliaLockTxHash,
+      visionTxHash,
+      fee: ethers.formatEther(BRIDGE_FEE),
+      amount: ethers.formatEther(amountWei),
+      direction: "sepolia_to_vision",
+    });
+  } catch (err) {
+    console.error("[ReverseBridge] Error:", err);
+    return res.status(500).json({ error: err.message || "Reverse bridge failed" });
+  }
+}
+
+/**
+ * Handle Sepolia VCN transfer (relayer-sponsored, user pays fee in VCN Sepolia)
+ * Flow: User signs Permit -> Relayer executes permit -> Relayer collects fee -> Relayer transfers to recipient
+ */
+async function handleSepoliaTransfer(req, res, { user, recipient, amount, fee, deadline, signature }) {
+  try {
+    console.log("[SepoliaTransfer] Starting...", { user, recipient, amount: amount?.toString() });
+
+    if (!user || !recipient || !amount || !signature) {
+      return res.status(400).json({ error: "Missing required fields: user, recipient, amount, signature" });
+    }
+
+    const VCN_SEPOLIA_ADDRESS = process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b";
+    const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+
+    // Setup Sepolia relayer
+    const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+    if (!sepoliaRelayerPk) {
+      return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+    }
+    const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+    const sepoliaRelayer = new ethers.Wallet(sepoliaRelayerPk, sepoliaProvider);
+    const relayerAddress = sepoliaRelayer.address;
+
+    console.log(`[SepoliaTransfer] Relayer: ${relayerAddress}`);
+
+    // VCN Sepolia contract
+    const vcnAbi = [
+      "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
+      "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+      "function balanceOf(address account) view returns (uint256)",
+      "function allowance(address owner, address spender) view returns (uint256)",
+    ];
+    const vcnContract = new ethers.Contract(VCN_SEPOLIA_ADDRESS, vcnAbi, sepoliaRelayer);
+
+    const transferAmount = BigInt(amount);
+    const feeAmount = fee ? BigInt(fee) : ethers.parseEther("1");
+    const totalAmount = transferAmount + feeAmount;
+
+    // Check user balance
+    const userBalance = await vcnContract.balanceOf(user);
+    console.log(`[SepoliaTransfer] User balance: ${ethers.formatEther(userBalance)}, needed: ${ethers.formatEther(totalAmount)}`);
+    if (userBalance < totalAmount) {
+      return res.status(400).json({ error: `Insufficient Sepolia VCN balance. Have: ${ethers.formatEther(userBalance)}, Need: ${ethers.formatEther(totalAmount)}` });
+    }
+
+    // Execute Permit
+    const { v, r, s } = parseSignature(signature);
+    if (v) {
+      try {
+        console.log(`[SepoliaTransfer] Executing permit for ${ethers.formatEther(totalAmount)} VCN...`);
+        const permitTx = await vcnContract.permit(user, relayerAddress, totalAmount, deadline, v, r, s);
+        await permitTx.wait();
+        console.log("[SepoliaTransfer] Permit executed:", permitTx.hash);
+      } catch (permitErr) {
+        console.error("[SepoliaTransfer] Permit failed:", permitErr.message);
+        // Check if allowance is already sufficient
+        const currentAllowance = await vcnContract.allowance(user, relayerAddress);
+        if (currentAllowance < totalAmount) {
+          return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+        }
+        console.log("[SepoliaTransfer] Allowance already sufficient, continuing...");
+      }
+    }
+
+    // Collect fee
+    try {
+      const feeTx = await vcnContract.transferFrom(user, relayerAddress, feeAmount);
+      await feeTx.wait();
+      console.log(`[SepoliaTransfer] Fee collected: ${ethers.formatEther(feeAmount)} VCN`);
+    } catch (feeErr) {
+      console.error("[SepoliaTransfer] Fee collection failed:", feeErr.message);
+      return res.status(400).json({ error: `Fee collection failed: ${feeErr.reason || feeErr.message}` });
+    }
+
+    // Transfer to recipient
+    let txHash;
+    try {
+      const transferTx = await vcnContract.transferFrom(user, recipient, transferAmount);
+      const receipt = await transferTx.wait();
+      txHash = receipt.hash;
+      console.log(`[SepoliaTransfer] Transfer successful: ${ethers.formatEther(transferAmount)} VCN -> ${recipient}, tx: ${txHash}`);
+    } catch (transferErr) {
+      console.error("[SepoliaTransfer] Transfer failed:", transferErr.message);
+      return res.status(500).json({ error: `Transfer failed: ${transferErr.reason || transferErr.message}` });
+    }
+
+    // Record to Firestore
+    try {
+      await db.collection("transactions").add({
+        type: "sepolia_transfer",
+        from: user,
+        to: recipient,
+        amount: ethers.formatEther(transferAmount),
+        fee: ethers.formatEther(feeAmount),
+        txHash,
+        chain: "sepolia",
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        status: "completed"
+      });
+    } catch (dbErr) {
+      console.warn("[SepoliaTransfer] Firestore record failed:", dbErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      txHash,
+      amount: ethers.formatEther(transferAmount),
+      fee: ethers.formatEther(feeAmount),
+      recipient,
+    });
+
+  } catch (err) {
+    console.error("[SepoliaTransfer] Error:", err);
+    return res.status(500).json({ error: err.message || "Sepolia transfer failed" });
   }
 }
 

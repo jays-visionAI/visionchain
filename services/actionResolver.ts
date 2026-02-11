@@ -198,7 +198,7 @@ export class ActionResolverService {
     }
 
     private async resolveBridge(intent: UserIntent, userAddress: string): Promise<ProposedAction> {
-        const { amount, token, destinationChain, to } = intent.params;
+        const { amount, token, destinationChain, to, sourceChain } = intent.params;
         if (!amount || !destinationChain) throw new Error("Missing Bridge params");
 
         // Resolve recipient if specified (e.g., contact name -> address)
@@ -216,24 +216,61 @@ export class ActionResolverService {
             }
         }
 
-        // Vision Chain - Secure Bridge (Phase 1) Contracts
-        const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
-        const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
-
         // Chain IDs
         const VISION_CHAIN_ID = 1337;
         const SEPOLIA_CHAIN_ID = 11155111;
 
-        // Normalize destination chain name to Sepolia for all Ethereum-related keywords
-        const chainUpper = destinationChain.toUpperCase();
+        // Detect reverse bridge direction (Sepolia/Ethereum -> Vision Chain)
+        const destUpper = destinationChain.toUpperCase();
+        const srcUpper = (sourceChain || '').toUpperCase();
         const ethereumKeywords = [
             'ETHEREUM', 'ETH', 'SEPOLIA', 'ERC-20', 'ERC20', 'MAINNET',
             '이더리움', '이더', '세폴리아', '이더계열'
         ];
+        const visionKeywords = ['VISION', 'VCN', 'VISIONCHAIN', '비전', '비전체인'];
 
+        // Check if this is a REVERSE bridge (Sepolia -> Vision Chain)
+        const isSourceEthereum = ethereumKeywords.some(kw => srcUpper.includes(kw));
+        const isDestVision = visionKeywords.some(kw => destUpper.includes(kw));
+        const isReverseBridge = isSourceEthereum || isDestVision;
+
+        if (isReverseBridge) {
+            // Reverse bridge: Sepolia VCN → Vision Chain VCN
+            const summary = recipientLabel
+                ? `Bridge ${amount} VCN from Sepolia to Vision Chain for ${recipientLabel}`
+                : `Bridge ${amount} VCN from Sepolia to Vision Chain`;
+
+            return {
+                type: 'TRANSACTION',
+                summary,
+                data: {
+                    bridgeType: 'REVERSE_BRIDGE',
+                    bridgeDirection: 'reverse',
+                    amount: amount,
+                    recipient: bridgeRecipient,
+                    sourceChain: 'SEPOLIA',
+                    destinationChain: 'VISION',
+                },
+                visualization: {
+                    type: 'BRIDGE',
+                    asset: token || 'VCN',
+                    amount: amount,
+                    fromChain: 'Ethereum Sepolia',
+                    toChain: 'Vision Chain',
+                    recipient: recipientLabel || undefined
+                }
+            };
+        }
+
+        // Forward bridge: Vision Chain → Sepolia
+        const chainUpper = destUpper;
         const dstChainId = ethereumKeywords.some(kw => chainUpper.includes(kw))
             ? SEPOLIA_CHAIN_ID
             : 137; // Polygon placeholder
+
+        // Vision Chain - Secure Bridge (Phase 1) Contracts
+        const INTENT_COMMITMENT_ADDRESS = '0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6';
+        const VISION_BRIDGE_SECURE_ADDRESS = '0x610178dA211FEF7D417bC0e6FeD39F05609AD788';
 
         // Build bridge data for 2-step secure bridge
         const amountWei = ethers.parseEther(amount);
@@ -257,6 +294,7 @@ export class ActionResolverService {
             summary,
             data: {
                 bridgeType: 'SECURE_BRIDGE_V1',
+                bridgeDirection: 'forward',
                 step1: {
                     contractAddress: INTENT_COMMITMENT_ADDRESS,
                     abi: INTENT_COMMITMENT_ABI,
