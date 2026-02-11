@@ -2721,9 +2721,13 @@ const Wallet = (): JSX.Element => {
             console.log('[Bridge] Permit signature generated successfully');
 
             // Call Paymaster API to execute bridge (gasless) with permit signature
+            // Use AbortController with 180s timeout - bridge involves multiple chain txns
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 180000);
             const response = await fetch(PAYMASTER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                signal: controller.signal,
                 body: JSON.stringify({
                     type: 'bridge',
                     user: userAddr,
@@ -2736,6 +2740,7 @@ const Wallet = (): JSX.Element => {
                     signature: signature,
                 })
             });
+            clearTimeout(timeoutId);
 
             const result = await response.json();
 

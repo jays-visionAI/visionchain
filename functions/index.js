@@ -734,7 +734,7 @@ const VCN_TOKEN_ABI = [
  *   transactions?: Array<{recipient, amount, name?}>
  * }
  */
-exports.paymaster = onRequest({ cors: true, invoker: "public", secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
+exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 300, secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
