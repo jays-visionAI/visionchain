@@ -17,6 +17,7 @@ import {
 } from 'lucide-solid';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
+import { useI18n } from '../i18n/i18nContext';
 import { contractService } from '../services/contractService';
 import { WalletService } from '../services/walletService';
 
@@ -79,6 +80,7 @@ interface ValidatorStakingProps {
 
 // ============ Component ============
 export default function ValidatorStaking(props: ValidatorStakingProps) {
+    const { t } = useI18n();
     // State - Use prop walletAddress if available
     const isConnected = () => !!(props.walletAddress?.() || '');
     const [totalStaked, setTotalStaked] = createSignal('0');
@@ -545,17 +547,17 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                     <div class="bg-[#1a1a1c] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4 overflow-hidden">
                         <h3 class="text-lg font-black text-white mb-4 flex items-center gap-2">
                             <Lock class="w-5 h-5 text-amber-400" />
-                            Spending Password Required
+                            {t('staking.spendingPasswordRequired')}
                         </h3>
                         <p class="text-sm text-gray-400 mb-4">
-                            Enter your spending password to authorize this staking transaction.
+                            {t('staking.enterSpendingPassword')}
                         </p>
                         <input
                             type="password"
                             value={password()}
                             onInput={(e) => setPassword(e.currentTarget.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
-                            placeholder="Enter spending password"
+                            placeholder={t('staking.enterPassword')}
                             class="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none mb-4 box-border"
                         />
                         <Show when={errorMsg()}>
@@ -572,7 +574,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                 onClick={handlePasswordSubmit}
                                 class="flex-1 py-3 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors"
                             >
-                                Confirm
+                                {t('bridge.confirm')}
                             </button>
                         </div>
                     </div>
@@ -582,10 +584,10 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
 
                 {/* Header */}
                 <WalletViewHeader
-                    tag="Bridge Security"
-                    title="VALIDATOR"
-                    titleAccent="EARN"
-                    description="Stake VCN to become a bridge validator. Secure cross-chain transfers and earn rewards."
+                    tag={t('staking.tag')}
+                    title={t('staking.title')}
+                    titleAccent={t('staking.titleAccent')}
+                    description={t('staking.description')}
                     icon={Shield}
                     hideDescriptionOnMobile={true}
                 />
@@ -594,40 +596,38 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 <div class="bg-gradient-to-r from-green-500/5 via-amber-500/5 to-orange-500/5 border border-amber-500/20 rounded-2xl p-6">
                     <h3 class="text-lg font-black text-white mb-4 flex items-center gap-2">
                         <Gift class="w-5 h-5 text-amber-400" />
-                        Staking Rewards & Conditions
+                        {t('staking.stakingRewardsConditions')}
                     </h3>
                     <div class="grid md:grid-cols-3 gap-4">
                         <div class="bg-black/20 rounded-xl p-4 border border-white/5">
                             <div class="flex items-center gap-2 mb-2">
                                 <Percent class="w-4 h-4 text-green-400" />
-                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Annual APY</span>
+                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('staking.annualApy')}</span>
                             </div>
                             <div class="text-2xl font-black text-green-400">12-20%</div>
-                            <p class="text-[10px] text-gray-500 mt-1">Depends on network activity</p>
+                            <p class="text-[10px] text-gray-500 mt-1">{t('staking.dependsOnNetwork')}</p>
                         </div>
                         <div class="bg-black/20 rounded-xl p-4 border border-white/5">
                             <div class="flex items-center gap-2 mb-2">
                                 <Gift class="w-4 h-4 text-amber-400" />
-                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Reward Source</span>
+                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('staking.rewardSource')}</span>
                             </div>
-                            <div class="text-sm font-bold text-white">Bridge Fees</div>
-                            <p class="text-[10px] text-gray-500 mt-1">0.1% of each bridge transfer</p>
+                            <div class="text-sm font-bold text-white">{t('staking.bridgeFees')}</div>
+                            <p class="text-[10px] text-gray-500 mt-1">{t('staking.bridgeFeePercent')}</p>
                         </div>
                         <div class="bg-black/20 rounded-xl p-4 border border-white/5">
                             <div class="flex items-center gap-2 mb-2">
                                 <AlertTriangle class="w-4 h-4 text-red-400" />
-                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Slashing Risk</span>
+                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('staking.slashingRisk')}</span>
                             </div>
                             <div class="text-2xl font-black text-red-400">{slashPercent()}%</div>
-                            <p class="text-[10px] text-gray-500 mt-1">On invalid proof submission</p>
+                            <p class="text-[10px] text-gray-500 mt-1">{t('staking.onInvalidProof')}</p>
                         </div>
                     </div>
                     <div class="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                         <p class="text-[11px] text-gray-400">
-                            <strong class="text-amber-400">How it works:</strong> Validators earn a share of bridge fees proportional to their stake.
-                            If a validator submits an invalid proof and is successfully challenged, {slashPercent()}% of their stake is slashed
-                            and awarded to the challenger. Minimum stake: <strong class="text-white">{minStake()} VCN</strong>,
-                            Unstaking cooldown: <strong class="text-white">{cooldownDays()} days</strong>.
+                            <strong class="text-amber-400">{t('staking.howItWorks')}</strong> {t('staking.howItWorksDesc')} {slashPercent()}% {t('staking.stakeSlashedDesc')} <strong class="text-white">{minStake()} VCN</strong>,
+                            {t('staking.unstakingCooldown')} <strong class="text-white">{cooldownDays()} {t('staking.days')}</strong>.
                         </p>
                     </div>
                 </div>
@@ -635,31 +635,31 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                 {/* Stats Grid */}
                 <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     <div class="p-5 bg-white/[0.02] border border-white/5 rounded-2xl">
-                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Total Staked</div>
+                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">{t('staking.totalStaked')}</div>
                         <div class="text-2xl font-black text-white">{Number(totalStaked()).toLocaleString()}</div>
                         <div class="text-[10px] text-amber-400 font-bold">VCN</div>
                     </div>
                     <div class="p-5 bg-white/[0.02] border border-white/5 rounded-2xl">
-                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Active Validators</div>
+                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">{t('staking.activeValidators')}</div>
                         <div class="text-2xl font-black text-white">{activeValidatorCount()}</div>
                         <div class="text-[10px] text-green-400 font-bold flex items-center gap-1">
-                            <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" /> Online
+                            <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" /> {t('staking.online')}
                         </div>
                     </div>
                     <div class="p-5 bg-white/[0.02] border border-white/5 rounded-2xl">
-                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Minimum Stake</div>
+                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">{t('staking.minimumStake')}</div>
                         <div class="text-2xl font-black text-white">{minStake()}</div>
-                        <div class="text-[10px] text-gray-500 font-bold">VCN Required</div>
+                        <div class="text-[10px] text-gray-500 font-bold">{t('staking.vcnRequired')}</div>
                     </div>
                     <div class="p-5 bg-white/[0.02] border border-white/5 rounded-2xl">
-                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Cooldown</div>
+                        <div class="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">{t('staking.cooldown')}</div>
                         <div class="text-2xl font-black text-white">{cooldownDays()}</div>
-                        <div class="text-[10px] text-blue-400 font-bold">Days</div>
+                        <div class="text-[10px] text-blue-400 font-bold">{t('staking.daysLabel')}</div>
                     </div>
                     <div class="p-5 bg-red-500/5 border border-red-500/10 rounded-2xl">
-                        <div class="text-[9px] font-black text-red-400/60 uppercase tracking-widest mb-2">Slash Rate</div>
+                        <div class="text-[9px] font-black text-red-400/60 uppercase tracking-widest mb-2">{t('staking.slashRate')}</div>
                         <div class="text-2xl font-black text-red-400">{slashPercent()}%</div>
-                        <div class="text-[10px] text-red-400/60 font-bold">On Invalid Proof</div>
+                        <div class="text-[10px] text-red-400/60 font-bold">{t('staking.onInvalidProofLabel')}</div>
                     </div>
                 </div>
 
@@ -671,16 +671,16 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                             {/* User Balance Display */}
                             <div class="mb-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
                                 <div class="flex items-center justify-between mb-2">
-                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Your VCN Balance</span>
+                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('staking.yourVcnBalance')}</span>
                                     <span class="text-lg font-black text-white">{Number(userInfo().vcnBalance).toLocaleString()} VCN</span>
                                 </div>
                                 <div class="flex items-center justify-between">
-                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Your Staked Amount</span>
+                                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('staking.yourStakedAmount')}</span>
                                     <span class="text-lg font-black text-amber-400">{Number(userInfo().stakedAmount).toLocaleString()} VCN</span>
                                 </div>
                                 <Show when={parseFloat(userInfo().pendingUnstake) > 0}>
                                     <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
-                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Pending Unstake</span>
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('staking.pendingUnstake')}</span>
                                         <div class="text-right">
                                             <span class="text-sm font-black text-blue-400">{Number(userInfo().pendingUnstake).toLocaleString()} VCN</span>
                                             <div class="text-[9px] text-gray-500">{formatTimeRemaining(userInfo().unlockTime)}</div>
@@ -690,7 +690,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                 {/* Pending Rewards Section */}
                                 <div class="flex items-center justify-between mt-3 pt-3 border-t border-green-500/20">
                                     <div>
-                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block">Pending Rewards</span>
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest block">{t('staking.pendingRewards')}</span>
                                         <span class="text-[9px] text-green-400/60">APY: {currentAPY()}%</span>
                                     </div>
                                     <div class="flex items-center gap-3">
@@ -700,7 +700,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                             disabled={isLoading() || parseFloat(userInfo().pendingRewards) <= 0}
                                             class="px-3 py-1.5 bg-green-500 hover:bg-green-400 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold text-xs rounded-lg transition-all"
                                         >
-                                            Claim
+                                            {t('staking.claim')}
                                         </button>
                                     </div>
                                 </div>
@@ -714,7 +714,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                         }`}
                                 >
                                     <Lock class="w-4 h-4 inline mr-2" />
-                                    Stake
+                                    {t('staking.stake')}
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('unstake')}
@@ -722,7 +722,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                         }`}
                                 >
                                     <Unlock class="w-4 h-4 inline mr-2" />
-                                    Unstake
+                                    {t('staking.unstake')}
                                 </button>
                                 <Show when={parseFloat(userInfo().pendingUnstake) > 0 && userInfo().unlockTime <= Date.now()}>
                                     <button
@@ -731,7 +731,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                             }`}
                                     >
                                         <Gift class="w-4 h-4 inline mr-2" />
-                                        Withdraw
+                                        {t('staking.withdraw')}
                                     </button>
                                 </Show>
                             </div>
@@ -740,7 +740,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                 <div class="space-y-6">
                                     <div>
                                         <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">
-                                            Stake Amount
+                                            {t('staking.stakeAmount')}
                                         </label>
                                         <div class="relative">
                                             <input
@@ -767,10 +767,10 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                     >
                                         <Show when={isLoading()} fallback={<>
                                             <Lock class="w-4 h-4" />
-                                            Stake VCN
+                                            {t('staking.stakeVcn')}
                                         </>}>
                                             <div class="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                                            {txStatus() === 'approving' ? 'Approving...' : 'Staking...'}
+                                            {txStatus() === 'approving' ? t('staking.approving') : t('staking.staking')}
                                         </Show>
                                     </button>
                                 </div>
@@ -780,14 +780,14 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                 <div class="space-y-6">
                                     <div>
                                         <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">
-                                            Unstake Amount (Max: {Number(userInfo().stakedAmount).toLocaleString()} VCN)
+                                            {t('staking.unstakeAmount')} (Max: {Number(userInfo().stakedAmount).toLocaleString()} VCN)
                                         </label>
                                         <div class="relative">
                                             <input
                                                 type="number"
                                                 value={unstakeAmount()}
                                                 onInput={(e) => setUnstakeAmount(e.currentTarget.value)}
-                                                placeholder="Enter amount"
+                                                placeholder={t('staking.enterAmount')}
                                                 class="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-xl font-bold text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
                                             />
                                             <button
@@ -811,7 +811,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                                     <div class="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                                                         <div class="flex items-center gap-2 text-red-400 text-xs font-bold">
                                                             <AlertTriangle class="w-4 h-4" />
-                                                            Below Minimum Stake
+                                                            {t('staking.belowMinimumStake')}
                                                         </div>
                                                         <p class="text-[11px] text-gray-400 mt-2">
                                                             Remaining stake ({remaining.toLocaleString()} VCN) would be below minimum ({minStake()} VCN).
@@ -826,10 +826,10 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                     <div class="p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
                                         <div class="flex items-center gap-2 text-blue-400 text-xs font-bold">
                                             <Timer class="w-4 h-4" />
-                                            {cooldownDays()}-Day Cooldown Period
+                                            {cooldownDays()}{t('staking.cooldownPeriod')}
                                         </div>
                                         <p class="text-[11px] text-gray-400 mt-2">
-                                            After requesting unstake, your tokens will be locked for {cooldownDays()} days before withdrawal.
+                                            {t('staking.cooldownDesc')} {cooldownDays()} {t('staking.cooldownDescDays')}
                                         </p>
                                     </div>
 
@@ -844,10 +844,10 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                     >
                                         <Show when={isLoading()} fallback={<>
                                             <Unlock class="w-4 h-4" />
-                                            Request Unstake
+                                            {t('staking.requestUnstake')}
                                         </>}>
                                             <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Processing...
+                                            {t('staking.processingTx')}
                                         </Show>
                                     </button>
                                 </div>
@@ -858,7 +858,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                     <div class="p-6 bg-green-500/10 border border-green-500/20 rounded-xl text-center">
                                         <Gift class="w-12 h-12 text-green-400 mx-auto mb-4" />
                                         <div class="text-2xl font-black text-white mb-2">{Number(userInfo().pendingUnstake).toLocaleString()} VCN</div>
-                                        <p class="text-sm text-green-400 font-bold">Ready to Withdraw!</p>
+                                        <p class="text-sm text-green-400 font-bold">{t('staking.readyToWithdraw')}</p>
                                     </div>
 
                                     <button
@@ -868,10 +868,10 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                     >
                                         <Show when={isLoading()} fallback={<>
                                             <Gift class="w-4 h-4" />
-                                            Withdraw VCN
+                                            {t('staking.withdrawVcn')}
                                         </>}>
                                             <div class="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                                            Withdrawing...
+                                            {t('staking.withdrawing')}
                                         </Show>
                                     </button>
                                 </div>
@@ -886,23 +886,23 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                     <Show when={txStatus() === 'pending' || txStatus() === 'approving'}>
                                         <div class="w-5 h-5 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
                                         <span class="text-amber-400 text-xs font-bold">
-                                            {txStatus() === 'approving' ? 'Approving VCN...' : 'Transaction pending...'}
+                                            {txStatus() === 'approving' ? t('staking.approvingVcn') : t('staking.txPending')}
                                         </span>
                                     </Show>
                                     <Show when={txStatus() === 'success'}>
                                         <CheckCircle2 class="w-5 h-5 text-green-400" />
                                         <div class="flex-1">
-                                            <span class="text-green-400 text-xs font-bold block">Transaction successful!</span>
+                                            <span class="text-green-400 text-xs font-bold block">{t('staking.txSuccess')}</span>
                                             <Show when={txHash()}>
                                                 <a href={`https://sepolia.etherscan.io/tx/${txHash()}`} target="_blank" class="text-[10px] text-gray-500 hover:text-green-400 flex items-center gap-1">
-                                                    View on Explorer <ExternalLink class="w-3 h-3" />
+                                                    {t('bridge.viewOnExplorer')} <ExternalLink class="w-3 h-3" />
                                                 </a>
                                             </Show>
                                         </div>
                                     </Show>
                                     <Show when={txStatus() === 'error'}>
                                         <XCircle class="w-5 h-5 text-red-400" />
-                                        <span class="text-red-400 text-xs font-bold">{errorMsg() || 'Transaction failed'}</span>
+                                        <span class="text-red-400 text-xs font-bold">{errorMsg() || t('staking.txFailed')}</span>
                                     </Show>
                                 </div>
                             </Show>
@@ -913,15 +913,15 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                             <div class="p-6 border-b border-white/5">
                                 <h3 class="text-lg font-black text-white flex items-center gap-2">
                                     <Users class="w-5 h-5 text-amber-400" />
-                                    Active Validators ({activeValidatorCount()})
+                                    {t('staking.activeValidatorsTitle')} ({activeValidatorCount()})
                                 </h3>
                             </div>
                             <div class="divide-y divide-white/5 max-h-[400px] overflow-y-auto">
                                 <Show when={validators().length > 0} fallback={
                                     <div class="p-8 text-center">
                                         <Shield class="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                                        <p class="text-gray-500 text-sm">No validators yet</p>
-                                        <p class="text-gray-600 text-xs mt-2">Be the first to stake!</p>
+                                        <p class="text-gray-500 text-sm">{t('staking.noValidators')}</p>
+                                        <p class="text-gray-600 text-xs mt-2">{t('staking.beFirstToStake')}</p>
                                     </div>
                                 }>
                                     <For each={validators()}>
@@ -937,13 +937,13 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                                                             <div class="text-sm font-bold text-white font-mono">{validator.address}</div>
                                                             <span class={`text-[10px] font-black uppercase tracking-widest ${validator.isActive ? 'text-green-400' : 'text-amber-400'
                                                                 }`}>
-                                                                {validator.isActive ? 'Active' : 'Unstaking'}
+                                                                {validator.isActive ? t('staking.activeStatus') : t('staking.unstakingStatus')}
                                                             </span>
                                                         </div>
                                                     </div>
                                                     <div class="text-right">
                                                         <div class="text-sm font-black text-white">{validator.stakedAmount}</div>
-                                                        <div class="text-[10px] text-amber-400 font-bold">VCN Staked</div>
+                                                        <div class="text-[10px] text-amber-400 font-bold">{t('staking.vcnStaked')}</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -958,9 +958,9 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                     <div class="max-w-md mx-auto">
                         <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-8 text-center">
                             <Wallet class="w-16 h-16 text-gray-600 mx-auto mb-6" />
-                            <h3 class="text-xl font-black text-white mb-2">Loading Wallet...</h3>
+                            <h3 class="text-xl font-black text-white mb-2">{t('staking.loadingWallet')}</h3>
                             <p class="text-gray-500 text-sm">
-                                Please wait while we connect to your wallet.
+                                {t('staking.connectingWallet')}
                             </p>
                             <Show when={errorMsg()}>
                                 <p class="text-red-400 text-xs mt-4">{errorMsg()}</p>
@@ -975,11 +975,9 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
                         <Shield class="w-6 h-6 text-amber-400" />
                     </div>
                     <div>
-                        <h4 class="text-sm font-black text-white mb-1">Optimistic Finality Security</h4>
+                        <h4 class="text-sm font-black text-white mb-1">{t('staking.optimisticFinalitySecurity')}</h4>
                         <p class="text-xs text-gray-400 leading-relaxed">
-                            Validators secure the bridge by attesting to cross-chain transfers. Invalid attestations
-                            can be challenged within the 15-minute challenge period. Valid challenges result in
-                            slashing {slashPercent()}% of the validator's stake, which is awarded to the challenger.
+                            {t('staking.securityDesc')} {slashPercent()}% {t('staking.securityDescEnd')}
                         </p>
                     </div>
                 </div>

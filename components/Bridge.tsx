@@ -20,6 +20,7 @@ import {
 import { WalletService } from '../services/walletService';
 import { ethers } from 'ethers';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
+import { useI18n } from '../i18n/i18nContext';
 import { getFirebaseDb, subscribeToBridgeNetworks, BridgeNetwork } from '../services/firebaseService';
 import { collection, query, where, orderBy, onSnapshot, limit, doc, setDoc } from 'firebase/firestore';
 import { createNotification } from '../services/notificationService';
@@ -179,6 +180,7 @@ interface BridgeProps {
 }
 
 const Bridge: Component<BridgeProps> = (props) => {
+    const { t } = useI18n();
     // Connection state - derived from prop
     const isConnected = () => !!(props.walletAddress?.() || '');
     const walletAddress = () => props.walletAddress?.() || '';
@@ -391,8 +393,8 @@ const Bridge: Component<BridgeProps> = (props) => {
 
     // Get estimated completion time
     const getEstimatedCompletion = (createdAt: any, status: string): string => {
-        if (status === 'COMPLETED' || status === 'FINALIZED') return 'Completed';
-        if (status === 'FAILED') return 'Failed';
+        if (status === 'COMPLETED' || status === 'FINALIZED') return t('bridge.completed');
+        if (status === 'FAILED') return t('bridge.failed');
         if (!createdAt) return '~15-30 min';
 
         const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
@@ -772,7 +774,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                             Spending Password Required
                         </h3>
                         <p class="text-sm text-gray-400 mb-4">
-                            Enter your spending password to authorize this swap transaction.
+                            {t('bridge.enterPasswordDesc')}
                         </p>
                         <input
                             type="password"
@@ -796,7 +798,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                 onClick={handlePasswordSubmit}
                                 class="flex-1 py-3 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-400 transition-colors"
                             >
-                                Confirm
+                                {t('bridge.confirm')}
                             </button>
                         </div>
                     </div>
@@ -807,10 +809,10 @@ const Bridge: Component<BridgeProps> = (props) => {
 
                 {/* Header */}
                 <WalletViewHeader
-                    tag="Cross-Chain Transfer"
-                    title="VISION"
-                    titleAccent="SWAP"
-                    description="Transfer assets between Ethereum and Vision Chain with optimistic finality security."
+                    tag={t('bridge.tag')}
+                    title={t('bridge.title')}
+                    titleAccent={t('bridge.titleAccent')}
+                    description={t('bridge.description')}
                     icon={ArrowRightLeft}
                     hideDescriptionOnMobile={true}
                 />
@@ -819,9 +821,9 @@ const Bridge: Component<BridgeProps> = (props) => {
                     <div class="max-w-md mx-auto">
                         <div class="bg-white/[0.02] border border-white/5 rounded-3xl p-8 text-center">
                             <Wallet class="w-16 h-16 text-gray-600 mx-auto mb-6" />
-                            <h3 class="text-xl font-black text-white mb-2">Loading Wallet...</h3>
+                            <h3 class="text-xl font-black text-white mb-2">{t('bridge.loadingWallet')}</h3>
                             <p class="text-gray-500 text-sm">
-                                Please wait while we connect to your wallet.
+                                {t('bridge.loadingWalletDesc')}
                             </p>
                         </div>
                     </div>
@@ -840,8 +842,8 @@ const Bridge: Component<BridgeProps> = (props) => {
                                         {/* From Network */}
                                         <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all focus-within:border-blue-500/50">
                                             <div class="flex justify-between items-center mb-3">
-                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">From Network</span>
-                                                <span class="text-[10px] font-bold text-blue-400">Balance: {Number(balance()).toLocaleString()} {getCurrentAssetSymbol()}</span>
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('bridge.fromNetwork')}</span>
+                                                <span class="text-[10px] font-bold text-blue-400">{t('bridge.balance')}: {Number(balance()).toLocaleString()} {getCurrentAssetSymbol()}</span>
                                             </div>
                                             <div class="flex items-center gap-4">
                                                 <div class="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center border border-blue-500/20">
@@ -857,7 +859,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                             onClick={() => switchNetwork(fromNetwork().chainId)}
                                                             class="text-[10px] text-amber-400 hover:text-amber-300 font-bold"
                                                         >
-                                                            Switch Network
+                                                            {t('bridge.switchNetwork')}
                                                         </button>
                                                     </Show>
                                                 </div>
@@ -877,7 +879,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                         {/* To Network - Dropdown */}
                                         <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 transition-all relative">
                                             <div class="flex justify-between items-center mb-3">
-                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Destination Network</span>
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('bridge.destinationNetwork')}</span>
                                             </div>
                                             <button
                                                 onClick={() => setShowNetworkDropdown(!showNetworkDropdown())}
@@ -897,7 +899,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                 <div class="flex-1 text-left">
                                                     <div class="text-lg font-black italic uppercase tracking-tight text-white">{toNetwork().name}</div>
                                                     <Show when={!toNetwork().enabled}>
-                                                        <span class="text-[10px] text-amber-400 font-bold">Coming Soon</span>
+                                                        <span class="text-[10px] text-amber-400 font-bold">{t('bridge.comingSoon')}</span>
                                                     </Show>
                                                 </div>
                                                 <ChevronRight class={`w-5 h-5 text-gray-500 transition-transform ${showNetworkDropdown() ? 'rotate-90' : ''}`} />
@@ -935,7 +937,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                                 <div class="flex-1 text-left">
                                                                     <div class="text-sm font-bold">{network.name}</div>
                                                                     <Show when={!network.enabled}>
-                                                                        <span class="text-[10px] text-amber-400 font-bold">Coming Soon</span>
+                                                                        <span class="text-[10px] text-amber-400 font-bold">{t('bridge.comingSoon')}</span>
                                                                     </Show>
                                                                 </div>
                                                                 <Show when={toNetwork().chainId === network.chainId}>
@@ -951,7 +953,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                         {/* Asset & Amount */}
                                         <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 mt-4">
                                             <div class="flex justify-between items-center mb-4">
-                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Amount to Bridge</span>
+                                                <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('bridge.amountToBridge')}</span>
                                                 <div class="flex gap-2">
                                                     <button onClick={() => setPercentage(25)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">25%</button>
                                                     <button onClick={() => setPercentage(50)} class="px-2 py-1 bg-white/5 rounded text-[8px] font-bold hover:bg-white/10">50%</button>
@@ -991,7 +993,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                     <Show when={showAssetDropdown()}>
                                                         <div class="absolute right-0 top-full mt-2 bg-[#1a1a1c] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[200px]">
                                                             <div class="p-2 border-b border-white/5">
-                                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest px-2">Select Asset</span>
+                                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest px-2">{t('bridge.selectAsset')}</span>
                                                             </div>
                                                             <For each={getAvailableAssets()}>
                                                                 {(asset) => (
@@ -1034,7 +1036,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                             </div>
                                             {/* Asset Balance Info */}
                                             <div class="mt-3 flex justify-between items-center">
-                                                <span class="text-[10px] text-gray-500 font-medium">Available Balance</span>
+                                                <span class="text-[10px] text-gray-500 font-medium">{t('bridge.availableBalance')}</span>
                                                 <span class="text-[11px] font-bold text-white tabular-nums">{Number(balance()).toLocaleString()} {getCurrentAssetSymbol()}</span>
                                             </div>
                                         </div>
@@ -1051,26 +1053,26 @@ const Bridge: Component<BridgeProps> = (props) => {
                                         <div class="pt-4 space-y-4">
                                             {/* VCN Price Display */}
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
-                                                <span>VCN Price</span>
+                                                <span>{t('bridge.vcnPrice')}</span>
                                                 <span class="text-emerald-400 font-bold">${getVcnPrice().toFixed(4)}</span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
-                                                <span>Estimated Value</span>
+                                                <span>{t('bridge.estimatedValue')}</span>
                                                 <span class="text-white font-bold">
                                                     ${(parseFloat(amount() || '0') * getVcnPrice()).toFixed(2)} USD
                                                 </span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
-                                                <span>Bridge Fee</span>
+                                                <span>{t('bridge.bridgeFee')}</span>
                                                 <span class="text-gray-300">1 VCN</span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
-                                                <span>Minimum Bridge</span>
+                                                <span>{t('bridge.minimumBridge')}</span>
                                                 <span class="text-gray-300">0.1 VCN</span>
                                             </div>
                                             <div class="flex justify-between items-center text-[11px] text-gray-500 font-medium px-2">
-                                                <span>Estimated Arrival</span>
-                                                <span class="text-gray-300">~15 Minutes</span>
+                                                <span>{t('bridge.estimatedArrival')}</span>
+                                                <span class="text-gray-300">{t('bridge.fifteenMinutes')}</span>
                                             </div>
 
                                             <button
@@ -1080,10 +1082,10 @@ const Bridge: Component<BridgeProps> = (props) => {
                                             >
                                                 <ArrowRightLeft class="w-4 h-4" />
                                                 {parseFloat(amount() || '0') > parseFloat(balance())
-                                                    ? 'INSUFFICIENT BALANCE'
+                                                    ? t('bridge.insufficientBalance')
                                                     : parseFloat(amount() || '0') < 0.1 && parseFloat(amount() || '0') > 0
-                                                        ? 'MINIMUM 0.1 VCN'
-                                                        : 'START BRIDGE TRANSFER'}
+                                                        ? t('bridge.minimumVcn')
+                                                        : t('bridge.startBridgeTransfer')}
                                             </button>
                                         </div>
                                     </div>
@@ -1096,12 +1098,12 @@ const Bridge: Component<BridgeProps> = (props) => {
                                             <div class="w-10 h-10 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
                                         </div>
                                         <h2 class="text-2xl font-black italic tracking-tight">
-                                            {isApproving() ? 'APPROVING TOKEN...' : 'INITIATING BRIDGE...'}
+                                            {isApproving() ? t('bridge.approvingToken') : t('bridge.initiatingBridge')}
                                         </h2>
                                         <p class="text-gray-400 text-sm max-w-sm mx-auto">
                                             {isApproving()
-                                                ? 'Please confirm the approval transaction in your wallet.'
-                                                : 'Please confirm the bridge transaction in your wallet.'}
+                                                ? t('bridge.confirmApproval')
+                                                : t('bridge.confirmBridge')}
                                         </p>
                                     </div>
                                 </Show>
@@ -1112,10 +1114,10 @@ const Bridge: Component<BridgeProps> = (props) => {
                                         <div class="w-20 h-20 bg-green-500/20 border border-green-500/50 rounded-full flex items-center justify-center mx-auto mb-6">
                                             <CheckCircle2 class="w-10 h-10 text-green-500" />
                                         </div>
-                                        <h2 class="text-3xl font-black italic tracking-tight">TRANSFER INITIATED!</h2>
+                                        <h2 class="text-3xl font-black italic tracking-tight">{t('bridge.transferInitiated')}</h2>
                                         <p class="text-gray-400 text-sm leading-relaxed max-w-sm mx-auto">
-                                            Your {amount()} {selectedAsset()} is being bridged to {toNetwork().name}.
-                                            It will be available after the 15-minute challenge period.
+                                            {t('bridge.transferInitiatedDesc1')} {amount()} {selectedAsset()} {t('bridge.transferInitiatedDesc2')} {toNetwork().name}.
+                                            {t('bridge.transferInitiatedDesc3')}
                                         </p>
                                         <div class="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-4 max-w-xs mx-auto">
                                             <div class="text-xs font-mono text-blue-400 break-all mb-2">
@@ -1126,14 +1128,14 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                 target="_blank"
                                                 class="text-[10px] text-gray-500 hover:text-blue-400 flex items-center justify-center gap-1"
                                             >
-                                                View on Explorer <ExternalLink class="w-3 h-3" />
+                                                {t('bridge.viewOnExplorer')} <ExternalLink class="w-3 h-3" />
                                             </a>
                                         </div>
                                         <button
                                             onClick={() => { setStep(1); setAmount(''); setTxHash(''); }}
                                             class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-300 transition-all"
                                         >
-                                            New Transfer
+                                            {t('bridge.newTransfer')}
                                         </button>
                                     </div>
                                 </Show>
@@ -1144,19 +1146,19 @@ const Bridge: Component<BridgeProps> = (props) => {
                                 <div class="bg-white/[0.03] border border-white/[0.06] p-6 rounded-2xl space-y-3">
                                     <div class="flex items-center gap-3 text-cyan-400">
                                         <ShieldCheck class="w-5 h-5" />
-                                        <span class="text-[11px] font-black uppercase tracking-widest">Optimistic Security</span>
+                                        <span class="text-[11px] font-black uppercase tracking-widest">{t('bridge.optimisticSecurity')}</span>
                                     </div>
                                     <p class="text-[11px] text-gray-500 leading-relaxed font-medium">
-                                        Transfers are secured by a 15-minute challenge period. Validators stake VCN to attest to transfers.
+                                        {t('bridge.optimisticSecurityDesc')}
                                     </p>
                                 </div>
                                 <div class="bg-white/[0.03] border border-white/[0.06] p-6 rounded-2xl space-y-3">
                                     <div class="flex items-center gap-3 text-purple-400">
                                         <Clock class="w-5 h-5" />
-                                        <span class="text-[11px] font-black uppercase tracking-widest">Challenge Period</span>
+                                        <span class="text-[11px] font-black uppercase tracking-widest">{t('bridge.challengePeriod')}</span>
                                     </div>
                                     <p class="text-[11px] text-gray-500 leading-relaxed font-medium">
-                                        Funds are released after 15 minutes if no valid challenge is submitted.
+                                        {t('bridge.challengePeriodDesc')}
                                     </p>
                                 </div>
                             </div>
@@ -1169,15 +1171,15 @@ const Bridge: Component<BridgeProps> = (props) => {
                             <div class="bg-blue-600/10 border border-blue-500/20 rounded-[24px] p-6">
                                 <div class="flex items-center gap-3 mb-4">
                                     <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                    <span class="text-[10px] font-black text-green-400 uppercase tracking-widest">Bridge Operational</span>
+                                    <span class="text-[10px] font-black text-green-400 uppercase tracking-widest">{t('bridge.bridgeOperational')}</span>
                                 </div>
-                                <div class="text-lg font-black italic mb-2 tracking-tight">Connected: {walletAddress().slice(0, 6)}...{walletAddress().slice(-4)}</div>
+                                <div class="text-lg font-black italic mb-2 tracking-tight">{t('bridge.connected')}: {walletAddress().slice(0, 6)}...{walletAddress().slice(-4)}</div>
                                 <p class="text-xs text-blue-400/60 font-medium">Chain ID: {props.privateKey?.() ? VISION_CHAIN_ID : currentChainId()}</p>
 
                                 {/* Live VCN Price */}
                                 <div class="mt-4 pt-4 border-t border-white/5">
                                     <div class="flex justify-between items-center">
-                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">VCN Price</span>
+                                        <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('bridge.vcnPrice')}</span>
                                         <div class="flex items-center gap-2">
                                             <span class="relative flex h-2 w-2">
                                                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1194,7 +1196,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                 <div class="flex items-center justify-between mb-6">
                                     <div class="flex items-center gap-3">
                                         <History class="w-5 h-5 text-gray-400" />
-                                        <h3 class="text-sm font-black italic tracking-widest uppercase">Bridge Status</h3>
+                                        <h3 class="text-sm font-black italic tracking-widest uppercase">{t('bridge.bridgeStatus')}</h3>
                                     </div>
                                     <button
                                         onClick={() => subscribeToBridgeHistory()}
@@ -1213,7 +1215,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                     <Show when={bridgeHistory().length > 0} fallback={
                                         <div class="py-8 text-center">
                                             <History class="w-10 h-10 text-gray-700 mx-auto mb-3" />
-                                            <p class="text-gray-600 text-xs">No bridge requests yet</p>
+                                            <p class="text-gray-600 text-xs">{t('bridge.noBridgeRequests')}</p>
                                         </div>
                                     }>
                                         <div class="space-y-4">
@@ -1235,9 +1237,9 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                                     bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
                                                                         'bg-red-500/10 text-red-400 border border-red-500/20'
                                                                 }`}>
-                                                                {bridge.status === 'COMMITTED' ? 'Processing' :
-                                                                    bridge.status === 'PROCESSING' ? 'Confirming' :
-                                                                        bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? 'Complete' : 'Failed'}
+                                                                {bridge.status === 'COMMITTED' ? t('bridge.processing') :
+                                                                    bridge.status === 'PROCESSING' ? t('bridge.confirming') :
+                                                                        bridge.status === 'COMPLETED' || bridge.status === 'FINALIZED' ? t('bridge.complete') : t('bridge.failed')}
                                                             </span>
                                                         </div>
 
@@ -1260,13 +1262,13 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                                 </div>
                                                                 <div class="flex justify-between text-[8px] text-gray-600 font-bold uppercase tracking-widest">
                                                                     <span class={['COMMITTED', 'PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status) ? 'text-blue-400' : ''}>
-                                                                        Submitted
+                                                                        {t('bridge.submitted')}
                                                                     </span>
                                                                     <span class={['PROCESSING', 'COMPLETED', 'FINALIZED'].includes(bridge.status) ? 'text-amber-400' : ''}>
-                                                                        Verifying
+                                                                        {t('bridge.verifying')}
                                                                     </span>
                                                                     <span class={['COMPLETED', 'FINALIZED'].includes(bridge.status) ? 'text-green-400' : ''}>
-                                                                        Complete
+                                                                        {t('bridge.complete')}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -1291,7 +1293,7 @@ const Bridge: Component<BridgeProps> = (props) => {
                                                                 class="flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-[10px] text-gray-400 hover:text-white transition-colors"
                                                             >
                                                                 <ExternalLink class="w-3 h-3" />
-                                                                View on VisionScan
+                                                                {t('bridge.viewOnVisionScan')}
                                                             </a>
                                                         </Show>
                                                     </div>

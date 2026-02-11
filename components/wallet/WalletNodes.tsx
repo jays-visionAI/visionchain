@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import { Check, Plus } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletNodesProps {
     userNodes: any[];
@@ -14,6 +15,7 @@ const VALIDATOR_PRICE_USD = 10000;
 const ENTERPRISE_PRICE_USD = 100000;
 
 export const WalletNodes = (props: WalletNodesProps) => {
+    const { t } = useI18n();
     // Dynamic Price Calculation
     const validatorPriceVCN = Math.ceil(VALIDATOR_PRICE_USD / VCN_PRICE);
     const enterprisePriceVCN = Math.ceil(ENTERPRISE_PRICE_USD / VCN_PRICE);
@@ -25,14 +27,14 @@ export const WalletNodes = (props: WalletNodesProps) => {
 
             <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative">
                 <WalletViewHeader
-                    tag="Network Infrastructure"
-                    title="COMPUTE"
-                    titleAccent="NODES"
-                    description="Manage your decentralized infrastructure fleet and validator licenses across the Vision network."
+                    tag={t('nodes.tag')}
+                    title={t('nodes.title')}
+                    titleAccent={t('nodes.titleAccent')}
+                    description={t('nodes.description')}
                     rightElement={
                         <div class="flex items-center gap-3">
                             <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span class="text-sm font-black text-emerald-400 uppercase tracking-widest">Network Optimal</span>
+                            <span class="text-sm font-black text-emerald-400 uppercase tracking-widest">{t('nodes.networkOptimal')}</span>
                         </div>
                     }
                 />
@@ -40,7 +42,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                 <div class="space-y-10">
                     {/* Active Nodes List */}
                     <div class="space-y-4">
-                        <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">Your Fleet</h3>
+                        <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">{t('nodes.yourFleet')}</h3>
                         <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                             <For each={props.userNodes}>
                                 {(node) => (
@@ -54,7 +56,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                                         <div class={`w-2 h-2 rounded-full ${node.status === 'Running' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                                                     </div>
                                                     <div>
-                                                        <h4 class="font-bold text-white">{node.type} Node</h4>
+                                                        <h4 class="font-bold text-white">{node.type} {t('nodes.nodeLabel')}</h4>
                                                         <div class="text-[10px] text-gray-500 font-mono uppercase">{node.id}</div>
                                                     </div>
                                                 </div>
@@ -65,11 +67,11 @@ export const WalletNodes = (props: WalletNodesProps) => {
 
                                             <div class="grid grid-cols-2 gap-4">
                                                 <div class="p-4 bg-black/20 rounded-2xl border border-white/5">
-                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Daily Reward</div>
+                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">{t('nodes.dailyReward')}</div>
                                                     <div class="text-lg font-bold text-white">+{node.dailyReward} VCN</div>
                                                 </div>
                                                 <div class="p-4 bg-black/20 rounded-2xl border border-white/5">
-                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Uptime</div>
+                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">{t('nodes.uptime')}</div>
                                                     <div class="text-lg font-bold text-white">{node.uptime}</div>
                                                 </div>
                                             </div>
@@ -78,10 +80,10 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                                 <button
                                                     onClick={props.claimNodeRewards}
                                                     class="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95">
-                                                    Claim Rewards
+                                                    {t('nodes.claimRewards')}
                                                 </button>
                                                 <button class="px-6 py-3.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/5">
-                                                    Manage
+                                                    {t('nodes.manage')}
                                                 </button>
                                             </div>
                                         </div>
@@ -102,11 +104,11 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     <Plus class="w-6 h-6 text-emerald-400" />
                                 </div>
                                 <div>
-                                    <h3 class="text-xl font-bold text-white mb-2">Deploy New Node</h3>
-                                    <p class="text-sm text-gray-500 max-w-xs mx-auto">Purchase a new Validator or Enterprise license to increase your mining output.</p>
+                                    <h3 class="text-xl font-bold text-white mb-2">{t('nodes.deployNewNode')}</h3>
+                                    <p class="text-sm text-gray-500 max-w-xs mx-auto">{t('nodes.deployNewNodeDesc')}</p>
                                 </div>
                                 <button class="px-8 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors">
-                                    View Catalog
+                                    {t('nodes.viewCatalog')}
                                 </button>
                             </div>
                         </div>
@@ -114,14 +116,14 @@ export const WalletNodes = (props: WalletNodesProps) => {
 
                     {/* Node Catalog Section */}
                     <div id="catalog-section" class="border-t border-white/[0.06] pt-12">
-                        <h3 class="text-2xl font-bold text-white mb-8 tracking-tight">Node License Catalog</h3>
+                        <h3 class="text-2xl font-bold text-white mb-8 tracking-tight">{t('nodes.nodeLicenseCatalog')}</h3>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Validator Tier */}
                             <div class="bg-[#111113] border border-white/[0.06] rounded-3xl p-8 hover:border-emerald-500/30 transition-all flex flex-col">
                                 <div class="flex justify-between items-start mb-6">
                                     <div class="px-3 py-1 bg-emerald-500/10 rounded-lg text-[10px] font-bold text-emerald-400 uppercase tracking-widest">
-                                        Most Popular
+                                        {t('nodes.mostPopular')}
                                     </div>
                                     <div class="text-right">
                                         <div class="text-2xl font-bold text-white">{validatorPriceVCN.toLocaleString()} VCN</div>
@@ -129,30 +131,30 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     </div>
                                 </div>
 
-                                <h4 class="text-2xl font-bold text-white mb-4">Validator Node</h4>
+                                <h4 class="text-2xl font-bold text-white mb-4">{t('nodes.validatorNode')}</h4>
                                 <p class="text-gray-400 text-sm mb-8 leading-relaxed">
-                                    Standard participation node. Validates transactions and earns VCN rewards with a 1x multiplier. Ideal for individual operators.
+                                    {t('nodes.validatorNodeDesc')}
                                 </p>
 
                                 <div class="space-y-3 mb-8 flex-1">
                                     <div class="flex items-center gap-3 text-sm text-gray-300">
                                         <Check class="w-4 h-4 text-emerald-500" />
-                                        <span>1x Mining Multiplier</span>
+                                        <span>{t('nodes.miningMultiplier1x')}</span>
                                     </div>
                                     <div class="flex items-center gap-3 text-sm text-gray-300">
                                         <Check class="w-4 h-4 text-emerald-500" />
-                                        <span>Eligible for Halving Trigger</span>
+                                        <span>{t('nodes.halvingTrigger')}</span>
                                     </div>
                                     <div class="flex items-center gap-3 text-sm text-gray-300">
                                         <Check class="w-4 h-4 text-emerald-500" />
-                                        <span>Standard Hardware Req.</span>
+                                        <span>{t('nodes.standardHardware')}</span>
                                     </div>
                                 </div>
 
                                 <button
                                     onClick={() => props.purchaseNode('Validator')}
                                     class="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl border border-white/10 transition-all hover:border-emerald-500/50">
-                                    Purchase License
+                                    {t('nodes.purchaseLicense')}
                                 </button>
                             </div>
 
@@ -160,12 +162,12 @@ export const WalletNodes = (props: WalletNodesProps) => {
                             <div class="bg-[#111113] border border-white/[0.06] rounded-3xl p-8 hover:border-purple-500/30 transition-all flex flex-col relative overflow-hidden">
                                 {/* Badge */}
                                 <div class="absolute -right-12 top-6 bg-purple-600 w-40 h-8 flex items-center justify-center rotate-45 text-[10px] font-bold text-white uppercase tracking-widest shadow-lg">
-                                    High Perf.
+                                    {t('nodes.highPerf')}
                                 </div>
 
                                 <div class="flex justify-between items-start mb-6">
                                     <div class="px-3 py-1 bg-purple-500/10 rounded-lg text-[10px] font-bold text-purple-400 uppercase tracking-widest">
-                                        Enterprise
+                                        {t('nodes.enterprise')}
                                     </div>
                                     <div class="text-right">
                                         <div class="text-2xl font-bold text-white">{enterprisePriceVCN.toLocaleString()} VCN</div>
@@ -173,30 +175,30 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     </div>
                                 </div>
 
-                                <h4 class="text-2xl font-bold text-white mb-4">Enterprise Node</h4>
+                                <h4 class="text-2xl font-bold text-white mb-4">{t('nodes.enterpriseNode')}</h4>
                                 <p class="text-gray-400 text-sm mb-8 leading-relaxed">
-                                    High-performance institutional node handling data availability and AI compute tasks. 12x multiplier reward.
+                                    {t('nodes.enterpriseNodeDesc')}
                                 </p>
 
                                 <div class="space-y-3 mb-8 flex-1">
                                     <div class="flex items-center gap-3 text-sm text-gray-300">
                                         <Check class="w-4 h-4 text-purple-500" />
-                                        <span>12x Mining Multiplier</span>
+                                        <span>{t('nodes.miningMultiplier12x')}</span>
                                     </div>
                                     <div class="flex items-center gap-3 text-sm text-gray-300">
                                         <Check class="w-4 h-4 text-purple-500" />
-                                        <span>AI Task Processing Priority</span>
+                                        <span>{t('nodes.aiTaskPriority')}</span>
                                     </div>
                                     <div class="flex items-center gap-3 text-sm text-gray-300">
                                         <Check class="w-4 h-4 text-purple-500" />
-                                        <span>10Gbps Network Required</span>
+                                        <span>{t('nodes.networkRequired')}</span>
                                     </div>
                                 </div>
 
                                 <button
                                     onClick={() => props.purchaseNode('Enterprise')}
                                     class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-500/20">
-                                    Purchase License
+                                    {t('nodes.purchaseLicense')}
                                 </button>
                             </div>
                         </div>

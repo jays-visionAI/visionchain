@@ -19,6 +19,7 @@ import {
     ExternalLink
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
+import { useI18n } from '../../i18n/i18nContext';
 import {
     listCexApiKeys,
     registerCexApiKey,
@@ -62,6 +63,7 @@ const EmptyPortfolioIcon = () => (
 
 // Donut Chart SVG Component
 const DonutChart = (props: { assets: CexAsset[], size?: number }) => {
+    const { t } = useI18n();
     const size = props.size || 160;
     const radius = 55;
     const centerX = size / 2;
@@ -124,7 +126,7 @@ const DonutChart = (props: { assets: CexAsset[], size?: number }) => {
             </svg>
             {/* Center text */}
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Assets</span>
+                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{t('cex.assets')}</span>
                 <span class="text-xl font-black text-white">{props.assets.length}</span>
             </div>
         </div>
@@ -147,6 +149,7 @@ const SkeletonRow = () => (
 );
 
 const WalletCexPortfolio = (): JSX.Element => {
+    const { t } = useI18n();
     // === State ===
     const [credentials, setCredentials] = createSignal<CexCredential[]>([]);
     const [portfolios, setPortfolios] = createSignal<CexPortfolioSnapshot[]>([]);
@@ -214,7 +217,7 @@ const WalletCexPortfolio = (): JSX.Element => {
     // === Actions ===
     const handleRegister = async () => {
         if (!addAccessKey().trim() || !addSecretKey().trim()) {
-            setRegisterError('Please fill in both Access Key and Secret Key.');
+            setRegisterError(t('cex.fillBothKeys'));
             return;
         }
         setIsRegistering(true);
@@ -227,7 +230,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                 secretKey: addSecretKey(),
                 label: addLabel() || undefined,
             });
-            setRegisterSuccess(`${result.label} connected successfully!`);
+            setRegisterSuccess(`${result.label} ${t('cex.connectedSuccess')}`);
             setAddAccessKey('');
             setAddSecretKey('');
             setAddLabel('');
@@ -298,10 +301,10 @@ const WalletCexPortfolio = (): JSX.Element => {
 
                 {/* Header */}
                 <WalletViewHeader
-                    tag="Exchange Portfolio"
-                    title="CEX"
-                    titleAccent="PORTFOLIO"
-                    description="Connect your exchange accounts and view your complete portfolio with AI-powered analysis."
+                    tag={t('cex.tag')}
+                    title={t('cex.title')}
+                    titleAccent={t('cex.titleAccent')}
+                    description={t('cex.description')}
                     rightElement={
                         <div class="flex items-center gap-2">
                             <Show when={hasCredentials()}>
@@ -311,7 +314,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     class="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-lg transition-all text-xs font-bold text-gray-400 hover:text-white disabled:opacity-50"
                                 >
                                     <RefreshCw class={`w-3.5 h-3.5 ${isSyncing() ? 'animate-spin' : ''}`} />
-                                    Sync
+                                    {t('cex.sync')}
                                 </button>
                             </Show>
                             <button
@@ -324,7 +327,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 class="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-lg transition-all text-xs font-bold"
                             >
                                 <Plus class="w-3.5 h-3.5" />
-                                Connect
+                                {t('cex.connect')}
                             </button>
                             <button
                                 onClick={() => setShowIpGuide(true)}
@@ -371,9 +374,9 @@ const WalletCexPortfolio = (): JSX.Element => {
                 <Show when={!isLoading() && !hasCredentials()}>
                     <div class="flex flex-col items-center justify-center py-16 px-6 bg-[#111113]/40 rounded-3xl border border-white/[0.04]">
                         <EmptyPortfolioIcon />
-                        <h3 class="text-lg font-black text-white mt-6 mb-2">No Exchanges Connected</h3>
+                        <h3 class="text-lg font-black text-white mt-6 mb-2">{t('cex.noExchanges')}</h3>
                         <p class="text-sm text-gray-500 text-center max-w-sm mb-8">
-                            Connect your exchange API keys to view your complete portfolio, get AI analysis, and track your investments.
+                            {t('cex.noExchangesDesc')}
                         </p>
 
                         {/* Exchange Cards */}
@@ -385,7 +388,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="p-2.5 bg-[#093687]/20 rounded-xl"><UpbitIcon /></div>
                                 <div class="text-left">
                                     <div class="text-sm font-black text-white">Upbit</div>
-                                    <div class="text-[10px] text-gray-500">Korean Exchange</div>
+                                    <div class="text-[10px] text-gray-500">{t('cex.koreanExchange')}</div>
                                 </div>
                                 <ChevronRight class="w-4 h-4 text-gray-600 ml-auto group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
                             </button>
@@ -396,7 +399,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="p-2.5 bg-[#F37021]/20 rounded-xl"><BithumbIcon /></div>
                                 <div class="text-left">
                                     <div class="text-sm font-black text-white">Bithumb</div>
-                                    <div class="text-[10px] text-gray-500">Korean Exchange</div>
+                                    <div class="text-[10px] text-gray-500">{t('cex.koreanExchange')}</div>
                                 </div>
                                 <ChevronRight class="w-4 h-4 text-gray-600 ml-auto group-hover:text-orange-400 group-hover:translate-x-0.5 transition-all" />
                             </button>
@@ -406,9 +409,9 @@ const WalletCexPortfolio = (): JSX.Element => {
                         <div class="flex items-start gap-2.5 mt-8 px-4 py-3 bg-cyan-500/5 border border-cyan-500/10 rounded-xl max-w-lg">
                             <Shield class="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />
                             <div>
-                                <p class="text-[11px] text-cyan-400 font-bold mb-0.5">End-to-End Encrypted</p>
+                                <p class="text-[11px] text-cyan-400 font-bold mb-0.5">{t('cex.endToEndEncrypted')}</p>
                                 <p class="text-[10px] text-gray-500 leading-relaxed">
-                                    Your API keys are encrypted with AES-256-GCM and stored securely on our servers. We only require read-only permissions.
+                                    {t('cex.encryptionDesc')}
                                 </p>
                             </div>
                         </div>
@@ -420,10 +423,10 @@ const WalletCexPortfolio = (): JSX.Element => {
                     {/* Connected Exchanges */}
                     <div class="space-y-3">
                         <div class="flex items-center justify-between">
-                            <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest">Connected Exchanges</h3>
+                            <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest">{t('cex.connectedExchanges')}</h3>
                             <div class="flex items-center gap-1 text-[10px] text-gray-600">
                                 <Show when={aggregated()?.lastUpdated}>
-                                    Updated {getRelativeTime(aggregated()?.lastUpdated || null)}
+                                    {t('cex.updated')} {getRelativeTime(aggregated()?.lastUpdated || null)}
                                 </Show>
                             </div>
                         </div>
@@ -441,7 +444,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                                 <div class="flex items-center gap-2 mt-0.5">
                                                     <span class={`inline-flex items-center gap-1 text-[10px] font-bold ${cred.status === 'active' ? 'text-green-400' : cred.status === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
                                                         <span class={`w-1.5 h-1.5 rounded-full ${cred.status === 'active' ? 'bg-green-400' : cred.status === 'error' ? 'bg-red-400' : 'bg-yellow-400'}`} />
-                                                        {cred.status === 'active' ? 'Active' : cred.status === 'error' ? 'Error' : 'Validating'}
+                                                        {cred.status === 'active' ? t('cex.active') : cred.status === 'error' ? t('cex.error') : t('cex.validating')}
                                                     </span>
                                                     <Show when={snapshot}>
                                                         <span class="text-[10px] text-gray-600">
@@ -507,14 +510,14 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                                     {/* Total Value */}
                                     <div class="p-4 bg-gradient-to-br from-cyan-500/8 to-transparent rounded-2xl border border-cyan-500/10">
-                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total Value</div>
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t('cex.totalValue')}</div>
                                         <div class="text-lg font-black text-white">
                                             {viewCurrency() === 'krw' ? formatKrw(agg().totalValueKrw) : formatUsd(agg().totalValueUsd)}
                                         </div>
                                     </div>
                                     {/* P&L */}
                                     <div class="p-4 bg-[#111113]/60 rounded-2xl border border-white/[0.04]">
-                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Total P&L</div>
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t('cex.totalPL')}</div>
                                         <div class="flex items-center gap-1">
                                             {(() => {
                                                 const totalPL = portfolios().reduce((sum, p) => sum + (p.totalProfitLoss || 0), 0);
@@ -535,12 +538,12 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     </div>
                                     {/* Asset Count */}
                                     <div class="p-4 bg-[#111113]/60 rounded-2xl border border-white/[0.04]">
-                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Assets</div>
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t('cex.assets')}</div>
                                         <div class="text-lg font-black text-white">{agg().assets.length}</div>
                                     </div>
                                     {/* Exchanges */}
                                     <div class="p-4 bg-[#111113]/60 rounded-2xl border border-white/[0.04]">
-                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Exchanges</div>
+                                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t('cex.exchanges')}</div>
                                         <div class="text-lg font-black text-white">{credentials().length}</div>
                                     </div>
                                 </div>
@@ -549,7 +552,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                     {/* Allocation Chart */}
                                     <div class="bg-[#111113]/60 rounded-2xl border border-white/[0.04] p-6">
-                                        <h4 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-6">Allocation</h4>
+                                        <h4 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-6">{t('cex.allocation')}</h4>
                                         <div class="flex justify-center mb-6">
                                             <DonutChart assets={displayAssets()} size={160} />
                                         </div>
@@ -573,23 +576,23 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     {/* Asset Table */}
                                     <div class="lg:col-span-2 bg-[#111113]/60 rounded-2xl border border-white/[0.04] overflow-hidden">
                                         <div class="flex items-center justify-between p-4 border-b border-white/[0.04]">
-                                            <h4 class="text-xs font-black text-gray-500 uppercase tracking-widest">Holdings</h4>
-                                            <span class="text-[10px] text-gray-600">{displayAssets().length} assets</span>
+                                            <h4 class="text-xs font-black text-gray-500 uppercase tracking-widest">{t('cex.holdings')}</h4>
+                                            <span class="text-[10px] text-gray-600">{displayAssets().length} {t('cex.assetsCount')}</span>
                                         </div>
 
                                         {/* Table Header */}
                                         <div class="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 text-[10px] font-bold text-gray-600 uppercase tracking-wider border-b border-white/[0.02]">
-                                            <div class="col-span-4">Asset</div>
-                                            <div class="col-span-2 text-right">Price</div>
-                                            <div class="col-span-2 text-right">Balance</div>
-                                            <div class="col-span-2 text-right">Value</div>
-                                            <div class="col-span-2 text-right">P&L</div>
+                                            <div class="col-span-4">{t('cex.asset')}</div>
+                                            <div class="col-span-2 text-right">{t('cex.price')}</div>
+                                            <div class="col-span-2 text-right">{t('cex.balance')}</div>
+                                            <div class="col-span-2 text-right">{t('cex.value')}</div>
+                                            <div class="col-span-2 text-right">{t('cex.pl')}</div>
                                         </div>
 
                                         {/* Asset Rows */}
                                         <div class="divide-y divide-white/[0.02]">
                                             <For each={displayAssets()} fallback={
-                                                <div class="p-8 text-center text-sm text-gray-500">No assets found. Sync your exchange to load data.</div>
+                                                <div class="p-8 text-center text-sm text-gray-500">{t('cex.noAssetsFound')}</div>
                                             }>
                                                 {(asset) => {
                                                     const iconUrl = getCoinIconUrl(asset.currency);
@@ -678,8 +681,8 @@ const WalletCexPortfolio = (): JSX.Element => {
                                         <Key class="w-5 h-5 text-cyan-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-sm font-black text-white">Connect Exchange</h3>
-                                        <p class="text-[10px] text-gray-500">Enter your API credentials</p>
+                                        <h3 class="text-sm font-black text-white">{t('cex.connectExchange')}</h3>
+                                        <p class="text-[10px] text-gray-500">{t('cex.enterCredentials')}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setShowAddModal(false)} class="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
@@ -691,7 +694,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                             <div class="p-5 space-y-4">
                                 {/* Exchange Selection */}
                                 <div>
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Exchange</label>
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">{t('cex.exchange')}</label>
                                     <div class="grid grid-cols-2 gap-2">
                                         <button
                                             onClick={() => setAddExchange('upbit')}
@@ -712,7 +715,7 @@ const WalletCexPortfolio = (): JSX.Element => {
 
                                 {/* Label */}
                                 <div>
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Label (Optional)</label>
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">{t('cex.labelOptional')}</label>
                                     <input
                                         type="text"
                                         value={addLabel()}
@@ -724,12 +727,12 @@ const WalletCexPortfolio = (): JSX.Element => {
 
                                 {/* Access Key */}
                                 <div>
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">Access Key</label>
+                                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">{t('cex.accessKey')}</label>
                                     <input
                                         type="text"
                                         value={addAccessKey()}
                                         onInput={(e) => setAddAccessKey(e.currentTarget.value)}
-                                        placeholder="Enter your Access Key"
+                                        placeholder={t('cex.enterAccessKey')}
                                         class="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
                                         spellcheck={false}
                                         autocomplete="off"
@@ -739,7 +742,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 {/* Secret Key */}
                                 <div>
                                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                        Secret Key
+                                        {t('cex.secretKey')}
                                         <button onClick={() => setShowSecretKey(!showSecretKey())} class="text-gray-600 hover:text-gray-400 transition-colors">
                                             {showSecretKey() ? <EyeOff class="w-3 h-3" /> : <Eye class="w-3 h-3" />}
                                         </button>
@@ -748,7 +751,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                         type={showSecretKey() ? 'text' : 'password'}
                                         value={addSecretKey()}
                                         onInput={(e) => setAddSecretKey(e.currentTarget.value)}
-                                        placeholder="Enter your Secret Key"
+                                        placeholder={t('cex.enterSecretKey')}
                                         class="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
                                         spellcheck={false}
                                         autocomplete="off"
@@ -759,7 +762,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="flex items-start gap-2 p-3 bg-cyan-500/5 border border-cyan-500/10 rounded-xl">
                                     <Shield class="w-3.5 h-3.5 text-cyan-400 mt-0.5 flex-shrink-0" />
                                     <p class="text-[10px] text-gray-500 leading-relaxed">
-                                        Keys are encrypted with AES-256-GCM and never stored in plaintext. Only read-only access is required.
+                                        {t('cex.securityNote')}
                                     </p>
                                 </div>
 
@@ -791,9 +794,9 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     disabled={isRegistering() || !addAccessKey().trim() || !addSecretKey().trim()}
                                     class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl text-sm font-black text-black transition-colors"
                                 >
-                                    <Show when={isRegistering()} fallback={<>Connect</>}>
+                                    <Show when={isRegistering()} fallback={<>{t('cex.connect')}</>}>
                                         <RefreshCw class="w-3.5 h-3.5 animate-spin" />
-                                        Validating...
+                                        {t('cex.validatingBtn')}
                                     </Show>
                                 </button>
                             </div>
@@ -812,8 +815,8 @@ const WalletCexPortfolio = (): JSX.Element => {
                                         <Shield class="w-5 h-5 text-amber-400" />
                                     </div>
                                     <div>
-                                        <h3 class="text-sm font-black text-white">IP Whitelist Setup Guide</h3>
-                                        <p class="text-[10px] text-gray-500">Required for API Key registration</p>
+                                        <h3 class="text-sm font-black text-white">{t('cex.ipGuideTitle')}</h3>
+                                        <p class="text-[10px] text-gray-500">{t('cex.ipGuideSubtitle')}</p>
                                     </div>
                                 </div>
                                 <button onClick={() => setShowIpGuide(false)} class="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
@@ -825,21 +828,21 @@ const WalletCexPortfolio = (): JSX.Element => {
                             <div class="p-5 space-y-5">
                                 {/* Static IP Card */}
                                 <div class="p-4 bg-gradient-to-br from-cyan-500/8 to-purple-500/5 rounded-2xl border border-cyan-500/15">
-                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Vision Chain Server IP</div>
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">{t('cex.serverIp')}</div>
                                     <div class="flex items-center gap-3">
                                         <code class="text-2xl font-black text-white tracking-wider flex-1">{STATIC_IP}</code>
                                         <button
                                             onClick={copyIpAddress}
                                             class={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${ipCopied()
-                                                    ? 'bg-green-500/15 text-green-400 border border-green-500/20'
-                                                    : 'bg-white/[0.05] hover:bg-white/[0.1] text-gray-400 hover:text-white border border-white/[0.08]'
+                                                ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                                                : 'bg-white/[0.05] hover:bg-white/[0.1] text-gray-400 hover:text-white border border-white/[0.08]'
                                                 }`}
                                         >
                                             {ipCopied() ? <Check class="w-3.5 h-3.5" /> : <Copy class="w-3.5 h-3.5" />}
                                             {ipCopied() ? 'Copied!' : 'Copy'}
                                         </button>
                                     </div>
-                                    <p class="text-[10px] text-gray-500 mt-2">Copy this IP address and add it to your exchange API whitelist.</p>
+                                    <p class="text-[10px] text-gray-500 mt-2">{t('cex.copyIpDesc')}</p>
                                 </div>
 
                                 {/* Why IP Whitelist */}
@@ -847,9 +850,9 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     <div class="flex items-start gap-2.5">
                                         <AlertCircle class="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
                                         <div>
-                                            <p class="text-xs font-bold text-amber-400 mb-1">Why is this required?</p>
+                                            <p class="text-xs font-bold text-amber-400 mb-1">{t('cex.whyRequired')}</p>
                                             <p class="text-[11px] text-gray-400 leading-relaxed">
-                                                Korean exchanges (Upbit, Bithumb) require IP whitelisting for security. Only requests from whitelisted IPs can access your account data. Our server uses a fixed IP to securely fetch your portfolio.
+                                                {t('cex.whyRequiredDesc')}
                                             </p>
                                         </div>
                                     </div>
@@ -859,7 +862,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="space-y-3">
                                     <div class="flex items-center gap-2">
                                         <div class="p-1.5 bg-[#093687]/20 rounded-lg"><UpbitIcon /></div>
-                                        <h4 class="text-sm font-black text-white">Upbit Setup</h4>
+                                        <h4 class="text-sm font-black text-white">{t('cex.upbitSetup')}</h4>
                                     </div>
                                     <div class="space-y-2 pl-2">
                                         <div class="flex items-start gap-3">
@@ -888,7 +891,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="space-y-3">
                                     <div class="flex items-center gap-2">
                                         <div class="p-1.5 bg-[#F37021]/20 rounded-lg"><BithumbIcon /></div>
-                                        <h4 class="text-sm font-black text-white">Bithumb Setup</h4>
+                                        <h4 class="text-sm font-black text-white">{t('cex.bithumbSetup')}</h4>
                                     </div>
                                     <div class="space-y-2 pl-2">
                                         <div class="flex items-start gap-3">
@@ -914,9 +917,9 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 <div class="flex items-start gap-2.5 p-3 bg-green-500/5 border border-green-500/10 rounded-xl">
                                     <Shield class="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
                                     <div>
-                                        <p class="text-[11px] text-green-400 font-bold mb-0.5">Security Best Practice</p>
+                                        <p class="text-[11px] text-green-400 font-bold mb-0.5">{t('cex.securityBestPractice')}</p>
                                         <p class="text-[10px] text-gray-500 leading-relaxed">
-                                            Always grant only <span class="text-white font-bold">read-only (balance inquiry)</span> permissions. Never enable withdrawal or trading permissions for third-party services.
+                                            {t('cex.securityBestPracticeDesc')}
                                         </p>
                                     </div>
                                 </div>
@@ -929,7 +932,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 rounded-xl text-sm font-black text-black transition-colors"
                                 >
                                     <Key class="w-4 h-4" />
-                                    Connect Exchange Now
+                                    {t('cex.connectExchangeNow')}
                                 </button>
                             </div>
                         </div>

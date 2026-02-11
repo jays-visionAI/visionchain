@@ -18,8 +18,10 @@ import { Motion } from 'solid-motionone';
 
 import { WalletViewHeader } from './WalletViewHeader';
 import { ReferralLeaderboard } from './ReferralLeaderboard';
+import { useI18n } from '../../i18n/i18nContext';
 
 export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (view: string) => void }) => {
+    const { t } = useI18n();
     const [selectedQuest, setSelectedQuest] = createSignal<string | null>(null);
     const [totalStaked, setTotalStaked] = createSignal('Loading...');
 
@@ -50,63 +52,63 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
     const quests = [
         {
             id: 'referral',
-            title: 'Referral Rush',
-            tag: 'Active Now',
+            title: t('campaign.referralRushTitle'),
+            tag: t('campaign.activeNow'),
             tagColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-            description: 'Invite your network to Vision Chain and climb the global leaderboard for massive VCN multipliers.',
+            description: t('campaign.referralRushCardDesc'),
             icon: UserPlus,
             accent: 'emerald',
-            btnText: 'View Leaderboard',
+            btnText: t('campaign.viewLeaderboard'),
             stats: [
-                { label: 'Top Reward', value: '100x VCN' },
-                { label: 'Participants', value: '2.4K+' }
+                { label: t('campaign.topReward'), value: '100x VCN' },
+                { label: t('campaign.participants'), value: '2.4K+' }
             ],
-            footerTag: 'Season 1',
+            footerTag: t('campaign.season1'),
             footerIcon: Sparkles
         },
         {
             id: 'staking',
-            title: 'Validator Staking',
-            tag: 'Active Now',
+            title: t('campaign.validatorStaking'),
+            tag: t('campaign.activeNow'),
             tagColor: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-            description: 'Earn min 12% APR up to 20% by staking your VCN tokens. Secure bridge network and grow your holdings.',
+            description: t('campaign.validatorStakingDesc'),
             icon: TrendingUp,
             accent: 'orange',
-            btnText: 'Stake Now',
+            btnText: t('campaign.stakeNow'),
             stats: [
-                { label: 'Current APY', value: '12~20%' },
-                { label: 'Total Staked', value: totalStaked() }
+                { label: t('campaign.currentApy'), value: '12~20%' },
+                { label: t('campaign.totalStaked'), value: totalStaked() }
             ],
-            footerTag: 'Active Now',
+            footerTag: t('campaign.activeNow'),
             footerIcon: Target
         },
         {
             id: 'airdrop',
-            title: 'Community Airdrop',
-            tag: 'Season 1',
+            title: t('campaign.communityAirdrop'),
+            tag: t('campaign.season1'),
             tagColor: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-            description: 'Complete daily ecosystem missions to earn Vision Points and qualify for the first genesis airdrop.',
+            description: t('campaign.communityAirdropDesc'),
             icon: Sparkles,
             accent: 'purple',
-            btnText: 'View Missions',
+            btnText: t('campaign.viewMissions'),
             progress: 5,
-            footerTag: 'New Era',
+            footerTag: t('campaign.newEra'),
             footerIcon: TrendingUp
         },
         {
             id: 'vns',
-            title: 'VNS Hunting',
-            tag: 'Early Access',
+            title: t('campaign.vnsHunting'),
+            tag: t('campaign.earlyAccess'),
             tagColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-            description: 'Secure premium .vsn handles before the public launch. Collectors earn exclusive naming rewards.',
+            description: t('campaign.vnsHuntingDesc'),
             icon: Target,
             accent: 'amber',
-            btnText: 'Start Hunting',
+            btnText: t('campaign.startHunting'),
             stats: [
-                { label: 'Handles Claimed', value: '8.1K' },
-                { label: 'Rarity Bonus', value: 'Up to 5x' }
+                { label: t('campaign.handlesClaimed'), value: '8.1K' },
+                { label: t('campaign.rarityBonus'), value: 'Up to 5x' }
             ],
-            footerTag: 'Limited',
+            footerTag: t('campaign.limited'),
             footerIcon: Award
         }
     ];
@@ -126,12 +128,12 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                 <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-all">
                                     <ArrowLeft class="w-5 h-5" />
                                 </div>
-                                <span class="text-sm font-bold uppercase tracking-widest">Back to Quests</span>
+                                <span class="text-sm font-bold uppercase tracking-widest">{t('campaign.backToQuests')}</span>
                             </button>
 
                             <div class="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                                 <Trophy class="w-4 h-4 text-blue-400" />
-                                <span class="text-xs font-black text-blue-400 uppercase tracking-widest">Active Leaderboard</span>
+                                <span class="text-xs font-black text-blue-400 uppercase tracking-widest">{t('campaign.activeLeaderboard')}</span>
                             </div>
                         </div>
 
@@ -143,19 +145,18 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                         <UserPlus class="w-64 h-64" />
                                     </div>
                                     <div class="relative z-10 max-w-2xl">
-                                        <span class="inline-block px-3 py-1 bg-emerald-500 text-black text-[10px] font-black uppercase rounded mb-4">Referral Quest</span>
-                                        <h1 class="text-4xl lg:text-5xl font-black italic text-white tracking-tighter mb-4">REFERRAL RUSH</h1>
+                                        <span class="inline-block px-3 py-1 bg-emerald-500 text-black text-[10px] font-black uppercase rounded mb-4">{t('campaign.referralQuest')}</span>
+                                        <h1 class="text-4xl lg:text-5xl font-black italic text-white tracking-tighter mb-4">{t('campaign.referralRush')}</h1>
                                         <p class="text-lg text-gray-400 font-medium leading-relaxed mb-8">
-                                            The race is on. Build your network on Vision Chain and unlock exclusive multipliers based on your rank.
-                                            Every verified referral boosts your power.
+                                            {t('campaign.referralRushDesc')}
                                         </p>
                                         <div class="flex gap-4">
                                             <div class="bg-black/40 border border-white/10 rounded-2xl px-6 py-4">
-                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Your Rank</div>
+                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('campaign.yourRank')}</div>
                                                 <div class="text-2xl font-black text-white italic">#--</div>
                                             </div>
                                             <div class="bg-black/40 border border-white/10 rounded-2xl px-6 py-4">
-                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Reward</div>
+                                                <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{t('campaign.totalReward')}</div>
                                                 <div class="text-2xl font-black text-emerald-400 italic">0 VCN</div>
                                             </div>
                                         </div>
@@ -171,13 +172,13 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                 <div class="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-600 mb-6">
                                     <Award class="w-10 h-10" />
                                 </div>
-                                <h3 class="text-2xl font-black text-white uppercase italic tracking-tight mb-2">Quest System Initializing</h3>
-                                <p class="text-gray-500 max-w-sm mb-8">Leaderboards and mission dashboards for {selectedQuest()} are coming soon in the next season update.</p>
+                                <h3 class="text-2xl font-black text-white uppercase italic tracking-tight mb-2">{t('campaign.questInitializing')}</h3>
+                                <p class="text-gray-500 max-w-sm mb-8">{t('campaign.questInitializingDesc')} {selectedQuest()} {t('campaign.questInitializingDescEnd')}</p>
                                 <button
                                     onClick={() => setSelectedQuest(null)}
                                     class="px-8 py-3 bg-white text-black font-black uppercase italic rounded-xl text-sm hover:scale-105 active:scale-95 transition-all"
                                 >
-                                    Return to Overview
+                                    {t('campaign.returnToOverview')}
                                 </button>
                             </div>
                         </Show>
@@ -185,10 +186,10 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                 }>
                     <div class="space-y-12">
                         <WalletViewHeader
-                            tag="Earning Center"
-                            title="QUEST"
-                            titleAccent="SYSTEM"
-                            description="Maximize your earnings through Vision ecosystem events, rewards, and community missions."
+                            tag={t('campaign.tag')}
+                            title={t('campaign.title')}
+                            titleAccent={t('campaign.titleAccent')}
+                            description={t('campaign.description')}
                             icon={Zap}
                         />
 
@@ -241,7 +242,7 @@ export const WalletCampaign = (props: { userProfile: () => any; onNavigate?: (vi
                                             <Show when={quest.progress !== undefined}>
                                                 <div class="mb-8 pt-4 border-t border-white/5">
                                                     <div class="flex items-center justify-between mb-3">
-                                                        <span class="text-[9px] text-gray-600 font-black uppercase tracking-widest">Progress Basis</span>
+                                                        <span class="text-[9px] text-gray-600 font-black uppercase tracking-widest">{t('campaign.progressBasis')}</span>
                                                         <span class="text-[10px] text-white font-black italic">ACTIVE</span>
                                                     </div>
                                                     <div class="w-full h-2 bg-white/5 rounded-full overflow-hidden">
