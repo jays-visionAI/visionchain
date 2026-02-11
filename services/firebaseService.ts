@@ -1363,6 +1363,7 @@ export const getFirebaseStorage = () => {
 // --- Isolated Admin Auth (Prevents Session Conflict) ---
 let adminApp: FirebaseApp;
 let adminAuth: Auth;
+let adminDb: Firestore;
 
 export const getAdminFirebaseAuth = () => {
     if (!adminAuth) {
@@ -1372,6 +1373,16 @@ export const getAdminFirebaseAuth = () => {
         adminAuth = getAuth(adminApp);
     }
     return adminAuth;
+};
+
+// Admin Firestore - uses AdminConsole app so admin auth session is respected
+export const getAdminFirebaseDb = () => {
+    if (!adminDb) {
+        // Ensure admin app is initialized
+        getAdminFirebaseAuth();
+        adminDb = getFirestore(adminApp);
+    }
+    return adminDb;
 };
 
 export const getFirebaseDb = () => {
@@ -1881,9 +1892,16 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
     const startTime = Date.now();
     console.log('[Performance] getAllUsers started');
 
+    // Use admin DB if admin session is active, otherwise default DB
     let currentDb: Firestore;
     try {
-        currentDb = getFirebaseDb();
+        const adminAuth = getAdminFirebaseAuth();
+        if (adminAuth.currentUser) {
+            currentDb = getAdminFirebaseDb();
+            console.log('[getAllUsers] Using Admin Firestore session');
+        } else {
+            currentDb = getFirebaseDb();
+        }
     } catch (e) {
         initializeFirebase();
         currentDb = getFirebaseDb();
@@ -2024,9 +2042,17 @@ export interface AgentData {
 
 export const getAllAgents = async (limitCount = 500): Promise<AgentData[]> => {
     console.log('[Performance] getAllAgents started');
+
+    // Use admin DB if admin session is active, otherwise default DB
     let currentDb: Firestore;
     try {
-        currentDb = getFirebaseDb();
+        const adminAuth = getAdminFirebaseAuth();
+        if (adminAuth.currentUser) {
+            currentDb = getAdminFirebaseDb();
+            console.log('[getAllAgents] Using Admin Firestore session');
+        } else {
+            currentDb = getFirebaseDb();
+        }
     } catch (e) {
         initializeFirebase();
         currentDb = getFirebaseDb();
@@ -2068,14 +2094,24 @@ export const getAllAgents = async (limitCount = 500): Promise<AgentData[]> => {
 };
 
 export const deleteAgent = async (agentName: string): Promise<void> => {
-    const db = getFirebaseDb();
-    await deleteDoc(doc(db, 'agents', agentName));
+    // Use admin DB for admin operations
+    let currentDb: Firestore;
+    try {
+        const adminAuth = getAdminFirebaseAuth();
+        currentDb = adminAuth.currentUser ? getAdminFirebaseDb() : getFirebaseDb();
+    } catch { currentDb = getFirebaseDb(); }
+    await deleteDoc(doc(currentDb, 'agents', agentName));
 };
 
 export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'partner'> => {
     try {
-        const db = getFirebaseDb();
-        const userRef = doc(db, 'users', email.toLowerCase());
+        // Use admin DB if admin session is active
+        let currentDb: Firestore;
+        try {
+            const adminAuth = getAdminFirebaseAuth();
+            currentDb = adminAuth.currentUser ? getAdminFirebaseDb() : getFirebaseDb();
+        } catch { currentDb = getFirebaseDb(); }
+        const userRef = doc(currentDb, 'users', email.toLowerCase());
         const userSnap = await getDoc(userRef);
         if (userSnap.exists()) {
             return userSnap.data().role || 'user';
