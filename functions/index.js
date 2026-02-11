@@ -7901,7 +7901,9 @@ exports.agentGateway = onRequest({
   }
 
   try {
-    const { action, api_key } = req.body;
+    const body = req.body;
+    const action = body.action;
+    const apiKeyParam = body.api_key || body.apiKey;
 
     if (!action) {
       return res.status(400).json({ error: "Missing required field: action" });
@@ -7909,16 +7911,20 @@ exports.agentGateway = onRequest({
 
     // --- REGISTER ---
     if (action === "register") {
-      const { agent_name, platform, platform_id, owner_email, referral_code } = req.body;
+      const agentName = body.agent_name || body.agentName;
+      const platform = body.platform;
+      const platformId = body.platform_id || body.platformId || "";
+      const ownerEmail = body.owner_email || body.ownerEmail || "";
+      const refCode = body.referral_code || body.referralCode || "";
 
-      if (!agent_name || !platform) {
+      if (!agentName || !platform) {
         return res.status(400).json({
           error: "Missing required fields: agent_name, platform",
         });
       }
 
       // Check if agent already exists
-      const existingAgent = await db.collection("agents").doc(agent_name.toLowerCase()).get();
+      const existingAgent = await db.collection("agents").doc(agentName.toLowerCase()).get();
       if (existingAgent.exists) {
         const data = existingAgent.data();
         return res.status(409).json({
@@ -7934,15 +7940,15 @@ exports.agentGateway = onRequest({
       // Create new wallet
       const wallet = ethers.Wallet.createRandom();
       const apiKey = generateAgentApiKey();
-      const agentReferralCode = generateAgentReferralCode(agent_name);
+      const agentReferralCode = generateAgentReferralCode(agentName);
 
       // Save agent to Firestore
       const agentData = {
-        agentName: agent_name.toLowerCase(),
-        displayName: agent_name,
+        agentName: agentName.toLowerCase(),
+        displayName: agentName,
         platform: platform.toLowerCase(),
-        platformId: platform_id || "",
-        ownerEmail: (owner_email || "").toLowerCase(),
+        platformId: platformId,
+        ownerEmail: ownerEmail.toLowerCase(),
         walletAddress: wallet.address,
         privateKey: serverEncrypt(wallet.privateKey), // Encrypted server-side
         apiKey: apiKey,
@@ -7957,7 +7963,7 @@ exports.agentGateway = onRequest({
         status: "active",
       };
 
-      await db.collection("agents").doc(agent_name.toLowerCase()).set(agentData);
+      await db.collection("agents").doc(agentName.toLowerCase()).set(agentData);
 
       // Fund the wallet with VCN
       let fundingTxHash = "";
@@ -7975,11 +7981,11 @@ exports.agentGateway = onRequest({
       }
 
       // Process referral if provided
-      if (referral_code) {
+      if (refCode) {
         try {
           // Find referrer agent
           const referrerSnap = await db.collection("agents")
-            .where("referralCode", "==", referral_code)
+            .where("referralCode", "==", refCode)
             .limit(1)
             .get();
           if (!referrerSnap.empty) {
@@ -7989,14 +7995,14 @@ exports.agentGateway = onRequest({
               rpPoints: admin.firestore.FieldValue.increment(50),
             });
             // Give bonus to new agent too
-            await db.collection("agents").doc(agent_name.toLowerCase()).update({
+            await db.collection("agents").doc(agentName.toLowerCase()).update({
               rpPoints: admin.firestore.FieldValue.increment(25),
             });
-            console.log(`[Agent Gateway] Referral processed: ${referral_code} -> ${agent_name}`);
+            console.log(`[Agent Gateway] Referral processed: ${refCode} -> ${agentName}`);
           } else {
             // Check human user referral codes
             const humanSnap = await db.collection("users")
-              .where("referralCode", "==", referral_code)
+              .where("referralCode", "==", refCode)
               .limit(1)
               .get();
             if (!humanSnap.empty) {
@@ -8004,10 +8010,10 @@ exports.agentGateway = onRequest({
               await humanDoc.ref.update({
                 referralCount: admin.firestore.FieldValue.increment(1),
               });
-              await db.collection("agents").doc(agent_name.toLowerCase()).update({
+              await db.collection("agents").doc(agentName.toLowerCase()).update({
                 rpPoints: admin.firestore.FieldValue.increment(25),
               });
-              console.log(`[Agent Gateway] Human referral processed: ${referral_code} -> ${agent_name}`);
+              console.log(`[Agent Gateway] Human referral processed: ${refCode} -> ${agentName}`);
             }
           }
         } catch (refErr) {
@@ -8015,27 +8021,27 @@ exports.agentGateway = onRequest({
         }
       }
 
-      console.log(`[Agent Gateway] Registered agent: ${agent_name} (${platform}) wallet: ${wallet.address}`);
+      console.log(`[Agent Gateway] Registered agent: ${agentName} (${platform}) wallet: ${wallet.address}`);
 
       return res.status(201).json({
         success: true,
         agent: {
-          agent_name: agent_name.toLowerCase(),
+          agent_name: agentName.toLowerCase(),
           wallet_address: wallet.address,
           api_key: apiKey,
           referral_code: agentReferralCode,
           initial_balance: `${AGENT_FAUCET_AMOUNT} VCN`,
           funding_tx: fundingTxHash,
-          dashboard_url: `https://visionchain.co/agent/${agent_name.toLowerCase()}`,
+          dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
         },
       });
     }
 
     // --- All other actions require authentication ---
-    if (!api_key) {
+    if (!apiKeyParam) {
       return res.status(401).json({ error: "Missing api_key. Register first." });
     }
-    const agent = await authenticateAgent(api_key);
+    const agent = await authenticateAgent(apiKeyParam);
     if (!agent) {
       return res.status(401).json({ error: "Invalid api_key" });
     }
