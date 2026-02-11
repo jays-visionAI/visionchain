@@ -1405,7 +1405,7 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
             intentHash: intentHash,
             commitTxHash: commitTx.hash,
             lockTxHash: lockTx.hash,
-            challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
+            challengeEndTime: Date.now(), // Testnet: immediate (no challenge logic yet)
             metadata: {
               destinationChain: dstChainId === 11155111 ? "Sepolia" : "Unknown",
               srcChainId: srcChain,

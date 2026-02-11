@@ -2910,7 +2910,7 @@ const Wallet = (): JSX.Element => {
                     intentHash: intentHash,
                     commitTxHash: result.commitTxHash,
                     lockTxHash: result.lockTxHash,
-                    challengeEndTime: Date.now() + (bridgeDelay() * 60 * 1000), // User-selected challenge period
+                    challengeEndTime: Date.now(), // Testnet: immediate (no challenge logic implemented yet)
                     metadata: {
                         destinationChain: bridge.destinationChain,
                         srcChainId: 1337,
