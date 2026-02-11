@@ -1258,23 +1258,20 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     // VCN Token contract for permit/transferFrom
     const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-    // === DIAGNOSTIC LOGGING ===
-    const userBalance = await tokenContract.balanceOf(user);
-    const currentAllowance = await tokenContract.allowance(user, adminAddress);
-    console.log(`[Paymaster:Bridge] Admin address: ${adminAddress}`);
-    console.log(`[Paymaster:Bridge] User ERC20 VCN balance: ${ethers.formatEther(userBalance)}`);
-    console.log(`[Paymaster:Bridge] Current allowance (user->admin): ${ethers.formatEther(currentAllowance)}`);
-    console.log(`[Paymaster:Bridge] Required total: ${ethers.formatEther(totalAmount)} (amount: ${ethers.formatEther(amountWei)}, fee: ${ethers.formatEther(BRIDGE_FEE)})`);
-    console.log(`[Paymaster:Bridge] Has signature: ${!!signature}, Has deadline: ${!!deadline}`);
+    // === DIAGNOSTIC LOGGING (parallel for speed) ===
+    const [userBalance, currentAllowance] = await Promise.all([
+      tokenContract.balanceOf(user),
+      tokenContract.allowance(user, adminAddress),
+    ]);
+    console.log(`[Paymaster:Bridge] Admin: ${adminAddress}, User VCN: ${ethers.formatEther(userBalance)}, Allowance: ${ethers.formatEther(currentAllowance)}`);
+    console.log(`[Paymaster:Bridge] Required: ${ethers.formatEther(totalAmount)} (amount: ${ethers.formatEther(amountWei)}, fee: ${ethers.formatEther(BRIDGE_FEE)})`);
 
-    // === STEP 0: Execute Permit & Collect Fee via transferFrom ===
+    // === STEP 0: Execute Permit (if provided) ===
     if (signature && deadline) {
       const { v, r, s } = parseSignature(signature);
-      console.log(`[Paymaster:Bridge] Parsed signature - v: ${v}, r: ${r ? r.substring(0, 10) + "..." : "null"}, s: ${s ? s.substring(0, 10) + "..." : "null"}`);
       if (v) {
         try {
-          console.log(`[Paymaster:Bridge] Executing permit for ${ethers.formatEther(totalAmount)} VCN (amount + fee)...`);
-          console.log(`[Paymaster:Bridge] Permit params: owner=${user}, spender=${adminAddress}, value=${totalAmount.toString()}, deadline=${deadline}`);
+          console.log(`[Paymaster:Bridge] Executing permit for ${ethers.formatEther(totalAmount)} VCN...`);
           const permitTx = await tokenContract.permit(
             user,
             adminAddress,
@@ -1284,59 +1281,42 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
           );
           await permitTx.wait();
           console.log(`[Paymaster:Bridge] Permit successful`);
-
-          // Verify allowance after permit
-          const newAllowance = await tokenContract.allowance(user, adminAddress);
-          console.log(`[Paymaster:Bridge] Post-permit allowance: ${ethers.formatEther(newAllowance)}`);
         } catch (permitErr) {
           console.error(`[Paymaster:Bridge] Permit failed:`, permitErr.message);
-          console.error(`[Paymaster:Bridge] Permit reason:`, permitErr.reason);
           return res.status(400).json({ error: `Permit verification failed: ${permitErr.reason || permitErr.message}` });
         }
-      } else {
-        console.warn(`[Paymaster:Bridge] Signature parsed but v is null/undefined, skipping permit`);
       }
     } else {
-      console.warn(`[Paymaster:Bridge] No signature or deadline provided, skipping permit. Fee collection will likely fail.`);
+      console.warn(`[Paymaster:Bridge] No signature/deadline, skipping permit.`);
     }
 
-    // Collect fee from user to admin
+    // === STEP 1: Single transferFrom for fee + bridge amount (OPTIMIZED: was 2 separate TXs) ===
     try {
-      const preAllowance = await tokenContract.allowance(user, adminAddress);
-      console.log(`[Paymaster:Bridge] Pre-fee allowance: ${ethers.formatEther(preAllowance)}, fee needed: ${ethers.formatEther(BRIDGE_FEE)}`);
-      const feeTx = await tokenContract.transferFrom(user, adminAddress, BRIDGE_FEE);
-      await feeTx.wait();
-      console.log(`[Paymaster:Bridge] Fee collected: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
-
-      // Forward fee to staking contract for validator rewards
-      try {
-        const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
-        const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, BRIDGE_FEE);
-        await approveTx.wait();
-        const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
-        await depositTx.wait();
-        console.log(`[Paymaster:Bridge] Fee forwarded to staking: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
-      } catch (fwdErr) {
-        console.warn(`[Paymaster:Bridge] Fee forwarding to staking failed:`, fwdErr.message);
-      }
-    } catch (feeErr) {
-      console.error(`[Paymaster:Bridge] Fee collection failed:`, feeErr.message);
-      console.error(`[Paymaster:Bridge] Fee collection reason:`, feeErr.reason);
-      return res.status(400).json({ error: `Fee collection failed: ${feeErr.reason || feeErr.message}` });
-    }
-
-    // Transfer bridge amount from user to admin (admin will lock it)
-    try {
-      const transferTx = await tokenContract.transferFrom(user, adminAddress, amountWei);
+      console.log(`[Paymaster:Bridge] Transferring total ${ethers.formatEther(totalAmount)} VCN (fee + amount) in single TX...`);
+      const transferTx = await tokenContract.transferFrom(user, adminAddress, totalAmount);
       await transferTx.wait();
-      console.log(`[Paymaster:Bridge] Transferred ${ethers.formatEther(amountWei)} VCN from user to admin for locking`);
-    } catch (transferErr) {
-      console.error(`[Paymaster:Bridge] Bridge amount transfer failed:`, transferErr.message);
-      return res.status(400).json({ error: `Bridge amount transfer failed: ${transferErr.reason || transferErr.message}` });
+      console.log(`[Paymaster:Bridge] Total transfer successful`);
+
+      // Forward fee to staking contract (fire-and-forget, non-blocking)
+      (async () => {
+        try {
+          const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+          const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, BRIDGE_FEE);
+          await approveTx.wait();
+          const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
+          await depositTx.wait();
+          console.log(`[Paymaster:Bridge] Fee forwarded to staking: ${ethers.formatEther(BRIDGE_FEE)} VCN`);
+        } catch (fwdErr) {
+          console.warn(`[Paymaster:Bridge] Fee forwarding to staking failed:`, fwdErr.message);
+        }
+      })();
+    } catch (feeErr) {
+      console.error(`[Paymaster:Bridge] Transfer failed:`, feeErr.message);
+      return res.status(400).json({ error: `Token transfer failed: ${feeErr.reason || feeErr.message}` });
     }
 
-    // === STEP 1: Commit Intent (Paymaster pays gas) ===
-    console.log(`[Paymaster:Bridge] Step 1: Committing intent on-chain...`);
+    // === STEP 2: Commit Intent (Paymaster pays gas) ===
+    console.log(`[Paymaster:Bridge] Step 2: Committing intent on-chain...`);
     const commitTx = await intentContract.commitIntent(bridgeRecipient, amountWei, dstChainId, { gasLimit: 200000 });
     console.log(`[Paymaster:Bridge] Commit TX sent: ${commitTx.hash}`);
     const commitReceipt = await commitTx.wait();
@@ -1383,8 +1363,8 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     }
     console.log(`[Paymaster:Bridge] Intent hash: ${intentHash}`);
 
-    // === STEP 2: Lock VCN with intentHash (admin locks the VCN it received from user) ===
-    console.log(`[Paymaster:Bridge] Step 2: Locking VCN...`);
+    // === STEP 3: Lock VCN with intentHash (admin locks the VCN it received from user) ===
+    console.log(`[Paymaster:Bridge] Step 3: Locking VCN...`);
     const lockTx = await bridgeContract.lockVCN(intentHash, bridgeRecipient, dstChainId, {
       value: amountWei, // Send native VCN (admin's balance)
       gasLimit: 300000,
@@ -1393,57 +1373,65 @@ async function handleBridge(req, res, { user, srcChainId, dstChainId, _token, am
     const lockReceipt = await lockTx.wait();
     console.log(`[Paymaster:Bridge] Lock confirmed in block ${lockReceipt.blockNumber}`);
 
-    // Save to Firestore for tracking
-    try {
-      // Save to bridgeTransactions (legacy)
-      await db.collection("bridgeTransactions").add({
-        user: user.toLowerCase(),
-        srcChainId: srcChain,
-        dstChainId: dstChainId,
-        amount: ethers.formatEther(amountWei),
-        fee: ethers.formatEther(BRIDGE_FEE),
-        recipient: bridgeRecipient,
-        intentHash: intentHash,
-        commitTxHash: commitTx.hash,
-        lockTxHash: lockTx.hash,
-        status: "LOCKED",
-        createdAt: admin.firestore.Timestamp.now(),
-        type: "BRIDGE_PAYMASTER",
-      });
+    // Save to Firestore for tracking (fire-and-forget, non-blocking)
+    const firestorePromise = (async () => {
+      try {
+        // Save both records in parallel
+        await Promise.all([
+          db.collection("bridgeTransactions").add({
+            user: user.toLowerCase(),
+            srcChainId: srcChain,
+            dstChainId: dstChainId,
+            amount: ethers.formatEther(amountWei),
+            fee: ethers.formatEther(BRIDGE_FEE),
+            recipient: bridgeRecipient,
+            intentHash: intentHash,
+            commitTxHash: commitTx.hash,
+            lockTxHash: lockTx.hash,
+            status: "LOCKED",
+            createdAt: admin.firestore.Timestamp.now(),
+            type: "BRIDGE_PAYMASTER",
+          }),
+          db.collection("transactions").doc(lockTx.hash).set({
+            hash: lockTx.hash,
+            from_addr: user.toLowerCase(),
+            to_addr: "bridge:sepolia",
+            recipient: bridgeRecipient.toLowerCase(),
+            value: ethers.formatEther(amountWei),
+            fee: ethers.formatEther(BRIDGE_FEE),
+            timestamp: Date.now(),
+            type: "Bridge",
+            bridgeStatus: "LOCKED",
+            intentHash: intentHash,
+            commitTxHash: commitTx.hash,
+            lockTxHash: lockTx.hash,
+            challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
+            metadata: {
+              destinationChain: dstChainId === 11155111 ? "Sepolia" : "Unknown",
+              srcChainId: srcChain,
+              dstChainId: dstChainId,
+            },
+          }),
+        ]);
+        console.log(`[Paymaster:Bridge] Firestore records created`);
+      } catch (firestoreErr) {
+        console.warn("[Paymaster:Bridge] Firestore write failed:", firestoreErr.message);
+      }
+    })();
 
-      // ALSO save to transactions collection (for unified relayer processing)
-      await db.collection("transactions").doc(lockTx.hash).set({
-        hash: lockTx.hash,
-        from_addr: user.toLowerCase(),
-        to_addr: "bridge:sepolia",
-        recipient: bridgeRecipient.toLowerCase(),
-        value: ethers.formatEther(amountWei),
-        fee: ethers.formatEther(BRIDGE_FEE),
-        timestamp: Date.now(),
-        type: "Bridge",
-        bridgeStatus: "LOCKED",
-        intentHash: intentHash,
-        commitTxHash: commitTx.hash,
-        lockTxHash: lockTx.hash,
-        challengeEndTime: Date.now() + (2 * 60 * 1000), // 2 min challenge period
-        metadata: {
-          destinationChain: dstChainId === 11155111 ? "Sepolia" : "Unknown",
-          srcChainId: srcChain,
-          dstChainId: dstChainId,
-        },
-      });
-      console.log(`[Paymaster:Bridge] Firestore record created`);
-    } catch (firestoreErr) {
-      console.warn("[Paymaster:Bridge] Firestore write failed:", firestoreErr.message);
-    }
-
-    return res.status(200).json({
+    // Return success immediately, don't wait for Firestore
+    const result = res.status(200).json({
       success: true,
       commitTxHash: commitTx.hash,
       lockTxHash: lockTx.hash,
       intentHash: intentHash,
       fee: ethers.formatEther(BRIDGE_FEE),
     });
+
+    // Ensure Firestore write completes before function exits
+    await firestorePromise;
+
+    return result;
   } catch (err) {
     console.error("[Paymaster:Bridge] Error:", err);
     return res.status(500).json({ error: err.message || "Bridge transaction failed" });

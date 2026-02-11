@@ -3445,6 +3445,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
             let fullBuffer = '';
             let displayedLength = 0;
             let typingInterval: any = null;
+            let earlyIntentDetected = false; // Flag for early intent short-circuit
 
             // Start typing animation at human-like pace (~30 chars/sec for readability)
             const startTypingEffect = () => {
@@ -3485,6 +3486,27 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 }
             };
 
+            // Early intent detection: check for action intent JSON during streaming
+            const tryEarlyIntentDetect = (text: string): boolean => {
+                // Only check once - look for complete JSON blocks with action intents
+                const actionIntents = /\{[^{}]*"intent"\s*:\s*"(bridge|send|schedule|navigate|multi)"[^{}]*\}/;
+                const codeBlockMatch = text.match(/```json([\s\S]*?)```/);
+                if (codeBlockMatch) {
+                    const jsonContent = codeBlockMatch[1].trim();
+                    if (actionIntents.test(jsonContent)) {
+                        console.log('[AI] Early intent detected during streaming - short-circuiting');
+                        return true;
+                    }
+                }
+                // Also check raw JSON outside code blocks
+                const filtered = filterThinkTags(text);
+                if (actionIntents.test(filtered)) {
+                    console.log('[AI] Early intent detected (raw) during streaming - short-circuiting');
+                    return true;
+                }
+                return false;
+            };
+
             let response: string = await generateTextStream(
                 fullPrompt,
                 (chunk, fullText) => {
@@ -3494,8 +3516,20 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     // Buffer filtered content (without think tags) for typing effect
                     fullBuffer = filterThinkTags(fullText);
 
-                    // Start typing effect on first chunk
-                    if (!typingInterval && fullBuffer.length > 0) startTypingEffect();
+                    // Early intent detection: if action intent JSON found, skip typing
+                    if (!earlyIntentDetected && fullBuffer.length > 20) {
+                        if (tryEarlyIntentDetect(fullText)) {
+                            earlyIntentDetected = true;
+                            // Stop typing effect immediately
+                            if (typingInterval) { clearInterval(typingInterval); typingInterval = null; }
+                            // Show brief processing message instead of full AI response
+                            setStreamingContent('');
+                            return;
+                        }
+                    }
+
+                    // Start typing effect on first chunk (only if no early intent)
+                    if (!earlyIntentDetected && !typingInterval && fullBuffer.length > 0) startTypingEffect();
                 },
                 imageBase64,
                 'intent',
@@ -3503,16 +3537,22 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 messages().slice(0, -1) // Exclude the placeholder message
             );
 
-            // Wait for typing to finish displaying
-            await new Promise<void>(resolve => {
-                const finishInterval = setInterval(() => {
-                    if (displayedLength >= fullBuffer.length) {
-                        clearInterval(finishInterval);
-                        if (typingInterval) clearInterval(typingInterval);
-                        resolve();
-                    }
-                }, 50);
-            });
+            // If early intent detected, skip the typing wait entirely
+            if (!earlyIntentDetected) {
+                // Wait for typing to finish displaying
+                await new Promise<void>(resolve => {
+                    const finishInterval = setInterval(() => {
+                        if (displayedLength >= fullBuffer.length) {
+                            clearInterval(finishInterval);
+                            if (typingInterval) clearInterval(typingInterval);
+                            resolve();
+                        }
+                    }, 50);
+                });
+            } else {
+                // Clean up any remaining typing interval
+                if (typingInterval) { clearInterval(typingInterval); typingInterval = null; }
+            }
 
             // Clear streaming content and add final message to messages array
             setStreamingContent('');
