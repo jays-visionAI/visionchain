@@ -798,7 +798,7 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
         return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
 
       case "reverse_bridge_info": {
-        // Return relayer address so client can sign Permit with correct spender
+        // Return relayer address for client reference
         const sepoliaRelayerPk = process.env.SEPOLIA_RELAYER_PK;
         if (!sepoliaRelayerPk) {
           return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
@@ -808,6 +808,53 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
           success: true,
           relayerAddress: relayerWallet.address,
           vcnSepoliaAddress: process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b",
+        });
+      }
+
+      case "reverse_bridge_prepare": {
+        // Gas sponsorship: send Sepolia ETH to user so they can call approve()
+        // This is needed because VCNTokenSepolia does NOT support ERC-2612 Permit
+        const prepRelayerPk = process.env.SEPOLIA_RELAYER_PK;
+        if (!prepRelayerPk) {
+          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+        }
+        if (!user) {
+          return res.status(400).json({ error: "Missing required field: user" });
+        }
+
+        const prepSepoliaProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+        const prepRelayerWallet = new ethers.Wallet(prepRelayerPk, prepSepoliaProvider);
+        const prepRelayerAddress = prepRelayerWallet.address;
+
+        // Check user's Sepolia ETH balance
+        const userEthBalance = await prepSepoliaProvider.getBalance(user);
+        const GAS_SPONSOR_AMOUNT = ethers.parseEther("0.005"); // ~enough for 2-3 approve txs
+
+        let gasRefillTxHash = null;
+        if (userEthBalance < GAS_SPONSOR_AMOUNT) {
+          console.log(`[ReverseBridgePrepare] Sending ${ethers.formatEther(GAS_SPONSOR_AMOUNT)} ETH to ${user} for gas...`);
+          const relayerEthBal = await prepSepoliaProvider.getBalance(prepRelayerAddress);
+          if (relayerEthBal < GAS_SPONSOR_AMOUNT + ethers.parseEther("0.01")) {
+            return res.status(503).json({ error: "Relayer ETH balance too low for gas sponsorship" });
+          }
+          const gasTx = await prepRelayerWallet.sendTransaction({
+            to: user,
+            value: GAS_SPONSOR_AMOUNT,
+            gasLimit: 21000,
+          });
+          await gasTx.wait();
+          gasRefillTxHash = gasTx.hash;
+          console.log(`[ReverseBridgePrepare] Gas refill tx: ${gasRefillTxHash}`);
+        } else {
+          console.log(`[ReverseBridgePrepare] User already has ${ethers.formatEther(userEthBalance)} ETH, skipping refill`);
+        }
+
+        return res.status(200).json({
+          success: true,
+          relayerAddress: prepRelayerAddress,
+          vcnSepoliaAddress: process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b",
+          gasRefillTxHash,
+          userEthBalance: ethers.formatEther(userEthBalance),
         });
       }
 

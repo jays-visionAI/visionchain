@@ -1778,6 +1778,7 @@ const Wallet = (): JSX.Element => {
                         amount: bridgeData.amount,
                         sourceChain: bridgeData.sourceChain || 'SEPOLIA',
                         recipient: bridgeData.recipient,
+                        privateKey: privateKey,
                     });
                 } else {
                     // Forward bridge: Vision Chain VCN → Sepolia
@@ -2943,7 +2944,8 @@ const Wallet = (): JSX.Element => {
     };
 
     // === Reverse Bridge: Sepolia VCN → Vision Chain VCN ===
-    const executeReverseBridgeIntent = async (bridge: { amount: string; sourceChain: string; recipient?: string }) => {
+    // Uses Gas Sponsorship + Approve pattern (VCNTokenSepolia does NOT support ERC-2612 Permit)
+    const executeReverseBridgeIntent = async (bridge: { amount: string; sourceChain: string; recipient?: string; privateKey?: string }) => {
         setIsBridging(true);
         try {
             const userAddr = walletAddress();
@@ -2954,7 +2956,6 @@ const Wallet = (): JSX.Element => {
             }
 
             const SEPOLIA_VCN_TOKEN = '0x07755968236333B5f8803E9D0fC294608B200d1b';
-            const SEPOLIA_CHAIN_ID = 11155111;
             const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app';
 
             // Check Sepolia VCN balance first
@@ -3004,116 +3005,60 @@ const Wallet = (): JSX.Element => {
                 }
             }
 
-            // === Generate EIP-712 Permit Signature for Sepolia VCN ===
-            const BRIDGE_FEE = ethers.parseEther("1"); // 1 VCN Sepolia fee
-            const bridgeAmountBn = ethers.parseEther(bridge.amount);
-            const totalAmount = bridgeAmountBn + BRIDGE_FEE;
-            const deadline = Math.floor(Date.now() / 1000) + 3600;
+            // === STEP 1: Call reverse_bridge_prepare for gas sponsorship + relayer address ===
+            console.log('[ReverseBridge] Step 1: Preparing (gas sponsorship)...');
+            setLoadingMessage(lastLocale() === 'ko' ? '가스비 준비 중...' : 'Preparing gas...');
 
-            // We need to sign with the user's key but against the Sepolia VCN token
-            // The signer's key works on any chain - only the domain matters
-            const signer = contractService.getSigner();
-            if (!signer) {
-                throw new Error("Signer not available. Please unlock your wallet.");
-            }
-
-            // Query Sepolia VCN token for nonces (via Sepolia RPC)
-            const sepoliaProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
-            const sepoliaVcnContract = new ethers.Contract(SEPOLIA_VCN_TOKEN, [
-                "function nonces(address owner) view returns (uint256)",
-                "function name() view returns (string)",
-            ], sepoliaProvider);
-
-            const tokenName = await sepoliaVcnContract.name();
-            const nonce = await sepoliaVcnContract.nonces(userAddr);
-
-            console.log(`[ReverseBridge] Sepolia VCN name: ${tokenName}, nonce: ${nonce}`);
-
-            // The spender is the Sepolia Relayer wallet (will be filled server-side)
-            // We use a placeholder - the server's relayer address
-            // For Permit, the spender must match what the server uses
-            // Since we don't know the relayer address client-side, we get it from the server first
-            // OR we hardcode it (simpler for now)
-            // The relayer address is derived from SEPOLIA_RELAYER_PK - let's query it
-            const relayerInfoResponse = await fetch(PAYMASTER_URL, {
+            const prepareRes = await fetch(PAYMASTER_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'reverse_bridge_info' })
-            }).catch(() => null);
+                body: JSON.stringify({ type: 'reverse_bridge_prepare', user: userAddr })
+            });
+            const prepareData = await prepareRes.json();
 
-            // If info endpoint doesn't exist, use the existing secureBridgeRelayer address pattern
-            // We'll determine the relayer from context - actually, the permit spender must be exact
-            // Let's use a different approach: pass the signature and let the server reject if mismatched
-            // Better: we can derive it from the executor address pattern
-            // Most robust: hardcode the known relayer address OR add an info endpoint
-
-            // For now, we'll sign against a well-known relayer address that can be fetched
-            // Actually the cleanest way: the server accepts the permit where spender = relayer
-            // We need to know the relayer address. Let's check if there's a config endpoint.
-
-            // Simplest approach: sign permit with spender=0x0 placeholder and have server use approve-based fallback
-            // BEST approach: add relayer address to the paymaster response
-
-            // Let's get the relayer address by making a dry-run call
-            let relayerAddress: string;
-            try {
-                const infoRes = await fetch(PAYMASTER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'reverse_bridge_info', user: userAddr })
-                });
-                const infoData = await infoRes.json();
-                relayerAddress = infoData.relayerAddress;
-            } catch {
-                // Fallback: use the known admin address (this might not match on Sepolia)
-                // We will need the info endpoint. For now, use a workaround:
-                // The relayer address is deterministic from SEPOLIA_RELAYER_PK
-                // Since we can't access it from client, we'll add a simple info endpoint
-                console.warn('[ReverseBridge] Could not fetch relayer address, using approve fallback');
-                relayerAddress = '0x0000000000000000000000000000000000000000';
+            if (!prepareRes.ok || !prepareData.success) {
+                throw new Error(prepareData.error || 'Failed to prepare reverse bridge');
             }
 
-            let permitSignature: string | null = null;
+            const relayerAddress = prepareData.relayerAddress;
+            console.log(`[ReverseBridge] Relayer: ${relayerAddress}, Gas refill: ${prepareData.gasRefillTxHash || 'skipped'}`);
 
-            if (relayerAddress && relayerAddress !== '0x0000000000000000000000000000000000000000') {
-                // Sign EIP-712 Permit for Sepolia VCN
-                const domain = {
-                    name: tokenName,
-                    version: "1",
-                    chainId: SEPOLIA_CHAIN_ID,
-                    verifyingContract: SEPOLIA_VCN_TOKEN
-                };
+            // === STEP 2: Create Sepolia signer and approve relayer ===
+            console.log('[ReverseBridge] Step 2: Approving relayer on Sepolia...');
+            setLoadingMessage(lastLocale() === 'ko' ? '세폴리아 승인 처리 중...' : 'Approving on Sepolia...');
 
-                const types = {
-                    Permit: [
-                        { name: "owner", type: "address" },
-                        { name: "spender", type: "address" },
-                        { name: "value", type: "uint256" },
-                        { name: "nonce", type: "uint256" },
-                        { name: "deadline", type: "uint256" }
-                    ]
-                };
-
-                const values = {
-                    owner: userAddr,
-                    spender: relayerAddress,
-                    value: totalAmount,
-                    nonce: nonce,
-                    deadline: deadline
-                };
-
-                console.log('[ReverseBridge] Signing Sepolia Permit...', {
-                    owner: userAddr,
-                    spender: relayerAddress,
-                    value: ethers.formatEther(totalAmount),
-                    chainId: SEPOLIA_CHAIN_ID
-                });
-
-                permitSignature = await signer.signTypedData(domain, types, values);
-                console.log('[ReverseBridge] Permit signature generated');
+            if (!bridge.privateKey) {
+                throw new Error('Private key not available for Sepolia signer');
             }
 
-            // Call Paymaster API for reverse bridge
+            const sepoliaProvider = new ethers.JsonRpcProvider('https://ethereum-sepolia-rpc.publicnode.com');
+            const sepoliaSigner = new ethers.Wallet(bridge.privateKey, sepoliaProvider);
+
+            const BRIDGE_FEE = ethers.parseEther("1");
+            const bridgeAmountBn = ethers.parseEther(bridge.amount);
+            const totalAmount = bridgeAmountBn + BRIDGE_FEE;
+
+            // Approve relayer for the total amount (amount + fee)
+            const vcnContract = new ethers.Contract(SEPOLIA_VCN_TOKEN, [
+                'function approve(address spender, uint256 amount) returns (bool)',
+                'function allowance(address owner, address spender) view returns (uint256)',
+            ], sepoliaSigner);
+
+            // Check existing allowance first
+            const existingAllowance = await vcnContract.allowance(userAddr, relayerAddress);
+            if (existingAllowance < totalAmount) {
+                console.log(`[ReverseBridge] Current allowance: ${ethers.formatEther(existingAllowance)}, approving ${ethers.formatEther(totalAmount)}...`);
+                const approveTx = await vcnContract.approve(relayerAddress, totalAmount, { gasLimit: 60000 });
+                await approveTx.wait();
+                console.log(`[ReverseBridge] Approve tx: ${approveTx.hash}`);
+            } else {
+                console.log(`[ReverseBridge] Allowance already sufficient: ${ethers.formatEther(existingAllowance)}`);
+            }
+
+            // === STEP 3: Call Paymaster for reverse bridge execution ===
+            console.log('[ReverseBridge] Step 3: Executing reverse bridge...');
+            setLoadingMessage(lastLocale() === 'ko' ? '역브릿지 실행 중...' : 'Executing reverse bridge...');
+
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 180000);
             const response = await fetch(PAYMASTER_URL, {
@@ -3126,8 +3071,7 @@ const Wallet = (): JSX.Element => {
                     recipient: resolvedRecipientAddr,
                     amount: bridgeAmountBn.toString(),
                     fee: BRIDGE_FEE.toString(),
-                    deadline: deadline,
-                    signature: permitSignature,
+                    // No signature/deadline - using approve-based flow
                 })
             });
             clearTimeout(timeoutId);
