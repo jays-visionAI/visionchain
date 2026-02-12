@@ -91,6 +91,7 @@ render(() => (
         <Route path="/paymaster" component={Public.PaymasterPage} />
         <Route path="/agent" component={Public.AgentGatewayPage} />
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
+        <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
 
         {/* Admin Routes */}

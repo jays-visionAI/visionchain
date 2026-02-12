@@ -306,7 +306,7 @@ const endpoints: ApiEndpoint[] = [
             success: true,
             network: {
                 name: 'Vision Chain',
-                chain_id: 8888,
+                chain_id: 20261337,
                 rpc_url: 'https://api.visionchain.co/rpc-proxy',
                 latest_block: 123456,
                 token: { name: 'VCN Token', symbol: 'VCN', address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', decimals: 18 },
@@ -449,8 +449,8 @@ console.log(data);`;
                                                 <button
                                                     onClick={() => { setActiveEndpoint(ep.id); setActiveCategory(ep.category); }}
                                                     class={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group ${activeEndpoint() === ep.id
-                                                            ? 'bg-gradient-to-r from-cyan-500/10 to-purple-500/5 text-white border-l-2 border-cyan-400'
-                                                            : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
+                                                        ? 'bg-gradient-to-r from-cyan-500/10 to-purple-500/5 text-white border-l-2 border-cyan-400'
+                                                        : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
                                                         }`}
                                                 >
                                                     <span class="font-semibold">{ep.title}</span>
@@ -572,8 +572,8 @@ console.log(data);`;
                                         <button
                                             onClick={() => setCodeTab(lang)}
                                             class={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${codeTab() === lang
-                                                    ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                                                    : 'text-gray-500 hover:text-white'
+                                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                                : 'text-gray-500 hover:text-white'
                                                 }`}
                                         >
                                             {lang === 'curl' ? 'cURL' : lang === 'python' ? 'Python' : 'JavaScript'}

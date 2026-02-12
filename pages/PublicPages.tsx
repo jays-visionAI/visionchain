@@ -17,6 +17,7 @@ export const Testnet = lazy(() => import('../components/Testnet'));
 export const Bridge = lazy(() => import('../components/Bridge'));
 export const Paymaster = lazy(() => import('../components/Paymaster'));
 export const AgentGateway = lazy(() => import('../components/AgentGateway'));
+export const ApiHub = lazy(() => import('../components/ApiHub'));
 
 // Page Wrapper Components
 export const ResearchPage = () => {
@@ -99,9 +100,14 @@ export const AgentGatewayPage = () => {
     return <div id="agent-gateway"><AgentGateway /></div>;
 };
 
-export const AgentApiDocs = lazy(() => import('../components/AgentApiDocs'));
+export const AgentApiDocs = lazy(() => import('../components/DevDocs'));
 
 export const AgentApiDocsPage = () => {
-    document.title = 'Agent API Documentation | Vision Chain';
+    document.title = 'API Documentation | Vision Chain';
     return <div id="agent-api-docs"><AgentApiDocs /></div>;
+};
+
+export const ApiHubPage = () => {
+    document.title = 'API & Developer Platform | Vision Chain';
+    return <div id="api-hub"><ApiHub /></div>;
 };
