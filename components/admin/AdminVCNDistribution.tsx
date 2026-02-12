@@ -8,7 +8,7 @@ import {
 } from 'lucide-solid';
 
 const UploadCSV = lazy(() => import('./UploadCSV').then(m => ({ default: m.UploadCSV })));
-const ActivateContract = lazy(() => import('./ActivateContract').then(m => ({ default: m.ActivateContract })));
+const ActivateContract = lazy(() => import('./ActivateContract'));
 const ManagePartners = lazy(() => import('./ManagePartners').then(m => ({ default: m.ManagePartners })));
 const Announcement = lazy(() => import('./Announcement').then(m => ({ default: m.Announcement })));
 
