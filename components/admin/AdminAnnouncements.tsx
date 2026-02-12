@@ -96,15 +96,17 @@ export function AdminAnnouncements() {
 
         setSaving(true);
         try {
-            const data = {
+            const url = formActionUrl().trim();
+            const label = formActionLabel().trim();
+            const data: Omit<GlobalAnnouncement, 'id' | 'createdAt'> = {
                 title: formTitle().trim(),
                 content: formContent().trim(),
                 type: formType(),
                 priority: formPriority(),
                 isActive: formIsActive(),
                 createdBy: auth.user()?.email || 'admin',
-                actionUrl: formActionUrl().trim() || undefined,
-                actionLabel: formActionLabel().trim() || undefined
+                ...(url ? { actionUrl: url } : {}),
+                ...(label ? { actionLabel: label } : {}),
             };
 
             if (editingId()) {
@@ -228,9 +230,9 @@ export function AdminAnnouncements() {
                                                             {meta.label}
                                                         </span>
                                                         <span class={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${item.priority === 'urgent' ? 'bg-red-500/20 text-red-400' :
-                                                                item.priority === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                                                                    item.priority === 'low' ? 'bg-gray-500/20 text-gray-400' :
-                                                                        'bg-blue-500/20 text-blue-400'
+                                                            item.priority === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                                                                item.priority === 'low' ? 'bg-gray-500/20 text-gray-400' :
+                                                                    'bg-blue-500/20 text-blue-400'
                                                             }`}>
                                                             {item.priority}
                                                         </span>
