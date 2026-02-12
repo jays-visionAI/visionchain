@@ -152,26 +152,26 @@ export const AdminDashboard: Component = () => {
             // Get users grouped by creation date (last 7 days)
             const now = new Date();
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const result: { day: string; value: number }[] = [];
 
-            for (let i = 6; i >= 0; i--) {
+            // Build all 7 day queries in parallel instead of sequential
+            const dayPromises = Array.from({ length: 7 }, (_, idx) => {
+                const i = 6 - idx;
                 const date = new Date(now);
                 date.setDate(date.getDate() - i);
                 const dayName = days[date.getDay()];
-                const startOfDay = new Date(date.setHours(0, 0, 0, 0)).toISOString();
-                const endOfDay = new Date(date.setHours(23, 59, 59, 999)).toISOString();
+                const startOfDay = new Date(new Date(date).setHours(0, 0, 0, 0)).toISOString();
+                const endOfDay = new Date(new Date(date).setHours(23, 59, 59, 999)).toISOString();
 
-                // Query users created on this day
                 const usersRef = collection(db, 'users');
                 const q = query(
                     usersRef,
                     where('createdAt', '>=', startOfDay),
                     where('createdAt', '<=', endOfDay)
                 );
-                const snapshot = await getDocs(q);
-                result.push({ day: dayName, value: snapshot.size });
-            }
+                return getDocs(q).then(snapshot => ({ day: dayName, value: snapshot.size }));
+            });
 
+            const result = await Promise.all(dayPromises);
             setDauData(result);
         } catch (e) {
             console.error("Failed to fetch DAU data:", e);
@@ -190,27 +190,27 @@ export const AdminDashboard: Component = () => {
 
     // Fetch real data on mount & Simulate TPS
     onMount(() => {
+        // Fetch all data on mount
         fetchRecentTransactions();
         fetchPaymasterStats();
         fetchUserStats();
         fetchTVLData();
         fetchDAUData();
 
-        // Refresh Data every 5s
+        // Refresh only fast-changing data every 30s (was 5s - too aggressive)
+        // User stats and TVL change infrequently, no need to poll
         const dataInterval = setInterval(() => {
             fetchRecentTransactions();
             fetchPaymasterStats();
-            fetchUserStats();
-            fetchTVLData();
-        }, 5000);
+        }, 30000);
 
-        // Mock TPS Simulation (Fast update)
+        // Mock TPS Simulation (cosmetic only, slowed from 2s to 10s)
         const tpsInterval = setInterval(() => {
             setTps(prev => {
                 const fluctuation = (Math.random() - 0.5) * 150;
                 return Math.floor(Math.max(4500, Math.min(5200, prev + fluctuation)));
             });
-        }, 2000);
+        }, 10000);
 
         onCleanup(() => {
             clearInterval(dataInterval);

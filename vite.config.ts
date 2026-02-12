@@ -56,9 +56,25 @@ export default defineConfig(({ mode }) => {
               return 'admin-tabs';
             }
 
-            // Admin main components
+            // Admin dashboard sub-components
+            if (id.includes('/components/admin/dashboard/')) {
+              return 'admin-dashboard';
+            }
+
+            // Admin users sub-components
+            if (id.includes('/components/admin/users/')) {
+              return 'admin-users';
+            }
+
+            // Admin page components - split per page for better lazy loading
             if (id.includes('/components/admin/')) {
-              return 'admin';
+              // Extract component name for individual chunks
+              const match = id.match(/\/components\/admin\/Admin(\w+)\.tsx/);
+              if (match) {
+                return `admin-${match[1].toLowerCase()}`;
+              }
+              // Shared admin code (layout, context, etc.)
+              return 'admin-core';
             }
 
             // Wallet components - separate chunk

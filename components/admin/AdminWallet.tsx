@@ -213,27 +213,23 @@ export default function AdminWallet() {
             const block = await provider.getBlock('latest');
             const lastAuditTime = block ? formatTimeAgo(block.timestamp * 1000) : 'Unknown';
 
-            // Count transactions in last 24h from Firebase
+            // Count transactions in last 24h from Firebase (filtered server-side)
             let dailyVolume = 0;
             try {
                 const db = getFirebaseDb();
                 const yesterday = Date.now() - 24 * 60 * 60 * 1000;
-                const txCollection = collection(db, 'transactions');
-                const snapshot = await getDocs(txCollection);
-                dailyVolume = snapshot.docs.filter(doc => {
-                    const ts = doc.data().timestamp;
-                    return ts && ts > yesterday;
-                }).length;
 
-                // Also count scheduled transfers
+                // Use server-side filtering instead of fetching entire collections
+                const txCollection = collection(db, 'transactions');
+                const txQuery = query(txCollection, where('timestamp', '>', yesterday));
+                const txSnapshot = await getDocs(txQuery);
+                dailyVolume = txSnapshot.size;
+
+                // Also count scheduled transfers (filtered server-side)
                 const scheduledCollection = collection(db, 'scheduledTransfers');
-                const scheduledSnapshot = await getDocs(scheduledCollection);
-                dailyVolume += scheduledSnapshot.docs.filter(doc => {
-                    const createdAt = doc.data().createdAt;
-                    if (!createdAt) return false;
-                    const ts = new Date(createdAt).getTime();
-                    return ts > yesterday;
-                }).length;
+                const scheduledQuery = query(scheduledCollection, where('createdAt', '>', new Date(yesterday)));
+                const scheduledSnapshot = await getDocs(scheduledQuery);
+                dailyVolume += scheduledSnapshot.size;
             } catch (e) {
                 console.warn('[AdminWallet] Failed to count daily transactions');
             }

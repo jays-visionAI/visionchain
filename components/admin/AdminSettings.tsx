@@ -1,5 +1,4 @@
 import { createSignal, Show, onMount, createEffect } from 'solid-js';
-import { Motion } from 'solid-motionone';
 import {
     Sparkles,
     Zap,
@@ -146,7 +145,7 @@ export default function AdminSettings() {
     return (
         <div class="max-w-4xl mx-auto pb-20">
             <Show when={settingsSubView() === 'main'}>
-                <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <div class="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div class="mb-8">
                         <h1 class="text-3xl font-bold text-white tracking-tight">Admin Console</h1>
                         <p class="text-gray-400 mt-1">Global node configuration and system-wide intelligence settings.</p>
@@ -423,11 +422,11 @@ export default function AdminSettings() {
                             </div>
                         </div>
                     </div>
-                </Motion.div>
+                </div>
             </Show>
 
             <Show when={settingsSubView() === 'ai'}>
-                <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+                <div class="animate-in fade-in slide-in-from-right-4 duration-500">
                     <button
                         onClick={() => setSettingsSubView('main')}
                         class="mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
@@ -438,7 +437,7 @@ export default function AdminSettings() {
                         <span class="font-bold text-sm">Back to Admin Console</span>
                     </button>
                     <AdminAIManagement />
-                </Motion.div>
+                </div>
             </Show>
         </div>
     );

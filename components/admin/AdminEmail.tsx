@@ -546,27 +546,32 @@ export default function AdminEmail() {
         await loadTemplates();
     });
 
-    // Load templates from Firestore (or use defaults)
+    // Load templates from Firestore (or use defaults) - parallel loading
     const loadTemplates = async () => {
         try {
             const db = getFirebaseDb();
-            const loadedTemplates: TemplateDefinition[] = [];
 
-            for (const defaultTpl of DEFAULT_TEMPLATES) {
-                const docRef = doc(db, 'emailTemplates', defaultTpl.id);
-                const docSnap = await getDoc(docRef);
+            // Load all templates in parallel instead of sequentially
+            const loadedTemplates = await Promise.all(
+                DEFAULT_TEMPLATES.map(async (defaultTpl) => {
+                    try {
+                        const docRef = doc(db, 'emailTemplates', defaultTpl.id);
+                        const docSnap = await getDoc(docRef);
 
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    loadedTemplates.push({
-                        ...defaultTpl,
-                        subject: data.subject || defaultTpl.subject,
-                        bodyHtml: data.bodyHtml || defaultTpl.bodyHtml,
-                    });
-                } else {
-                    loadedTemplates.push(defaultTpl);
-                }
-            }
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            return {
+                                ...defaultTpl,
+                                subject: data.subject || defaultTpl.subject,
+                                bodyHtml: data.bodyHtml || defaultTpl.bodyHtml,
+                            };
+                        }
+                    } catch {
+                        // Fall through to default
+                    }
+                    return defaultTpl;
+                })
+            );
 
             setTemplates(loadedTemplates);
         } catch (err: any) {

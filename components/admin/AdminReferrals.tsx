@@ -1,4 +1,4 @@
-import { createSignal, createEffect, createMemo, For, Show } from 'solid-js';
+import { createSignal, onMount, createMemo, For, Show } from 'solid-js';
 import { Users, TrendingUp, DollarSign, Calendar, Search, ArrowRight, UserPlus, Calculator, Trophy } from 'lucide-solid';
 import { getFirebaseDb, UserData, ReferralConfig, getReferralConfig } from '../../services/firebaseService';
 import { collection, query, getDocs, limit, where, orderBy, doc, updateDoc, setDoc } from 'firebase/firestore';
@@ -88,7 +88,7 @@ export default function AdminReferrals() {
         }
     };
 
-    createEffect(() => {
+    onMount(() => {
         fetchData();
     });
 
