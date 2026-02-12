@@ -335,12 +335,18 @@ export default function VisionScanHome(props: VisionScanHomeProps) {
                                                         {typeInfo.label}
                                                     </span>
                                                     {/* Bridge Pending Status */}
-                                                    <Show when={(typeInfo as any).isBridge && tx.bridgeStatus !== 'FINALIZED'}>
+                                                    <Show when={(typeInfo as any).isBridge && tx.bridgeStatus !== 'FINALIZED' && tx.bridgeStatus !== 'COMPLETED' && tx.bridgeStatus !== 'FULFILLED'}>
                                                         <div class={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold ${tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'
                                                             }`}>
                                                             <span class={`w-1.5 h-1.5 rounded-full animate-pulse ${tx.bridgeStatus === 'CHALLENGED' ? 'bg-red-400' : 'bg-amber-400'
                                                                 }`} />
                                                             {tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : 'Pending'}
+                                                        </div>
+                                                    </Show>
+                                                    <Show when={(typeInfo as any).isBridge && (tx.bridgeStatus === 'FINALIZED' || tx.bridgeStatus === 'COMPLETED' || tx.bridgeStatus === 'FULFILLED')}>
+                                                        <div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold bg-green-500/10 text-green-400">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                                                            Completed
                                                         </div>
                                                     </Show>
                                                 </td>

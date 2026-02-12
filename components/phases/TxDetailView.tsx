@@ -146,13 +146,13 @@ export default function TxDetailView(props: TxDetailProps) {
                                             <ArrowRight class="w-3 h-3 text-purple-500" />
                                             <span class="text-xs font-bold text-white uppercase">{isBridgeTx ? `Dst: ${bridgeDestination}` : 'Dst: Vision Chain'}</span>
                                         </div>
-                                        <span class={`px-2 py-1 text-[9px] font-black uppercase rounded ${props.tx.bridgeStatus === 'FINALIZED'
-                                                ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-                                                : props.tx.bridgeStatus === 'CHALLENGED'
-                                                    ? 'bg-red-500/10 border border-red-500/20 text-red-400'
-                                                    : 'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse'
+                                        <span class={`px-2 py-1 text-[9px] font-black uppercase rounded ${(props.tx.bridgeStatus === 'FINALIZED' || props.tx.bridgeStatus === 'COMPLETED' || props.tx.bridgeStatus === 'FULFILLED')
+                                            ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                                            : props.tx.bridgeStatus === 'CHALLENGED'
+                                                ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                                : 'bg-amber-500/10 border border-amber-500/20 text-amber-400 animate-pulse'
                                             }`}>
-                                            {props.tx.bridgeStatus === 'FINALIZED' ? 'Finalized' : props.tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : 'Pending'}
+                                            {(props.tx.bridgeStatus === 'FINALIZED' || props.tx.bridgeStatus === 'COMPLETED' || props.tx.bridgeStatus === 'FULFILLED') ? 'Completed' : props.tx.bridgeStatus === 'CHALLENGED' ? 'Challenged' : 'Pending'}
                                         </span>
                                     </div>
                                     <Show when={props.tx.challengeEndTime}>

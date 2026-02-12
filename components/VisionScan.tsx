@@ -180,7 +180,9 @@ export default function VisionScan() {
                     confidence: tx.metadata?.confidence || 100,
                     trustStatus: tx.metadata?.trustStatus || 'verified',
                     netEffect: tx.metadata?.netEffect || [],
-                    path: ['Vision Chain']
+                    path: ['Vision Chain'],
+                    bridgeStatus: tx.bridgeStatus || tx.metadata?.bridgeStatus,
+                    metadata: tx.metadata
                 };
             });
 
@@ -202,7 +204,9 @@ export default function VisionScan() {
                     confidence: 100,
                     trustStatus: 'verified',
                     netEffect: [],
-                    path: ['Vision Chain']
+                    path: ['Vision Chain'],
+                    bridgeStatus: overrides.bridgeStatus,
+                    metadata: overrides.metadata
                 });
             }
 
