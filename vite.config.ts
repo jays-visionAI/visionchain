@@ -68,13 +68,19 @@ export default defineConfig(({ mode }) => {
 
             // Admin page components - split per page for better lazy loading
             if (id.includes('/components/admin/')) {
-              // Extract component name for individual chunks
+              // Extract Admin* component name for individual chunks
               const match = id.match(/\/components\/admin\/Admin(\w+)\.tsx/);
               if (match) {
                 return `admin-${match[1].toLowerCase()}`;
               }
-              // Shared admin code (layout, context, etc.)
-              return 'admin-core';
+              // Shared admin code (layout, context) - only specific shared files
+              if (id.includes('adminRoleContext') || id.includes('AdminLayout')) {
+                return 'admin-core';
+              }
+              // Let lazy-loaded sub-components (ActivateContract, ManagePartners, 
+              // UploadCSV, Announcement, PaymasterAdmin, etc.) get their own 
+              // auto-generated chunks via Rollup's default code splitting
+              return undefined;
             }
 
             // Wallet components - separate chunk
