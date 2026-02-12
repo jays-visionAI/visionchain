@@ -858,18 +858,55 @@ export const recordRoundReferral = async (referrerId: string, newUserEmail: stri
 
 /**
  * Gets past round history.
+ * Fetches all rounds with roundId < current round (they are inherently completed by time).
  */
 export const getRoundHistory = async (limitCount: number = 10): Promise<ReferralRound[]> => {
     try {
         const db = getFirebaseDb();
+        const currentRoundId = calculateCurrentRoundId();
+        if (currentRoundId <= 0) return []; // No past rounds yet
+
         const roundsRef = collection(db, 'referral_rounds');
-        const q = query(roundsRef, where('status', '==', 'completed'), orderBy('roundId', 'desc'), limit(limitCount));
+        const q = query(
+            roundsRef,
+            where('roundId', '<', currentRoundId),
+            orderBy('roundId', 'desc'),
+            limit(limitCount)
+        );
         const snapshot = await getDocs(q);
 
-        return snapshot.docs.map(doc => ({ roundId: parseInt(doc.id), ...doc.data() } as ReferralRound));
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                roundId: data.roundId ?? parseInt(doc.id),
+                ...data,
+                status: 'completed' as const, // Past rounds are inherently completed
+            } as ReferralRound;
+        });
     } catch (e) {
         console.error("Error fetching round history:", e);
-        return [];
+        // Fallback: manually build past rounds from known IDs
+        try {
+            const db = getFirebaseDb();
+            const currentRoundId = calculateCurrentRoundId();
+            const rounds: ReferralRound[] = [];
+            const fetchCount = Math.min(currentRoundId, limitCount);
+            for (let i = currentRoundId - 1; i >= Math.max(0, currentRoundId - fetchCount); i--) {
+                const roundRef = doc(db, 'referral_rounds', i.toString());
+                const roundSnap = await getDoc(roundRef);
+                if (roundSnap.exists()) {
+                    rounds.push({
+                        roundId: i,
+                        ...roundSnap.data(),
+                        status: 'completed',
+                    } as ReferralRound);
+                }
+            }
+            return rounds;
+        } catch (e2) {
+            console.error("Fallback round history also failed:", e2);
+            return [];
+        }
     }
 };
 
