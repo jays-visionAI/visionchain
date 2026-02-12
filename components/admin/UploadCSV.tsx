@@ -15,6 +15,7 @@ export const UploadCSV = () => {
     const [isUploading, setIsUploading] = createSignal(false);
     const [uploadStatus, setUploadStatus] = createSignal<{ success: boolean, message: string } | null>(null);
     const [uploadResult, setUploadResult] = createSignal<UploadResultType | null>(null);
+    const [uploadedEntries, setUploadedEntries] = createSignal<TokenSaleEntry[]>([]);
 
     const handleDrag = (e: Event) => {
         e.preventDefault();
@@ -154,6 +155,9 @@ export const UploadCSV = () => {
                     console.error(`Failed to send email to ${email}:`, err);
                 }
             }
+
+            // Save entries before clearing parsedData so result tables can look up amounts
+            setUploadedEntries([...entries]);
 
             setUploadResult({
                 newInvitations: result.newInvitations,
@@ -373,16 +377,21 @@ export const UploadCSV = () => {
                                         <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 sticky top-0 backdrop-blur-sm">
                                             <tr>
                                                 <th class="px-6 py-3">Email</th>
+                                                <th class="px-6 py-3 text-right">Amount</th>
                                                 <th class="px-6 py-3 text-right">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {uploadResult()?.newInvitations.map((email) => (
-                                                <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
-                                                    <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
-                                                    <td class="px-6 py-3 text-right text-green-400 text-xs font-bold uppercase">Invited</td>
-                                                </tr>
-                                            ))}
+                                            {uploadResult()?.newInvitations.map((email) => {
+                                                const entry = uploadedEntries().find(e => e.email.toLowerCase() === email.toLowerCase());
+                                                return (
+                                                    <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                                        <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
+                                                        <td class="px-6 py-3 text-right text-white font-bold">{entry ? entry.amountToken.toLocaleString() : '-'}</td>
+                                                        <td class="px-6 py-3 text-right text-green-400 text-xs font-bold uppercase">Invited</td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
@@ -442,16 +451,21 @@ export const UploadCSV = () => {
                                         <thead class="text-xs text-slate-500 uppercase bg-slate-900/50 sticky top-0 backdrop-blur-sm">
                                             <tr>
                                                 <th class="px-6 py-3">Email</th>
+                                                <th class="px-6 py-3 text-right">Amount</th>
                                                 <th class="px-6 py-3 text-right">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {uploadResult()?.existingMembers.map((email) => (
-                                                <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
-                                                    <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
-                                                    <td class="px-6 py-3 text-right text-blue-400 text-xs font-bold uppercase">Updated</td>
-                                                </tr>
-                                            ))}
+                                            {uploadResult()?.existingMembers.map((email) => {
+                                                const entry = uploadedEntries().find(e => e.email.toLowerCase() === email.toLowerCase());
+                                                return (
+                                                    <tr class="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                                                        <td class="px-6 py-3 font-mono text-slate-300">{email}</td>
+                                                        <td class="px-6 py-3 text-right text-white font-bold">{entry ? entry.amountToken.toLocaleString() : '-'}</td>
+                                                        <td class="px-6 py-3 text-right text-blue-400 text-xs font-bold uppercase">Updated</td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
