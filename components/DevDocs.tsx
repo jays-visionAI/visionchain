@@ -60,7 +60,7 @@ const highlight = (code: string, lang: string): string => {
 
 // ─── Constants ───
 const API = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
-const NET = { name: 'Vision Chain', chainId: 20261337, rpc: 'https://api.visionchain.co/rpc-proxy', token: 'VCN', tokenAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3', staking: '0x593dFDc2e31F32D17B981392786F84b0E1228Ab6', paymaster: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512', explorer: 'https://www.visionchain.co/visionscan' };
+const NET = { name: 'Vision Chain', chainId: 3151909, rpc: 'https://api.visionchain.co/rpc-proxy', token: 'VCN', tokenAddr: '0x5FbDB2315678afecb367f032d93F642f64180aa3', staking: '0x593dFDc2e31F32D17B981392786F84b0E1228Ab6', paymaster: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512', explorer: 'https://www.visionchain.co/visionscan' };
 
 // ─── Endpoint Definitions ───
 interface Field { name: string; type: string; required: boolean; desc: string; }
@@ -157,7 +157,7 @@ const eps: Endpoint[] = [
         id: 'network_info', action: 'network_info', title: 'Network Info', cat: 'Network', desc: 'Get Vision Chain network information: chain details, block height, token info, total agents.', auth: false,
         fields: [],
         req: { action: 'network_info' },
-        res: { success: true, network: { name: 'Vision Chain', chain_id: 20261337, rpc_url: 'https://api.visionchain.co/rpc-proxy', latest_block: 123456, token: { name: 'VCN Token', symbol: 'VCN', address: NET.tokenAddr, decimals: 18 }, explorer: NET.explorer, total_agents: 42 } },
+        res: { success: true, network: { name: 'Vision Chain', chain_id: 3151909, rpc_url: 'https://api.visionchain.co/rpc-proxy', latest_block: 123456, token: { name: 'VCN Token', symbol: 'VCN', address: NET.tokenAddr, decimals: 18 }, explorer: NET.explorer, total_agents: 42 } },
     },
 ];
 
