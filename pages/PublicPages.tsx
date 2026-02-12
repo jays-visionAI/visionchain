@@ -98,3 +98,10 @@ export const AgentGatewayPage = () => {
     document.title = 'Agent Gateway | Vision Chain';
     return <div id="agent-gateway"><AgentGateway /></div>;
 };
+
+export const AgentApiDocs = lazy(() => import('../components/AgentApiDocs'));
+
+export const AgentApiDocsPage = () => {
+    document.title = 'Agent API Documentation | Vision Chain';
+    return <div id="agent-api-docs"><AgentApiDocs /></div>;
+};

@@ -7889,10 +7889,15 @@ exports.agentGateway = onRequest({
   if (req.method === "GET") {
     return res.status(200).json({
       name: "Vision Chain Agent Gateway",
-      version: "1.0.0",
+      version: "2.0.0",
       skill_url: "https://visionchain.co/skill.md",
-      docs: "https://visionchain.co/agent",
-      actions: ["register", "balance", "transfer", "referral", "leaderboard", "profile"],
+      docs: "https://visionchain.co/docs/agent-api",
+      actions: [
+        "register", "balance", "transfer", "transactions",
+        "referral", "leaderboard", "profile",
+        "stake", "unstake", "claim_rewards", "staking_info",
+        "network_info",
+      ],
     });
   }
 
@@ -8257,9 +8262,350 @@ exports.agentGateway = onRequest({
       });
     }
 
+    // --- TRANSACTIONS ---
+    if (action === "transactions") {
+      const { limit: txLimit = 20, type: txType } = req.body;
+      const clampedLimit = Math.min(Math.max(parseInt(txLimit) || 20, 1), 100);
+
+      let txQuery = db.collection("agents").doc(agent.id)
+        .collection("transactions")
+        .orderBy("timestamp", "desc")
+        .limit(clampedLimit);
+
+      if (txType) {
+        txQuery = db.collection("agents").doc(agent.id)
+          .collection("transactions")
+          .where("type", "==", txType)
+          .orderBy("timestamp", "desc")
+          .limit(clampedLimit);
+      }
+
+      const txSnap = await txQuery.get();
+      const transactions = [];
+      txSnap.forEach((doc) => {
+        const d = doc.data();
+        transactions.push({
+          id: doc.id,
+          type: d.type,
+          to: d.to || "",
+          from: d.from || "",
+          amount: d.amount || "0",
+          tx_hash: d.txHash || "",
+          status: d.status || "confirmed",
+          timestamp: d.timestamp?.toDate?.()?.toISOString() || "",
+        });
+      });
+
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        count: transactions.length,
+        transactions: transactions,
+      });
+    }
+
+    // --- STAKE ---
+    if (action === "stake") {
+      const { amount: stakeAmount } = req.body;
+      if (!stakeAmount) {
+        return res.status(400).json({ error: "Missing required field: amount (in VCN)" });
+      }
+
+      const amountNum = parseFloat(stakeAmount);
+      if (isNaN(amountNum) || amountNum < 1) {
+        return res.status(400).json({ error: "Minimum stake amount is 1 VCN" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ABI_FULL = [
+          "function stakeFor(address beneficiary, uint256 amount) external",
+          "function getStake(address account) external view returns (uint256)",
+          "function pendingReward(address account) external view returns (uint256)",
+        ];
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI_FULL, adminWallet);
+
+        const amountWei = ethers.parseEther(stakeAmount.toString());
+
+        // Check agent's VCN balance
+        const bal = await tokenContract.balanceOf(agent.walletAddress);
+        if (bal < amountWei) {
+          return res.status(400).json({
+            error: "Insufficient VCN balance",
+            balance: ethers.formatEther(bal),
+            required: stakeAmount.toString(),
+          });
+        }
+
+        // Transfer VCN from agent wallet to admin, then stake on behalf
+        const agentPK = serverDecrypt(agent.privateKey);
+        const agentWallet = new ethers.Wallet(agentPK, provider);
+        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+        // Ensure agent has gas
+        const agentGas = await provider.getBalance(agent.walletAddress);
+        if (agentGas < ethers.parseEther("0.001")) {
+          const gasTx = await adminWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: ethers.parseEther("0.01"),
+          });
+          await gasTx.wait();
+        }
+
+        // Agent transfers VCN to admin
+        const transferTx = await agentToken.transfer(adminWallet.address, amountWei);
+        await transferTx.wait();
+
+        // Admin approves staking contract
+        const approveTx = await tokenContract.approve(STAKING_ADDRESS, amountWei);
+        await approveTx.wait();
+
+        // Admin stakes on behalf of agent
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+        const stakeTx = await stakingContract.stakeFor(agent.walletAddress, amountWei, gasOpts);
+        await stakeTx.wait();
+
+        // Update stats
+        await db.collection("agents").doc(agent.id).update({
+          rpPoints: admin.firestore.FieldValue.increment(20),
+        });
+
+        // Record transaction
+        await db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "stake",
+          amount: stakeAmount.toString(),
+          txHash: stakeTx.hash,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          status: "confirmed",
+        });
+
+        console.log(`[Agent Gateway] Stake: ${agent.agentName} staked ${stakeAmount} VCN, tx: ${stakeTx.hash}`);
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: stakeTx.hash,
+          agent_name: agent.agentName,
+          amount_staked: stakeAmount.toString(),
+          rp_earned: 20,
+          message: "VCN staked successfully as a validator node",
+        });
+      } catch (stakeErr) {
+        console.error("[Agent Gateway] Stake error:", stakeErr.message);
+        return res.status(500).json({ error: `Staking failed: ${stakeErr.reason || stakeErr.message}` });
+      }
+    }
+
+    // --- UNSTAKE ---
+    if (action === "unstake") {
+      const { amount: unstakeAmount } = req.body;
+      if (!unstakeAmount) {
+        return res.status(400).json({ error: "Missing required field: amount (in VCN)" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ABI_FULL = [
+          "function requestUnstakeFor(address beneficiary, uint256 amount) external",
+          "function getStake(address account) external view returns (uint256)",
+        ];
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI_FULL, adminWallet);
+
+        const amountWei = ethers.parseEther(unstakeAmount.toString());
+
+        // Check staked amount
+        const stakedAmount = await stakingContract.getStake(agent.walletAddress);
+        if (stakedAmount < amountWei) {
+          return res.status(400).json({
+            error: "Insufficient staked amount",
+            staked: ethers.formatEther(stakedAmount),
+            requested: unstakeAmount.toString(),
+          });
+        }
+
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+        const unstakeTx = await stakingContract.requestUnstakeFor(agent.walletAddress, amountWei, gasOpts);
+        await unstakeTx.wait();
+
+        // Update stats
+        await db.collection("agents").doc(agent.id).update({
+          rpPoints: admin.firestore.FieldValue.increment(5),
+        });
+
+        // Record transaction
+        await db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "unstake",
+          amount: unstakeAmount.toString(),
+          txHash: unstakeTx.hash,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          status: "cooldown",
+        });
+
+        console.log(`[Agent Gateway] Unstake: ${agent.agentName} requested unstake ${unstakeAmount} VCN, tx: ${unstakeTx.hash}`);
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: unstakeTx.hash,
+          agent_name: agent.agentName,
+          amount_unstaking: unstakeAmount.toString(),
+          cooldown_info: "Unstaking requires a cooldown period before withdrawal",
+          rp_earned: 5,
+        });
+      } catch (unstakeErr) {
+        console.error("[Agent Gateway] Unstake error:", unstakeErr.message);
+        return res.status(500).json({ error: `Unstaking failed: ${unstakeErr.reason || unstakeErr.message}` });
+      }
+    }
+
+    // --- CLAIM REWARDS ---
+    if (action === "claim_rewards") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ABI_FULL = [
+          "function claimRewardsFor(address beneficiary) external",
+          "function pendingReward(address account) external view returns (uint256)",
+          "function getStake(address account) external view returns (uint256)",
+        ];
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI_FULL, adminWallet);
+
+        // Check pending rewards
+        const pendingReward = await stakingContract.pendingReward(agent.walletAddress);
+        if (pendingReward === 0n) {
+          return res.status(400).json({
+            error: "No pending rewards to claim",
+            pending_reward: "0",
+          });
+        }
+
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+        const claimTx = await stakingContract.claimRewardsFor(agent.walletAddress, gasOpts);
+        await claimTx.wait();
+
+        const rewardAmount = ethers.formatEther(pendingReward);
+
+        // Update stats
+        await db.collection("agents").doc(agent.id).update({
+          rpPoints: admin.firestore.FieldValue.increment(10),
+        });
+
+        // Record transaction
+        await db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "claim_rewards",
+          amount: rewardAmount,
+          txHash: claimTx.hash,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          status: "confirmed",
+        });
+
+        console.log(`[Agent Gateway] Claim: ${agent.agentName} claimed ${rewardAmount} VCN rewards, tx: ${claimTx.hash}`);
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: claimTx.hash,
+          agent_name: agent.agentName,
+          rewards_claimed: rewardAmount,
+          rp_earned: 10,
+        });
+      } catch (claimErr) {
+        console.error("[Agent Gateway] Claim error:", claimErr.message);
+        return res.status(500).json({ error: `Claim failed: ${claimErr.reason || claimErr.message}` });
+      }
+    }
+
+    // --- STAKING INFO ---
+    if (action === "staking_info") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ABI_FULL = [
+          "function getStake(address account) external view returns (uint256)",
+          "function pendingReward(address account) external view returns (uint256)",
+          "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
+        ];
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI_FULL, provider);
+
+        const stakedAmount = await stakingContract.getStake(agent.walletAddress);
+        const pendingReward = await stakingContract.pendingReward(agent.walletAddress);
+
+        let apyBps = 0;
+        let totalStaked = "0";
+        try {
+          const rewardInfo = await stakingContract.getRewardInfo();
+          apyBps = Number(rewardInfo[0]);
+          totalStaked = ethers.formatEther(rewardInfo[1]);
+        } catch (e) {
+          console.warn("[Agent Gateway] getRewardInfo failed:", e.message);
+        }
+
+        return res.status(200).json({
+          success: true,
+          agent_name: agent.agentName,
+          staking: {
+            staked_vcn: ethers.formatEther(stakedAmount),
+            pending_rewards_vcn: ethers.formatEther(pendingReward),
+            apy_percent: (apyBps / 100).toFixed(2),
+            network_total_staked: totalStaked,
+            staking_contract: STAKING_ADDRESS,
+          },
+        });
+      } catch (infoErr) {
+        console.error("[Agent Gateway] Staking info error:", infoErr.message);
+        return res.status(500).json({ error: `Failed to fetch staking info: ${infoErr.message}` });
+      }
+    }
+
+    // --- NETWORK INFO ---
+    if (action === "network_info") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const latestBlock = await provider.getBlockNumber();
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+
+        // Total agents
+        const agentCountSnap = await db.collection("agents").count().get();
+        const totalAgents = agentCountSnap.data().count;
+
+        return res.status(200).json({
+          success: true,
+          network: {
+            name: "Vision Chain",
+            chain_id: 8888,
+            rpc_url: RPC_URL,
+            latest_block: latestBlock,
+            token: {
+              name: "VCN Token",
+              symbol: "VCN",
+              address: VCN_TOKEN_ADDRESS,
+              decimals: 18,
+            },
+            staking_contract: "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6",
+            explorer: "https://visionchain.co/visionscan",
+            total_agents: totalAgents,
+          },
+        });
+      } catch (netErr) {
+        return res.status(500).json({ error: `Network info failed: ${netErr.message}` });
+      }
+    }
+
     return res.status(400).json({
       error: `Unknown action: ${action}`,
-      available_actions: ["register", "balance", "transfer", "referral", "leaderboard", "profile"],
+      available_actions: [
+        "register", "balance", "transfer", "transactions",
+        "referral", "leaderboard", "profile",
+        "stake", "unstake", "claim_rewards", "staking_info",
+        "network_info",
+      ],
     });
   } catch (err) {
     console.error("[Agent Gateway] Error:", err);

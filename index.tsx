@@ -30,7 +30,7 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs');
 
   return (
     <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
@@ -91,6 +91,7 @@ render(() => (
         <Route path="/paymaster" component={Public.PaymasterPage} />
         <Route path="/agent" component={Public.AgentGatewayPage} />
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
+        <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
 
         {/* Admin Routes */}
         <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
