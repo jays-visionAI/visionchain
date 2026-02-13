@@ -3,8 +3,6 @@ import { FileText, X, Paperclip, Save, Trash2, Code, Eye, EyeOff } from 'lucide-
 import { Motion } from 'solid-motionone';
 import Quill from 'quill';
 import { marked } from 'marked';
-import hljs from 'highlight.js';
-import mermaid from 'mermaid';
 import { AdminDocument } from '../../../services/firebaseService';
 
 interface DocEditorModalProps {
@@ -34,28 +32,57 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
 
     const renderMermaidInPreview = async () => {
         if (!previewRef) return;
+        // Mermaid diagrams
         const mermaidBlocks = previewRef.querySelectorAll('pre code.language-mermaid');
-        for (let i = 0; i < mermaidBlocks.length; i++) {
-            const block = mermaidBlocks[i];
-            const pre = block.parentElement;
-            if (!pre) continue;
-            const code = block.textContent || '';
+        if (mermaidBlocks.length > 0) {
             try {
-                const id = `mermaid-preview-${Date.now()}-${i}`;
-                const { svg } = await mermaid.render(id, code);
-                const wrapper = document.createElement('div');
-                wrapper.className = 'mermaid-diagram';
-                wrapper.innerHTML = svg;
-                pre.replaceWith(wrapper);
+                const mermaid = (await import('mermaid')).default;
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'dark',
+                    themeVariables: {
+                        primaryColor: '#06b6d4',
+                        primaryTextColor: '#e5e7eb',
+                        primaryBorderColor: '#22d3ee',
+                        lineColor: '#4b5563',
+                        secondaryColor: '#1e293b',
+                        tertiaryColor: '#0f172a',
+                    },
+                    fontFamily: '"Inter", sans-serif',
+                    fontSize: 13,
+                });
+                for (let i = 0; i < mermaidBlocks.length; i++) {
+                    const block = mermaidBlocks[i];
+                    const pre = block.parentElement;
+                    if (!pre) continue;
+                    const code = block.textContent || '';
+                    try {
+                        const id = `mermaid-preview-${Date.now()}-${i}`;
+                        const { svg } = await mermaid.render(id, code);
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'mermaid-diagram';
+                        wrapper.innerHTML = svg;
+                        pre.replaceWith(wrapper);
+                    } catch (e) {
+                        console.warn('[DocEditor] Mermaid preview failed:', e);
+                    }
+                }
             } catch (e) {
-                console.warn('[DocEditor] Mermaid preview failed:', e);
+                console.warn('[DocEditor] Failed to load mermaid:', e);
             }
         }
         // highlight code blocks
         const blocks = previewRef.querySelectorAll('pre code:not(.language-mermaid)');
-        blocks.forEach((block) => {
-            hljs.highlightElement(block as HTMLElement);
-        });
+        if (blocks.length > 0) {
+            try {
+                const hljs = (await import('highlight.js')).default;
+                blocks.forEach((block) => {
+                    hljs.highlightElement(block as HTMLElement);
+                });
+            } catch (e) {
+                console.warn('[DocEditor] Failed to load highlight.js:', e);
+            }
+        }
     };
 
     createEffect(() => {
