@@ -152,7 +152,7 @@ const NETWORKS: NetworkConfig[] = [
     {
         name: 'Polygon Amoy',
         chainId: 80002,
-        rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com',
+        rpcUrl: 'https://polygon-amoy.drpc.org',
         explorerUrl: 'https://amoy.polygonscan.com',
         vcnTokenAddress: '', // TODO: Deploy
         enabled: false,  // Enable after VCN token deployment

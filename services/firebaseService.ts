@@ -4245,7 +4245,7 @@ const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
     {
         name: 'Polygon Amoy',
         chainId: 80002,
-        rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com',
+        rpcUrl: 'https://polygon-amoy.drpc.org',
         explorerUrl: 'https://amoy.polygonscan.com',
         vcnTokenAddress: '',
         icon: 'polygon',

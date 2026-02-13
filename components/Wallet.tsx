@@ -588,20 +588,31 @@ const Wallet = (): JSX.Element => {
 
         setIsLoadingMultiChain(true);
 
+        // Helper: create provider with timeout, no retries
+        const makeProvider = (rpcUrl: string) =>
+            new ethers.JsonRpcProvider(rpcUrl, undefined, {
+                staticNetwork: true,
+            });
+
+        const withTimeout = <T,>(promise: Promise<T>, ms = 5000): Promise<T> =>
+            Promise.race([
+                promise,
+                new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
+            ]);
+
         // Fetch all balances in parallel
         const fetchPromises = [
             // Sepolia VCN Token
             (async () => {
                 try {
-                    const SEPOLIA_RPC = 'https://ethereum-sepolia-rpc.publicnode.com';
+                    const provider = makeProvider('https://ethereum-sepolia-rpc.publicnode.com');
                     const SEPOLIA_VCN_TOKEN = '0x07755968236333B5f8803E9D0fC294608B200d1b';
                     const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
-                    const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
                     const contract = new ethers.Contract(SEPOLIA_VCN_TOKEN, ERC20_ABI, provider);
-                    const balance = await contract.balanceOf(addr);
+                    const balance = await withTimeout(contract.balanceOf(addr));
                     setSepoliaVcnBalance(parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Sepolia] VCN balance error:', err);
+                    console.debug('[Sepolia] VCN balance error:', (err as any).message);
                     setSepoliaVcnBalance(0);
                 }
             })(),
@@ -609,13 +620,11 @@ const Wallet = (): JSX.Element => {
             // Ethereum Mainnet ETH
             (async () => {
                 try {
-                    const ETH_RPC = 'https://ethereum-rpc.publicnode.com';
-                    const provider = new ethers.JsonRpcProvider(ETH_RPC);
-                    const balance = await provider.getBalance(addr);
+                    const provider = makeProvider('https://ethereum-rpc.publicnode.com');
+                    const balance = await withTimeout(provider.getBalance(addr));
                     setEthMainnetBalance(parseFloat(ethers.formatEther(balance)));
-                    console.log('[Ethereum] ETH Balance:', parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Ethereum] ETH balance error:', err);
+                    console.debug('[Ethereum] ETH balance error:', (err as any).message);
                     setEthMainnetBalance(0);
                 }
             })(),
@@ -623,13 +632,11 @@ const Wallet = (): JSX.Element => {
             // Polygon Mainnet POL
             (async () => {
                 try {
-                    const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com';
-                    const provider = new ethers.JsonRpcProvider(POLYGON_RPC);
-                    const balance = await provider.getBalance(addr);
+                    const provider = makeProvider('https://polygon-bor-rpc.publicnode.com');
+                    const balance = await withTimeout(provider.getBalance(addr));
                     setPolygonBalance(parseFloat(ethers.formatEther(balance)));
-                    console.log('[Polygon] POL Balance:', parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Polygon] POL balance error:', err);
+                    console.debug('[Polygon] POL balance error:', (err as any).message);
                     setPolygonBalance(0);
                 }
             })(),
@@ -637,13 +644,11 @@ const Wallet = (): JSX.Element => {
             // Base Mainnet ETH
             (async () => {
                 try {
-                    const BASE_RPC = 'https://base-rpc.publicnode.com';
-                    const provider = new ethers.JsonRpcProvider(BASE_RPC);
-                    const balance = await provider.getBalance(addr);
+                    const provider = makeProvider('https://base-rpc.publicnode.com');
+                    const balance = await withTimeout(provider.getBalance(addr));
                     setBaseBalance(parseFloat(ethers.formatEther(balance)));
-                    console.log('[Base] ETH Balance:', parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Base] ETH balance error:', err);
+                    console.debug('[Base] ETH balance error:', (err as any).message);
                     setBaseBalance(0);
                 }
             })(),
@@ -651,13 +656,11 @@ const Wallet = (): JSX.Element => {
             // Polygon Amoy Testnet POL
             (async () => {
                 try {
-                    const AMOY_RPC = 'https://polygon-amoy-bor-rpc.publicnode.com';
-                    const provider = new ethers.JsonRpcProvider(AMOY_RPC);
-                    const balance = await provider.getBalance(addr);
+                    const provider = makeProvider('https://polygon-amoy.drpc.org');
+                    const balance = await withTimeout(provider.getBalance(addr));
                     setPolygonAmoyBalance(parseFloat(ethers.formatEther(balance)));
-                    console.log('[Polygon Amoy] POL Balance:', parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Polygon Amoy] POL balance error:', err);
+                    console.debug('[Polygon Amoy] POL balance error:', (err as any).message);
                     setPolygonAmoyBalance(0);
                 }
             })(),
@@ -665,13 +668,11 @@ const Wallet = (): JSX.Element => {
             // Base Sepolia Testnet ETH
             (async () => {
                 try {
-                    const BASE_SEPOLIA_RPC = 'https://base-sepolia-rpc.publicnode.com';
-                    const provider = new ethers.JsonRpcProvider(BASE_SEPOLIA_RPC);
-                    const balance = await provider.getBalance(addr);
+                    const provider = makeProvider('https://base-sepolia-rpc.publicnode.com');
+                    const balance = await withTimeout(provider.getBalance(addr));
                     setBaseSepoliaBalance(parseFloat(ethers.formatEther(balance)));
-                    console.log('[Base Sepolia] ETH Balance:', parseFloat(ethers.formatEther(balance)));
                 } catch (err) {
-                    console.debug('[Base Sepolia] ETH balance error:', err);
+                    console.debug('[Base Sepolia] ETH balance error:', (err as any).message);
                     setBaseSepoliaBalance(0);
                 }
             })(),
