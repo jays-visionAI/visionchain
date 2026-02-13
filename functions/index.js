@@ -8712,7 +8712,7 @@ exports.agentGateway = onRequest({
       }
 
       // Validate allowed actions
-      const validActions = ["balance", "transfer", "stake", "unstake", "network_info", "leaderboard", "staking_info", "transactions"];
+      const validActions = ["balance", "transfer", "stake", "unstake", "network_info", "leaderboard", "staking_info", "transactions", "referral_outreach", "social_promo", "content_create", "invite_distribute", "community_engage"];
       const filteredActions = allowedActions.filter((a) => validActions.includes(a));
 
       // Estimate monthly cost
@@ -9171,7 +9171,8 @@ Do NOT perform any action unless your instructions explicitly require it.`;
           });
           // Tiered action cost: write actions cost more
           const writeActions = ["transfer", "stake", "unstake"];
-          const mediumActions = ["transactions"];
+          const mediumActions = ["transactions", "referral_outreach", "social_promo", "invite_distribute", "community_engage"];
+          const lowActions = ["content_create"];
           if (writeActions.includes(actionData.action)) {
             actionCost = 0.45; // Total = 0.05 base + 0.45 = 0.5 VCN
           } else if (mediumActions.includes(actionData.action)) {
@@ -9283,6 +9284,109 @@ async function executeAgentAction(agentData, action, params, provider) {
         });
       });
       return { leaderboard };
+    }
+    // === Growth & Marketing Actions ===
+    case "referral_outreach": {
+      const agentDoc = await db.collection("agents").doc(agentData.agentName).get();
+      const refCode = agentDoc.exists ? agentDoc.data().referralCode : "";
+      const referralLink = `https://visionchain.co/signup?ref=${refCode}`;
+      // Log outreach attempt
+      await db.collection("agents").doc(agentData.agentName).update({
+        lastOutreachAt: admin.firestore.FieldValue.serverTimestamp(),
+        outreachCount: admin.firestore.FieldValue.increment(1),
+      });
+      return {
+        referral_link: referralLink,
+        referral_code: refCode,
+        message_template: `Join Vision Chain - the next-gen L1 blockchain. Sign up with my referral: ${referralLink}`,
+        channels_suggested: ["twitter", "telegram", "discord", "email"],
+        status: "outreach_prepared",
+      };
+    }
+    case "social_promo": {
+      const topic = params.topic || "general";
+      const templates = {
+        general: "Vision Chain is redefining blockchain with gasless transactions, built-in AI agents, and zero-knowledge bridges. Join the revolution.",
+        staking: "Earn rewards by staking VCN on Vision Chain. Secure the network and grow your portfolio.",
+        agents: "AI Agents on Vision Chain run 24/7, execute on-chain tasks autonomously, and cost as low as 0.05 VCN per execution.",
+        bridge: "Bridge assets seamlessly between Ethereum and Vision Chain with our trustless bridge.",
+      };
+      await db.collection("agents").doc(agentData.agentName).update({
+        lastPromoAt: admin.firestore.FieldValue.serverTimestamp(),
+        promoCount: admin.firestore.FieldValue.increment(1),
+      });
+      return {
+        content: templates[topic] || templates.general,
+        topic,
+        hashtags: ["#VisionChain", "#VCN", "#Web3", "#AI", "#Blockchain"],
+        status: "content_ready",
+      };
+    }
+    case "content_create": {
+      const contentType = params.type || "thread";
+      await db.collection("agents").doc(agentData.agentName).update({
+        lastContentAt: admin.firestore.FieldValue.serverTimestamp(),
+        contentCount: admin.firestore.FieldValue.increment(1),
+      });
+      return {
+        content_type: contentType,
+        suggestions: [
+          "Write a thread about Vision Chain's gasless transaction model",
+          "Create a comparison post: Vision Chain vs other L1s",
+          "Explain how AI Agents work on Vision Chain",
+          "Share staking rewards calculator and APY breakdown",
+          "Highlight the Vision Chain bridge security model",
+        ],
+        brand_assets: {
+          website: "https://visionchain.co",
+          docs: "https://visionchain.co/docs",
+          explorer: "https://visionchain.co/visionscan",
+        },
+        status: "template_ready",
+      };
+    }
+    case "invite_distribute": {
+      const agentDoc2 = await db.collection("agents").doc(agentData.agentName).get();
+      const refCode2 = agentDoc2.exists ? agentDoc2.data().referralCode : "";
+      const target = params.target || "general";
+      await db.collection("agents").doc(agentData.agentName).update({
+        lastInviteAt: admin.firestore.FieldValue.serverTimestamp(),
+        inviteCount: admin.firestore.FieldValue.increment(1),
+      });
+      return {
+        referral_code: refCode2,
+        signup_link: `https://visionchain.co/signup?ref=${refCode2}`,
+        invite_message: `You're invited to Vision Chain! Get started with free VCN tokens when you sign up: https://visionchain.co/signup?ref=${refCode2}`,
+        target_audience: target,
+        status: "invite_prepared",
+      };
+    }
+    case "community_engage": {
+      // Provide context for community engagement
+      const networkBlock = await provider.getBlockNumber();
+      const recentAgents = await db.collection("agents")
+        .orderBy("registeredAt", "desc")
+        .limit(3)
+        .get();
+      const newAgents = [];
+      recentAgents.forEach((doc) => {
+        newAgents.push(doc.data().agentName);
+      });
+      await db.collection("agents").doc(agentData.agentName).update({
+        lastEngageAt: admin.firestore.FieldValue.serverTimestamp(),
+        engageCount: admin.firestore.FieldValue.increment(1),
+      });
+      return {
+        network_health: { latest_block: networkBlock, status: "healthy" },
+        recent_agents: newAgents,
+        talking_points: [
+          "Welcome new community members",
+          "Share latest network stats",
+          "Answer common questions about staking and rewards",
+          "Highlight recent platform updates",
+        ],
+        status: "context_ready",
+      };
     }
     default:
       return { error: `Action ${action} not yet implemented for hosted agents` };

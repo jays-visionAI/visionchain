@@ -39,19 +39,26 @@ const icons = {
 // LLM selection is handled by ZYNK AI Router - users don't need to choose
 
 const AVAILABLE_ACTIONS = [
-    { id: 'balance', label: 'Check Balance', desc: 'View VCN token balance', icon: '0', risk: 'low' },
-    { id: 'transfer', label: 'Transfer VCN', desc: 'Send VCN to addresses', icon: '1', risk: 'high' },
-    { id: 'stake', label: 'Stake VCN', desc: 'Stake tokens for rewards', icon: '2', risk: 'medium' },
-    { id: 'unstake', label: 'Unstake VCN', desc: 'Request unstaking', icon: '3', risk: 'medium' },
-    { id: 'network_info', label: 'Network Info', desc: 'Query chain status', icon: '4', risk: 'low' },
-    { id: 'leaderboard', label: 'Leaderboard', desc: 'Check RP rankings', icon: '5', risk: 'low' },
+    // On-chain Actions
+    { id: 'balance', label: 'Check Balance', desc: 'View VCN token balance', category: 'on-chain', risk: 'low' },
+    { id: 'transfer', label: 'Transfer VCN', desc: 'Send VCN to addresses', category: 'on-chain', risk: 'high' },
+    { id: 'stake', label: 'Stake VCN', desc: 'Stake tokens for rewards', category: 'on-chain', risk: 'medium' },
+    { id: 'unstake', label: 'Unstake VCN', desc: 'Request unstaking', category: 'on-chain', risk: 'medium' },
+    { id: 'network_info', label: 'Network Info', desc: 'Query chain status', category: 'on-chain', risk: 'low' },
+    { id: 'leaderboard', label: 'Leaderboard', desc: 'Check RP rankings', category: 'on-chain', risk: 'low' },
+    // Growth & Marketing Actions
+    { id: 'referral_outreach', label: 'Referral Outreach', desc: 'Auto-share referral links to channels', category: 'growth', risk: 'medium' },
+    { id: 'social_promo', label: 'Social Promotion', desc: 'Post Vision Chain content to social media', category: 'growth', risk: 'medium' },
+    { id: 'content_create', label: 'Content Creation', desc: 'Generate promotional articles & threads', category: 'growth', risk: 'low' },
+    { id: 'invite_distribute', label: 'Invite Distribution', desc: 'Send invitations via email or DM', category: 'growth', risk: 'medium' },
+    { id: 'community_engage', label: 'Community Engage', desc: 'Reply and engage in community channels', category: 'growth', risk: 'low' },
 ];
 
 const TRIGGER_OPTIONS = [
-    { value: 5, label: 'Every 5 min', cost: '~216 VCN/mo' },
-    { value: 30, label: 'Every 30 min', cost: '~36 VCN/mo' },
-    { value: 60, label: 'Every hour', cost: '~18 VCN/mo' },
-    { value: 1440, label: 'Once daily', cost: '~0.75 VCN/mo' },
+    { value: 5, label: 'Every 5 min', cost: '~7.2 VCN/mo' },
+    { value: 30, label: 'Every 30 min', cost: '~1.2 VCN/mo' },
+    { value: 60, label: 'Every hour', cost: '~0.6 VCN/mo' },
+    { value: 1440, label: 'Once daily', cost: '~0.05 VCN/mo' },
 ];
 
 export default function AgentHosting(props: AgentHostingProps) {
@@ -1094,8 +1101,25 @@ export default function AgentHosting(props: AgentHostingProps) {
 
                         <div style="margin-bottom: 20px;">
                             <label class="ah-label">Allowed Actions</label>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">On-chain</div>
                             <div class="ah-action-grid">
-                                <For each={AVAILABLE_ACTIONS}>
+                                <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'on-chain')}>
+                                    {(action) => (
+                                        <div
+                                            class={`ah-action-chip ${selectedActions().includes(action.id) ? 'selected' : ''}`}
+                                            onClick={() => toggleAction(action.id)}
+                                        >
+                                            <div>
+                                                <div class="ah-action-label">{action.label}</div>
+                                                <div class="ah-action-desc">{action.desc}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                            <div style="font-size: 11px; color: #a78bfa; margin: 16px 0 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">Growth & Marketing</div>
+                            <div class="ah-action-grid">
+                                <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'growth')}>
                                     {(action) => (
                                         <div
                                             class={`ah-action-chip ${selectedActions().includes(action.id) ? 'selected' : ''}`}
