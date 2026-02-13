@@ -2103,20 +2103,20 @@ export const getAllAgents = async (limitCount = 500): Promise<AgentData[]> => {
         snapshot.forEach((docSnap: any) => {
             const data = docSnap.data();
             agents.push({
-                agent_name: data.agent_name || docSnap.id,
+                agent_name: data.agentName || data.agent_name || docSnap.id,
                 platform: data.platform || 'unknown',
-                platform_id: data.platform_id || '',
-                owner_email: data.owner_email || '',
-                wallet_address: data.wallet_address || '',
-                api_key: data.api_key || '',
-                referral_code: data.referral_code || '',
-                rp: data.rp || 0,
-                referral_count: data.referral_count || 0,
-                total_transfers: data.total_transfers || 0,
-                total_transfer_volume: data.total_transfer_volume || '0',
+                platform_id: data.platformId || data.platform_id || '',
+                owner_email: data.ownerEmail || data.owner_email || '',
+                wallet_address: data.walletAddress || data.wallet_address || '',
+                api_key: data.apiKey || data.api_key || '',
+                referral_code: data.referralCode || data.referral_code || '',
+                rp: data.rpPoints || data.rp || 0,
+                referral_count: data.referralCount || data.referral_count || 0,
+                total_transfers: data.transferCount || data.total_transfers || 0,
+                total_transfer_volume: data.totalTransferred || data.total_transfer_volume || '0',
                 status: data.status || 'active',
-                created_at: data.created_at || '',
-                referred_by: data.referred_by || '',
+                created_at: data.registeredAt?.toDate?.()?.toISOString() || data.created_at || '',
+                referred_by: data.referredBy || data.referred_by || '',
             });
         });
 
