@@ -8077,24 +8077,44 @@ exports.agentGateway = onRequest({
 
       await db.collection("agents").doc(agentName.toLowerCase()).set(agentData);
 
-      // Fund the wallet with VCN
-      let fundingTxHash = "";
+      console.log(`[Agent Gateway] Registered agent: ${agentName} (${platform}) wallet: ${wallet.address}`);
+
+      // === RESPOND IMMEDIATELY (prevent 504 timeout) ===
+      res.status(201).json({
+        success: true,
+        agent: {
+          agent_name: agentName.toLowerCase(),
+          wallet_address: wallet.address,
+          api_key: apiKey,
+          referral_code: agentReferralCode,
+          initial_balance: `${AGENT_FAUCET_AMOUNT} VCN (pending)`,
+          funding_tx: "pending",
+          sbt_token_id: null,
+          sbt_tx_hash: "",
+          dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
+        },
+      });
+
+      // === ASYNC: On-chain operations (run after response is sent) ===
+      const agentDocRef = db.collection("agents").doc(agentName.toLowerCase());
+
+      // 1) Fund the wallet with VCN (net of SBT mint fee - executor keeps the fee)
+      const netFundingAmount = String(parseFloat(AGENT_FAUCET_AMOUNT) - parseFloat(SBT_MINT_FEE));
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
-        const amountWei = ethers.parseEther(AGENT_FAUCET_AMOUNT);
+        const amountWei = ethers.parseEther(netFundingAmount);
         const tx = await tokenContract.transfer(wallet.address, amountWei);
         await tx.wait();
-        fundingTxHash = tx.hash;
-        console.log(`[Agent Gateway] Funded ${wallet.address} with ${AGENT_FAUCET_AMOUNT} VCN, tx: ${tx.hash}`);
+        await agentDocRef.update({ fundingTx: tx.hash, fundingStatus: "completed" });
+        console.log(`[Agent Gateway] Funded ${wallet.address} with ${netFundingAmount} VCN (${SBT_MINT_FEE} VCN SBT fee retained), tx: ${tx.hash}`);
       } catch (fundErr) {
         console.error(`[Agent Gateway] Funding failed for ${wallet.address}:`, fundErr.message);
+        await agentDocRef.update({ fundingStatus: "failed", fundingError: fundErr.message }).catch(() => { });
       }
 
-      // Mint SBT identity token (Paymaster: executor pays gas, deducts VCN from agent)
-      let sbtTokenId = null;
-      let sbtTxHash = "";
+      // 2) Mint SBT identity token (executor pays gas - server-side Paymaster pattern)
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
@@ -8102,35 +8122,27 @@ exports.agentGateway = onRequest({
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(wallet.address, agentName.toLowerCase(), platform.toLowerCase(), gasOpts);
         const receipt = await mintTx.wait();
-        // Parse Transfer event for tokenId
         const transferLog = receipt.logs.find((l) => l.topics[0] === ethers.id("Transfer(address,address,uint256)"));
+        let sbtTokenId = null;
         if (transferLog) {
           sbtTokenId = parseInt(transferLog.topics[3], 16);
         }
-        sbtTxHash = mintTx.hash;
-        console.log(`[Agent Gateway] SBT minted for ${agentName}, tokenId: ${sbtTokenId}, tx: ${sbtTxHash}`);
+        console.log(`[Agent Gateway] SBT minted for ${agentName}, tokenId: ${sbtTokenId}, tx: ${mintTx.hash}`);
 
-        // Deduct VCN minting fee from agent wallet -> executor
-        const agentSigner = new ethers.Wallet(wallet.privateKey, provider);
-        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentSigner);
-        const feeTx = await agentToken.transfer(adminWallet.address, ethers.parseEther(SBT_MINT_FEE), gasOpts);
-        await feeTx.wait();
-        console.log(`[Agent Gateway] SBT fee ${SBT_MINT_FEE} VCN deducted from ${wallet.address}`);
+        // SBT fee already deducted from funding amount (executor retained it) - no on-chain fee transfer needed
 
-        // Update Firestore with SBT info
-        await db.collection("agents").doc(agentName.toLowerCase()).update({
+        await agentDocRef.update({
           sbtTokenId: sbtTokenId,
-          sbtTxHash: sbtTxHash,
+          sbtTxHash: mintTx.hash,
           sbtAddress: AGENT_SBT_ADDRESS,
         });
       } catch (sbtErr) {
         console.warn(`[Agent Gateway] SBT mint failed for ${agentName}:`, sbtErr.message);
       }
 
-      // Process referral if provided
+      // 3) Process referral if provided
       if (refCode) {
         try {
-          // Find referrer agent
           const referrerSnap = await db.collection("agents")
             .where("referralCode", "==", refCode)
             .limit(1)
@@ -8141,13 +8153,11 @@ exports.agentGateway = onRequest({
               referralCount: admin.firestore.FieldValue.increment(1),
               rpPoints: admin.firestore.FieldValue.increment(50),
             });
-            // Give bonus to new agent too
-            await db.collection("agents").doc(agentName.toLowerCase()).update({
+            await agentDocRef.update({
               rpPoints: admin.firestore.FieldValue.increment(25),
             });
             console.log(`[Agent Gateway] Referral processed: ${refCode} -> ${agentName}`);
           } else {
-            // Check human user referral codes
             const humanSnap = await db.collection("users")
               .where("referralCode", "==", refCode)
               .limit(1)
@@ -8157,7 +8167,7 @@ exports.agentGateway = onRequest({
               await humanDoc.ref.update({
                 referralCount: admin.firestore.FieldValue.increment(1),
               });
-              await db.collection("agents").doc(agentName.toLowerCase()).update({
+              await agentDocRef.update({
                 rpPoints: admin.firestore.FieldValue.increment(25),
               });
               console.log(`[Agent Gateway] Human referral processed: ${refCode} -> ${agentName}`);
@@ -8168,22 +8178,7 @@ exports.agentGateway = onRequest({
         }
       }
 
-      console.log(`[Agent Gateway] Registered agent: ${agentName} (${platform}) wallet: ${wallet.address}`);
-
-      return res.status(201).json({
-        success: true,
-        agent: {
-          agent_name: agentName.toLowerCase(),
-          wallet_address: wallet.address,
-          api_key: apiKey,
-          referral_code: agentReferralCode,
-          initial_balance: `${AGENT_FAUCET_AMOUNT} VCN`,
-          funding_tx: fundingTxHash,
-          sbt_token_id: sbtTokenId,
-          sbt_tx_hash: sbtTxHash,
-          dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
-        },
-      });
+      return; // Already responded above
     }
 
     // --- All other actions require authentication ---
