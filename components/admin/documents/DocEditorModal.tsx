@@ -83,40 +83,38 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
             }
             setShowPreview(false);
 
-            // Initialize Quill only for non-markdown
-            if (!isMarkdownType(props.doc?.type || 'Text/Manual')) {
-                setTimeout(() => {
-                    if (editorRef && !quill) {
-                        quill = new Quill(editorRef, {
-                            theme: 'snow',
-                            modules: {
-                                toolbar: [
-                                    [{ 'header': [1, 2, 3, false] }],
-                                    ['bold', 'italic', 'underline', 'strike'],
-                                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                    ['link', 'image'],
-                                    ['clean']
-                                ]
-                            }
-                        });
+            // Initialize Quill editor (div is always in DOM, hidden via CSS when Markdown)
+            setTimeout(() => {
+                if (editorRef && !quill) {
+                    quill = new Quill(editorRef, {
+                        theme: 'snow',
+                        modules: {
+                            toolbar: [
+                                [{ 'header': [1, 2, 3, false] }],
+                                ['bold', 'italic', 'underline', 'strike'],
+                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                ['link', 'image'],
+                                ['clean']
+                            ]
+                        }
+                    });
 
-                        // Handle Markdown Paste
-                        quill.root.addEventListener('paste', (e: ClipboardEvent) => {
-                            const text = e.clipboardData?.getData('text/plain');
-                            if (text && (text.includes('# ') || text.includes('**') || text.includes('- '))) {
-                                e.preventDefault();
-                                const html = marked.parse(text);
-                                const range = quill.getSelection();
-                                quill.clipboard.dangerouslyPasteHTML(range.index, html);
-                            }
-                        });
-                    }
+                    // Handle Markdown Paste
+                    quill.root.addEventListener('paste', (e: ClipboardEvent) => {
+                        const text = e.clipboardData?.getData('text/plain');
+                        if (text && (text.includes('# ') || text.includes('**') || text.includes('- '))) {
+                            e.preventDefault();
+                            const html = marked.parse(text);
+                            const range = quill.getSelection();
+                            quill.clipboard.dangerouslyPasteHTML(range.index, html);
+                        }
+                    });
+                }
 
-                    if (quill) {
-                        quill.root.innerHTML = props.doc?.content || '';
-                    }
-                }, 100);
-            }
+                if (quill && !isMarkdownType(props.doc?.type || 'Text/Manual')) {
+                    quill.root.innerHTML = props.doc?.content || '';
+                }
+            }, 100);
         }
     });
 
@@ -230,16 +228,16 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
                                 </Show>
                             </div>
 
-                            <Show
-                                when={isMarkdownType(docType())}
-                                fallback={
-                                    /* Quill WYSIWYG Editor */
-                                    <div class="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden min-h-[400px]">
-                                        <div ref={editorRef} class="h-[400px] text-gray-300" />
-                                    </div>
-                                }
+                            {/* Quill WYSIWYG Editor - always in DOM, hidden when Markdown */}
+                            <div
+                                class="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden min-h-[400px]"
+                                style={{ display: isMarkdownType(docType()) ? 'none' : 'block' }}
                             >
-                                {/* Markdown Editor */}
+                                <div ref={editorRef} class="h-[400px] text-gray-300" />
+                            </div>
+
+                            {/* Markdown Editor - shown only when Markdown type */}
+                            <Show when={isMarkdownType(docType())}>
                                 <Show
                                     when={showPreview()}
                                     fallback={
