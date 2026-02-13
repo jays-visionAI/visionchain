@@ -96,6 +96,21 @@ export interface CategoryInfo {
     labelKo: string;
 }
 
+export interface CategoryHighlight {
+    category: string;
+    summary: string;
+    sentiment: 'bullish' | 'bearish' | 'neutral';
+}
+
+export interface MarketBrief {
+    analysis: string;
+    categoryHighlights: CategoryHighlight[];
+    keyRisks: string[];
+    opportunities: string[];
+    tradingBias: 'LONG' | 'SHORT' | 'NEUTRAL';
+    confidenceScore: number;
+}
+
 export interface InsightSnapshot {
     asi: ASIData;
     alphaAlerts: AlphaAlert[];
@@ -105,6 +120,7 @@ export interface InsightSnapshot {
     lastUpdated: string | null;
     categories: CategoryInfo[];
     newsFeed: NewsArticle[];
+    marketBrief: MarketBrief | null;
 }
 
 export interface AgentViewData {
@@ -183,6 +199,7 @@ export const VisionInsightService = {
                 lastUpdated: data.lastUpdated || null,
                 categories: data.categories || DEFAULT_CATEGORIES,
                 newsFeed: data.newsFeed || [],
+                marketBrief: data.marketBrief || null,
             };
         } catch (err: any) {
             console.error('[VisionInsight] Failed to fetch snapshot:', err);
@@ -200,6 +217,7 @@ export const VisionInsightService = {
                 lastUpdated: null,
                 categories: DEFAULT_CATEGORIES,
                 newsFeed: [],
+                marketBrief: null,
             };
         }
     },

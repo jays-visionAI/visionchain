@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, Show, For, createMemo } from 'solid-js';
-import { VisionInsightService, type InsightSnapshot, type AgentViewData, type NewsArticle, type CategoryInfo } from '../../services/visionInsightService';
+import { VisionInsightService, type InsightSnapshot, type AgentViewData, type NewsArticle, type CategoryInfo, type MarketBrief } from '../../services/visionInsightService';
 
 const VisionInsight: Component = () => {
     const [snapshot, setSnapshot] = createSignal<InsightSnapshot | null>(null);
@@ -147,6 +147,15 @@ const VisionInsight: Component = () => {
             coingape: '#3b82f6', decenter: '#ef4444', blockmedia: '#06b6d4',
         };
         return map[sourceId] || '#666';
+    };
+
+    // Trading bias config
+    const biasConfig = (bias: string) => {
+        switch (bias) {
+            case 'LONG': return { color: '#22c55e', icon: '↑', bg: 'rgba(34,197,94,0.1)' };
+            case 'SHORT': return { color: '#ef4444', icon: '↓', bg: 'rgba(239,68,68,0.1)' };
+            default: return { color: '#fbbf24', icon: '↔', bg: 'rgba(251,191,36,0.08)' };
+        }
     };
 
     return (
@@ -372,6 +381,120 @@ const VisionInsight: Component = () => {
                         <div style={{ 'font-size': '9px', color: '#555', 'margin-top': '2px' }}>Whale Flow</div>
                     </div>
                 </div>
+
+                {/* AI Market Brief */}
+                <Show when={snapshot()?.marketBrief}>
+                    {(brief) => {
+                        const b = brief() as MarketBrief;
+                        const bias = biasConfig(b.tradingBias);
+                        return (
+                            <div style={{
+                                background: 'linear-gradient(135deg, rgba(167,139,250,0.06), rgba(34,211,238,0.04))',
+                                border: '1px solid rgba(167,139,250,0.15)',
+                                'border-radius': '14px',
+                                padding: '16px',
+                                'margin-bottom': '16px',
+                            }}>
+                                {/* Header */}
+                                <div style={{ display: 'flex', 'align-items': 'center', 'justify-content': 'space-between', 'margin-bottom': '12px' }}>
+                                    <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2">
+                                            <path d="M12 2a8 8 0 0 0-8 8c0 3.4 2.1 6.3 5 7.5V20h6v-2.5c2.9-1.2 5-4.1 5-7.5a8 8 0 0 0-8-8z" />
+                                            <line x1="10" y1="22" x2="14" y2="22" />
+                                        </svg>
+                                        <span style={{ 'font-size': '12px', 'font-weight': '700', color: '#ddd' }}>AI Market Brief</span>
+                                        <span style={{
+                                            'font-size': '8px', 'font-weight': '700', color: '#a78bfa',
+                                            background: 'rgba(167,139,250,0.12)', padding: '2px 6px', 'border-radius': '6px',
+                                        }}>GEMINI</span>
+                                    </div>
+                                    <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                                        <span style={{
+                                            'font-size': '10px', 'font-weight': '800', color: bias.color,
+                                            background: bias.bg, padding: '3px 8px', 'border-radius': '8px',
+                                        }}>{bias.icon} {b.tradingBias}</span>
+                                        <span style={{
+                                            'font-size': '9px', color: '#888',
+                                        }}>Confidence: {b.confidenceScore}%</span>
+                                    </div>
+                                </div>
+
+                                {/* Analysis */}
+                                <p style={{
+                                    margin: '0 0 12px',
+                                    'font-size': '13px',
+                                    color: '#ccc',
+                                    'line-height': '1.55',
+                                }}>{b.analysis}</p>
+
+                                {/* Category Highlights */}
+                                <Show when={b.categoryHighlights && b.categoryHighlights.length > 0}>
+                                    <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '6px', 'margin-bottom': '12px' }}>
+                                        <For each={b.categoryHighlights}>
+                                            {(ch) => {
+                                                const chSent = sentimentBadge(ch.sentiment);
+                                                const chColor = categoryColor(ch.category);
+                                                return (
+                                                    <div style={{
+                                                        flex: '1', 'min-width': '200px',
+                                                        padding: '8px 10px',
+                                                        background: 'rgba(255,255,255,0.02)',
+                                                        'border-radius': '8px',
+                                                        border: `1px solid ${chColor}20`,
+                                                    }}>
+                                                        <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'margin-bottom': '4px' }}>
+                                                            <span style={{ width: '5px', height: '5px', 'border-radius': '50%', background: chColor }} />
+                                                            <span style={{ 'font-size': '9px', 'font-weight': '700', color: chColor, 'text-transform': 'uppercase' }}>
+                                                                {categories().find((c: CategoryInfo) => c.id === ch.category)?.label || ch.category}
+                                                            </span>
+                                                            <span style={{
+                                                                'font-size': '8px', color: chSent.color, 'margin-left': 'auto',
+                                                                'font-weight': '700',
+                                                            }}>{ch.sentiment === 'bullish' ? '↑' : ch.sentiment === 'bearish' ? '↓' : '→'}</span>
+                                                        </div>
+                                                        <p style={{ margin: '0', 'font-size': '11px', color: '#999', 'line-height': '1.35' }}>{ch.summary}</p>
+                                                    </div>
+                                                );
+                                            }}
+                                        </For>
+                                    </div>
+                                </Show>
+
+                                {/* Risks & Opportunities row */}
+                                <div style={{ display: 'flex', gap: '10px', 'flex-wrap': 'wrap' }}>
+                                    <Show when={b.keyRisks && b.keyRisks.length > 0}>
+                                        <div style={{ flex: '1', 'min-width': '150px' }}>
+                                            <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'margin-bottom': '4px' }}>
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+                                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                                    <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                                </svg>
+                                                <span style={{ 'font-size': '9px', 'font-weight': '700', color: '#ef4444', 'text-transform': 'uppercase' }}>Risks</span>
+                                            </div>
+                                            <For each={b.keyRisks}>
+                                                {(risk) => <p style={{ margin: '0 0 2px', 'font-size': '10px', color: '#888', 'padding-left': '14px' }}>- {risk}</p>}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                    <Show when={b.opportunities && b.opportunities.length > 0}>
+                                        <div style={{ flex: '1', 'min-width': '150px' }}>
+                                            <div style={{ display: 'flex', 'align-items': 'center', gap: '4px', 'margin-bottom': '4px' }}>
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="10" />
+                                                    <polyline points="12 16 12 12" /><polyline points="8 12 12 8 16 12" />
+                                                </svg>
+                                                <span style={{ 'font-size': '9px', 'font-weight': '700', color: '#22c55e', 'text-transform': 'uppercase' }}>Opportunities</span>
+                                            </div>
+                                            <For each={b.opportunities}>
+                                                {(opp) => <p style={{ margin: '0 0 2px', 'font-size': '10px', color: '#888', 'padding-left': '14px' }}>- {opp}</p>}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                </div>
+                            </div>
+                        );
+                    }}
+                </Show>
 
                 {/* Category Tab Bar */}
                 <div style={{

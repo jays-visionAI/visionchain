@@ -10117,12 +10117,70 @@ exports.generateInsightSnapshot = onSchedule({
 
     // Generate ASI summary line
     let asiSummary = "";
+    let marketBrief = null;
     try {
       const summaryPrompt = `Given crypto market ASI score ${asiScore}/100 (${asiLabel}), trend: ${asiTrend}, based on ${articles.length} recent articles. Write ONE sentence (max 15 words) summarizing the market mood for traders. No quotes.`;
       asiSummary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
       asiSummary = asiSummary.replace(/^["']|["']$/g, "").trim();
     } catch (e) {
       asiSummary = `Market sentiment at ${asiScore}/100. ${asiLabel} conditions prevail.`;
+    }
+
+    // Generate comprehensive AI Market Brief
+    try {
+      const categoryIds = NEWS_CATEGORIES.filter((c) => c.id !== "all").map((c) => c.id);
+      const categoryArticles = {};
+      for (const catId of categoryIds) {
+        categoryArticles[catId] = articles.filter((a) => a.category === catId);
+      }
+
+      const headlinesByCategory = categoryIds.map((catId) => {
+        const catArts = categoryArticles[catId] || [];
+        const top3 = catArts.slice(0, 3).map((a) => a.oneLiner || a.title).join("; ");
+        return `[${catId}]: ${top3 || "No recent news"}`;
+      }).join("\n");
+
+      const briefPrompt = `You are a senior crypto market strategist. Analyze the following market intelligence and generate a structured market brief.
+
+Current Data:
+- ASI Score: ${asiScore}/100 (${asiLabel}), Trend: ${asiTrend}
+- Total Articles Analyzed: ${articles.length}
+- Top Headlines by Category:
+${headlinesByCategory}
+
+Output ONLY a valid JSON object:
+{
+  "analysis": "2-3 sentence overall market analysis (concise, actionable)",
+  "categoryHighlights": [
+    {"category": "<category_id>", "summary": "one-sentence highlight", "sentiment": "bullish|bearish|neutral"}
+  ],
+  "keyRisks": ["risk 1", "risk 2"],
+  "opportunities": ["opportunity 1", "opportunity 2"],
+  "tradingBias": "LONG|SHORT|NEUTRAL",
+  "confidenceScore": 0-100
+}
+
+Only include categories with actual news. Output ONLY valid JSON, no markdown.`;
+
+      const briefRaw = await callLLM(
+        "gemini-2.0-flash",
+        "You are a crypto market analyst AI. Output only valid JSON.",
+        briefPrompt,
+      );
+
+      const cleaned = briefRaw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      marketBrief = JSON.parse(cleaned);
+      console.log(`[Blocky] AI Market Brief generated: bias=${marketBrief.tradingBias}, confidence=${marketBrief.confidenceScore}`);
+    } catch (e) {
+      console.error("[Blocky] Market brief generation failed:", e.message);
+      marketBrief = {
+        analysis: `Market sentiment is ${asiLabel.toLowerCase()} with ASI at ${asiScore}/100. ${articles.length} articles analyzed across crypto sectors.`,
+        categoryHighlights: [],
+        keyRisks: ["Insufficient data for detailed risk analysis"],
+        opportunities: ["Monitor emerging trends as more data is collected"],
+        tradingBias: "NEUTRAL",
+        confidenceScore: 30,
+      };
     }
 
     // 3. Select Top 3 Alpha Alerts (highest impact)
@@ -10198,6 +10256,7 @@ exports.generateInsightSnapshot = onSchedule({
       },
       alphaAlerts,
       whaleWatch,
+      marketBrief: marketBrief || null,
       narratives: {
         trendingKeywords,
         calendar,
@@ -10420,6 +10479,7 @@ exports.getVisionInsight = onCall({
       alphaAlerts: snapshot.alphaAlerts || [],
       whaleWatch: snapshot.whaleWatch || getPlaceholderWhaleData(),
       narratives: snapshot.narratives || { trendingKeywords: [], calendar: [] },
+      marketBrief: snapshot.marketBrief || null,
       articlesAnalyzed: snapshot.articlesAnalyzed || 0,
       lastUpdated: snapshot.createdAt?.toDate?.()?.toISOString() || null,
       categories: NEWS_CATEGORIES,
