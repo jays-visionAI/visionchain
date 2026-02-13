@@ -693,6 +693,20 @@ const BRIDGE_STAKING_ABI = [
   "function owner() external view returns (address)",
 ];
 
+// --- VisionAgentSBT Contract Config (EIP-5192) ---
+const AGENT_SBT_ADDRESS = "0xc7398A445B0274531BCfA4d1011E7bAf8034831d";
+const AGENT_SBT_ABI = [
+  "function mintAgentIdentity(address to, string agentName, string platform) external returns (uint256)",
+  "function getAgentByAddress(address wallet) external view returns (uint256, string, string, uint256)",
+  "function totalSupply() external view returns (uint256)",
+  "function locked(uint256 tokenId) external view returns (bool)",
+  "function isMinter(address) external view returns (bool)",
+  "function setMinter(address minter, bool allowed) external",
+  "event Locked(uint256 tokenId)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
+];
+const SBT_MINT_FEE = "1"; // 1 VCN minting fee
+
 const ERC20_ABI = [
   "function approve(address spender, uint256 amount) external returns (bool)",
   "function allowance(address owner, address spender) external view returns (uint256)",
@@ -8078,6 +8092,41 @@ exports.agentGateway = onRequest({
         console.error(`[Agent Gateway] Funding failed for ${wallet.address}:`, fundErr.message);
       }
 
+      // Mint SBT identity token (Paymaster: executor pays gas, deducts VCN from agent)
+      let sbtTokenId = null;
+      let sbtTxHash = "";
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+        const mintTx = await sbtContract.mintAgentIdentity(wallet.address, agentName.toLowerCase(), platform.toLowerCase(), gasOpts);
+        const receipt = await mintTx.wait();
+        // Parse Transfer event for tokenId
+        const transferLog = receipt.logs.find((l) => l.topics[0] === ethers.id("Transfer(address,address,uint256)"));
+        if (transferLog) {
+          sbtTokenId = parseInt(transferLog.topics[3], 16);
+        }
+        sbtTxHash = mintTx.hash;
+        console.log(`[Agent Gateway] SBT minted for ${agentName}, tokenId: ${sbtTokenId}, tx: ${sbtTxHash}`);
+
+        // Deduct VCN minting fee from agent wallet -> executor
+        const agentSigner = new ethers.Wallet(wallet.privateKey, provider);
+        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentSigner);
+        const feeTx = await agentToken.transfer(adminWallet.address, ethers.parseEther(SBT_MINT_FEE), gasOpts);
+        await feeTx.wait();
+        console.log(`[Agent Gateway] SBT fee ${SBT_MINT_FEE} VCN deducted from ${wallet.address}`);
+
+        // Update Firestore with SBT info
+        await db.collection("agents").doc(agentName.toLowerCase()).update({
+          sbtTokenId: sbtTokenId,
+          sbtTxHash: sbtTxHash,
+          sbtAddress: AGENT_SBT_ADDRESS,
+        });
+      } catch (sbtErr) {
+        console.warn(`[Agent Gateway] SBT mint failed for ${agentName}:`, sbtErr.message);
+      }
+
       // Process referral if provided
       if (refCode) {
         try {
@@ -8130,6 +8179,8 @@ exports.agentGateway = onRequest({
           referral_code: agentReferralCode,
           initial_balance: `${AGENT_FAUCET_AMOUNT} VCN`,
           funding_tx: fundingTxHash,
+          sbt_token_id: sbtTokenId,
+          sbt_tx_hash: sbtTxHash,
           dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
         },
       });

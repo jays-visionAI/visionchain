@@ -31,10 +31,14 @@ async function main() {
     const balance = await provider.getBalance(wallet.address);
     console.log("Balance:", ethers.formatEther(balance), "ETH");
 
-    // Deploy
+    // Deploy with explicit gas settings for Vision Chain
     console.log("Deploying VisionAgentSBT...");
     const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, wallet);
-    const contract = await factory.deploy();
+    const gasOpts = {
+        gasLimit: 5000000,
+        gasPrice: ethers.parseUnits("1", "gwei"),
+    };
+    const contract = await factory.deploy(gasOpts);
     console.log("Tx hash:", contract.deploymentTransaction().hash);
     console.log("Waiting for confirmation...");
     await contract.waitForDeployment();
