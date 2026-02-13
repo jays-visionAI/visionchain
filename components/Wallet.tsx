@@ -4436,11 +4436,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                         { minLvl: 80, bg: 'bg-rose-500', border: 'border-rose-500/30' },
                                                                         { minLvl: 90, bg: 'bg-yellow-500', border: 'border-yellow-500/30' }
                                                                     ];
-                                                                    let level = 1;
-                                                                    if (count < 20) { level = count + 1; }
-                                                                    else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                    else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                    else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                    let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
                                                                     if (level > 100) level = 100;
 
                                                                     const rank = RANKS.slice().reverse().find(r => level >= r.minLvl) || RANKS[0];
@@ -4451,11 +4447,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     <span class="text-[10px] font-black text-white uppercase tracking-widest">
                                                                         {(() => {
                                                                             const count = userProfile().referralCount || 0;
-                                                                            let level = 1;
-                                                                            if (count < 20) { level = count + 1; }
-                                                                            else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                            else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                            else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                            let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
                                                                             if (level > 100) level = 100;
 
                                                                             const names = ['Novice', 'Scout', 'Ranger', 'Guardian', 'Elite', 'Captain', 'Commander', 'Warlord', 'Titan', 'Visionary'];
@@ -4492,27 +4484,16 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             {/* XP / Level Progress Bar */}
                                                             {(() => {
                                                                 const count = userProfile().referralCount || 0;
-                                                                let level = 1;
-                                                                if (count < 20) { level = count + 1; }
-                                                                else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
                                                                 if (level > 100) level = 100;
 
-                                                                // Calculate refs needed for current and next level
-                                                                const getRefsForLevel = (lvl: number) => {
-                                                                    if (lvl <= 1) return 0;
-                                                                    if (lvl <= 20) return lvl - 1;
-                                                                    if (lvl <= 50) return 20 + (lvl - 21) * 2;
-                                                                    if (lvl <= 80) return 80 + (lvl - 51) * 5;
-                                                                    return 230 + (lvl - 81) * 10;
-                                                                };
-                                                                const currentLevelBaseRefs = getRefsForLevel(level);
-                                                                const nextLevelBaseRefs = getRefsForLevel(level + 1);
-                                                                const refsPerLevel = nextLevelBaseRefs - currentLevelBaseRefs;
+                                                                // Triangular: level L requires L*(L-1)/2 total refs
+                                                                const currentLevelBaseRefs = level * (level - 1) / 2;
+                                                                const refsPerLevel = level; // Need 'level' refs to advance
+                                                                const nextLevelRefs = level >= 100 ? currentLevelBaseRefs : currentLevelBaseRefs + level;
                                                                 const progressIntoLevel = count - currentLevelBaseRefs;
                                                                 const progressPercent = level >= 100 ? 100 : Math.min(100, Math.max(0, (progressIntoLevel / refsPerLevel) * 100));
-                                                                const refsToNext = Math.max(0, nextLevelBaseRefs - count);
+                                                                const refsToNext = Math.max(0, nextLevelRefs - count);
 
                                                                 // Rank Gradient Helper
                                                                 const getGradient = (lvl: number) => {
@@ -4686,11 +4667,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
                                                                 <div class="text-lg font-black">{(() => {
                                                                     const count = userProfile().referralCount || 0;
-                                                                    let level = 1;
-                                                                    if (count < 20) { level = count + 1; }
-                                                                    else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                    else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                    else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                    let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
                                                                     if (level > 100) level = 100;
 
                                                                     const getRankName = (lvl: number) => {

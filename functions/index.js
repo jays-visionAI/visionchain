@@ -8149,6 +8149,7 @@ exports.agentGateway = onRequest({
             .get();
           if (!referrerSnap.empty) {
             const referrerDoc = referrerSnap.docs[0];
+            const referrerData = referrerDoc.data();
             await referrerDoc.ref.update({
               referralCount: admin.firestore.FieldValue.increment(1),
               rpPoints: admin.firestore.FieldValue.increment(50),
@@ -8157,6 +8158,24 @@ exports.agentGateway = onRequest({
               rpPoints: admin.firestore.FieldValue.increment(25),
             });
             console.log(`[Agent Gateway] Referral processed: ${refCode} -> ${agentName}`);
+
+            // Roll up agent referral to owner user's referralCount
+            if (referrerData.ownerEmail) {
+              try {
+                const ownerSnap = await db.collection("users")
+                  .where("email", "==", referrerData.ownerEmail.toLowerCase())
+                  .limit(1)
+                  .get();
+                if (!ownerSnap.empty) {
+                  await ownerSnap.docs[0].ref.update({
+                    referralCount: admin.firestore.FieldValue.increment(1),
+                  });
+                  console.log(`[Agent Gateway] Agent referral rolled up to owner: ${referrerData.ownerEmail}`);
+                }
+              } catch (ownerErr) {
+                console.warn(`[Agent Gateway] Owner rollup failed:`, ownerErr.message);
+              }
+            }
           } else {
             const humanSnap = await db.collection("users")
               .where("referralCode", "==", refCode)
