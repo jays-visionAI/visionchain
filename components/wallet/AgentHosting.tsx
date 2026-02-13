@@ -36,10 +36,7 @@ const icons = {
     spark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4"><path d="M12 3v18M3 12h18M5.636 5.636l12.728 12.728M18.364 5.636L5.636 18.364"/></svg>`,
 };
 
-const AVAILABLE_MODELS = [
-    { id: 'deepseek-chat', name: 'DeepSeek Chat', provider: 'DeepSeek', speed: 'Fast', desc: 'Cost-efficient reasoning' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google', speed: 'Fast', desc: 'Balanced performance' },
-];
+// LLM selection is handled by ZYNK AI Router - users don't need to choose
 
 const AVAILABLE_ACTIONS = [
     { id: 'balance', label: 'Check Balance', desc: 'View VCN token balance', icon: '0', risk: 'low' },
@@ -106,7 +103,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                         api_key: savedKey,
                         wallet_address: data.agent.wallet_address,
                         status: data.agent.hosting?.enabled ? 'active' : 'setup',
-                        llm_model: data.agent.hosting?.llm_model || 'gemini-2.0-flash',
+                        llm_model: data.agent.hosting?.llm_model || 'deepseek-chat',
                         system_prompt: data.agent.hosting?.system_prompt || '',
                         trigger_type: 'interval',
                         interval_minutes: data.agent.hosting?.trigger?.interval_minutes || 60,
@@ -149,7 +146,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                     api_key: data.agent.api_key,
                     wallet_address: data.agent.wallet_address,
                     status: 'setup',
-                    llm_model: 'gemini-2.0-flash',
+                    llm_model: 'deepseek-chat',
                     system_prompt: '',
                     trigger_type: 'interval',
                     interval_minutes: 60,
@@ -159,7 +156,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                     last_execution: null,
                     vcn_balance: '100',
                 }]);
-                setSetupStep(2);
+                setSetupStep(2); // Skip to behavior config (was step 3)
             } else {
                 setRegisterError(data.error || 'Registration failed');
             }
@@ -814,7 +811,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                         {/* Pricing Info */}
                         <div class="ah-fee-breakdown" style="max-width: 340px; margin: 24px auto 0;">
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Per execution (LLM included)</span>
+                                <span class="ah-fee-label">Per execution (ZYNK AI included)</span>
                                 <span class="ah-fee-value">1.5 VCN</span>
                             </div>
                             <div class="ah-fee-row">
@@ -919,8 +916,8 @@ export default function AgentHosting(props: AgentHostingProps) {
                                             <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Configuration</div>
                                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                                                 <div style="font-size: 12px;">
-                                                    <span style="color: #64748b;">Model: </span>
-                                                    <span style="color: #e2e8f0; font-weight: 600;">{agent.llm_model === 'deepseek-chat' ? 'DeepSeek' : 'Gemini'}</span>
+                                                    <span style="color: #64748b;">AI: </span>
+                                                    <span style="color: #e2e8f0; font-weight: 600;">ZYNK AI</span>
                                                 </div>
                                                 <div style="font-size: 12px;">
                                                     <span style="color: #64748b;">Schedule: </span>
@@ -970,8 +967,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                 <div class="ah-step-indicator">
                     <div class={`ah-step-dot ${setupStep() === 1 ? 'active' : setupStep() > 1 ? 'done' : ''}`} />
                     <div class={`ah-step-dot ${setupStep() === 2 ? 'active' : setupStep() > 2 ? 'done' : ''}`} />
-                    <div class={`ah-step-dot ${setupStep() === 3 ? 'active' : setupStep() > 3 ? 'done' : ''}`} />
-                    <div class={`ah-step-dot ${setupStep() === 4 ? 'active' : ''}`} />
+                    <div class={`ah-step-dot ${setupStep() === 3 ? 'active' : ''}`} />
                 </div>
 
                 {/* Step 1: Name & Register */}
@@ -1004,44 +1000,13 @@ export default function AgentHosting(props: AgentHostingProps) {
                     </div>
                 </Show>
 
-                {/* Step 2: LLM Model */}
+
+                {/* Step 2: Behavior & Actions */}
                 <Show when={setupStep() === 2}>
                     <div class="ah-card">
                         <div class="ah-card-title">
-                            <Zap class="w-5 h-5 text-cyan-400" />
-                            Step 2: Choose AI Model
-                        </div>
-                        <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">
-                            Vision Chain provides the LLM -- no API key needed.
-                        </p>
-                        <div class="ah-model-grid">
-                            <For each={AVAILABLE_MODELS}>
-                                {(model) => (
-                                    <div
-                                        class={`ah-model-card ${selectedModel() === model.id ? 'selected' : ''}`}
-                                        onClick={() => setSelectedModel(model.id)}
-                                    >
-                                        <div class="ah-model-name">{model.name}</div>
-                                        <div class="ah-model-meta">{model.provider} -- {model.speed}</div>
-                                        <div class="ah-model-meta" style="margin-top: 4px; color: #94a3b8;">{model.desc}</div>
-                                    </div>
-                                )}
-                            </For>
-                        </div>
-                        <div style="margin-top: 20px; display: flex; gap: 8px; justify-content: flex-end;">
-                            <button class="ah-btn-primary" onClick={() => setSetupStep(3)}>
-                                Next <ChevronRight class="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                </Show>
-
-                {/* Step 3: Behavior & Actions */}
-                <Show when={setupStep() === 3}>
-                    <div class="ah-card">
-                        <div class="ah-card-title">
                             <Shield class="w-5 h-5 text-cyan-400" />
-                            Step 3: Define Behavior
+                            Step 2: Define Behavior
                         </div>
 
                         <div style="margin-bottom: 20px;">
@@ -1087,20 +1052,20 @@ export default function AgentHosting(props: AgentHostingProps) {
                         </div>
 
                         <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                            <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
-                            <button class="ah-btn-primary" onClick={() => setSetupStep(4)}>
+                            <button class="ah-tab" onClick={() => setSetupStep(1)}>Back</button>
+                            <button class="ah-btn-primary" onClick={() => setSetupStep(3)}>
                                 Next <ChevronRight class="w-4 h-4" />
                             </button>
                         </div>
                     </div>
                 </Show>
 
-                {/* Step 4: Trigger & Cost */}
-                <Show when={setupStep() === 4}>
+                {/* Step 3: Trigger & Cost */}
+                <Show when={setupStep() === 3}>
                     <div class="ah-card">
                         <div class="ah-card-title">
                             <Clock class="w-5 h-5 text-cyan-400" />
-                            Step 4: Execution Schedule
+                            Step 3: Execution Schedule
                         </div>
 
                         <div style="margin-bottom: 20px;">
@@ -1137,7 +1102,7 @@ export default function AgentHosting(props: AgentHostingProps) {
 
                         <div class="ah-fee-breakdown">
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Per execution (LLM included)</span>
+                                <span class="ah-fee-label">Per execution (ZYNK AI included)</span>
                                 <span class="ah-fee-value">1.5 VCN</span>
                             </div>
                             <div class="ah-fee-row">
@@ -1152,7 +1117,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                         </div>
 
                         <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px;">
-                            <button class="ah-tab" onClick={() => setSetupStep(3)}>Back</button>
+                            <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
                             <button
                                 class="ah-btn-primary"
                                 onClick={handleStartAgent}
@@ -1218,7 +1183,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                                             <div class="ah-log-time">{new Date(log.timestamp).toLocaleString()}</div>
                                             <Show when={log.llm_model}>
                                                 <span style="font-size: 9px; padding: 2px 6px; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.2); border-radius: 4px; color: #22d3ee; font-weight: 600;">
-                                                    {log.llm_model === 'deepseek-chat' ? 'DeepSeek' : 'Gemini'}
+                                                    ZYNK AI
                                                 </span>
                                             </Show>
                                         </div>
