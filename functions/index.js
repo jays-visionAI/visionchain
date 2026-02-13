@@ -10833,3 +10833,246 @@ exports.getVisionInsight = onCall({
     throw new HttpsError("internal", "Failed to fetch insight data");
   }
 });
+
+/**
+ * triggerInsightRefresh - Admin callable to manually trigger data collection + snapshot
+ * Use when scheduled functions haven't run and data is empty/stale
+ */
+exports.triggerInsightRefresh = onCall({
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (request) => {
+  // Auth check
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in");
+  }
+
+  const startTime = Date.now();
+  const results = { articlesCollected: 0, snapshotGenerated: false, errors: [] };
+
+  try {
+    // === STEP 1: Collect News (same logic as collectBlockyNews) ===
+    console.log(`[Blocky] Manual refresh: starting news collection...`);
+
+    const feedPromises = BLOCKY_MEDIA_SOURCES.map((source) => parseRssFeed(source));
+    const feedResults = await Promise.allSettled(feedPromises);
+
+    let allArticles = [];
+    for (const result of feedResults) {
+      if (result.status === "fulfilled") {
+        allArticles = allArticles.concat(result.value);
+      }
+    }
+    console.log(`[Blocky] Manual refresh: ${allArticles.length} raw articles parsed`);
+
+    if (allArticles.length > 0) {
+      // Dedup against existing
+      const existingUrls = new Set();
+      const recentDocs = await db.collection("blockyNews")
+        .doc("data")
+        .collection("articles")
+        .where("collectedAt", ">", new Date(Date.now() - 48 * 60 * 60 * 1000))
+        .select("url")
+        .get();
+      recentDocs.forEach((doc) => existingUrls.add(doc.data().url));
+
+      const newArticles = allArticles.filter((a) => a.url && !existingUrls.has(a.url));
+      console.log(`[Blocky] Manual refresh: ${newArticles.length} new articles after dedup`);
+
+      if (newArticles.length > 0) {
+        // AI analysis
+        const analyzedArticles = await analyzeArticlesBatch(newArticles);
+
+        // Store in Firestore
+        const writeBatch = db.batch();
+        let writeCount = 0;
+        for (const article of analyzedArticles) {
+          const docId = crypto.createHash("md5").update(article.url).digest("hex").substring(0, 20);
+          const ref = db.collection("blockyNews").doc("data").collection("articles").doc(docId);
+          writeBatch.set(ref, {
+            ...article,
+            publishedAt: article.publishedAt instanceof Date ?
+              admin.firestore.Timestamp.fromDate(article.publishedAt) :
+              admin.firestore.Timestamp.fromDate(new Date(article.publishedAt)),
+            collectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          writeCount++;
+          if (writeCount >= 490) break;
+        }
+        await writeBatch.commit();
+        results.articlesCollected = writeCount;
+
+        await db.collection("blockyNews").doc("meta").set({
+          lastCollectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          articlesCollected: writeCount,
+          sourcesAttempted: BLOCKY_MEDIA_SOURCES.length,
+        }, { merge: true });
+      }
+    }
+  } catch (err) {
+    console.error("[Blocky] Manual refresh - collection error:", err);
+    results.errors.push(`Collection: ${err.message}`);
+  }
+
+  try {
+    // === STEP 2: Generate Snapshot (same logic as generateInsightSnapshot) ===
+    console.log("[Blocky] Manual refresh: generating snapshot...");
+
+    const recentArticles = await db.collection("blockyNews")
+      .doc("data")
+      .collection("articles")
+      .where("collectedAt", ">", new Date(Date.now() - 24 * 60 * 60 * 1000))
+      .orderBy("collectedAt", "desc")
+      .limit(100)
+      .get();
+
+    const articles = [];
+    recentArticles.forEach((doc) => articles.push({ id: doc.id, ...doc.data() }));
+    console.log(`[Blocky] Manual refresh: ${articles.length} recent articles for snapshot`);
+
+    // ASI computation
+    let totalSentiment = 0;
+    let sentimentCount = 0;
+    for (const article of articles) {
+      if (typeof article.sentiment === "number") {
+        const weight = (article.impactScore || 50) / 50;
+        totalSentiment += article.sentiment * weight;
+        sentimentCount += weight;
+      }
+    }
+    const rawSentiment = sentimentCount > 0 ? totalSentiment / sentimentCount : 0;
+    const asiScore = Math.round(Math.max(0, Math.min(100, (rawSentiment + 1) * 50)));
+    let asiLabel = "Neutral";
+    if (asiScore >= 75) asiLabel = "Extreme Greed";
+    else if (asiScore >= 60) asiLabel = "Greed";
+    else if (asiScore >= 45) asiLabel = "Neutral";
+    else if (asiScore >= 25) asiLabel = "Fear";
+    else asiLabel = "Extreme Fear";
+
+    // Previous ASI
+    const prevSnapshot = await db.collection("blockyNews")
+      .doc("data")
+      .collection("snapshots")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+    let prevAsi = 50;
+    if (!prevSnapshot.empty) {
+      prevAsi = prevSnapshot.docs[0].data().asi?.score || 50;
+    }
+    const asiTrend = asiScore > prevAsi ? "BULLISH" : asiScore < prevAsi ? "BEARISH" : "STABLE";
+
+    // ASI summary
+    let asiSummary = `Market sentiment at ${asiScore}/100. ${asiLabel} conditions prevail.`;
+    try {
+      const summaryPrompt = `Given crypto market ASI score ${asiScore}/100 (${asiLabel}), trend: ${asiTrend}, based on ${articles.length} recent articles. Write ONE sentence (max 15 words) summarizing the market mood for traders. No quotes.`;
+      asiSummary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
+      asiSummary = asiSummary.replace(/^["']|["']$/g, "").trim();
+    } catch (e) {
+      // keep fallback
+    }
+
+    // Market brief
+    let marketBrief = null;
+    try {
+      const categoryIds = NEWS_CATEGORIES.filter((c) => c.id !== "all").map((c) => c.id);
+      const headlinesByCategory = categoryIds.map((catId) => {
+        const catArts = articles.filter((a) => a.category === catId);
+        const top3 = catArts.slice(0, 3).map((a) => a.oneLiner || a.title).join("; ");
+        return `[${catId}]: ${top3 || "No recent news"}`;
+      }).join("\n");
+
+      // eslint-disable-next-line max-len
+      const briefPrompt = "You are a senior crypto market strategist. " +
+        "Analyze the following market intelligence.\n\n" +
+        "Current Data:\n" +
+        `- ASI Score: ${asiScore}/100 (${asiLabel}), Trend: ${asiTrend}\n` +
+        `- Total Articles: ${articles.length}\n` +
+        "- Headlines by Category:\n" +
+        headlinesByCategory + "\n\n" +
+        "Output ONLY valid JSON with keys: analysis, " +
+        "categoryHighlights, keyRisks, opportunities, " +
+        "tradingBias (LONG/SHORT/NEUTRAL), confidenceScore (0-100). " +
+        "Only include categories with news. No markdown.";
+
+      const briefRaw = await callLLM("gemini-2.0-flash", "You are a crypto market analyst AI. Output only valid JSON.", briefPrompt);
+      const cleaned = briefRaw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      marketBrief = JSON.parse(cleaned);
+    } catch (e) {
+      marketBrief = {
+        analysis: `Market sentiment is ${asiLabel.toLowerCase()} with ASI at ${asiScore}/100. ${articles.length} articles analyzed.`,
+        categoryHighlights: [],
+        keyRisks: ["Insufficient data for detailed risk analysis"],
+        opportunities: ["Monitor emerging trends"],
+        tradingBias: "NEUTRAL",
+        confidenceScore: 30,
+      };
+    }
+
+    // Alpha Alerts
+    const sortedByImpact = [...articles].sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0));
+    const alphaAlerts = sortedByImpact.slice(0, 3).map((a) => ({
+      articleId: a.id,
+      headline: a.oneLiner || a.title,
+      severity: a.severity || "info",
+      impactScore: a.impactScore || 0,
+      impactDirection: a.sentiment > 0.2 ? "bullish" : a.sentiment < -0.2 ? "bearish" : "neutral",
+      agentConsensus: a.oneLiner || "",
+      source: a.sourceName || a.source,
+      url: a.url || "",
+    }));
+
+    // Whale Watch
+    const whaleWatch = await fetchWhaleActivity();
+    whaleWatch.topAgentMoves = [];
+
+    // Trending keywords
+    const keywordMap = {};
+    for (const article of articles) {
+      for (const kw of (article.keywords || [])) {
+        const normalized = kw.toLowerCase().replace(/[^a-z0-9_]/g, "");
+        if (normalized.length > 2) {
+          keywordMap[normalized] = (keywordMap[normalized] || 0) + 1;
+        }
+      }
+    }
+    const trendingKeywords = Object.entries(keywordMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([keyword, count]) => ({ keyword, count }));
+
+    // Calendar
+    const calendar = await fetchEconomicCalendar();
+
+    // Store snapshot
+    const snapshotId = new Date().toISOString().split("T")[0] + "_" +
+      new Date().getHours().toString().padStart(2, "0");
+
+    await db.collection("blockyNews").doc("data").collection("snapshots").doc(snapshotId).set({
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      asi: { score: asiScore, label: asiLabel, trend: asiTrend, summary: asiSummary, previousScore: prevAsi },
+      alphaAlerts,
+      whaleWatch,
+      marketBrief,
+      narratives: { trendingKeywords, calendar },
+      articlesAnalyzed: articles.length,
+    });
+
+    results.snapshotGenerated = true;
+    console.log(`[Blocky] Manual refresh: snapshot ${snapshotId} generated. ASI: ${asiScore}`);
+  } catch (err) {
+    console.error("[Blocky] Manual refresh - snapshot error:", err);
+    results.errors.push(`Snapshot: ${err.message}`);
+  }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[Blocky] Manual refresh complete in ${elapsed}s. Articles: ${results.articlesCollected}, Snapshot: ${results.snapshotGenerated}`);
+
+  return {
+    success: results.errors.length === 0,
+    articlesCollected: results.articlesCollected,
+    snapshotGenerated: results.snapshotGenerated,
+    elapsed: `${elapsed}s`,
+    errors: results.errors,
+  };
+});

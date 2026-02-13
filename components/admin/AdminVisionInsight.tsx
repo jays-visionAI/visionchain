@@ -253,19 +253,25 @@ function AdminVisionInsight() {
     // Trigger manual collection
     const triggerCollection = async () => {
         setTriggerLoading(true);
-        setStatusMsg('Triggering news collection... (this may take a few minutes)');
+        setStatusMsg('Triggering news collection + snapshot generation... (this may take a few minutes)');
         try {
-            // We call the callable function to trigger manually
-            const fn = httpsCallable(functions, 'getVisionInsight');
-            await fn({ format: 'ui' });
-            setStatusMsg('Collection triggered. Refresh in a few minutes to see results.');
+            const fn = httpsCallable(functions, 'triggerInsightRefresh');
+            const result = await fn({});
+            const data = result.data as any;
+            if (data.success) {
+                setStatusMsg(`Done! ${data.articlesCollected} articles collected, snapshot generated in ${data.elapsed}`);
+            } else {
+                setStatusMsg(`Partial success: ${data.articlesCollected} articles. Errors: ${data.errors.join(', ')}`);
+            }
+            refetch();
         } catch (e: any) {
             setStatusMsg(`Trigger error: ${e.message}`);
         } finally {
             setTriggerLoading(false);
-            setTimeout(() => setStatusMsg(''), 5000);
+            setTimeout(() => setStatusMsg(''), 8000);
         }
     };
+
 
     // Delete article
     const deleteArticle = async (url: string) => {
