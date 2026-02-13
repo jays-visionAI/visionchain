@@ -8841,11 +8841,39 @@ exports.agentGateway = onRequest({
       });
     }
 
+    // --- DELETE AGENT ---
+    if (action === "delete_agent") {
+      try {
+        // Delete hosting_logs subcollection
+        const logsSnap = await db.collection("agents").doc(agent.id)
+          .collection("hosting_logs").limit(500).get();
+        const batch = db.batch();
+        logsSnap.forEach((doc) => batch.delete(doc.ref));
+
+        // Delete transactions subcollection
+        const txSnap = await db.collection("agents").doc(agent.id)
+          .collection("transactions").limit(500).get();
+        txSnap.forEach((doc) => batch.delete(doc.ref));
+
+        // Delete the agent document itself
+        batch.delete(db.collection("agents").doc(agent.id));
+        await batch.commit();
+
+        return res.status(200).json({
+          success: true,
+          message: `Agent '${agent.agentName}' has been permanently deleted.`,
+        });
+      } catch (e) {
+        console.error("[Agent Gateway] Delete failed:", e);
+        return res.status(500).json({ success: false, error: "Failed to delete agent." });
+      }
+    }
+
     return res.status(400).json({
       error: `Unknown action: ${action}`,
       available_actions: [
         "register", "balance", "transfer", "transactions",
-        "referral", "leaderboard", "profile",
+        "referral", "leaderboard", "profile", "delete_agent",
         "stake", "unstake", "claim_rewards", "staking_info",
         "network_info",
         "configure_hosting", "toggle_hosting", "hosting_logs",

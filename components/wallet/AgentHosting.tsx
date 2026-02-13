@@ -1,5 +1,5 @@
 import { createSignal, Show, For, onMount, createMemo } from 'solid-js';
-import { Bot, Play, Pause, Settings, Clock, Zap, ArrowUpRight, Shield, RefreshCw, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-solid';
+import { Bot, Play, Pause, Settings, Clock, Zap, ArrowUpRight, Shield, RefreshCw, ChevronRight, AlertTriangle, CheckCircle, Trash2, Copy } from 'lucide-solid';
 
 // Agent Gateway API URL - environment-aware
 const AGENT_API_URL = (() => {
@@ -69,6 +69,8 @@ export default function AgentHosting(props: AgentHostingProps) {
     const [maxVcnPerAction, setMaxVcnPerAction] = createSignal(5);
     const [isRegistering, setIsRegistering] = createSignal(false);
     const [registerError, setRegisterError] = createSignal('');
+    const [deletingAgent, setDeletingAgent] = createSignal('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = createSignal('');
 
     // Logs
     const [logs, setLogs] = createSignal<any[]>([]);
@@ -111,7 +113,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                         total_vcn_spent: data.agent.hosting?.total_vcn_spent || 0,
                         execution_count: data.agent.hosting?.execution_count || 0,
                         last_execution: data.agent.hosting?.last_execution || null,
-                        vcn_balance: data.agent.balance || '0',
+                        vcn_balance: data.agent.balance_vcn || data.agent.balance || '0',
                     }]);
                 }
             }
@@ -242,6 +244,33 @@ export default function AgentHosting(props: AgentHostingProps) {
         } catch (err) {
             console.error('[AgentHosting] Toggle failed:', err);
         }
+    };
+
+    const handleDeleteAgent = async (agentName: string) => {
+        const agent = agents().find(a => a.agent_name === agentName);
+        if (!agent) return;
+
+        setDeletingAgent(agentName);
+        try {
+            const resp = await fetch(AGENT_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete_agent',
+                    api_key: agent.api_key,
+                }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                setAgents(agents().filter(a => a.agent_name !== agentName));
+                localStorage.removeItem('vcn_agent_api_key');
+                setShowDeleteConfirm('');
+                setSetupStep(1);
+            }
+        } catch (err) {
+            console.error('[AgentHosting] Delete failed:', err);
+        }
+        setDeletingAgent('');
     };
 
     const loadLogs = async () => {
@@ -880,6 +909,21 @@ export default function AgentHosting(props: AgentHostingProps) {
                                         </Show>
                                     </div>
 
+                                    {/* Wallet Address */}
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; padding: 8px 12px; background: rgba(6,182,212,0.05); border: 1px solid rgba(6,182,212,0.15); border-radius: 8px;">
+                                        <span style="font-size: 11px; color: #64748b; white-space: nowrap;">Wallet:</span>
+                                        <span style="font-size: 11px; color: #e2e8f0; font-family: monospace; overflow: hidden; text-overflow: ellipsis;">
+                                            {agent.wallet_address}
+                                        </span>
+                                        <button
+                                            style="flex-shrink: 0; background: none; border: none; cursor: pointer; padding: 2px; color: #64748b;"
+                                            onClick={() => { navigator.clipboard.writeText(agent.wallet_address); }}
+                                            title="Copy address"
+                                        >
+                                            <Copy class="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+
                                     {/* VCN Balance Bar */}
                                     <div style="margin-bottom: 16px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -954,6 +998,36 @@ export default function AgentHosting(props: AgentHostingProps) {
                                             </div>
                                         </div>
                                     </Show>
+
+                                    {/* Delete Agent */}
+                                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.05);">
+                                        <Show when={showDeleteConfirm() !== agent.agent_name}>
+                                            <button
+                                                style="padding: 6px 12px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.15); border-radius: 8px; color: #f87171; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;"
+                                                onClick={() => setShowDeleteConfirm(agent.agent_name)}
+                                            >
+                                                <Trash2 class="w-3 h-3" /> Delete Agent
+                                            </button>
+                                        </Show>
+                                        <Show when={showDeleteConfirm() === agent.agent_name}>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 11px; color: #f87171; font-weight: 600;">Permanently delete this agent?</span>
+                                                <button
+                                                    style="padding: 5px 12px; background: #ef4444; border: none; border-radius: 6px; color: white; font-size: 11px; font-weight: 700; cursor: pointer;"
+                                                    onClick={() => handleDeleteAgent(agent.agent_name)}
+                                                    disabled={deletingAgent() === agent.agent_name}
+                                                >
+                                                    {deletingAgent() === agent.agent_name ? 'Deleting...' : 'Confirm'}
+                                                </button>
+                                                <button
+                                                    style="padding: 5px 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #94a3b8; font-size: 11px; cursor: pointer;"
+                                                    onClick={() => setShowDeleteConfirm('')}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </Show>
+                                    </div>
                                 </div>
                             );
                         }}
