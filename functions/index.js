@@ -9188,9 +9188,9 @@ async function executeAgent(agentId, agentData, hosting, provider) {
     }
 
     // 2. Build context prompt for the agent with user's action settings
-    const actionSettingsStr = hosting.action_settings && Object.keys(hosting.action_settings).length > 0
-      ? `\nYour owner has configured these settings for your action:\n${JSON.stringify(hosting.action_settings, null, 2)}\nYou MUST use these settings when executing actions. For example, use the configured thresholds, recipients, channels, limits, and preferences.`
-      : "";
+    const actionSettingsStr = (hosting.action_settings && Object.keys(hosting.action_settings).length > 0) ?
+      `\nYour owner has configured these settings for your action:\n${JSON.stringify(hosting.action_settings, null, 2)}\nYou MUST use these settings when executing actions. For example, use the configured thresholds, recipients, channels, limits, and preferences.` :
+      "";
 
     const contextPrompt = `You are an autonomous AI agent running on Vision Chain.
 Current time: ${new Date().toISOString()}
