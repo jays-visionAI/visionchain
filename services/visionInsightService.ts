@@ -179,11 +179,26 @@ export const VisionInsightService = {
     /**
      * Fetch the latest insight snapshot + news feed for UI rendering
      */
-    async fetchSnapshot(category?: string): Promise<InsightSnapshot> {
+    async fetchSnapshot(category?: string, locale?: string): Promise<InsightSnapshot> {
         try {
             const getVisionInsight = httpsCallable(functions, 'getVisionInsight');
-            const result = await getVisionInsight({ format: 'ui', category: category || 'all' });
-            const data = result.data as InsightSnapshot;
+            const userLocale = locale || (typeof navigator !== 'undefined' ? navigator.language : 'en');
+            console.log('[VisionInsight] Calling getVisionInsight...', { locale: userLocale });
+            const result = await getVisionInsight({ format: 'ui', category: category || 'all', locale: userLocale });
+            const data = result.data as any;
+            console.log('[VisionInsight] Raw response:', JSON.stringify({
+                hasAsi: !!data?.asi,
+                newsFeedCount: data?.newsFeed?.length || 0,
+                categoriesCount: data?.categories?.length || 0,
+                hasMarketBrief: !!data?.marketBrief,
+                error: data?.error || 'none',
+                articlesAnalyzed: data?.articlesAnalyzed || 0,
+            }));
+
+            // If server returned an error object, use defaults but don't throw
+            if (data?.error) {
+                console.warn('[VisionInsight] Server returned error:', data.error);
+            }
 
             return {
                 asi: data.asi || { score: 50, label: 'Neutral', trend: 'STABLE', summary: 'Loading...' },
@@ -202,7 +217,7 @@ export const VisionInsightService = {
                 marketBrief: data.marketBrief || null,
             };
         } catch (err: any) {
-            console.error('[VisionInsight] Failed to fetch snapshot:', err);
+            console.error('[VisionInsight] Failed to fetch snapshot:', err.code, err.message, err);
             return {
                 asi: { score: 50, label: 'Neutral', trend: 'STABLE', summary: 'Data loading...' },
                 alphaAlerts: [],

@@ -10782,14 +10782,21 @@ exports.getVisionInsight = onCall({
 
     // Fetch recent articles for news feed (last 24 hours, max 100)
     const category = request.data?.category || "all";
+    const locale = request.data?.locale || "en";
+    const lang = locale.split("-")[0].toLowerCase(); // "ko-KR" -> "ko"
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    console.log(`[Blocky] getVisionInsight: category=${category}, locale=${locale}, lang=${lang}`);
+
     const articlesQuery = db.collection("blockyNews")
       .doc("data")
       .collection("articles")
-      .where("collectedAt", ">", new Date(Date.now() - 24 * 60 * 60 * 1000))
+      .where("collectedAt", ">", cutoffTime)
       .orderBy("collectedAt", "desc")
-      .limit(100);
+      .limit(200);
 
     const articlesSnap = await articlesQuery.get();
+    console.log(`[Blocky] getVisionInsight: found ${articlesSnap.size} total articles`);
+
     let newsFeed = articlesSnap.docs.map((doc) => {
       const d = doc.data();
       return {
@@ -10811,9 +10818,16 @@ exports.getVisionInsight = onCall({
       };
     });
 
+    // Hard filter by user locale language
+    const beforeLang = newsFeed.length;
+    newsFeed = newsFeed.filter((a) => a.language === lang);
+    console.log(`[Blocky] getVisionInsight: lang filter ${lang}: ${beforeLang} -> ${newsFeed.length}`);
+
     // Filter by category if not "all"
     if (category !== "all") {
+      const beforeFilter = newsFeed.length;
       newsFeed = newsFeed.filter((a) => a.category === category);
+      console.log(`[Blocky] getVisionInsight: category filter ${category}: ${beforeFilter} -> ${newsFeed.length}`);
     }
 
     // UI format: structured for widget rendering + news feed
