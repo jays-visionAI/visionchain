@@ -1118,19 +1118,14 @@ export default function AgentHosting(props: AgentHostingProps) {
                                                 {agent.status === 'insufficient_balance' && <><AlertTriangle class="w-3 h-3" /> Low Balance</>}
                                             </span>
                                         </div>
-                                        <Show when={agent.status !== 'setup'}>
+                                        <div style="display: flex; gap: 8px; align-items: center;">
                                             <button
                                                 class={`ah-toggle-btn ${agent.status === 'active' ? 'ah-toggle-active' : 'ah-toggle-paused'}`}
                                                 onClick={() => handleToggleAgent(agent.agent_name, agent.status)}
                                             >
                                                 {agent.status === 'active' ? <><Pause class="w-3.5 h-3.5" /> Pause</> : <><Play class="w-3.5 h-3.5" /> Start</>}
                                             </button>
-                                        </Show>
-                                        <Show when={agent.status === 'setup'}>
-                                            <button class="ah-btn-primary" style="padding: 8px 16px; font-size: 12px;" onClick={() => { setSetupStep(2); setActiveTab('setup'); }}>
-                                                <Settings class="w-3.5 h-3.5" /> Configure
-                                            </button>
-                                        </Show>
+                                        </div>
                                     </div>
 
                                     {/* Wallet Address */}
@@ -1179,7 +1174,7 @@ export default function AgentHosting(props: AgentHostingProps) {
                                     </div>
 
                                     {/* Configuration Summary */}
-                                    <Show when={agent.status !== 'setup'}>
+                                    <Show when={true}>
                                         <div style="margin-top: 16px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px solid rgba(255,255,255,0.04);">
                                             <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px;">Configuration</div>
                                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
