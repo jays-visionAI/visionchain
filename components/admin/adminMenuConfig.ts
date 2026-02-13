@@ -22,7 +22,8 @@ import {
     Network,
     Mail,
     LineChart,
-    Eye
+    Eye,
+    Share2
 } from 'lucide-solid';
 
 
@@ -50,7 +51,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Network,
     Mail,
     LineChart,
-    Eye
+    Eye,
+    Share2
 };
 
 // Menu item interface with optional children for sub-menus
@@ -237,6 +239,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 14,
+        requiredRole: 'admin'
+    },
+    {
+        id: 'social-media',
+        path: '/adminsystem/social-media',
+        label: 'Social Media',
+        icon: 'Share2',
+        badge: 'NEW',
+        category: 'custom',
+        order: 15,
         requiredRole: 'admin'
     },
 

@@ -11090,3 +11090,561 @@ exports.triggerInsightRefresh = onCall({
     errors: results.errors,
   };
 });
+
+// =============================================================================
+// ===== SOCIAL MEDIA AUTO-POSTING =============================================
+// =============================================================================
+
+const REFERRAL_RUSH_EPOCH_MS = new Date("2026-02-09T00:00:00Z").getTime();
+const MS_PER_ROUND = 24 * 60 * 60 * 1000; // 24 hours
+
+function calculateRoundId(dateMs) {
+  return Math.floor((dateMs - REFERRAL_RUSH_EPOCH_MS) / MS_PER_ROUND);
+}
+
+function getRoundTimeRange(roundId) {
+  const start = new Date(REFERRAL_RUSH_EPOCH_MS + roundId * MS_PER_ROUND);
+  const end = new Date(REFERRAL_RUSH_EPOCH_MS + (roundId + 1) * MS_PER_ROUND);
+  return { start, end };
+}
+
+/**
+ * Helper: Get social media settings from Firestore
+ */
+async function getSocialMediaSettings() {
+  const settingsDoc = await db.collection("settings").doc("social_media").get();
+  if (!settingsDoc.exists) {
+    throw new Error("Social media settings not configured. Go to Admin > Social Media to set up.");
+  }
+  return settingsDoc.data();
+}
+
+/**
+ * Helper: Get round results for posting
+ */
+async function getRoundResults(roundId) {
+  const roundDoc = await db.collection("referral_rounds").doc(roundId.toString()).get();
+  if (!roundDoc.exists) return null;
+
+  const round = roundDoc.data();
+  const participantsSnap = await db
+    .collection("referral_round_participants")
+    .where("roundId", "==", roundId)
+    .orderBy("inviteCount", "desc")
+    .limit(10)
+    .get();
+
+  const participants = participantsSnap.docs.map((d) => d.data());
+  const totalInvites = participants.reduce((sum, p) => sum + p.inviteCount, 0);
+
+  return {
+    round,
+    participants,
+    totalInvites,
+    roundNumber: roundId + 1,
+  };
+}
+
+/**
+ * Helper: Fill template variables in prompt
+ */
+function fillTemplate(template, vars) {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), String(value));
+  }
+  return result;
+}
+
+/**
+ * Helper: Generate text content using Gemini
+ */
+async function generatePostText(prompt) {
+  try {
+    const result = await callLLM([
+      { role: "user", content: prompt },
+    ], {
+      temperature: 0.7,
+      maxTokens: 500,
+    });
+    return result.trim();
+  } catch (err) {
+    console.error("[SocialMedia] Text generation error:", err);
+    throw new Error(`Text generation failed: ${err.message}`);
+  }
+}
+
+/**
+ * Helper: Generate image using Gemini (NanoBanana 3.0 Pro)
+ */
+async function generatePostImage(imagePrompt) {
+  try {
+    const apiKey = await getApiKeyFromFirestore("gemini");
+    if (!apiKey) throw new Error("Gemini API key not configured");
+
+    // Use Gemini 2.0 Flash with image generation
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `Generate an image: ${imagePrompt}` }],
+        }],
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API error: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find((p) => p.inlineData);
+
+    if (!imagePart) {
+      console.warn("[SocialMedia] No image generated, continuing without image");
+      return null;
+    }
+
+    return {
+      base64: imagePart.inlineData.data,
+      mimeType: imagePart.inlineData.mimeType || "image/png",
+    };
+  } catch (err) {
+    console.error("[SocialMedia] Image generation error:", err);
+    return null; // Don't fail the whole post if image fails
+  }
+}
+
+/**
+ * Helper: Post to Twitter/X using API v2
+ */
+async function postToTwitter(settings, text, imageData) {
+  const twitter = settings.platforms?.twitter;
+  if (!twitter?.enabled) {
+    return { skipped: true, reason: "Twitter not enabled" };
+  }
+
+  const { apiKey, apiSecret, accessToken, accessTokenSecret } = twitter;
+  if (!apiKey || !apiSecret || !accessToken || !accessTokenSecret) {
+    throw new Error("Twitter API credentials incomplete");
+  }
+
+  // Helper: Generate OAuth 1.0a signature
+  const crypto = require("crypto");
+
+  function percentEncode(str) {
+    return encodeURIComponent(str)
+      .replace(/!/g, "%21")
+      .replace(/\*/g, "%2A")
+      .replace(/'/g, "%27")
+      .replace(/\(/g, "%28")
+      .replace(/\)/g, "%29");
+  }
+
+  function generateOAuthSignature(method, url, params, consumerSecret, tokenSecret) {
+    const sortedKeys = Object.keys(params).sort();
+    const paramString = sortedKeys.map((k) => `${percentEncode(k)}=${percentEncode(params[k])}`).join("&");
+    const baseString = `${method}&${percentEncode(url)}&${percentEncode(paramString)}`;
+    const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(tokenSecret)}`;
+    return crypto.createHmac("sha1", signingKey).update(baseString).digest("base64");
+  }
+
+  function buildOAuthHeader(method, url, extraParams = {}) {
+    const oauthParams = {
+      oauth_consumer_key: apiKey,
+      oauth_nonce: crypto.randomBytes(16).toString("hex"),
+      oauth_signature_method: "HMAC-SHA1",
+      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+      oauth_token: accessToken,
+      oauth_version: "1.0",
+      ...extraParams,
+    };
+    const signature = generateOAuthSignature(method, url, oauthParams, apiSecret, accessTokenSecret);
+    oauthParams.oauth_signature = signature;
+    const header = Object.keys(oauthParams)
+      .sort()
+      .map((k) => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
+      .join(", ");
+    return `OAuth ${header}`;
+  }
+
+  let mediaId = null;
+
+  // Upload image if available (Twitter v1.1 media upload)
+  if (imageData) {
+    try {
+      const mediaUrl = "https://upload.twitter.com/1.1/media/upload.json";
+
+      // Use FormData-like approach with fetch
+      const boundary = `----FormBoundary${crypto.randomBytes(8).toString("hex")}`;
+
+      const bodyParts = [
+        `--${boundary}\r\n`,
+        `Content-Disposition: form-data; name="media_data"\r\n\r\n`,
+        `${imageData.base64}\r\n`,
+        `--${boundary}--\r\n`,
+      ];
+      const body = bodyParts.join("");
+
+      const oauthHeader = buildOAuthHeader("POST", mediaUrl);
+      const mediaResp = await fetch(mediaUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": oauthHeader,
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
+      });
+
+      if (mediaResp.ok) {
+        const mediaResult = await mediaResp.json();
+        mediaId = mediaResult.media_id_string;
+        console.log(`[SocialMedia] Twitter media uploaded: ${mediaId}`);
+      } else {
+        const errText = await mediaResp.text();
+        console.error(`[SocialMedia] Twitter media upload failed: ${errText}`);
+      }
+    } catch (err) {
+      console.error("[SocialMedia] Twitter media upload error:", err);
+    }
+  }
+
+  // Post tweet using v2 API
+  const tweetUrl = "https://api.twitter.com/2/tweets";
+  const tweetBody = { text };
+  if (mediaId) {
+    tweetBody.media = { media_ids: [mediaId] };
+  }
+
+  const oauthHeader = buildOAuthHeader("POST", tweetUrl);
+  const tweetResp = await fetch(tweetUrl, {
+    method: "POST",
+    headers: {
+      "Authorization": oauthHeader,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(tweetBody),
+  });
+
+  if (!tweetResp.ok) {
+    const errText = await tweetResp.text();
+    throw new Error(`Twitter post failed: ${tweetResp.status} - ${errText}`);
+  }
+
+  const tweetResult = await tweetResp.json();
+  const tweetId = tweetResult.data?.id;
+
+  return {
+    success: true,
+    postId: tweetId,
+    postUrl: tweetId ? `https://x.com/i/status/${tweetId}` : null,
+  };
+}
+
+/**
+ * Helper: Post to LinkedIn
+ */
+async function postToLinkedIn(settings, text, imageData) {
+  const linkedin = settings.platforms?.linkedin;
+  if (!linkedin?.enabled) {
+    return { skipped: true, reason: "LinkedIn not enabled" };
+  }
+
+  const { accessToken: lnToken, organizationId } = linkedin;
+  if (!lnToken) throw new Error("LinkedIn access token not configured");
+
+  const author = organizationId ?
+    `urn:li:organization:${organizationId}` :
+    "urn:li:person:me";
+
+  let imageUrn = null;
+
+  // Upload image if available
+  if (imageData) {
+    try {
+      // Step 1: Register upload
+      const registerResp = await fetch("https://api.linkedin.com/v2/assets?action=registerUpload", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${lnToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          registerUploadRequest: {
+            recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+            owner: author,
+            serviceRelationships: [{
+              relationshipType: "OWNER",
+              identifier: "urn:li:userGeneratedContent",
+            }],
+          },
+        }),
+      });
+
+      if (registerResp.ok) {
+        const regData = await registerResp.json();
+        const uploadUrl = regData.value?.uploadMechanism?.["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"]?.uploadUrl;
+        imageUrn = regData.value?.asset;
+
+        if (uploadUrl) {
+          // Step 2: Upload image binary
+          const imageBuffer = Buffer.from(imageData.base64, "base64");
+          await fetch(uploadUrl, {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${lnToken}`,
+              "Content-Type": imageData.mimeType,
+            },
+            body: imageBuffer,
+          });
+          console.log(`[SocialMedia] LinkedIn image uploaded: ${imageUrn}`);
+        }
+      }
+    } catch (err) {
+      console.error("[SocialMedia] LinkedIn image upload error:", err);
+      imageUrn = null;
+    }
+  }
+
+  // Create share
+  const shareBody = {
+    author,
+    lifecycleState: "PUBLISHED",
+    specificContent: {
+      "com.linkedin.ugc.ShareContent": {
+        shareCommentary: { text },
+        shareMediaCategory: imageUrn ? "IMAGE" : "NONE",
+        ...(imageUrn ? {
+          media: [{
+            status: "READY",
+            media: imageUrn,
+          }],
+        } : {}),
+      },
+    },
+    visibility: {
+      "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC",
+    },
+  };
+
+  const shareResp = await fetch("https://api.linkedin.com/v2/ugcPosts", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${lnToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(shareBody),
+  });
+
+  if (!shareResp.ok) {
+    const errText = await shareResp.text();
+    throw new Error(`LinkedIn post failed: ${shareResp.status} - ${errText}`);
+  }
+
+  const shareResult = await shareResp.json();
+  return {
+    success: true,
+    postId: shareResult.id,
+    postUrl: null, // LinkedIn doesn't return direct URL easily
+  };
+}
+
+/**
+ * Core posting logic shared by manual and scheduled triggers
+ */
+async function executeSocialPost(postType, overrideData = {}) {
+  const settings = await getSocialMediaSettings();
+  const postConfig = settings.postTypes?.[postType];
+
+  if (!postConfig || !postConfig.enabled) {
+    return { success: false, error: `Post type '${postType}' not found or disabled` };
+  }
+
+  // Build template variables
+  let templateVars = { ...overrideData };
+
+  // Auto-fill round data for referral_rush_round_end
+  if (postType === "referral_rush_round_end" && !overrideData.roundNumber) {
+    const prevRoundId = calculateRoundId(Date.now()) - 1;
+    const results = await getRoundResults(prevRoundId);
+    if (results) {
+      const { start, end } = getRoundTimeRange(prevRoundId);
+      const rankingsText = results.participants
+        .slice(0, 3)
+        .map((p, i) => `  ${i + 1}. ${p.referrerId} (${p.inviteCount} invites)`)
+        .join("\n");
+
+      templateVars = {
+        roundNumber: results.roundNumber,
+        startDate: start.toISOString().split("T")[0],
+        endDate: end.toISOString().split("T")[0],
+        totalParticipants: results.participants.length,
+        totalNewUsers: results.round.totalNewUsers || results.totalInvites,
+        rewardPool: results.round.totalRewardPool || 1000,
+        rankings: rankingsText || "  No participants this round",
+        ...templateVars,
+      };
+    } else {
+      templateVars = {
+        roundNumber: prevRoundId + 1,
+        totalParticipants: 0,
+        totalNewUsers: 0,
+        rewardPool: 1000,
+        rankings: "  No participants this round",
+        ...templateVars,
+      };
+    }
+  }
+
+  // Generate text
+  const filledPrompt = fillTemplate(postConfig.prompt || "", templateVars);
+  console.log(`[SocialMedia] Generating text for ${postType}...`);
+  const postText = await generatePostText(filledPrompt);
+  console.log(`[SocialMedia] Generated text (${postText.length} chars): ${postText.substring(0, 100)}...`);
+
+  // Generate image
+  let imageData = null;
+  if (postConfig.imagePrompt) {
+    const filledImagePrompt = fillTemplate(postConfig.imagePrompt, templateVars);
+    console.log(`[SocialMedia] Generating image for ${postType}...`);
+    imageData = await generatePostImage(filledImagePrompt);
+    if (imageData) {
+      console.log(`[SocialMedia] Image generated (${imageData.mimeType})`);
+    }
+  }
+
+  // Post to each platform
+  const platforms = postConfig.platforms || [];
+  const results = [];
+
+  for (const platform of platforms) {
+    try {
+      let result;
+      if (platform === "twitter") {
+        result = await postToTwitter(settings, postText, imageData);
+      } else if (platform === "linkedin") {
+        result = await postToLinkedIn(settings, postText, imageData);
+      } else {
+        result = { skipped: true, reason: `Unknown platform: ${platform}` };
+      }
+
+      // Log to Firestore
+      await db.collection("social_posts").add({
+        postType,
+        platform,
+        status: result.skipped ? "skipped" : (result.success ? "success" : "error"),
+        content: postText,
+        postUrl: result.postUrl || null,
+        error: result.reason || null,
+        roundId: templateVars.roundNumber ? templateVars.roundNumber - 1 : null,
+        createdAt: new Date().toISOString(),
+      });
+
+      results.push({ platform, ...result });
+    } catch (err) {
+      console.error(`[SocialMedia] ${platform} error:`, err);
+
+      await db.collection("social_posts").add({
+        postType,
+        platform,
+        status: "error",
+        content: postText,
+        error: err.message,
+        roundId: templateVars.roundNumber ? templateVars.roundNumber - 1 : null,
+        createdAt: new Date().toISOString(),
+      });
+
+      results.push({ platform, success: false, error: err.message });
+    }
+  }
+
+  return {
+    success: results.some((r) => r.success),
+    platforms: results.map((r) => r.platform),
+    results,
+    generatedText: postText,
+  };
+}
+
+/**
+ * Manual trigger / test post (callable from Admin UI)
+ */
+exports.postToSocialMedia = onCall({
+  timeoutSeconds: 120,
+  memory: "512MiB",
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in");
+  }
+
+  const { postType, testMode, overrideData } = request.data || {};
+  if (!postType) {
+    throw new HttpsError("invalid-argument", "postType is required");
+  }
+
+  console.log(`[SocialMedia] Manual post triggered: ${postType} (test=${!!testMode})`);
+
+  try {
+    const result = await executeSocialPost(postType, overrideData || {});
+    return result;
+  } catch (err) {
+    console.error("[SocialMedia] Manual post error:", err);
+    throw new HttpsError("internal", err.message);
+  }
+});
+
+/**
+ * Scheduled auto-post: Runs daily at 00:05 UTC
+ * Checks if the previous round just ended and posts results
+ */
+exports.onRoundEndAutoPost = onSchedule({
+  schedule: "5 0 * * *",
+  timeZone: "UTC",
+  timeoutSeconds: 120,
+  memory: "512MiB",
+}, async () => {
+  console.log("[SocialMedia] Scheduled round-end auto-post triggered");
+
+  try {
+    const settings = await getSocialMediaSettings();
+    const postConfig = settings.postTypes?.referral_rush_round_end;
+
+    if (!postConfig?.enabled) {
+      console.log("[SocialMedia] referral_rush_round_end post type not enabled, skipping");
+      return;
+    }
+
+    // Check if the previous round had any activity
+    const prevRoundId = calculateRoundId(Date.now()) - 1;
+    if (prevRoundId < 0) {
+      console.log("[SocialMedia] No previous round to report");
+      return;
+    }
+
+    // Check if we already posted for this round
+    const existingPosts = await db
+      .collection("social_posts")
+      .where("roundId", "==", prevRoundId)
+      .where("postType", "==", "referral_rush_round_end")
+      .where("status", "==", "success")
+      .limit(1)
+      .get();
+
+    if (!existingPosts.empty) {
+      console.log(`[SocialMedia] Already posted for round ${prevRoundId + 1}, skipping`);
+      return;
+    }
+
+    const result = await executeSocialPost("referral_rush_round_end");
+    console.log(`[SocialMedia] Auto-post result:`, JSON.stringify(result));
+  } catch (err) {
+    console.error("[SocialMedia] Scheduled post error:", err);
+  }
+});
+

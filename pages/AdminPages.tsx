@@ -22,6 +22,7 @@ export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminB
 export const AdminEmail = lazy(() => import('../components/admin/AdminEmail'));
 export const AdminCexPortfolio = lazy(() => import('../components/admin/AdminCexPortfolio'));
 export const AdminVisionInsight = lazy(() => import('../components/admin/AdminVisionInsight'));
+export const AdminSocialMedia = lazy(() => import('../components/admin/AdminSocialMedia'));
 
 
 // Loading spinner component
@@ -248,6 +249,17 @@ export function AdminVisionInsightPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminVisionInsight />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminSocialMediaPage() {
+    document.title = 'Social Media | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminSocialMedia />
             </AdminLayout>
         </Suspense>
     );

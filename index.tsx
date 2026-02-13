@@ -116,6 +116,7 @@ render(() => (
         <Route path="/adminsystem/email" component={Admin.AdminEmailPage} />
         <Route path="/adminsystem/cex-portfolio" component={Admin.AdminCexPortfolioPage} />
         <Route path="/adminsystem/vision-insight" component={Admin.AdminVisionInsightPage} />
+        <Route path="/adminsystem/social-media" component={Admin.AdminSocialMediaPage} />
 
       </Router>
     </I18nProvider>
