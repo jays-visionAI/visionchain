@@ -1,7 +1,42 @@
-import { Component, Show, For } from 'solid-js';
-import { FileText, X, Type, Paperclip } from 'lucide-solid';
+import { Component, Show, For, onMount, createEffect, createSignal } from 'solid-js';
+import { FileText, X, Type, Paperclip, Code } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
 import { AdminDocument } from '../../../services/firebaseService';
+import { marked } from 'marked';
+import hljs from 'highlight.js';
+import mermaid from 'mermaid';
+
+// Initialize mermaid with dark theme
+mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+        primaryColor: '#06b6d4',
+        primaryTextColor: '#e5e7eb',
+        primaryBorderColor: '#22d3ee',
+        lineColor: '#4b5563',
+        secondaryColor: '#1e293b',
+        tertiaryColor: '#0f172a',
+        background: '#0c0c0c',
+        mainBkg: '#111827',
+        nodeBorder: '#22d3ee',
+        clusterBkg: '#1e293b',
+        titleColor: '#e5e7eb',
+        edgeLabelBackground: '#111827',
+    },
+    fontFamily: '"Inter", sans-serif',
+    fontSize: 13,
+});
+
+// Configure marked with highlight.js
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+});
+
+const isMarkdownType = (type: string): boolean => {
+    return type === 'Markdown' || type === 'markdown';
+};
 
 interface DocViewerModalProps {
     isOpen: boolean;
@@ -11,6 +46,54 @@ interface DocViewerModalProps {
 }
 
 export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
+    let contentRef: HTMLDivElement | undefined;
+    const [rendered, setRendered] = createSignal(false);
+
+    const renderMermaidDiagrams = async () => {
+        if (!contentRef) return;
+        const mermaidBlocks = contentRef.querySelectorAll('pre code.language-mermaid');
+        for (let i = 0; i < mermaidBlocks.length; i++) {
+            const block = mermaidBlocks[i];
+            const pre = block.parentElement;
+            if (!pre) continue;
+            const code = block.textContent || '';
+            try {
+                const id = `mermaid-${Date.now()}-${i}`;
+                const { svg } = await mermaid.render(id, code);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mermaid-diagram';
+                wrapper.innerHTML = svg;
+                pre.replaceWith(wrapper);
+            } catch (e) {
+                console.warn('[DocViewer] Mermaid render failed:', e);
+            }
+        }
+    };
+
+    const highlightCodeBlocks = () => {
+        if (!contentRef) return;
+        const blocks = contentRef.querySelectorAll('pre code:not(.language-mermaid)');
+        blocks.forEach((block) => {
+            hljs.highlightElement(block as HTMLElement);
+        });
+    };
+
+    const renderMarkdown = (content: string): string => {
+        return marked.parse(content) as string;
+    };
+
+    createEffect(() => {
+        if (props.isOpen && props.doc && isMarkdownType(props.doc.type)) {
+            setRendered(false);
+            // Wait for DOM to update
+            setTimeout(async () => {
+                highlightCodeBlocks();
+                await renderMermaidDiagrams();
+                setRendered(true);
+            }, 100);
+        }
+    });
+
     return (
         <Show when={props.isOpen && props.doc}>
             <div class="fixed inset-0 z-[200] flex items-center justify-center p-6">
@@ -31,14 +114,14 @@ export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
                     <div class="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-500">
-                                <FileText class="w-6 h-6" />
+                                {isMarkdownType(props.doc!.type) ? <Code class="w-6 h-6" /> : <FileText class="w-6 h-6" />}
                             </div>
                             <div>
                                 <div class="flex items-center gap-3 mb-1">
                                     <span class="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] font-black text-gray-400 uppercase tracking-wider">
                                         {props.doc!.category}
                                     </span>
-                                    <span class="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                                    <span class={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider ${isMarkdownType(props.doc!.type) ? 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400' : 'bg-white/5 border-white/10 text-gray-400'}`}>
                                         {props.doc!.type}
                                     </span>
                                 </div>
@@ -82,7 +165,18 @@ export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
                             </div>
 
                             {/* Main Body */}
-                            <div class="ql-editor-view text-gray-300 leading-relaxed" innerHTML={props.doc!.content} />
+                            <Show
+                                when={isMarkdownType(props.doc!.type)}
+                                fallback={
+                                    <div class="ql-editor-view text-gray-300 leading-relaxed" innerHTML={props.doc!.content} />
+                                }
+                            >
+                                <div
+                                    ref={contentRef}
+                                    class="markdown-body"
+                                    innerHTML={renderMarkdown(props.doc!.content)}
+                                />
+                            </Show>
 
                             {/* Viewer Attachments */}
                             <Show when={props.doc!.attachments && props.doc!.attachments.length > 0}>

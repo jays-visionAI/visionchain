@@ -178,6 +178,184 @@ export default function AdminDocuments() {
                     border: 1px solid rgba(255, 255, 255, 0.1) !important;
                     border-radius: 8px !important;
                 }
+
+                /* === Markdown Body Styles === */
+                .markdown-body {
+                    color: rgba(255, 255, 255, 0.85);
+                    font-family: 'Inter', -apple-system, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.7;
+                    word-wrap: break-word;
+                }
+                .markdown-body h1 {
+                    font-size: 1.75em;
+                    font-weight: 900;
+                    font-style: italic;
+                    letter-spacing: -0.02em;
+                    color: #fff;
+                    border-bottom: 1px solid rgba(255,255,255,0.08);
+                    padding-bottom: 0.5em;
+                    margin: 1.5em 0 0.8em;
+                }
+                .markdown-body h1:first-child { margin-top: 0; }
+                .markdown-body h2 {
+                    font-size: 1.35em;
+                    font-weight: 800;
+                    color: #e5e7eb;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    padding-bottom: 0.4em;
+                    margin: 1.4em 0 0.6em;
+                }
+                .markdown-body h3 {
+                    font-size: 1.1em;
+                    font-weight: 700;
+                    color: #d1d5db;
+                    margin: 1.2em 0 0.4em;
+                }
+                .markdown-body h4 {
+                    font-size: 1em;
+                    font-weight: 700;
+                    color: #9ca3af;
+                    margin: 1em 0 0.3em;
+                }
+                .markdown-body p { margin: 0.6em 0; }
+                .markdown-body strong { color: #f3f4f6; font-weight: 700; }
+                .markdown-body em { color: #d1d5db; }
+                .markdown-body a {
+                    color: #22d3ee;
+                    text-decoration: none;
+                }
+                .markdown-body a:hover { text-decoration: underline; }
+
+                /* Lists */
+                .markdown-body ul, .markdown-body ol {
+                    padding-left: 1.5em;
+                    margin: 0.5em 0;
+                }
+                .markdown-body li {
+                    margin: 0.3em 0;
+                    color: rgba(255,255,255,0.75);
+                }
+                .markdown-body li::marker { color: #4b5563; }
+                .markdown-body ul { list-style-type: disc; }
+                .markdown-body ol { list-style-type: decimal; }
+
+                /* Tables */
+                .markdown-body table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 1em 0;
+                    font-size: 13px;
+                }
+                .markdown-body thead tr {
+                    background: rgba(255,255,255,0.03);
+                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                }
+                .markdown-body th {
+                    padding: 10px 16px;
+                    text-align: left;
+                    font-size: 10px;
+                    font-weight: 900;
+                    text-transform: uppercase;
+                    letter-spacing: 0.08em;
+                    color: #6b7280;
+                }
+                .markdown-body td {
+                    padding: 10px 16px;
+                    border-bottom: 1px solid rgba(255,255,255,0.04);
+                    color: rgba(255,255,255,0.75);
+                }
+                .markdown-body tbody tr:hover {
+                    background: rgba(255,255,255,0.02);
+                }
+
+                /* Code Blocks */
+                .markdown-body pre {
+                    background: rgba(0,0,0,0.4);
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 12px;
+                    padding: 0;
+                    margin: 1em 0;
+                    overflow-x: auto;
+                }
+                .markdown-body pre code {
+                    display: block;
+                    padding: 16px 20px;
+                    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+                    font-size: 12.5px;
+                    line-height: 1.6;
+                    color: #e5e7eb;
+                    background: transparent;
+                    border: none;
+                    border-radius: 0;
+                }
+                .markdown-body code {
+                    background: rgba(255,255,255,0.06);
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 6px;
+                    padding: 2px 6px;
+                    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+                    font-size: 0.88em;
+                    color: #22d3ee;
+                }
+
+                /* Blockquotes */
+                .markdown-body blockquote {
+                    border-left: 3px solid #22d3ee;
+                    margin: 1em 0;
+                    padding: 0.5em 1.2em;
+                    background: rgba(6, 182, 212, 0.05);
+                    border-radius: 0 8px 8px 0;
+                    color: rgba(255,255,255,0.7);
+                }
+                .markdown-body blockquote > blockquote {
+                    border-left-color: #f59e0b;
+                    background: rgba(245, 158, 11, 0.05);
+                }
+
+                /* Alerts (GitHub style) */
+                .markdown-body blockquote p:first-child strong:first-child {
+                    display: block;
+                    margin-bottom: 4px;
+                }
+
+                /* Horizontal Rule */
+                .markdown-body hr {
+                    border: none;
+                    height: 1px;
+                    background: rgba(255,255,255,0.06);
+                    margin: 2em 0;
+                }
+
+                /* Mermaid Diagrams */
+                .mermaid-diagram {
+                    display: flex;
+                    justify-content: center;
+                    margin: 1.5em 0;
+                    padding: 24px;
+                    background: rgba(0,0,0,0.3);
+                    border: 1px solid rgba(255,255,255,0.06);
+                    border-radius: 16px;
+                }
+                .mermaid-diagram svg {
+                    max-width: 100%;
+                    height: auto;
+                }
+
+                /* highlight.js dark overrides */
+                .hljs { background: transparent !important; color: #e5e7eb !important; }
+                .hljs-keyword { color: #c084fc !important; }
+                .hljs-string { color: #86efac !important; }
+                .hljs-comment { color: #6b7280 !important; font-style: italic; }
+                .hljs-function { color: #93c5fd !important; }
+                .hljs-number { color: #fdba74 !important; }
+                .hljs-title { color: #67e8f9 !important; }
+                .hljs-attr { color: #fca5a5 !important; }
+                .hljs-built_in { color: #fcd34d !important; }
+                .hljs-variable { color: #f9a8d4 !important; }
+                .hljs-type { color: #a5b4fc !important; }
+                .hljs-meta { color: #6b7280 !important; }
+                .hljs-literal { color: #fdba74 !important; }
             `}</style>
 
             {/* Header Section */}

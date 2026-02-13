@@ -1,8 +1,10 @@
 import { Component, Show, createSignal, onMount, onCleanup, createEffect, For } from 'solid-js';
-import { FileText, X, Paperclip, Save, Trash2 } from 'lucide-solid';
+import { FileText, X, Paperclip, Save, Trash2, Code, Eye, EyeOff } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
 import Quill from 'quill';
 import { marked } from 'marked';
+import hljs from 'highlight.js';
+import mermaid from 'mermaid';
 import { AdminDocument } from '../../../services/firebaseService';
 
 interface DocEditorModalProps {
@@ -14,14 +16,53 @@ interface DocEditorModalProps {
     onDelete: () => void;
 }
 
+const isMarkdownType = (type: string): boolean => {
+    return type === 'Markdown' || type === 'markdown';
+};
+
 export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
     const [title, setTitle] = createSignal('');
     const [category, setCategory] = createSignal('Operations Manual');
     const [docType, setDocType] = createSignal('Text/Manual');
     const [attachments, setAttachments] = createSignal<string[]>([]);
+    const [mdContent, setMdContent] = createSignal('');
+    const [showPreview, setShowPreview] = createSignal(false);
 
     let editorRef: HTMLDivElement | undefined;
+    let previewRef: HTMLDivElement | undefined;
     let quill: any;
+
+    const renderMermaidInPreview = async () => {
+        if (!previewRef) return;
+        const mermaidBlocks = previewRef.querySelectorAll('pre code.language-mermaid');
+        for (let i = 0; i < mermaidBlocks.length; i++) {
+            const block = mermaidBlocks[i];
+            const pre = block.parentElement;
+            if (!pre) continue;
+            const code = block.textContent || '';
+            try {
+                const id = `mermaid-preview-${Date.now()}-${i}`;
+                const { svg } = await mermaid.render(id, code);
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mermaid-diagram';
+                wrapper.innerHTML = svg;
+                pre.replaceWith(wrapper);
+            } catch (e) {
+                console.warn('[DocEditor] Mermaid preview failed:', e);
+            }
+        }
+        // highlight code blocks
+        const blocks = previewRef.querySelectorAll('pre code:not(.language-mermaid)');
+        blocks.forEach((block) => {
+            hljs.highlightElement(block as HTMLElement);
+        });
+    };
+
+    createEffect(() => {
+        if (showPreview() && isMarkdownType(docType())) {
+            setTimeout(() => renderMermaidInPreview(), 100);
+        }
+    });
 
     createEffect(() => {
         if (props.isOpen) {
@@ -30,55 +71,58 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
                 setCategory(props.doc.category);
                 setDocType(props.doc.type);
                 setAttachments(props.doc.attachments || []);
+                if (isMarkdownType(props.doc.type)) {
+                    setMdContent(props.doc.content);
+                }
             } else {
                 setTitle('');
                 setCategory('Operations Manual');
                 setDocType('Text/Manual');
                 setAttachments([]);
+                setMdContent('');
             }
+            setShowPreview(false);
 
-            // Initialize Quill after modal is opened and ref is available
-            setTimeout(() => {
-                if (editorRef && !quill) {
-                    quill = new Quill(editorRef, {
-                        theme: 'snow',
-                        modules: {
-                            toolbar: [
-                                [{ 'header': [1, 2, 3, false] }],
-                                ['bold', 'italic', 'underline', 'strike'],
-                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                ['link', 'image'],
-                                ['clean']
-                            ]
-                        }
-                    });
+            // Initialize Quill only for non-markdown
+            if (!isMarkdownType(props.doc?.type || 'Text/Manual')) {
+                setTimeout(() => {
+                    if (editorRef && !quill) {
+                        quill = new Quill(editorRef, {
+                            theme: 'snow',
+                            modules: {
+                                toolbar: [
+                                    [{ 'header': [1, 2, 3, false] }],
+                                    ['bold', 'italic', 'underline', 'strike'],
+                                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                    ['link', 'image'],
+                                    ['clean']
+                                ]
+                            }
+                        });
 
-                    // Handle Markdown Paste
-                    quill.root.addEventListener('paste', (e: ClipboardEvent) => {
-                        const text = e.clipboardData?.getData('text/plain');
-                        if (text && (text.includes('# ') || text.includes('**') || text.includes('- '))) {
-                            e.preventDefault();
-                            const html = marked.parse(text);
-                            const range = quill.getSelection();
-                            quill.clipboard.dangerouslyPasteHTML(range.index, html);
-                        }
-                    });
-                }
+                        // Handle Markdown Paste
+                        quill.root.addEventListener('paste', (e: ClipboardEvent) => {
+                            const text = e.clipboardData?.getData('text/plain');
+                            if (text && (text.includes('# ') || text.includes('**') || text.includes('- '))) {
+                                e.preventDefault();
+                                const html = marked.parse(text);
+                                const range = quill.getSelection();
+                                quill.clipboard.dangerouslyPasteHTML(range.index, html);
+                            }
+                        });
+                    }
 
-                if (quill) {
-                    quill.root.innerHTML = props.doc?.content || '';
-                }
-            }, 100);
-        } else {
-            // Clean up quill on close if needed
-            if (quill) {
-                // quill = null;
+                    if (quill) {
+                        quill.root.innerHTML = props.doc?.content || '';
+                    }
+                }, 100);
             }
         }
     });
 
     const handleSave = async () => {
-        const content = quill ? quill.root.innerHTML : '';
+        const isMd = isMarkdownType(docType());
+        const content = isMd ? mdContent() : (quill ? quill.root.innerHTML : '');
         const newDoc: AdminDocument = {
             id: props.doc?.id || Date.now().toString(),
             title: title(),
@@ -112,11 +156,13 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
                     <div class="p-8 border-b border-white/5 flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-500">
-                                <FileText class="w-6 h-6" />
+                                {isMarkdownType(docType()) ? <Code class="w-6 h-6" /> : <FileText class="w-6 h-6" />}
                             </div>
                             <div>
                                 <h2 class="text-2xl font-black italic tracking-tight">{props.doc ? 'EDIT DOCUMENT' : 'NEW DOCUMENT'}</h2>
-                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Rich-Text Smart Editor with Markdown Support</p>
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">
+                                    {isMarkdownType(docType()) ? 'Markdown Editor with Mermaid & Code Highlighting' : 'Rich-Text Smart Editor with Markdown Support'}
+                                </p>
                             </div>
                         </div>
                         <button
@@ -150,6 +196,7 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
                                     <option value="Operations Manual">Operations Manual</option>
                                     <option value="Technical Document">Technical Document</option>
                                     <option value="Planning">Planning</option>
+                                    <option value="API Specification">API Specification</option>
                                     <option value="Other">Other</option>
                                 </select>
                             </div>
@@ -163,15 +210,71 @@ export const DocEditorModal: Component<DocEditorModalProps> = (props) => {
                                     <option value="Text/Manual">Text/Manual</option>
                                     <option value="Technical Data">Technical Data</option>
                                     <option value="System Notice">System Notice</option>
+                                    <option value="Markdown">Markdown</option>
                                 </select>
                             </div>
                         </div>
 
+                        {/* Content Area */}
                         <div class="space-y-2">
-                            <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Content</label>
-                            <div class="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden min-h-[400px]">
-                                <div ref={editorRef} class="h-[400px] text-gray-300" />
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest">Content</label>
+                                <Show when={isMarkdownType(docType())}>
+                                    <button
+                                        onClick={() => setShowPreview(!showPreview())}
+                                        class={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${showPreview() ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-white/5 text-gray-400 border border-white/10 hover:text-white'}`}
+                                    >
+                                        {showPreview() ? <EyeOff class="w-3 h-3" /> : <Eye class="w-3 h-3" />}
+                                        {showPreview() ? 'Editor' : 'Preview'}
+                                    </button>
+                                </Show>
                             </div>
+
+                            <Show
+                                when={isMarkdownType(docType())}
+                                fallback={
+                                    /* Quill WYSIWYG Editor */
+                                    <div class="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden min-h-[400px]">
+                                        <div ref={editorRef} class="h-[400px] text-gray-300" />
+                                    </div>
+                                }
+                            >
+                                {/* Markdown Editor */}
+                                <Show
+                                    when={showPreview()}
+                                    fallback={
+                                        <div class="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden">
+                                            <div class="flex items-center gap-3 px-4 py-2 border-b border-white/5 bg-white/[0.02]">
+                                                <Code class="w-3.5 h-3.5 text-cyan-400" />
+                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Markdown Source</span>
+                                                <span class="text-[9px] text-gray-600 ml-auto">{mdContent().length} chars</span>
+                                            </div>
+                                            <textarea
+                                                value={mdContent()}
+                                                onInput={(e) => setMdContent(e.currentTarget.value)}
+                                                class="w-full h-[500px] bg-transparent text-gray-300 font-mono text-[13px] leading-relaxed p-6 resize-none focus:outline-none placeholder:text-gray-600"
+                                                placeholder="Write your Markdown content here...&#10;&#10;# Heading&#10;## Subheading&#10;&#10;```mermaid&#10;graph TD&#10;    A --> B&#10;```&#10;&#10;| Column 1 | Column 2 |&#10;|----------|----------|&#10;| Data     | Data     |"
+                                                spellcheck={false}
+                                            />
+                                        </div>
+                                    }
+                                >
+                                    {/* Markdown Preview */}
+                                    <div class="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden">
+                                        <div class="flex items-center gap-3 px-4 py-2 border-b border-white/5 bg-cyan-500/5">
+                                            <Eye class="w-3.5 h-3.5 text-cyan-400" />
+                                            <span class="text-[9px] font-black text-cyan-400 uppercase tracking-widest">Preview Mode</span>
+                                        </div>
+                                        <div class="p-6 min-h-[500px] max-h-[500px] overflow-y-auto custom-scrollbar">
+                                            <div
+                                                ref={previewRef}
+                                                class="markdown-body"
+                                                innerHTML={marked.parse(mdContent()) as string}
+                                            />
+                                        </div>
+                                    </div>
+                                </Show>
+                            </Show>
                         </div>
 
                         <div class="space-y-4">
