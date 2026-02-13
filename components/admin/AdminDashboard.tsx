@@ -1,7 +1,7 @@
 import { Component, createSignal, onCleanup, For, Show, onMount } from 'solid-js';
 import { ethers } from 'ethers';
 import { getAllUsers, getDefiConfig, getFirebaseDb } from '../../services/firebaseService';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import {
     Activity,
     Server,
@@ -13,7 +13,9 @@ import {
     Cpu,
     Database,
     Clock,
-    Zap
+    Zap,
+    Bot,
+    Users
 } from 'lucide-solid';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { MetricCard } from './dashboard/MetricCard';
@@ -56,6 +58,8 @@ export const AdminDashboard: Component = () => {
     const [gpuTflops, setGpuTflops] = createSignal(0);
     const [storageTb, setStorageTb] = createSignal(0);
     const [wallets, setWallets] = createSignal(0);
+    const [humanCount, setHumanCount] = createSignal(0);
+    const [agentCount, setAgentCount] = createSignal(0);
     const [blockTime, setBlockTime] = createSignal(1.2); // Static realistic block time
     const [tvl, setTvl] = createSignal(0);
     const [vcnDistributed, setVcnDistributed] = createSignal(0);
@@ -128,7 +132,16 @@ export const AdminDashboard: Component = () => {
     const fetchUserStats = async () => {
         try {
             const users = await getAllUsers(500);
-            setWallets(users.length);
+            setHumanCount(users.length);
+
+            // Fetch agent count from Firestore
+            const db = getFirebaseDb();
+            const agentsRef = collection(db, 'agents');
+            const agentsSnap = await getCountFromServer(agentsRef);
+            const agentTotal = agentsSnap.data().count;
+            setAgentCount(agentTotal);
+
+            setWallets(users.length + agentTotal);
         } catch (e) {
             console.error("Failed to fetch user stats for dashboard:", e);
         }
@@ -255,21 +268,37 @@ export const AdminDashboard: Component = () => {
                         </div>
                     </MetricCard>
 
-                    {/* Total Wallets */}
                     <MetricCard
-                        title="Total Wallets"
+                        title="Total Accounts"
                         value={wallets().toLocaleString()}
                         trend={5.8}
-                        icon={Wallet}
+                        icon={Users}
                         color="blue"
                     >
-                        <div class="mt-4 space-y-2">
-                            <div class="flex justify-between text-xs text-slate-500">
-                                <span>New (24h)</span>
-                                <span class="text-white font-mono">+1,240</span>
+                        <div class="mt-4 space-y-3">
+                            {/* Human Accounts */}
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-slate-500 flex items-center gap-1">
+                                        <Wallet class="w-3 h-3" /> Human
+                                    </span>
+                                    <span class="text-white font-mono">{humanCount().toLocaleString()}</span>
+                                </div>
+                                <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-blue-500 h-full rounded-full transition-all" style={`width: ${wallets() > 0 ? (humanCount() / wallets() * 100) : 0}%`} />
+                                </div>
                             </div>
-                            <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                                <div class="bg-blue-500 h-full w-[75%]" />
+                            {/* Agent Accounts */}
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-slate-500 flex items-center gap-1">
+                                        <Bot class="w-3 h-3" /> AI Agent
+                                    </span>
+                                    <span class="text-cyan-400 font-mono">{agentCount().toLocaleString()}</span>
+                                </div>
+                                <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-cyan-500 h-full rounded-full transition-all" style={`width: ${wallets() > 0 ? (agentCount() / wallets() * 100) : 0}%`} />
+                                </div>
                             </div>
                         </div>
                     </MetricCard>
