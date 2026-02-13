@@ -113,13 +113,14 @@ import Bridge from './Bridge';
 import ValidatorStaking from './ValidatorStaking';
 const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
 const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
+const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
 
 import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -4196,6 +4197,15 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             <div class="flex-1 overflow-y-auto custom-scrollbar">
                                 <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
                                     <AgentHosting walletAddress={walletAddress} userEmail={() => userProfile()?.email || ''} />
+                                </Suspense>
+                            </div>
+                        </Show>
+
+                        {/* Vision Insight View */}
+                        <Show when={activeView() === 'insight'}>
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                    <VisionInsight />
                                 </Suspense>
                             </div>
                         </Show>

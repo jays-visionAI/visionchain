@@ -25,7 +25,7 @@ import {
 import { VisionLogo } from './VisionLogo';
 import { VisionFullLogo } from './VisionFullLogo';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'agent';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -58,6 +58,19 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'bridge' as ViewType, label: 'Swap', icon: ArrowLeftRight },
         { id: 'staking' as ViewType, label: 'Earn', icon: Shield },
         { id: 'agent' as ViewType, label: 'Agent', icon: Bot },
+        {
+            id: 'insight' as ViewType, label: 'Vision Insight', icon: (props: any) => (
+                <svg xmlns="http://www.w3.org/2000/svg" width={props.size || 20} height={props.size || 20} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" opacity="0.3" />
+                    <circle cx="12" cy="12" r="6" opacity="0.5" />
+                    <circle cx="12" cy="12" r="2" fill="currentColor" />
+                    <line x1="12" y1="2" x2="12" y2="5" />
+                    <line x1="12" y1="19" x2="12" y2="22" />
+                    <line x1="2" y1="12" x2="5" y2="12" />
+                    <line x1="19" y1="12" x2="22" y2="12" />
+                </svg>
+            )
+        },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },

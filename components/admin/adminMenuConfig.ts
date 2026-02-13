@@ -21,7 +21,8 @@ import {
     Megaphone,
     Network,
     Mail,
-    LineChart
+    LineChart,
+    Eye
 } from 'lucide-solid';
 
 
@@ -48,7 +49,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Megaphone,
     Network,
     Mail,
-    LineChart
+    LineChart,
+    Eye
 };
 
 // Menu item interface with optional children for sub-menus
@@ -226,6 +228,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 13
+    },
+    {
+        id: 'vision-insight',
+        path: '/adminsystem/vision-insight',
+        label: 'Vision Insight',
+        icon: 'Eye',
+        badge: 'NEW',
+        category: 'custom',
+        order: 14,
+        requiredRole: 'admin'
     },
 
     // ===== DEVELOPER PAGES =====

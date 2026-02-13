@@ -9439,3 +9439,789 @@ exports.executorMonitor = onSchedule({
     console.error("[ExecutorMonitor] Error:", err.message);
   }
 });
+
+// =============================================================================
+// VISION INSIGHT (Powered by Blocky) - News Intelligence HUD
+// =============================================================================
+// collectBlockyNews      - Scheduled every 2h: RSS parsing + AI analysis
+// generateInsightSnapshot - Scheduled every 6h: ASI, Alpha, Whale, Calendar
+// generateWeeklyTrendReport - Scheduled weekly: trend aggregation
+// getVisionInsight        - Callable: serves snapshot data to frontend
+// =============================================================================
+
+// Lazy-loaded modules for Vision Insight
+let rssParser = null;
+let cheerio = null;
+
+/**
+ * Get rss-parser instance (lazy loaded)
+ * @return {object} RSSParser instance
+ */
+function getRssParser() {
+  if (!rssParser) {
+    const RSSParser = require("rss-parser");
+    rssParser = new RSSParser({
+      timeout: 15000,
+      headers: { "User-Agent": "VisionChain-Blocky/1.0" },
+    });
+  }
+  return rssParser;
+}
+
+/**
+ * Get cheerio module (lazy loaded)
+ * @return {object} Cheerio module
+ */
+function getCheerio() {
+  if (!cheerio) {
+    cheerio = require("cheerio");
+  }
+  return cheerio;
+}
+
+// Vision Insight media sources configuration
+const BLOCKY_MEDIA_SOURCES = [
+  // Global (5)
+  { id: "cointelegraph", name: "CoinTelegraph", url: "https://cointelegraph.com/rss", lang: "en", region: "global" },
+  { id: "coindesk", name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/", lang: "en", region: "global" },
+  { id: "decrypt", name: "Decrypt", url: "https://decrypt.co/feed", lang: "en", region: "global" },
+  { id: "theblock", name: "The Block", url: "https://www.theblock.co/rss", lang: "en", region: "global" },
+  { id: "bitcoinmag", name: "Bitcoin Magazine", url: "https://bitcoinmagazine.com/feed", lang: "en", region: "global" },
+  // Asia (5)
+  { id: "decenter", name: "DeCenter", url: "https://decenter.kr/rss/allArticle.xml", lang: "ko", region: "korea", fallbackScrape: true },
+  { id: "blockmedia", name: "BlockMedia", url: "https://www.blockmedia.co.kr/feed/", lang: "ko", region: "korea", fallbackScrape: true },
+  { id: "coinpost", name: "CoinPost", url: "https://coinpost.jp/?feed=rss2", lang: "ja", region: "japan" },
+  { id: "blockhead", name: "Blockhead", url: "https://blockhead.co/feed/", lang: "en", region: "singapore" },
+  { id: "coingape", name: "CoinGape", url: "https://coingape.com/feed/", lang: "en", region: "india" },
+];
+
+const NEWS_CATEGORIES = ["market", "regulation", "defi", "layer2", "bitcoin", "ethereum", "ai", "general"];
+
+/**
+ * Parse a single RSS feed and return normalized articles
+ * @param {object} source - Media source config
+ * @return {Promise<Array>} Parsed articles
+ */
+async function parseRssFeed(source) {
+  const parser = getRssParser();
+  try {
+    const feed = await parser.parseURL(source.url);
+    const articles = (feed.items || []).slice(0, 10).map((item) => ({
+      title: (item.title || "").trim(),
+      url: item.link || "",
+      summary: item.contentSnippet ? item.contentSnippet.substring(0, 500) : "",
+      publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+      source: source.id,
+      sourceName: source.name,
+      language: source.lang,
+      region: source.region,
+    }));
+    console.log(`[Blocky] Parsed ${articles.length} articles from ${source.name}`);
+    return articles;
+  } catch (err) {
+    console.warn(`[Blocky] RSS failed for ${source.name}: ${err.message}`);
+    // Fallback: try HTML scraping for Korean media
+    if (source.fallbackScrape) {
+      return await scrapeMediaFallback(source);
+    }
+    return [];
+  }
+}
+
+/**
+ * Fallback HTML scraping for media sources without working RSS
+ * @param {object} source - Media source config
+ * @return {Promise<Array>} Scraped articles
+ */
+async function scrapeMediaFallback(source) {
+  try {
+    if (!axios) axios = require("axios");
+    const $ = getCheerio();
+    const baseUrl = new URL(source.url).origin;
+    const response = await axios.get(baseUrl, {
+      timeout: 10000,
+      headers: { "User-Agent": "VisionChain-Blocky/1.0" },
+    });
+    const dom = $.load(response.data);
+    const articles = [];
+
+    // Generic scraping: look for article links
+    dom("article a, .post-title a, h2 a, h3 a").each((i, el) => {
+      if (articles.length >= 5) return false;
+      const title = dom(el).text().trim();
+      const href = dom(el).attr("href");
+      if (title && href && title.length > 10) {
+        const fullUrl = href.startsWith("http") ? href : `${baseUrl}${href}`;
+        articles.push({
+          title,
+          url: fullUrl,
+          summary: "",
+          publishedAt: new Date(),
+          source: source.id,
+          sourceName: source.name,
+          language: source.lang,
+          region: source.region,
+        });
+      }
+    });
+    console.log(`[Blocky] Scraped ${articles.length} articles from ${source.name} (fallback)`);
+    return articles;
+  } catch (err) {
+    console.warn(`[Blocky] Scrape fallback failed for ${source.name}: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * AI-analyze a batch of articles: categorize, sentiment, impact, keywords
+ * Uses Gemini via existing callLLM
+ * @param {Array} articles - Raw articles
+ * @return {Promise<Array>} Analyzed articles
+ */
+async function analyzeArticlesBatch(articles) {
+  if (!articles.length) return [];
+
+  // Process in batches of 5 to stay within token limits
+  const batchSize = 5;
+  const results = [];
+
+  for (let i = 0; i < articles.length; i += batchSize) {
+    const batch = articles.slice(i, i + batchSize);
+    const batchInput = batch.map((a, idx) => `[${idx}] "${a.title}" - ${a.summary.substring(0, 200)}`).join("\n");
+
+    const systemPrompt = `You are a crypto news analyst. For each article, output ONLY a JSON array with objects containing:
+- index: number (matching input index)
+- category: one of ${JSON.stringify(NEWS_CATEGORIES)}
+- sentiment: number from -1.0 (bearish) to 1.0 (bullish)
+- sentimentLabel: "bearish" | "neutral" | "bullish"
+- impactScore: number 0-100 (how market-moving is this news)
+- keywords: array of 3-5 keywords
+- oneLiner: one-sentence English summary (translate if non-English)
+- severity: "critical" | "warning" | "info" based on impact
+
+Output ONLY valid JSON array, no markdown fences.`;
+
+    try {
+      const response = await callLLM("gemini-2.0-flash", systemPrompt, batchInput);
+      // Parse JSON response - strip markdown fences if present
+      const cleaned = response.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleaned);
+
+      for (const analysis of parsed) {
+        const article = batch[analysis.index];
+        if (article) {
+          results.push({
+            ...article,
+            category: NEWS_CATEGORIES.includes(analysis.category) ? analysis.category : "general",
+            sentiment: Math.max(-1, Math.min(1, analysis.sentiment || 0)),
+            sentimentLabel: analysis.sentimentLabel || "neutral",
+            impactScore: Math.max(0, Math.min(100, analysis.impactScore || 50)),
+            keywords: (analysis.keywords || []).slice(0, 5),
+            oneLiner: analysis.oneLiner || article.title,
+            severity: ["critical", "warning", "info"].includes(analysis.severity) ? analysis.severity : "info",
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[Blocky] AI analysis failed for batch: ${err.message}`);
+      // Fallback: add articles with default analysis
+      for (const article of batch) {
+        results.push({
+          ...article,
+          category: "general",
+          sentiment: 0,
+          sentimentLabel: "neutral",
+          impactScore: 30,
+          keywords: [],
+          oneLiner: article.title,
+          severity: "info",
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * collectBlockyNews - Scheduled every 2 hours
+ * Parses RSS feeds from 10 media sources, AI-analyzes each article,
+ * stores in Firestore with dedup by URL
+ */
+exports.collectBlockyNews = onSchedule({
+  schedule: "every 2 hours",
+  timeZone: "UTC",
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async () => {
+  console.log("[Blocky] Starting news collection from 10 media sources...");
+  const startTime = Date.now();
+
+  try {
+    // 1. Parse all RSS feeds in parallel
+    const feedPromises = BLOCKY_MEDIA_SOURCES.map((source) => parseRssFeed(source));
+    const feedResults = await Promise.allSettled(feedPromises);
+
+    let allArticles = [];
+    for (const result of feedResults) {
+      if (result.status === "fulfilled") {
+        allArticles = allArticles.concat(result.value);
+      }
+    }
+    console.log(`[Blocky] Total raw articles parsed: ${allArticles.length}`);
+
+    if (allArticles.length === 0) {
+      console.warn("[Blocky] No articles parsed from any source, aborting.");
+      return;
+    }
+
+    // 2. Dedup against existing articles (by URL)
+    const existingUrls = new Set();
+    const recentDocs = await db.collection("blockyNews")
+      .doc("data")
+      .collection("articles")
+      .where("collectedAt", ">", new Date(Date.now() - 48 * 60 * 60 * 1000)) // last 48h
+      .select("url")
+      .get();
+    recentDocs.forEach((doc) => existingUrls.add(doc.data().url));
+
+    const newArticles = allArticles.filter((a) => a.url && !existingUrls.has(a.url));
+    console.log(`[Blocky] New articles after dedup: ${newArticles.length}`);
+
+    if (newArticles.length === 0) {
+      console.log("[Blocky] No new articles to process.");
+      return;
+    }
+
+    // 3. AI analysis (in batches)
+    const analyzedArticles = await analyzeArticlesBatch(newArticles);
+
+    // 4. Store in Firestore
+    const batch = db.batch();
+    let writeCount = 0;
+    for (const article of analyzedArticles) {
+      // Use URL hash as document ID for dedup
+      const docId = crypto.createHash("md5").update(article.url).digest("hex").substring(0, 20);
+      const ref = db.collection("blockyNews").doc("data").collection("articles").doc(docId);
+      batch.set(ref, {
+        ...article,
+        publishedAt: article.publishedAt instanceof Date ?
+          admin.firestore.Timestamp.fromDate(article.publishedAt) :
+          admin.firestore.Timestamp.fromDate(new Date(article.publishedAt)),
+        collectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      writeCount++;
+
+      // Firestore batch limit is 500
+      if (writeCount >= 490) break;
+    }
+    await batch.commit();
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[Blocky] Collection complete: ${writeCount} articles stored in ${elapsed}s`);
+
+    // 5. Update collection metadata
+    await db.collection("blockyNews").doc("meta").set({
+      lastCollectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      articlesCollected: writeCount,
+      sourcesAttempted: BLOCKY_MEDIA_SOURCES.length,
+    }, { merge: true });
+  } catch (err) {
+    console.error("[Blocky] Collection error:", err);
+  }
+});
+
+/**
+ * Fetch upcoming US economic calendar events from Finnhub
+ * @return {Promise<Array>} Economic events
+ */
+async function fetchEconomicCalendar() {
+  if (!axios) axios = require("axios");
+
+  try {
+    // Try Finnhub free API first
+    const finnhubKey = await getApiKeyFromFirestore("finnhub") ||
+      process.env.FINNHUB_API_KEY || "";
+
+    if (!finnhubKey) {
+      console.warn("[Blocky] Finnhub API key not configured, using fallback calendar");
+      return getFallbackCalendar();
+    }
+
+    const now = new Date();
+    const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const from = now.toISOString().split("T")[0];
+    const to = twoWeeksLater.toISOString().split("T")[0];
+
+    const response = await axios.get(
+      `https://finnhub.io/api/v1/calendar/economic?from=${from}&to=${to}&token=${finnhubKey}`,
+      { timeout: 10000 },
+    );
+
+    const events = (response.data?.economicCalendar || [])
+      .filter((e) => e.country === "US")
+      .filter((e) => {
+        const name = (e.event || "").toLowerCase();
+        return name.includes("fomc") || name.includes("cpi") ||
+          name.includes("non-farm") || name.includes("nonfarm") ||
+          name.includes("ppi") || name.includes("gdp") ||
+          name.includes("jobless") || name.includes("fed") ||
+          name.includes("interest rate") || name.includes("inflation");
+      })
+      .slice(0, 8)
+      .map((e) => {
+        const eventDate = new Date(e.time || e.date);
+        const daysUntil = Math.ceil((eventDate - now) / (24 * 60 * 60 * 1000));
+        return {
+          label: e.event,
+          date: e.time || e.date,
+          daysUntil: Math.max(0, daysUntil),
+          impact: e.impact === 3 ? "high" : e.impact === 2 ? "medium" : "low",
+          previous: e.prev || null,
+          estimate: e.estimate || null,
+          actual: e.actual || null,
+        };
+      });
+
+    console.log(`[Blocky] Fetched ${events.length} US economic events`);
+    return events;
+  } catch (err) {
+    console.warn(`[Blocky] Economic calendar fetch failed: ${err.message}`);
+    return getFallbackCalendar();
+  }
+}
+
+/**
+ * Fallback calendar with known recurring US economic events
+ * @return {Array} Static economic events
+ */
+function getFallbackCalendar() {
+  // Return empty if no API available - admin can manually add events
+  return [];
+}
+
+/**
+ * Fetch whale activity data from Whale Alert API
+ * @return {Promise<object>} Whale activity summary
+ */
+async function fetchWhaleActivity() {
+  if (!axios) axios = require("axios");
+
+  try {
+    const whaleAlertKey = await getApiKeyFromFirestore("whale_alert") ||
+      process.env.WHALE_ALERT_API_KEY || "";
+
+    if (!whaleAlertKey) {
+      console.warn("[Blocky] Whale Alert API key not configured, using placeholder data");
+      return getPlaceholderWhaleData();
+    }
+
+    // Get transactions from last 24 hours with min value $1M
+    const since = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
+
+    const response = await axios.get(
+      `https://api.whale-alert.io/v1/transactions?api_key=${whaleAlertKey}&min_value=1000000&start=${since}&limit=20`,
+      { timeout: 15000 },
+    );
+
+    const txs = response.data?.transactions || [];
+
+    // Aggregate flows
+    let exchangeInflow = 0;
+    let exchangeOutflow = 0;
+    const largeTxs = [];
+
+    for (const tx of txs) {
+      const value = tx.amount_usd || 0;
+      const isToExchange = tx.to?.owner_type === "exchange";
+      const isFromExchange = tx.from?.owner_type === "exchange";
+
+      if (isToExchange && !isFromExchange) {
+        exchangeInflow += value;
+      } else if (isFromExchange && !isToExchange) {
+        exchangeOutflow += value;
+      }
+
+      if (largeTxs.length < 5) {
+        largeTxs.push({
+          symbol: tx.symbol || "BTC",
+          amount: tx.amount || 0,
+          amountUsd: value,
+          from: tx.from?.owner || "unknown",
+          to: tx.to?.owner || "unknown",
+          hash: tx.hash || "",
+          timestamp: tx.timestamp,
+        });
+      }
+    }
+
+    const netFlow = exchangeOutflow - exchangeInflow; // positive = accumulation
+    return {
+      netFlow,
+      flowDirection: netFlow > 0 ? "accumulation" : "distribution",
+      exchangeInflow,
+      exchangeOutflow,
+      largeTxs,
+      topSector: "crypto", // Would need more data for sector breakdown
+      dataSource: "whale_alert",
+    };
+  } catch (err) {
+    console.warn(`[Blocky] Whale Alert fetch failed: ${err.message}`);
+    return getPlaceholderWhaleData();
+  }
+}
+
+/**
+ * Placeholder whale data when API is not configured
+ * @return {object} Placeholder data
+ */
+function getPlaceholderWhaleData() {
+  return {
+    netFlow: 0,
+    flowDirection: "neutral",
+    exchangeInflow: 0,
+    exchangeOutflow: 0,
+    largeTxs: [],
+    topSector: "N/A",
+    dataSource: "placeholder",
+  };
+}
+
+/**
+ * generateInsightSnapshot - Scheduled every 6 hours
+ * Computes ASI, selects Alpha Alerts, fetches Whale & Calendar data
+ */
+exports.generateInsightSnapshot = onSchedule({
+  schedule: "every 6 hours",
+  timeZone: "UTC",
+  timeoutSeconds: 300,
+  memory: "512MiB",
+}, async () => {
+  console.log("[Blocky] Generating insight snapshot...");
+
+  try {
+    // 1. Get recent articles (last 24h)
+    const recentArticles = await db.collection("blockyNews")
+      .doc("data")
+      .collection("articles")
+      .where("collectedAt", ">", new Date(Date.now() - 24 * 60 * 60 * 1000))
+      .orderBy("collectedAt", "desc")
+      .limit(100)
+      .get();
+
+    const articles = [];
+    recentArticles.forEach((doc) => articles.push({ id: doc.id, ...doc.data() }));
+    console.log(`[Blocky] Processing ${articles.length} recent articles for snapshot`);
+
+    // 2. Compute Agent Sentiment Index (ASI)
+    let totalSentiment = 0;
+    let sentimentCount = 0;
+    for (const article of articles) {
+      if (typeof article.sentiment === "number") {
+        // Weight by impact score
+        const weight = (article.impactScore || 50) / 50;
+        totalSentiment += article.sentiment * weight;
+        sentimentCount += weight;
+      }
+    }
+    const rawSentiment = sentimentCount > 0 ? totalSentiment / sentimentCount : 0;
+    // Convert from -1..1 to 0..100
+    const asiScore = Math.round(Math.max(0, Math.min(100, (rawSentiment + 1) * 50)));
+    let asiLabel = "Neutral";
+    if (asiScore >= 75) asiLabel = "Extreme Greed";
+    else if (asiScore >= 60) asiLabel = "Greed";
+    else if (asiScore >= 45) asiLabel = "Neutral";
+    else if (asiScore >= 25) asiLabel = "Fear";
+    else asiLabel = "Extreme Fear";
+
+    // Get previous snapshot for trend
+    const prevSnapshot = await db.collection("blockyNews")
+      .doc("data")
+      .collection("snapshots")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+
+    let prevAsi = 50;
+    if (!prevSnapshot.empty) {
+      prevAsi = prevSnapshot.docs[0].data().asi?.score || 50;
+    }
+    const asiTrend = asiScore > prevAsi ? "BULLISH" : asiScore < prevAsi ? "BEARISH" : "STABLE";
+
+    // Generate ASI summary line
+    let asiSummary = "";
+    try {
+      const summaryPrompt = `Given crypto market ASI score ${asiScore}/100 (${asiLabel}), trend: ${asiTrend}, based on ${articles.length} recent articles. Write ONE sentence (max 15 words) summarizing the market mood for traders. No quotes.`;
+      asiSummary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst. Reply with only one sentence.", summaryPrompt);
+      asiSummary = asiSummary.replace(/^["']|["']$/g, "").trim();
+    } catch (e) {
+      asiSummary = `Market sentiment at ${asiScore}/100. ${asiLabel} conditions prevail.`;
+    }
+
+    // 3. Select Top 3 Alpha Alerts (highest impact)
+    const sortedByImpact = [...articles].sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0));
+    const alphaAlerts = sortedByImpact.slice(0, 3).map((a) => ({
+      articleId: a.id,
+      headline: a.oneLiner || a.title,
+      severity: a.severity || "info",
+      impactScore: a.impactScore || 0,
+      impactDirection: a.sentiment > 0.2 ? "bullish" : a.sentiment < -0.2 ? "bearish" : "neutral",
+      agentConsensus: a.oneLiner || "",
+      source: a.sourceName || a.source,
+      url: a.url || "",
+    }));
+
+    // 4. Fetch Whale Watch data
+    const whaleWatch = await fetchWhaleActivity();
+
+    // Also add Vision Chain agent activity
+    const topAgentMoves = [];
+    try {
+      const recentAgentTxs = await db.collection("agentTransactionLedger")
+        .orderBy("executedAt", "desc")
+        .limit(10)
+        .get();
+      recentAgentTxs.forEach((doc) => {
+        const d = doc.data();
+        if (d.action === "stake" || d.action === "transfer") {
+          topAgentMoves.push({
+            agentName: d.agentName || "Agent",
+            action: d.action,
+            amount: d.amount || "0",
+            timestamp: d.executedAt,
+          });
+        }
+      });
+    } catch (e) {
+      // Agent ledger may not exist yet
+    }
+    whaleWatch.topAgentMoves = topAgentMoves.slice(0, 5);
+
+    // 5. Extract trending keywords
+    const keywordMap = {};
+    for (const article of articles) {
+      const kws = article.keywords || [];
+      for (const kw of kws) {
+        const normalized = kw.toLowerCase().replace(/[^a-z0-9_]/g, "");
+        if (normalized.length > 2) {
+          keywordMap[normalized] = (keywordMap[normalized] || 0) + 1;
+        }
+      }
+    }
+    const trendingKeywords = Object.entries(keywordMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([keyword, count]) => ({ keyword, count }));
+
+    // 6. Fetch economic calendar
+    const calendar = await fetchEconomicCalendar();
+
+    // 7. Store snapshot
+    const snapshotId = new Date().toISOString().split("T")[0] + "_" +
+      new Date().getHours().toString().padStart(2, "0");
+
+    await db.collection("blockyNews").doc("data").collection("snapshots").doc(snapshotId).set({
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      asi: {
+        score: asiScore,
+        label: asiLabel,
+        trend: asiTrend,
+        summary: asiSummary,
+        previousScore: prevAsi,
+      },
+      alphaAlerts,
+      whaleWatch,
+      narratives: {
+        trendingKeywords,
+        calendar,
+      },
+      articlesAnalyzed: articles.length,
+    });
+
+    console.log(`[Blocky] Snapshot ${snapshotId} generated. ASI: ${asiScore} (${asiLabel}), Alerts: ${alphaAlerts.length}`);
+  } catch (err) {
+    console.error("[Blocky] Snapshot generation error:", err);
+  }
+});
+
+/**
+ * generateWeeklyTrendReport - Scheduled weekly on Monday 09:00 UTC
+ */
+exports.generateWeeklyTrendReport = onSchedule({
+  schedule: "every monday 09:00",
+  timeZone: "UTC",
+  timeoutSeconds: 300,
+  memory: "512MiB",
+}, async () => {
+  console.log("[Blocky] Generating weekly trend report...");
+
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    // Get all articles from the past week
+    const weekArticles = await db.collection("blockyNews")
+      .doc("data")
+      .collection("articles")
+      .where("collectedAt", ">", weekAgo)
+      .get();
+
+    const articles = [];
+    weekArticles.forEach((doc) => articles.push(doc.data()));
+
+    if (articles.length === 0) {
+      console.log("[Blocky] No articles for weekly report.");
+      return;
+    }
+
+    // Aggregate sentiment
+    let totalSentiment = 0;
+    for (const a of articles) {
+      totalSentiment += a.sentiment || 0;
+    }
+    const avgSentiment = totalSentiment / articles.length;
+    const overallSentiment = Math.round((avgSentiment + 1) * 50);
+    const sentimentLabel = avgSentiment > 0.2 ? "bullish" : avgSentiment < -0.2 ? "bearish" : "neutral";
+
+    // Category breakdown
+    const categoryBreakdown = {};
+    for (const a of articles) {
+      const cat = a.category || "general";
+      categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + 1;
+    }
+
+    // Top keywords
+    const keywordMap = {};
+    for (const a of articles) {
+      for (const kw of (a.keywords || [])) {
+        const n = kw.toLowerCase();
+        keywordMap[n] = (keywordMap[n] || 0) + 1;
+      }
+    }
+    const topKeywords = Object.entries(keywordMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15)
+      .map(([keyword, count]) => ({ keyword, count }));
+
+    // Get top 5 articles by impact
+    const highlights = [...articles]
+      .sort((a, b) => (b.impactScore || 0) - (a.impactScore || 0))
+      .slice(0, 5)
+      .map((a) => ({
+        title: a.title,
+        source: a.sourceName || a.source,
+        impactScore: a.impactScore,
+        sentiment: a.sentimentLabel,
+      }));
+
+    // AI-generated summary
+    let summary = "";
+    try {
+      const topHeadlines = highlights.map((h) => h.title).join("; ");
+      const prompt = `Summarize this week's crypto market: Sentiment ${overallSentiment}/100 (${sentimentLabel}). ${articles.length} articles analyzed. Top categories: ${Object.entries(categoryBreakdown).map(([k, v]) => `${k}:${v}`).join(", ")}. Key headlines: ${topHeadlines}. Write 2-3 sentences max.`;
+      summary = await callLLM("gemini-2.0-flash", "You are a crypto market analyst writing a weekly brief. Be concise.", prompt);
+    } catch (e) {
+      summary = `This week saw ${articles.length} articles with overall ${sentimentLabel} sentiment (${overallSentiment}/100).`;
+    }
+
+    // Store report
+    const now = new Date();
+    const reportId = `${now.getFullYear()}-W${Math.ceil(now.getDate() / 7).toString().padStart(2, "0")}`;
+
+    await db.collection("blockyNews").doc("data").collection("reports").doc(reportId).set({
+      weekStartDate: admin.firestore.Timestamp.fromDate(weekAgo),
+      weekEndDate: admin.firestore.Timestamp.fromDate(now),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      overallSentiment,
+      sentimentLabel,
+      topKeywords,
+      categoryBreakdown,
+      highlights,
+      summary,
+      totalArticles: articles.length,
+    });
+
+    console.log(`[Blocky] Weekly report ${reportId} generated: ${articles.length} articles, sentiment ${overallSentiment}`);
+  } catch (err) {
+    console.error("[Blocky] Weekly report error:", err);
+  }
+});
+
+/**
+ * getVisionInsight - HTTP Callable
+ * Returns latest snapshot for the Vision Insight dashboard
+ * Supports format=json (Agent View) and format=ui (default)
+ */
+exports.getVisionInsight = onCall({
+  timeoutSeconds: 30,
+  memory: "256MiB",
+}, async (request) => {
+  try {
+    const format = request.data?.format || "ui";
+
+    // Get latest snapshot
+    const snapshotQuery = await db.collection("blockyNews")
+      .doc("data")
+      .collection("snapshots")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+
+    if (snapshotQuery.empty) {
+      return { error: "No insight data available yet. Data collection starts shortly." };
+    }
+
+    const snapshot = snapshotQuery.docs[0].data();
+
+    // Agent View: raw JSON format
+    if (format === "json") {
+      return {
+        timestamp: snapshot.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        market_pulse: {
+          sentiment_score: (snapshot.asi?.score || 50) / 100,
+          trend: snapshot.asi?.trend || "STABLE",
+          consensus: snapshot.asi?.score >= 60 ? "ACCUMULATE" :
+            snapshot.asi?.score <= 40 ? "REDUCE" : "HOLD",
+        },
+        alpha_signals: (snapshot.alphaAlerts || []).map((a) => ({
+          id: a.articleId,
+          headline: a.headline,
+          impact_score: a.impactScore,
+          severity: a.severity,
+          impact_direction: a.impactDirection,
+          source: a.source,
+          url: a.url,
+        })),
+        whale_activity: {
+          net_flow: snapshot.whaleWatch?.netFlow || 0,
+          flow_direction: snapshot.whaleWatch?.flowDirection || "neutral",
+          exchange_inflow: snapshot.whaleWatch?.exchangeInflow || 0,
+          exchange_outflow: snapshot.whaleWatch?.exchangeOutflow || 0,
+          large_txs: snapshot.whaleWatch?.largeTxs || [],
+          top_sector: snapshot.whaleWatch?.topSector || "N/A",
+        },
+        narratives: {
+          trending: (snapshot.narratives?.trendingKeywords || []).map((k) => k.keyword),
+          upcoming_events: (snapshot.narratives?.calendar || []).map((e) => ({
+            label: e.label,
+            date: e.date,
+            days_until: e.daysUntil,
+            impact: e.impact,
+          })),
+        },
+      };
+    }
+
+    // UI format: structured for widget rendering
+    return {
+      asi: snapshot.asi || { score: 50, label: "Neutral", trend: "STABLE", summary: "" },
+      alphaAlerts: snapshot.alphaAlerts || [],
+      whaleWatch: snapshot.whaleWatch || getPlaceholderWhaleData(),
+      narratives: snapshot.narratives || { trendingKeywords: [], calendar: [] },
+      articlesAnalyzed: snapshot.articlesAnalyzed || 0,
+      lastUpdated: snapshot.createdAt?.toDate?.()?.toISOString() || null,
+    };
+  } catch (err) {
+    console.error("[Blocky] getVisionInsight error:", err);
+    throw new HttpsError("internal", "Failed to fetch insight data");
+  }
+});

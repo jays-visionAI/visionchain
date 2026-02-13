@@ -18,6 +18,11 @@ module.exports = {
             chainId: 1337,
             accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
         },
+        visionchain: {
+            url: "https://api.visionchain.co/rpc-proxy",
+            chainId: 3151909,
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+        },
         hardhat: {
         }
     },

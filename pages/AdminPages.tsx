@@ -21,6 +21,7 @@ export const AdminAnnouncements = lazy(() => import('../components/admin/AdminAn
 export const AdminBridgeNetworks = lazy(() => import('../components/admin/AdminBridgeNetworks'));
 export const AdminEmail = lazy(() => import('../components/admin/AdminEmail'));
 export const AdminCexPortfolio = lazy(() => import('../components/admin/AdminCexPortfolio'));
+export const AdminVisionInsight = lazy(() => import('../components/admin/AdminVisionInsight'));
 
 
 // Loading spinner component
@@ -236,6 +237,17 @@ export function AdminCexPortfolioPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminCexPortfolio />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminVisionInsightPage() {
+    document.title = 'Vision Insight | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminVisionInsight />
             </AdminLayout>
         </Suspense>
     );
