@@ -88,7 +88,7 @@ register, balance, transfer, transactions, referral, leaderboard, profile, stake
 
 ## Token Info
 - Token: VCN (Vision Chain Native) | Decimals: 18
-- Chain: Vision Chain (Chain ID: 8888)
+- Chain: Vision Chain (Chain ID: 3151909)
 - RPC: https://api.visionchain.co/rpc-proxy
 - Explorer: https://visionchain.co/visionscan
 - Initial Funding: 100 VCN on registration

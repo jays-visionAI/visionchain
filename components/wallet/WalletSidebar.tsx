@@ -19,12 +19,13 @@ import {
     Bell,
     ArrowLeftRight,
     Shield,
-    BarChart3
+    BarChart3,
+    Bot
 } from 'lucide-solid';
 import { VisionLogo } from './VisionLogo';
 import { VisionFullLogo } from './VisionFullLogo';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'agent';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -56,6 +57,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
         { id: 'cex' as ViewType, label: 'CEX Portfolio', icon: BarChart3 },
         { id: 'bridge' as ViewType, label: 'Swap', icon: ArrowLeftRight },
         { id: 'staking' as ViewType, label: 'Earn', icon: Shield },
+        { id: 'agent' as ViewType, label: 'Agent', icon: Bot },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },

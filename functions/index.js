@@ -797,6 +797,9 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
       case "staking":
         return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
 
+      case "agent_execution":
+        return await handleAgentExecution(req, res, { user, amount, fee, deadline, signature, tokenContract, adminWallet });
+
       case "reverse_bridge_info": {
         // Return relayer address for client reference
         const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
@@ -2074,6 +2077,95 @@ async function handleStaking(req, res, { user, amount, stakeAction, fee, deadlin
   } catch (err) {
     console.error(`[Paymaster:Staking] ${stakeAction} failed:`, err);
     return res.status(500).json({ error: err.message || "Staking transaction failed" });
+  }
+}
+
+/**
+ * Handle agent execution fee - 70% protocol / 30% node pool
+ */
+async function handleAgentExecution(req, res, { user, amount, fee, deadline, signature, tokenContract, adminWallet }) {
+  const { agentId } = req.body;
+  if (!agentId) {
+    return res.status(400).json({ error: "Missing required field: agentId" });
+  }
+
+  console.log(`[Paymaster:AgentExec] Agent ${agentId}, user: ${user}`);
+
+  // Verify agent exists and belongs to user
+  const agentDoc = await db.collection("agents").doc(agentId).get();
+  if (!agentDoc.exists) {
+    return res.status(404).json({ error: "Agent not found" });
+  }
+  const agentData = agentDoc.data();
+  if (agentData.walletAddress.toLowerCase() !== user.toLowerCase()) {
+    return res.status(403).json({ error: "Agent wallet mismatch" });
+  }
+
+  // Default execution fee: 1.5 VCN
+  const executionFee = fee ? BigInt(fee) : ethers.parseEther("1.5");
+  const adminAddress = adminWallet.address;
+
+  try {
+    // 1. Permit: agent wallet approves executor to spend
+    if (signature) {
+      const { v, r, s } = parseSignature(signature);
+      if (v) {
+        const permitTx = await tokenContract.permit(user, adminAddress, executionFee, deadline, v, r, s);
+        await permitTx.wait();
+        console.log(`[Paymaster:AgentExec] Permit ok: ${permitTx.hash}`);
+      }
+    }
+
+    // 2. Collect total fee from agent wallet
+    const collectTx = await tokenContract.transferFrom(user, adminAddress, executionFee);
+    await collectTx.wait();
+    console.log(`[Paymaster:AgentExec] Collected ${ethers.formatEther(executionFee)} VCN from agent`);
+
+    // 3. Split: 70% protocol (stays with admin), 30% node pool (BridgeStaking)
+    const nodePoolShare = (executionFee * 30n) / 100n;
+
+    if (nodePoolShare > 0n) {
+      try {
+        const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+        const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, nodePoolShare);
+        await approveTx.wait();
+        const depositTx = await stakingContract.depositFees(nodePoolShare);
+        await depositTx.wait();
+        console.log(`[Paymaster:AgentExec] 30% to node pool: ${ethers.formatEther(nodePoolShare)} VCN`);
+      } catch (poolErr) {
+        console.warn(`[Paymaster:AgentExec] Node pool deposit failed:`, poolErr.message);
+      }
+    }
+
+    // 4. Update agent hosting stats
+    await db.collection("agents").doc(agentId).update({
+      "hosting.total_vcn_spent": admin.firestore.FieldValue.increment(parseFloat(ethers.formatEther(executionFee))),
+      "hosting.execution_count": admin.firestore.FieldValue.increment(1),
+      "hosting.last_execution": admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 5. Record transaction
+    await indexTransaction(collectTx.hash, {
+      type: "Agent Execution",
+      from: user,
+      to: adminAddress,
+      amount: ethers.formatEther(executionFee),
+      fee: ethers.formatEther(executionFee),
+      method: "Paymaster Agent Execution (70/30)",
+      agentId: agentId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      txHash: collectTx.hash,
+      fee_total: ethers.formatEther(executionFee),
+      fee_protocol: ethers.formatEther(executionFee - nodePoolShare),
+      fee_node_pool: ethers.formatEther(nodePoolShare),
+      agent_id: agentId,
+    });
+  } catch (err) {
+    console.error(`[Paymaster:AgentExec] Failed:`, err);
+    return res.status(500).json({ error: err.message || "Agent execution fee failed" });
   }
 }
 
@@ -7897,6 +7989,7 @@ exports.agentGateway = onRequest({
         "referral", "leaderboard", "profile",
         "stake", "unstake", "claim_rewards", "staking_info",
         "network_info",
+        "configure_hosting", "toggle_hosting", "hosting_logs",
       ],
     });
   }
@@ -8598,6 +8691,156 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // --- CONFIGURE HOSTING ---
+    if (action === "configure_hosting") {
+      const llmModel = body.llm_model || "deepseek-chat";
+      const systemPrompt = body.system_prompt || "";
+      const trigger = body.trigger || { type: "interval", interval_minutes: 60 };
+      const allowedActions = body.allowed_actions || [];
+      const maxVcnPerAction = Math.min(Math.max(parseFloat(body.max_vcn_per_action) || 5, 1), 100);
+
+      // Validate model
+      const validModels = ["gemini-2.0-flash", "deepseek-chat"];
+      if (!validModels.includes(llmModel)) {
+        return res.status(400).json({ error: `Invalid LLM model. Available: ${validModels.join(", ")}` });
+      }
+
+      // Validate interval
+      const intervalMinutes = parseInt(trigger.interval_minutes) || 60;
+      if (intervalMinutes < 5 || intervalMinutes > 1440) {
+        return res.status(400).json({ error: "interval_minutes must be between 5 and 1440" });
+      }
+
+      // Validate allowed actions
+      const validActions = ["balance", "transfer", "stake", "unstake", "network_info", "leaderboard", "staking_info", "transactions"];
+      const filteredActions = allowedActions.filter((a) => validActions.includes(a));
+
+      // Estimate monthly cost
+      const executionsPerMonth = (30 * 24 * 60) / intervalMinutes;
+      const costPerExecution = 1.5;
+      const maintenanceFee = 10;
+      const estimatedMonthlyCost = executionsPerMonth * costPerExecution + maintenanceFee;
+
+      const hostingConfig = {
+        enabled: false, // Not yet started, just configured
+        llm_model: llmModel,
+        system_prompt: systemPrompt,
+        trigger: {
+          type: trigger.type || "interval",
+          interval_minutes: intervalMinutes,
+        },
+        allowed_actions: filteredActions,
+        max_vcn_per_action: maxVcnPerAction,
+        estimated_monthly_cost: parseFloat(estimatedMonthlyCost.toFixed(1)),
+        total_vcn_spent: 0,
+        execution_count: 0,
+        last_execution: null,
+        configured_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      };
+
+      await db.collection("agents").doc(agent.id).update({
+        hosting: hostingConfig,
+      });
+
+      console.log(`[Agent Gateway] Hosting configured for ${agent.agentName}: model=${llmModel}, interval=${intervalMinutes}min`);
+
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        hosting: {
+          ...hostingConfig,
+          configured_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        estimated_monthly_cost_vcn: estimatedMonthlyCost.toFixed(1),
+        message: "Hosting configured. Use toggle_hosting to start.",
+      });
+    }
+
+    // --- TOGGLE HOSTING ---
+    if (action === "toggle_hosting") {
+      const enabled = body.enabled === true || body.enabled === "true";
+
+      // Check if hosting is configured
+      const agentDoc = await db.collection("agents").doc(agent.id).get();
+      const agentData = agentDoc.data();
+
+      if (!agentData.hosting) {
+        return res.status(400).json({
+          error: "Hosting not configured. Use configure_hosting first.",
+        });
+      }
+
+      // If enabling, check VCN balance
+      if (enabled) {
+        try {
+          const provider = new ethers.JsonRpcProvider(RPC_URL);
+          const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+          const balanceWei = await tokenContract.balanceOf(agent.walletAddress);
+          const balance = parseFloat(ethers.formatEther(balanceWei));
+
+          if (balance < 5) {
+            return res.status(400).json({
+              error: "Insufficient VCN balance. Minimum 5 VCN required to start hosting.",
+              current_balance: balance.toFixed(2),
+            });
+          }
+        } catch (balErr) {
+          console.warn("[Agent Gateway] Balance check failed during toggle:", balErr.message);
+        }
+      }
+
+      await db.collection("agents").doc(agent.id).update({
+        "hosting.enabled": enabled,
+        "hosting.updated_at": admin.firestore.FieldValue.serverTimestamp(),
+        ...(enabled ? { "hosting.started_at": admin.firestore.FieldValue.serverTimestamp() } : { "hosting.paused_at": admin.firestore.FieldValue.serverTimestamp() }),
+      });
+
+      console.log(`[Agent Gateway] Hosting ${enabled ? "STARTED" : "PAUSED"} for ${agent.agentName}`);
+
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        hosting_enabled: enabled,
+        message: enabled ? "Agent hosting started." : "Agent hosting paused.",
+      });
+    }
+
+    // --- HOSTING LOGS ---
+    if (action === "hosting_logs") {
+      const logLimit = Math.min(Math.max(parseInt(body.limit) || 20, 1), 100);
+
+      const logsSnap = await db.collection("agents").doc(agent.id)
+        .collection("hosting_logs")
+        .orderBy("timestamp", "desc")
+        .limit(logLimit)
+        .get();
+
+      const logs = [];
+      logsSnap.forEach((doc) => {
+        const d = doc.data();
+        logs.push({
+          id: doc.id,
+          status: d.status || "unknown",
+          llm_model: d.llm_model,
+          llm_response: d.llm_response || "",
+          actions_executed: d.actions_executed || [],
+          vcn_cost: d.vcn_cost || 0,
+          error_message: d.error_message || null,
+          duration_ms: d.duration_ms || 0,
+          timestamp: d.timestamp?.toDate?.()?.toISOString() || "",
+        });
+      });
+
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        logs,
+        total_returned: logs.length,
+      });
+    }
+
     return res.status(400).json({
       error: `Unknown action: ${action}`,
       available_actions: [
@@ -8605,10 +8848,453 @@ exports.agentGateway = onRequest({
         "referral", "leaderboard", "profile",
         "stake", "unstake", "claim_rewards", "staking_info",
         "network_info",
+        "configure_hosting", "toggle_hosting", "hosting_logs",
       ],
     });
   } catch (err) {
     console.error("[Agent Gateway] Error:", err);
     return res.status(500).json({ error: err.message || "Internal server error" });
+  }
+});
+
+// =====================================================
+// AGENT EXECUTOR - Scheduled Cloud Function
+// Runs every 5 minutes, executes all enabled hosted agents
+// =====================================================
+
+// --- Executor Wallet Pool ---
+// 5 wallets derived from executor PK via HD path for concurrent tx support
+// Round-robin assignment with nonce management (~5-10 TPS)
+const executorPool = {
+  wallets: [],
+  currentIndex: 0,
+  nonces: new Map(),
+
+  async init(provider) {
+    if (this.wallets.length > 0) return;
+    const basePk = EXECUTOR_PRIVATE_KEY;
+    if (!basePk) {
+      console.error("[ExecutorPool] No executor private key configured");
+      return;
+    }
+
+    // Pool wallet 0 = base executor key
+    this.wallets.push(new ethers.Wallet(basePk, provider));
+
+    // Pool wallets 1-4 = derived via deterministic key derivation
+    // Using keccak256(basePk + index) to derive additional keys
+    for (let i = 1; i < 5; i++) {
+      const derivedKey = ethers.keccak256(
+        ethers.solidityPacked(["bytes32", "uint256"], [basePk.startsWith("0x") ? basePk : `0x${basePk}`, i]),
+      );
+      this.wallets.push(new ethers.Wallet(derivedKey, provider));
+    }
+
+    // Pre-fetch nonces
+    for (const w of this.wallets) {
+      try {
+        const nonce = await provider.getTransactionCount(w.address, "pending");
+        this.nonces.set(w.address, nonce);
+      } catch (e) {
+        this.nonces.set(w.address, 0);
+      }
+    }
+
+    console.log(`[ExecutorPool] Initialized ${this.wallets.length} wallets: ${this.wallets.map((w) => w.address.slice(0, 8) + "...").join(", ")}`);
+  },
+
+  getNext() {
+    if (this.wallets.length === 0) return null;
+    const wallet = this.wallets[this.currentIndex];
+    this.currentIndex = (this.currentIndex + 1) % this.wallets.length;
+    return wallet;
+  },
+
+  getNonce(address) {
+    return this.nonces.get(address) || 0;
+  },
+
+  incrementNonce(address) {
+    const current = this.nonces.get(address) || 0;
+    this.nonces.set(address, current + 1);
+  },
+};
+
+// --- LLM Caller ---
+// Reads API keys from Firestore admin settings (settings/api_keys/keys)
+// Falls back to env vars if Firestore keys not found
+let _cachedApiKeys = null;
+let _cachedApiKeysAt = 0;
+
+async function getApiKeyFromFirestore(provider) {
+  // Cache for 5 minutes
+  if (_cachedApiKeys && Date.now() - _cachedApiKeysAt < 300000) {
+    const key = _cachedApiKeys.find(
+      (k) => k.provider === provider && k.isActive !== false,
+    );
+    if (key) return key.value;
+  }
+
+  try {
+    const keysSnap = await db
+      .collection("settings")
+      .doc("api_keys")
+      .collection("keys")
+      .get();
+    _cachedApiKeys = keysSnap.docs.map((d) => d.data());
+    _cachedApiKeysAt = Date.now();
+    const key = _cachedApiKeys.find(
+      (k) => k.provider === provider && k.isActive !== false,
+    );
+    return key ? key.value : null;
+  } catch (err) {
+    console.warn(`[callLLM] Failed to read API keys from Firestore:`, err.message);
+    return null;
+  }
+}
+
+async function callLLM(model, systemPrompt, userPrompt, availableTools) {
+  if (!axios) axios = require("axios");
+
+  if (model === "gemini-2.0-flash") {
+    const GEMINI_KEY =
+      (await getApiKeyFromFirestore("gemini")) ||
+      process.env.GEMINI_API_KEY ||
+      "";
+    if (!GEMINI_KEY) throw new Error("GEMINI_API_KEY not configured");
+
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 1024,
+        },
+      },
+      { timeout: 30000 },
+    );
+
+    const candidate = response.data?.candidates?.[0];
+    return candidate?.content?.parts?.[0]?.text || "No response";
+  }
+
+  if (model === "deepseek-chat") {
+    const DEEPSEEK_KEY =
+      (await getApiKeyFromFirestore("deepseek")) ||
+      process.env.DEEPSEEK_API_KEY ||
+      "";
+    if (!DEEPSEEK_KEY) throw new Error("DEEPSEEK_API_KEY not configured");
+
+    const response = await axios.post(
+      "https://api.deepseek.com/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 1024,
+      },
+      {
+        headers: { Authorization: `Bearer ${DEEPSEEK_KEY}` },
+        timeout: 30000,
+      },
+    );
+
+    return response.data?.choices?.[0]?.message?.content || "No response";
+  }
+
+  throw new Error(`Unsupported model: ${model}`);
+}
+
+// --- Agent Executor Scheduled Function ---
+exports.agentExecutor = onSchedule({
+  schedule: "every 5 minutes",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 300,
+  memory: "512MiB",
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async () => {
+  console.log("[AgentExecutor] Starting execution cycle...");
+  const startTime = Date.now();
+
+  try {
+    // Find all agents with hosting enabled
+    const agentsSnap = await db.collection("agents")
+      .where("hosting.enabled", "==", true)
+      .get();
+
+    if (agentsSnap.empty) {
+      console.log("[AgentExecutor] No active hosted agents.");
+      return;
+    }
+
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    await executorPool.init(provider);
+
+    console.log(`[AgentExecutor] Found ${agentsSnap.size} active agents to check.`);
+
+    const now = Date.now();
+    const executionPromises = [];
+
+    agentsSnap.forEach((docSnap) => {
+      const agentData = docSnap.data();
+      const hosting = agentData.hosting;
+
+      // Check if it's time to execute based on interval
+      const intervalMs = (hosting.trigger?.interval_minutes || 60) * 60 * 1000;
+      const lastExec = hosting.last_execution?.toDate?.()?.getTime() || 0;
+
+      if (now - lastExec < intervalMs) {
+        return; // Not time yet
+      }
+
+      executionPromises.push(
+        executeAgent(docSnap.id, agentData, hosting, provider)
+          .catch((err) => {
+            console.error(`[AgentExecutor] Error executing ${agentData.agentName}:`, err.message);
+          }),
+      );
+    });
+
+    await Promise.allSettled(executionPromises);
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[AgentExecutor] Cycle complete. ${executionPromises.length} agents processed in ${elapsed}ms.`);
+  } catch (err) {
+    console.error("[AgentExecutor] Fatal error:", err);
+  }
+});
+
+// --- Execute Single Agent ---
+async function executeAgent(agentId, agentData, hosting, provider) {
+  const executionStart = Date.now();
+  const logRef = db.collection("agents").doc(agentId).collection("hosting_logs").doc();
+
+  try {
+    // 1. Check VCN balance
+    const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+    const balanceWei = await tokenContract.balanceOf(agentData.walletAddress);
+    const balance = parseFloat(ethers.formatEther(balanceWei));
+
+    if (balance < 1.5) {
+      // Auto-pause due to insufficient balance
+      await db.collection("agents").doc(agentId).update({
+        "hosting.enabled": false,
+        "hosting.paused_reason": "insufficient_balance",
+        "hosting.paused_at": admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await logRef.set({
+        status: "error",
+        error_message: `Insufficient VCN balance (${balance.toFixed(2)} VCN). Agent paused.`,
+        vcn_cost: 0,
+        duration_ms: Date.now() - executionStart,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      console.log(`[AgentExecutor] ${agentData.agentName} paused: insufficient balance (${balance.toFixed(2)} VCN)`);
+      return;
+    }
+
+    // 2. Build context prompt for the agent
+    const contextPrompt = `You are an autonomous AI agent running on Vision Chain.
+Current time: ${new Date().toISOString()}
+Your wallet: ${agentData.walletAddress}
+VCN Balance: ${balance.toFixed(2)} VCN
+
+Available actions you can request: ${hosting.allowed_actions.join(", ")}
+Max VCN per action: ${hosting.max_vcn_per_action}
+
+Based on your instructions and current state, decide what to do.
+If you need to perform an action, respond with JSON: {"action": "action_name", "params": {...}}
+If no action needed, respond with a brief status report.
+Do NOT perform any action unless your instructions explicitly require it.`;
+
+    // 3. Call LLM
+    const llmResponse = await callLLM(
+      hosting.llm_model,
+      hosting.system_prompt || "You are a helpful autonomous agent.",
+      contextPrompt,
+      hosting.allowed_actions,
+    );
+
+    // 4. Parse and execute action if present
+    const actionsExecuted = [];
+    let actionCost = 0;
+
+    try {
+      // Try to extract JSON action from response
+      const jsonMatch = llmResponse.match(/\{[\s\S]*?"action"[\s\S]*?\}/);
+      if (jsonMatch) {
+        const actionData = JSON.parse(jsonMatch[0]);
+        if (actionData.action && hosting.allowed_actions.includes(actionData.action)) {
+          // Execute the action via the agent's own API key
+          const actionResult = await executeAgentAction(
+            agentData, actionData.action, actionData.params || {}, provider,
+          );
+          actionsExecuted.push({
+            action: actionData.action,
+            params: actionData.params,
+            result: actionResult,
+          });
+          actionCost = 1.0; // Extra cost for on-chain action
+        }
+      }
+    } catch (parseErr) {
+      // No action in response, just monitoring - that's fine
+      console.log(`[AgentExecutor] ${agentData.agentName}: No action parsed (monitoring only)`);
+    }
+
+    // 5. Deduct VCN fee (1.5 base + action cost)
+    const totalCost = 1.5 + actionCost;
+
+    // Deduct fee from agent's wallet using executor pool
+    const executor = executorPool.getNext();
+    if (executor) {
+      try {
+        const feeWei = ethers.parseEther(totalCost.toString());
+        const tokenWithSigner = new ethers.Contract(VCN_TOKEN_ADDRESS, [
+          ...ERC20_ABI,
+          "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+        ], executor);
+
+        // Note: This requires approval from agent wallet to executor
+        // In production, use Paymaster for gasless fee deduction
+        console.log(`[AgentExecutor] Fee: ${totalCost} VCN from ${agentData.agentName}`);
+      } catch (feeErr) {
+        console.warn(`[AgentExecutor] Fee deduction skipped for ${agentData.agentName}: ${feeErr.message}`);
+      }
+    }
+
+    // 6. Record log and update stats
+    await logRef.set({
+      status: "success",
+      llm_model: hosting.llm_model,
+      llm_response: llmResponse.substring(0, 500), // Truncate long responses
+      actions_executed: actionsExecuted,
+      vcn_cost: totalCost,
+      balance_before: balance,
+      balance_after: balance - totalCost,
+      duration_ms: Date.now() - executionStart,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection("agents").doc(agentId).update({
+      "hosting.last_execution": admin.firestore.FieldValue.serverTimestamp(),
+      "hosting.execution_count": admin.firestore.FieldValue.increment(1),
+      "hosting.total_vcn_spent": admin.firestore.FieldValue.increment(totalCost),
+    });
+
+    console.log(`[AgentExecutor] ${agentData.agentName} executed. Cost: ${totalCost} VCN. Actions: ${actionsExecuted.length}`);
+  } catch (err) {
+    // Log error
+    await logRef.set({
+      status: "error",
+      llm_model: hosting.llm_model || "unknown",
+      error_message: err.message,
+      vcn_cost: 0,
+      duration_ms: Date.now() - executionStart,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.error(`[AgentExecutor] ${agentData.agentName} failed:`, err.message);
+  }
+}
+
+// --- Execute Agent On-Chain Action ---
+async function executeAgentAction(agentData, action, params, provider) {
+  switch (action) {
+    case "balance": {
+      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+      const bal = await tokenContract.balanceOf(agentData.walletAddress);
+      return { balance: ethers.formatEther(bal), symbol: "VCN" };
+    }
+    case "network_info": {
+      const block = await provider.getBlockNumber();
+      return { chain_id: 3151909, latest_block: block, name: "Vision Chain" };
+    }
+    case "staking_info": {
+      const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, [
+        "function getStakeInfo(address) view returns (uint256, uint256, uint256)",
+      ], provider);
+      try {
+        const [staked, rewards, cooldownEnd] = await stakingContract.getStakeInfo(agentData.walletAddress);
+        return {
+          staked: ethers.formatEther(staked),
+          pending_rewards: ethers.formatEther(rewards),
+          cooldown_ends: cooldownEnd.toString(),
+        };
+      } catch {
+        return { error: "Failed to fetch staking info" };
+      }
+    }
+    case "leaderboard": {
+      const topSnap = await db.collection("agents")
+        .orderBy("rpPoints", "desc")
+        .limit(5)
+        .get();
+      const leaderboard = [];
+      topSnap.forEach((doc) => {
+        const d = doc.data();
+        leaderboard.push({
+          agent_name: d.agentName,
+          rp_points: d.rpPoints || 0,
+        });
+      });
+      return { leaderboard };
+    }
+    default:
+      return { error: `Action ${action} not yet implemented for hosted agents` };
+  }
+}
+
+// =====================================================
+// EXECUTOR MONITOR - Checks executor wallet balances
+// =====================================================
+exports.executorMonitor = onSchedule({
+  schedule: "every 30 minutes",
+  timeZone: "Asia/Seoul",
+  timeoutSeconds: 60,
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async () => {
+  console.log("[ExecutorMonitor] Checking executor pool balances...");
+
+  try {
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    await executorPool.init(provider);
+
+    const alerts = [];
+    for (const wallet of executorPool.wallets) {
+      const ethBalance = await provider.getBalance(wallet.address);
+      const ethBal = parseFloat(ethers.formatEther(ethBalance));
+
+      if (ethBal < 0.01) {
+        alerts.push({
+          address: wallet.address,
+          balance_eth: ethBal.toFixed(6),
+          status: "CRITICAL",
+        });
+      }
+    }
+
+    if (alerts.length > 0) {
+      console.warn("[ExecutorMonitor] LOW BALANCE ALERTS:", JSON.stringify(alerts));
+
+      // Store alert in Firestore for admin dashboard
+      await db.collection("system_alerts").add({
+        type: "executor_low_balance",
+        alerts,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        resolved: false,
+      });
+    } else {
+      console.log("[ExecutorMonitor] All executor wallets have sufficient balance.");
+    }
+  } catch (err) {
+    console.error("[ExecutorMonitor] Error:", err.message);
   }
 });

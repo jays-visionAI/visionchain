@@ -112,13 +112,14 @@ import { WalletReferralDocs } from './wallet/WalletReferralDocs';
 import Bridge from './Bridge';
 import ValidatorStaking from './ValidatorStaking';
 const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
+const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
 
 import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -4186,6 +4187,15 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         <Show when={activeView() === 'staking'}>
                             <div class="flex-1 overflow-y-auto custom-scrollbar">
                                 <ValidatorStaking walletAddress={walletAddress} privateKey={currentPrivateKey} userEmail={() => userProfile()?.email || ''} />
+                            </div>
+                        </Show>
+
+                        {/* Agent Hosting View */}
+                        <Show when={activeView() === 'agent'}>
+                            <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                    <AgentHosting walletAddress={walletAddress} userEmail={() => userProfile()?.email || ''} />
+                                </Suspense>
                             </div>
                         </Show>
 

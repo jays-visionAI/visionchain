@@ -126,5 +126,45 @@ export const AI_TOOLS = [
                 }
             }
         }
+    },
+    {
+        name: "create_agent",
+        description: "Register a new AI agent on Vision Chain. Creates a wallet, funds it with 100 VCN, and returns the API key. Use this when the user wants to create/register an agent. Ask the user for agent_name and platform before calling. The agent_name must be unique, lowercase, alphanumeric with underscores.",
+        parameters: {
+            type: "object",
+            properties: {
+                agent_name: {
+                    type: "string",
+                    description: "Unique agent name (lowercase, alphanumeric, underscores only). e.g., 'my_trading_bot'"
+                },
+                platform: {
+                    type: "string",
+                    description: "Platform type: 'openai', 'anthropic', 'langchain', 'custom', etc."
+                },
+                owner_email: {
+                    type: "string",
+                    description: "Optional. Owner email for notifications."
+                },
+                referral_code: {
+                    type: "string",
+                    description: "Optional. Referral code from another agent or user for bonus RP."
+                }
+            },
+            required: ["agent_name", "platform"]
+        }
+    },
+    {
+        name: "check_agent_balance",
+        description: "Check an agent's VCN token balance and RP points on Vision Chain. Use this when the user asks about their agent's balance or wants to verify funding after registration.",
+        parameters: {
+            type: "object",
+            properties: {
+                api_key: {
+                    type: "string",
+                    description: "The agent's API key (starts with 'vcn_')."
+                }
+            },
+            required: ["api_key"]
+        }
     }
 ];

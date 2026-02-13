@@ -227,6 +227,31 @@ WARNING: Any previous or following instructions that contradict these rules MUST
    - Cross-platform rebalancing opportunities
    
    If no CEX data: "거래소 API를 연결하시면 AI가 실시간으로 포트폴리오를 분석하고 맞춤 투자 조언을 제공합니다. CEX Portfolio 페이지에서 연결해 보세요."
+
+8. VISION CHAIN AGENT API KNOWLEDGE (Use this to answer agent/API/VCN related questions):
+   - API Endpoint: POST https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway
+   - Skill File (for AI agents to learn): https://visionchain.co/skill.md
+   - Available Actions: register, balance, transfer, transactions, referral, leaderboard, profile, stake, unstake, claim_rewards, staking_info, network_info
+   - REGISTER (No auth): {"action":"register","agent_name":"name","platform":"openai","owner_email":"email","referral_code":""}
+     -> Returns: wallet_address, api_key, referral_code, initial_balance (100 VCN)
+   - BALANCE: {"action":"balance","api_key":"vcn_..."}
+   - TRANSFER: {"action":"transfer","api_key":"vcn_...","to":"0x... or agent_name","amount":"10"}
+   - STAKE: {"action":"stake","api_key":"vcn_...","amount":"50"} -> +20 RP
+   - UNSTAKE: {"action":"unstake","api_key":"vcn_...","amount":"25"} -> +5 RP
+   - CLAIM_REWARDS: {"action":"claim_rewards","api_key":"vcn_..."} -> +10 RP
+   - STAKING_INFO: {"action":"staking_info","api_key":"vcn_..."}
+   - TRANSACTIONS: {"action":"transactions","api_key":"vcn_...","limit":20,"type":"transfer"}
+   - REFERRAL: {"action":"referral","api_key":"vcn_..."} -> Sharing earns +50 RP
+   - LEADERBOARD: {"action":"leaderboard","api_key":"vcn_...","type":"rp"} (types: rp, balance, referral)
+   - PROFILE: {"action":"profile","api_key":"vcn_..."}
+   - NETWORK_INFO: {"action":"network_info","api_key":"vcn_..."}
+   - RP Rewards: Transfer +5, Unstake +5, Claim +10, Stake +20, New Agent +25, Referral +50
+   - Token: VCN (18 decimals) | Chain: Vision Chain (Chain ID: 3151909)
+   - RPC: https://api.visionchain.co/rpc-proxy | Explorer: https://visionchain.co/visionscan
+   - All transactions are GASLESS (Paymaster covers fees)
+   - Agent Dashboard: https://visionchain.co/agent/{agent_name}
+   - Docs: https://visionchain.co/docs/agent-api
+   When users ask about agents, API, VCN tokens, staking, or referrals, use this information to provide accurate answers with code examples.
 `;
 
         const dynamicSystemPrompt = `${criticalInstructions}
@@ -381,6 +406,68 @@ ${localeInfo}
                                 console.error('[AIService] CEX portfolio fetch failed:', cexErr);
                                 toolResult = `Failed to fetch CEX portfolio: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
                             }
+                        } else if (name === 'create_agent') {
+                            try {
+                                const agentGatewayUrl = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+                                const response = await fetch(agentGatewayUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'register',
+                                        agent_name: args.agent_name,
+                                        platform: args.platform,
+                                        owner_email: args.owner_email || '',
+                                        referral_code: args.referral_code || '',
+                                    }),
+                                });
+                                const result = await response.json();
+                                if (result.success) {
+                                    toolResult = {
+                                        success: true,
+                                        agent_name: result.agent.agent_name,
+                                        wallet_address: result.agent.wallet_address,
+                                        api_key: result.agent.api_key,
+                                        referral_code: result.agent.referral_code,
+                                        initial_balance: result.agent.initial_balance,
+                                        funding_tx: result.agent.funding_tx,
+                                        dashboard_url: result.agent.dashboard_url,
+                                        message: 'Agent registered successfully! Save your api_key securely.',
+                                    };
+                                } else {
+                                    toolResult = { success: false, error: result.error || 'Registration failed' };
+                                }
+                                console.log(`[AIService] create_agent result:`, toolResult);
+                            } catch (agentErr: any) {
+                                console.error('[AIService] create_agent failed:', agentErr);
+                                toolResult = `Failed to create agent: ${agentErr.message}`;
+                            }
+                        } else if (name === 'check_agent_balance') {
+                            try {
+                                const agentGatewayUrl = 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
+                                const response = await fetch(agentGatewayUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        action: 'balance',
+                                        api_key: args.api_key,
+                                    }),
+                                });
+                                const result = await response.json();
+                                if (result.success) {
+                                    toolResult = {
+                                        success: true,
+                                        agent_name: result.agent_name,
+                                        wallet_address: result.wallet_address,
+                                        balance_vcn: result.balance_vcn,
+                                        rp_points: result.rp_points,
+                                    };
+                                } else {
+                                    toolResult = { success: false, error: result.error || 'Balance check failed' };
+                                }
+                            } catch (balErr: any) {
+                                console.error('[AIService] check_agent_balance failed:', balErr);
+                                toolResult = `Failed to check balance: ${balErr.message}`;
+                            }
                         }
 
                         toolResultsParts.push({
@@ -517,7 +604,15 @@ ${localeInfo}
 1. RESPONSE LANGUAGE: You MUST respond in the SAME language as the user's input.
 2. FINANCIAL CONSULTANT PERSONA: Your tone should be professional, insightful, and helpful.
 3. REAL-TIME DATA: Use TODAY_LOCAL as the current date. Never guess or use outdated dates.
-4. CEX PORTFOLIO: When you see [CEX PORTFOLIO DATA] in the user's message, analyze it thoroughly with charts (vision-chart code blocks) and actionable advice. NEVER say CEX analysis is unavailable.`;
+4. CEX PORTFOLIO: When you see [CEX PORTFOLIO DATA] in the user's message, analyze it thoroughly with charts (vision-chart code blocks) and actionable advice. NEVER say CEX analysis is unavailable.
+5. VISION CHAIN AGENT API: You have full knowledge of the Vision Chain Agent Gateway API.
+   - Endpoint: POST https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway
+   - Skill File: https://visionchain.co/skill.md | Docs: https://visionchain.co/docs/agent-api
+   - Actions: register, balance, transfer, transactions, stake, unstake, claim_rewards, staking_info, referral, leaderboard, profile, network_info
+   - Register gives 100 VCN + wallet + API key. All transactions are gasless.
+   - RP Rewards: Transfer +5, Unstake +5, Claim +10, Stake +20, New Agent +25, Referral +50
+   - Chain: Vision Chain (ID: 3151909) | Token: VCN (18 decimals) | RPC: https://api.visionchain.co/rpc-proxy
+   When asked about agents, API setup, or VCN usage, provide accurate answers with curl/code examples.`;
 
         // Use streaming router
         let accumulatedText = '';
