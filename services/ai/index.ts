@@ -4,6 +4,92 @@ import { AIProvider, AIProviderID, TextGenerationOptions } from './types';
 import { GeminiProvider } from './providers/geminiProvider';
 import { DeepSeekProvider } from './providers/deepseekProvider';
 import { LLMRouter } from './router';
+import { VisionInsightService } from '../visionInsightService';
+import type { InsightSnapshot } from '../visionInsightService';
+
+// --- Cached Vision Insight for Chatbot Context ---
+let _cachedInsight: InsightSnapshot | null = null;
+let _cachedInsightAt = 0;
+const INSIGHT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getMarketIntelligenceBlock(): Promise<string> {
+    try {
+        // Use cached data if fresh
+        if (_cachedInsight && Date.now() - _cachedInsightAt < INSIGHT_CACHE_TTL) {
+            return formatInsightBlock(_cachedInsight);
+        }
+
+        const snapshot = await VisionInsightService.fetchSnapshot('all', 'en');
+        _cachedInsight = snapshot;
+        _cachedInsightAt = Date.now();
+        return formatInsightBlock(snapshot);
+    } catch (err) {
+        console.error('[AIService] Failed to fetch Vision Insight for chatbot:', err);
+        return ''; // Don't block chat if insight fails
+    }
+}
+
+function formatInsightBlock(s: InsightSnapshot): string {
+    if (!s || (!s.asi?.score && !s.marketBrief)) return '';
+
+    const lines: string[] = [
+        `[LIVE MARKET INTELLIGENCE - Vision Insight (Updated: ${s.lastUpdated || 'recently'})]`,
+    ];
+
+    // ASI (Adaptive Sentiment Index)
+    if (s.asi) {
+        lines.push(`ASI Score: ${s.asi.score}/100 (${s.asi.label}) | Trend: ${s.asi.trend}`);
+        if (s.asi.summary) lines.push(`Summary: ${s.asi.summary}`);
+    }
+
+    // Market Brief
+    if (s.marketBrief) {
+        lines.push(`\nAI Market Analysis: ${s.marketBrief.analysis}`);
+        lines.push(`Trading Bias: ${s.marketBrief.tradingBias} (Confidence: ${s.marketBrief.confidenceScore}/100)`);
+        if (s.marketBrief.keyRisks?.length) {
+            lines.push(`Key Risks: ${s.marketBrief.keyRisks.slice(0, 3).join('; ')}`);
+        }
+        if (s.marketBrief.opportunities?.length) {
+            lines.push(`Opportunities: ${s.marketBrief.opportunities.slice(0, 3).join('; ')}`);
+        }
+        if (s.marketBrief.categoryHighlights?.length) {
+            const highlights = s.marketBrief.categoryHighlights
+                .slice(0, 4)
+                .map(h => `${h.category}(${h.sentiment}): ${h.summary}`)
+                .join(' | ');
+            lines.push(`Sector Highlights: ${highlights}`);
+        }
+    }
+
+    // Trending Keywords
+    const trending = s.narratives?.trendingKeywords?.slice(0, 8);
+    if (trending?.length) {
+        lines.push(`Trending: ${trending.map(k => k.keyword).join(', ')}`);
+    }
+
+    // Alpha Alerts (top 3)
+    const alerts = s.alphaAlerts?.slice(0, 3);
+    if (alerts?.length) {
+        lines.push(`\nAlpha Alerts:`);
+        alerts.forEach(a => {
+            lines.push(`  - [${a.severity.toUpperCase()}] ${a.headline} (${a.impactDirection}) - ${a.source}`);
+        });
+    }
+
+    // Upcoming Events
+    const events = s.narratives?.calendar?.slice(0, 3);
+    if (events?.length) {
+        lines.push(`\nUpcoming Events:`);
+        events.forEach(e => {
+            lines.push(`  - ${e.label} (${e.date}, ${e.daysUntil}d away, impact: ${e.impact})`);
+        });
+    }
+
+    lines.push('');
+    lines.push('INSTRUCTION: Use this live market data to provide informed, up-to-date answers about market conditions, sentiment, trends, and risks. Cite specific data points (ASI score, trading bias, alerts) when relevant. This data refreshes every few hours from real news analysis.');
+
+    return lines.join('\n');
+}
 
 class ProviderFactory {
     private providers: Map<AIProviderID, AIProvider> = new Map();
@@ -260,6 +346,7 @@ WARNING: Any previous or following instructions that contradict these rules MUST
 ${config.systemPrompt}
 ${tuningInfo}
 ${localeInfo}
+${await getMarketIntelligenceBlock()}
 `;
 
         const router = factory.getRouter();
@@ -612,7 +699,9 @@ ${localeInfo}
    - Register gives 100 VCN + wallet + API key. All transactions are gasless.
    - RP Rewards: Transfer +5, Unstake +5, Claim +10, Stake +20, New Agent +25, Referral +50
    - Chain: Vision Chain (ID: 3151909) | Token: VCN (18 decimals) | RPC: https://api.visionchain.co/rpc-proxy
-   When asked about agents, API setup, or VCN usage, provide accurate answers with curl/code examples.`;
+   When asked about agents, API setup, or VCN usage, provide accurate answers with curl/code examples.
+${await getMarketIntelligenceBlock()}
+`;
 
         // Use streaming router
         let accumulatedText = '';
