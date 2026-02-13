@@ -8749,6 +8749,8 @@ exports.agentGateway = onRequest({
       const trigger = body.trigger || { type: "interval", interval_minutes: 60 };
       const allowedActions = body.allowed_actions || [];
       const maxVcnPerAction = Math.min(Math.max(parseFloat(body.max_vcn_per_action) || 5, 1), 100);
+      const actionSettings = body.action_settings || {};
+      const selectedAction = body.selected_action || (allowedActions.length === 1 ? allowedActions[0] : "");
 
       // Validate model
       const validModels = ["gemini-2.0-flash", "deepseek-chat"];
@@ -8766,9 +8768,13 @@ exports.agentGateway = onRequest({
       const validActions = ["balance", "transfer", "stake", "unstake", "network_info", "leaderboard", "staking_info", "transactions", "referral_outreach", "social_promo", "content_create", "invite_distribute", "community_engage"];
       const filteredActions = allowedActions.filter((a) => validActions.includes(a));
 
-      // Estimate monthly cost
+      // Estimate monthly cost based on actual action cost tier
       const executionsPerMonth = (30 * 24 * 60) / intervalMinutes;
-      const costPerExecution = 0.05; // Minimum tier (read-only)
+      const writeActions = ["transfer", "stake", "unstake"];
+      const mediumActions = ["referral_outreach", "social_promo", "invite_distribute", "community_engage"];
+      let costPerExecution = 0.05; // Default read-only tier
+      if (writeActions.includes(selectedAction)) costPerExecution = 0.5;
+      else if (mediumActions.includes(selectedAction)) costPerExecution = 0.1;
       const maintenanceFee = 0;
       const estimatedMonthlyCost = executionsPerMonth * costPerExecution + maintenanceFee;
 
@@ -8781,6 +8787,8 @@ exports.agentGateway = onRequest({
           interval_minutes: intervalMinutes,
         },
         allowed_actions: filteredActions,
+        selected_action: selectedAction,
+        action_settings: actionSettings,
         max_vcn_per_action: maxVcnPerAction,
         estimated_monthly_cost: parseFloat(estimatedMonthlyCost.toFixed(1)),
         total_vcn_spent: 0,
@@ -9179,7 +9187,11 @@ async function executeAgent(agentId, agentData, hosting, provider) {
       return;
     }
 
-    // 2. Build context prompt for the agent
+    // 2. Build context prompt for the agent with user's action settings
+    const actionSettingsStr = hosting.action_settings && Object.keys(hosting.action_settings).length > 0
+      ? `\nYour owner has configured these settings for your action:\n${JSON.stringify(hosting.action_settings, null, 2)}\nYou MUST use these settings when executing actions. For example, use the configured thresholds, recipients, channels, limits, and preferences.`
+      : "";
+
     const contextPrompt = `You are an autonomous AI agent running on Vision Chain.
 Current time: ${new Date().toISOString()}
 Your wallet: ${agentData.walletAddress}
@@ -9187,6 +9199,7 @@ VCN Balance: ${balance.toFixed(2)} VCN
 
 Available actions you can request: ${hosting.allowed_actions.join(", ")}
 Max VCN per action: ${hosting.max_vcn_per_action}
+${actionSettingsStr}
 
 Based on your instructions and current state, decide what to do.
 If you need to perform an action, respond with JSON: {"action": "action_name", "params": {...}}
@@ -9213,7 +9226,7 @@ Do NOT perform any action unless your instructions explicitly require it.`;
         if (actionData.action && hosting.allowed_actions.includes(actionData.action)) {
           // Execute the action via the agent's own API key
           const actionResult = await executeAgentAction(
-            agentData, actionData.action, actionData.params || {}, provider,
+            agentData, actionData.action, actionData.params || {}, provider, hosting,
           );
           actionsExecuted.push({
             action: actionData.action,
@@ -9295,16 +9308,53 @@ Do NOT perform any action unless your instructions explicitly require it.`;
 }
 
 // --- Execute Agent On-Chain Action ---
-async function executeAgentAction(agentData, action, params, provider) {
+async function executeAgentAction(agentData, action, params, provider, hosting = {}) {
+  // Merge stored action_settings with LLM-provided params (stored settings take priority for user-configured values)
+  const settings = hosting.action_settings || {};
+  const mergedParams = { ...params, ...settings };
+
   switch (action) {
     case "balance": {
       const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
       const bal = await tokenContract.balanceOf(agentData.walletAddress);
-      return { balance: ethers.formatEther(bal), symbol: "VCN" };
+      const balanceNum = parseFloat(ethers.formatEther(bal));
+      const alertThreshold = parseFloat(mergedParams.alert_threshold) || 50;
+      const alertMethod = mergedParams.alert_method || "log";
+      const isLow = balanceNum < alertThreshold;
+      return {
+        balance: balanceNum.toFixed(4),
+        symbol: "VCN",
+        alert_threshold: alertThreshold,
+        alert_method: alertMethod,
+        is_below_threshold: isLow,
+        alert: isLow ? `WARNING: Balance ${balanceNum.toFixed(2)} VCN is below threshold ${alertThreshold} VCN. Please top up.` : null,
+      };
     }
     case "network_info": {
       const block = await provider.getBlockNumber();
-      return { chain_id: 3151909, latest_block: block, name: "Vision Chain" };
+      const blockDelayAlert = parseInt(mergedParams.block_delay_alert) || 60;
+      // Check time since last block
+      let timeSinceLastBlock = null;
+      let blockDelayWarning = null;
+      try {
+        const latestBlock = await provider.getBlock(block);
+        if (latestBlock && latestBlock.timestamp) {
+          timeSinceLastBlock = Math.floor(Date.now() / 1000) - latestBlock.timestamp;
+          if (timeSinceLastBlock > blockDelayAlert) {
+            blockDelayWarning = `WARNING: No new block for ${timeSinceLastBlock}s (threshold: ${blockDelayAlert}s). Network may be experiencing issues.`;
+          }
+        }
+      } catch (e) {
+        // Non-critical, continue without timing info
+      }
+      return {
+        chain_id: 3151909,
+        latest_block: block,
+        name: "Vision Chain",
+        block_delay_threshold_sec: blockDelayAlert,
+        seconds_since_last_block: timeSinceLastBlock,
+        alert: blockDelayWarning,
+      };
     }
     case "staking_info": {
       const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, [
@@ -9312,10 +9362,16 @@ async function executeAgentAction(agentData, action, params, provider) {
       ], provider);
       try {
         const [staked, rewards, cooldownEnd] = await stakingContract.getStakeInfo(agentData.walletAddress);
+        const pendingRewards = parseFloat(ethers.formatEther(rewards));
+        const autoClaimThreshold = parseFloat(mergedParams.auto_claim_threshold) || 0;
+        const shouldClaim = autoClaimThreshold > 0 && pendingRewards >= autoClaimThreshold;
         return {
           staked: ethers.formatEther(staked),
-          pending_rewards: ethers.formatEther(rewards),
+          pending_rewards: pendingRewards.toFixed(4),
           cooldown_ends: cooldownEnd.toString(),
+          auto_claim_threshold: autoClaimThreshold,
+          claim_recommended: shouldClaim,
+          alert: shouldClaim ? `Pending rewards (${pendingRewards.toFixed(2)} VCN) exceed auto-claim threshold (${autoClaimThreshold} VCN). Consider claiming.` : null,
         };
       } catch {
         return { error: "Failed to fetch staking info" };
@@ -9341,21 +9397,48 @@ async function executeAgentAction(agentData, action, params, provider) {
       const agentDoc = await db.collection("agents").doc(agentData.agentName).get();
       const refCode = agentDoc.exists ? agentDoc.data().referralCode : "";
       const referralLink = `https://visionchain.co/signup?ref=${refCode}`;
-      // Log outreach attempt
+      const channels = mergedParams.channels || ["twitter"];
+      const customMessage = mergedParams.custom_message || "";
+      const maxDaily = parseInt(mergedParams.max_daily) || 10;
+
+      // Check daily outreach limit
+      const today = new Date().toISOString().split("T")[0];
+      const dailyKey = `outreach_count_${today}`;
+      const currentCount = agentDoc.exists ? (agentDoc.data()[dailyKey] || 0) : 0;
+      if (currentCount >= maxDaily) {
+        return {
+          status: "daily_limit_reached",
+          daily_limit: maxDaily,
+          current_count: currentCount,
+          message: `Daily outreach limit reached (${maxDaily}). Will resume tomorrow.`,
+        };
+      }
+
+      // Log outreach attempt with daily counter
       await db.collection("agents").doc(agentData.agentName).update({
         lastOutreachAt: admin.firestore.FieldValue.serverTimestamp(),
         outreachCount: admin.firestore.FieldValue.increment(1),
+        [dailyKey]: admin.firestore.FieldValue.increment(1),
       });
       return {
         referral_link: referralLink,
         referral_code: refCode,
-        message_template: `Join Vision Chain - the next-gen L1 blockchain. Sign up with my referral: ${referralLink}`,
-        channels_suggested: ["twitter", "telegram", "discord", "email"],
+        message_template: customMessage || `Join Vision Chain - the next-gen L1 blockchain. Sign up with my referral: ${referralLink}`,
+        target_channels: channels,
+        daily_usage: `${currentCount + 1}/${maxDaily}`,
         status: "outreach_prepared",
       };
     }
     case "social_promo": {
-      const topic = params.topic || "general";
+      const topic = mergedParams.topic || "general";
+      const tone = mergedParams.tone || "professional";
+      const customHashtags = mergedParams.hashtags ? mergedParams.hashtags.split(",").map((h) => h.trim()).filter(Boolean) : [];
+      const toneInstructions = {
+        professional: "Write in a professional, authoritative tone suitable for industry leaders.",
+        casual: "Write in a casual, friendly tone that feels approachable and relatable.",
+        hype: "Write with energy and excitement, building hype and FOMO.",
+        educational: "Write in an educational tone, explaining concepts clearly and accurately.",
+      };
       const templates = {
         general: "Vision Chain is redefining blockchain with gasless transactions, built-in AI agents, and zero-knowledge bridges. Join the revolution.",
         staking: "Earn rewards by staking VCN on Vision Chain. Secure the network and grow your portfolio.",
@@ -9366,21 +9449,32 @@ async function executeAgentAction(agentData, action, params, provider) {
         lastPromoAt: admin.firestore.FieldValue.serverTimestamp(),
         promoCount: admin.firestore.FieldValue.increment(1),
       });
+      const defaultHashtags = ["#VisionChain", "#VCN", "#Web3", "#AI", "#Blockchain"];
       return {
         content: templates[topic] || templates.general,
         topic,
-        hashtags: ["#VisionChain", "#VCN", "#Web3", "#AI", "#Blockchain"],
+        tone,
+        tone_instruction: toneInstructions[tone] || toneInstructions.professional,
+        hashtags: [...defaultHashtags, ...customHashtags],
         status: "content_ready",
       };
     }
     case "content_create": {
-      const contentType = params.type || "thread";
+      const contentType = mergedParams.content_type || "thread";
+      const platform = mergedParams.platform || "twitter";
+      const platformGuidelines = {
+        twitter: { max_chars: 280, thread_limit: 15, format: "Short, punchy tweets with emojis and hashtags" },
+        medium: { min_words: 800, format: "Long-form article with headers, images, and clear structure" },
+        blog: { min_words: 500, format: "Blog post with SEO-friendly headers and engaging intro" },
+      };
       await db.collection("agents").doc(agentData.agentName).update({
         lastContentAt: admin.firestore.FieldValue.serverTimestamp(),
         contentCount: admin.firestore.FieldValue.increment(1),
       });
       return {
         content_type: contentType,
+        target_platform: platform,
+        platform_guidelines: platformGuidelines[platform] || platformGuidelines.twitter,
         suggestions: [
           "Write a thread about Vision Chain's gasless transaction model",
           "Create a comparison post: Vision Chain vs other L1s",
@@ -9399,21 +9493,49 @@ async function executeAgentAction(agentData, action, params, provider) {
     case "invite_distribute": {
       const agentDoc2 = await db.collection("agents").doc(agentData.agentName).get();
       const refCode2 = agentDoc2.exists ? agentDoc2.data().referralCode : "";
-      const target = params.target || "general";
+      const targetAudience = mergedParams.target_audience || "general";
+      const customInvite = mergedParams.custom_invite || "";
+      const dailyLimit = parseInt(mergedParams.daily_limit) || 20;
+
+      // Check daily invite limit
+      const today2 = new Date().toISOString().split("T")[0];
+      const dailyKey2 = `invite_count_${today2}`;
+      const currentCount2 = agentDoc2.exists ? (agentDoc2.data()[dailyKey2] || 0) : 0;
+      if (currentCount2 >= dailyLimit) {
+        return {
+          status: "daily_limit_reached",
+          daily_limit: dailyLimit,
+          current_count: currentCount2,
+          message: `Daily invite limit reached (${dailyLimit}). Will resume tomorrow.`,
+        };
+      }
+
+      const audienceMessages = {
+        general: `Join Vision Chain and get free VCN tokens to explore the platform!`,
+        developer: `Build on Vision Chain - gasless L1 with AI agent SDK, full EVM compatibility, and developer-first tooling.`,
+        investor: `Vision Chain (VCN) offers staking rewards, cross-chain bridges, and a growing AI agent ecosystem.`,
+        defi: `DeFi on Vision Chain: zero gas fees, instant finality, and built-in AI agents for automated strategies.`,
+      };
+
       await db.collection("agents").doc(agentData.agentName).update({
         lastInviteAt: admin.firestore.FieldValue.serverTimestamp(),
         inviteCount: admin.firestore.FieldValue.increment(1),
+        [dailyKey2]: admin.firestore.FieldValue.increment(1),
       });
       return {
         referral_code: refCode2,
         signup_link: `https://visionchain.co/signup?ref=${refCode2}`,
-        invite_message: `You're invited to Vision Chain! Get started with free VCN tokens when you sign up: https://visionchain.co/signup?ref=${refCode2}`,
-        target_audience: target,
+        invite_message: customInvite || audienceMessages[targetAudience] || audienceMessages.general,
+        target_audience: targetAudience,
+        daily_usage: `${currentCount2 + 1}/${dailyLimit}`,
         status: "invite_prepared",
       };
     }
     case "community_engage": {
-      // Provide context for community engagement
+      // Provide context for community engagement using stored settings
+      const channels = mergedParams.channels || ["discord"];
+      const focusTopics = mergedParams.focus_topics || ["onboarding"];
+      const engagementStyle = mergedParams.style || "helpful";
       const networkBlock = await provider.getBlockNumber();
       const recentAgents = await db.collection("agents")
         .orderBy("registeredAt", "desc")
@@ -9423,14 +9545,34 @@ async function executeAgentAction(agentData, action, params, provider) {
       recentAgents.forEach((doc) => {
         newAgents.push(doc.data().agentName);
       });
+
+      const styleGuides = {
+        helpful: "Be warm, supportive, and solution-oriented. Proactively offer help.",
+        informative: "Stick to facts and data. Cite documentation when possible.",
+        friendly: "Be casual and approachable. Use conversational language.",
+      };
+
+      const topicTalkingPoints = {
+        staking_faq: ["Current staking APY", "How to stake VCN", "Reward claim process", "Cooldown period for unstaking"],
+        network_updates: ["Latest block height", "Network performance", "New features", "Upcoming upgrades"],
+        onboarding: ["How to create a wallet", "How to get free VCN", "First steps guide", "Referral program benefits"],
+        technical: ["Smart contract deployment", "API documentation", "Agent SDK usage", "Bridge functionality"],
+      };
+
+      const relevantPoints = focusTopics.flatMap((t) => topicTalkingPoints[t] || []);
+
       await db.collection("agents").doc(agentData.agentName).update({
         lastEngageAt: admin.firestore.FieldValue.serverTimestamp(),
         engageCount: admin.firestore.FieldValue.increment(1),
       });
       return {
+        target_channels: channels,
+        focus_topics: focusTopics,
+        engagement_style: engagementStyle,
+        style_guide: styleGuides[engagementStyle] || styleGuides.helpful,
         network_health: { latest_block: networkBlock, status: "healthy" },
         recent_agents: newAgents,
-        talking_points: [
+        talking_points: relevantPoints.length > 0 ? relevantPoints : [
           "Welcome new community members",
           "Share latest network stats",
           "Answer common questions about staking and rewards",
@@ -9438,6 +9580,203 @@ async function executeAgentAction(agentData, action, params, provider) {
         ],
         status: "context_ready",
       };
+    }
+    // === Coming Soon: Write Actions ===
+    case "transfer": {
+      const recipient = mergedParams.recipient;
+      const amount = parseFloat(mergedParams.amount) || 10;
+      const dailyLimit = parseFloat(mergedParams.daily_limit) || 50;
+      const minBalanceKeep = parseFloat(mergedParams.min_balance_keep) || 20;
+      const condition = mergedParams.condition || "always";
+
+      if (!recipient || !recipient.startsWith("0x") || recipient.length !== 42) {
+        return { error: "Invalid recipient address. Please configure a valid 0x address in action settings.", status: "config_error" };
+      }
+
+      // Check balance constraints
+      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+      const bal = await tokenContract.balanceOf(agentData.walletAddress);
+      const currentBalance = parseFloat(ethers.formatEther(bal));
+
+      if (condition === "above_balance" && currentBalance <= (amount + minBalanceKeep)) {
+        return {
+          status: "condition_not_met",
+          current_balance: currentBalance.toFixed(4),
+          required_balance: (amount + minBalanceKeep).toFixed(4),
+          message: "Balance not high enough to trigger transfer while keeping minimum reserve.",
+        };
+      }
+
+      if (currentBalance - amount < minBalanceKeep) {
+        return {
+          status: "insufficient_balance",
+          current_balance: currentBalance.toFixed(4),
+          min_balance_keep: minBalanceKeep,
+          message: `Transfer would drop balance below minimum reserve (${minBalanceKeep} VCN). Skipped.`,
+        };
+      }
+
+      // Check daily limit
+      const today3 = new Date().toISOString().split("T")[0];
+      const dailyKey3 = `transfer_total_${today3}`;
+      const agentDoc3 = await db.collection("agents").doc(agentData.agentName).get();
+      const dailyTotal = agentDoc3.exists ? (agentDoc3.data()[dailyKey3] || 0) : 0;
+      if (dailyTotal + amount > dailyLimit) {
+        return {
+          status: "daily_limit_reached",
+          daily_limit: dailyLimit,
+          daily_spent: dailyTotal,
+          message: `Daily transfer limit would be exceeded (${dailyTotal + amount}/${dailyLimit} VCN). Skipped.`,
+        };
+      }
+
+      // Execute the transfer
+      try {
+        const agentWallet = new ethers.Wallet(agentData.privateKey, provider);
+        const token = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, agentWallet);
+        const tx = await token.transfer(recipient, ethers.parseEther(amount.toString()));
+        await tx.wait();
+
+        // Update daily counter
+        await db.collection("agents").doc(agentData.agentName).update({
+          lastTransferAt: admin.firestore.FieldValue.serverTimestamp(),
+          transferCount: admin.firestore.FieldValue.increment(1),
+          [dailyKey3]: admin.firestore.FieldValue.increment(amount),
+        });
+
+        return {
+          status: "transfer_completed",
+          recipient,
+          amount: amount.toFixed(4),
+          tx_hash: tx.hash,
+          daily_usage: `${(dailyTotal + amount).toFixed(2)}/${dailyLimit} VCN`,
+          remaining_balance: (currentBalance - amount).toFixed(4),
+        };
+      } catch (err) {
+        return { error: `Transfer failed: ${err.message}`, status: "execution_error" };
+      }
+    }
+    case "stake": {
+      const stakeMode = mergedParams.stake_mode || "fixed";
+      const stakeAmount = parseFloat(mergedParams.stake_amount) || 50;
+      const stakePercent = parseFloat(mergedParams.stake_percent) || 80;
+      const autoCompound = mergedParams.auto_compound !== false;
+      const minBalanceKeep = parseFloat(mergedParams.min_balance_keep) || 20;
+
+      // Check current balance
+      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
+      const bal = await tokenContract.balanceOf(agentData.walletAddress);
+      const currentBalance = parseFloat(ethers.formatEther(bal));
+      const availableToStake = Math.max(0, currentBalance - minBalanceKeep);
+
+      // Calculate actual stake amount
+      let actualAmount;
+      if (stakeMode === "percentage") {
+        actualAmount = Math.min(availableToStake, (currentBalance * stakePercent) / 100);
+      } else {
+        actualAmount = Math.min(availableToStake, stakeAmount);
+      }
+
+      if (actualAmount <= 0) {
+        return {
+          status: "insufficient_balance",
+          current_balance: currentBalance.toFixed(4),
+          min_balance_keep: minBalanceKeep,
+          message: `Not enough balance to stake after keeping minimum reserve (${minBalanceKeep} VCN).`,
+        };
+      }
+
+      // Execute staking
+      try {
+        const agentWallet = new ethers.Wallet(agentData.privateKey, provider);
+        const token = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, agentWallet);
+        const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, [
+          "function stake(uint256 amount) external",
+        ], agentWallet);
+
+        // Approve first
+        const approveTx = await token.approve(BRIDGE_STAKING_ADDRESS, ethers.parseEther(actualAmount.toString()));
+        await approveTx.wait();
+
+        // Stake
+        const stakeTx = await stakingContract.stake(ethers.parseEther(actualAmount.toString()));
+        await stakeTx.wait();
+
+        await db.collection("agents").doc(agentData.agentName).update({
+          lastStakeAt: admin.firestore.FieldValue.serverTimestamp(),
+          stakeCount: admin.firestore.FieldValue.increment(1),
+        });
+
+        return {
+          status: "stake_completed",
+          amount_staked: actualAmount.toFixed(4),
+          stake_mode: stakeMode,
+          auto_compound: autoCompound,
+          tx_hash: stakeTx.hash,
+          remaining_balance: (currentBalance - actualAmount).toFixed(4),
+        };
+      } catch (err) {
+        return { error: `Staking failed: ${err.message}`, status: "execution_error" };
+      }
+    }
+    case "unstake": {
+      const unstakeAmountType = mergedParams.unstake_amount || "all";
+      const partialAmount = parseFloat(mergedParams.partial_amount) || 100;
+      const triggerCondition = mergedParams.trigger_condition || "manual";
+      const targetApy = parseFloat(mergedParams.target_apy) || 5;
+
+      // Get current staking info
+      const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, [
+        "function getStakeInfo(address) view returns (uint256, uint256, uint256)",
+        "function requestUnstake(uint256 amount) external",
+      ], provider);
+      try {
+        const [staked, rewards] = await stakingContract.getStakeInfo(agentData.walletAddress);
+        const stakedAmount = parseFloat(ethers.formatEther(staked));
+
+        if (stakedAmount <= 0) {
+          return { status: "no_stake", message: "No VCN currently staked. Nothing to unstake." };
+        }
+
+        // Check APY condition if applicable
+        if (triggerCondition === "apy_below") {
+          // Simplified APY calculation (annualized rewards / staked)
+          const pendingRewards = parseFloat(ethers.formatEther(rewards));
+          const estimatedApy = stakedAmount > 0 ? (pendingRewards / stakedAmount) * 365 * 100 : 0;
+          if (estimatedApy >= targetApy) {
+            return {
+              status: "condition_not_met",
+              current_apy: estimatedApy.toFixed(2),
+              target_apy: targetApy,
+              message: `Current estimated APY (${estimatedApy.toFixed(2)}%) is above target (${targetApy}%). No unstake needed.`,
+            };
+          }
+        }
+
+        // Calculate unstake amount
+        const actualUnstake = unstakeAmountType === "all" ? stakedAmount : Math.min(partialAmount, stakedAmount);
+
+        // Execute unstake
+        const agentWallet = new ethers.Wallet(agentData.privateKey, provider);
+        const stakingWithSigner = stakingContract.connect(agentWallet);
+        const tx = await stakingWithSigner.requestUnstake(ethers.parseEther(actualUnstake.toString()));
+        await tx.wait();
+
+        await db.collection("agents").doc(agentData.agentName).update({
+          lastUnstakeAt: admin.firestore.FieldValue.serverTimestamp(),
+          unstakeCount: admin.firestore.FieldValue.increment(1),
+        });
+
+        return {
+          status: "unstake_requested",
+          amount_unstaked: actualUnstake.toFixed(4),
+          unstake_type: unstakeAmountType,
+          tx_hash: tx.hash,
+          remaining_staked: (stakedAmount - actualUnstake).toFixed(4),
+        };
+      } catch (err) {
+        return { error: `Unstake failed: ${err.message}`, status: "execution_error" };
+      }
     }
     default:
       return { error: `Action ${action} not yet implemented for hosted agents` };
