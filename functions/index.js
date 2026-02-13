@@ -10731,11 +10731,15 @@ exports.getVisionInsight = onCall({
       .limit(1)
       .get();
 
-    if (snapshotQuery.empty) {
-      return { error: "No insight data available yet. Data collection starts shortly." };
-    }
-
-    const snapshot = snapshotQuery.docs[0].data();
+    const snapshot = snapshotQuery.empty ? {
+      asi: { score: 50, label: "Neutral", trend: "STABLE", summary: "Initializing market analysis..." },
+      alphaAlerts: [],
+      whaleWatch: getPlaceholderWhaleData(),
+      narratives: { trendingKeywords: [], calendar: [] },
+      marketBrief: null,
+      articlesAnalyzed: 0,
+      createdAt: null,
+    } : snapshotQuery.docs[0].data();
 
     // Agent View: raw JSON format
     if (format === "json") {
