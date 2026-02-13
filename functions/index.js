@@ -2101,8 +2101,8 @@ async function handleAgentExecution(req, res, { user, amount, fee, deadline, sig
     return res.status(403).json({ error: "Agent wallet mismatch" });
   }
 
-  // Default execution fee: 1.5 VCN
-  const executionFee = fee ? BigInt(fee) : ethers.parseEther("1.5");
+  // Default execution fee: 0.05 VCN (minimum tier)
+  const executionFee = fee ? BigInt(fee) : ethers.parseEther("0.05");
   const adminAddress = adminWallet.address;
 
   try {
@@ -8717,8 +8717,8 @@ exports.agentGateway = onRequest({
 
       // Estimate monthly cost
       const executionsPerMonth = (30 * 24 * 60) / intervalMinutes;
-      const costPerExecution = 1.5;
-      const maintenanceFee = 10;
+      const costPerExecution = 0.05; // Minimum tier (read-only)
+      const maintenanceFee = 0;
       const estimatedMonthlyCost = executionsPerMonth * costPerExecution + maintenanceFee;
 
       const hostingConfig = {
@@ -9169,7 +9169,16 @@ Do NOT perform any action unless your instructions explicitly require it.`;
             params: actionData.params,
             result: actionResult,
           });
-          actionCost = 1.0; // Extra cost for on-chain action
+          // Tiered action cost: write actions cost more
+          const writeActions = ["transfer", "stake", "unstake"];
+          const mediumActions = ["transactions"];
+          if (writeActions.includes(actionData.action)) {
+            actionCost = 0.45; // Total = 0.05 base + 0.45 = 0.5 VCN
+          } else if (mediumActions.includes(actionData.action)) {
+            actionCost = 0.05; // Total = 0.05 base + 0.05 = 0.1 VCN
+          } else {
+            actionCost = 0; // Read-only: 0.05 VCN base only
+          }
         }
       }
     } catch (parseErr) {
@@ -9177,8 +9186,8 @@ Do NOT perform any action unless your instructions explicitly require it.`;
       console.log(`[AgentExecutor] ${agentData.agentName}: No action parsed (monitoring only)`);
     }
 
-    // 5. Deduct VCN fee (1.5 base + action cost)
-    const totalCost = 1.5 + actionCost;
+    // 5. Deduct VCN fee (tiered: 0.05 base + action cost)
+    const totalCost = 0.05 + actionCost;
 
     // Deduct fee from agent's wallet using executor pool
     const executor = executorPool.getNext();

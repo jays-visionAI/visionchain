@@ -78,9 +78,8 @@ export default function AgentHosting(props: AgentHostingProps) {
     const estimatedMonthlyCost = createMemo(() => {
         const interval = triggerInterval();
         const executionsPerMonth = (30 * 24 * 60) / interval;
-        const costPerExecution = 1.5; // LLM included
-        const maintenance = 10;
-        return (executionsPerMonth * costPerExecution + maintenance).toFixed(1);
+        const costPerExecution = 0.05; // Minimum tier (read-only)
+        return (executionsPerMonth * costPerExecution).toFixed(1);
     });
 
     onMount(async () => {
@@ -838,18 +837,18 @@ export default function AgentHosting(props: AgentHostingProps) {
                         </button>
 
                         {/* Pricing Info */}
-                        <div class="ah-fee-breakdown" style="max-width: 340px; margin: 24px auto 0;">
+                        <div class="ah-fee-breakdown" style="max-width: 380px; margin: 24px auto 0;">
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Per execution (ZYNK AI included)</span>
-                                <span class="ah-fee-value">1.5 VCN</span>
+                                <span class="ah-fee-label">Read-only (balance, network, leaderboard)</span>
+                                <span class="ah-fee-value">0.05 VCN</span>
                             </div>
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">On-chain action included</span>
-                                <span class="ah-fee-value">2.5 VCN</span>
+                                <span class="ah-fee-label">Medium (transactions query)</span>
+                                <span class="ah-fee-value">0.1 VCN</span>
                             </div>
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Monthly maintenance</span>
-                                <span class="ah-fee-value">10 VCN</span>
+                                <span class="ah-fee-label">On-chain write (transfer, stake, unstake)</span>
+                                <span class="ah-fee-value">0.5 VCN</span>
                             </div>
                             <div class="ah-fee-divider" />
                             <div class="ah-fee-row">
@@ -1176,12 +1175,16 @@ export default function AgentHosting(props: AgentHostingProps) {
 
                         <div class="ah-fee-breakdown">
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Per execution (ZYNK AI included)</span>
-                                <span class="ah-fee-value">1.5 VCN</span>
+                                <span class="ah-fee-label">Read-only actions</span>
+                                <span class="ah-fee-value">0.05 VCN</span>
                             </div>
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Monthly maintenance</span>
-                                <span class="ah-fee-value">10.0 VCN</span>
+                                <span class="ah-fee-label">Medium actions</span>
+                                <span class="ah-fee-value">0.1 VCN</span>
+                            </div>
+                            <div class="ah-fee-row">
+                                <span class="ah-fee-label">On-chain write actions</span>
+                                <span class="ah-fee-value">0.5 VCN</span>
                             </div>
                             <div class="ah-fee-divider" />
                             <div class="ah-fee-row">
