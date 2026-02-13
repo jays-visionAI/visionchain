@@ -185,10 +185,17 @@ export default function AgentHosting(props: AgentHostingProps) {
 
     const handleStartAgent = async () => {
         const agent = agents()[0];
-        if (!agent) return;
+        if (!agent) {
+            setRegisterError('No agent found. Please register first.');
+            return;
+        }
+
+        setIsRegistering(true);
+        setRegisterError('');
 
         try {
             // Save hosting configuration
+            console.log('[AgentHosting] Configuring hosting for:', agent.agent_name);
             const resp = await fetch(AGENT_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -206,27 +213,43 @@ export default function AgentHosting(props: AgentHostingProps) {
                 }),
             });
             const configData = await resp.json();
-            if (configData.success) {
-                // Also toggle hosting on
-                await fetch(AGENT_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'toggle_hosting',
-                        api_key: agent.api_key,
-                        enabled: true,
-                    }),
-                });
+            console.log('[AgentHosting] Configure response:', configData);
+
+            if (!configData.success) {
+                setRegisterError(configData.error || 'Failed to configure hosting');
+                setIsRegistering(false);
+                return;
+            }
+
+            // Toggle hosting on
+            console.log('[AgentHosting] Enabling hosting...');
+            const toggleResp = await fetch(AGENT_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'toggle_hosting',
+                    api_key: agent.api_key,
+                    enabled: true,
+                }),
+            });
+            const toggleData = await toggleResp.json();
+            console.log('[AgentHosting] Toggle response:', toggleData);
+
+            if (toggleData.success) {
                 setAgents(prev => prev.map(a =>
                     a.agent_name === agent.agent_name
                         ? { ...a, status: 'active', llm_model: selectedModel(), system_prompt: systemPrompt(), interval_minutes: triggerInterval(), allowed_actions: selectedActions() }
                         : a
                 ));
                 setActiveTab('overview');
+            } else {
+                setRegisterError(toggleData.error || 'Failed to enable hosting');
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('[AgentHosting] Failed to start agent:', err);
+            setRegisterError(err.message || 'Network error during deployment');
         }
+        setIsRegistering(false);
     };
 
     const handleToggleAgent = async (agentName: string, currentStatus: string) => {
@@ -1217,15 +1240,22 @@ export default function AgentHosting(props: AgentHostingProps) {
                             </div>
                         </div>
 
-                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px;">
-                            <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
-                            <button
-                                class="ah-btn-primary"
-                                onClick={handleStartAgent}
-                                disabled={!systemPrompt().trim() || selectedActions().length === 0}
-                            >
-                                <Play class="w-4 h-4" /> Deploy Agent
-                            </button>
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 20px;">
+                            <Show when={registerError()}>
+                                <div style="padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #f87171; font-size: 12px;">
+                                    {registerError()}
+                                </div>
+                            </Show>
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
+                                <button
+                                    class="ah-btn-primary"
+                                    onClick={handleStartAgent}
+                                    disabled={!systemPrompt().trim() || selectedActions().length === 0 || isRegistering()}
+                                >
+                                    {isRegistering() ? 'Deploying...' : <><Play class="w-4 h-4" /> Deploy Agent</>}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </Show>

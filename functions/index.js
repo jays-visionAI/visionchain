@@ -9538,6 +9538,10 @@ const BLOCKY_MEDIA_SOURCES = [
   { id: "decrypt", name: "Decrypt", url: "https://decrypt.co/feed", lang: "en", region: "global" },
   { id: "theblock", name: "The Block", url: "https://www.theblock.co/rss", lang: "en", region: "global" },
   { id: "bitcoinmag", name: "Bitcoin Magazine", url: "https://bitcoinmagazine.com/feed", lang: "en", region: "global" },
+  // Google News - Crypto Syndication (free, no API key)
+  { id: "gnews-crypto", name: "Google News Crypto", url: "https://news.google.com/rss/search?q=cryptocurrency+OR+bitcoin+OR+ethereum+OR+crypto+market&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-crypto-kr", name: "Google News Crypto KR", url: "https://news.google.com/rss/search?q=%EA%B0%80%EC%83%81%EC%9E%90%EC%82%B0+OR+%EB%B9%84%ED%8A%B8%EC%BD%94%EC%9D%B8+OR+%EC%95%94%ED%98%B8%ED%99%94%ED%8F%90&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "gnews-bitcoin", name: "Google News Bitcoin", url: "https://news.google.com/rss/search?q=bitcoin+OR+btc+price+OR+bitcoin+etf&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
   // Asia (5)
   { id: "decenter", name: "DeCenter", url: "https://decenter.kr/rss/allArticle.xml", lang: "ko", region: "korea", fallbackScrape: true },
   { id: "blockmedia", name: "BlockMedia", url: "https://www.blockmedia.co.kr/feed/", lang: "ko", region: "korea", fallbackScrape: true },
@@ -9852,79 +9856,153 @@ function getFallbackCalendar() {
 }
 
 /**
- * Fetch whale activity data from Whale Alert API
+ * Fetch whale activity using free APIs:
+ * - Etherscan Public API (ETH large internal txs, no key needed for basic)
+ * - Blockchain.com API (BTC recent blocks, completely free)
  * @return {Promise<object>} Whale activity summary
  */
 async function fetchWhaleActivity() {
   if (!axios) axios = require("axios");
 
+  const largeTxs = [];
+  let exchangeInflow = 0;
+  let exchangeOutflow = 0;
+
+  // Known exchange addresses (lowercase) for flow classification
+  const knownExchanges = new Set([
+    "binance", "coinbase", "kraken", "bitfinex", "huobi", "okx",
+    "kucoin", "bybit", "gate.io", "crypto.com", "upbit", "bithumb",
+  ]);
+  const ethExchangeAddrs = {
+    "0x28c6c06298d514db089934071355e5743bf21d60": "Binance 14",
+    "0x21a31ee1afc51d94c2efccaa2092ad1028285549": "Binance 15",
+    "0xdfd5293d8e347dfe59e90efd55b2956a1343963d": "Binance 16",
+    "0x56eddb7aa87536c09ccc2793473599fd21a8b17f": "Binance 17",
+    "0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43": "Coinbase 10",
+    "0x503828976d22510aad0201ac7ec88293211d23da": "Coinbase 2",
+    "0x71660c4005ba85c37ccec55d0c4493e66fe775d3": "Coinbase 3",
+    "0x2910543af39aba0cd09dbb2d50200b3e800a63d2": "Kraken 13",
+    "0x267be1c1d684f78cb4f6a176c4911b741e4ffdc0": "Kraken 4",
+    "0x176f3dab24a159341c0509bb36b833e7fdd0a132": "OKX",
+    "0x98ec059dc3adfbdd63429454aeb0c990fba4a128": "OKX 2",
+    "0x6cc5f688a315f3dc28a7781717a9a798a59fda7b": "OKX 3",
+  };
+
+  // --- 1. Etherscan: Fetch recent large ETH transfers (free, no API key) ---
   try {
-    const whaleAlertKey = await getApiKeyFromFirestore("whale_alert") ||
-      process.env.WHALE_ALERT_API_KEY || "";
-
-    if (!whaleAlertKey) {
-      console.warn("[Blocky] Whale Alert API key not configured, using placeholder data");
-      return getPlaceholderWhaleData();
-    }
-
-    // Get transactions from last 24 hours with min value $1M
-    const since = Math.floor((Date.now() - 24 * 60 * 60 * 1000) / 1000);
-
-    const response = await axios.get(
-      `https://api.whale-alert.io/v1/transactions?api_key=${whaleAlertKey}&min_value=1000000&start=${since}&limit=20`,
-      { timeout: 15000 },
+    // Use Etherscan public API - get latest ETH blocks and large value txs
+    // Free tier: 5 calls/sec, no key needed for basic endpoints
+    const ethRes = await axios.get(
+      "https://api.etherscan.io/api?module=proxy&action=eth_blockNumber",
+      { timeout: 10000 },
     );
+    const latestBlock = parseInt(ethRes.data?.result || "0", 16);
 
-    const txs = response.data?.transactions || [];
+    if (latestBlock > 0) {
+      // Get transactions from a recent block (look back ~100 blocks, ~20 min)
+      const fromBlock = latestBlock - 100;
+      const txListRes = await axios.get(
+        `https://api.etherscan.io/api?module=account&action=txlistinternal&startblock=${fromBlock}&endblock=${latestBlock}&page=1&offset=50&sort=desc`,
+        { timeout: 15000 },
+      );
 
-    // Aggregate flows
-    let exchangeInflow = 0;
-    let exchangeOutflow = 0;
-    const largeTxs = [];
+      const ethTxs = txListRes.data?.result || [];
+      if (Array.isArray(ethTxs)) {
+        for (const tx of ethTxs) {
+          const valueEth = parseFloat(tx.value) / 1e18;
+          if (valueEth < 100) continue; // Only 100+ ETH transfers (~$300K+)
 
-    for (const tx of txs) {
-      const value = tx.amount_usd || 0;
-      const isToExchange = tx.to?.owner_type === "exchange";
-      const isFromExchange = tx.from?.owner_type === "exchange";
+          const estimatedUsd = valueEth * 3000; // Rough ETH price estimate
+          const fromAddr = (tx.from || "").toLowerCase();
+          const toAddr = (tx.to || "").toLowerCase();
+          const fromLabel = ethExchangeAddrs[fromAddr] || "wallet";
+          const toLabel = ethExchangeAddrs[toAddr] || "wallet";
+          const isFromExchange = !!ethExchangeAddrs[fromAddr];
+          const isToExchange = !!ethExchangeAddrs[toAddr];
 
-      if (isToExchange && !isFromExchange) {
-        exchangeInflow += value;
-      } else if (isFromExchange && !isToExchange) {
-        exchangeOutflow += value;
-      }
+          if (isToExchange && !isFromExchange) exchangeInflow += estimatedUsd;
+          if (isFromExchange && !isToExchange) exchangeOutflow += estimatedUsd;
 
-      if (largeTxs.length < 5) {
-        largeTxs.push({
-          symbol: tx.symbol || "BTC",
-          amount: tx.amount || 0,
-          amountUsd: value,
-          from: tx.from?.owner || "unknown",
-          to: tx.to?.owner || "unknown",
-          hash: tx.hash || "",
-          timestamp: tx.timestamp,
-        });
+          if (largeTxs.length < 5) {
+            largeTxs.push({
+              symbol: "ETH",
+              amount: Math.round(valueEth * 100) / 100,
+              amountUsd: Math.round(estimatedUsd),
+              from: fromLabel,
+              to: toLabel,
+              hash: tx.hash || "",
+              timestamp: parseInt(tx.timeStamp || "0"),
+            });
+          }
+        }
       }
     }
-
-    const netFlow = exchangeOutflow - exchangeInflow; // positive = accumulation
-    return {
-      netFlow,
-      flowDirection: netFlow > 0 ? "accumulation" : "distribution",
-      exchangeInflow,
-      exchangeOutflow,
-      largeTxs,
-      topSector: "crypto", // Would need more data for sector breakdown
-      dataSource: "whale_alert",
-    };
+    console.log(`[Blocky] Etherscan: found ${largeTxs.length} large ETH transfers`);
   } catch (err) {
-    console.warn(`[Blocky] Whale Alert fetch failed: ${err.message}`);
-    return getPlaceholderWhaleData();
+    console.warn(`[Blocky] Etherscan fetch failed: ${err.message}`);
   }
+
+  // --- 2. Blockchain.com: Fetch recent large BTC transactions (free, no key) ---
+  try {
+    const btcRes = await axios.get(
+      "https://blockchain.info/latestblock",
+      { timeout: 10000 },
+    );
+    const latestHash = btcRes.data?.hash;
+
+    if (latestHash) {
+      const blockRes = await axios.get(
+        `https://blockchain.info/rawblock/${latestHash}?format=json`,
+        { timeout: 15000 },
+      );
+      const btcTxs = blockRes.data?.tx || [];
+      const btcPrice = 95000; // Rough BTC price estimate
+
+      for (const tx of btcTxs) {
+        // Sum outputs for tx value
+        const totalOut = (tx.out || []).reduce((s, o) => s + (o.value || 0), 0);
+        const valueBtc = totalOut / 1e8;
+        if (valueBtc < 10) continue; // Only 10+ BTC transfers (~$950K+)
+
+        const estimatedUsd = valueBtc * btcPrice;
+
+        if (largeTxs.length < 8) {
+          largeTxs.push({
+            symbol: "BTC",
+            amount: Math.round(valueBtc * 1000) / 1000,
+            amountUsd: Math.round(estimatedUsd),
+            from: "wallet",
+            to: "wallet",
+            hash: tx.hash || "",
+            timestamp: tx.time || 0,
+          });
+        }
+      }
+    }
+    console.log(`[Blocky] Blockchain.com: processed BTC block for whale txs`);
+  } catch (err) {
+    console.warn(`[Blocky] Blockchain.com fetch failed: ${err.message}`);
+  }
+
+  // Sort by USD value desc
+  largeTxs.sort((a, b) => b.amountUsd - a.amountUsd);
+  const topTxs = largeTxs.slice(0, 5);
+
+  const netFlow = exchangeOutflow - exchangeInflow; // positive = accumulation
+  return {
+    netFlow,
+    flowDirection: netFlow > 0 ? "accumulation" : netFlow < 0 ? "distribution" : "neutral",
+    exchangeInflow,
+    exchangeOutflow,
+    largeTxs: topTxs,
+    topSector: "crypto",
+    dataSource: "etherscan+blockchain.com",
+  };
 }
 
 /**
- * Placeholder whale data when API is not configured
- * @return {object} Placeholder data
+ * Fallback whale data when all APIs fail
+ * @return {object} Empty data
  */
 function getPlaceholderWhaleData() {
   return {
@@ -9934,7 +10012,7 @@ function getPlaceholderWhaleData() {
     exchangeOutflow: 0,
     largeTxs: [],
     topSector: "N/A",
-    dataSource: "placeholder",
+    dataSource: "unavailable",
   };
 }
 

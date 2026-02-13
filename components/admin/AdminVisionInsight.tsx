@@ -737,8 +737,8 @@ function AdminVisionInsight() {
                     }}>
                         <h3 style={{ margin: '0 0 12px', 'font-size': '14px', 'font-weight': '700' }}>Add API Key</h3>
                         <p style={{ 'font-size': '11px', color: '#888', 'margin-bottom': '12px' }}>
-                            Required: <b style={{ color: '#22d3ee' }}>finnhub</b> (economic calendar), <b style={{ color: '#22d3ee' }}>whale_alert</b> (whale tracking).
-                            Optional: gemini, deepseek (AI analysis).
+                            Required: <b style={{ color: '#22d3ee' }}>finnhub</b> (economic calendar).
+                            Optional: gemini, deepseek (AI analysis). Whale tracking uses free Etherscan + Blockchain.com APIs (no key needed).
                         </p>
                         <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap', 'align-items': 'flex-end' }}>
                             <div>
@@ -753,7 +753,6 @@ function AdminVisionInsight() {
                                 >
                                     <option value="">Select...</option>
                                     <option value="finnhub">Finnhub</option>
-                                    <option value="whale_alert">Whale Alert</option>
                                     <option value="gemini">Gemini AI</option>
                                     <option value="deepseek">DeepSeek</option>
                                 </select>
@@ -799,7 +798,7 @@ function AdminVisionInsight() {
                     }}>
                         <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'margin-bottom': '16px' }}>
                             <Rss size={16} color="#f59e0b" />
-                            <h3 style={{ margin: '0', 'font-size': '14px', 'font-weight': '700' }}>Configured Media Sources (10)</h3>
+                            <h3 style={{ margin: '0', 'font-size': '14px', 'font-weight': '700' }}>Configured Media Sources (13)</h3>
                         </div>
 
                         {/* Global Sources */}
@@ -823,6 +822,36 @@ function AdminVisionInsight() {
                                     }}>
                                         <div style={{
                                             width: '6px', height: '6px', 'border-radius': '50%', background: '#22c55e',
+                                        }} />
+                                        <div>
+                                            <div style={{ 'font-size': '12px', 'font-weight': '700', color: '#ddd' }}>{s.name}</div>
+                                            <div style={{ 'font-size': '10px', color: '#666' }}>{s.url} ({s.lang})</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Google News Syndication */}
+                        <div style={{ 'margin-bottom': '16px' }}>
+                            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'margin-bottom': '10px' }}>
+                                <Search size={12} color="#f59e0b" />
+                                <span style={{ 'font-size': '11px', 'font-weight': '700', color: '#f59e0b', 'text-transform': 'uppercase', 'letter-spacing': '1px' }}>Google News Syndication (3)</span>
+                                <span style={{ 'font-size': '9px', color: '#22c55e', 'margin-left': '4px' }}>FREE - NO API KEY</span>
+                            </div>
+                            <div style={{ display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+                                {[
+                                    { name: 'Google News Crypto', lang: 'EN', url: 'news.google.com (crypto)' },
+                                    { name: 'Google News Crypto KR', lang: 'KO', url: 'news.google.com (가상자산)' },
+                                    { name: 'Google News Bitcoin', lang: 'EN', url: 'news.google.com (bitcoin)' },
+                                ].map(s => (
+                                    <div style={{
+                                        display: 'flex', 'align-items': 'center', gap: '8px',
+                                        padding: '10px 12px', background: 'rgba(255,255,255,0.02)',
+                                        'border-radius': '8px', border: '1px solid rgba(245,158,11,0.15)',
+                                    }}>
+                                        <div style={{
+                                            width: '6px', height: '6px', 'border-radius': '50%', background: '#f59e0b',
                                         }} />
                                         <div>
                                             <div style={{ 'font-size': '12px', 'font-weight': '700', color: '#ddd' }}>{s.name}</div>
