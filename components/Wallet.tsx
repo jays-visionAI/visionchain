@@ -4436,12 +4436,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                         { minLvl: 80, bg: 'bg-rose-500', border: 'border-rose-500/30' },
                                                                         { minLvl: 90, bg: 'bg-yellow-500', border: 'border-yellow-500/30' }
                                                                     ];
-                                                                    let level = 1;
-                                                                    // Level Calc Logic
-                                                                    if (count < 20) { level = count + 1; }
-                                                                    else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                    else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                    else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                    let level = Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2);
                                                                     if (level > 100) level = 100;
 
                                                                     const rank = RANKS.slice().reverse().find(r => level >= r.minLvl) || RANKS[0];
@@ -4452,12 +4447,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                     <span class="text-[10px] font-black text-white uppercase tracking-widest">
                                                                         {(() => {
                                                                             const count = userProfile().referralCount || 0;
-                                                                            let level = 1;
-                                                                            // Level Calc Logic
-                                                                            if (count < 20) { level = count + 1; }
-                                                                            else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                            else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                            else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                            let level = Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2);
                                                                             if (level > 100) level = 100;
 
                                                                             const names = ['Novice', 'Scout', 'Ranger', 'Guardian', 'Elite', 'Captain', 'Commander', 'Warlord', 'Titan', 'Visionary'];
@@ -4678,11 +4668,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                             <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
                                                                 <div class="text-lg font-black">{(() => {
                                                                     const count = userProfile().referralCount || 0;
-                                                                    let level = 1;
-                                                                    if (count < 20) { level = count + 1; }
-                                                                    else if (count < 80) { level = 20 + Math.floor((count - 20) / 2) + 1; }
-                                                                    else if (count < 230) { level = 50 + Math.floor((count - 80) / 5) + 1; }
-                                                                    else { level = 80 + Math.floor((count - 230) / 10) + 1; }
+                                                                    let level = Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2);
                                                                     if (level > 100) level = 100;
 
                                                                     const getRankName = (lvl: number) => {
