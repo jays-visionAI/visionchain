@@ -9530,27 +9530,61 @@ function getCheerio() {
   return cheerio;
 }
 
-// Vision Insight media sources configuration
+// Vision Insight media sources configuration - Category-based Google News RSS + Specialist Media
 const BLOCKY_MEDIA_SOURCES = [
-  // Global (5)
-  { id: "cointelegraph", name: "CoinTelegraph", url: "https://cointelegraph.com/rss", lang: "en", region: "global" },
-  { id: "coindesk", name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/", lang: "en", region: "global" },
-  { id: "decrypt", name: "Decrypt", url: "https://decrypt.co/feed", lang: "en", region: "global" },
-  { id: "theblock", name: "The Block", url: "https://www.theblock.co/rss", lang: "en", region: "global" },
-  { id: "bitcoinmag", name: "Bitcoin Magazine", url: "https://bitcoinmagazine.com/feed", lang: "en", region: "global" },
-  // Google News - Crypto Syndication (free, no API key)
-  { id: "gnews-crypto", name: "Google News Crypto", url: "https://news.google.com/rss/search?q=cryptocurrency+OR+bitcoin+OR+ethereum+OR+crypto+market&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
-  { id: "gnews-crypto-kr", name: "Google News Crypto KR", url: "https://news.google.com/rss/search?q=%EA%B0%80%EC%83%81%EC%9E%90%EC%82%B0+OR+%EB%B9%84%ED%8A%B8%EC%BD%94%EC%9D%B8+OR+%EC%95%94%ED%98%B8%ED%99%94%ED%8F%90&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
-  { id: "gnews-bitcoin", name: "Google News Bitcoin", url: "https://news.google.com/rss/search?q=bitcoin+OR+btc+price+OR+bitcoin+etf&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
-  // Asia (5)
-  { id: "decenter", name: "DeCenter", url: "https://decenter.kr/rss/allArticle.xml", lang: "ko", region: "korea", fallbackScrape: true },
-  { id: "blockmedia", name: "BlockMedia", url: "https://www.blockmedia.co.kr/feed/", lang: "ko", region: "korea", fallbackScrape: true },
-  { id: "coinpost", name: "CoinPost", url: "https://coinpost.jp/?feed=rss2", lang: "ja", region: "japan" },
-  { id: "blockhead", name: "Blockhead", url: "https://blockhead.co/feed/", lang: "en", region: "singapore" },
-  { id: "coingape", name: "CoinGape", url: "https://coingape.com/feed/", lang: "en", region: "india" },
+  // ===== BITCOIN & BTC ETF =====
+  { id: "gnews-btc-en", name: "Google News Bitcoin", category: "bitcoin", url: "https://news.google.com/rss/search?q=bitcoin+OR+btc+etf+OR+btc+price+OR+bitcoin+halving&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-btc-kr", name: "Google News BTC KR", category: "bitcoin", url: "https://news.google.com/rss/search?q=%EB%B9%84%ED%8A%B8%EC%BD%94%EC%9D%B8+OR+BTC+%EA%B0%80%EA%B2%A9+OR+%EB%B9%84%ED%8A%B8%EC%BD%94%EC%9D%B8+ETF&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "bitcoinmag", name: "Bitcoin Magazine", category: "bitcoin", url: "https://bitcoinmagazine.com/feed", lang: "en", region: "global" },
+
+  // ===== ETHEREUM & LAYER 2 =====
+  { id: "gnews-eth-en", name: "Google News Ethereum", category: "ethereum", url: "https://news.google.com/rss/search?q=ethereum+OR+ETH+price+OR+layer2+blockchain+OR+arbitrum+OR+optimism&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-eth-kr", name: "Google News ETH KR", category: "ethereum", url: "https://news.google.com/rss/search?q=%EC%9D%B4%EB%8D%94%EB%A6%AC%EC%9B%80+OR+%EB%A0%88%EC%9D%B4%EC%96%B4+2+OR+%EC%95%84%EB%B9%84%ED%8A%B8%EB%9F%BC&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "coindesk", name: "CoinDesk", category: "ethereum", url: "https://www.coindesk.com/arc/outboundfeeds/rss/", lang: "en", region: "global" },
+
+  // ===== DeFi & DEX =====
+  { id: "gnews-defi-en", name: "Google News DeFi", category: "defi", url: "https://news.google.com/rss/search?q=defi+OR+decentralized+finance+OR+dex+OR+uniswap+OR+aave&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-defi-kr", name: "Google News DeFi KR", category: "defi", url: "https://news.google.com/rss/search?q=%EB%94%94%ED%8C%8C%EC%9D%B4+OR+%ED%83%88%EC%A4%91%EC%95%99%ED%99%94+%EA%B8%88%EC%9C%B5+OR+%EC%9C%A0%EB%8B%88%EC%8A%A4%EC%99%91&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "decrypt", name: "Decrypt", category: "defi", url: "https://decrypt.co/feed", lang: "en", region: "global" },
+
+  // ===== REGULATION & POLICY =====
+  { id: "gnews-reg-en", name: "Google News Regulation", category: "regulation", url: "https://news.google.com/rss/search?q=crypto+regulation+OR+SEC+crypto+OR+crypto+policy+OR+crypto+tax&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  // eslint-disable-next-line max-len
+  { id: "gnews-reg-kr", name: "Google News Regulation KR", category: "regulation", url: "https://news.google.com/rss/search?q=%EA%B0%80%EC%83%81%EC%9E%90%EC%82%B0+%EA%B7%9C%EC%A0%9C+OR+%EC%95%94%ED%98%B8%ED%99%94%ED%8F%90+%EC%A0%95%EC%B1%85&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "theblock", name: "The Block", category: "regulation", url: "https://www.theblock.co/rss", lang: "en", region: "global" },
+
+  // ===== AI & WEB3 =====
+  { id: "gnews-ai-en", name: "Google News AI Web3", category: "ai_web3", url: "https://news.google.com/rss/search?q=AI+blockchain+OR+web3+OR+AI+crypto+OR+decentralized+AI&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-ai-kr", name: "Google News AI Web3 KR", category: "ai_web3", url: "https://news.google.com/rss/search?q=AI+%EB%B8%94%EB%A1%9D%EC%B2%B4%EC%9D%B8+OR+%EC%9B%B93+OR+AI+%EA%B0%80%EC%83%81%EC%9E%90%EC%82%B0&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "cointelegraph", name: "CoinTelegraph", category: "ai_web3", url: "https://cointelegraph.com/rss", lang: "en", region: "global" },
+
+  // ===== NFT & GAMING =====
+  { id: "gnews-nft-en", name: "Google News NFT", category: "nft_gaming", url: "https://news.google.com/rss/search?q=NFT+OR+blockchain+gaming+OR+gamefi+OR+metaverse+crypto&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-nft-kr", name: "Google News NFT KR", category: "nft_gaming", url: "https://news.google.com/rss/search?q=NFT+OR+%EB%B8%94%EB%A1%9D%EC%B2%B4%EC%9D%B8+%EA%B2%8C%EC%9E%84+OR+%EA%B2%8C%EC%9E%84%ED%8C%8C%EC%9D%B4&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "blockhead", name: "Blockhead", category: "nft_gaming", url: "https://blockhead.co/feed/", lang: "en", region: "singapore" },
+
+  // ===== ALTCOINS & MARKET =====
+  { id: "gnews-alt-en", name: "Google News Altcoins", category: "altcoin", url: "https://news.google.com/rss/search?q=altcoin+OR+crypto+market+OR+cryptocurrency+price+OR+solana+OR+xrp&hl=en-US&gl=US&ceid=US:en", lang: "en", region: "global" },
+  { id: "gnews-alt-kr", name: "Google News Altcoins KR", category: "altcoin", url: "https://news.google.com/rss/search?q=%EC%95%8C%ED%8A%B8%EC%BD%94%EC%9D%B8+OR+%EC%BD%94%EC%9D%B8+%EC%8B%9C%EC%84%B8+OR+%EC%86%94%EB%9D%BC%EB%82%98+OR+%EB%A6%AC%ED%94%8C&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "coingape", name: "CoinGape", category: "altcoin", url: "https://coingape.com/feed/", lang: "en", region: "india" },
+
+  // ===== KOREA CRYPTO =====
+  { id: "gnews-kr-main", name: "Google News Crypto KR", category: "korea", url: "https://news.google.com/rss/search?q=%EA%B0%80%EC%83%81%EC%9E%90%EC%82%B0+OR+%EC%97%85%EB%B9%84%ED%8A%B8+OR+%EB%B9%97%EC%8D%B8+OR+%EC%BD%94%EC%9D%B8%EC%9B%90&hl=ko&gl=KR&ceid=KR:ko", lang: "ko", region: "korea" },
+  { id: "decenter", name: "DeCenter", category: "korea", url: "https://decenter.kr/rss/allArticle.xml", lang: "ko", region: "korea", fallbackScrape: true },
+  { id: "blockmedia", name: "BlockMedia", category: "korea", url: "https://www.blockmedia.co.kr/feed/", lang: "ko", region: "korea", fallbackScrape: true },
 ];
 
-const NEWS_CATEGORIES = ["market", "regulation", "defi", "layer2", "bitcoin", "ethereum", "ai", "general"];
+const NEWS_CATEGORIES = [
+  { id: "all", label: "All", labelKo: "전체" },
+  { id: "bitcoin", label: "Bitcoin & ETF", labelKo: "비트코인" },
+  { id: "ethereum", label: "Ethereum & L2", labelKo: "이더리움" },
+  { id: "defi", label: "DeFi & DEX", labelKo: "디파이" },
+  { id: "regulation", label: "Regulation", labelKo: "규제/정책" },
+  { id: "ai_web3", label: "AI & Web3", labelKo: "AI & Web3" },
+  { id: "nft_gaming", label: "NFT & Gaming", labelKo: "NFT/게임" },
+  { id: "altcoin", label: "Altcoins", labelKo: "알트코인" },
+  { id: "korea", label: "Korea", labelKo: "한국" },
+];
 
 /**
  * Parse a single RSS feed and return normalized articles
@@ -9568,6 +9602,7 @@ async function parseRssFeed(source) {
       publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
       source: source.id,
       sourceName: source.name,
+      category: source.category || "general",
       language: source.lang,
       region: source.region,
     }));
@@ -9614,6 +9649,7 @@ async function scrapeMediaFallback(source) {
           publishedAt: new Date(),
           source: source.id,
           sourceName: source.name,
+          category: source.category || "general",
           language: source.lang,
           region: source.region,
         });
@@ -9644,9 +9680,10 @@ async function analyzeArticlesBatch(articles) {
     const batch = articles.slice(i, i + batchSize);
     const batchInput = batch.map((a, idx) => `[${idx}] "${a.title}" - ${a.summary.substring(0, 200)}`).join("\n");
 
+    const categoryIds = NEWS_CATEGORIES.filter((c) => c.id !== "all").map((c) => c.id);
     const systemPrompt = `You are a crypto news analyst. For each article, output ONLY a JSON array with objects containing:
 - index: number (matching input index)
-- category: one of ${JSON.stringify(NEWS_CATEGORIES)}
+- category: one of ${JSON.stringify(categoryIds)}
 - sentiment: number from -1.0 (bearish) to 1.0 (bullish)
 - sentimentLabel: "bearish" | "neutral" | "bullish"
 - impactScore: number 0-100 (how market-moving is this news)
@@ -9665,9 +9702,10 @@ Output ONLY valid JSON array, no markdown fences.`;
       for (const analysis of parsed) {
         const article = batch[analysis.index];
         if (article) {
+          const validCategories = NEWS_CATEGORIES.map((c) => c.id).filter((c) => c !== "all");
           results.push({
             ...article,
-            category: NEWS_CATEGORIES.includes(analysis.category) ? analysis.category : "general",
+            category: validCategories.includes(analysis.category) ? analysis.category : (article.category || "altcoin"),
             sentiment: Math.max(-1, Math.min(1, analysis.sentiment || 0)),
             sentimentLabel: analysis.sentimentLabel || "neutral",
             impactScore: Math.max(0, Math.min(100, analysis.impactScore || 50)),
@@ -9683,7 +9721,7 @@ Output ONLY valid JSON array, no markdown fences.`;
       for (const article of batch) {
         results.push({
           ...article,
-          category: "general",
+          category: article.category || "altcoin",
           sentiment: 0,
           sentimentLabel: "neutral",
           impactScore: 30,
@@ -9709,7 +9747,7 @@ exports.collectBlockyNews = onSchedule({
   timeoutSeconds: 540,
   memory: "512MiB",
 }, async () => {
-  console.log("[Blocky] Starting news collection from 10 media sources...");
+  console.log(`[Blocky] Starting news collection from ${BLOCKY_MEDIA_SOURCES.length} media sources (8 categories)...`);
   const startTime = Date.now();
 
   try {
@@ -10340,7 +10378,43 @@ exports.getVisionInsight = onCall({
       };
     }
 
-    // UI format: structured for widget rendering
+    // Fetch recent articles for news feed (last 24 hours, max 100)
+    const category = request.data?.category || "all";
+    const articlesQuery = db.collection("blockyNews")
+      .doc("data")
+      .collection("articles")
+      .where("collectedAt", ">", new Date(Date.now() - 24 * 60 * 60 * 1000))
+      .orderBy("collectedAt", "desc")
+      .limit(100);
+
+    const articlesSnap = await articlesQuery.get();
+    let newsFeed = articlesSnap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        title: d.title || "",
+        url: d.url || "",
+        source: d.source || "",
+        sourceName: d.sourceName || "",
+        category: d.category || "altcoin",
+        language: d.language || "en",
+        sentiment: d.sentiment || 0,
+        sentimentLabel: d.sentimentLabel || "neutral",
+        impactScore: d.impactScore || 0,
+        severity: d.severity || "info",
+        oneLiner: d.oneLiner || d.title || "",
+        keywords: d.keywords || [],
+        publishedAt: d.publishedAt?.toDate?.()?.toISOString() || null,
+        collectedAt: d.collectedAt?.toDate?.()?.toISOString() || null,
+      };
+    });
+
+    // Filter by category if not "all"
+    if (category !== "all") {
+      newsFeed = newsFeed.filter((a) => a.category === category);
+    }
+
+    // UI format: structured for widget rendering + news feed
     return {
       asi: snapshot.asi || { score: 50, label: "Neutral", trend: "STABLE", summary: "" },
       alphaAlerts: snapshot.alphaAlerts || [],
@@ -10348,6 +10422,8 @@ exports.getVisionInsight = onCall({
       narratives: snapshot.narratives || { trendingKeywords: [], calendar: [] },
       articlesAnalyzed: snapshot.articlesAnalyzed || 0,
       lastUpdated: snapshot.createdAt?.toDate?.()?.toISOString() || null,
+      categories: NEWS_CATEGORIES,
+      newsFeed,
     };
   } catch (err) {
     console.error("[Blocky] getVisionInsight error:", err);

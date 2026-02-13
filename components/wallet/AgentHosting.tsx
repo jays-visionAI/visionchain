@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, createMemo } from 'solid-js';
+import { createSignal, Show, For, onMount, createMemo, createEffect } from 'solid-js';
 import { Bot, Play, Pause, Settings, Clock, Zap, ArrowUpRight, Shield, RefreshCw, ChevronRight, AlertTriangle, CheckCircle, Trash2, Copy } from 'lucide-solid';
 
 // Agent Gateway API URL - environment-aware
@@ -38,41 +38,211 @@ const icons = {
 
 // LLM selection is handled by ZYNK AI Router - users don't need to choose
 
-const AVAILABLE_ACTIONS = [
-    // On-chain Actions
-    { id: 'balance', label: 'Check Balance', desc: 'View VCN token balance', category: 'on-chain', risk: 'low' },
-    { id: 'transfer', label: 'Transfer VCN', desc: 'Send VCN to addresses', category: 'on-chain', risk: 'high' },
-    { id: 'stake', label: 'Stake VCN', desc: 'Stake tokens for rewards', category: 'on-chain', risk: 'medium' },
-    { id: 'unstake', label: 'Unstake VCN', desc: 'Request unstaking', category: 'on-chain', risk: 'medium' },
-    { id: 'network_info', label: 'Network Info', desc: 'Query chain status', category: 'on-chain', risk: 'low' },
-    { id: 'leaderboard', label: 'Leaderboard', desc: 'Check RP rankings', category: 'on-chain', risk: 'low' },
-    // Growth & Marketing Actions
-    { id: 'referral_outreach', label: 'Referral Outreach', desc: 'Auto-share referral links to channels', category: 'growth', risk: 'medium' },
-    { id: 'social_promo', label: 'Social Promotion', desc: 'Post Vision Chain content to social media', category: 'growth', risk: 'medium' },
-    { id: 'content_create', label: 'Content Creation', desc: 'Generate promotional articles & threads', category: 'growth', risk: 'low' },
-    { id: 'invite_distribute', label: 'Invite Distribution', desc: 'Send invitations via email or DM', category: 'growth', risk: 'medium' },
-    { id: 'community_engage', label: 'Community Engage', desc: 'Reply and engage in community channels', category: 'growth', risk: 'low' },
+// SVG icon paths for actions (no emoji)
+const ACTION_ICONS: Record<string, string> = {
+    balance: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-1 2-2 2-4 0-1-.5-1.5-1-2z"/><path d="M2 9.1C1 9.5 1 10 1 10.8V14c0 1.1 1.2 2 2.5 2S6 15.1 6 14"/></svg>`,
+    transfer: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M7 17l-4-4 4-4"/><path d="M3 13h13"/><path d="M17 7l4 4-4 4"/><path d="M21 11H8"/></svg>`,
+    stake: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 2v20"/><path d="M2 12h20"/><circle cx="12" cy="12" r="4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>`,
+    unstake: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>`,
+    network_info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 10l2 2 2-2 2 2 2-2"/></svg>`,
+    staking_info: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
+    leaderboard: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C5.3 4 6 4.7 6 5.5"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C18.7 4 18 4.7 18 5.5"/><rect x="6" y="9" width="12" height="13" rx="2"/><path d="M12 9v4"/></svg>`,
+    referral_outreach: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+    social_promo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>`,
+    content_create: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+    invite_distribute: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`,
+    community_engage: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+};
+
+interface ActionConfig {
+    id: string;
+    label: string;
+    desc: string;
+    longDesc: string;
+    category: 'on-chain' | 'growth';
+    costTier: 'read' | 'medium' | 'write';
+    costVcn: number;
+    status: 'live' | 'coming_soon';
+    settingsFields: SettingsField[];
+    defaultPrompt: string;
+}
+
+interface SettingsField {
+    key: string;
+    type: 'number' | 'text' | 'textarea' | 'select' | 'toggle' | 'multi-select' | 'address';
+    label: string;
+    desc?: string;
+    placeholder?: string;
+    defaultValue: any;
+    options?: { value: string; label: string }[];
+    min?: number;
+    max?: number;
+    unit?: string;
+}
+
+const AVAILABLE_ACTIONS: ActionConfig[] = [
+    {
+        id: 'balance', label: 'Balance Monitor', desc: 'Track VCN balance and get alerts',
+        longDesc: 'Continuously monitors your agent wallet balance and triggers alerts when it drops below your threshold. Useful for ensuring your agent never runs out of funds.',
+        category: 'on-chain', costTier: 'read', costVcn: 0.05, status: 'live',
+        defaultPrompt: 'Monitor my VCN balance. Alert me if it drops below the threshold.',
+        settingsFields: [
+            { key: 'alert_threshold', type: 'number', label: 'Alert Threshold', desc: 'Notify when balance drops below this amount', placeholder: '50', defaultValue: 50, min: 1, max: 10000, unit: 'VCN' },
+            { key: 'alert_method', type: 'select', label: 'Alert Method', defaultValue: 'log', options: [{ value: 'log', label: 'Execution Log' }, { value: 'webhook', label: 'Webhook (future)' }] },
+        ],
+    },
+    {
+        id: 'transfer', label: 'Auto Transfer', desc: 'Schedule automatic VCN transfers',
+        longDesc: 'Automatically transfers VCN to specified addresses based on your configured rules. Set daily limits and whitelist addresses for safety.',
+        category: 'on-chain', costTier: 'write', costVcn: 0.5, status: 'coming_soon',
+        defaultPrompt: 'Transfer VCN to the specified address when conditions are met. Never exceed the daily limit.',
+        settingsFields: [
+            { key: 'recipient', type: 'address', label: 'Recipient Address', placeholder: '0x...', defaultValue: '' },
+            { key: 'amount', type: 'number', label: 'Amount per Transfer', placeholder: '10', defaultValue: 10, min: 0.1, max: 1000, unit: 'VCN' },
+            { key: 'daily_limit', type: 'number', label: 'Daily Limit', desc: 'Maximum VCN to transfer per day', placeholder: '50', defaultValue: 50, min: 1, max: 10000, unit: 'VCN' },
+            { key: 'condition', type: 'select', label: 'Transfer Condition', defaultValue: 'always', options: [{ value: 'always', label: 'Every execution' }, { value: 'above_balance', label: 'Only when balance above threshold' }] },
+            { key: 'min_balance_keep', type: 'number', label: 'Minimum Balance to Keep', desc: 'Never transfer if it would drop balance below this', placeholder: '20', defaultValue: 20, min: 1, max: 10000, unit: 'VCN' },
+        ],
+    },
+    {
+        id: 'stake', label: 'Auto Stake', desc: 'Automatically stake VCN for rewards',
+        longDesc: 'Automatically stakes your VCN tokens in the BridgeStaking contract to earn rewards. Configure percentage of balance to stake and auto-compound settings.',
+        category: 'on-chain', costTier: 'write', costVcn: 0.5, status: 'coming_soon',
+        defaultPrompt: 'Stake available VCN tokens for rewards. Keep minimum balance for operations.',
+        settingsFields: [
+            { key: 'stake_mode', type: 'select', label: 'Stake Mode', defaultValue: 'fixed', options: [{ value: 'fixed', label: 'Fixed amount' }, { value: 'percentage', label: 'Percentage of balance' }] },
+            { key: 'stake_amount', type: 'number', label: 'Stake Amount', placeholder: '50', defaultValue: 50, min: 1, max: 100000, unit: 'VCN' },
+            { key: 'stake_percent', type: 'number', label: 'Stake Percentage', placeholder: '80', defaultValue: 80, min: 10, max: 100, unit: '%' },
+            { key: 'auto_compound', type: 'toggle', label: 'Auto-Compound Rewards', desc: 'Automatically re-stake earned rewards', defaultValue: true },
+            { key: 'min_balance_keep', type: 'number', label: 'Minimum Balance to Keep', placeholder: '20', defaultValue: 20, min: 1, max: 10000, unit: 'VCN' },
+        ],
+    },
+    {
+        id: 'unstake', label: 'Conditional Unstake', desc: 'Unstake based on conditions',
+        longDesc: 'Monitors your staking position and automatically unstakes when your configured conditions are met, such as APY dropping below a target.',
+        category: 'on-chain', costTier: 'write', costVcn: 0.5, status: 'coming_soon',
+        defaultPrompt: 'Monitor staking position. Unstake if conditions are met.',
+        settingsFields: [
+            { key: 'unstake_amount', type: 'select', label: 'Unstake Amount', defaultValue: 'all', options: [{ value: 'all', label: 'Full unstake' }, { value: 'partial', label: 'Partial amount' }] },
+            { key: 'partial_amount', type: 'number', label: 'Partial Unstake Amount', placeholder: '100', defaultValue: 100, min: 1, max: 100000, unit: 'VCN' },
+            { key: 'trigger_condition', type: 'select', label: 'Trigger Condition', defaultValue: 'manual', options: [{ value: 'manual', label: 'Every execution' }, { value: 'apy_below', label: 'APY drops below target' }] },
+            { key: 'target_apy', type: 'number', label: 'Target APY Threshold', desc: 'Unstake when APY drops below this', placeholder: '5', defaultValue: 5, min: 0.1, max: 100, unit: '%' },
+        ],
+    },
+    {
+        id: 'network_info', label: 'Network Monitor', desc: 'Monitor chain health and status',
+        longDesc: 'Monitors Vision Chain network health including block production, latency, and alerts you to any anomalies or delays.',
+        category: 'on-chain', costTier: 'read', costVcn: 0.05, status: 'live',
+        defaultPrompt: 'Monitor Vision Chain network status and alert on any issues.',
+        settingsFields: [
+            { key: 'block_delay_alert', type: 'number', label: 'Block Delay Alert', desc: 'Alert when no new block for this many seconds', placeholder: '60', defaultValue: 60, min: 10, max: 600, unit: 'sec' },
+        ],
+    },
+    {
+        id: 'staking_info', label: 'Staking Dashboard', desc: 'Track staking rewards and position',
+        longDesc: 'Monitors your staking position, tracks pending rewards, and provides insights into your staking performance over time.',
+        category: 'on-chain', costTier: 'read', costVcn: 0.05, status: 'live',
+        defaultPrompt: 'Check my staking position and pending rewards. Log the results.',
+        settingsFields: [
+            { key: 'auto_claim_threshold', type: 'number', label: 'Auto-Claim Threshold', desc: 'Automatically claim when rewards exceed this (0 = disabled)', placeholder: '10', defaultValue: 0, min: 0, max: 10000, unit: 'VCN' },
+        ],
+    },
+    {
+        id: 'leaderboard', label: 'Leaderboard Tracker', desc: 'Track RP rankings and competition',
+        longDesc: 'Monitors the RP leaderboard rankings and tracks your agent\'s position relative to top competitors.',
+        category: 'on-chain', costTier: 'read', costVcn: 0.05, status: 'live',
+        defaultPrompt: 'Check the RP leaderboard and log my ranking.',
+        settingsFields: [],
+    },
+    {
+        id: 'referral_outreach', label: 'Referral Outreach', desc: 'Auto-distribute referral links',
+        longDesc: 'Generates and distributes your unique referral link with customized messaging. Tracks outreach count and effectiveness.',
+        category: 'growth', costTier: 'medium', costVcn: 0.1, status: 'live',
+        defaultPrompt: 'Generate referral outreach content for the selected channels. Use the custom message template if provided.',
+        settingsFields: [
+            { key: 'channels', type: 'multi-select', label: 'Target Channels', defaultValue: ['twitter'], options: [{ value: 'twitter', label: 'Twitter / X' }, { value: 'telegram', label: 'Telegram' }, { value: 'discord', label: 'Discord' }, { value: 'email', label: 'Email' }] },
+            { key: 'custom_message', type: 'textarea', label: 'Custom Message', desc: 'Your referral link will be auto-appended', placeholder: 'Check out Vision Chain - the next-gen L1 blockchain with AI agents...', defaultValue: '' },
+            { key: 'max_daily', type: 'number', label: 'Max Outreach per Day', placeholder: '10', defaultValue: 10, min: 1, max: 100, unit: 'times' },
+        ],
+    },
+    {
+        id: 'social_promo', label: 'Social Promotion', desc: 'Auto-generate social media posts',
+        longDesc: 'Generates promotional content about Vision Chain for social media platforms. Choose your topic focus and tone for targeted marketing.',
+        category: 'growth', costTier: 'medium', costVcn: 0.1, status: 'live',
+        defaultPrompt: 'Create a social media post about Vision Chain focused on the selected topic. Match the selected tone.',
+        settingsFields: [
+            { key: 'topic', type: 'select', label: 'Topic Focus', defaultValue: 'general', options: [{ value: 'general', label: 'General / Overview' }, { value: 'staking', label: 'Staking & Rewards' }, { value: 'agents', label: 'AI Agents' }, { value: 'bridge', label: 'Bridge & Cross-chain' }] },
+            { key: 'tone', type: 'select', label: 'Tone & Style', defaultValue: 'professional', options: [{ value: 'professional', label: 'Professional' }, { value: 'casual', label: 'Casual & Friendly' }, { value: 'hype', label: 'Hype & Excitement' }, { value: 'educational', label: 'Educational' }] },
+            { key: 'hashtags', type: 'text', label: 'Custom Hashtags', desc: 'Comma-separated (defaults added automatically)', placeholder: '#DeFi, #Web3', defaultValue: '' },
+        ],
+    },
+    {
+        id: 'content_create', label: 'Content Creator', desc: 'Generate articles and threads',
+        longDesc: 'Creates long-form promotional content like Twitter threads, blog drafts, and newsletter segments about Vision Chain.',
+        category: 'growth', costTier: 'read', costVcn: 0.05, status: 'live',
+        defaultPrompt: 'Generate promotional content for Vision Chain in the selected format and platform.',
+        settingsFields: [
+            { key: 'content_type', type: 'select', label: 'Content Type', defaultValue: 'thread', options: [{ value: 'thread', label: 'Twitter Thread' }, { value: 'article', label: 'Blog Article' }, { value: 'newsletter', label: 'Newsletter Segment' }] },
+            { key: 'platform', type: 'select', label: 'Target Platform', defaultValue: 'twitter', options: [{ value: 'twitter', label: 'Twitter / X' }, { value: 'medium', label: 'Medium' }, { value: 'blog', label: 'Blog / Website' }] },
+        ],
+    },
+    {
+        id: 'invite_distribute', label: 'Invite Distribution', desc: 'Send targeted invitations',
+        longDesc: 'Generates personalized invitation messages for different audience segments with your unique referral link.',
+        category: 'growth', costTier: 'medium', costVcn: 0.1, status: 'live',
+        defaultPrompt: 'Generate invitation messages targeted at the selected audience. Include the referral signup link.',
+        settingsFields: [
+            { key: 'target_audience', type: 'select', label: 'Target Audience', defaultValue: 'general', options: [{ value: 'general', label: 'General Users' }, { value: 'developer', label: 'Developers' }, { value: 'investor', label: 'Investors & Traders' }, { value: 'defi', label: 'DeFi Users' }] },
+            { key: 'custom_invite', type: 'textarea', label: 'Custom Invite Message', placeholder: 'Personalize your invitation message...', defaultValue: '' },
+            { key: 'daily_limit', type: 'number', label: 'Daily Invite Limit', placeholder: '20', defaultValue: 20, min: 1, max: 100, unit: 'invites' },
+        ],
+    },
+    {
+        id: 'community_engage', label: 'Community Engagement', desc: 'Auto-engage in community channels',
+        longDesc: 'Provides context and talking points for engaging in community channels. Helps maintain an active presence and answer common questions.',
+        category: 'growth', costTier: 'medium', costVcn: 0.1, status: 'live',
+        defaultPrompt: 'Engage in community channels with helpful, accurate information about Vision Chain. Focus on the selected topics.',
+        settingsFields: [
+            { key: 'channels', type: 'multi-select', label: 'Channels', defaultValue: ['discord'], options: [{ value: 'discord', label: 'Discord' }, { value: 'telegram', label: 'Telegram' }, { value: 'twitter', label: 'Twitter Replies' }] },
+            { key: 'focus_topics', type: 'multi-select', label: 'Focus Topics', defaultValue: ['onboarding'], options: [{ value: 'staking_faq', label: 'Staking FAQ' }, { value: 'network_updates', label: 'Network Updates' }, { value: 'onboarding', label: 'Onboarding Help' }, { value: 'technical', label: 'Technical Support' }] },
+            { key: 'style', type: 'select', label: 'Engagement Style', defaultValue: 'helpful', options: [{ value: 'helpful', label: 'Helpful & Supportive' }, { value: 'informative', label: 'Informative & Factual' }, { value: 'friendly', label: 'Friendly & Casual' }] },
+        ],
+    },
 ];
 
 const TRIGGER_OPTIONS = [
-    { value: 5, label: 'Every 5 min', cost: '~7.2 VCN/mo' },
-    { value: 30, label: 'Every 30 min', cost: '~1.2 VCN/mo' },
-    { value: 60, label: 'Every hour', cost: '~0.6 VCN/mo' },
-    { value: 1440, label: 'Once daily', cost: '~0.05 VCN/mo' },
+    { value: 5, label: 'Every 5 min', cost: '~7.2 VCN/mo', desc: 'Real-time monitoring' },
+    { value: 30, label: 'Every 30 min', cost: '~1.2 VCN/mo', desc: 'Near real-time' },
+    { value: 60, label: 'Every hour', cost: '~0.6 VCN/mo', desc: 'Standard automation' },
+    { value: 1440, label: 'Once daily', cost: '~0.05 VCN/mo', desc: 'Daily reports' },
 ];
+
+const COST_COLORS: Record<string, string> = {
+    read: '#34d399',
+    medium: '#fbbf24',
+    write: '#f87171',
+};
+
+const COST_LABELS: Record<string, string> = {
+    read: 'Read-only',
+    medium: 'Medium',
+    write: 'Write',
+};
 
 export default function AgentHosting(props: AgentHostingProps) {
     const [activeTab, setActiveTab] = createSignal<'overview' | 'setup' | 'logs'>('overview');
     const [agents, setAgents] = createSignal<HostedAgent[]>([]);
     const [loading, setLoading] = createSignal(true);
-    const [setupStep, setSetupStep] = createSignal(1);
+    const [setupStep, setSetupStep] = createSignal(1); // 1=name, 2=select action, 3=action settings, 4=schedule+deploy
 
     // Setup form state
     const [agentName, setAgentName] = createSignal('');
     const [selectedModel, setSelectedModel] = createSignal('deepseek-chat');
     const [systemPrompt, setSystemPrompt] = createSignal('');
     const [triggerInterval, setTriggerInterval] = createSignal(60);
-    const [selectedActions, setSelectedActions] = createSignal<string[]>(['balance', 'network_info']);
+    const [selectedActions, setSelectedActions] = createSignal<string[]>([]);
+    const [selectedAction, setSelectedAction] = createSignal<string>('');
+    const [actionSettings, setActionSettings] = createSignal<Record<string, any>>({});
     const [maxVcnPerAction, setMaxVcnPerAction] = createSignal(5);
     const [isRegistering, setIsRegistering] = createSignal(false);
     const [registerError, setRegisterError] = createSignal('');
@@ -82,12 +252,42 @@ export default function AgentHosting(props: AgentHostingProps) {
     // Logs
     const [logs, setLogs] = createSignal<any[]>([]);
 
+    // Derive selected action config
+    const selectedActionConfig = createMemo(() => AVAILABLE_ACTIONS.find(a => a.id === selectedAction()));
+
     const estimatedMonthlyCost = createMemo(() => {
         const interval = triggerInterval();
         const executionsPerMonth = (30 * 24 * 60) / interval;
-        const costPerExecution = 0.05; // Minimum tier (read-only)
+        const action = selectedActionConfig();
+        const costPerExecution = action?.costVcn || 0.05;
         return (executionsPerMonth * costPerExecution).toFixed(1);
     });
+
+    // When action is selected, initialize defaults
+    const selectAction = (actionId: string) => {
+        setSelectedAction(actionId);
+        setSelectedActions([actionId]);
+        const config = AVAILABLE_ACTIONS.find(a => a.id === actionId);
+        if (config) {
+            const defaults: Record<string, any> = {};
+            config.settingsFields.forEach(f => { defaults[f.key] = f.defaultValue; });
+            setActionSettings(defaults);
+            setSystemPrompt(config.defaultPrompt);
+        }
+    };
+
+    const updateSetting = (key: string, value: any) => {
+        setActionSettings(prev => ({ ...prev, [key]: value }));
+    };
+
+    const toggleMultiSelect = (key: string, value: string) => {
+        const current = actionSettings()[key] || [];
+        if (current.includes(value)) {
+            updateSetting(key, current.filter((v: string) => v !== value));
+        } else {
+            updateSetting(key, [...current, value]);
+        }
+    };
 
     onMount(async () => {
         await loadAgents();
@@ -174,14 +374,7 @@ export default function AgentHosting(props: AgentHostingProps) {
         setIsRegistering(false);
     };
 
-    const toggleAction = (actionId: string) => {
-        const current = selectedActions();
-        if (current.includes(actionId)) {
-            setSelectedActions(current.filter(a => a !== actionId));
-        } else {
-            setSelectedActions([...current, actionId]);
-        }
-    };
+    // Legacy toggleAction removed -- using selectAction for single-select
 
     const handleStartAgent = async () => {
         const agent = agents()[0];
@@ -1070,7 +1263,8 @@ export default function AgentHosting(props: AgentHostingProps) {
                 <div class="ah-step-indicator">
                     <div class={`ah-step-dot ${setupStep() === 1 ? 'active' : setupStep() > 1 ? 'done' : ''}`} />
                     <div class={`ah-step-dot ${setupStep() === 2 ? 'active' : setupStep() > 2 ? 'done' : ''}`} />
-                    <div class={`ah-step-dot ${setupStep() === 3 ? 'active' : ''}`} />
+                    <div class={`ah-step-dot ${setupStep() === 3 ? 'active' : setupStep() > 3 ? 'done' : ''}`} />
+                    <div class={`ah-step-dot ${setupStep() === 4 ? 'active' : ''}`} />
                 </div>
 
                 {/* Step 1: Name & Register */}
@@ -1103,90 +1297,365 @@ export default function AgentHosting(props: AgentHostingProps) {
                     </div>
                 </Show>
 
-
-                {/* Step 2: Behavior & Actions */}
+                {/* Step 2: Select ONE Action */}
                 <Show when={setupStep() === 2}>
                     <div class="ah-card">
                         <div class="ah-card-title">
-                            <Shield class="w-5 h-5 text-cyan-400" />
-                            Step 2: Define Behavior
+                            <Zap class="w-5 h-5 text-cyan-400" />
+                            Step 2: Choose an Action
                         </div>
+                        <p style="font-size: 12px; color: #94a3b8; margin: -4px 0 16px; line-height: 1.5;">
+                            Select one action for your agent to perform. Each action has its own specialized configuration.
+                        </p>
 
-                        <div style="margin-bottom: 20px;">
-                            <label class="ah-label">System Prompt</label>
-                            <textarea
-                                class="ah-textarea"
-                                placeholder="Describe what your agent should do. Example: Monitor my VCN balance. If it drops below 50 VCN, alert me. Never transfer more than 10 VCN at once."
-                                value={systemPrompt()}
-                                onInput={(e) => setSystemPrompt(e.currentTarget.value)}
-                            />
-                        </div>
-
-                        <div style="margin-bottom: 20px;">
-                            <label class="ah-label">Allowed Actions</label>
-                            <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">On-chain</div>
-                            <div class="ah-action-grid">
-                                <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'on-chain')}>
-                                    {(action) => (
-                                        <div
-                                            class={`ah-action-chip ${selectedActions().includes(action.id) ? 'selected' : ''}`}
-                                            onClick={() => toggleAction(action.id)}
-                                        >
-                                            <div>
-                                                <div class="ah-action-label">{action.label}</div>
-                                                <div class="ah-action-desc">{action.desc}</div>
-                                            </div>
+                        {/* On-chain category */}
+                        <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">On-chain</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                            <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'on-chain')}>
+                                {(action) => (
+                                    <div
+                                        style={{
+                                            padding: '14px',
+                                            background: selectedAction() === action.id ? 'rgba(34, 211, 238, 0.08)' : 'rgba(255,255,255,0.02)',
+                                            border: selectedAction() === action.id ? '1.5px solid rgba(34, 211, 238, 0.5)' : '1px solid rgba(255,255,255,0.06)',
+                                            'border-radius': '10px',
+                                            cursor: action.status === 'coming_soon' ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            opacity: action.status === 'coming_soon' ? '0.45' : '1',
+                                            position: 'relative',
+                                        }}
+                                        onClick={() => action.status === 'live' && selectAction(action.id)}
+                                    >
+                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                            <div style="color: #22d3ee; flex-shrink: 0;" innerHTML={ACTION_ICONS[action.id]} />
+                                            <div style="font-size: 13px; font-weight: 600; color: white;">{action.label}</div>
                                         </div>
-                                    )}
-                                </For>
-                            </div>
-                            <div style="font-size: 11px; color: #a78bfa; margin: 16px 0 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">Growth & Marketing</div>
-                            <div class="ah-action-grid">
-                                <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'growth')}>
-                                    {(action) => (
-                                        <div
-                                            class={`ah-action-chip ${selectedActions().includes(action.id) ? 'selected' : ''}`}
-                                            onClick={() => toggleAction(action.id)}
-                                        >
-                                            <div>
-                                                <div class="ah-action-label">{action.label}</div>
-                                                <div class="ah-action-desc">{action.desc}</div>
-                                            </div>
+                                        <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">{action.desc}</div>
+                                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+                                            <span style={{
+                                                'font-size': '10px',
+                                                padding: '2px 6px',
+                                                'border-radius': '4px',
+                                                'font-weight': '600',
+                                                background: `${COST_COLORS[action.costTier]}15`,
+                                                color: COST_COLORS[action.costTier],
+                                            }}>
+                                                {action.costVcn} VCN
+                                            </span>
+                                            <Show when={action.status === 'coming_soon'}>
+                                                <span style="font-size: 10px; color: #64748b; font-weight: 500;">Coming Soon</span>
+                                            </Show>
                                         </div>
-                                    )}
-                                </For>
-                            </div>
+                                    </div>
+                                )}
+                            </For>
                         </div>
 
-                        <div style="margin-bottom: 16px;">
-                            <label class="ah-label">Max VCN per Action</label>
-                            <input
-                                type="number"
-                                class="ah-input"
-                                style="max-width: 120px;"
-                                value={maxVcnPerAction()}
-                                onInput={(e) => setMaxVcnPerAction(Number(e.currentTarget.value))}
-                                min="1"
-                                max="100"
-                            />
+                        {/* Growth category */}
+                        <div style="font-size: 11px; color: #a78bfa; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;">Growth & Marketing</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                            <For each={AVAILABLE_ACTIONS.filter(a => a.category === 'growth')}>
+                                {(action) => (
+                                    <div
+                                        style={{
+                                            padding: '14px',
+                                            background: selectedAction() === action.id ? 'rgba(167, 139, 250, 0.08)' : 'rgba(255,255,255,0.02)',
+                                            border: selectedAction() === action.id ? '1.5px solid rgba(167, 139, 250, 0.5)' : '1px solid rgba(255,255,255,0.06)',
+                                            'border-radius': '10px',
+                                            cursor: action.status === 'coming_soon' ? 'not-allowed' : 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            opacity: action.status === 'coming_soon' ? '0.45' : '1',
+                                        }}
+                                        onClick={() => action.status === 'live' && selectAction(action.id)}
+                                    >
+                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                            <div style="color: #a78bfa; flex-shrink: 0;" innerHTML={ACTION_ICONS[action.id]} />
+                                            <div style="font-size: 13px; font-weight: 600; color: white;">{action.label}</div>
+                                        </div>
+                                        <div style="font-size: 11px; color: #94a3b8; line-height: 1.4;">{action.desc}</div>
+                                        <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px;">
+                                            <span style={{
+                                                'font-size': '10px',
+                                                padding: '2px 6px',
+                                                'border-radius': '4px',
+                                                'font-weight': '600',
+                                                background: `${COST_COLORS[action.costTier]}15`,
+                                                color: COST_COLORS[action.costTier],
+                                            }}>
+                                                {action.costVcn} VCN
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </For>
                         </div>
 
                         <div style="display: flex; gap: 8px; justify-content: flex-end;">
                             <button class="ah-tab" onClick={() => setSetupStep(1)}>Back</button>
-                            <button class="ah-btn-primary" onClick={() => setSetupStep(3)}>
-                                Next <ChevronRight class="w-4 h-4" />
+                            <button
+                                class="ah-btn-primary"
+                                disabled={!selectedAction()}
+                                onClick={() => setSetupStep(3)}
+                            >
+                                Configure <ChevronRight class="w-4 h-4" />
                             </button>
                         </div>
                     </div>
                 </Show>
 
-                {/* Step 3: Trigger & Cost */}
+                {/* Step 3: Per-Action Settings */}
                 <Show when={setupStep() === 3}>
+                    <div class="ah-card">
+                        <Show when={selectedActionConfig()}>
+                            {(config) => (
+                                <>
+                                    {/* Action header */}
+                                    <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px;">
+                                        <div style={{
+                                            width: '44px', height: '44px', 'border-radius': '12px',
+                                            background: config().category === 'on-chain' ? 'rgba(34, 211, 238, 0.1)' : 'rgba(167, 139, 250, 0.1)',
+                                            border: `1px solid ${config().category === 'on-chain' ? 'rgba(34, 211, 238, 0.2)' : 'rgba(167, 139, 250, 0.2)'}`,
+                                            display: 'flex', 'align-items': 'center', 'justify-content': 'center', 'flex-shrink': '0',
+                                            color: config().category === 'on-chain' ? '#22d3ee' : '#a78bfa',
+                                        }} innerHTML={ACTION_ICONS[config().id]} />
+                                        <div>
+                                            <div style="font-size: 16px; font-weight: 700; color: white;">
+                                                {config().label}
+                                            </div>
+                                            <div style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin-top: 2px;">
+                                                {config().longDesc}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Cost badge */}
+                                    <div style={{
+                                        display: 'inline-flex', 'align-items': 'center', gap: '6px', padding: '4px 10px',
+                                        'border-radius': '6px', 'margin-bottom': '20px',
+                                        background: `${COST_COLORS[config().costTier]}10`,
+                                        border: `1px solid ${COST_COLORS[config().costTier]}30`,
+                                    }}>
+                                        <span style={{ 'font-size': '10px', color: '#94a3b8', 'font-weight': '600', 'text-transform': 'uppercase' }}>
+                                            {COST_LABELS[config().costTier]}
+                                        </span>
+                                        <span style={{ 'font-size': '12px', color: COST_COLORS[config().costTier], 'font-weight': '700' }}>
+                                            {config().costVcn} VCN / execution
+                                        </span>
+                                    </div>
+
+                                    {/* Dynamic settings fields */}
+                                    <Show when={config().settingsFields.length > 0}>
+                                        <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px;">
+                                            <For each={config().settingsFields}>
+                                                {(field) => (
+                                                    <div>
+                                                        <label class="ah-label" style="margin-bottom: 4px;">
+                                                            {field.label}
+                                                            <Show when={field.unit}>
+                                                                <span style="font-size: 10px; color: #64748b; margin-left: 4px;">({field.unit})</span>
+                                                            </Show>
+                                                        </label>
+                                                        <Show when={field.desc}>
+                                                            <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">{field.desc}</div>
+                                                        </Show>
+
+                                                        {/* Number input */}
+                                                        <Show when={field.type === 'number'}>
+                                                            <input
+                                                                type="number"
+                                                                class="ah-input"
+                                                                style="max-width: 200px;"
+                                                                placeholder={field.placeholder}
+                                                                value={actionSettings()[field.key] ?? field.defaultValue}
+                                                                onInput={(e) => updateSetting(field.key, Number(e.currentTarget.value))}
+                                                                min={field.min}
+                                                                max={field.max}
+                                                            />
+                                                        </Show>
+
+                                                        {/* Text input */}
+                                                        <Show when={field.type === 'text'}>
+                                                            <input
+                                                                type="text"
+                                                                class="ah-input"
+                                                                placeholder={field.placeholder}
+                                                                value={actionSettings()[field.key] ?? ''}
+                                                                onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
+                                                            />
+                                                        </Show>
+
+                                                        {/* Address input */}
+                                                        <Show when={field.type === 'address'}>
+                                                            <input
+                                                                type="text"
+                                                                class="ah-input"
+                                                                style="font-family: 'SF Mono', Monaco, monospace; font-size: 12px;"
+                                                                placeholder={field.placeholder}
+                                                                value={actionSettings()[field.key] ?? ''}
+                                                                onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
+                                                            />
+                                                        </Show>
+
+                                                        {/* Textarea */}
+                                                        <Show when={field.type === 'textarea'}>
+                                                            <textarea
+                                                                class="ah-textarea"
+                                                                style="min-height: 72px;"
+                                                                placeholder={field.placeholder}
+                                                                value={actionSettings()[field.key] ?? ''}
+                                                                onInput={(e) => updateSetting(field.key, e.currentTarget.value)}
+                                                            />
+                                                        </Show>
+
+                                                        {/* Select */}
+                                                        <Show when={field.type === 'select'}>
+                                                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                                                <For each={field.options}>
+                                                                    {(opt) => (
+                                                                        <button
+                                                                            style={{
+                                                                                padding: '6px 14px',
+                                                                                'border-radius': '8px',
+                                                                                'font-size': '12px',
+                                                                                'font-weight': actionSettings()[field.key] === opt.value ? '600' : '400',
+                                                                                cursor: 'pointer',
+                                                                                border: actionSettings()[field.key] === opt.value ? '1px solid rgba(34, 211, 238, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                                                                                background: actionSettings()[field.key] === opt.value ? 'rgba(34, 211, 238, 0.1)' : 'rgba(255,255,255,0.03)',
+                                                                                color: actionSettings()[field.key] === opt.value ? '#22d3ee' : '#94a3b8',
+                                                                                transition: 'all 0.2s ease',
+                                                                            }}
+                                                                            onClick={() => updateSetting(field.key, opt.value)}
+                                                                        >
+                                                                            {opt.label}
+                                                                        </button>
+                                                                    )}
+                                                                </For>
+                                                            </div>
+                                                        </Show>
+
+                                                        {/* Toggle */}
+                                                        <Show when={field.type === 'toggle'}>
+                                                            <div
+                                                                style={{
+                                                                    display: 'flex', 'align-items': 'center', gap: '10px', cursor: 'pointer',
+                                                                    padding: '8px 14px', 'border-radius': '8px',
+                                                                    background: actionSettings()[field.key] ? 'rgba(34, 211, 238, 0.08)' : 'rgba(255,255,255,0.03)',
+                                                                    border: actionSettings()[field.key] ? '1px solid rgba(34, 211, 238, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                                                                    transition: 'all 0.2s ease',
+                                                                    'max-width': 'fit-content',
+                                                                }}
+                                                                onClick={() => updateSetting(field.key, !actionSettings()[field.key])}
+                                                            >
+                                                                <div style={{
+                                                                    width: '36px', height: '20px', 'border-radius': '10px', position: 'relative',
+                                                                    background: actionSettings()[field.key] ? '#22d3ee' : 'rgba(255,255,255,0.15)',
+                                                                    transition: 'background 0.2s ease',
+                                                                }}>
+                                                                    <div style={{
+                                                                        width: '16px', height: '16px', 'border-radius': '50%', background: 'white',
+                                                                        position: 'absolute', top: '2px',
+                                                                        left: actionSettings()[field.key] ? '18px' : '2px',
+                                                                        transition: 'left 0.2s ease',
+                                                                    }} />
+                                                                </div>
+                                                                <span style={{ 'font-size': '12px', color: actionSettings()[field.key] ? '#22d3ee' : '#94a3b8', 'font-weight': '500' }}>
+                                                                    {actionSettings()[field.key] ? 'Enabled' : 'Disabled'}
+                                                                </span>
+                                                            </div>
+                                                        </Show>
+
+                                                        {/* Multi-select */}
+                                                        <Show when={field.type === 'multi-select'}>
+                                                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                                                <For each={field.options}>
+                                                                    {(opt) => {
+                                                                        const isSelected = () => (actionSettings()[field.key] || []).includes(opt.value);
+                                                                        return (
+                                                                            <button
+                                                                                style={{
+                                                                                    padding: '6px 14px',
+                                                                                    'border-radius': '8px',
+                                                                                    'font-size': '12px',
+                                                                                    'font-weight': isSelected() ? '600' : '400',
+                                                                                    cursor: 'pointer',
+                                                                                    border: isSelected() ? '1px solid rgba(34, 211, 238, 0.4)' : '1px solid rgba(255,255,255,0.08)',
+                                                                                    background: isSelected() ? 'rgba(34, 211, 238, 0.1)' : 'rgba(255,255,255,0.03)',
+                                                                                    color: isSelected() ? '#22d3ee' : '#94a3b8',
+                                                                                    transition: 'all 0.2s ease',
+                                                                                }}
+                                                                                onClick={() => toggleMultiSelect(field.key, opt.value)}
+                                                                            >
+                                                                                {opt.label}
+                                                                            </button>
+                                                                        );
+                                                                    }}
+                                                                </For>
+                                                            </div>
+                                                        </Show>
+                                                    </div>
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
+
+                                    {/* System prompt (auto-populated, editable) */}
+                                    <div style="margin-bottom: 16px;">
+                                        <label class="ah-label">System Prompt</label>
+                                        <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">Auto-generated from your action. Edit to customize agent behavior.</div>
+                                        <textarea
+                                            class="ah-textarea"
+                                            style="min-height: 64px;"
+                                            value={systemPrompt()}
+                                            onInput={(e) => setSystemPrompt(e.currentTarget.value)}
+                                        />
+                                    </div>
+
+                                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                        <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
+                                        <button
+                                            class="ah-btn-primary"
+                                            disabled={!systemPrompt().trim()}
+                                            onClick={() => setSetupStep(4)}
+                                        >
+                                            Next <ChevronRight class="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </Show>
+                    </div>
+                </Show>
+
+                {/* Step 4: Schedule & Deploy */}
+                <Show when={setupStep() === 4}>
                     <div class="ah-card">
                         <div class="ah-card-title">
                             <Clock class="w-5 h-5 text-cyan-400" />
-                            Step 3: Execution Schedule
+                            Step 4: Schedule & Deploy
                         </div>
+
+                        {/* Selected action recap */}
+                        <Show when={selectedActionConfig()}>
+                            {(config) => (
+                                <div style={{
+                                    display: 'flex', 'align-items': 'center', gap: '10px', padding: '10px 14px',
+                                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                                    'border-radius': '10px', 'margin-bottom': '20px',
+                                }}>
+                                    <div style={{ color: config().category === 'on-chain' ? '#22d3ee' : '#a78bfa', 'flex-shrink': '0' }} innerHTML={ACTION_ICONS[config().id]} />
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: white;">{config().label}</div>
+                                        <div style="font-size: 11px; color: #94a3b8;">{config().desc}</div>
+                                    </div>
+                                    <span style={{
+                                        'margin-left': 'auto', 'font-size': '10px', padding: '2px 6px', 'border-radius': '4px', 'font-weight': '600',
+                                        background: `${COST_COLORS[config().costTier]}15`, color: COST_COLORS[config().costTier],
+                                    }}>
+                                        {config().costVcn} VCN
+                                    </span>
+                                </div>
+                            )}
+                        </Show>
 
                         <div style="margin-bottom: 20px;">
                             <label class="ah-label">Run Frequency</label>
@@ -1222,21 +1691,23 @@ export default function AgentHosting(props: AgentHostingProps) {
 
                         <div class="ah-fee-breakdown">
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Read-only actions</span>
-                                <span class="ah-fee-value">0.05 VCN</span>
+                                <span class="ah-fee-label">Cost per execution</span>
+                                <span class="ah-fee-value">{selectedActionConfig()?.costVcn || 0.05} VCN</span>
                             </div>
                             <div class="ah-fee-row">
-                                <span class="ah-fee-label">Medium actions</span>
-                                <span class="ah-fee-value">0.1 VCN</span>
-                            </div>
-                            <div class="ah-fee-row">
-                                <span class="ah-fee-label">On-chain write actions</span>
-                                <span class="ah-fee-value">0.5 VCN</span>
+                                <span class="ah-fee-label">Executions per month</span>
+                                <span class="ah-fee-value">{Math.round((30 * 24 * 60) / triggerInterval())}</span>
                             </div>
                             <div class="ah-fee-divider" />
                             <div class="ah-fee-row">
                                 <span class="ah-fee-label">Your initial balance</span>
                                 <span class="ah-fee-value" style="color: #34d399;">100 VCN</span>
+                            </div>
+                            <div class="ah-fee-row">
+                                <span class="ah-fee-label">Estimated runway</span>
+                                <span class="ah-fee-value" style="color: #22d3ee;">
+                                    {Math.max(1, Math.floor(100 / parseFloat(estimatedMonthlyCost() || '1')))} months
+                                </span>
                             </div>
                         </div>
 
@@ -1247,11 +1718,11 @@ export default function AgentHosting(props: AgentHostingProps) {
                                 </div>
                             </Show>
                             <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                                <button class="ah-tab" onClick={() => setSetupStep(2)}>Back</button>
+                                <button class="ah-tab" onClick={() => setSetupStep(3)}>Back</button>
                                 <button
                                     class="ah-btn-primary"
                                     onClick={handleStartAgent}
-                                    disabled={!systemPrompt().trim() || selectedActions().length === 0 || isRegistering()}
+                                    disabled={!systemPrompt().trim() || !selectedAction() || isRegistering()}
                                 >
                                     {isRegistering() ? 'Deploying...' : <><Play class="w-4 h-4" /> Deploy Agent</>}
                                 </button>

@@ -71,6 +71,31 @@ export interface NarrativesData {
     calendar: CalendarEvent[];
 }
 
+// News feed types
+export interface NewsArticle {
+    id: string;
+    title: string;
+    url: string;
+    source: string;
+    sourceName: string;
+    category: string;
+    language: string;
+    sentiment: number;
+    sentimentLabel: 'bullish' | 'bearish' | 'neutral';
+    impactScore: number;
+    severity: 'critical' | 'warning' | 'info';
+    oneLiner: string;
+    keywords: string[];
+    publishedAt: string | null;
+    collectedAt: string | null;
+}
+
+export interface CategoryInfo {
+    id: string;
+    label: string;
+    labelKo: string;
+}
+
 export interface InsightSnapshot {
     asi: ASIData;
     alphaAlerts: AlphaAlert[];
@@ -78,6 +103,8 @@ export interface InsightSnapshot {
     narratives: NarrativesData;
     articlesAnalyzed: number;
     lastUpdated: string | null;
+    categories: CategoryInfo[];
+    newsFeed: NewsArticle[];
 }
 
 export interface AgentViewData {
@@ -115,18 +142,31 @@ export interface AgentViewData {
     };
 }
 
+// Default categories fallback
+const DEFAULT_CATEGORIES: CategoryInfo[] = [
+    { id: 'all', label: 'All', labelKo: '전체' },
+    { id: 'bitcoin', label: 'Bitcoin & ETF', labelKo: '비트코인' },
+    { id: 'ethereum', label: 'Ethereum & L2', labelKo: '이더리움' },
+    { id: 'defi', label: 'DeFi & DEX', labelKo: '디파이' },
+    { id: 'regulation', label: 'Regulation', labelKo: '규제/정책' },
+    { id: 'ai_web3', label: 'AI & Web3', labelKo: 'AI & Web3' },
+    { id: 'nft_gaming', label: 'NFT & Gaming', labelKo: 'NFT/게임' },
+    { id: 'altcoin', label: 'Altcoins', labelKo: '알트코인' },
+    { id: 'korea', label: 'Korea', labelKo: '한국' },
+];
+
 /**
  * Vision Insight Service
  * Fetches data from the getVisionInsight Cloud Function
  */
 export const VisionInsightService = {
     /**
-     * Fetch the latest insight snapshot for UI rendering
+     * Fetch the latest insight snapshot + news feed for UI rendering
      */
-    async fetchSnapshot(): Promise<InsightSnapshot> {
+    async fetchSnapshot(category?: string): Promise<InsightSnapshot> {
         try {
             const getVisionInsight = httpsCallable(functions, 'getVisionInsight');
-            const result = await getVisionInsight({ format: 'ui' });
+            const result = await getVisionInsight({ format: 'ui', category: category || 'all' });
             const data = result.data as InsightSnapshot;
 
             return {
@@ -141,10 +181,11 @@ export const VisionInsightService = {
                 narratives: data.narratives || { trendingKeywords: [], calendar: [] },
                 articlesAnalyzed: data.articlesAnalyzed || 0,
                 lastUpdated: data.lastUpdated || null,
+                categories: data.categories || DEFAULT_CATEGORIES,
+                newsFeed: data.newsFeed || [],
             };
         } catch (err: any) {
             console.error('[VisionInsight] Failed to fetch snapshot:', err);
-            // Return placeholder data on error
             return {
                 asi: { score: 50, label: 'Neutral', trend: 'STABLE', summary: 'Data loading...' },
                 alphaAlerts: [],
@@ -157,6 +198,8 @@ export const VisionInsightService = {
                 narratives: { trendingKeywords: [], calendar: [] },
                 articlesAnalyzed: 0,
                 lastUpdated: null,
+                categories: DEFAULT_CATEGORIES,
+                newsFeed: [],
             };
         }
     },

@@ -798,105 +798,96 @@ function AdminVisionInsight() {
                     }}>
                         <div style={{ display: 'flex', 'align-items': 'center', gap: '8px', 'margin-bottom': '16px' }}>
                             <Rss size={16} color="#f59e0b" />
-                            <h3 style={{ margin: '0', 'font-size': '14px', 'font-weight': '700' }}>Configured Media Sources (13)</h3>
+                            <h3 style={{ margin: '0', 'font-size': '14px', 'font-weight': '700' }}>Configured Media Sources (24)</h3>
+                            <span style={{ 'font-size': '9px', color: '#22c55e', 'margin-left': '4px', padding: '2px 6px', background: 'rgba(34,197,94,0.1)', 'border-radius': '8px' }}>16 Google News + 8 Specialist</span>
                         </div>
 
-                        {/* Global Sources */}
-                        <div style={{ 'margin-bottom': '16px' }}>
-                            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'margin-bottom': '10px' }}>
-                                <Globe size={12} color="#22d3ee" />
-                                <span style={{ 'font-size': '11px', 'font-weight': '700', color: '#22d3ee', 'text-transform': 'uppercase', 'letter-spacing': '1px' }}>Global (5)</span>
-                            </div>
-                            <div style={{ display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-                                {[
-                                    { name: 'CoinTelegraph', lang: 'EN', url: 'cointelegraph.com' },
-                                    { name: 'CoinDesk', lang: 'EN', url: 'coindesk.com' },
-                                    { name: 'Decrypt', lang: 'EN', url: 'decrypt.co' },
-                                    { name: 'The Block', lang: 'EN', url: 'theblock.co' },
-                                    { name: 'Bitcoin Magazine', lang: 'EN', url: 'bitcoinmagazine.com' },
-                                ].map(s => (
-                                    <div style={{
-                                        display: 'flex', 'align-items': 'center', gap: '8px',
-                                        padding: '10px 12px', background: 'rgba(255,255,255,0.02)',
-                                        'border-radius': '8px', border: '1px solid rgba(255,255,255,0.04)',
-                                    }}>
+                        {[
+                            {
+                                cat: 'Bitcoin & BTC ETF', color: '#f7931a', sources: [
+                                    { name: 'Google News Bitcoin', lang: 'EN', type: 'google' },
+                                    { name: 'Google News BTC KR', lang: 'KO', type: 'google' },
+                                    { name: 'Bitcoin Magazine', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'Ethereum & L2', color: '#627eea', sources: [
+                                    { name: 'Google News Ethereum', lang: 'EN', type: 'google' },
+                                    { name: 'Google News ETH KR', lang: 'KO', type: 'google' },
+                                    { name: 'CoinDesk', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'DeFi & DEX', color: '#22c55e', sources: [
+                                    { name: 'Google News DeFi', lang: 'EN', type: 'google' },
+                                    { name: 'Google News DeFi KR', lang: 'KO', type: 'google' },
+                                    { name: 'Decrypt', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'Regulation & Policy', color: '#ef4444', sources: [
+                                    { name: 'Google News Regulation', lang: 'EN', type: 'google' },
+                                    { name: 'Google News Regulation KR', lang: 'KO', type: 'google' },
+                                    { name: 'The Block', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'AI & Web3', color: '#06b6d4', sources: [
+                                    { name: 'Google News AI Web3', lang: 'EN', type: 'google' },
+                                    { name: 'Google News AI Web3 KR', lang: 'KO', type: 'google' },
+                                    { name: 'CoinTelegraph', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'NFT & Gaming', color: '#ec4899', sources: [
+                                    { name: 'Google News NFT', lang: 'EN', type: 'google' },
+                                    { name: 'Google News NFT KR', lang: 'KO', type: 'google' },
+                                    { name: 'Blockhead', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'Altcoins & Market', color: '#8b5cf6', sources: [
+                                    { name: 'Google News Altcoins', lang: 'EN', type: 'google' },
+                                    { name: 'Google News Altcoins KR', lang: 'KO', type: 'google' },
+                                    { name: 'CoinGape', lang: 'EN', type: 'rss' },
+                                ]
+                            },
+                            {
+                                cat: 'Korea Crypto', color: '#3b82f6', sources: [
+                                    { name: 'Google News Crypto KR', lang: 'KO', type: 'google' },
+                                    { name: 'DeCenter', lang: 'KO', type: 'rss' },
+                                    { name: 'BlockMedia', lang: 'KO', type: 'rss' },
+                                ]
+                            },
+                        ].map(group => (
+                            <div style={{ 'margin-bottom': '14px' }}>
+                                <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'margin-bottom': '8px' }}>
+                                    <div style={{ width: '8px', height: '8px', 'border-radius': '50%', background: group.color }} />
+                                    <span style={{ 'font-size': '11px', 'font-weight': '700', color: group.color, 'text-transform': 'uppercase', 'letter-spacing': '0.5px' }}>{group.cat}</span>
+                                    <span style={{ 'font-size': '9px', color: '#555' }}>({group.sources.length} sources)</span>
+                                </div>
+                                <div style={{ display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(200px, 1fr))', gap: '6px' }}>
+                                    {group.sources.map(s => (
                                         <div style={{
-                                            width: '6px', height: '6px', 'border-radius': '50%', background: '#22c55e',
-                                        }} />
-                                        <div>
-                                            <div style={{ 'font-size': '12px', 'font-weight': '700', color: '#ddd' }}>{s.name}</div>
-                                            <div style={{ 'font-size': '10px', color: '#666' }}>{s.url} ({s.lang})</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Google News Syndication */}
-                        <div style={{ 'margin-bottom': '16px' }}>
-                            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'margin-bottom': '10px' }}>
-                                <Search size={12} color="#f59e0b" />
-                                <span style={{ 'font-size': '11px', 'font-weight': '700', color: '#f59e0b', 'text-transform': 'uppercase', 'letter-spacing': '1px' }}>Google News Syndication (3)</span>
-                                <span style={{ 'font-size': '9px', color: '#22c55e', 'margin-left': '4px' }}>FREE - NO API KEY</span>
-                            </div>
-                            <div style={{ display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-                                {[
-                                    { name: 'Google News Crypto', lang: 'EN', url: 'news.google.com (crypto)' },
-                                    { name: 'Google News Crypto KR', lang: 'KO', url: 'news.google.com (가상자산)' },
-                                    { name: 'Google News Bitcoin', lang: 'EN', url: 'news.google.com (bitcoin)' },
-                                ].map(s => (
-                                    <div style={{
-                                        display: 'flex', 'align-items': 'center', gap: '8px',
-                                        padding: '10px 12px', background: 'rgba(255,255,255,0.02)',
-                                        'border-radius': '8px', border: '1px solid rgba(245,158,11,0.15)',
-                                    }}>
-                                        <div style={{
-                                            width: '6px', height: '6px', 'border-radius': '50%', background: '#f59e0b',
-                                        }} />
-                                        <div>
-                                            <div style={{ 'font-size': '12px', 'font-weight': '700', color: '#ddd' }}>{s.name}</div>
-                                            <div style={{ 'font-size': '10px', color: '#666' }}>{s.url} ({s.lang})</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Asia Sources */}
-                        <div>
-                            <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'margin-bottom': '10px' }}>
-                                <Globe size={12} color="#a78bfa" />
-                                <span style={{ 'font-size': '11px', 'font-weight': '700', color: '#a78bfa', 'text-transform': 'uppercase', 'letter-spacing': '1px' }}>Asia (5)</span>
-                            </div>
-                            <div style={{ display: 'grid', 'grid-template-columns': 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-                                {[
-                                    { name: 'DeCenter', lang: 'KO', url: 'decenter.kr', fallback: true },
-                                    { name: 'BlockMedia', lang: 'KO', url: 'blockmedia.co.kr', fallback: true },
-                                    { name: 'CoinPost', lang: 'JA', url: 'coinpost.jp' },
-                                    { name: 'Blockhead', lang: 'EN', url: 'blockhead.co' },
-                                    { name: 'CoinGape', lang: 'EN', url: 'coingape.com' },
-                                ].map(s => (
-                                    <div style={{
-                                        display: 'flex', 'align-items': 'center', gap: '8px',
-                                        padding: '10px 12px', background: 'rgba(255,255,255,0.02)',
-                                        'border-radius': '8px', border: '1px solid rgba(255,255,255,0.04)',
-                                    }}>
-                                        <div style={{
-                                            width: '6px', height: '6px', 'border-radius': '50%', background: '#22c55e',
-                                        }} />
-                                        <div>
-                                            <div style={{ 'font-size': '12px', 'font-weight': '700', color: '#ddd' }}>
-                                                {s.name}
-                                                {(s as any).fallback && (
-                                                    <span style={{ 'font-size': '9px', color: '#f59e0b', 'margin-left': '6px' }}>SCRAPE FALLBACK</span>
-                                                )}
+                                            display: 'flex', 'align-items': 'center', gap: '8px',
+                                            padding: '8px 10px', background: 'rgba(255,255,255,0.02)',
+                                            'border-radius': '8px', border: `1px solid ${s.type === 'google' ? group.color + '22' : 'rgba(255,255,255,0.04)'}`,
+                                        }}>
+                                            <div style={{
+                                                width: '5px', height: '5px', 'border-radius': '50%',
+                                                background: s.type === 'google' ? '#f59e0b' : '#22c55e',
+                                            }} />
+                                            <div>
+                                                <div style={{ 'font-size': '11px', 'font-weight': '600', color: '#ccc' }}>{s.name}</div>
+                                                <div style={{ 'font-size': '9px', color: '#555' }}>
+                                                    {s.type === 'google' ? 'Google News RSS' : 'Direct RSS'} ({s.lang})
+                                                </div>
                                             </div>
-                                            <div style={{ 'font-size': '10px', color: '#666' }}>{s.url} ({s.lang})</div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
                 </Show>
             </Show>
