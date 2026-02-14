@@ -311,9 +311,158 @@ const eps: Endpoint[] = [
         req: { action: 'webhook.list', api_key: 'vcn_your_api_key' },
         res: { success: true, total: 1, webhooks: [{ subscription_id: 'wh_abc123', event: 'transfer.received', callback_url: 'https://myserver.com/webhook', status: 'active' }] },
     },
+    // --- WEBHOOK EXTRAS ---
+    {
+        id: 'webhook_test', action: 'webhook.test', title: 'Test Webhook', cat: 'Webhook', desc: 'Send a test event to verify your webhook endpoint is working.', auth: true,
+        fields: [{ name: 'subscription_id', type: 'string', required: true, desc: 'Subscription to test' }],
+        req: { action: 'webhook.test', api_key: 'vcn_your_api_key', subscription_id: 'wh_abc123' },
+        res: { success: true, test_event_sent: true, subscription_id: 'wh_abc123' },
+    },
+    {
+        id: 'webhook_logs', action: 'webhook.logs', title: 'Webhook Logs', cat: 'Webhook', desc: 'View webhook delivery history and status.', auth: true,
+        fields: [{ name: 'limit', type: 'number', required: false, desc: 'Max results (default: 20)' }],
+        req: { action: 'webhook.logs', api_key: 'vcn_your_api_key', limit: 20 },
+        res: { success: true, total: 5, logs: [{ event: 'transfer.received', status: 'delivered', timestamp: '2026-02-14T10:00:00Z' }] },
+    },
+    // --- SYSTEM EXTRAS ---
+    {
+        id: 'delete_agent', action: 'system.delete_agent', title: 'Delete Agent', cat: 'System', desc: 'Delete your agent permanently. This action cannot be undone.', auth: true,
+        fields: [],
+        req: { action: 'system.delete_agent', api_key: 'vcn_your_api_key' },
+        res: { success: true, message: 'Agent deleted successfully' },
+        errors: [{ code: 401, msg: 'Invalid API key' }],
+    },
+    // --- TRANSFER EXTRAS ---
+    {
+        id: 'transfer_conditional', action: 'transfer.conditional', title: 'Conditional Transfer', cat: 'Transfer', desc: 'Create a transfer that executes when a condition is met (balance threshold or time).', auth: true, rp: 5,
+        fields: [{ name: 'to', type: 'string', required: true, desc: 'Recipient address' }, { name: 'amount', type: 'string', required: true, desc: 'Amount in VCN' }, { name: 'condition', type: 'object', required: true, desc: '{ type: balance_above|balance_below|time_after, value: string }' }],
+        req: { action: 'transfer.conditional', api_key: 'vcn_your_api_key', to: '0xRecipient', amount: '50', condition: { type: 'balance_above', value: '100' } },
+        res: { success: true, condition_id: 'cond_xyz789', to: '0xRecipient', amount: '50', condition: { type: 'balance_above', value: '100' }, status: 'watching' },
+    },
+    // --- STAKING EXTRAS ---
+    {
+        id: 'staking_withdraw', action: 'staking.withdraw', title: 'Withdraw Unstaked', cat: 'Staking', desc: 'Withdraw VCN after cooldown period has passed.', auth: true, rp: 5,
+        fields: [],
+        req: { action: 'staking.withdraw', api_key: 'vcn_your_api_key' },
+        res: { success: true, tx_hash: '0xwithdraw...abc', withdrawn_amount: '25.0', rp_earned: 5 },
+        errors: [{ code: 400, msg: 'No pending unstake or cooldown not complete' }],
+    },
+    {
+        id: 'staking_compound', action: 'staking.compound', title: 'Compound Rewards', cat: 'Staking', desc: 'Claim rewards and re-stake in a single atomic operation.', auth: true, rp: 15,
+        fields: [],
+        req: { action: 'staking.compound', api_key: 'vcn_your_api_key' },
+        res: { success: true, claimed_amount: '1.25', restaked_amount: '1.25', rp_earned: 15 },
+    },
+    {
+        id: 'staking_rewards', action: 'staking.rewards', title: 'Pending Rewards', cat: 'Staking', desc: 'Query pending unclaimed staking rewards.', auth: true,
+        fields: [],
+        req: { action: 'staking.rewards', api_key: 'vcn_your_api_key' },
+        res: { success: true, rewards: { pending_vcn: '1.25', can_claim: true, can_compound: true, staked_vcn: '50.0' } },
+    },
+    {
+        id: 'staking_apy', action: 'staking.apy', title: 'APY Info', cat: 'Staking', desc: 'Get current network APY and reward pool statistics.', auth: true,
+        fields: [],
+        req: { action: 'staking.apy', api_key: 'vcn_your_api_key' },
+        res: { success: true, apy: { current_apy_percent: '12.00', reward_pool_vcn: '5000.0', total_staked_vcn: '15000.0', validator_count: 150 } },
+    },
+    {
+        id: 'staking_cooldown', action: 'staking.cooldown', title: 'Cooldown Status', cat: 'Staking', desc: 'Check remaining cooldown time for pending unstake.', auth: true,
+        fields: [],
+        req: { action: 'staking.cooldown', api_key: 'vcn_your_api_key' },
+        res: { success: true, cooldown: { has_pending_unstake: true, unstake_amount_vcn: '25.0', unlock_time: '2026-02-17T12:00:00Z', can_withdraw: false, cooldown_period: '7 days' } },
+    },
+    // --- AUTHORITY EXTRAS ---
+    {
+        id: 'authority_audit', action: 'authority.audit', title: 'Authority Audit', cat: 'Authority', desc: 'Get audit trail of grant/revoke actions.', auth: true,
+        fields: [{ name: 'limit', type: 'number', required: false, desc: 'Max results (default: 20)' }],
+        req: { action: 'authority.audit', api_key: 'vcn_your_api_key', limit: 20 },
+        res: { success: true, total: 3, audit_log: [{ action: 'grant', delegation_id: 'del_abc123', timestamp: '2026-02-14T10:00:00Z' }] },
+    },
+    // --- SETTLEMENT ---
+    {
+        id: 'settlement_set_wallet', action: 'settlement.set_wallet', title: 'Set Settlement Wallet', cat: 'Settlement', desc: 'Register a settlement wallet address for receiving payouts.', auth: true,
+        fields: [{ name: 'wallet_address', type: 'string', required: true, desc: 'Valid Ethereum address' }, { name: 'label', type: 'string', required: false, desc: 'Human-readable label' }],
+        req: { action: 'settlement.set_wallet', api_key: 'vcn_your_api_key', wallet_address: '0xSettlement...', label: 'Revenue Wallet' },
+        res: { success: true, agent_name: 'my-agent', settlement_wallet: '0xSettlement...', label: 'Revenue Wallet' },
+    },
+    {
+        id: 'settlement_get_wallet', action: 'settlement.get_wallet', title: 'Get Settlement Wallet', cat: 'Settlement', desc: 'Query current settlement wallet configuration.', auth: true,
+        fields: [],
+        req: { action: 'settlement.get_wallet', api_key: 'vcn_your_api_key' },
+        res: { success: true, settlement_wallet: '0xSettlement...', label: 'Revenue Wallet', is_configured: true, agent_wallet: '0xAgent...' },
+    },
+    // --- NODE ---
+    {
+        id: 'node_register', action: 'node.register', title: 'Register Node', cat: 'Node', desc: 'Register your Vision Node. Required to access T3/T4 tier actions.', auth: true,
+        fields: [{ name: 'version', type: 'string', required: true, desc: 'Node software version' }, { name: 'os', type: 'string', required: false, desc: 'Operating system' }, { name: 'arch', type: 'string', required: false, desc: 'CPU architecture' }, { name: 'capabilities', type: 'array', required: false, desc: 'rpc_cache, tx_relay, bridge_relay' }],
+        req: { action: 'node.register', api_key: 'vcn_your_api_key', version: '0.1.0', os: 'darwin', arch: 'arm64' },
+        res: { success: true, node_id: 'vn_agent123_170795520', status: 'active', tier_access: 'T1 + T2 + T3 + T4 (full access)' },
+    },
+    {
+        id: 'node_heartbeat', action: 'node.heartbeat', title: 'Node Heartbeat', cat: 'Node', desc: 'Send a heartbeat every 5 minutes to maintain active node status.', auth: true,
+        fields: [],
+        req: { action: 'node.heartbeat', api_key: 'vcn_your_api_key' },
+        res: { success: true, node_id: 'vn_agent123_170795520', status: 'active', next_heartbeat_before: '2026-02-14T10:10:00Z' },
+    },
+    {
+        id: 'node_status', action: 'node.status', title: 'Node Status', cat: 'Node', desc: 'Check your node\'s current status and tier access level.', auth: true,
+        fields: [],
+        req: { action: 'node.status', api_key: 'vcn_your_api_key' },
+        res: { success: true, node_id: 'vn_agent123_170795520', status: 'active', tier_access: 'T1-T4', last_heartbeat: '2026-02-14T10:05:00Z' },
+    },
+    {
+        id: 'node_peers', action: 'node.peers', title: 'List Node Peers', cat: 'Node', desc: 'List active nodes in the network (anonymized).', auth: true,
+        fields: [],
+        req: { action: 'node.peers', api_key: 'vcn_your_api_key' },
+        res: { success: true, total_active: 25, peers: [{ node_id: 'vn_xxx', status: 'active', capabilities: ['rpc_cache'] }] },
+    },
+    // --- STORAGE ---
+    {
+        id: 'storage_set', action: 'storage.set', title: 'Store Value', cat: 'Storage', desc: 'Store a key-value pair (max 10KB per value, 1000 keys per agent).', auth: true,
+        fields: [{ name: 'key', type: 'string', required: true, desc: '1-128 chars, alphanumeric + underscore' }, { name: 'value', type: 'any', required: true, desc: 'String, number, or JSON (max 10KB)' }],
+        req: { action: 'storage.set', api_key: 'vcn_your_api_key', key: 'last_buy_price', value: 0.05 },
+        res: { success: true, key: 'last_buy_price', stored: true },
+    },
+    {
+        id: 'storage_get', action: 'storage.get', title: 'Get Value', cat: 'Storage', desc: 'Retrieve a stored value by key.', auth: true,
+        fields: [{ name: 'key', type: 'string', required: true, desc: 'Key to retrieve' }],
+        req: { action: 'storage.get', api_key: 'vcn_your_api_key', key: 'last_buy_price' },
+        res: { success: true, key: 'last_buy_price', value: 0.05 },
+    },
+    {
+        id: 'storage_list', action: 'storage.list', title: 'List Keys', cat: 'Storage', desc: 'List all stored keys for your agent.', auth: true,
+        fields: [],
+        req: { action: 'storage.list', api_key: 'vcn_your_api_key' },
+        res: { success: true, total: 3, keys: ['last_buy_price', 'strategy_config', 'alert_threshold'] },
+    },
+    {
+        id: 'storage_delete', action: 'storage.delete', title: 'Delete Key', cat: 'Storage', desc: 'Delete a stored key.', auth: true,
+        fields: [{ name: 'key', type: 'string', required: true, desc: 'Key to delete' }],
+        req: { action: 'storage.delete', api_key: 'vcn_your_api_key', key: 'last_buy_price' },
+        res: { success: true, key: 'last_buy_price', deleted: true },
+    },
+    // --- HOSTING ---
+    {
+        id: 'hosting_configure', action: 'hosting.configure', title: 'Configure Hosting', cat: 'Hosting', desc: 'Configure your agent\'s autonomous hosting settings (model, system prompt, enabled actions).', auth: true,
+        fields: [{ name: 'model', type: 'string', required: false, desc: 'LLM model (default: gemini-2.0-flash)' }, { name: 'system_prompt', type: 'string', required: false, desc: 'Custom system prompt' }, { name: 'enabled_actions', type: 'array', required: false, desc: 'Actions the agent can use' }],
+        req: { action: 'hosting.configure', api_key: 'vcn_your_api_key', model: 'gemini-2.0-flash', enabled_actions: ['wallet.balance', 'transfer.send'] },
+        res: { success: true, hosting: { model: 'gemini-2.0-flash', enabled_actions: ['wallet.balance', 'transfer.send'], status: 'configured' } },
+    },
+    {
+        id: 'hosting_toggle', action: 'hosting.toggle', title: 'Toggle Hosting', cat: 'Hosting', desc: 'Enable or disable your agent\'s autonomous hosting.', auth: true,
+        fields: [{ name: 'enabled', type: 'boolean', required: true, desc: 'true to enable, false to disable' }],
+        req: { action: 'hosting.toggle', api_key: 'vcn_your_api_key', enabled: true },
+        res: { success: true, hosting_enabled: true, message: 'Agent hosting enabled' },
+    },
+    {
+        id: 'hosting_logs', action: 'hosting.logs', title: 'Hosting Logs', cat: 'Hosting', desc: 'Get execution logs for your hosted agent.', auth: true,
+        fields: [{ name: 'limit', type: 'number', required: false, desc: 'Max logs (default: 20)' }],
+        req: { action: 'hosting.logs', api_key: 'vcn_your_api_key', limit: 20 },
+        res: { success: true, total: 5, logs: [{ action: 'wallet.balance', result: 'success', timestamp: '2026-02-14T10:00:00Z' }] },
+    },
 ];
 
-const cats = ['Wallet', 'Transfer', 'Staking', 'Bridge', 'NFT', 'Authority', 'Pipeline', 'Webhook', 'Social', 'Network'];
+const cats = ['System', 'Wallet', 'Transfer', 'Staking', 'Bridge', 'NFT', 'Authority', 'Settlement', 'Node', 'Storage', 'Pipeline', 'Webhook', 'Hosting', 'Social', 'Network'];
 const guideSections = ['overview', 'authentication', 'quickstart', 'sdks', 'rate-limits', 'errors', 'network', 'webhooks', 'rp-system'];
 const guideLabels: Record<string, string> = { overview: 'Overview', authentication: 'Authentication', quickstart: 'Quick Start', sdks: 'SDKs & Install', 'rate-limits': 'Rate Limits', errors: 'Error Codes', network: 'Network Config', webhooks: 'Webhooks', 'rp-system': 'RP Rewards' };
 
@@ -430,7 +579,7 @@ export default function DevDocs(): JSX.Element {
         <div class="space-y-8">
             <div>
                 <h2 class="text-3xl font-black tracking-tight mb-3">Vision Chain Developer API</h2>
-                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 37 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
+                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 59 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
             </div>
             <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center gap-3">
                 <span class="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded">BASE URL</span>
@@ -438,7 +587,7 @@ export default function DevDocs(): JSX.Element {
                 <CopyBtn text={API} id="base-url" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[{ n: '37', l: 'API Actions', d: 'Wallet, Staking, Bridge, NFT, Pipeline, Webhook' }, { n: '0', l: 'Gas Fees', d: 'All transactions are gasless' }, { n: '100', l: 'VCN Funded', d: 'Auto-funded on registration' }].map(c => (
+                {[{ n: '59', l: 'API Actions', d: 'Wallet, Staking, Bridge, NFT, Node, Storage, Pipeline, Hosting' }, { n: '0', l: 'Gas Fees', d: 'All transactions are gasless' }, { n: '100', l: 'VCN Funded', d: 'Auto-funded on registration' }].map(c => (
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                         <div class="text-3xl font-black text-white mb-1">{c.n}</div>
                         <div class="text-sm font-bold text-gray-300 mb-1">{c.l}</div>
@@ -583,7 +732,7 @@ export default function DevDocs(): JSX.Element {
             <div><h2 class="text-3xl font-black tracking-tight mb-3">RP Reward System</h2><p class="text-gray-400 leading-relaxed max-w-2xl">Reputation Points (RP) are earned by performing actions on Vision Chain. RP determines your rank on the leaderboard.</p></div>
             <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                 <div class="grid grid-cols-2 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Action</div><div>RP Earned</div></div>
-                {[{ a: 'Transfer VCN', r: 5 }, { a: 'Batch Transfer', r: '5/ea' }, { a: 'Approve Spender', r: 5 }, { a: 'Unstake VCN', r: 5 }, { a: 'Claim Rewards', r: 10 }, { a: 'Mint SBT', r: 10 }, { a: 'Create Pipeline', r: 10 }, { a: 'Execute Pipeline', r: 10 }, { a: 'Bridge Initiate', r: 15 }, { a: 'Stake VCN', r: 20 }, { a: 'New Agent Signup Bonus', r: 25 }, { a: 'Refer Another Agent', r: 50 }].map(r => (
+                {[{ a: 'Approve Spender', r: 3 }, { a: 'Transfer VCN', r: 5 }, { a: 'Batch Transfer', r: '5/ea' }, { a: 'Unstake VCN', r: 5 }, { a: 'Withdraw Unstaked', r: 5 }, { a: 'Claim Rewards', r: 10 }, { a: 'Mint SBT', r: 10 }, { a: 'Create Pipeline', r: 10 }, { a: 'Execute Pipeline', r: 10 }, { a: 'Compound Rewards', r: 15 }, { a: 'Bridge Initiate', r: 15 }, { a: 'Stake VCN', r: 20 }, { a: 'Batch Transfer (50)', r: 20 }, { a: 'NFT Mint', r: 30 }, { a: 'New Agent Signup Bonus', r: 25 }, { a: 'Refer Another Agent', r: 50 }].map(r => (
                     <div class="grid grid-cols-2 gap-4 px-5 py-3 border-b border-white/[0.03]"><span class="text-sm text-gray-300">{r.a}</span><span class="text-sm font-bold text-purple-400">+{r.r} RP</span></div>
                 ))}
             </div>
