@@ -10733,8 +10733,8 @@ exports.agentGateway = onRequest({
 
     // --- NFT METADATA (nft.metadata) --- T1
     if (action === "nft_metadata" || action === "nft.metadata") {
-      const { token_id } = req.body;
-      if (!token_id) {
+      const { token_id: tokenId } = req.body;
+      if (!tokenId) {
         return res.status(400).json({ error: "Missing required field: token_id" });
       }
 
@@ -10747,19 +10747,19 @@ exports.agentGateway = onRequest({
         ], provider);
 
         const [isLocked, totalSupply, owner] = await Promise.all([
-          sbtContract.locked(token_id).catch(() => null),
+          sbtContract.locked(tokenId).catch(() => null),
           sbtContract.totalSupply().catch(() => 0n),
-          sbtContract.ownerOf(token_id).catch(() => null),
+          sbtContract.ownerOf(tokenId).catch(() => null),
         ]);
 
         if (!owner) {
-          return res.status(404).json({ error: `Token #${token_id} does not exist` });
+          return res.status(404).json({ error: `Token #${tokenId} does not exist` });
         }
 
         return res.status(200).json({
           success: true,
           metadata: {
-            token_id,
+            token_id: tokenId,
             contract: AGENT_SBT_ADDRESS,
             standard: "VRC-5192 (EIP-5192 Soulbound)",
             owner,
@@ -11047,7 +11047,7 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "pipeline.create") {
       try {
-        const { name, steps, trigger, schedule_cron } = body;
+        const { name, steps, trigger, schedule_cron: scheduleCron } = body;
         if (!name) return res.status(400).json({ error: "Missing required field: name" });
         if (!steps || !Array.isArray(steps) || steps.length === 0) {
           return res.status(400).json({ error: "steps must be a non-empty array" });
@@ -11076,7 +11076,7 @@ exports.agentGateway = onRequest({
           name,
           steps,
           trigger: trigger || "manual",
-          schedule_cron: schedule_cron || null,
+          schedule_cron: scheduleCron || null,
           created_at: admin.firestore.FieldValue.serverTimestamp(),
           last_run: null,
           run_count: 0,
@@ -11098,10 +11098,10 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "pipeline.execute") {
       try {
-        const { pipeline_id } = body;
-        if (!pipeline_id) return res.status(400).json({ error: "Missing required field: pipeline_id" });
+        const { pipeline_id: pipelineId } = body;
+        if (!pipelineId) return res.status(400).json({ error: "Missing required field: pipeline_id" });
 
-        const pipRef = db.collection("agents").doc(agent.id).collection("pipelines").doc(pipeline_id);
+        const pipRef = db.collection("agents").doc(agent.id).collection("pipelines").doc(pipelineId);
         const pipSnap = await pipRef.get();
         if (!pipSnap.exists) return res.status(404).json({ error: "Pipeline not found" });
 
@@ -11112,7 +11112,7 @@ exports.agentGateway = onRequest({
 
         // Execute steps sequentially
         const results = [];
-        let context = {}; // Carry data between steps
+        const context = {}; // Carry data between steps
 
         for (let i = 0; i < pipeline.steps.length; i++) {
           const step = pipeline.steps[i];
@@ -11182,7 +11182,7 @@ exports.agentGateway = onRequest({
 
         return res.status(200).json({
           success: true,
-          pipeline_id,
+          pipeline_id: pipelineId,
           pipeline_name: pipeline.name,
           total_steps: pipeline.steps.length,
           executed: results.filter((r) => !r.skipped).length,
@@ -11224,15 +11224,15 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "pipeline.delete") {
       try {
-        const { pipeline_id } = body;
-        if (!pipeline_id) return res.status(400).json({ error: "Missing required field: pipeline_id" });
+        const { pipeline_id: pipelineId } = body;
+        if (!pipelineId) return res.status(400).json({ error: "Missing required field: pipeline_id" });
 
-        const pipRef = db.collection("agents").doc(agent.id).collection("pipelines").doc(pipeline_id);
+        const pipRef = db.collection("agents").doc(agent.id).collection("pipelines").doc(pipelineId);
         const pipSnap = await pipRef.get();
         if (!pipSnap.exists) return res.status(404).json({ error: "Pipeline not found" });
 
         await pipRef.delete();
-        return res.status(200).json({ success: true, pipeline_id, deleted: true });
+        return res.status(200).json({ success: true, pipeline_id: pipelineId, deleted: true });
       } catch (e) {
         return res.status(500).json({ error: `Pipeline delete failed: ${e.message}` });
       }
@@ -11244,9 +11244,9 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "webhook.subscribe") {
       try {
-        const { event, callback_url } = body;
+        const { event, callback_url: callbackUrl } = body;
         if (!event) return res.status(400).json({ error: "Missing required field: event" });
-        if (!callback_url) return res.status(400).json({ error: "Missing required field: callback_url" });
+        if (!callbackUrl) return res.status(400).json({ error: "Missing required field: callback_url" });
 
         const validEvents = [
           "transfer.received", "staking.reward_earned", "staking.cooldown_complete",
@@ -11267,7 +11267,7 @@ exports.agentGateway = onRequest({
         const secret = require("crypto").randomBytes(32).toString("hex");
         const subRef = await whCol.add({
           event,
-          callback_url,
+          callback_url: callbackUrl,
           secret,
           filters: body.filters || {},
           status: "active",
@@ -11280,7 +11280,7 @@ exports.agentGateway = onRequest({
           success: true,
           subscription_id: subRef.id,
           event,
-          callback_url,
+          callback_url: callbackUrl,
           secret,
           status: "active",
           message: "Save the secret for HMAC signature verification on callbacks.",
