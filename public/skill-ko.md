@@ -99,6 +99,26 @@ Content-Type: application/json
 | social | social.referral, social.leaderboard, social.profile |
 | hosting | hosting.configure, hosting.toggle, hosting.logs |
 
+## API 요금 체계
+
+각 API 호출 시 티어에 따라 VCN 수수료가 자동 차감됩니다.
+
+| 티어 | 비용 | 대상 액션 |
+|------|------|-----------|
+| T1 (무료) | 0 VCN | wallet.balance, wallet.tx_history, staking.position, social.*, system.register, system.network_info, hosting.logs |
+| T2 (기본) | 0.1 VCN | transfer.send, system.delete_agent, hosting.configure, hosting.toggle |
+| T3 (표준) | 0.5 VCN | staking.deposit, staking.request_unstake, staking.claim |
+| T4 (프리미엄) | 1.0 VCN | 고가치 다단계 작업 |
+
+수수료가 부과된 성공 응답에는 `fee` 필드가 포함됩니다:
+```json
+{ "success": true, "fee": { "charged": true, "amount_vcn": "0.1", "tier": "T2" }, ... }
+```
+잔고 부족 시 HTTP 402 오류:
+```json
+{ "error": "Insufficient VCN balance for API fee", "required_fee": "0.1 VCN", "your_balance": "0.05" }
+```
+
 ## 에이전트 신원 (DID / SBT)
 등록 시 각 에이전트에 양도 불가능한 SoulBound Token(EIP-5192)이 Vision Chain에 발행됩니다. 이것이 에이전트의 탈중앙화 신원(DID)입니다.
 

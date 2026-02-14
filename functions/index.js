@@ -8324,6 +8324,121 @@ exports.agentGateway = onRequest({
       lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => { });
 
+    // === API FEE DEDUCTION MIDDLEWARE ===
+    // Map legacy action names to canonical domain.method for pricing lookup
+    const ACTION_CANONICAL = {
+      balance: "wallet.balance", transfer: "transfer.send", transactions: "wallet.tx_history",
+      referral: "social.referral", leaderboard: "social.leaderboard", profile: "social.profile",
+      stake: "staking.deposit", unstake: "staking.request_unstake",
+      claim_rewards: "staking.claim", staking_info: "staking.position",
+      network_info: "system.network_info", delete_agent: "system.delete_agent",
+      configure_hosting: "hosting.configure", toggle_hosting: "hosting.toggle", hosting_logs: "hosting.logs",
+    };
+    const canonicalAction = ACTION_CANONICAL[action] || action;
+
+    // Load pricing config (cached in-memory for 5 minutes)
+    let pricingConfig = agentGateway._pricingCache;
+    if (!pricingConfig || Date.now() - (agentGateway._pricingCacheAt || 0) > 300000) {
+      try {
+        const pricingSnap = await db.collection("config").doc("api_pricing").get();
+        if (pricingSnap.exists) {
+          pricingConfig = pricingSnap.data();
+        } else {
+          pricingConfig = null;
+        }
+        agentGateway._pricingCache = pricingConfig;
+        agentGateway._pricingCacheAt = Date.now();
+      } catch (pcErr) {
+        console.warn(`[Agent Gateway] Pricing config load failed:`, pcErr.message);
+        pricingConfig = null;
+      }
+    }
+
+    // Determine fee for this action
+    let feeVcn = 0;
+    let feeTierId = "T1";
+    let feeDeducted = false;
+    let feeTxHash = "";
+
+    if (pricingConfig && pricingConfig.tiers && pricingConfig.service_tiers) {
+      feeTierId = pricingConfig.service_tiers[canonicalAction] || "T1";
+      const tierDef = pricingConfig.tiers[feeTierId];
+      if (tierDef) {
+        feeVcn = parseFloat(tierDef.cost_vcn) || 0;
+      }
+    }
+
+    // Deduct fee if cost > 0
+    if (feeVcn > 0) {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
+        const feeWei = ethers.parseEther(feeVcn.toString());
+
+        // Check agent balance
+        const agentBal = await tokenContract.balanceOf(agent.walletAddress);
+        if (agentBal < feeWei) {
+          return res.status(402).json({
+            error: "Insufficient VCN balance for API fee",
+            required_fee: `${feeVcn} VCN`,
+            your_balance: ethers.formatEther(agentBal),
+            tier: feeTierId,
+            action: canonicalAction,
+          });
+        }
+
+        // Deduct: agent wallet -> executor (protocol fee collection)
+        const agentPK = serverDecrypt(agent.privateKey);
+        const agentWallet = new ethers.Wallet(agentPK, provider);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+        // Ensure agent has gas
+        const agentGasBal = await provider.getBalance(agent.walletAddress);
+        if (agentGasBal < ethers.parseEther("0.001")) {
+          const gasTx = await adminWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: ethers.parseEther("0.01"),
+          });
+          await gasTx.wait();
+        }
+
+        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+        const feeTx = await agentToken.transfer(adminWallet.address, feeWei);
+        await feeTx.wait();
+        feeTxHash = feeTx.hash;
+        feeDeducted = true;
+
+        // Log fee collection
+        db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "api_fee",
+          action: canonicalAction,
+          tier: feeTierId,
+          amount: feeVcn.toString(),
+          txHash: feeTx.hash,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => { });
+
+        console.log(`[Agent Gateway] Fee collected: ${agent.agentName} -> ${feeVcn} VCN (${feeTierId}) for ${canonicalAction}, tx: ${feeTx.hash}`);
+      } catch (feeErr) {
+        // Log but don't block action during rollout
+        console.error(`[Agent Gateway] Fee deduction failed for ${agent.agentName}/${canonicalAction}:`, feeErr.message);
+      }
+    }
+
+    // Auto-inject fee info into all successful JSON responses
+    const _originalJson = res.json.bind(res);
+    res.json = (body) => {
+      if (body && typeof body === "object" && body.success && feeVcn > 0) {
+        body.fee = {
+          charged: feeDeducted,
+          amount_vcn: feeVcn.toString(),
+          tier: feeTierId,
+          tx_hash: feeTxHash || undefined,
+        };
+      }
+      return _originalJson(body);
+    };
+
     // --- BALANCE (wallet.balance) ---
     if (action === "balance" || action === "wallet.balance") {
       const provider = new ethers.JsonRpcProvider(RPC_URL);

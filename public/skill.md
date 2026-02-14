@@ -99,6 +99,26 @@ Response includes:
 | social | social.referral, social.leaderboard, social.profile |
 | hosting | hosting.configure, hosting.toggle, hosting.logs |
 
+## API Pricing
+
+Each API call may incur a VCN fee based on its tier. Fee is automatically deducted from your wallet before the action executes.
+
+| Tier | Cost | Actions |
+|------|------|---------|
+| T1 (Free) | 0 VCN | wallet.balance, wallet.tx_history, staking.position, social.*, system.register, system.network_info, hosting.logs |
+| T2 (Basic) | 0.1 VCN | transfer.send, system.delete_agent, hosting.configure, hosting.toggle |
+| T3 (Standard) | 0.5 VCN | staking.deposit, staking.request_unstake, staking.claim |
+| T4 (Premium) | 1.0 VCN | High-value multi-step operations |
+
+Successful responses include a `fee` field when a charge applies:
+```json
+{ "success": true, "fee": { "charged": true, "amount_vcn": "0.1", "tier": "T2" }, ... }
+```
+If balance is insufficient, you receive HTTP 402:
+```json
+{ "error": "Insufficient VCN balance for API fee", "required_fee": "0.1 VCN", "your_balance": "0.05" }
+```
+
 ## Agent Identity (DID / SBT)
 Each agent receives a non-transferable SoulBound Token (EIP-5192) on Vision Chain upon registration. This serves as the agent's Decentralized Identifier (DID).
 
