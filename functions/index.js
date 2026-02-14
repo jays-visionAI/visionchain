@@ -7979,6 +7979,9 @@ async function authenticateAgent(apiKey) {
   return { id: doc.id, ...doc.data() };
 }
 
+let _gwPricingCache = null;
+let _gwPricingCacheAt = 0;
+
 exports.agentGateway = onRequest({
   cors: true,
   invoker: "public",
@@ -8337,8 +8340,8 @@ exports.agentGateway = onRequest({
     const canonicalAction = ACTION_CANONICAL[action] || action;
 
     // Load pricing config (cached in-memory for 5 minutes)
-    let pricingConfig = agentGateway._pricingCache;
-    if (!pricingConfig || Date.now() - (agentGateway._pricingCacheAt || 0) > 300000) {
+    let pricingConfig = _gwPricingCache;
+    if (!pricingConfig || Date.now() - _gwPricingCacheAt > 300000) {
       try {
         const pricingSnap = await db.collection("config").doc("api_pricing").get();
         if (pricingSnap.exists) {
@@ -8346,8 +8349,8 @@ exports.agentGateway = onRequest({
         } else {
           pricingConfig = null;
         }
-        agentGateway._pricingCache = pricingConfig;
-        agentGateway._pricingCacheAt = Date.now();
+        _gwPricingCache = pricingConfig;
+        _gwPricingCacheAt = Date.now();
       } catch (pcErr) {
         console.warn(`[Agent Gateway] Pricing config load failed:`, pcErr.message);
         pricingConfig = null;
