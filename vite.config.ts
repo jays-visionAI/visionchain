@@ -33,6 +33,8 @@ export default defineConfig(({ mode }) => {
               if (id.includes('lucide')) return 'vendor-icons';
               if (id.includes('@google/generative-ai') || id.includes('@google/genai')) return 'vendor-gemini';
               if (id.includes('axios')) return 'vendor-axios';
+              // Mermaid must be its own async chunk -- it has circular deps that crash if bundled into vendor
+              if (id.includes('mermaid')) return 'vendor-mermaid';
               if (id.includes('marked') || id.includes('highlight')) return 'vendor-markdown';
               if (id.includes('apexcharts') || id.includes('chart')) return 'vendor-charts';
               if (id.includes('qrcode')) return 'vendor-qr';
