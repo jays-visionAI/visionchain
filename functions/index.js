@@ -10258,13 +10258,13 @@ exports.agentGateway = onRequest({
 
     // --- AUTHORITY USAGE (authority.usage) --- T1
     if (action === "authority_usage" || action === "authority.usage") {
-      const { delegation_id } = req.body;
-      if (!delegation_id) {
+      const { delegation_id: delegationId } = req.body;
+      if (!delegationId) {
         return res.status(400).json({ error: "Missing required field: delegation_id" });
       }
 
       try {
-        const doc = await db.collection("agents").doc(agent.id).collection("authority_delegations").doc(delegation_id).get();
+        const doc = await db.collection("agents").doc(agent.id).collection("authority_delegations").doc(delegationId).get();
         if (!doc.exists) {
           return res.status(404).json({ error: "Delegation not found" });
         }
@@ -10275,7 +10275,7 @@ exports.agentGateway = onRequest({
 
         return res.status(200).json({
           success: true,
-          delegation_id,
+          delegation_id: delegationId,
           delegate_to: d.delegate_to,
           permissions: d.permissions,
           usage: {
@@ -10328,18 +10328,18 @@ exports.agentGateway = onRequest({
 
     // --- SETTLEMENT SET WALLET (settlement.set_wallet) --- T2
     if (action === "set_settlement_wallet" || action === "settlement.set_wallet") {
-      const { wallet_address, label } = req.body;
-      if (!wallet_address) {
+      const { wallet_address: walletAddr, label } = req.body;
+      if (!walletAddr) {
         return res.status(400).json({ error: "Missing required field: wallet_address" });
       }
 
-      if (!ethers.isAddress(wallet_address)) {
+      if (!ethers.isAddress(walletAddr)) {
         return res.status(400).json({ error: "Invalid wallet address" });
       }
 
       try {
         await db.collection("agents").doc(agent.id).update({
-          settlementWallet: wallet_address.toLowerCase(),
+          settlementWallet: walletAddr.toLowerCase(),
           settlementWalletLabel: label || "Default Settlement",
           settlementWalletUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -10347,7 +10347,7 @@ exports.agentGateway = onRequest({
         return res.status(200).json({
           success: true,
           agent_name: agent.agentName,
-          settlement_wallet: wallet_address.toLowerCase(),
+          settlement_wallet: walletAddr.toLowerCase(),
           label: label || "Default Settlement",
         });
       } catch (e) {
@@ -10373,8 +10373,8 @@ exports.agentGateway = onRequest({
 
     // --- BRIDGE INITIATE (bridge.initiate) --- T4
     if (action === "bridge_initiate" || action === "bridge.initiate") {
-      const { amount, destination_chain, recipient } = req.body;
-      if (!amount || !destination_chain) {
+      const { amount, destination_chain: destChainId, recipient } = req.body;
+      if (!amount || !destChainId) {
         return res.status(400).json({ error: "Missing required fields: amount (VCN), destination_chain (chainId)" });
       }
 
@@ -10421,7 +10421,7 @@ exports.agentGateway = onRequest({
         const intentContract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_ABI, adminWallet);
 
         const bridgeRecipient = recipient || agent.walletAddress;
-        const commitTx = await intentContract.commitIntent(bridgeRecipient, amountWei, destination_chain, { gasLimit: 200000 });
+        const commitTx = await intentContract.commitIntent(bridgeRecipient, amountWei, destChainId, { gasLimit: 200000 });
         const receipt = await commitTx.wait();
 
         // Extract intentHash
@@ -10440,7 +10440,7 @@ exports.agentGateway = onRequest({
           amount: amount.toString(),
           fee: "1",
           source_chain: 1337,
-          destination_chain,
+          destination_chain: destChainId,
           recipient: bridgeRecipient,
           intent_hash: intentHash,
           commit_tx: commitTx.hash,
@@ -10456,14 +10456,14 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_) { /* non-critical */ }
+          } catch (_e4) { /* non-critical */ }
         })();
 
         await db.collection("agents").doc(agent.id).update({
           rpPoints: admin.firestore.FieldValue.increment(15),
         });
 
-        console.log(`[Agent Gateway] Bridge: ${agent.agentName} -> chain ${destination_chain}: ${amount} VCN, intent: ${intentHash}`);
+        console.log(`[Agent Gateway] Bridge: ${agent.agentName} -> chain ${destChainId}: ${amount} VCN, intent: ${intentHash}`);
 
         return res.status(200).json({
           success: true,
@@ -10472,7 +10472,7 @@ exports.agentGateway = onRequest({
           commit_tx: commitTx.hash,
           amount,
           fee: "1",
-          destination_chain,
+          destination_chain: destChainId,
           recipient: bridgeRecipient,
           status: "committed",
           rp_earned: 15,
@@ -10656,7 +10656,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e) { /* no existing SBT */ }
+        } catch (_e5) { /* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10671,7 +10671,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e2) { /* skip */ }
+          } catch (_e6) { /* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10717,7 +10717,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e3) { /* no SBT */ }
+        } catch (_e7) { /* no SBT */ }
 
         return res.status(200).json({
           success: true,
