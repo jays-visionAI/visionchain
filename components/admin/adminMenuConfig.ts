@@ -23,7 +23,8 @@ import {
     Mail,
     LineChart,
     Eye,
-    Share2
+    Share2,
+    Coins
 } from 'lucide-solid';
 
 
@@ -52,7 +53,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Mail,
     LineChart,
     Eye,
-    Share2
+    Share2,
+    Coins
 };
 
 // Menu item interface with optional children for sub-menus
@@ -249,6 +251,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 15,
+        requiredRole: 'admin'
+    },
+    {
+        id: 'api-pricing',
+        path: '/adminsystem/api-pricing',
+        label: 'API Pricing',
+        icon: 'Coins',
+        badge: 'NEW',
+        category: 'custom',
+        order: 16,
         requiredRole: 'admin'
     },
 

@@ -23,6 +23,7 @@ export const AdminEmail = lazy(() => import('../components/admin/AdminEmail'));
 export const AdminCexPortfolio = lazy(() => import('../components/admin/AdminCexPortfolio'));
 export const AdminVisionInsight = lazy(() => import('../components/admin/AdminVisionInsight'));
 export const AdminSocialMedia = lazy(() => import('../components/admin/AdminSocialMedia'));
+export const AdminApiPricing = lazy(() => import('../components/admin/AdminApiPricing'));
 
 
 // Loading spinner component
@@ -260,6 +261,17 @@ export function AdminSocialMediaPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminSocialMedia />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminApiPricingPage() {
+    document.title = 'API Pricing | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminApiPricing />
             </AdminLayout>
         </Suspense>
     );
