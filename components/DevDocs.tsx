@@ -159,9 +159,161 @@ const eps: Endpoint[] = [
         req: { action: 'network_info' },
         res: { success: true, network: { name: 'Vision Chain', chain_id: 3151909, rpc_url: 'https://api.visionchain.co/rpc-proxy', latest_block: 123456, token: { name: 'VCN Token', symbol: 'VCN', address: NET.tokenAddr, decimals: 18 }, explorer: NET.explorer, total_agents: 42 } },
     },
+    // --- WALLET EXTRAS ---
+    {
+        id: 'token_info', action: 'wallet.token_info', title: 'Token Info', cat: 'Wallet', desc: 'Get detailed information about any ERC-20 token on Vision Chain.', auth: true,
+        fields: [{ name: 'token_address', type: 'string', required: false, desc: 'Token contract address (defaults to VCN)' }],
+        req: { action: 'wallet.token_info', api_key: 'vcn_your_api_key' },
+        res: { success: true, token: { address: '0x5FbDB...aa3', name: 'VCN Token', symbol: 'VCN', decimals: 18, total_supply: '1000000000.0' }, agent_balance: '95.5' },
+    },
+    {
+        id: 'gas_estimate', action: 'wallet.gas_estimate', title: 'Gas Estimate', cat: 'Wallet', desc: 'Estimate gas costs for different transaction types. All agent transactions are gasless.', auth: true,
+        fields: [{ name: 'tx_type', type: 'string', required: false, desc: 'transfer, approve, stake, bridge (default: transfer)' }],
+        req: { action: 'wallet.gas_estimate', api_key: 'vcn_your_api_key', tx_type: 'transfer' },
+        res: { success: true, estimate: { tx_type: 'transfer', gas_units: '65000', gas_price_gwei: '1.0', note: 'Agent transactions are gasless' } },
+    },
+    {
+        id: 'approve', action: 'wallet.approve', title: 'Approve Spender', cat: 'Wallet', desc: 'Approve a contract or address to spend VCN on your behalf.', auth: true, rp: 5,
+        fields: [{ name: 'spender', type: 'string', required: true, desc: 'Address to approve' }, { name: 'amount', type: 'string', required: true, desc: 'Amount in VCN' }, { name: 'token_address', type: 'string', required: false, desc: 'Token contract (defaults to VCN)' }],
+        req: { action: 'wallet.approve', api_key: 'vcn_your_api_key', spender: '0xContract...', amount: '1000' },
+        res: { success: true, tx_hash: '0xabc...123', spender: '0xContract...', amount: '1000', rp_earned: 5 },
+    },
+    // --- TRANSFER EXTRAS ---
+    {
+        id: 'batch_transfer', action: 'transfer.batch', title: 'Batch Transfer', cat: 'Transfer', desc: 'Send VCN to multiple recipients in one call. Max 10 per batch.', auth: true, rp: 5,
+        fields: [{ name: 'recipients', type: 'array', required: true, desc: 'Array of {to, amount} objects (max 10)' }],
+        req: { action: 'transfer.batch', api_key: 'vcn_your_api_key', recipients: [{ to: '0xAddr1', amount: '10' }, { to: '0xAddr2', amount: '5' }] },
+        res: { success: true, results: [{ to: '0xAddr1', amount: '10', tx_hash: '0x...', status: 'confirmed' }], summary: { total_sent: '15', successful: 2, failed: 0 }, rp_earned: 10 },
+    },
+    {
+        id: 'scheduled_transfer', action: 'transfer.scheduled', title: 'Scheduled Transfer', cat: 'Transfer', desc: 'Schedule a future VCN transfer (up to 30 days ahead).', auth: true, rp: 5,
+        fields: [{ name: 'to', type: 'string', required: true, desc: 'Recipient address' }, { name: 'amount', type: 'string', required: true, desc: 'Amount in VCN' }, { name: 'execute_at', type: 'string', required: true, desc: 'ISO 8601 timestamp or Unix' }],
+        req: { action: 'transfer.scheduled', api_key: 'vcn_your_api_key', to: '0xRecipient', amount: '50', execute_at: '2026-03-01T12:00:00Z' },
+        res: { success: true, scheduled_id: 'sched_abc123', execute_at: '2026-03-01T12:00:00.000Z', status: 'scheduled', rp_earned: 5 },
+    },
+    // --- BRIDGE ---
+    {
+        id: 'bridge_initiate', action: 'bridge.initiate', title: 'Bridge Initiate', cat: 'Bridge', desc: 'Initiate an outbound VCN bridge to another chain. 1 VCN bridge fee.', auth: true, rp: 15,
+        fields: [{ name: 'amount', type: 'string', required: true, desc: 'Amount of VCN' }, { name: 'destination_chain', type: 'number', required: true, desc: 'Destination chain ID' }, { name: 'recipient', type: 'string', required: false, desc: 'Recipient (defaults to agent)' }],
+        req: { action: 'bridge.initiate', api_key: 'vcn_your_api_key', amount: '100', destination_chain: 11155111 },
+        res: { success: true, bridge_id: 'br_abc123', intent_hash: '0x...', commit_tx: '0x...', amount: '100', fee: '1', destination_chain: 11155111, status: 'committed', rp_earned: 15 },
+    },
+    {
+        id: 'bridge_status', action: 'bridge.status', title: 'Bridge Status', cat: 'Bridge', desc: 'Check bridge transfer status by ID or intent hash.', auth: true,
+        fields: [{ name: 'bridge_id', type: 'string', required: false, desc: 'Bridge record ID' }, { name: 'intent_hash', type: 'string', required: false, desc: 'Intent hash' }],
+        req: { action: 'bridge.status', api_key: 'vcn_your_api_key', bridge_id: 'br_abc123' },
+        res: { success: true, bridge: { bridge_id: 'br_abc123', status: 'completed', amount: '100', fee: '1', source_chain: 1337, destination_chain: 11155111 } },
+    },
+    {
+        id: 'bridge_finalize', action: 'bridge.finalize', title: 'Bridge Finalize', cat: 'Bridge', desc: 'Finalize a bridge and update its on-chain status.', auth: true,
+        fields: [{ name: 'bridge_id', type: 'string', required: true, desc: 'Bridge record ID' }],
+        req: { action: 'bridge.finalize', api_key: 'vcn_your_api_key', bridge_id: 'br_abc123' },
+        res: { success: true, status: 'completed', bridge_id: 'br_abc123' },
+    },
+    {
+        id: 'bridge_history', action: 'bridge.history', title: 'Bridge History', cat: 'Bridge', desc: 'Retrieve your bridge transaction history.', auth: true,
+        fields: [{ name: 'limit', type: 'number', required: false, desc: 'Max results (default: 20)' }],
+        req: { action: 'bridge.history', api_key: 'vcn_your_api_key', limit: 5 },
+        res: { success: true, bridges: [{ bridge_id: 'br_abc123', type: 'outbound', amount: '100', status: 'completed', destination_chain: 11155111 }] },
+    },
+    {
+        id: 'bridge_fee', action: 'bridge.fee', title: 'Bridge Fee', cat: 'Bridge', desc: 'Check current bridge fee structure.', auth: true,
+        fields: [{ name: 'amount', type: 'string', required: false, desc: 'Amount for total calculation' }],
+        req: { action: 'bridge.fee', api_key: 'vcn_your_api_key', amount: '100' },
+        res: { success: true, fee: { bridge_fee_vcn: '1', amount_vcn: '100', total_required: '101', note: 'Fee distributed to validators' } },
+    },
+    // --- NFT / SBT ---
+    {
+        id: 'nft_mint', action: 'nft.mint', title: 'Mint SBT', cat: 'NFT', desc: 'Mint a VisionAgent Soulbound Token (SBT) for your agent identity.', auth: true, rp: 10,
+        fields: [{ name: 'mint_to', type: 'string', required: false, desc: 'Target address (defaults to agent)' }, { name: 'token_type', type: 'string', required: false, desc: 'Currently only "sbt"' }],
+        req: { action: 'nft.mint', api_key: 'vcn_your_api_key' },
+        res: { success: true, token_id: '42', tx_hash: '0x...', contract: '0xAgent...SBT', standard: 'VRC-5192', rp_earned: 10 },
+    },
+    {
+        id: 'nft_balance', action: 'nft.balance', title: 'NFT Balance', cat: 'NFT', desc: 'Check your agent\'s SBT/NFT holdings.', auth: true,
+        fields: [],
+        req: { action: 'nft.balance', api_key: 'vcn_your_api_key' },
+        res: { success: true, sbt: { has_sbt: true, token_id: '42', contract: '0xAgent...SBT' } },
+    },
+    {
+        id: 'nft_metadata', action: 'nft.metadata', title: 'NFT Metadata', cat: 'NFT', desc: 'Get on-chain metadata for a specific SBT token.', auth: true,
+        fields: [{ name: 'token_id', type: 'string', required: true, desc: 'Token ID to query' }],
+        req: { action: 'nft.metadata', api_key: 'vcn_your_api_key', token_id: '42' },
+        res: { success: true, metadata: { token_id: '42', standard: 'VRC-5192', locked: true, owner: '0xAgent...' } },
+    },
+    // --- AUTHORITY ---
+    {
+        id: 'authority_grant', action: 'authority.grant', title: 'Grant Authority', cat: 'Authority', desc: 'Delegate permissions to another address with limits and expiry.', auth: true, rp: 5,
+        fields: [{ name: 'delegate_to', type: 'string', required: true, desc: 'Address to delegate to' }, { name: 'permissions', type: 'array', required: true, desc: 'transfer, stake, claim, bridge, etc.' }, { name: 'limits', type: 'object', required: false, desc: '{ max_amount_per_tx, max_daily_amount }' }, { name: 'expires_at', type: 'string', required: false, desc: 'ISO 8601 (default: 30 days)' }],
+        req: { action: 'authority.grant', api_key: 'vcn_your_api_key', delegate_to: '0xTrusted...', permissions: ['transfer', 'stake'] },
+        res: { success: true, delegation_id: 'del_abc123', delegate_to: '0xTrusted...', permissions: ['transfer', 'stake'], status: 'active' },
+    },
+    {
+        id: 'authority_revoke', action: 'authority.revoke', title: 'Revoke Authority', cat: 'Authority', desc: 'Revoke a delegation by ID or revoke all delegations to an address.', auth: true,
+        fields: [{ name: 'delegation_id', type: 'string', required: false, desc: 'Delegation to revoke' }, { name: 'delegate_to', type: 'string', required: false, desc: 'Revoke all to this address' }],
+        req: { action: 'authority.revoke', api_key: 'vcn_your_api_key', delegation_id: 'del_abc123' },
+        res: { success: true, revoked_count: 1 },
+    },
+    {
+        id: 'authority_status', action: 'authority.status', title: 'Authority Status', cat: 'Authority', desc: 'List all active delegations.', auth: true,
+        fields: [{ name: 'delegate_to', type: 'string', required: false, desc: 'Filter by delegate' }],
+        req: { action: 'authority.status', api_key: 'vcn_your_api_key' },
+        res: { success: true, active_delegations: 2, delegations: [{ delegation_id: 'del_abc123', delegate_to: '0xTrusted...', permissions: ['transfer'], status: 'active' }] },
+    },
+    {
+        id: 'authority_usage', action: 'authority.usage', title: 'Authority Usage', cat: 'Authority', desc: 'Check usage statistics for a delegation.', auth: true,
+        fields: [{ name: 'delegation_id', type: 'string', required: true, desc: 'Delegation ID' }],
+        req: { action: 'authority.usage', api_key: 'vcn_your_api_key', delegation_id: 'del_abc123' },
+        res: { success: true, delegation_id: 'del_abc123', usage: { tx_count: 5, total_amount_used: '150.0' } },
+    },
+    // --- PIPELINE ---
+    {
+        id: 'pipeline_create', action: 'pipeline.create', title: 'Create Pipeline', cat: 'Pipeline', desc: 'Create a multi-step action pipeline. Max 10 steps, 20 pipelines per agent.', auth: true, rp: 10,
+        fields: [{ name: 'name', type: 'string', required: true, desc: 'Pipeline name' }, { name: 'steps', type: 'array', required: true, desc: 'Array of {action, params}' }, { name: 'trigger', type: 'string', required: false, desc: 'manual or cron' }, { name: 'schedule_cron', type: 'string', required: false, desc: 'Cron expression' }],
+        req: { action: 'pipeline.create', api_key: 'vcn_your_api_key', name: 'Daily Rewards', steps: [{ action: 'claim_rewards', params: {} }, { action: 'stake', params: { amount: '10' } }] },
+        res: { success: true, pipeline_id: 'pip_abc123', name: 'Daily Rewards', steps: 2, trigger: 'manual', status: 'active' },
+    },
+    {
+        id: 'pipeline_execute', action: 'pipeline.execute', title: 'Execute Pipeline', cat: 'Pipeline', desc: 'Execute all steps in a pipeline sequentially.', auth: true, rp: 10,
+        fields: [{ name: 'pipeline_id', type: 'string', required: true, desc: 'Pipeline ID to execute' }],
+        req: { action: 'pipeline.execute', api_key: 'vcn_your_api_key', pipeline_id: 'pip_abc123' },
+        res: { success: true, pipeline_id: 'pip_abc123', total_steps: 2, executed: 2, results: [{ step: 0, action: 'claim_rewards', status: 'success' }] },
+    },
+    {
+        id: 'pipeline_list', action: 'pipeline.list', title: 'List Pipelines', cat: 'Pipeline', desc: 'List all pipelines with run statistics.', auth: true,
+        fields: [],
+        req: { action: 'pipeline.list', api_key: 'vcn_your_api_key' },
+        res: { success: true, total: 2, pipelines: [{ pipeline_id: 'pip_abc123', name: 'Daily Rewards', steps: 2, trigger: 'manual', run_count: 5 }] },
+    },
+    {
+        id: 'pipeline_delete', action: 'pipeline.delete', title: 'Delete Pipeline', cat: 'Pipeline', desc: 'Permanently delete a pipeline.', auth: true,
+        fields: [{ name: 'pipeline_id', type: 'string', required: true, desc: 'Pipeline ID to delete' }],
+        req: { action: 'pipeline.delete', api_key: 'vcn_your_api_key', pipeline_id: 'pip_abc123' },
+        res: { success: true, pipeline_id: 'pip_abc123', deleted: true },
+    },
+    // --- WEBHOOK ---
+    {
+        id: 'webhook_subscribe', action: 'webhook.subscribe', title: 'Subscribe Webhook', cat: 'Webhook', desc: 'Subscribe to real-time event notifications. Max 20 per agent.', auth: true,
+        fields: [{ name: 'event', type: 'string', required: true, desc: 'Event: transfer.received, bridge.completed, etc.' }, { name: 'callback_url', type: 'string', required: true, desc: 'URL to receive POST requests' }, { name: 'filters', type: 'object', required: false, desc: 'Optional event filters' }],
+        req: { action: 'webhook.subscribe', api_key: 'vcn_your_api_key', event: 'transfer.received', callback_url: 'https://myserver.com/webhook' },
+        res: { success: true, subscription_id: 'wh_abc123', event: 'transfer.received', callback_url: 'https://myserver.com/webhook', secret: 'hmac_secret...', status: 'active' },
+        notes: ['Payloads signed with HMAC-SHA256', 'Retries 3x with exponential backoff'],
+    },
+    {
+        id: 'webhook_unsubscribe', action: 'webhook.unsubscribe', title: 'Unsubscribe Webhook', cat: 'Webhook', desc: 'Remove a webhook subscription.', auth: true,
+        fields: [{ name: 'subscription_id', type: 'string', required: true, desc: 'Subscription ID' }],
+        req: { action: 'webhook.unsubscribe', api_key: 'vcn_your_api_key', subscription_id: 'wh_abc123' },
+        res: { success: true, subscription_id: 'wh_abc123', deleted: true },
+    },
+    {
+        id: 'webhook_list', action: 'webhook.list', title: 'List Webhooks', cat: 'Webhook', desc: 'List all active webhook subscriptions.', auth: true,
+        fields: [],
+        req: { action: 'webhook.list', api_key: 'vcn_your_api_key' },
+        res: { success: true, total: 1, webhooks: [{ subscription_id: 'wh_abc123', event: 'transfer.received', callback_url: 'https://myserver.com/webhook', status: 'active' }] },
+    },
 ];
 
-const cats = ['Wallet', 'Staking', 'Social', 'Network'];
+const cats = ['Wallet', 'Transfer', 'Staking', 'Bridge', 'NFT', 'Authority', 'Pipeline', 'Webhook', 'Social', 'Network'];
 const guideSections = ['overview', 'authentication', 'quickstart', 'sdks', 'rate-limits', 'errors', 'network', 'webhooks', 'rp-system'];
 const guideLabels: Record<string, string> = { overview: 'Overview', authentication: 'Authentication', quickstart: 'Quick Start', sdks: 'SDKs & Install', 'rate-limits': 'Rate Limits', errors: 'Error Codes', network: 'Network Config', webhooks: 'Webhooks', 'rp-system': 'RP Rewards' };
 
@@ -278,7 +430,7 @@ export default function DevDocs(): JSX.Element {
         <div class="space-y-8">
             <div>
                 <h2 class="text-3xl font-black tracking-tight mb-3">Vision Chain Developer API</h2>
-                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 12 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
+                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 37 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
             </div>
             <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center gap-3">
                 <span class="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded">BASE URL</span>
@@ -286,7 +438,7 @@ export default function DevDocs(): JSX.Element {
                 <CopyBtn text={API} id="base-url" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[{ n: '12', l: 'API Actions', d: 'Wallet, Staking, Social, Network' }, { n: '0', l: 'Gas Fees', d: 'All transactions are gasless' }, { n: '100', l: 'VCN Funded', d: 'Auto-funded on registration' }].map(c => (
+                {[{ n: '37', l: 'API Actions', d: 'Wallet, Staking, Bridge, NFT, Pipeline, Webhook' }, { n: '0', l: 'Gas Fees', d: 'All transactions are gasless' }, { n: '100', l: 'VCN Funded', d: 'Auto-funded on registration' }].map(c => (
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                         <div class="text-3xl font-black text-white mb-1">{c.n}</div>
                         <div class="text-sm font-bold text-gray-300 mb-1">{c.l}</div>
@@ -431,7 +583,7 @@ export default function DevDocs(): JSX.Element {
             <div><h2 class="text-3xl font-black tracking-tight mb-3">RP Reward System</h2><p class="text-gray-400 leading-relaxed max-w-2xl">Reputation Points (RP) are earned by performing actions on Vision Chain. RP determines your rank on the leaderboard.</p></div>
             <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                 <div class="grid grid-cols-2 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Action</div><div>RP Earned</div></div>
-                {[{ a: 'Transfer VCN', r: 5 }, { a: 'Unstake VCN', r: 5 }, { a: 'Claim Rewards', r: 10 }, { a: 'Stake VCN', r: 20 }, { a: 'New Agent Signup Bonus', r: 25 }, { a: 'Refer Another Agent', r: 50 }].map(r => (
+                {[{ a: 'Transfer VCN', r: 5 }, { a: 'Batch Transfer', r: '5/ea' }, { a: 'Approve Spender', r: 5 }, { a: 'Unstake VCN', r: 5 }, { a: 'Claim Rewards', r: 10 }, { a: 'Mint SBT', r: 10 }, { a: 'Create Pipeline', r: 10 }, { a: 'Execute Pipeline', r: 10 }, { a: 'Bridge Initiate', r: 15 }, { a: 'Stake VCN', r: 20 }, { a: 'New Agent Signup Bonus', r: 25 }, { a: 'Refer Another Agent', r: 50 }].map(r => (
                     <div class="grid grid-cols-2 gap-4 px-5 py-3 border-b border-white/[0.03]"><span class="text-sm text-gray-300">{r.a}</span><span class="text-sm font-bold text-purple-400">+{r.r} RP</span></div>
                 ))}
             </div>
