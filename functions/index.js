@@ -666,8 +666,48 @@ async function logSecurityEvent(email, action, details, db) {
 
 const db = admin.firestore();
 
-// Configuration
-const RPC_URL = "https://api.visionchain.co/rpc-proxy"; // Vision Chain v2 (Chain ID: 3151909)
+// ============================================================================
+// VISION CHAIN - PAYMASTER CONFIGURATION
+// ============================================================================
+//
+// [BLOCKCHAIN CONSTRAINTS - DO NOT CHANGE WITHOUT UNDERSTANDING THESE]
+//
+// Vision Chain uses Clique PoA (Proof of Authority) consensus.
+// Current chain parameters (as of 2026-02-14):
+//   - Chain ID:       3151909
+//   - Block Period:   5 seconds (1 block every 5s)
+//   - Gas Limit:      30,000,000 (30M per block)
+//   - Sealer Nodes:   1 (node-2, address 0xd4FeD8Fe5946aDA714bb664D6B5F2C954acf6B15)
+//   - Max TPS:        ~285 (simple transfer) / ~92 (ERC20 transfer)
+//
+// TIMEOUT DERIVATION (all timeouts must respect block period):
+//   - RPC read timeout:       15s = 3 blocks worth of time (adequate for read calls)
+//   - TX send timeout:        30s = 6 blocks (allow retries if first block is missed)
+//   - TX confirmation wait:   60s = 12 blocks (TX should confirm within 1-2 blocks,
+//                              but allow extra time for network delays)
+//   - balanceOf timeout:      12s = ~2.5 blocks (read-only, should respond in <1 block)
+//   - Cloud Function timeout: 300s = HARD LIMIT set by Firebase (cannot exceed)
+//
+// NONCE MANAGEMENT:
+//   - Always use "latest" (confirmed) nonce, never "pending"
+//   - Each TX explicitly sets nonce to prevent ethers.js from using "pending" count
+//   - If TX fails mid-sequence, the unused nonce creates a gap that blocks
+//     ALL future TXs from this wallet until the gap is filled (self-transfer)
+//
+// RPC ROUTING:
+//   - rpc.visionchain.co MUST route to the sealer node (node-2, port 8546)
+//   - If routed to a non-sealer node, TXs depend on P2P propagation which
+//     is unreliable and causes TXs to be stuck in mempool indefinitely
+//   - The RPC proxy (api.visionchain.co/rpc-proxy) also routes to node-1 (port 8545)
+//     and has the same propagation issue; use only as read-only fallback
+//
+// ============================================================================
+
+const RPC_URL = "http://46.224.221.201:8546"; // Direct to sealer node-2 (bypasses nginx -> non-sealer node-1)
+const RPC_FALLBACK = "https://rpc.visionchain.co"; // nginx -> node-1 (non-sealer, read-only fallback)
+
+// Block period in seconds - used to derive safe timeout values
+const BLOCK_PERIOD_SECONDS = 5;
 
 // Vision Chain Executor - MUST be set via Firebase Secrets
 // firebase functions:secrets:set VCN_EXECUTOR_PK
@@ -779,6 +819,53 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
 
     console.log(`[Paymaster] Request type: ${type} from ${user}`);
 
+    // Health check / RPC diagnostic endpoint
+    if (type === "health") {
+      const rpcs = [RPC_URL, RPC_FALLBACK];
+      const results = [];
+      for (const url of rpcs) {
+        const start = Date.now();
+        try {
+          const fetchReq = new ethers.FetchRequest(url);
+          fetchReq.timeout = 8000;
+          const testProvider = new ethers.JsonRpcProvider(fetchReq, undefined, { staticNetwork: true });
+          const blockNum = await testProvider.getBlockNumber();
+          results.push({ url, ok: true, block: blockNum, ms: Date.now() - start });
+        } catch (e) {
+          results.push({ url, ok: false, error: e.message, ms: Date.now() - start });
+        }
+      }
+      return res.status(200).json({ rpcs: results, timestamp: new Date().toISOString() });
+    }
+
+    // Flush stuck nonces
+    if (type === "flush_nonce") {
+      const visionNet = ethers.Network.from({ name: "vision-chain", chainId: 3151909 });
+      const fetchReq = new ethers.FetchRequest(RPC_URL);
+      fetchReq.timeout = 15000;
+      const p = new ethers.JsonRpcProvider(fetchReq, visionNet, { staticNetwork: visionNet });
+      const w = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, p);
+      const latestNonce = await p.getTransactionCount(w.address, "latest");
+      const pendingNonce = await p.getTransactionCount(w.address, "pending");
+      console.log(`[Paymaster:FlushNonce] latest=${latestNonce}, pending=${pendingNonce}`);
+      if (pendingNonce <= latestNonce) {
+        return res.status(200).json({ message: "No nonce gap", latestNonce, pendingNonce });
+      }
+      const flushed = [];
+      for (let n = latestNonce; n < pendingNonce; n++) {
+        try {
+          const tx = await w.sendTransaction({ to: w.address, value: 0, nonce: n });
+          await tx.wait();
+          flushed.push({ nonce: n, hash: tx.hash });
+          console.log(`[Paymaster:FlushNonce] Flushed nonce ${n}: ${tx.hash}`);
+        } catch (e) {
+          flushed.push({ nonce: n, error: e.message });
+          console.error(`[Paymaster:FlushNonce] Failed nonce ${n}: ${e.message}`);
+        }
+      }
+      return res.status(200).json({ flushed, latestNonce, pendingNonce });
+    }
+
     // Basic validation (skip for info-only endpoints)
     if (!user && type !== "reverse_bridge_info") {
       return res.status(400).json({ error: "Missing required field: user" });
@@ -789,103 +876,295 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
       return res.status(400).json({ error: "Request expired" });
     }
 
-    // Setup blockchain connection
-    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    // ---------------------------------------------------------------
+    // BLOCKCHAIN CONNECTION SETUP
+    // ---------------------------------------------------------------
+    // CRITICAL: Must use explicit network to prevent ethers.js v6 from
+    // calling eth_chainId internally, which hangs in Cloud Functions.
+    // See: https://github.com/ethers-io/ethers.js/issues/4377
+    const visionNetwork = ethers.Network.from({
+      name: "vision-chain",
+      chainId: 3151909, // Vision Chain network ID - DO NOT CHANGE
+    });
+
+    // RPC read timeout = 3 blocks = 3 * BLOCK_PERIOD_SECONDS
+    // Rationale: Read calls should respond within 1 block; 3x gives margin.
+    const rpcTimeoutMs = BLOCK_PERIOD_SECONDS * 3 * 1000;
+
+    let provider;
+    const rpcUrls = [RPC_URL, RPC_FALLBACK];
+    for (const rpcUrl of rpcUrls) {
+      try {
+        const fetchReq = new ethers.FetchRequest(rpcUrl);
+        fetchReq.timeout = rpcTimeoutMs; // Derived from block period
+        provider = new ethers.JsonRpcProvider(fetchReq, visionNetwork, { staticNetwork: visionNetwork });
+        const blockNum = await provider.getBlockNumber();
+        console.log(`[Paymaster] RPC connected: ${rpcUrl}, block: ${blockNum}`);
+        break;
+      } catch (rpcErr) {
+        console.warn(`[Paymaster] RPC failed (${rpcUrl}): ${rpcErr.message}`);
+        provider = null;
+      }
+    }
+    if (!provider) {
+      return res.status(503).json({ error: "All RPC nodes unreachable" });
+    }
     const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
     const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
 
-    // Route based on type
-    switch (type) {
-      case "transfer":
-        return await handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet });
+    // ---------------------------------------------------------------
+    // NONCE MANAGEMENT & DEFENSIVE SAFEGUARDS
+    // ---------------------------------------------------------------
+    // 1. CONCURRENCY GUARD: Use Firestore distributed lock to prevent
+    //    multiple Cloud Function instances from using the same nonce.
+    //    Without this, two simultaneous requests could both get nonce=377
+    //    and one would fail, creating a gap.
+    //
+    // 2. NONCE GAP DETECTION: Before processing, check if latest != pending.
+    //    If there's a gap, auto-fill with empty TXs before proceeding.
+    //    This prevents a single failed TX from blocking ALL future TXs.
+    //
+    // 3. ALWAYS USE "latest" (confirmed on-chain), NEVER "pending".
+    //    Using "pending" nonce counts unconfirmed TXs and creates gaps.
+    // ---------------------------------------------------------------
 
-      case "timelock":
-        return await handleTimeLock(req, res, { user, recipient, amount, fee, deadline, signature, unlockTime, userEmail, senderAddress });
+    // Skip lock for read-only operations
+    const needsLock = ["transfer", "timelock", "batch", "bridge", "staking", "admin_transfer"].includes(type);
+    let lockRef = null;
 
-      case "batch":
-        return await handleBatch(req, res, { user, transactions, fee, deadline, signature, tokenContract, adminWallet, userEmail });
+    if (needsLock) {
+      // Acquire distributed lock (expires after 120s as safety valve)
+      lockRef = db.collection("_system").doc("paymaster_lock");
+      const lockTimeout = Date.now() + 120000;
+      let lockAcquired = false;
 
-      case "bridge":
-        return await handleBridge(req, res, { user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature, adminWallet });
+      for (let attempt = 0; attempt < 10; attempt++) {
+        try {
+          await db.runTransaction(async (t) => {
+            const lockDoc = await t.get(lockRef);
+            const lockData = lockDoc.data();
 
-      case "staking":
-        return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
-
-      case "agent_execution":
-        return await handleAgentExecution(req, res, { user, amount, fee, deadline, signature, tokenContract, adminWallet });
-
-      case "reverse_bridge_info": {
-        // Return relayer address for client reference
-        const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
-        if (!sepoliaRelayerPk) {
-          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
-        }
-        const relayerWallet = new ethers.Wallet(sepoliaRelayerPk);
-        return res.status(200).json({
-          success: true,
-          relayerAddress: relayerWallet.address,
-          vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
-        });
-      }
-
-      case "reverse_bridge_prepare": {
-        // Gas sponsorship: send Sepolia ETH to user so they can call approve()
-        // This is needed because VCNTokenSepolia does NOT support ERC-2612 Permit
-        const prepRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
-        if (!prepRelayerPk) {
-          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
-        }
-        if (!user) {
-          return res.status(400).json({ error: "Missing required field: user" });
-        }
-
-        const prepSepoliaProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
-        const prepRelayerWallet = new ethers.Wallet(prepRelayerPk, prepSepoliaProvider);
-        const prepRelayerAddress = prepRelayerWallet.address;
-
-        // Check user's Sepolia ETH balance
-        const userEthBalance = await prepSepoliaProvider.getBalance(user);
-        const GAS_SPONSOR_AMOUNT = ethers.parseEther("0.005"); // ~enough for 2-3 approve txs
-
-        let gasRefillTxHash = null;
-        if (userEthBalance < GAS_SPONSOR_AMOUNT) {
-          console.log(`[ReverseBridgePrepare] Sending ${ethers.formatEther(GAS_SPONSOR_AMOUNT)} ETH to ${user} for gas...`);
-          const relayerEthBal = await prepSepoliaProvider.getBalance(prepRelayerAddress);
-          if (relayerEthBal < GAS_SPONSOR_AMOUNT + ethers.parseEther("0.01")) {
-            return res.status(503).json({ error: "Relayer ETH balance too low for gas sponsorship" });
-          }
-          const gasTx = await prepRelayerWallet.sendTransaction({
-            to: user,
-            value: GAS_SPONSOR_AMOUNT,
-            gasLimit: 21000,
+            // Lock is free if: doesn't exist, explicitly unlocked, or expired
+            if (!lockDoc.exists || !lockData.locked || Date.now() > lockData.expiresAt) {
+              t.set(lockRef, {
+                locked: true,
+                lockedBy: `${type}-${user}`,
+                lockedAt: Date.now(),
+                expiresAt: lockTimeout,
+              });
+              lockAcquired = true;
+            } else {
+              throw new Error("Lock held");
+            }
           });
-          await gasTx.wait();
-          gasRefillTxHash = gasTx.hash;
-          console.log(`[ReverseBridgePrepare] Gas refill tx: ${gasRefillTxHash}`);
-        } else {
-          console.log(`[ReverseBridgePrepare] User already has ${ethers.formatEther(userEthBalance)} ETH, skipping refill`);
+          if (lockAcquired) break;
+        } catch (lockErr) {
+          // Wait 1 block period before retrying
+          console.log(`[Paymaster] Lock busy, retry ${attempt + 1}/10...`);
+          await new Promise((r) => setTimeout(r, BLOCK_PERIOD_SECONDS * 1000));
         }
-
-        return res.status(200).json({
-          success: true,
-          relayerAddress: prepRelayerAddress,
-          vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
-          gasRefillTxHash,
-          userEthBalance: ethers.formatEther(userEthBalance),
-        });
       }
 
-      case "reverse_bridge":
-        return await handleReverseBridge(req, res, { user, recipient, amount, fee, deadline, signature, adminWallet });
+      if (!lockAcquired) {
+        console.error("[Paymaster] Could not acquire lock after 10 attempts");
+        return res.status(429).json({
+          error: "Paymaster is processing another request. Please retry in a few seconds.",
+        });
+      }
+      console.log(`[Paymaster] Lock acquired for ${type}-${user}`);
+    }
 
-      case "sepolia_transfer":
-        return await handleSepoliaTransfer(req, res, { user, recipient, amount, fee, deadline, signature });
+    // Helper to release lock (called in finally or on early return)
+    const releaseLock = async () => {
+      if (lockRef) {
+        try {
+          await lockRef.set({ locked: false, releasedAt: Date.now() });
+          console.log("[Paymaster] Lock released");
+        } catch (e) {
+          console.error("[Paymaster] Failed to release lock:", e.message);
+        }
+      }
+    };
 
-      case "admin_transfer":
-        return await handleAdminTransfer(req, res, { recipient, amount, tokenContract, adminWallet });
+    try {
+      // NONCE GAP DETECTION & AUTO-RECOVERY
+      const latestNonce = await provider.getTransactionCount(adminWallet.address, "latest");
+      const pendingNonce = await provider.getTransactionCount(adminWallet.address, "pending");
 
-      default:
-        return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge, staking, admin_transfer` });
+      if (pendingNonce > latestNonce) {
+        // GAP DETECTED: There are pending TXs that haven't been mined.
+        // This blocks all new TXs. Auto-fill the gap with empty self-transfers.
+        const gapSize = pendingNonce - latestNonce;
+        console.warn(`[Paymaster] NONCE GAP DETECTED: latest=${latestNonce}, pending=${pendingNonce}, gap=${gapSize}`);
+
+        // Safety limit: don't try to fill more than 20 nonces (indicates deeper problem)
+        if (gapSize > 20) {
+          await releaseLock();
+          console.error(`[Paymaster] Nonce gap too large (${gapSize}). Manual intervention required.`);
+          return res.status(503).json({
+            error: `Nonce gap too large (${gapSize}). Contact admin.`,
+            latestNonce,
+            pendingNonce,
+          });
+        }
+
+        // Auto-fill gap with higher gas to replace stuck TXs
+        const gasPrice = (await provider.getFeeData()).gasPrice;
+        const boostGas = gasPrice * 10n;
+        console.log(`[Paymaster] Auto-filling ${gapSize} nonce gaps (gasPrice: ${ethers.formatUnits(boostGas, "gwei")} Gwei)...`);
+
+        for (let n = latestNonce; n < pendingNonce; n++) {
+          try {
+            const fillTx = await adminWallet.sendTransaction({
+              to: adminWallet.address,
+              value: 0,
+              nonce: n,
+              gasPrice: boostGas,
+              gasLimit: 21000,
+            });
+            await Promise.race([
+              fillTx.wait(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("fill TX timeout")), BLOCK_PERIOD_SECONDS * 6 * 1000)),
+            ]);
+            console.log(`[Paymaster] Filled nonce ${n}: ${fillTx.hash}`);
+          } catch (fillErr) {
+            console.error(`[Paymaster] Failed to fill nonce ${n}: ${fillErr.message}`);
+            await releaseLock();
+            return res.status(503).json({
+              error: `Failed to recover nonce gap at nonce ${n}. Retry later.`,
+            });
+          }
+        }
+        console.log("[Paymaster] Nonce gap resolved successfully");
+      }
+
+      // Get the clean confirmed nonce after any gap recovery
+      const startNonce = await provider.getTransactionCount(adminWallet.address, "latest");
+      console.log(`[Paymaster] Provider ready, admin: ${adminWallet.address}, nonce: ${startNonce}`);
+
+      // Route based on type
+      switch (type) {
+        case "transfer":
+          return await handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet, startNonce });
+
+        case "timelock":
+          return await handleTimeLock(req, res, { user, recipient, amount, fee, deadline, signature, unlockTime, userEmail, senderAddress });
+
+        case "batch":
+          return await handleBatch(req, res, { user, transactions, fee, deadline, signature, tokenContract, adminWallet, userEmail });
+
+        case "bridge":
+          return await handleBridge(req, res, { user, srcChainId, dstChainId, token, amount, recipient, nonce, expiry, intentSignature, adminWallet });
+
+        case "staking":
+          return await handleStaking(req, res, { user, amount, stakeAction, fee, deadline, signature, tokenContract, adminWallet });
+
+        case "agent_execution":
+          return await handleAgentExecution(req, res, { user, amount, fee, deadline, signature, tokenContract, adminWallet });
+
+        case "reverse_bridge_info": {
+          // Return relayer address for client reference
+          const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
+          if (!sepoliaRelayerPk) {
+            return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+          }
+          const relayerWallet = new ethers.Wallet(sepoliaRelayerPk);
+          return res.status(200).json({
+            success: true,
+            relayerAddress: relayerWallet.address,
+            vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
+          });
+        }
+
+        case "reverse_bridge_prepare": {
+          // Gas sponsorship: send Sepolia ETH to user so they can call approve()
+          // This is needed because VCNTokenSepolia does NOT support ERC-2612 Permit
+          const prepRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
+          if (!prepRelayerPk) {
+            return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+          }
+          if (!user) {
+            return res.status(400).json({ error: "Missing required field: user" });
+          }
+
+          const prepSepoliaProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+          const prepRelayerWallet = new ethers.Wallet(prepRelayerPk, prepSepoliaProvider);
+          const prepRelayerAddress = prepRelayerWallet.address;
+
+          // Check user's Sepolia ETH balance
+          const userEthBalance = await prepSepoliaProvider.getBalance(user);
+          const GAS_SPONSOR_AMOUNT = ethers.parseEther("0.005"); // ~enough for 2-3 approve txs
+
+          let gasRefillTxHash = null;
+          if (userEthBalance < GAS_SPONSOR_AMOUNT) {
+            console.log(`[ReverseBridgePrepare] Sending ${ethers.formatEther(GAS_SPONSOR_AMOUNT)} ETH to ${user} for gas...`);
+            const relayerEthBal = await prepSepoliaProvider.getBalance(prepRelayerAddress);
+            if (relayerEthBal < GAS_SPONSOR_AMOUNT + ethers.parseEther("0.01")) {
+              return res.status(503).json({ error: "Relayer ETH balance too low for gas sponsorship" });
+            }
+            const gasTx = await prepRelayerWallet.sendTransaction({
+              to: user,
+              value: GAS_SPONSOR_AMOUNT,
+              gasLimit: 21000,
+            });
+            await gasTx.wait();
+            gasRefillTxHash = gasTx.hash;
+            console.log(`[ReverseBridgePrepare] Gas refill tx: ${gasRefillTxHash}`);
+          } else {
+            console.log(`[ReverseBridgePrepare] User already has ${ethers.formatEther(userEthBalance)} ETH, skipping refill`);
+          }
+
+          return res.status(200).json({
+            success: true,
+            relayerAddress: prepRelayerAddress,
+            vcnSepoliaAddress: (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim(),
+            gasRefillTxHash,
+            userEthBalance: ethers.formatEther(userEthBalance),
+          });
+        }
+
+        case "reverse_bridge":
+          return await handleReverseBridge(req, res, { user, recipient, amount, fee, deadline, signature, adminWallet });
+
+        case "sepolia_transfer":
+          return await handleSepoliaTransfer(req, res, { user, recipient, amount, fee, deadline, signature });
+
+        case "admin_transfer":
+          return await handleAdminTransfer(req, res, { recipient, amount, tokenContract, adminWallet });
+
+        case "flush_nonce": {
+          const flushLatest = await provider.getTransactionCount(adminWallet.address, "latest");
+          const flushPending = await provider.getTransactionCount(adminWallet.address, "pending");
+          console.log(`[Paymaster:FlushNonce] latest=${flushLatest}, pending=${flushPending}`);
+          if (flushPending <= flushLatest) {
+            return res.status(200).json({ message: "No nonce gap", latestNonce: flushLatest, pendingNonce: flushPending });
+          }
+          const flushed = [];
+          for (let n = flushLatest; n < flushPending; n++) {
+            try {
+              const gasPrice = (await provider.getFeeData()).gasPrice;
+              const boostedGas = gasPrice * 10n; // 10x to replace stuck TXs
+              const flushTx = await adminWallet.sendTransaction({ to: adminWallet.address, value: 0, nonce: n, gasPrice: boostedGas });
+              await flushTx.wait();
+              flushed.push({ nonce: n, hash: flushTx.hash });
+              console.log(`[Paymaster:FlushNonce] Flushed nonce ${n}: ${flushTx.hash}`);
+            } catch (e) {
+              flushed.push({ nonce: n, error: e.message });
+              console.error(`[Paymaster:FlushNonce] Failed nonce ${n}: ${e.message}`);
+            }
+          }
+          return res.status(200).json({ flushed, latestNonce: flushLatest, pendingNonce: flushPending });
+        }
+
+        default:
+          return res.status(400).json({ error: `Unknown type: ${type}. Supported: transfer, timelock, batch, bridge, staking, admin_transfer, flush_nonce` });
+      }
+    } catch (innerErr) {
+      console.error("[Paymaster] TX processing error:", innerErr);
+      return res.status(500).json({ error: innerErr.message || "Internal server error" });
+    } finally {
+      // ALWAYS release the distributed lock, even on error
+      await releaseLock();
     }
   } catch (err) {
     console.error("[Paymaster] Error:", err);
@@ -943,7 +1222,7 @@ async function handleAdminTransfer(req, res, { recipient, amount, tokenContract,
  * @param {object} params - Transfer parameters
  * @return {Promise} - Response promise
  */
-async function handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet }) {
+async function handleTransfer(req, res, { user, recipient, amount, fee, deadline, signature, tokenContract, adminWallet, startNonce }) {
   if (!recipient || !amount) {
     return res.status(400).json({ error: "Missing required fields: recipient, amount" });
   }
@@ -957,51 +1236,109 @@ async function handleTransfer(req, res, { user, recipient, amount, fee, deadline
 
   console.log(`[Paymaster:Transfer] Transfer: ${ethers.formatUnits(transferAmountBigInt, 18)}, Fee: ${ethers.formatUnits(feeBigInt, 18)}, Total: ${ethers.formatUnits(totalAmountBigInt, 18)}`);
 
-  // Check user balance
-  const userBalance = await tokenContract.balanceOf(user);
+  // Check user balance (with timeout to prevent hang)
+  // Timeout = ~2.5 blocks. balanceOf is a read call; should return in <1 block.
+  // If this times out, the RPC node is likely unresponsive.
+  const balanceTimeoutMs = Math.ceil(BLOCK_PERIOD_SECONDS * 2.5) * 1000;
+  console.log(`[Paymaster:Transfer] Checking balance for ${user}...`);
+  let userBalance;
+  try {
+    userBalance = await Promise.race([
+      tokenContract.balanceOf(user),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`balanceOf timeout after ${balanceTimeoutMs / 1000}s`)), balanceTimeoutMs)),
+    ]);
+    console.log(`[Paymaster:Transfer] Balance: ${ethers.formatUnits(userBalance, 18)} VCN`);
+  } catch (balErr) {
+    console.error(`[Paymaster:Transfer] Balance check failed: ${balErr.message}`);
+    return res.status(503).json({ error: `RPC call failed: ${balErr.message}` });
+  }
   if (userBalance < totalAmountBigInt) {
     console.error(`[Paymaster:Transfer] Insufficient balance: ${userBalance} < ${totalAmountBigInt}`);
     return res.status(400).json({ error: "Insufficient balance" });
   }
 
   // Parse signature
+  console.log(`[Paymaster:Transfer] Parsing signature...`);
   const { v, r, s } = parseSignature(signature);
   if (!v) {
     return res.status(400).json({ error: "Invalid signature format" });
   }
 
-  // Execute permit
+  // ---------------------------------------------------------------
+  // TX TIMEOUT CONSTRAINTS (derived from block period)
+  // ---------------------------------------------------------------
+  // TX send timeout = 6 blocks: time for TX to be accepted by the node's mempool.
+  // TX wait timeout = 12 blocks: time for TX to be mined and confirmed.
+  // With 5s blocks: send=30s, wait=60s. With 3s blocks: send=18s, wait=36s.
+  // WARNING: If block period changes, these values auto-adjust.
+  //          Do NOT hardcode timeout values directly.
+  const txSendTimeoutMs = BLOCK_PERIOD_SECONDS * 6 * 1000;
+  const txWaitTimeoutMs = BLOCK_PERIOD_SECONDS * 12 * 1000;
+
+  // Execute permit (with timeout)
   try {
-    const permitTx = await tokenContract.permit(user, adminWallet.address, totalAmountBigInt, deadline, v, r, s);
-    await permitTx.wait();
-    console.log(`[Paymaster:Transfer] Permit successful: ${permitTx.hash}`);
+    console.log(`[Paymaster:Transfer] Sending permit tx (timeout: ${txSendTimeoutMs / 1000}s)...`);
+    const permitTx = await Promise.race([
+      tokenContract.permit(user, adminWallet.address, totalAmountBigInt, deadline, v, r, s, { nonce: startNonce }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`permit send timeout ${txSendTimeoutMs / 1000}s`)), txSendTimeoutMs)),
+    ]);
+    console.log(`[Paymaster:Transfer] Permit TX sent: ${permitTx.hash}, waiting (timeout: ${txWaitTimeoutMs / 1000}s)...`);
+    await Promise.race([
+      permitTx.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`permit wait timeout ${txWaitTimeoutMs / 1000}s`)), txWaitTimeoutMs)),
+    ]);
+    console.log(`[Paymaster:Transfer] Permit confirmed: ${permitTx.hash}`);
   } catch (permitErr) {
-    console.error(`[Paymaster:Transfer] Permit failed:`, permitErr);
+    console.error(`[Paymaster:Transfer] Permit failed:`, permitErr.message || permitErr);
     return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
   }
 
-  // Execute transfer
-  const tx = await tokenContract.transferFrom(user, recipient, transferAmountBigInt);
-  console.log(`[Paymaster:Transfer] TX sent: ${tx.hash}`);
+  // Execute transfer (with timeout - same constraints as permit above)
+  let tx;
+  try {
+    console.log(`[Paymaster:Transfer] Sending transferFrom tx (timeout: ${txSendTimeoutMs / 1000}s)...`);
+    tx = await Promise.race([
+      tokenContract.transferFrom(user, recipient, transferAmountBigInt, { nonce: startNonce + 1 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`transferFrom send timeout ${txSendTimeoutMs / 1000}s`)), txSendTimeoutMs)),
+    ]);
+    console.log(`[Paymaster:Transfer] TX sent: ${tx.hash}, waiting...`);
+  } catch (txErr) {
+    console.error(`[Paymaster:Transfer] Transfer send failed:`, txErr.message || txErr);
+    return res.status(500).json({ error: `Transfer failed: ${txErr.reason || txErr.message}` });
+  }
 
-  const receipt = await tx.wait();
-  console.log(`[Paymaster:Transfer] Confirmed in block ${receipt.blockNumber}`);
+  let receipt;
+  try {
+    receipt = await Promise.race([
+      tx.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`transfer wait timeout ${txWaitTimeoutMs / 1000}s`)), txWaitTimeoutMs)),
+    ]);
+    console.log(`[Paymaster:Transfer] Confirmed in block ${receipt.blockNumber}`);
 
-  // Index to Firestore
-  await indexTransaction(tx.hash, {
-    type: "Transfer",
-    from: user,
-    to: recipient,
-    amount: ethers.formatUnits(transferAmountBigInt, 18),
-    fee: ethers.formatUnits(feeBigInt, 18),
-    method: "Paymaster Gasless Transfer",
-  });
+    // Index to Firestore
+    await indexTransaction(tx.hash, {
+      type: "Transfer",
+      from: user,
+      to: recipient,
+      amount: ethers.formatUnits(transferAmountBigInt, 18),
+      fee: ethers.formatUnits(feeBigInt, 18),
+      method: "Paymaster Gasless Transfer",
+    });
 
-  return res.status(200).json({
-    success: true,
-    txHash: tx.hash,
-    blockNumber: receipt.blockNumber,
-  });
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      blockNumber: receipt.blockNumber,
+    });
+  } catch (waitErr) {
+    console.error(`[Paymaster:Transfer] Wait failed:`, waitErr.message || waitErr);
+    // TX was sent but confirmation failed - return hash anyway
+    return res.status(200).json({
+      success: true,
+      txHash: tx.hash,
+      warning: "Transaction sent but confirmation timed out",
+    });
+  }
 }
 
 /**

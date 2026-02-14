@@ -1198,6 +1198,7 @@ const Wallet = (): JSX.Element => {
                     let timeLockSuccess = false;
                     let timeLockTxHash = '';
                     let timeLockScheduleId = '';
+                    let usedPaymaster = false;
 
                     // --- STRATEGY 1: Try Gasless Paymaster (Production Ready) ---
                     try {
@@ -1216,6 +1217,7 @@ const Wallet = (): JSX.Element => {
                         timeLockTxHash = result.txHash;
                         timeLockScheduleId = result.scheduleId;
                         timeLockSuccess = true;
+                        usedPaymaster = true; // Backend already saved to Firestore
 
                     } catch (paymasterErr: any) {
                         console.warn("[Paymaster] Failed, trying legacy method:", paymasterErr.message);
@@ -1294,18 +1296,29 @@ const Wallet = (): JSX.Element => {
                     }
 
                     // Register successful Time-lock with Firebase
+                    // NOTE: Only save from frontend for LEGACY path (Strategy 2).
+                    // Paymaster path (Strategy 1) already creates the Firestore doc
+                    // in handleTimeLock on the backend. Saving again here would create
+                    // a duplicate TIME LOCK AGENT entry.
                     if (timeLockSuccess) {
                         setLastTxHash(timeLockTxHash);
-                        await saveScheduledTransfer({
-                            userEmail: userProfile().email,
-                            recipient: recipient,
-                            amount: amount,
-                            token: symbol,
-                            unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
-                            creationTx: timeLockTxHash,
-                            scheduleId: timeLockScheduleId,
-                            status: 'WAITING'
-                        });
+
+                        // Check if this came from Paymaster or Legacy path
+                        // Paymaster backend already creates the Firestore doc,
+                        // so only save from frontend for Legacy path
+                        if (!usedPaymaster) {
+                            // Legacy path: frontend needs to save the task
+                            await saveScheduledTransfer({
+                                userEmail: userProfile().email,
+                                recipient: recipient,
+                                amount: amount,
+                                token: symbol,
+                                unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
+                                creationTx: timeLockTxHash,
+                                scheduleId: timeLockScheduleId,
+                                status: 'WAITING'
+                            });
+                        }
                     }
 
                 } else if (symbol === 'VCN_SEPOLIA') {
