@@ -8676,6 +8676,59 @@ exports.agentGateway = onRequest({
     };
     const canonicalAction = ACTION_CANONICAL[action] || action;
 
+    // === NODE-GATE MIDDLEWARE ===
+    // T1 + T2: open to all authenticated agents
+    // T3 + T4: require active Vision Node
+    const ACTION_TIER_MAP = {
+      "system.register": "T1", "system.network_info": "T1", "system.delete_agent": "T2",
+      "wallet.balance": "T1", "wallet.tx_history": "T1", "wallet.token_info": "T1",
+      "wallet.gas_estimate": "T1", "wallet.approve": "T3",
+      "transfer.send": "T2", "transfer.batch": "T4", "transfer.scheduled": "T3", "transfer.conditional": "T3",
+      "staking.deposit": "T3", "staking.request_unstake": "T3", "staking.withdraw": "T3",
+      "staking.claim": "T3", "staking.compound": "T3", "staking.rewards": "T1",
+      "staking.apy": "T1", "staking.cooldown": "T1", "staking.position": "T1",
+      "bridge.initiate": "T4", "bridge.status": "T1", "bridge.finalize": "T3",
+      "bridge.history": "T1", "bridge.fee": "T1",
+      "nft.mint": "T4", "nft.balance": "T1", "nft.metadata": "T1",
+      "authority.grant": "T2", "authority.revoke": "T2", "authority.status": "T1",
+      "authority.usage": "T1", "authority.audit": "T1",
+      "settlement.set_wallet": "T2", "settlement.get_wallet": "T1",
+      "social.referral": "T1", "social.leaderboard": "T1", "social.profile": "T1",
+      "hosting.configure": "T2", "hosting.toggle": "T2", "hosting.logs": "T1",
+      // Stage 2 - new domains
+      "node.register": "T2", "node.heartbeat": "T1", "node.status": "T1", "node.peers": "T1",
+      "storage.set": "T2", "storage.get": "T1", "storage.list": "T1", "storage.delete": "T2",
+      "pipeline.create": "T2", "pipeline.execute": "T3", "pipeline.list": "T1", "pipeline.delete": "T2",
+      "webhook.subscribe": "T2", "webhook.unsubscribe": "T2", "webhook.list": "T1",
+      "webhook.test": "T1", "webhook.logs": "T1",
+    };
+
+    const actionTier = ACTION_TIER_MAP[canonicalAction] || "T2";
+    if (["T3", "T4"].includes(actionTier)) {
+      try {
+        const nodeSnap = await db.collection("agents").doc(agent.id)
+          .collection("node").doc("status").get();
+        const nodeData = nodeSnap.exists ? nodeSnap.data() : null;
+        const isNodeActive = nodeData &&
+          nodeData.last_heartbeat &&
+          (Date.now() - nodeData.last_heartbeat.toMillis() < 600000); // 10 min
+        if (!isNodeActive) {
+          return res.status(403).json({
+            error: "Vision Node required for this action",
+            action: canonicalAction,
+            tier: actionTier,
+            node_status: nodeData ? (Date.now() - (nodeData.last_heartbeat?.toMillis?.() || 0) < 3600000 ? "stale" : "inactive") : "not_registered",
+            message: "Install and run a Vision Node to access T3/T4 actions. T1+T2 actions remain available without a node.",
+            install_url: "https://visionchain.co/node/install",
+            docs_url: "https://visionchain.co/docs/node",
+          });
+        }
+      } catch (ngErr) {
+        console.warn(`[Node-Gate] Check failed for agent ${agent.id}:`, ngErr.message);
+        // Fail-open: allow action if node check itself fails
+      }
+    }
+
     // Load pricing config (cached in-memory for 5 minutes)
     let pricingConfig = _gwPricingCache;
     if (!pricingConfig || Date.now() - _gwPricingCacheAt > 300000) {
@@ -9507,14 +9560,1887 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // =====================================================
+    // Phase 1: NEW ENDPOINTS (11 total)
+    // =====================================================
+
+    // --- TOKEN INFO (wallet.token_info) --- T1
+    if (action === "token_info" || action === "wallet.token_info") {
+      try {
+        const { token_address } = req.body;
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const targetAddr = token_address || VCN_TOKEN_ADDRESS;
+
+        const tokenAbi = [
+          "function name() view returns (string)",
+          "function symbol() view returns (string)",
+          "function decimals() view returns (uint8)",
+          "function totalSupply() view returns (uint256)",
+          "function balanceOf(address) view returns (uint256)",
+        ];
+        const tokenContract = new ethers.Contract(targetAddr, tokenAbi, provider);
+
+        const [name, symbol, decimals, totalSupply] = await Promise.all([
+          tokenContract.name().catch(() => "Unknown"),
+          tokenContract.symbol().catch(() => "???"),
+          tokenContract.decimals().catch(() => 18),
+          tokenContract.totalSupply().catch(() => 0n),
+        ]);
+
+        const agentBalance = await tokenContract.balanceOf(agent.walletAddress).catch(() => 0n);
+
+        return res.status(200).json({
+          success: true,
+          token: {
+            address: targetAddr,
+            name,
+            symbol,
+            decimals: Number(decimals),
+            total_supply: ethers.formatUnits(totalSupply, decimals),
+          },
+          agent_balance: ethers.formatUnits(agentBalance, decimals),
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Token info failed: ${e.message}` });
+      }
+    }
+
+    // --- GAS ESTIMATE (wallet.gas_estimate) --- T1
+    if (action === "gas_estimate" || action === "wallet.gas_estimate") {
+      try {
+        const { tx_type = "transfer" } = req.body;
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const gasPrice = await provider.getFeeData();
+
+        // Estimate gas for common operations
+        const gasEstimates = {
+          transfer: 65000n,
+          approve: 46000n,
+          stake: 200000n,
+          unstake: 150000n,
+          claim: 100000n,
+          bridge: 300000n,
+        };
+
+        const estimatedGas = gasEstimates[tx_type] || 65000n;
+        const gasCostWei = estimatedGas * (gasPrice.gasPrice || ethers.parseUnits("1", "gwei"));
+
+        return res.status(200).json({
+          success: true,
+          estimate: {
+            tx_type,
+            gas_units: estimatedGas.toString(),
+            gas_price_gwei: ethers.formatUnits(gasPrice.gasPrice || 0n, "gwei"),
+            estimated_cost_eth: ethers.formatEther(gasCostWei),
+            note: "Vision Chain agent transactions are gasless - gas is sponsored by the platform",
+          },
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Gas estimate failed: ${e.message}` });
+      }
+    }
+
+    // --- APPROVE (wallet.approve) --- T3
+    if (action === "approve" || action === "wallet.approve") {
+      const { spender, amount, token_address } = req.body;
+      if (!spender || !amount) {
+        return res.status(400).json({ error: "Missing required fields: spender, amount" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const targetToken = token_address || VCN_TOKEN_ADDRESS;
+
+        const agentPK = serverDecrypt(agent.privateKey);
+        const agentWallet = new ethers.Wallet(agentPK, provider);
+        const agentToken = new ethers.Contract(targetToken, [
+          "function approve(address spender, uint256 amount) external returns (bool)",
+          "function allowance(address owner, address spender) view returns (uint256)",
+        ], agentWallet);
+
+        // Ensure agent has gas
+        const agentGas = await provider.getBalance(agent.walletAddress);
+        if (agentGas < ethers.parseEther("0.001")) {
+          const gasTx = await adminWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: ethers.parseEther("0.01"),
+          });
+          await gasTx.wait();
+        }
+
+        const amountWei = ethers.parseEther(amount.toString());
+        const tx = await agentToken.approve(spender, amountWei);
+        await tx.wait();
+
+        const newAllowance = await agentToken.allowance(agent.walletAddress, spender);
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: tx.hash,
+          spender,
+          amount_approved: amount.toString(),
+          current_allowance: ethers.formatEther(newAllowance),
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Approve failed: ${e.reason || e.message}` });
+      }
+    }
+
+    // --- BATCH TRANSFER (transfer.batch) --- T4
+    if (action === "batch_transfer" || action === "transfer.batch") {
+      const { transactions } = req.body;
+      if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
+        return res.status(400).json({ error: "Missing required field: transactions (array of {to, amount})" });
+      }
+      if (transactions.length > 50) {
+        return res.status(400).json({ error: "Maximum 50 transactions per batch" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+
+        // Validate total amount
+        let totalAmount = 0n;
+        for (const tx of transactions) {
+          if (!tx.to || !tx.amount) {
+            return res.status(400).json({ error: "Each transaction must have 'to' and 'amount'" });
+          }
+          totalAmount += ethers.parseEther(tx.amount.toString());
+        }
+
+        // Check balance
+        const bal = await tokenContract.balanceOf(agent.walletAddress);
+        if (bal < totalAmount) {
+          return res.status(400).json({
+            error: "Insufficient balance for batch",
+            balance: ethers.formatEther(bal),
+            required: ethers.formatEther(totalAmount),
+          });
+        }
+
+        // Transfer from agent to admin first
+        const agentPK = serverDecrypt(agent.privateKey);
+        const agentWallet = new ethers.Wallet(agentPK, provider);
+        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+        const agentGas = await provider.getBalance(agent.walletAddress);
+        if (agentGas < ethers.parseEther("0.001")) {
+          const gasTx = await adminWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: ethers.parseEther("0.01"),
+          });
+          await gasTx.wait();
+        }
+
+        const consolidateTx = await agentToken.transfer(adminWallet.address, totalAmount);
+        await consolidateTx.wait();
+
+        // Execute batch from admin
+        const results = [];
+        for (const tx of transactions) {
+          try {
+            const amountWei = ethers.parseEther(tx.amount.toString());
+            const sendTx = await tokenContract.transfer(tx.to, amountWei);
+            await sendTx.wait();
+            results.push({ to: tx.to, amount: tx.amount, tx_hash: sendTx.hash, status: "success" });
+          } catch (txErr) {
+            results.push({ to: tx.to, amount: tx.amount, status: "failed", error: txErr.reason || txErr.message });
+          }
+        }
+
+        // Stats
+        const successCount = results.filter((r) => r.status === "success").length;
+        await db.collection("agents").doc(agent.id).update({
+          transferCount: admin.firestore.FieldValue.increment(successCount),
+          rpPoints: admin.firestore.FieldValue.increment(successCount * 5),
+        });
+
+        // Record
+        db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "batch_transfer",
+          count: transactions.length,
+          success_count: successCount,
+          total_amount: ethers.formatEther(totalAmount),
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => { });
+
+        return res.status(200).json({
+          success: true,
+          batch_size: transactions.length,
+          completed: successCount,
+          failed: transactions.length - successCount,
+          results,
+          rp_earned: successCount * 5,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Batch transfer failed: ${e.reason || e.message}` });
+      }
+    }
+
+    // --- SCHEDULED TRANSFER (transfer.scheduled) --- T3
+    if (action === "scheduled_transfer" || action === "transfer.scheduled") {
+      const { to, amount, execute_at } = req.body;
+      if (!to || !amount || !execute_at) {
+        return res.status(400).json({ error: "Missing required fields: to, amount, execute_at (ISO 8601 or unix timestamp)" });
+      }
+
+      const executeTime = typeof execute_at === "number" ? new Date(execute_at * 1000) : new Date(execute_at);
+      if (isNaN(executeTime.getTime()) || executeTime.getTime() <= Date.now()) {
+        return res.status(400).json({ error: "execute_at must be a future timestamp" });
+      }
+
+      // Max 30 days in the future
+      if (executeTime.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: "execute_at cannot be more than 30 days in the future" });
+      }
+
+      try {
+        const scheduleRef = await db.collection("agents").doc(agent.id).collection("scheduled_transfers").add({
+          to,
+          amount: amount.toString(),
+          execute_at: admin.firestore.Timestamp.fromDate(executeTime),
+          status: "pending",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return res.status(200).json({
+          success: true,
+          schedule_id: scheduleRef.id,
+          to,
+          amount: amount.toString(),
+          execute_at: executeTime.toISOString(),
+          status: "pending",
+          message: "Transfer scheduled. Will execute at the specified time.",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Schedule failed: ${e.message}` });
+      }
+    }
+
+    // --- CONDITIONAL TRANSFER (transfer.conditional) --- T3
+    if (action === "conditional_transfer" || action === "transfer.conditional") {
+      const { to, amount, condition } = req.body;
+      if (!to || !amount || !condition) {
+        return res.status(400).json({ error: "Missing required fields: to, amount, condition" });
+      }
+
+      // condition = { type: "balance_above" | "balance_below" | "time_after", value: "..." }
+      const validConditions = ["balance_above", "balance_below", "time_after"];
+      if (!condition.type || !validConditions.includes(condition.type)) {
+        return res.status(400).json({
+          error: `Invalid condition type. Must be one of: ${validConditions.join(", ")}`,
+        });
+      }
+
+      try {
+        const condRef = await db.collection("agents").doc(agent.id).collection("conditional_transfers").add({
+          to,
+          amount: amount.toString(),
+          condition,
+          status: "watching",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return res.status(200).json({
+          success: true,
+          condition_id: condRef.id,
+          to,
+          amount: amount.toString(),
+          condition,
+          status: "watching",
+          message: "Conditional transfer created. Will execute when condition is met.",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Conditional transfer failed: ${e.message}` });
+      }
+    }
+
+    // --- STAKING WITHDRAW (staking.withdraw) --- T3
+    if (action === "withdraw_stake" || action === "staking.withdraw") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ABI_WITHDRAW = [
+          "function withdrawFor(address beneficiary) external",
+          "function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)",
+        ];
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI_WITHDRAW, adminWallet);
+
+        // Check pending unstake
+        const [unstakeAmount, unlockTime] = await stakingContract.getPendingUnstake(agent.walletAddress);
+        if (unstakeAmount === 0n) {
+          return res.status(400).json({
+            error: "No pending unstake request",
+            hint: "Call staking.request_unstake first",
+          });
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+        if (now < Number(unlockTime)) {
+          const remainingSec = Number(unlockTime) - now;
+          return res.status(400).json({
+            error: "Cooldown not complete",
+            unlock_time: new Date(Number(unlockTime) * 1000).toISOString(),
+            remaining_seconds: remainingSec,
+            remaining_human: `${Math.floor(remainingSec / 3600)}h ${Math.floor((remainingSec % 3600) / 60)}m`,
+          });
+        }
+
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+        const withdrawTx = await stakingContract.withdrawFor(agent.walletAddress, gasOpts);
+        await withdrawTx.wait();
+
+        await db.collection("agents").doc(agent.id).update({
+          rpPoints: admin.firestore.FieldValue.increment(10),
+        });
+
+        await db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "withdraw_stake",
+          amount: ethers.formatEther(unstakeAmount),
+          txHash: withdrawTx.hash,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          status: "confirmed",
+        });
+
+        console.log(`[Agent Gateway] Withdraw: ${agent.agentName} withdrew ${ethers.formatEther(unstakeAmount)} VCN, tx: ${withdrawTx.hash}`);
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: withdrawTx.hash,
+          agent_name: agent.agentName,
+          amount_withdrawn: ethers.formatEther(unstakeAmount),
+          rp_earned: 10,
+        });
+      } catch (e) {
+        console.error("[Agent Gateway] Withdraw error:", e.message);
+        return res.status(500).json({ error: `Withdraw failed: ${e.reason || e.message}` });
+      }
+    }
+
+    // --- STAKING COMPOUND (staking.compound) --- T3
+    if (action === "compound" || action === "staking.compound") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const STAKING_ABI_COMPOUND = [
+          "function claimRewardsFor(address beneficiary) external",
+          "function stakeFor(address beneficiary, uint256 amount) external",
+          "function pendingReward(address account) external view returns (uint256)",
+          "function getStake(address account) external view returns (uint256)",
+        ];
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, STAKING_ABI_COMPOUND, adminWallet);
+
+        const pendingReward = await stakingContract.pendingReward(agent.walletAddress);
+        if (pendingReward === 0n) {
+          return res.status(400).json({ error: "No pending rewards to compound" });
+        }
+
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+
+        // Step 1: Claim rewards (goes to agent wallet)
+        const claimTx = await stakingContract.claimRewardsFor(agent.walletAddress, gasOpts);
+        await claimTx.wait();
+
+        // Step 2: Transfer rewards from agent wallet to admin (for re-staking)
+        const agentPK = serverDecrypt(agent.privateKey);
+        const agentWallet = new ethers.Wallet(agentPK, provider);
+        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+        const agentGas = await provider.getBalance(agent.walletAddress);
+        if (agentGas < ethers.parseEther("0.001")) {
+          const gasTx = await adminWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: ethers.parseEther("0.01"),
+          });
+          await gasTx.wait();
+        }
+
+        const transferTx = await agentToken.transfer(adminWallet.address, pendingReward);
+        await transferTx.wait();
+
+        // Step 3: Admin approves and stakes on behalf
+        const approveTx = await tokenContract.approve(STAKING_ADDRESS, pendingReward);
+        await approveTx.wait();
+
+        const stakeTx = await stakingContract.stakeFor(agent.walletAddress, pendingReward, gasOpts);
+        await stakeTx.wait();
+
+        const rewardAmount = ethers.formatEther(pendingReward);
+
+        await db.collection("agents").doc(agent.id).update({
+          rpPoints: admin.firestore.FieldValue.increment(25),
+        });
+
+        await db.collection("agents").doc(agent.id).collection("transactions").add({
+          type: "compound",
+          amount: rewardAmount,
+          claimTxHash: claimTx.hash,
+          stakeTxHash: stakeTx.hash,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          status: "confirmed",
+        });
+
+        console.log(`[Agent Gateway] Compound: ${agent.agentName} compounded ${rewardAmount} VCN`);
+
+        return res.status(200).json({
+          success: true,
+          claim_tx: claimTx.hash,
+          restake_tx: stakeTx.hash,
+          agent_name: agent.agentName,
+          amount_compounded: rewardAmount,
+          rp_earned: 25,
+          message: "Rewards claimed and re-staked successfully",
+        });
+      } catch (e) {
+        console.error("[Agent Gateway] Compound error:", e.message);
+        return res.status(500).json({ error: `Compound failed: ${e.reason || e.message}` });
+      }
+    }
+
+    // --- STAKING REWARDS (staking.rewards) --- T1
+    if (action === "rewards" || action === "staking.rewards") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
+          "function pendingReward(address account) external view returns (uint256)",
+          "function getStake(address account) external view returns (uint256)",
+        ], provider);
+
+        const [pendingReward, stakedAmount] = await Promise.all([
+          stakingContract.pendingReward(agent.walletAddress),
+          stakingContract.getStake(agent.walletAddress),
+        ]);
+
+        return res.status(200).json({
+          success: true,
+          agent_name: agent.agentName,
+          pending_rewards_vcn: ethers.formatEther(pendingReward),
+          staked_vcn: ethers.formatEther(stakedAmount),
+          can_claim: pendingReward > 0n,
+          can_compound: pendingReward > 0n && stakedAmount > 0n,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Rewards query failed: ${e.message}` });
+      }
+    }
+
+    // --- STAKING APY (staking.apy) --- T1
+    if (action === "apy" || action === "staking.apy") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
+          "function currentAPY() external view returns (uint256)",
+          "function getRewardInfo() external view returns (uint256, uint256, uint256, uint256, uint256)",
+          "function getValidatorCount() external view returns (uint256)",
+        ], provider);
+
+        const [apyBps, rewardInfo, validatorCount] = await Promise.all([
+          stakingContract.currentAPY(),
+          stakingContract.getRewardInfo(),
+          stakingContract.getValidatorCount(),
+        ]);
+
+        return res.status(200).json({
+          success: true,
+          apy: {
+            current_apy_percent: (Number(apyBps) / 100).toFixed(2),
+            current_apy_bps: Number(apyBps),
+          },
+          network: {
+            reward_pool_vcn: ethers.formatEther(rewardInfo[0]),
+            fee_pool_vcn: ethers.formatEther(rewardInfo[1]),
+            total_staked_vcn: ethers.formatEther(rewardInfo[3]),
+            total_rewards_paid_vcn: ethers.formatEther(rewardInfo[4]),
+            validator_count: Number(validatorCount),
+          },
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `APY query failed: ${e.message}` });
+      }
+    }
+
+    // --- STAKING COOLDOWN (staking.cooldown) --- T1
+    if (action === "cooldown" || action === "staking.cooldown") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const STAKING_ADDRESS = "0x593dFDc2e31F32D17B981392786F84b0E1228Ab6";
+        const stakingContract = new ethers.Contract(STAKING_ADDRESS, [
+          "function getPendingUnstake(address account) external view returns (uint256 amount, uint256 unlockTime)",
+        ], provider);
+
+        const [unstakeAmount, unlockTime] = await stakingContract.getPendingUnstake(agent.walletAddress);
+
+        if (unstakeAmount === 0n) {
+          return res.status(200).json({
+            success: true,
+            agent_name: agent.agentName,
+            has_pending_unstake: false,
+            message: "No pending unstake request",
+          });
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+        const unlockTimestamp = Number(unlockTime);
+        const remainingSec = Math.max(0, unlockTimestamp - now);
+        const isReady = remainingSec === 0;
+
+        return res.status(200).json({
+          success: true,
+          agent_name: agent.agentName,
+          has_pending_unstake: true,
+          unstake_amount_vcn: ethers.formatEther(unstakeAmount),
+          unlock_time: new Date(unlockTimestamp * 1000).toISOString(),
+          remaining_seconds: remainingSec,
+          remaining_human: isReady ? "Ready to withdraw" : `${Math.floor(remainingSec / 86400)}d ${Math.floor((remainingSec % 86400) / 3600)}h ${Math.floor((remainingSec % 3600) / 60)}m`,
+          can_withdraw: isReady,
+          cooldown_period: "7 days",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Cooldown query failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // Phase 4: Authority Delegation (5) + Settlement (2)
+    // =====================================================
+
+    // --- AUTHORITY GRANT (authority.grant) --- T2
+    if (action === "authority_grant" || action === "authority.grant") {
+      const { delegate_to, permissions, limits, expires_at } = req.body;
+      if (!delegate_to || !permissions) {
+        return res.status(400).json({
+          error: "Missing required fields: delegate_to (address), permissions (array)",
+          example: {
+            delegate_to: "0x...",
+            permissions: ["transfer", "stake", "claim"],
+            limits: { max_amount_per_tx: "100", max_daily_amount: "1000" },
+            expires_at: "2026-03-01T00:00:00Z",
+          },
+        });
+      }
+
+      const validPerms = ["transfer", "batch_transfer", "stake", "unstake", "claim", "compound", "withdraw", "bridge", "approve"];
+      const invalidPerms = permissions.filter((p) => !validPerms.includes(p));
+      if (invalidPerms.length > 0) {
+        return res.status(400).json({ error: `Invalid permissions: ${invalidPerms.join(", ")}`, valid: validPerms });
+      }
+
+      try {
+        const expiry = expires_at ? new Date(expires_at) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // default 30 days
+
+        const delegationRef = await db.collection("agents").doc(agent.id).collection("authority_delegations").add({
+          delegate_to: delegate_to.toLowerCase(),
+          permissions,
+          limits: limits || {},
+          expires_at: admin.firestore.Timestamp.fromDate(expiry),
+          status: "active",
+          usage: { tx_count: 0, total_amount: "0" },
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Audit log
+        await db.collection("agents").doc(agent.id).collection("authority_audit").add({
+          action: "grant",
+          delegation_id: delegationRef.id,
+          delegate_to: delegate_to.toLowerCase(),
+          permissions,
+          limits: limits || {},
+          expires_at: expiry.toISOString(),
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return res.status(200).json({
+          success: true,
+          delegation_id: delegationRef.id,
+          delegate_to,
+          permissions,
+          limits: limits || {},
+          expires_at: expiry.toISOString(),
+          status: "active",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Authority grant failed: ${e.message}` });
+      }
+    }
+
+    // --- AUTHORITY REVOKE (authority.revoke) --- T2
+    if (action === "authority_revoke" || action === "authority.revoke") {
+      const { delegation_id, delegate_to } = req.body;
+      if (!delegation_id && !delegate_to) {
+        return res.status(400).json({ error: "Provide delegation_id or delegate_to address" });
+      }
+
+      try {
+        let revokedCount = 0;
+
+        if (delegation_id) {
+          const docRef = db.collection("agents").doc(agent.id).collection("authority_delegations").doc(delegation_id);
+          const doc = await docRef.get();
+          if (!doc.exists || doc.data().status !== "active") {
+            return res.status(400).json({ error: "Delegation not found or already revoked" });
+          }
+          await docRef.update({ status: "revoked", revoked_at: admin.firestore.FieldValue.serverTimestamp() });
+          revokedCount = 1;
+        } else {
+          const snap = await db.collection("agents").doc(agent.id).collection("authority_delegations")
+            .where("delegate_to", "==", delegate_to.toLowerCase())
+            .where("status", "==", "active")
+            .get();
+
+          const batch = db.batch();
+          snap.forEach((doc) => {
+            batch.update(doc.ref, { status: "revoked", revoked_at: admin.firestore.FieldValue.serverTimestamp() });
+          });
+          await batch.commit();
+          revokedCount = snap.size;
+        }
+
+        // Audit
+        await db.collection("agents").doc(agent.id).collection("authority_audit").add({
+          action: "revoke",
+          delegation_id: delegation_id || null,
+          delegate_to: delegate_to || null,
+          revoked_count: revokedCount,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return res.status(200).json({ success: true, revoked_count: revokedCount });
+      } catch (e) {
+        return res.status(500).json({ error: `Revoke failed: ${e.message}` });
+      }
+    }
+
+    // --- AUTHORITY STATUS (authority.status) --- T1
+    if (action === "authority_status" || action === "authority.status") {
+      try {
+        const { delegate_to } = req.body;
+        let query = db.collection("agents").doc(agent.id).collection("authority_delegations");
+
+        if (delegate_to) {
+          query = query.where("delegate_to", "==", delegate_to.toLowerCase());
+        }
+
+        const snap = await query.where("status", "==", "active").get();
+        const delegations = [];
+        snap.forEach((doc) => {
+          const d = doc.data();
+          delegations.push({
+            delegation_id: doc.id,
+            delegate_to: d.delegate_to,
+            permissions: d.permissions,
+            limits: d.limits,
+            usage: d.usage,
+            expires_at: d.expires_at?.toDate?.()?.toISOString() || null,
+            status: d.status,
+          });
+        });
+
+        return res.status(200).json({
+          success: true,
+          agent_name: agent.agentName,
+          active_delegations: delegations.length,
+          delegations,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Status query failed: ${e.message}` });
+      }
+    }
+
+    // --- AUTHORITY USAGE (authority.usage) --- T1
+    if (action === "authority_usage" || action === "authority.usage") {
+      const { delegation_id } = req.body;
+      if (!delegation_id) {
+        return res.status(400).json({ error: "Missing required field: delegation_id" });
+      }
+
+      try {
+        const doc = await db.collection("agents").doc(agent.id).collection("authority_delegations").doc(delegation_id).get();
+        if (!doc.exists) {
+          return res.status(404).json({ error: "Delegation not found" });
+        }
+
+        const d = doc.data();
+        const maxAmount = d.limits?.max_daily_amount ? parseFloat(d.limits.max_daily_amount) : Infinity;
+        const usedAmount = parseFloat(d.usage?.total_amount || "0");
+
+        return res.status(200).json({
+          success: true,
+          delegation_id,
+          delegate_to: d.delegate_to,
+          permissions: d.permissions,
+          usage: {
+            tx_count: d.usage?.tx_count || 0,
+            total_amount_used: d.usage?.total_amount || "0",
+            remaining_daily_limit: maxAmount === Infinity ? "unlimited" : (maxAmount - usedAmount).toFixed(4),
+          },
+          limits: d.limits,
+          status: d.status,
+          expires_at: d.expires_at?.toDate?.()?.toISOString() || null,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Usage query failed: ${e.message}` });
+      }
+    }
+
+    // --- AUTHORITY AUDIT (authority.audit) --- T1
+    if (action === "authority_audit" || action === "authority.audit") {
+      try {
+        const limit = Math.min(Math.max(parseInt(req.body.limit) || 20, 1), 100);
+
+        const snap = await db.collection("agents").doc(agent.id).collection("authority_audit")
+          .orderBy("timestamp", "desc")
+          .limit(limit)
+          .get();
+
+        const logs = [];
+        snap.forEach((doc) => {
+          const d = doc.data();
+          logs.push({
+            id: doc.id,
+            action: d.action,
+            delegation_id: d.delegation_id,
+            delegate_to: d.delegate_to,
+            permissions: d.permissions || null,
+            timestamp: d.timestamp?.toDate?.()?.toISOString() || "",
+          });
+        });
+
+        return res.status(200).json({
+          success: true,
+          agent_name: agent.agentName,
+          audit_logs: logs,
+          total_returned: logs.length,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Audit query failed: ${e.message}` });
+      }
+    }
+
+    // --- SETTLEMENT SET WALLET (settlement.set_wallet) --- T2
+    if (action === "set_settlement_wallet" || action === "settlement.set_wallet") {
+      const { wallet_address, label } = req.body;
+      if (!wallet_address) {
+        return res.status(400).json({ error: "Missing required field: wallet_address" });
+      }
+
+      if (!ethers.isAddress(wallet_address)) {
+        return res.status(400).json({ error: "Invalid wallet address" });
+      }
+
+      try {
+        await db.collection("agents").doc(agent.id).update({
+          settlementWallet: wallet_address.toLowerCase(),
+          settlementWalletLabel: label || "Default Settlement",
+          settlementWalletUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return res.status(200).json({
+          success: true,
+          agent_name: agent.agentName,
+          settlement_wallet: wallet_address.toLowerCase(),
+          label: label || "Default Settlement",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Set wallet failed: ${e.message}` });
+      }
+    }
+
+    // --- SETTLEMENT GET WALLET (settlement.get_wallet) --- T1
+    if (action === "get_settlement_wallet" || action === "settlement.get_wallet") {
+      return res.status(200).json({
+        success: true,
+        agent_name: agent.agentName,
+        settlement_wallet: agent.settlementWallet || null,
+        label: agent.settlementWalletLabel || null,
+        is_configured: !!agent.settlementWallet,
+        agent_wallet: agent.walletAddress,
+      });
+    }
+
+    // =====================================================
+    // Phase 2a: Bridge (5 endpoints)
+    // =====================================================
+
+    // --- BRIDGE INITIATE (bridge.initiate) --- T4
+    if (action === "bridge_initiate" || action === "bridge.initiate") {
+      const { amount, destination_chain, recipient } = req.body;
+      if (!amount || !destination_chain) {
+        return res.status(400).json({ error: "Missing required fields: amount (VCN), destination_chain (chainId)" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+
+        const amountWei = ethers.parseEther(amount.toString());
+        const BRIDGE_FEE = ethers.parseEther("1"); // 1 VCN fee
+        const totalRequired = amountWei + BRIDGE_FEE;
+
+        // Check agent balance
+        const bal = await tokenContract.balanceOf(agent.walletAddress);
+        if (bal < totalRequired) {
+          return res.status(400).json({
+            error: "Insufficient balance",
+            balance: ethers.formatEther(bal),
+            required: ethers.formatEther(totalRequired),
+            breakdown: { amount, fee: "1" },
+          });
+        }
+
+        // Transfer from agent to admin
+        const agentPK = serverDecrypt(agent.privateKey);
+        const agentWallet = new ethers.Wallet(agentPK, provider);
+        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+        const agentGas = await provider.getBalance(agent.walletAddress);
+        if (agentGas < ethers.parseEther("0.001")) {
+          const gasTx = await adminWallet.sendTransaction({ to: agent.walletAddress, value: ethers.parseEther("0.01") });
+          await gasTx.wait();
+        }
+
+        const transferTx = await agentToken.transfer(adminWallet.address, totalRequired);
+        await transferTx.wait();
+
+        // Commit intent
+        const INTENT_COMMITMENT_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+        const INTENT_ABI = [
+          "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
+          "event IntentCommitted(bytes32 indexed intentHash, address indexed user, address indexed recipient, uint256 amount, uint256 nonce, uint256 createdAt, uint256 destChainId)",
+        ];
+        const intentContract = new ethers.Contract(INTENT_COMMITMENT_ADDRESS, INTENT_ABI, adminWallet);
+
+        const bridgeRecipient = recipient || agent.walletAddress;
+        const commitTx = await intentContract.commitIntent(bridgeRecipient, amountWei, destination_chain, { gasLimit: 200000 });
+        const receipt = await commitTx.wait();
+
+        // Extract intentHash
+        let intentHash = null;
+        const intentTopic = ethers.id("IntentCommitted(bytes32,address,address,uint256,uint256,uint256,uint256)");
+        for (const log of receipt.logs || []) {
+          if (log.topics && log.topics[0] === intentTopic) {
+            intentHash = log.topics[1];
+            break;
+          }
+        }
+
+        // Record bridge in Firestore
+        const bridgeRef = await db.collection("agents").doc(agent.id).collection("bridge_history").add({
+          type: "outbound",
+          amount: amount.toString(),
+          fee: "1",
+          source_chain: 1337,
+          destination_chain,
+          recipient: bridgeRecipient,
+          intent_hash: intentHash,
+          commit_tx: commitTx.hash,
+          status: "committed",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Forward fee to staking (fire-and-forget)
+        (async () => {
+          try {
+            const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, adminWallet);
+            const approveTx = await tokenContract.approve(BRIDGE_STAKING_ADDRESS, BRIDGE_FEE);
+            await approveTx.wait();
+            const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
+            await depositTx.wait();
+          } catch (_) { /* non-critical */ }
+        })();
+
+        await db.collection("agents").doc(agent.id).update({
+          rpPoints: admin.firestore.FieldValue.increment(15),
+        });
+
+        console.log(`[Agent Gateway] Bridge: ${agent.agentName} -> chain ${destination_chain}: ${amount} VCN, intent: ${intentHash}`);
+
+        return res.status(200).json({
+          success: true,
+          bridge_id: bridgeRef.id,
+          intent_hash: intentHash,
+          commit_tx: commitTx.hash,
+          amount,
+          fee: "1",
+          destination_chain,
+          recipient: bridgeRecipient,
+          status: "committed",
+          rp_earned: 15,
+        });
+      } catch (e) {
+        console.error("[Agent Gateway] Bridge error:", e.message);
+        return res.status(500).json({ error: `Bridge initiate failed: ${e.reason || e.message}` });
+      }
+    }
+
+    // --- BRIDGE STATUS (bridge.status) --- T1
+    if (action === "bridge_status" || action === "bridge.status") {
+      const { bridge_id, intent_hash } = req.body;
+      if (!bridge_id && !intent_hash) {
+        return res.status(400).json({ error: "Provide bridge_id or intent_hash" });
+      }
+
+      try {
+        let bridgeDoc;
+
+        if (bridge_id) {
+          const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridge_id).get();
+          if (!doc.exists) return res.status(404).json({ error: "Bridge not found" });
+          bridgeDoc = { id: doc.id, ...doc.data() };
+        } else {
+          const snap = await db.collection("agents").doc(agent.id).collection("bridge_history")
+            .where("intent_hash", "==", intent_hash)
+            .limit(1)
+            .get();
+          if (snap.empty) return res.status(404).json({ error: "Bridge not found" });
+          const doc = snap.docs[0];
+          bridgeDoc = { id: doc.id, ...doc.data() };
+        }
+
+        return res.status(200).json({
+          success: true,
+          bridge: {
+            bridge_id: bridgeDoc.id,
+            status: bridgeDoc.status,
+            amount: bridgeDoc.amount,
+            fee: bridgeDoc.fee,
+            source_chain: bridgeDoc.source_chain,
+            destination_chain: bridgeDoc.destination_chain,
+            recipient: bridgeDoc.recipient,
+            intent_hash: bridgeDoc.intent_hash,
+            commit_tx: bridgeDoc.commit_tx,
+            finalize_tx: bridgeDoc.finalize_tx || null,
+            created_at: bridgeDoc.created_at?.toDate?.()?.toISOString() || "",
+          },
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Bridge status failed: ${e.message}` });
+      }
+    }
+
+    // --- BRIDGE FINALIZE (bridge.finalize) --- T3
+    if (action === "bridge_finalize" || action === "bridge.finalize") {
+      const { bridge_id } = req.body;
+      if (!bridge_id) {
+        return res.status(400).json({ error: "Missing required field: bridge_id" });
+      }
+
+      try {
+        const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridge_id).get();
+        if (!doc.exists) return res.status(404).json({ error: "Bridge not found" });
+
+        const data = doc.data();
+        if (data.status === "completed") {
+          return res.status(200).json({ success: true, message: "Bridge already finalized", bridge_id });
+        }
+
+        // Note: Actual finalization happens via bridgeRelayer cron. This endpoint
+        // checks if it's been finalized and updates the status.
+        if (data.status === "committed") {
+          // Check on-chain if the bridge has been relayed
+          const provider = new ethers.JsonRpcProvider(RPC_URL);
+          const VISION_BRIDGE_SECURE_ADDRESS = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
+          const bridgeContract = new ethers.Contract(VISION_BRIDGE_SECURE_ADDRESS, [
+            "function intentExecuted(bytes32) view returns (bool)",
+          ], provider);
+
+          const isExecuted = await bridgeContract.intentExecuted(data.intent_hash).catch(() => false);
+
+          if (isExecuted) {
+            await doc.ref.update({
+              status: "completed",
+              finalized_at: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return res.status(200).json({ success: true, status: "completed", bridge_id });
+          }
+
+          return res.status(200).json({
+            success: true,
+            status: "pending",
+            message: "Bridge has been committed but not yet relayed. The relayer processes bridges every 5 minutes.",
+            bridge_id,
+          });
+        }
+
+        return res.status(200).json({ success: true, status: data.status, bridge_id });
+      } catch (e) {
+        return res.status(500).json({ error: `Bridge finalize failed: ${e.message}` });
+      }
+    }
+
+    // --- BRIDGE HISTORY (bridge.history) --- T1
+    if (action === "bridge_history" || action === "bridge.history") {
+      try {
+        const limit = Math.min(Math.max(parseInt(req.body.limit) || 20, 1), 100);
+
+        const snap = await db.collection("agents").doc(agent.id).collection("bridge_history")
+          .orderBy("created_at", "desc")
+          .limit(limit)
+          .get();
+
+        const history = [];
+        snap.forEach((doc) => {
+          const d = doc.data();
+          history.push({
+            bridge_id: doc.id,
+            type: d.type,
+            amount: d.amount,
+            fee: d.fee,
+            destination_chain: d.destination_chain,
+            status: d.status,
+            intent_hash: d.intent_hash,
+            commit_tx: d.commit_tx,
+            created_at: d.created_at?.toDate?.()?.toISOString() || "",
+          });
+        });
+
+        return res.status(200).json({ success: true, bridges: history, total_returned: history.length });
+      } catch (e) {
+        return res.status(500).json({ error: `Bridge history failed: ${e.message}` });
+      }
+    }
+
+    // --- BRIDGE FEE (bridge.fee) --- T1
+    if (action === "bridge_fee" || action === "bridge.fee") {
+      const { amount, destination_chain } = req.body;
+      const bridgeFee = "1"; // Fixed 1 VCN fee
+
+      return res.status(200).json({
+        success: true,
+        fee: {
+          bridge_fee_vcn: bridgeFee,
+          amount_vcn: amount || "N/A",
+          total_required: amount ? (parseFloat(amount) + 1).toString() : "N/A",
+          destination_chain: destination_chain || "any",
+          note: "Bridge fee is distributed to staking validators",
+        },
+      });
+    }
+
+    // =====================================================
+    // Phase 6: NFT / SBT (3 endpoints)
+    // =====================================================
+
+    // --- NFT MINT (nft.mint) --- T4
+    if (action === "nft_mint" || action === "nft.mint") {
+      const { mint_to, token_type = "sbt" } = req.body;
+
+      if (token_type !== "sbt") {
+        return res.status(400).json({ error: "Currently only 'sbt' (VisionAgentSBT) is supported for platform NFT minting" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+        const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
+        const targetAddress = mint_to || agent.walletAddress;
+
+        // Check if already has SBT
+        try {
+          const existing = await sbtContract.getAgentByAddress(targetAddress);
+          if (existing && existing[0] > 0n) {
+            return res.status(400).json({
+              error: "Address already has a VisionAgent SBT",
+              token_id: existing[0].toString(),
+              agent_name: existing[1],
+            });
+          }
+        } catch (_) { /* no existing SBT */ }
+
+        const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
+        const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
+        const receipt = await mintTx.wait();
+
+        // Extract tokenId from Transfer event
+        let tokenId = null;
+        for (const log of receipt.logs || []) {
+          try {
+            const parsed = sbtContract.interface.parseLog({ topics: log.topics, data: log.data });
+            if (parsed && parsed.name === "Transfer") {
+              tokenId = parsed.args[2].toString();
+              break;
+            }
+          } catch (_) { /* skip */ }
+        }
+
+        await db.collection("agents").doc(agent.id).update({
+          sbtTokenId: tokenId,
+          sbtTxHash: mintTx.hash,
+          sbtStatus: "completed",
+          rpPoints: admin.firestore.FieldValue.increment(30),
+        });
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: mintTx.hash,
+          token_id: tokenId,
+          token_type: "VisionAgentSBT (VRC-5192)",
+          minted_to: targetAddress,
+          soulbound: true,
+          rp_earned: 30,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `NFT mint failed: ${e.reason || e.message}` });
+      }
+    }
+
+    // --- NFT BALANCE (nft.balance) --- T1
+    if (action === "nft_balance" || action === "nft.balance") {
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, provider);
+
+        const targetAddress = req.body.address || agent.walletAddress;
+        let sbtInfo = null;
+
+        try {
+          const result = await sbtContract.getAgentByAddress(targetAddress);
+          if (result && result[0] > 0n) {
+            const isLocked = await sbtContract.locked(result[0]).catch(() => true);
+            sbtInfo = {
+              token_id: result[0].toString(),
+              agent_name: result[1],
+              platform: result[2],
+              minted_at: result[3] ? new Date(Number(result[3]) * 1000).toISOString() : null,
+              soulbound: isLocked,
+              contract: AGENT_SBT_ADDRESS,
+            };
+          }
+        } catch (_) { /* no SBT */ }
+
+        return res.status(200).json({
+          success: true,
+          address: targetAddress,
+          has_sbt: !!sbtInfo,
+          sbt: sbtInfo,
+          supported_standards: ["VRC-5192 (SBT)"],
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `NFT balance failed: ${e.message}` });
+      }
+    }
+
+    // --- NFT METADATA (nft.metadata) --- T1
+    if (action === "nft_metadata" || action === "nft.metadata") {
+      const { token_id } = req.body;
+      if (!token_id) {
+        return res.status(400).json({ error: "Missing required field: token_id" });
+      }
+
+      try {
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, [
+          "function locked(uint256 tokenId) external view returns (bool)",
+          "function totalSupply() external view returns (uint256)",
+          "function ownerOf(uint256 tokenId) external view returns (address)",
+        ], provider);
+
+        const [isLocked, totalSupply, owner] = await Promise.all([
+          sbtContract.locked(token_id).catch(() => null),
+          sbtContract.totalSupply().catch(() => 0n),
+          sbtContract.ownerOf(token_id).catch(() => null),
+        ]);
+
+        if (!owner) {
+          return res.status(404).json({ error: `Token #${token_id} does not exist` });
+        }
+
+        return res.status(200).json({
+          success: true,
+          metadata: {
+            token_id,
+            contract: AGENT_SBT_ADDRESS,
+            standard: "VRC-5192 (EIP-5192 Soulbound)",
+            owner,
+            soulbound: isLocked,
+            total_supply: totalSupply.toString(),
+            name: "VisionAgent Identity",
+            description: "Soulbound identity token for Vision Chain AI agents",
+          },
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `NFT metadata failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // STAGE 2: NODE DOMAIN (4 endpoints)
+    // =====================================================
+
+    if (canonicalAction === "node.register") {
+      try {
+        const { version, os, arch, capabilities } = body;
+        if (!version) return res.status(400).json({ error: "Missing required field: version" });
+
+        const nodeId = `vn_${agent.id}_${Date.now()}`;
+        const ipHash = req.ip ? require("crypto").createHash("sha256").update(req.ip).digest("hex").slice(0, 16) : "unknown";
+
+        await db.collection("agents").doc(agent.id)
+          .collection("node").doc("status").set({
+            node_id: nodeId,
+            version: version || "0.1.0",
+            os: os || "unknown",
+            arch: arch || "unknown",
+            ip_hash: ipHash,
+            last_heartbeat: admin.firestore.FieldValue.serverTimestamp(),
+            registered_at: admin.firestore.FieldValue.serverTimestamp(),
+            status: "active",
+            uptime_hours: 0,
+            peer_count: 0,
+            capabilities: capabilities || ["rpc_cache"],
+          }, { merge: true });
+
+        return res.status(200).json({
+          success: true,
+          node_id: nodeId,
+          status: "active",
+          message: "Vision Node registered. Send heartbeat every 5 minutes to maintain active status.",
+          tier_access: "T1 + T2 + T3 + T4 (full access)",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Node registration failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "node.heartbeat") {
+      try {
+        const nodeRef = db.collection("agents").doc(agent.id).collection("node").doc("status");
+        const nodeSnap = await nodeRef.get();
+        if (!nodeSnap.exists) {
+          return res.status(400).json({ error: "Node not registered. Call node.register first." });
+        }
+
+        const nodeData = nodeSnap.data();
+        const registeredMs = nodeData.registered_at?.toMillis?.() || Date.now();
+        const uptimeHours = Math.round((Date.now() - registeredMs) / 3600000 * 10) / 10;
+
+        await nodeRef.update({
+          last_heartbeat: admin.firestore.FieldValue.serverTimestamp(),
+          status: "active",
+          uptime_hours: uptimeHours,
+          peer_count: body.peer_count || nodeData.peer_count || 0,
+          version: body.version || nodeData.version,
+        });
+
+        return res.status(200).json({
+          success: true,
+          node_id: nodeData.node_id,
+          status: "active",
+          uptime_hours: uptimeHours,
+          next_heartbeat_in: "5 minutes",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Heartbeat failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "node.status") {
+      try {
+        const nodeSnap = await db.collection("agents").doc(agent.id)
+          .collection("node").doc("status").get();
+
+        if (!nodeSnap.exists) {
+          return res.status(200).json({
+            success: true,
+            node_registered: false,
+            tier_access: "T1 + T2 only",
+            message: "No Vision Node registered. Register to unlock T3/T4 actions.",
+          });
+        }
+
+        const nd = nodeSnap.data();
+        const lastHbMs = nd.last_heartbeat?.toMillis?.() || 0;
+        const elapsed = Date.now() - lastHbMs;
+        let derivedStatus = "active";
+        if (elapsed > 3600000) derivedStatus = "inactive";
+        else if (elapsed > 600000) derivedStatus = "stale";
+
+        return res.status(200).json({
+          success: true,
+          node_registered: true,
+          node: {
+            node_id: nd.node_id,
+            version: nd.version,
+            os: nd.os,
+            arch: nd.arch,
+            status: derivedStatus,
+            uptime_hours: nd.uptime_hours || 0,
+            peer_count: nd.peer_count || 0,
+            capabilities: nd.capabilities || [],
+            last_heartbeat: nd.last_heartbeat?.toDate?.()?.toISOString() || null,
+            registered_at: nd.registered_at?.toDate?.()?.toISOString() || null,
+          },
+          tier_access: derivedStatus === "active" ? "T1~T4 (full)" :
+            derivedStatus === "stale" ? "T1+T2 only (heartbeat overdue)" : "T1+T2 only (inactive)",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Node status failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "node.peers") {
+      try {
+        // Return active nodes in the network (anonymized)
+        const nodesSnap = await db.collectionGroup("node")
+          .where("status", "==", "active")
+          .limit(50)
+          .get();
+
+        const peers = nodesSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            node_id: data.node_id,
+            version: data.version,
+            os: data.os,
+            arch: data.arch,
+            uptime_hours: data.uptime_hours || 0,
+            capabilities: data.capabilities || [],
+          };
+        });
+
+        return res.status(200).json({
+          success: true,
+          total_active_nodes: peers.length,
+          peers,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Peer lookup failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // STAGE 2: STORAGE DOMAIN (4 endpoints)
+    // =====================================================
+
+    if (canonicalAction === "storage.set") {
+      try {
+        const { key, value } = body;
+        if (!key) return res.status(400).json({ error: "Missing required field: key" });
+        if (value === undefined) return res.status(400).json({ error: "Missing required field: value" });
+
+        // Validate key format
+        if (!/^[a-zA-Z0-9_]{1,128}$/.test(key)) {
+          return res.status(400).json({ error: "Key must be 1-128 chars, alphanumeric + underscore only" });
+        }
+
+        // Check size (10KB max)
+        const serialized = JSON.stringify(value);
+        if (serialized.length > 10240) {
+          return res.status(400).json({ error: `Value too large: ${serialized.length} bytes (max 10240)` });
+        }
+
+        // Check key count limit (1000)
+        const kvCol = db.collection("agents").doc(agent.id).collection("kv_store");
+        const existing = await kvCol.doc(key).get();
+        if (!existing.exists) {
+          const countSnap = await kvCol.count().get();
+          if (countSnap.data().count >= 1000) {
+            return res.status(400).json({ error: "Key limit reached (max 1000 keys per agent)" });
+          }
+        }
+
+        const valueType = Array.isArray(value) ? "json" : typeof value === "object" ? "json" : typeof value;
+        await kvCol.doc(key).set({
+          value,
+          type: valueType,
+          size_bytes: serialized.length,
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          ...(!existing.exists && { created_at: admin.firestore.FieldValue.serverTimestamp() }),
+        }, { merge: true });
+
+        return res.status(200).json({
+          success: true,
+          key,
+          type: valueType,
+          size_bytes: serialized.length,
+          created: !existing.exists,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Storage set failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "storage.get") {
+      try {
+        const { key } = body;
+        if (!key) return res.status(400).json({ error: "Missing required field: key" });
+
+        const doc = await db.collection("agents").doc(agent.id)
+          .collection("kv_store").doc(key).get();
+
+        if (!doc.exists) {
+          return res.status(404).json({ error: `Key not found: ${key}` });
+        }
+
+        const data = doc.data();
+        return res.status(200).json({
+          success: true,
+          key,
+          value: data.value,
+          type: data.type,
+          size_bytes: data.size_bytes,
+          updated_at: data.updated_at?.toDate?.()?.toISOString() || null,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Storage get failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "storage.list") {
+      try {
+        const limit = Math.min(parseInt(body.limit) || 100, 1000);
+        const kvSnap = await db.collection("agents").doc(agent.id)
+          .collection("kv_store")
+          .orderBy("updated_at", "desc")
+          .limit(limit)
+          .get();
+
+        const keys = kvSnap.docs.map((d) => ({
+          key: d.id,
+          type: d.data().type,
+          size_bytes: d.data().size_bytes,
+          updated_at: d.data().updated_at?.toDate?.()?.toISOString() || null,
+        }));
+
+        return res.status(200).json({
+          success: true,
+          total_keys: keys.length,
+          keys,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Storage list failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "storage.delete") {
+      try {
+        const { key } = body;
+        if (!key) return res.status(400).json({ error: "Missing required field: key" });
+
+        const docRef = db.collection("agents").doc(agent.id).collection("kv_store").doc(key);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+          return res.status(404).json({ error: `Key not found: ${key}` });
+        }
+
+        await docRef.delete();
+        return res.status(200).json({ success: true, key, deleted: true });
+      } catch (e) {
+        return res.status(500).json({ error: `Storage delete failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // STAGE 2: PIPELINE DOMAIN (4 endpoints)
+    // =====================================================
+
+    if (canonicalAction === "pipeline.create") {
+      try {
+        const { name, steps, trigger, schedule_cron } = body;
+        if (!name) return res.status(400).json({ error: "Missing required field: name" });
+        if (!steps || !Array.isArray(steps) || steps.length === 0) {
+          return res.status(400).json({ error: "steps must be a non-empty array" });
+        }
+        if (steps.length > 10) {
+          return res.status(400).json({ error: "Max 10 steps per pipeline" });
+        }
+
+        // Validate each step has a valid action
+        const validActions = Object.keys(ACTION_TIER_MAP);
+        for (const step of steps) {
+          if (!step.action) return res.status(400).json({ error: "Each step must have an action field" });
+          if (!validActions.includes(step.action)) {
+            return res.status(400).json({ error: `Invalid action in step: ${step.action}` });
+          }
+        }
+
+        // Check pipeline limit (max 20 per agent)
+        const pipCol = db.collection("agents").doc(agent.id).collection("pipelines");
+        const countSnap = await pipCol.count().get();
+        if (countSnap.data().count >= 20) {
+          return res.status(400).json({ error: "Pipeline limit reached (max 20 per agent)" });
+        }
+
+        const pipelineRef = await pipCol.add({
+          name,
+          steps,
+          trigger: trigger || "manual",
+          schedule_cron: schedule_cron || null,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          last_run: null,
+          run_count: 0,
+          status: "active",
+        });
+
+        return res.status(200).json({
+          success: true,
+          pipeline_id: pipelineRef.id,
+          name,
+          steps_count: steps.length,
+          trigger: trigger || "manual",
+          status: "active",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Pipeline create failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "pipeline.execute") {
+      try {
+        const { pipeline_id } = body;
+        if (!pipeline_id) return res.status(400).json({ error: "Missing required field: pipeline_id" });
+
+        const pipRef = db.collection("agents").doc(agent.id).collection("pipelines").doc(pipeline_id);
+        const pipSnap = await pipRef.get();
+        if (!pipSnap.exists) return res.status(404).json({ error: "Pipeline not found" });
+
+        const pipeline = pipSnap.data();
+        if (pipeline.status !== "active") {
+          return res.status(400).json({ error: `Pipeline is ${pipeline.status}` });
+        }
+
+        // Execute steps sequentially
+        const results = [];
+        let context = {}; // Carry data between steps
+
+        for (let i = 0; i < pipeline.steps.length; i++) {
+          const step = pipeline.steps[i];
+
+          // Evaluate condition if present
+          if (step.condition) {
+            try {
+              // Simple condition evaluation: "alias.path > value"
+              const condMatch = step.condition.match(/^(\w+)\.([\w.]+)\s*([><=!]+)\s*(.+)$/);
+              if (condMatch) {
+                const [, alias, path, op, threshold] = condMatch;
+                const contextVal = path.split(".").reduce((obj, k) => obj?.[k], context[alias]);
+                const numVal = parseFloat(contextVal) || 0;
+                const numThreshold = parseFloat(threshold) || 0;
+
+                let condMet = false;
+                if (op === ">") condMet = numVal > numThreshold;
+                else if (op === ">=") condMet = numVal >= numThreshold;
+                else if (op === "<") condMet = numVal < numThreshold;
+                else if (op === "<=") condMet = numVal <= numThreshold;
+                else if (op === "==") condMet = numVal === numThreshold;
+                else if (op === "!=") condMet = numVal !== numThreshold;
+
+                if (!condMet) {
+                  results.push({ step: i + 1, action: step.action, skipped: true, reason: "condition not met" });
+                  continue;
+                }
+              }
+            } catch (ce) {
+              results.push({ step: i + 1, action: step.action, skipped: true, reason: `condition error: ${ce.message}` });
+              continue;
+            }
+          }
+
+          // Build request payload for step
+          const stepPayload = {
+            action: step.action,
+            api_key: apiKeyParam,
+            ...(step.params || {}),
+          };
+
+          // Execute via internal HTTP call to self (recursive gateway call)
+          try {
+            const axios = require("axios");
+            const baseUrl = `https://us-central1-${process.env.GCLOUD_PROJECT || "visionchain-d19ed"}.cloudfunctions.net/agentGateway`;
+            const stepRes = await axios.post(baseUrl, stepPayload, {
+              timeout: 30000,
+              headers: { "Content-Type": "application/json" },
+            });
+
+            const stepResult = stepRes.data;
+            if (step.alias) context[step.alias] = stepResult;
+            results.push({ step: i + 1, action: step.action, success: true, result: stepResult });
+          } catch (stepErr) {
+            const errData = stepErr.response?.data || { error: stepErr.message };
+            results.push({ step: i + 1, action: step.action, success: false, error: errData });
+            // Stop on failure
+            break;
+          }
+        }
+
+        // Update run stats
+        await pipRef.update({
+          last_run: admin.firestore.FieldValue.serverTimestamp(),
+          run_count: admin.firestore.FieldValue.increment(1),
+        });
+
+        return res.status(200).json({
+          success: true,
+          pipeline_id,
+          pipeline_name: pipeline.name,
+          total_steps: pipeline.steps.length,
+          executed: results.filter((r) => !r.skipped).length,
+          skipped: results.filter((r) => r.skipped).length,
+          results,
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Pipeline execute failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "pipeline.list") {
+      try {
+        const pipSnap = await db.collection("agents").doc(agent.id)
+          .collection("pipelines")
+          .orderBy("created_at", "desc")
+          .limit(20)
+          .get();
+
+        const pipelines = pipSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            pipeline_id: d.id,
+            name: data.name,
+            steps_count: data.steps?.length || 0,
+            trigger: data.trigger,
+            status: data.status,
+            run_count: data.run_count || 0,
+            last_run: data.last_run?.toDate?.()?.toISOString() || null,
+            created_at: data.created_at?.toDate?.()?.toISOString() || null,
+          };
+        });
+
+        return res.status(200).json({ success: true, total: pipelines.length, pipelines });
+      } catch (e) {
+        return res.status(500).json({ error: `Pipeline list failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "pipeline.delete") {
+      try {
+        const { pipeline_id } = body;
+        if (!pipeline_id) return res.status(400).json({ error: "Missing required field: pipeline_id" });
+
+        const pipRef = db.collection("agents").doc(agent.id).collection("pipelines").doc(pipeline_id);
+        const pipSnap = await pipRef.get();
+        if (!pipSnap.exists) return res.status(404).json({ error: "Pipeline not found" });
+
+        await pipRef.delete();
+        return res.status(200).json({ success: true, pipeline_id, deleted: true });
+      } catch (e) {
+        return res.status(500).json({ error: `Pipeline delete failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+    // STAGE 2: WEBHOOK DOMAIN (5 endpoints)
+    // =====================================================
+
+    if (canonicalAction === "webhook.subscribe") {
+      try {
+        const { event, callback_url } = body;
+        if (!event) return res.status(400).json({ error: "Missing required field: event" });
+        if (!callback_url) return res.status(400).json({ error: "Missing required field: callback_url" });
+
+        const validEvents = [
+          "transfer.received", "staking.reward_earned", "staking.cooldown_complete",
+          "bridge.completed", "authority.used", "balance.threshold",
+          "node.stale", "pipeline.completed",
+        ];
+        if (!validEvents.includes(event)) {
+          return res.status(400).json({ error: `Invalid event. Valid: ${validEvents.join(", ")}` });
+        }
+
+        // Check subscription limit (max 20 per agent)
+        const whCol = db.collection("agents").doc(agent.id).collection("webhooks");
+        const countSnap = await whCol.count().get();
+        if (countSnap.data().count >= 20) {
+          return res.status(400).json({ error: "Webhook limit reached (max 20 per agent)" });
+        }
+
+        const secret = require("crypto").randomBytes(32).toString("hex");
+        const subRef = await whCol.add({
+          event,
+          callback_url,
+          secret,
+          filters: body.filters || {},
+          status: "active",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          last_triggered: null,
+          failure_count: 0,
+        });
+
+        return res.status(200).json({
+          success: true,
+          subscription_id: subRef.id,
+          event,
+          callback_url,
+          secret,
+          status: "active",
+          message: "Save the secret for HMAC signature verification on callbacks.",
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Webhook subscribe failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "webhook.unsubscribe") {
+      try {
+        const { subscription_id } = body;
+        if (!subscription_id) return res.status(400).json({ error: "Missing required field: subscription_id" });
+
+        const whRef = db.collection("agents").doc(agent.id).collection("webhooks").doc(subscription_id);
+        const whSnap = await whRef.get();
+        if (!whSnap.exists) return res.status(404).json({ error: "Subscription not found" });
+
+        await whRef.delete();
+        return res.status(200).json({ success: true, subscription_id, deleted: true });
+      } catch (e) {
+        return res.status(500).json({ error: `Webhook unsubscribe failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "webhook.list") {
+      try {
+        const whSnap = await db.collection("agents").doc(agent.id)
+          .collection("webhooks")
+          .orderBy("created_at", "desc")
+          .limit(20)
+          .get();
+
+        const subscriptions = whSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            subscription_id: d.id,
+            event: data.event,
+            callback_url: data.callback_url,
+            status: data.status,
+            failure_count: data.failure_count || 0,
+            last_triggered: data.last_triggered?.toDate?.()?.toISOString() || null,
+            created_at: data.created_at?.toDate?.()?.toISOString() || null,
+          };
+        });
+
+        return res.status(200).json({ success: true, total: subscriptions.length, subscriptions });
+      } catch (e) {
+        return res.status(500).json({ error: `Webhook list failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "webhook.test") {
+      try {
+        const { subscription_id } = body;
+        if (!subscription_id) return res.status(400).json({ error: "Missing required field: subscription_id" });
+
+        const whRef = db.collection("agents").doc(agent.id).collection("webhooks").doc(subscription_id);
+        const whSnap = await whRef.get();
+        if (!whSnap.exists) return res.status(404).json({ error: "Subscription not found" });
+
+        const wh = whSnap.data();
+        const testPayload = {
+          event: wh.event,
+          agent_id: agent.id,
+          agent_name: agent.agentName,
+          test: true,
+          timestamp: new Date().toISOString(),
+          data: { message: "This is a test webhook event" },
+        };
+
+        // Send test callback
+        try {
+          const axios = require("axios");
+          const hmac = require("crypto").createHmac("sha256", wh.secret)
+            .update(JSON.stringify(testPayload)).digest("hex");
+
+          await axios.post(wh.callback_url, testPayload, {
+            timeout: 10000,
+            headers: {
+              "Content-Type": "application/json",
+              "X-Vision-Signature": hmac,
+              "X-Vision-Event": wh.event,
+            },
+          });
+
+          return res.status(200).json({
+            success: true,
+            subscription_id,
+            callback_url: wh.callback_url,
+            delivered: true,
+          });
+        } catch (cbErr) {
+          return res.status(200).json({
+            success: true,
+            subscription_id,
+            callback_url: wh.callback_url,
+            delivered: false,
+            error: cbErr.message,
+          });
+        }
+      } catch (e) {
+        return res.status(500).json({ error: `Webhook test failed: ${e.message}` });
+      }
+    }
+
+    if (canonicalAction === "webhook.logs") {
+      try {
+        const { subscription_id } = body;
+        const limit = Math.min(parseInt(body.limit) || 20, 100);
+
+        let query = db.collection("agents").doc(agent.id).collection("webhook_logs")
+          .orderBy("timestamp", "desc")
+          .limit(limit);
+
+        if (subscription_id) {
+          query = query.where("subscription_id", "==", subscription_id);
+        }
+
+        const logSnap = await query.get();
+        const logs = logSnap.docs.map((d) => {
+          const data = d.data();
+          return {
+            log_id: d.id,
+            subscription_id: data.subscription_id,
+            event: data.event,
+            delivered: data.delivered,
+            status_code: data.status_code,
+            error: data.error || null,
+            timestamp: data.timestamp?.toDate?.()?.toISOString() || null,
+          };
+        });
+
+        return res.status(200).json({ success: true, total: logs.length, logs });
+      } catch (e) {
+        return res.status(500).json({ error: `Webhook logs failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
+
     return res.status(400).json({
       error: `Unknown action: ${action}`,
       available_actions: [
-        "register", "balance", "transfer", "transactions",
-        "referral", "leaderboard", "profile", "delete_agent",
-        "stake", "unstake", "claim_rewards", "staking_info",
-        "network_info",
-        "configure_hosting", "toggle_hosting", "hosting_logs",
+        "system.register", "system.network_info", "system.delete_agent",
+        "wallet.balance", "wallet.token_info", "wallet.gas_estimate", "wallet.approve", "wallet.tx_history",
+        "transfer.send", "transfer.batch", "transfer.scheduled", "transfer.conditional",
+        "staking.deposit", "staking.request_unstake", "staking.withdraw",
+        "staking.claim", "staking.compound", "staking.rewards", "staking.apy", "staking.cooldown",
+        "staking.position",
+        "bridge.initiate", "bridge.status", "bridge.finalize", "bridge.history", "bridge.fee",
+        "nft.mint", "nft.balance", "nft.metadata",
+        "authority.grant", "authority.revoke", "authority.status", "authority.usage", "authority.audit",
+        "settlement.set_wallet", "settlement.get_wallet",
+        "node.register", "node.heartbeat", "node.status", "node.peers",
+        "storage.set", "storage.get", "storage.list", "storage.delete",
+        "pipeline.create", "pipeline.execute", "pipeline.list", "pipeline.delete",
+        "webhook.subscribe", "webhook.unsubscribe", "webhook.list", "webhook.test", "webhook.logs",
+        "social.referral", "social.leaderboard", "social.profile",
+        "hosting.configure", "hosting.toggle", "hosting.logs",
       ],
     });
   } catch (err) {
@@ -12227,3 +14153,478 @@ exports.onRoundEndAutoPost = onSchedule({
   }
 });
 
+// =====================================================
+// AGENT SCHEDULED TRANSFER EXECUTOR
+// Runs every 1 minute, executes pending agent scheduled transfers
+// Scans agents/{id}/scheduled_transfers for due "pending" entries
+// =====================================================
+exports.agentScheduledTransferExecutor = onSchedule({
+  schedule: "every 1 minutes",
+  timeoutSeconds: 120,
+  memory: "512MiB",
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async () => {
+  console.log("[AgentScheduledTx] Running:", new Date().toISOString());
+
+  try {
+    const agentsSnap = await db.collection("agents").get();
+    let totalProcessed = 0;
+
+    for (const agentDoc of agentsSnap.docs) {
+      const agent = agentDoc.data();
+      if (!agent.walletAddress || !agent.privateKey) continue;
+
+      // Find due scheduled transfers for this agent
+      const schedSnap = await agentDoc.ref
+        .collection("scheduled_transfers")
+        .where("status", "==", "pending")
+        .limit(10)
+        .get();
+
+      if (schedSnap.empty) continue;
+
+      // Filter in-memory for due entries
+      const dueTransfers = schedSnap.docs.filter((doc) => {
+        const data = doc.data();
+        if (!data.execute_at) return false;
+        return data.execute_at.toMillis() <= Date.now();
+      });
+
+      if (dueTransfers.length === 0) continue;
+
+      // Setup blockchain connection
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+
+      const agentPK = serverDecrypt(agent.privateKey);
+      const agentWallet = new ethers.Wallet(agentPK, provider);
+      const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+      // Ensure agent has gas
+      const agentGas = await provider.getBalance(agent.walletAddress);
+      if (agentGas < ethers.parseEther("0.001")) {
+        try {
+          const gasTx = await adminWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: ethers.parseEther("0.01"),
+          });
+          await gasTx.wait();
+        } catch (gasErr) {
+          console.error(`[AgentScheduledTx] Gas funding failed for ${agent.agentName}:`, gasErr.message);
+          continue;
+        }
+      }
+
+      for (const schedDoc of dueTransfers) {
+        const data = schedDoc.data();
+        try {
+          await schedDoc.ref.update({ status: "executing" });
+
+          const amountWei = ethers.parseEther(data.amount);
+
+          // Check balance
+          const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
+          const bal = await tokenContract.balanceOf(agent.walletAddress);
+          if (bal < amountWei) {
+            await schedDoc.ref.update({
+              status: "failed",
+              error: "Insufficient balance at execution time",
+              executed_at: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            continue;
+          }
+
+          const tx = await agentToken.transfer(data.to, amountWei);
+          await tx.wait();
+
+          await schedDoc.ref.update({
+            status: "completed",
+            tx_hash: tx.hash,
+            executed_at: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          await agentDoc.ref.collection("transactions").add({
+            type: "scheduled_transfer",
+            to: data.to,
+            amount: data.amount,
+            txHash: tx.hash,
+            schedule_id: schedDoc.id,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            status: "confirmed",
+          });
+
+          totalProcessed++;
+          console.log(`[AgentScheduledTx] Executed: ${agent.agentName} -> ${data.to}: ${data.amount} VCN, tx: ${tx.hash}`);
+        } catch (execErr) {
+          console.error(`[AgentScheduledTx] Failed ${schedDoc.id}:`, execErr.message);
+          await schedDoc.ref.update({
+            status: "failed",
+            error: execErr.reason || execErr.message,
+            executed_at: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
+
+    console.log(`[AgentScheduledTx] Complete. Processed: ${totalProcessed}`);
+  } catch (err) {
+    console.error("[AgentScheduledTx] Fatal error:", err);
+  }
+});
+
+// =====================================================
+// AGENT CONDITIONAL TRANSFER MONITOR
+// Runs every 5 minutes, checks conditions and executes matching transfers
+// Conditions: balance_above, balance_below, time_after
+// =====================================================
+exports.agentConditionalTransferMonitor = onSchedule({
+  schedule: "every 5 minutes",
+  timeoutSeconds: 120,
+  memory: "512MiB",
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async () => {
+  console.log("[AgentConditionalTx] Running:", new Date().toISOString());
+
+  try {
+    const agentsSnap = await db.collection("agents").get();
+    let totalTriggered = 0;
+
+    for (const agentDoc of agentsSnap.docs) {
+      const agent = agentDoc.data();
+      if (!agent.walletAddress || !agent.privateKey) continue;
+
+      const condSnap = await agentDoc.ref
+        .collection("conditional_transfers")
+        .where("status", "==", "watching")
+        .limit(20)
+        .get();
+
+      if (condSnap.empty) continue;
+
+      const provider = new ethers.JsonRpcProvider(RPC_URL);
+      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, [
+        "function balanceOf(address) view returns (uint256)",
+      ], provider);
+
+      const agentBalance = await tokenContract.balanceOf(agent.walletAddress);
+      const agentBalanceEth = parseFloat(ethers.formatEther(agentBalance));
+      const nowSec = Math.floor(Date.now() / 1000);
+
+      for (const condDoc of condSnap.docs) {
+        const data = condDoc.data();
+        const cond = data.condition;
+        let shouldExecute = false;
+
+        switch (cond.type) {
+          case "balance_above":
+            shouldExecute = agentBalanceEth > parseFloat(cond.value);
+            break;
+          case "balance_below":
+            shouldExecute = agentBalanceEth < parseFloat(cond.value);
+            break;
+          case "time_after": {
+            const targetTime = typeof cond.value === "number" ? cond.value : Math.floor(new Date(cond.value).getTime() / 1000);
+            shouldExecute = nowSec >= targetTime;
+            break;
+          }
+          default:
+            await condDoc.ref.update({ status: "error", error: `Unknown condition: ${cond.type}` });
+            continue;
+        }
+
+        if (!shouldExecute) continue;
+
+        try {
+          await condDoc.ref.update({ status: "executing" });
+
+          const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+          const agentPK = serverDecrypt(agent.privateKey);
+          const agentWallet = new ethers.Wallet(agentPK, provider);
+          const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+          const amountWei = ethers.parseEther(data.amount);
+
+          if (agentBalance < amountWei) {
+            await condDoc.ref.update({
+              status: "failed",
+              error: "Insufficient balance when condition triggered",
+              triggered_at: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            continue;
+          }
+
+          // Ensure gas
+          const agentGas = await provider.getBalance(agent.walletAddress);
+          if (agentGas < ethers.parseEther("0.001")) {
+            const gasTx = await adminWallet.sendTransaction({
+              to: agent.walletAddress,
+              value: ethers.parseEther("0.01"),
+            });
+            await gasTx.wait();
+          }
+
+          const tx = await agentToken.transfer(data.to, amountWei);
+          await tx.wait();
+
+          await condDoc.ref.update({
+            status: "completed",
+            tx_hash: tx.hash,
+            triggered_at: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          await agentDoc.ref.collection("transactions").add({
+            type: "conditional_transfer",
+            to: data.to,
+            amount: data.amount,
+            condition: cond,
+            txHash: tx.hash,
+            condition_id: condDoc.id,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            status: "confirmed",
+          });
+
+          totalTriggered++;
+          console.log(`[AgentConditionalTx] Triggered: ${agent.agentName} -> ${data.to}: ${data.amount} VCN (${cond.type}=${cond.value}), tx: ${tx.hash}`);
+        } catch (execErr) {
+          console.error(`[AgentConditionalTx] Failed ${condDoc.id}:`, execErr.message);
+          await condDoc.ref.update({
+            status: "failed",
+            error: execErr.reason || execErr.message,
+            triggered_at: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
+    }
+
+    console.log(`[AgentConditionalTx] Complete. Triggered: ${totalTriggered}`);
+  } catch (err) {
+    console.error("[AgentConditionalTx] Fatal error:", err);
+  }
+});
+
+// =====================================================
+// AGENT WEBHOOK PUBLISHER - Scheduled Cloud Function
+// Runs every 5 minutes, checks for triggerable events
+// and dispatches callbacks to subscribed webhook URLs
+// =====================================================
+exports.agentWebhookPublisher = onSchedule({
+  schedule: "every 5 minutes",
+  timeZone: "UTC",
+  memory: "512MiB",
+  timeoutSeconds: 120,
+  secrets: ["VCN_EXECUTOR_PK"],
+}, async () => {
+  console.log("[WebhookPublisher] Starting webhook event check...");
+
+  try {
+    const agentsSnap = await db.collection("agents").get();
+    let totalDispatched = 0;
+    const axios = require("axios");
+    const crypto = require("crypto");
+
+    for (const agentDoc of agentsSnap.docs) {
+      const agentId = agentDoc.id;
+      const agentData = agentDoc.data();
+
+      // Get active webhooks for this agent
+      const whSnap = await db.collection("agents").doc(agentId)
+        .collection("webhooks")
+        .where("status", "==", "active")
+        .get();
+
+      if (whSnap.empty) continue;
+
+      // Group webhooks by event type
+      const hooksByEvent = {};
+      whSnap.docs.forEach((d) => {
+        const data = d.data();
+        if (!hooksByEvent[data.event]) hooksByEvent[data.event] = [];
+        hooksByEvent[data.event].push({ id: d.id, ...data });
+      });
+
+      // --- Check each event type ---
+
+      // 1. transfer.received: check recent incoming transfers
+      if (hooksByEvent["transfer.received"]) {
+        try {
+          const fiveMinAgo = new Date(Date.now() - 300000);
+          const txSnap = await db.collection("agents").doc(agentId)
+            .collection("transactions")
+            .where("type", "==", "transfer_received")
+            .where("timestamp", ">=", fiveMinAgo)
+            .limit(10)
+            .get();
+
+          for (const txDoc of txSnap.docs) {
+            const txData = txDoc.data();
+            const alreadySent = txData.webhook_sent === true;
+            if (alreadySent) continue;
+
+            for (const hook of hooksByEvent["transfer.received"]) {
+              await dispatchWebhook(db, agentId, hook, "transfer.received", {
+                from: txData.from,
+                amount: txData.amount,
+                tx_hash: txData.txHash,
+              }, axios, crypto);
+              totalDispatched++;
+            }
+            await txDoc.ref.update({ webhook_sent: true });
+          }
+        } catch (e) {
+          console.warn(`[WebhookPublisher] transfer.received check failed for ${agentId}:`, e.message);
+        }
+      }
+
+      // 2. balance.threshold: check current balance against filters
+      if (hooksByEvent["balance.threshold"]) {
+        try {
+          const provider = new ethers.JsonRpcProvider(RPC_URL);
+          const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
+          const balance = parseFloat(ethers.formatEther(await tokenContract.balanceOf(agentData.walletAddress)));
+
+          for (const hook of hooksByEvent["balance.threshold"]) {
+            const threshold = parseFloat(hook.filters?.threshold || "0");
+            const direction = hook.filters?.direction || "below";
+            const lastBalance = hook.last_checked_balance || 0;
+
+            let shouldFire = false;
+            if (direction === "below" && balance < threshold && lastBalance >= threshold) shouldFire = true;
+            if (direction === "above" && balance > threshold && lastBalance <= threshold) shouldFire = true;
+
+            if (shouldFire) {
+              await dispatchWebhook(db, agentId, hook, "balance.threshold", {
+                balance: balance.toString(),
+                threshold: threshold.toString(),
+                direction,
+              }, axios, crypto);
+              totalDispatched++;
+            }
+
+            await db.collection("agents").doc(agentId)
+              .collection("webhooks").doc(hook.id)
+              .update({ last_checked_balance: balance });
+          }
+        } catch (e) {
+          console.warn(`[WebhookPublisher] balance.threshold check failed for ${agentId}:`, e.message);
+        }
+      }
+
+      // 3. staking.cooldown_complete: check if cooldown expired
+      if (hooksByEvent["staking.cooldown_complete"]) {
+        try {
+          const provider = new ethers.JsonRpcProvider(RPC_URL);
+          const stakingContract = new ethers.Contract(BRIDGE_STAKING_ADDRESS, BRIDGE_STAKING_ABI, provider);
+          const cooldownEnd = await stakingContract.getCooldownEnd(agentData.walletAddress);
+          const cooldownEndMs = Number(cooldownEnd) * 1000;
+
+          if (cooldownEndMs > 0 && cooldownEndMs <= Date.now()) {
+            for (const hook of hooksByEvent["staking.cooldown_complete"]) {
+              const lastTriggered = hook.last_triggered?.toMillis?.() || 0;
+              if (lastTriggered < cooldownEndMs) {
+                await dispatchWebhook(db, agentId, hook, "staking.cooldown_complete", {
+                  cooldown_end: new Date(cooldownEndMs).toISOString(),
+                  can_withdraw: true,
+                }, axios, crypto);
+                totalDispatched++;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[WebhookPublisher] cooldown check failed for ${agentId}:`, e.message);
+        }
+      }
+
+      // 4. node.stale: check if node heartbeat is overdue
+      if (hooksByEvent["node.stale"]) {
+        try {
+          const nodeSnap = await db.collection("agents").doc(agentId)
+            .collection("node").doc("status").get();
+          if (nodeSnap.exists) {
+            const nodeData = nodeSnap.data();
+            const lastHb = nodeData.last_heartbeat?.toMillis?.() || 0;
+            const elapsed = Date.now() - lastHb;
+
+            // Fire once in 10-15 min window after heartbeat missed
+            if (elapsed > 600000 && elapsed < 900000) {
+              for (const hook of hooksByEvent["node.stale"]) {
+                await dispatchWebhook(db, agentId, hook, "node.stale", {
+                  node_id: nodeData.node_id,
+                  last_heartbeat: new Date(lastHb).toISOString(),
+                  minutes_overdue: Math.round(elapsed / 60000),
+                }, axios, crypto);
+                totalDispatched++;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[WebhookPublisher] node.stale check failed for ${agentId}:`, e.message);
+        }
+      }
+    }
+
+    console.log(`[WebhookPublisher] Complete. Dispatched: ${totalDispatched}`);
+  } catch (err) {
+    console.error("[WebhookPublisher] Fatal error:", err);
+  }
+});
+
+// --- Webhook dispatch helper ---
+async function dispatchWebhook(db, agentId, hook, event, data, axios, crypto) {
+  const payload = {
+    event,
+    agent_id: agentId,
+    timestamp: new Date().toISOString(),
+    data,
+  };
+
+  const hmac = crypto.createHmac("sha256", hook.secret)
+    .update(JSON.stringify(payload)).digest("hex");
+
+  let delivered = false;
+  let statusCode = 0;
+  let error = null;
+
+  try {
+    const resp = await axios.post(hook.callback_url, payload, {
+      timeout: 10000,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Vision-Signature": hmac,
+        "X-Vision-Event": event,
+      },
+    });
+    delivered = true;
+    statusCode = resp.status;
+  } catch (e) {
+    error = e.message;
+    statusCode = e.response?.status || 0;
+  }
+
+  // Log the delivery attempt
+  await db.collection("agents").doc(agentId).collection("webhook_logs").add({
+    subscription_id: hook.id,
+    event,
+    delivered,
+    status_code: statusCode,
+    error,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // Update webhook metadata
+  const updateData = {
+    last_triggered: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (!delivered) {
+    updateData.failure_count = admin.firestore.FieldValue.increment(1);
+    // Auto-pause after 10 consecutive failures
+    if ((hook.failure_count || 0) >= 9) {
+      updateData.status = "paused";
+    }
+  } else {
+    updateData.failure_count = 0; // Reset on success
+  }
+
+  await db.collection("agents").doc(agentId)
+    .collection("webhooks").doc(hook.id)
+    .update(updateData);
+}

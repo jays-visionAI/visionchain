@@ -1,4 +1,4 @@
-import { Component, Show, For, createEffect, createSignal } from 'solid-js';
+import { Component, Show, For, createEffect, createSignal, createMemo, on, untrack } from 'solid-js';
 import { FileText, X, Type, Paperclip, Code } from 'lucide-solid';
 import { Motion } from 'solid-motionone';
 import { AdminDocument } from '../../../services/firebaseService';
@@ -23,6 +23,7 @@ interface DocViewerModalProps {
 
 export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
     let contentRef: HTMLDivElement | undefined;
+    let lastRenderedId = '';
 
     const renderMermaidDiagrams = async () => {
         if (!contentRef) return;
@@ -88,18 +89,27 @@ export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
         }
     };
 
-    const renderMarkdown = (content: string): string => {
-        return marked.parse(content) as string;
-    };
+    // Memoize rendered HTML to prevent re-parsing on every render cycle
+    const renderedHtml = createMemo(() => {
+        const doc = props.doc;
+        if (!doc || !isMarkdownType(doc.type)) return '';
+        return marked.parse(doc.content) as string;
+    });
 
-    createEffect(() => {
-        if (props.isOpen && props.doc && isMarkdownType(props.doc.type)) {
+    // Post-processing effect: only runs when doc ID changes, not on every reactive update
+    createEffect(on(
+        () => props.isOpen && props.doc?.id,
+        (currentId) => {
+            if (!currentId || !props.doc || !isMarkdownType(props.doc.type)) return;
+            if (lastRenderedId === currentId) return; // Guard against duplicate runs
+            lastRenderedId = currentId as string;
+
             setTimeout(async () => {
                 await highlightCodeBlocks();
                 await renderMermaidDiagrams();
-            }, 150);
+            }, 200);
         }
-    });
+    ));
 
     return (
         <Show when={props.isOpen && props.doc}>
@@ -181,7 +191,7 @@ export const DocViewerModal: Component<DocViewerModalProps> = (props) => {
                                 <div
                                     ref={contentRef}
                                     class="markdown-body"
-                                    innerHTML={renderMarkdown(props.doc!.content)}
+                                    innerHTML={renderedHtml()}
                                 />
                             </Show>
 
