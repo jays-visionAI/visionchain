@@ -100,6 +100,8 @@ interface WalletDashboardProps {
     showResponseTime?: boolean;
     walletAddress?: () => string;
     userEmail?: string;
+    batchInterval: () => number;
+    setBatchInterval: (val: number) => void;
 
     // Cross-Chain Bridge
     pendingBridge?: () => {
@@ -795,7 +797,9 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
     const [isBatchDrawerOpen, setIsBatchDrawerOpen] = createSignal(false);
     const [selectedTaskId, setSelectedTaskId] = createSignal<string | null>(null);
     const [selectedBatchId, setSelectedBatchId] = createSignal<string | null>(null);
-    const [batchInterval, setBatchInterval] = createSignal(5); // Default 5s for batch transactions
+    // Use parent-provided batchInterval (persists across password modal)
+    const batchInterval = props.batchInterval;
+    const setBatchInterval = props.setBatchInterval;
 
     // All tasks for Agent Queue (includes hidden for History tab)
     const combinedDrawerTasks = createMemo(() => {

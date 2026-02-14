@@ -572,6 +572,7 @@ const Wallet = (): JSX.Element => {
     const [multiTransactions, setMultiTransactions] = createSignal<any[]>([]);
     const [unreadNotificationsCount, setUnreadNotificationsCount] = createSignal(0);
     const [chatHistoryOpen, setChatHistoryOpen] = createSignal(true);
+    const [batchInterval, setBatchInterval] = createSignal(5); // Batch execution interval (seconds)
 
     // --- Multi-Chain Asset State ---
     const [sepoliaVcnBalance, setSepoliaVcnBalance] = createSignal(0);
@@ -1670,7 +1671,7 @@ const Wallet = (): JSX.Element => {
                     // 10 second interval for stability
                     // Dynamic interval based on user preference
                     if (i < transactions.length - 1) {
-                        const waitTime = (action.data.interval || 10) * 1000;
+                        const waitTime = (action.data.interval || 5) * 1000;
                         await new Promise(resolve => setTimeout(resolve, waitTime));
                     }
                 }
@@ -4146,6 +4147,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 showResponseTime={showResponseTime()}
                                 walletAddress={walletAddress}
                                 userEmail={auth.user()?.email || undefined}
+                                batchInterval={batchInterval}
+                                setBatchInterval={setBatchInterval}
                                 onStartBatch={(txs, interval) => {
                                     console.log("Starting batch with txs:", txs, "interval:", interval);
                                     setPendingAction({
