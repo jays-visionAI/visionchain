@@ -8331,21 +8331,140 @@ exports.agentGateway = onRequest({
   res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") return res.status(204).send("");
 
-  // GET requests serve the skill.md content link
+  // GET requests serve full API discovery for AI agents
   if (req.method === "GET") {
     return res.status(200).json({
       name: "Vision Chain Agent Gateway",
-      version: "3.0.0",
+      version: "5.0.0",
+      description: "EVM-compatible L1 blockchain with gasless transactions for AI agents. 59 actions across 15 domains.",
+      base_url: `https://us-central1-${process.env.GCLOUD_PROJECT || "visionchain-d19ed"}.cloudfunctions.net/agentGateway`,
+      method: "POST",
+      content_type: "application/json",
       skill_url: "https://visionchain.co/skill.md",
-      docs: "https://visionchain.co/docs/agent-api",
+      docs_url: "https://visionchain.co/docs/agent-api.md",
+      docs_ui: "https://visionchain.co/docs/agent-api",
+      chain: { name: "Vision Chain", chain_id: 3151909, rpc: "https://api.visionchain.co/rpc-proxy", token: "VCN", decimals: 18, gasless: true },
+      quick_start: "POST with { action: 'system.register', agent_name: 'your-name', platform: 'openai', owner_email: 'you@email.com' } to get wallet + API key + 99 VCN",
       domains: {
-        system: ["system.register", "system.network_info", "system.delete_agent"],
-        wallet: ["wallet.balance", "wallet.tx_history"],
-        transfer: ["transfer.send"],
-        staking: ["staking.deposit", "staking.request_unstake", "staking.claim", "staking.position"],
-        social: ["social.referral", "social.leaderboard", "social.profile"],
-        hosting: ["hosting.configure", "hosting.toggle", "hosting.logs"],
+        system: {
+          actions: [
+            { action: "system.register", auth: false, tier: "T1", cost: "0", params: { agent_name: "required", platform: "required", owner_email: "required", platform_id: "optional", referral_code: "optional" }, desc: "Register agent, get wallet + API key + SBT" },
+            { action: "system.network_info", auth: false, tier: "T1", cost: "0", params: {}, desc: "Chain info, contracts, block height" },
+            { action: "system.delete_agent", auth: true, tier: "T2", cost: "0.1", params: {}, desc: "Permanently delete agent" },
+          ],
+        },
+        wallet: {
+          actions: [
+            { action: "wallet.balance", auth: true, tier: "T1", cost: "0", params: {}, desc: "VCN balance + RP points" },
+            { action: "wallet.tx_history", auth: true, tier: "T1", cost: "0", params: { limit: "optional (1-100)", type: "optional (transfer|stake|unstake)" }, desc: "Transaction history" },
+            { action: "wallet.token_info", auth: true, tier: "T1", cost: "0", params: { token_address: "optional (defaults to VCN)" }, desc: "ERC-20 token details" },
+            { action: "wallet.gas_estimate", auth: true, tier: "T1", cost: "0", params: { tx_type: "optional (transfer|stake|unstake)" }, desc: "Gas estimation" },
+            { action: "wallet.approve", auth: true, tier: "T3", cost: "0.5", params: { spender: "required", amount: "required", token_address: "optional" }, desc: "Approve ERC-20 spender" },
+          ],
+        },
+        transfer: {
+          actions: [
+            { action: "transfer.send", auth: true, tier: "T2", cost: "0.1", params: { to: "required", amount: "required (max 10000)" }, desc: "Send VCN (gasless)" },
+            { action: "transfer.batch", auth: true, tier: "T4", cost: "1.0", params: { transfers: "required (array of {to, amount})" }, desc: "Batch transfer" },
+            { action: "transfer.scheduled", auth: true, tier: "T3", cost: "0.5", params: { to: "required", amount: "required", execute_at: "required (ISO 8601)" }, desc: "Scheduled transfer" },
+            { action: "transfer.conditional", auth: true, tier: "T3", cost: "0.5", params: { to: "required", amount: "required", condition: "required ({type, value})" }, desc: "Conditional transfer" },
+          ],
+        },
+        staking: {
+          actions: [
+            { action: "staking.deposit", auth: true, tier: "T3", cost: "0.5", params: { amount: "required (min 1)" }, desc: "Stake VCN" },
+            { action: "staking.request_unstake", auth: true, tier: "T3", cost: "0.5", params: { amount: "required" }, desc: "Request unstake (starts cooldown)" },
+            { action: "staking.withdraw", auth: true, tier: "T3", cost: "0.5", params: {}, desc: "Withdraw after cooldown" },
+            { action: "staking.claim", auth: true, tier: "T3", cost: "0.5", params: {}, desc: "Claim staking rewards" },
+            { action: "staking.compound", auth: true, tier: "T3", cost: "0.5", params: {}, desc: "Claim + re-stake atomically" },
+            { action: "staking.rewards", auth: true, tier: "T1", cost: "0", params: {}, desc: "Query pending rewards" },
+            { action: "staking.apy", auth: true, tier: "T1", cost: "0", params: {}, desc: "Current APY + network stats" },
+            { action: "staking.cooldown", auth: true, tier: "T1", cost: "0", params: {}, desc: "Cooldown status" },
+            { action: "staking.position", auth: true, tier: "T1", cost: "0", params: {}, desc: "Full staking position" },
+          ],
+        },
+        bridge: {
+          actions: [
+            { action: "bridge.initiate", auth: true, tier: "T4", cost: "1.0", params: { amount: "required", destination_chain: "required (chainId)", recipient: "optional" }, desc: "Start cross-chain bridge" },
+            { action: "bridge.status", auth: true, tier: "T1", cost: "0", params: { bridge_id: "optional", intent_hash: "optional" }, desc: "Check bridge status" },
+            { action: "bridge.finalize", auth: true, tier: "T3", cost: "0.5", params: { bridge_id: "required" }, desc: "Finalize bridge" },
+            { action: "bridge.history", auth: true, tier: "T1", cost: "0", params: {}, desc: "Bridge transaction history" },
+            { action: "bridge.fee", auth: true, tier: "T1", cost: "0", params: { amount: "optional", destination_chain: "optional" }, desc: "Bridge fee estimate" },
+          ],
+        },
+        nft: {
+          actions: [
+            { action: "nft.mint", auth: true, tier: "T4", cost: "1.0", params: { token_type: "optional (nft|sbt)", mint_to: "optional", metadata: "optional ({name, description, image})" }, desc: "Mint NFT or SBT" },
+            { action: "nft.balance", auth: true, tier: "T1", cost: "0", params: { wallet_address: "optional", contract_address: "optional" }, desc: "NFT/SBT balance" },
+            { action: "nft.metadata", auth: true, tier: "T1", cost: "0", params: { token_id: "required", contract_address: "optional" }, desc: "Token metadata" },
+          ],
+        },
+        authority: {
+          actions: [
+            { action: "authority.grant", auth: true, tier: "T2", cost: "0.1", params: { delegate_to: "required", permissions: "required (array)", limits: "optional", expires_at: "optional" }, desc: "Delegate permissions" },
+            { action: "authority.revoke", auth: true, tier: "T2", cost: "0.1", params: { delegation_id: "optional", delegate_to: "optional" }, desc: "Revoke delegation" },
+            { action: "authority.status", auth: true, tier: "T1", cost: "0", params: { delegate_to: "optional" }, desc: "List active delegations" },
+            { action: "authority.usage", auth: true, tier: "T1", cost: "0", params: { delegation_id: "required" }, desc: "Delegation usage stats" },
+            { action: "authority.audit", auth: true, tier: "T1", cost: "0", params: { limit: "optional" }, desc: "Audit trail" },
+          ],
+        },
+        settlement: {
+          actions: [
+            { action: "settlement.set_wallet", auth: true, tier: "T2", cost: "0.1", params: { wallet_address: "required", label: "optional" }, desc: "Set payout wallet" },
+            { action: "settlement.get_wallet", auth: true, tier: "T1", cost: "0", params: {}, desc: "Get settlement wallet" },
+          ],
+        },
+        node: {
+          actions: [
+            { action: "node.register", auth: true, tier: "T2", cost: "0.1", params: { version: "required", os: "optional", arch: "optional", capabilities: "optional (array)" }, desc: "Register Vision Node" },
+            { action: "node.heartbeat", auth: true, tier: "T1", cost: "0", params: {}, desc: "Send heartbeat (every 5 min)" },
+            { action: "node.status", auth: true, tier: "T1", cost: "0", params: {}, desc: "Node status" },
+            { action: "node.peers", auth: true, tier: "T1", cost: "0", params: {}, desc: "List network peers" },
+          ],
+        },
+        storage: {
+          actions: [
+            { action: "storage.set", auth: true, tier: "T2", cost: "0.1", params: { key: "required (1-128 chars)", value: "required (max 10KB)" }, desc: "Store key-value" },
+            { action: "storage.get", auth: true, tier: "T1", cost: "0", params: { key: "required" }, desc: "Retrieve value" },
+            { action: "storage.list", auth: true, tier: "T1", cost: "0", params: {}, desc: "List all keys" },
+            { action: "storage.delete", auth: true, tier: "T2", cost: "0.1", params: { key: "required" }, desc: "Delete key" },
+          ],
+        },
+        pipeline: {
+          actions: [
+            { action: "pipeline.create", auth: true, tier: "T2", cost: "0.1", params: { name: "required", steps: "required (array)", trigger: "optional", schedule: "optional" }, desc: "Create multi-step pipeline" },
+            { action: "pipeline.execute", auth: true, tier: "T3", cost: "0.5", params: { pipeline_id: "required" }, desc: "Execute pipeline" },
+            { action: "pipeline.list", auth: true, tier: "T1", cost: "0", params: {}, desc: "List pipelines" },
+            { action: "pipeline.delete", auth: true, tier: "T2", cost: "0.1", params: { pipeline_id: "required" }, desc: "Delete pipeline" },
+          ],
+        },
+        webhook: {
+          actions: [
+            { action: "webhook.subscribe", auth: true, tier: "T2", cost: "0.1", params: { event: "required", callback_url: "required", filters: "optional" }, desc: "Subscribe to events" },
+            { action: "webhook.unsubscribe", auth: true, tier: "T2", cost: "0.1", params: { subscription_id: "required" }, desc: "Remove webhook" },
+            { action: "webhook.list", auth: true, tier: "T1", cost: "0", params: {}, desc: "List webhooks" },
+            { action: "webhook.test", auth: true, tier: "T1", cost: "0", params: { subscription_id: "required" }, desc: "Send test event" },
+            { action: "webhook.logs", auth: true, tier: "T1", cost: "0", params: { limit: "optional" }, desc: "Delivery history" },
+          ],
+        },
+        hosting: {
+          actions: [
+            { action: "hosting.configure", auth: true, tier: "T2", cost: "0.1", params: { model: "optional", system_prompt: "optional", enabled_actions: "optional (array)" }, desc: "Configure agent hosting" },
+            { action: "hosting.toggle", auth: true, tier: "T2", cost: "0.1", params: { enabled: "required (boolean)" }, desc: "Enable/disable hosting" },
+            { action: "hosting.logs", auth: true, tier: "T1", cost: "0", params: { limit: "optional" }, desc: "Execution logs" },
+          ],
+        },
+        social: {
+          actions: [
+            { action: "social.referral", auth: true, tier: "T1", cost: "0", params: {}, desc: "Referral code + stats" },
+            { action: "social.leaderboard", auth: true, tier: "T1", cost: "0", params: { type: "optional (rp|referrals|transfers)" }, desc: "Top agents" },
+            { action: "social.profile", auth: true, tier: "T1", cost: "0", params: {}, desc: "Full agent profile" },
+          ],
+        },
       },
+      total_actions: 59,
+      authentication: "Include api_key in POST body. Obtain via system.register.",
+      pricing_tiers: { T1: "0 VCN (free reads)", T2: "0.1 VCN (basic writes)", T3: "0.5 VCN (complex ops)", T4: "1.0 VCN (premium)" },
     });
   }
 
@@ -10456,7 +10575,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */}
+          } catch (_e8) {/* non-critical */ }
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10656,7 +10775,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */}
+        } catch (_e9) {/* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10671,7 +10790,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */}
+          } catch (_e10) {/* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10717,7 +10836,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */}
+        } catch (_e11) {/* no SBT */ }
 
         return res.status(200).json({
           success: true,
