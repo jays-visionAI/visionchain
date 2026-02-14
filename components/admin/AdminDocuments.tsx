@@ -3,7 +3,8 @@ import {
     Search,
     Plus,
     Filter,
-    FileText
+    FileText,
+    Upload
 } from 'lucide-solid';
 import { getDocuments, saveAdminDocument, deleteAdminDocument, AdminDocument } from '../../services/firebaseService';
 
@@ -65,6 +66,7 @@ export default function AdminDocuments() {
     const [isSaving, setIsSaving] = createSignal(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
     const [isViewerOpen, setIsViewerOpen] = createSignal(false);
+    let fileInputRef: HTMLInputElement | undefined;
 
     onMount(async () => {
         await loadDocuments();
@@ -129,6 +131,36 @@ export default function AdminDocuments() {
             alert("Failed to delete.");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleImportMd = async (file: File) => {
+        const content = await file.text();
+        // Extract title from first # heading or use filename
+        const headingMatch = content.match(/^#\s+(.+)$/m);
+        const title = headingMatch ? headingMatch[1].trim() : file.name.replace(/\.md$/, '');
+
+        const newDoc: AdminDocument = {
+            id: `doc-${Date.now()}`,
+            title,
+            category: 'API Specification',
+            type: 'Markdown',
+            content,
+            author: 'Admin',
+            updatedAt: new Date().toISOString().split('T')[0],
+            attachments: []
+        };
+
+        setIsSaving(true);
+        try {
+            await saveAdminDocument(newDoc);
+            await loadDocuments();
+        } catch (error) {
+            console.error('Failed to import markdown:', error);
+            alert('Import failed.');
+        } finally {
+            setIsSaving(false);
+            if (fileInputRef) fileInputRef.value = '';
         }
     };
 
@@ -364,16 +396,35 @@ export default function AdminDocuments() {
                     <h1 class="text-3xl font-black italic tracking-tight uppercase">Document Management</h1>
                     <p class="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] mt-1">Manage system manuals, guides, and technical records</p>
                 </div>
-                <button
-                    onClick={() => {
-                        setSelectedDoc(null);
-                        setIsEditorOpen(true);
-                    }}
-                    class="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
-                >
-                    <Plus class="w-4 h-4" />
-                    New Document
-                </button>
+                <div class="flex items-center gap-3">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".md,.markdown"
+                        class="hidden"
+                        onChange={(e) => {
+                            const file = e.currentTarget.files?.[0];
+                            if (file) handleImportMd(file);
+                        }}
+                    />
+                    <button
+                        onClick={() => fileInputRef?.click()}
+                        class="flex items-center gap-2 px-5 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95"
+                    >
+                        <Upload class="w-4 h-4" />
+                        Import .md
+                    </button>
+                    <button
+                        onClick={() => {
+                            setSelectedDoc(null);
+                            setIsEditorOpen(true);
+                        }}
+                        class="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-400 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
+                    >
+                        <Plus class="w-4 h-4" />
+                        New Document
+                    </button>
+                </div>
             </div>
 
             {/* Stats & Filters */}
