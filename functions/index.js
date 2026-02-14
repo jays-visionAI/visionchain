@@ -11292,15 +11292,15 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "webhook.unsubscribe") {
       try {
-        const { subscription_id } = body;
-        if (!subscription_id) return res.status(400).json({ error: "Missing required field: subscription_id" });
+        const { subscription_id: subscriptionId } = body;
+        if (!subscriptionId) return res.status(400).json({ error: "Missing required field: subscription_id" });
 
-        const whRef = db.collection("agents").doc(agent.id).collection("webhooks").doc(subscription_id);
+        const whRef = db.collection("agents").doc(agent.id).collection("webhooks").doc(subscriptionId);
         const whSnap = await whRef.get();
         if (!whSnap.exists) return res.status(404).json({ error: "Subscription not found" });
 
         await whRef.delete();
-        return res.status(200).json({ success: true, subscription_id, deleted: true });
+        return res.status(200).json({ success: true, subscription_id: subscriptionId, deleted: true });
       } catch (e) {
         return res.status(500).json({ error: `Webhook unsubscribe failed: ${e.message}` });
       }
@@ -11335,10 +11335,10 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "webhook.test") {
       try {
-        const { subscription_id } = body;
-        if (!subscription_id) return res.status(400).json({ error: "Missing required field: subscription_id" });
+        const { subscription_id: subscriptionId } = body;
+        if (!subscriptionId) return res.status(400).json({ error: "Missing required field: subscription_id" });
 
-        const whRef = db.collection("agents").doc(agent.id).collection("webhooks").doc(subscription_id);
+        const whRef = db.collection("agents").doc(agent.id).collection("webhooks").doc(subscriptionId);
         const whSnap = await whRef.get();
         if (!whSnap.exists) return res.status(404).json({ error: "Subscription not found" });
 
@@ -11369,14 +11369,14 @@ exports.agentGateway = onRequest({
 
           return res.status(200).json({
             success: true,
-            subscription_id,
+            subscription_id: subscriptionId,
             callback_url: wh.callback_url,
             delivered: true,
           });
         } catch (cbErr) {
           return res.status(200).json({
             success: true,
-            subscription_id,
+            subscription_id: subscriptionId,
             callback_url: wh.callback_url,
             delivered: false,
             error: cbErr.message,
@@ -11389,15 +11389,15 @@ exports.agentGateway = onRequest({
 
     if (canonicalAction === "webhook.logs") {
       try {
-        const { subscription_id } = body;
+        const { subscription_id: subscriptionId } = body;
         const limit = Math.min(parseInt(body.limit) || 20, 100);
 
         let query = db.collection("agents").doc(agent.id).collection("webhook_logs")
           .orderBy("timestamp", "desc")
           .limit(limit);
 
-        if (subscription_id) {
-          query = query.where("subscription_id", "==", subscription_id);
+        if (subscriptionId) {
+          query = query.where("subscription_id", "==", subscriptionId);
         }
 
         const logSnap = await query.get();
