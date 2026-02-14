@@ -10485,21 +10485,21 @@ exports.agentGateway = onRequest({
 
     // --- BRIDGE STATUS (bridge.status) --- T1
     if (action === "bridge_status" || action === "bridge.status") {
-      const { bridge_id, intent_hash } = req.body;
-      if (!bridge_id && !intent_hash) {
+      const { bridge_id: bridgeId, intent_hash: intentHash } = req.body;
+      if (!bridgeId && !intentHash) {
         return res.status(400).json({ error: "Provide bridge_id or intent_hash" });
       }
 
       try {
         let bridgeDoc;
 
-        if (bridge_id) {
-          const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridge_id).get();
+        if (bridgeId) {
+          const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridgeId).get();
           if (!doc.exists) return res.status(404).json({ error: "Bridge not found" });
           bridgeDoc = { id: doc.id, ...doc.data() };
         } else {
           const snap = await db.collection("agents").doc(agent.id).collection("bridge_history")
-            .where("intent_hash", "==", intent_hash)
+            .where("intent_hash", "==", intentHash)
             .limit(1)
             .get();
           if (snap.empty) return res.status(404).json({ error: "Bridge not found" });
@@ -10530,18 +10530,18 @@ exports.agentGateway = onRequest({
 
     // --- BRIDGE FINALIZE (bridge.finalize) --- T3
     if (action === "bridge_finalize" || action === "bridge.finalize") {
-      const { bridge_id } = req.body;
-      if (!bridge_id) {
+      const { bridge_id: bridgeId } = req.body;
+      if (!bridgeId) {
         return res.status(400).json({ error: "Missing required field: bridge_id" });
       }
 
       try {
-        const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridge_id).get();
+        const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridgeId).get();
         if (!doc.exists) return res.status(404).json({ error: "Bridge not found" });
 
         const data = doc.data();
         if (data.status === "completed") {
-          return res.status(200).json({ success: true, message: "Bridge already finalized", bridge_id });
+          return res.status(200).json({ success: true, message: "Bridge already finalized", bridge_id: bridgeId });
         }
 
         // Note: Actual finalization happens via bridgeRelayer cron. This endpoint
@@ -10561,18 +10561,18 @@ exports.agentGateway = onRequest({
               status: "completed",
               finalized_at: admin.firestore.FieldValue.serverTimestamp(),
             });
-            return res.status(200).json({ success: true, status: "completed", bridge_id });
+            return res.status(200).json({ success: true, status: "completed", bridge_id: bridgeId });
           }
 
           return res.status(200).json({
             success: true,
             status: "pending",
             message: "Bridge has been committed but not yet relayed. The relayer processes bridges every 5 minutes.",
-            bridge_id,
+            bridge_id: bridgeId,
           });
         }
 
-        return res.status(200).json({ success: true, status: data.status, bridge_id });
+        return res.status(200).json({ success: true, status: data.status, bridge_id: bridgeId });
       } catch (e) {
         return res.status(500).json({ error: `Bridge finalize failed: ${e.message}` });
       }
@@ -10612,7 +10612,7 @@ exports.agentGateway = onRequest({
 
     // --- BRIDGE FEE (bridge.fee) --- T1
     if (action === "bridge_fee" || action === "bridge.fee") {
-      const { amount, destination_chain } = req.body;
+      const { amount, destination_chain: destChain } = req.body;
       const bridgeFee = "1"; // Fixed 1 VCN fee
 
       return res.status(200).json({
@@ -10621,7 +10621,7 @@ exports.agentGateway = onRequest({
           bridge_fee_vcn: bridgeFee,
           amount_vcn: amount || "N/A",
           total_required: amount ? (parseFloat(amount) + 1).toString() : "N/A",
-          destination_chain: destination_chain || "any",
+          destination_chain: destChain || "any",
           note: "Bridge fee is distributed to staking validators",
         },
       });
@@ -10633,9 +10633,9 @@ exports.agentGateway = onRequest({
 
     // --- NFT MINT (nft.mint) --- T4
     if (action === "nft_mint" || action === "nft.mint") {
-      const { mint_to, token_type = "sbt" } = req.body;
+      const { mint_to: mintTo, token_type: tokenType = "sbt" } = req.body;
 
-      if (token_type !== "sbt") {
+      if (tokenType !== "sbt") {
         return res.status(400).json({ error: "Currently only 'sbt' (VisionAgentSBT) is supported for platform NFT minting" });
       }
 
@@ -10644,7 +10644,7 @@ exports.agentGateway = onRequest({
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
 
         const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
-        const targetAddress = mint_to || agent.walletAddress;
+        const targetAddress = mintTo || agent.walletAddress;
 
         // Check if already has SBT
         try {
@@ -10656,7 +10656,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_) { /* no existing SBT */ }
+        } catch (_e) { /* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10671,7 +10671,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_) { /* skip */ }
+          } catch (_e2) { /* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10717,7 +10717,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_) { /* no SBT */ }
+        } catch (_e3) { /* no SBT */ }
 
         return res.status(200).json({
           success: true,
