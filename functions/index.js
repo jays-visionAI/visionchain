@@ -10116,8 +10116,8 @@ exports.agentGateway = onRequest({
 
     // --- AUTHORITY GRANT (authority.grant) --- T2
     if (action === "authority_grant" || action === "authority.grant") {
-      const { delegate_to, permissions, limits, expires_at } = req.body;
-      if (!delegate_to || !permissions) {
+      const { delegate_to: delegateTo, permissions, limits, expires_at } = req.body;
+      if (!delegateTo || !permissions) {
         return res.status(400).json({
           error: "Missing required fields: delegate_to (address), permissions (array)",
           example: {
@@ -10139,7 +10139,7 @@ exports.agentGateway = onRequest({
         const expiry = expires_at ? new Date(expires_at) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // default 30 days
 
         const delegationRef = await db.collection("agents").doc(agent.id).collection("authority_delegations").add({
-          delegate_to: delegate_to.toLowerCase(),
+          delegate_to: delegateTo.toLowerCase(),
           permissions,
           limits: limits || {},
           expires_at: admin.firestore.Timestamp.fromDate(expiry),
@@ -10152,7 +10152,7 @@ exports.agentGateway = onRequest({
         await db.collection("agents").doc(agent.id).collection("authority_audit").add({
           action: "grant",
           delegation_id: delegationRef.id,
-          delegate_to: delegate_to.toLowerCase(),
+          delegate_to: delegateTo.toLowerCase(),
           permissions,
           limits: limits || {},
           expires_at: expiry.toISOString(),
@@ -10162,7 +10162,7 @@ exports.agentGateway = onRequest({
         return res.status(200).json({
           success: true,
           delegation_id: delegationRef.id,
-          delegate_to,
+          delegate_to: delegateTo,
           permissions,
           limits: limits || {},
           expires_at: expiry.toISOString(),
@@ -10175,16 +10175,16 @@ exports.agentGateway = onRequest({
 
     // --- AUTHORITY REVOKE (authority.revoke) --- T2
     if (action === "authority_revoke" || action === "authority.revoke") {
-      const { delegation_id, delegate_to } = req.body;
-      if (!delegation_id && !delegate_to) {
+      const { delegation_id: rDelegationId, delegate_to: rDelegateTo } = req.body;
+      if (!rDelegationId && !rDelegateTo) {
         return res.status(400).json({ error: "Provide delegation_id or delegate_to address" });
       }
 
       try {
         let revokedCount = 0;
 
-        if (delegation_id) {
-          const docRef = db.collection("agents").doc(agent.id).collection("authority_delegations").doc(delegation_id);
+        if (rDelegationId) {
+          const docRef = db.collection("agents").doc(agent.id).collection("authority_delegations").doc(rDelegationId);
           const doc = await docRef.get();
           if (!doc.exists || doc.data().status !== "active") {
             return res.status(400).json({ error: "Delegation not found or already revoked" });
@@ -10193,7 +10193,7 @@ exports.agentGateway = onRequest({
           revokedCount = 1;
         } else {
           const snap = await db.collection("agents").doc(agent.id).collection("authority_delegations")
-            .where("delegate_to", "==", delegate_to.toLowerCase())
+            .where("delegate_to", "==", rDelegateTo.toLowerCase())
             .where("status", "==", "active")
             .get();
 
@@ -10208,8 +10208,8 @@ exports.agentGateway = onRequest({
         // Audit
         await db.collection("agents").doc(agent.id).collection("authority_audit").add({
           action: "revoke",
-          delegation_id: delegation_id || null,
-          delegate_to: delegate_to || null,
+          delegation_id: rDelegationId || null,
+          delegate_to: rDelegateTo || null,
           revoked_count: revokedCount,
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -10223,11 +10223,11 @@ exports.agentGateway = onRequest({
     // --- AUTHORITY STATUS (authority.status) --- T1
     if (action === "authority_status" || action === "authority.status") {
       try {
-        const { delegate_to } = req.body;
+        const { delegate_to: sDelegateTo } = req.body;
         let query = db.collection("agents").doc(agent.id).collection("authority_delegations");
 
-        if (delegate_to) {
-          query = query.where("delegate_to", "==", delegate_to.toLowerCase());
+        if (sDelegateTo) {
+          query = query.where("delegate_to", "==", sDelegateTo.toLowerCase());
         }
 
         const snap = await query.where("status", "==", "active").get();
@@ -10456,7 +10456,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e4) { /* non-critical */ }
+          } catch (_e8) { /* non-critical */ }
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10656,7 +10656,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e5) { /* no existing SBT */ }
+        } catch (_e9) { /* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10671,7 +10671,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e6) { /* skip */ }
+          } catch (_e10) { /* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10717,7 +10717,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e7) { /* no SBT */ }
+        } catch (_e11) { /* no SBT */ }
 
         return res.status(200).json({
           success: true,
