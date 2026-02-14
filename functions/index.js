@@ -9567,9 +9567,9 @@ exports.agentGateway = onRequest({
     // --- TOKEN INFO (wallet.token_info) --- T1
     if (action === "token_info" || action === "wallet.token_info") {
       try {
-        const { token_address } = req.body;
+        const { token_address: tokenAddr } = req.body;
         const provider = new ethers.JsonRpcProvider(RPC_URL);
-        const targetAddr = token_address || VCN_TOKEN_ADDRESS;
+        const targetAddr = tokenAddr || VCN_TOKEN_ADDRESS;
 
         const tokenAbi = [
           "function name() view returns (string)",
@@ -9608,7 +9608,7 @@ exports.agentGateway = onRequest({
     // --- GAS ESTIMATE (wallet.gas_estimate) --- T1
     if (action === "gas_estimate" || action === "wallet.gas_estimate") {
       try {
-        const { tx_type = "transfer" } = req.body;
+        const { tx_type: txType = "transfer" } = req.body;
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const gasPrice = await provider.getFeeData();
 
@@ -9622,13 +9622,13 @@ exports.agentGateway = onRequest({
           bridge: 300000n,
         };
 
-        const estimatedGas = gasEstimates[tx_type] || 65000n;
+        const estimatedGas = gasEstimates[txType] || 65000n;
         const gasCostWei = estimatedGas * (gasPrice.gasPrice || ethers.parseUnits("1", "gwei"));
 
         return res.status(200).json({
           success: true,
           estimate: {
-            tx_type,
+            tx_type: txType,
             gas_units: estimatedGas.toString(),
             gas_price_gwei: ethers.formatUnits(gasPrice.gasPrice || 0n, "gwei"),
             estimated_cost_eth: ethers.formatEther(gasCostWei),
@@ -9642,7 +9642,7 @@ exports.agentGateway = onRequest({
 
     // --- APPROVE (wallet.approve) --- T3
     if (action === "approve" || action === "wallet.approve") {
-      const { spender, amount, token_address } = req.body;
+      const { spender, amount, token_address: approveTokenAddr } = req.body;
       if (!spender || !amount) {
         return res.status(400).json({ error: "Missing required fields: spender, amount" });
       }
@@ -9650,7 +9650,7 @@ exports.agentGateway = onRequest({
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-        const targetToken = token_address || VCN_TOKEN_ADDRESS;
+        const targetToken = approveTokenAddr || VCN_TOKEN_ADDRESS;
 
         const agentPK = serverDecrypt(agent.privateKey);
         const agentWallet = new ethers.Wallet(agentPK, provider);
@@ -9782,12 +9782,12 @@ exports.agentGateway = onRequest({
 
     // --- SCHEDULED TRANSFER (transfer.scheduled) --- T3
     if (action === "scheduled_transfer" || action === "transfer.scheduled") {
-      const { to, amount, execute_at } = req.body;
-      if (!to || !amount || !execute_at) {
+      const { to, amount, execute_at: executeAt } = req.body;
+      if (!to || !amount || !executeAt) {
         return res.status(400).json({ error: "Missing required fields: to, amount, execute_at (ISO 8601 or unix timestamp)" });
       }
 
-      const executeTime = typeof execute_at === "number" ? new Date(execute_at * 1000) : new Date(execute_at);
+      const executeTime = typeof executeAt === "number" ? new Date(executeAt * 1000) : new Date(executeAt);
       if (isNaN(executeTime.getTime()) || executeTime.getTime() <= Date.now()) {
         return res.status(400).json({ error: "execute_at must be a future timestamp" });
       }
@@ -10116,7 +10116,7 @@ exports.agentGateway = onRequest({
 
     // --- AUTHORITY GRANT (authority.grant) --- T2
     if (action === "authority_grant" || action === "authority.grant") {
-      const { delegate_to: delegateTo, permissions, limits, expires_at } = req.body;
+      const { delegate_to: delegateTo, permissions, limits, expires_at: expiresAt } = req.body;
       if (!delegateTo || !permissions) {
         return res.status(400).json({
           error: "Missing required fields: delegate_to (address), permissions (array)",
@@ -10136,7 +10136,7 @@ exports.agentGateway = onRequest({
       }
 
       try {
-        const expiry = expires_at ? new Date(expires_at) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // default 30 days
+        const expiry = expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // default 30 days
 
         const delegationRef = await db.collection("agents").doc(agent.id).collection("authority_delegations").add({
           delegate_to: delegateTo.toLowerCase(),
@@ -10456,7 +10456,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) { /* non-critical */ }
+          } catch (_e8) {/* non-critical */}
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10656,7 +10656,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) { /* no existing SBT */ }
+        } catch (_e9) {/* no existing SBT */}
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10671,7 +10671,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) { /* skip */ }
+          } catch (_e10) {/* skip */}
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10717,7 +10717,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) { /* no SBT */ }
+        } catch (_e11) {/* no SBT */}
 
         return res.status(200).json({
           success: true,
