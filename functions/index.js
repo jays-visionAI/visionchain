@@ -7995,16 +7995,17 @@ exports.agentGateway = onRequest({
   if (req.method === "GET") {
     return res.status(200).json({
       name: "Vision Chain Agent Gateway",
-      version: "2.0.0",
+      version: "3.0.0",
       skill_url: "https://visionchain.co/skill.md",
       docs: "https://visionchain.co/docs/agent-api",
-      actions: [
-        "register", "balance", "transfer", "transactions",
-        "referral", "leaderboard", "profile",
-        "stake", "unstake", "claim_rewards", "staking_info",
-        "network_info",
-        "configure_hosting", "toggle_hosting", "hosting_logs",
-      ],
+      domains: {
+        system: ["system.register", "system.network_info", "system.delete_agent"],
+        wallet: ["wallet.balance", "wallet.tx_history"],
+        transfer: ["transfer.send"],
+        staking: ["staking.deposit", "staking.request_unstake", "staking.claim", "staking.position"],
+        social: ["social.referral", "social.leaderboard", "social.profile"],
+        hosting: ["hosting.configure", "hosting.toggle", "hosting.logs"],
+      },
     });
   }
 
@@ -8021,8 +8022,8 @@ exports.agentGateway = onRequest({
       return res.status(400).json({ error: "Missing required field: action" });
     }
 
-    // --- REGISTER ---
-    if (action === "register") {
+    // --- REGISTER (system.register) ---
+    if (action === "register" || action === "system.register") {
       const agentName = body.agent_name || body.agentName;
       const platform = body.platform;
       const platformId = body.platform_id || body.platformId || "";
@@ -8035,6 +8036,12 @@ exports.agentGateway = onRequest({
         });
       }
 
+      if (!ownerEmail) {
+        return res.status(400).json({
+          error: "Missing required field: owner_email. An owner email is required to create a user account and agent identity.",
+        });
+      }
+
       // Check if agent already exists
       const existingAgent = await db.collection("agents").doc(agentName.toLowerCase()).get();
       if (existingAgent.exists) {
@@ -8044,25 +8051,75 @@ exports.agentGateway = onRequest({
           agent: {
             agent_name: data.agentName,
             wallet_address: data.walletAddress,
+            owner_uid: data.ownerUid || null,
             dashboard_url: `https://visionchain.co/agent/${data.agentName}`,
           },
         });
       }
 
-      // Create new wallet
+      // === STEP 1: Find or Create Firebase Auth User ===
+      let ownerUid = null;
+      let userCreated = false;
+      const normalizedEmail = ownerEmail.toLowerCase().trim();
+
+      try {
+        // Try to find existing Firebase Auth user by email
+        const existingUser = await admin.auth().getUserByEmail(normalizedEmail);
+        ownerUid = existingUser.uid;
+        console.log(`[Agent Gateway] Found existing user: ${ownerUid} for ${normalizedEmail}`);
+      } catch (authErr) {
+        if (authErr.code === "auth/user-not-found") {
+          // Create new Firebase Auth user (passwordless - owner can claim via password reset)
+          try {
+            const newUser = await admin.auth().createUser({
+              email: normalizedEmail,
+              displayName: agentName,
+              disabled: false,
+            });
+            ownerUid = newUser.uid;
+            userCreated = true;
+            console.log(`[Agent Gateway] Created new user: ${ownerUid} for ${normalizedEmail}`);
+
+            // Create Firestore user document
+            const userReferralCode = `USER_${agentName.toUpperCase().slice(0, 8)}_${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+            await db.collection("users").doc(ownerUid).set({
+              uid: ownerUid,
+              email: normalizedEmail,
+              displayName: agentName,
+              role: "user",
+              referralCode: userReferralCode,
+              referralCount: 0,
+              agentCount: 0,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+              createdVia: "agent_gateway",
+              platform: platform.toLowerCase(),
+            });
+            console.log(`[Agent Gateway] Created user doc for ${ownerUid}`);
+          } catch (createErr) {
+            console.error(`[Agent Gateway] User creation failed:`, createErr.message);
+            // Continue without user link - don't block agent creation
+          }
+        } else {
+          console.warn(`[Agent Gateway] Auth lookup failed:`, authErr.message);
+        }
+      }
+
+      // === STEP 2: Create Agent Wallet ===
       const wallet = ethers.Wallet.createRandom();
       const apiKey = generateAgentApiKey();
       const agentReferralCode = generateAgentReferralCode(agentName);
 
-      // Save agent to Firestore
+      // === STEP 3: Save Agent to Firestore ===
       const agentData = {
         agentName: agentName.toLowerCase(),
         displayName: agentName,
         platform: platform.toLowerCase(),
         platformId: platformId,
-        ownerEmail: ownerEmail.toLowerCase(),
+        ownerEmail: normalizedEmail,
+        ownerUid: ownerUid, // Link to Firebase Auth user
         walletAddress: wallet.address,
-        privateKey: serverEncrypt(wallet.privateKey), // Encrypted server-side
+        privateKey: serverEncrypt(wallet.privateKey),
         apiKey: apiKey,
         referralCode: agentReferralCode,
         referralCount: 0,
@@ -8070,6 +8127,10 @@ exports.agentGateway = onRequest({
         totalTransferred: "0",
         totalReceived: "0",
         transferCount: 0,
+        fundingStatus: "pending",
+        sbtStatus: "pending",
+        sbtTokenId: null,
+        sbtTxHash: "",
         registeredAt: admin.firestore.FieldValue.serverTimestamp(),
         lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
         status: "active",
@@ -8077,29 +8138,21 @@ exports.agentGateway = onRequest({
 
       await db.collection("agents").doc(agentName.toLowerCase()).set(agentData);
 
-      console.log(`[Agent Gateway] Registered agent: ${agentName} (${platform}) wallet: ${wallet.address}`);
+      // Increment user's agent count
+      if (ownerUid) {
+        db.collection("users").doc(ownerUid).update({
+          agentCount: admin.firestore.FieldValue.increment(1),
+          lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch((e) => console.warn(`[Agent Gateway] Agent count update failed:`, e.message));
+      }
 
-      // === RESPOND IMMEDIATELY (prevent 504 timeout) ===
-      res.status(201).json({
-        success: true,
-        agent: {
-          agent_name: agentName.toLowerCase(),
-          wallet_address: wallet.address,
-          api_key: apiKey,
-          referral_code: agentReferralCode,
-          initial_balance: `${AGENT_FAUCET_AMOUNT} VCN (pending)`,
-          funding_tx: "pending",
-          sbt_token_id: null,
-          sbt_tx_hash: "",
-          dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
-        },
-      });
+      console.log(`[Agent Gateway] Registered agent: ${agentName} (${platform}) wallet: ${wallet.address} owner: ${ownerUid}`);
 
-      // === ASYNC: On-chain operations (run after response is sent) ===
+      // === STEP 4: Fund Wallet (synchronous) ===
       const agentDocRef = db.collection("agents").doc(agentName.toLowerCase());
-
-      // 1) Fund the wallet with VCN (net of SBT mint fee - executor keeps the fee)
       const netFundingAmount = String(parseFloat(AGENT_FAUCET_AMOUNT) - parseFloat(SBT_MINT_FEE));
+      let fundingTxHash = "";
+
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
@@ -8107,40 +8160,95 @@ exports.agentGateway = onRequest({
         const amountWei = ethers.parseEther(netFundingAmount);
         const tx = await tokenContract.transfer(wallet.address, amountWei);
         await tx.wait();
+        fundingTxHash = tx.hash;
         await agentDocRef.update({ fundingTx: tx.hash, fundingStatus: "completed" });
-        console.log(`[Agent Gateway] Funded ${wallet.address} with ${netFundingAmount} VCN (${SBT_MINT_FEE} VCN SBT fee retained), tx: ${tx.hash}`);
+        console.log(`[Agent Gateway] Funded ${wallet.address} with ${netFundingAmount} VCN, tx: ${tx.hash}`);
       } catch (fundErr) {
         console.error(`[Agent Gateway] Funding failed for ${wallet.address}:`, fundErr.message);
         await agentDocRef.update({ fundingStatus: "failed", fundingError: fundErr.message }).catch(() => { });
       }
 
-      // 2) Mint SBT identity token (executor pays gas - server-side Paymaster pattern)
+      // === STEP 5: RESPOND (before SBT mint -- fast response) ===
+      res.status(201).json({
+        success: true,
+        user: {
+          uid: ownerUid,
+          email: normalizedEmail,
+          created: userCreated,
+          login_url: userCreated ? "https://visionchain.co/login (use password reset to claim account)" : "https://visionchain.co/login",
+        },
+        agent: {
+          agent_name: agentName.toLowerCase(),
+          wallet_address: wallet.address,
+          api_key: apiKey,
+          referral_code: agentReferralCode,
+          initial_balance: `${netFundingAmount} VCN`,
+          funding_tx: fundingTxHash || "pending",
+          sbt: {
+            status: "pending",
+            contract: AGENT_SBT_ADDRESS,
+            note: "SBT DID is being minted asynchronously. Query social.profile to check status.",
+          },
+          dashboard_url: `https://visionchain.co/agent/${agentName.toLowerCase()}`,
+        },
+      });
+
+      // === ASYNC: SBT Minting + Referral (runs after response is sent) ===
+
+      // -- SBT Mint with verification --
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
         const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
+
+        // Verify executor has minter role
+        const hasMinterRole = await sbtContract.isMinter(adminWallet.address);
+        if (!hasMinterRole) {
+          console.log(`[Agent Gateway] Executor lacks minter role, granting...`);
+          try {
+            const grantTx = await sbtContract.setMinter(adminWallet.address, true, { gasLimit: 100000, gasPrice: ethers.parseUnits("1", "gwei") });
+            await grantTx.wait();
+            console.log(`[Agent Gateway] Minter role granted to executor`);
+          } catch (grantErr) {
+            throw new Error(`Cannot grant minter role: ${grantErr.message}`);
+          }
+        }
+
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(wallet.address, agentName.toLowerCase(), platform.toLowerCase(), gasOpts);
         const receipt = await mintTx.wait();
-        const transferLog = receipt.logs.find((l) => l.topics[0] === ethers.id("Transfer(address,address,uint256)"));
+        const sbtTxHash = mintTx.hash;
+
+        // Parse Transfer event log to get tokenId
         let sbtTokenId = null;
+        const transferLog = receipt.logs.find((l) => l.topics[0] === ethers.id("Transfer(address,address,uint256)"));
         if (transferLog) {
           sbtTokenId = parseInt(transferLog.topics[3], 16);
         }
-        console.log(`[Agent Gateway] SBT minted for ${agentName}, tokenId: ${sbtTokenId}, tx: ${mintTx.hash}`);
 
-        // SBT fee already deducted from funding amount (executor retained it) - no on-chain fee transfer needed
+        // Verify on-chain
+        const onChainAgent = await sbtContract.getAgentByAddress(wallet.address);
+        if (onChainAgent[0] !== 0n && onChainAgent[0] !== 0) {
+          sbtTokenId = Number(onChainAgent[0]);
+        }
 
         await agentDocRef.update({
           sbtTokenId: sbtTokenId,
-          sbtTxHash: mintTx.hash,
+          sbtTxHash: sbtTxHash,
           sbtAddress: AGENT_SBT_ADDRESS,
+          sbtStatus: "completed",
         });
+        console.log(`[Agent Gateway] SBT minted and verified for ${agentName}, tokenId: ${sbtTokenId}, tx: ${sbtTxHash}`);
       } catch (sbtErr) {
-        console.warn(`[Agent Gateway] SBT mint failed for ${agentName}:`, sbtErr.message);
+        console.error(`[Agent Gateway] SBT mint failed for ${agentName}:`, sbtErr.message);
+        await agentDocRef.update({
+          sbtStatus: "failed",
+          sbtError: sbtErr.message,
+          sbtRetryAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => { });
       }
 
-      // 3) Process referral if provided
+      // -- Referral Processing --
       if (refCode) {
         try {
           const referrerSnap = await db.collection("agents")
@@ -8159,8 +8267,12 @@ exports.agentGateway = onRequest({
             });
             console.log(`[Agent Gateway] Referral processed: ${refCode} -> ${agentName}`);
 
-            // Roll up agent referral to owner user's referralCount
-            if (referrerData.ownerEmail) {
+            // Roll up to owner user
+            if (referrerData.ownerUid) {
+              db.collection("users").doc(referrerData.ownerUid).update({
+                referralCount: admin.firestore.FieldValue.increment(1),
+              }).catch((e) => console.warn(`[Agent Gateway] Owner rollup failed:`, e.message));
+            } else if (referrerData.ownerEmail) {
               try {
                 const ownerSnap = await db.collection("users")
                   .where("email", "==", referrerData.ownerEmail.toLowerCase())
@@ -8170,7 +8282,6 @@ exports.agentGateway = onRequest({
                   await ownerSnap.docs[0].ref.update({
                     referralCount: admin.firestore.FieldValue.increment(1),
                   });
-                  console.log(`[Agent Gateway] Agent referral rolled up to owner: ${referrerData.ownerEmail}`);
                 }
               } catch (ownerErr) {
                 console.warn(`[Agent Gateway] Owner rollup failed:`, ownerErr.message);
@@ -8182,8 +8293,7 @@ exports.agentGateway = onRequest({
               .limit(1)
               .get();
             if (!humanSnap.empty) {
-              const humanDoc = humanSnap.docs[0];
-              await humanDoc.ref.update({
+              await humanSnap.docs[0].ref.update({
                 referralCount: admin.firestore.FieldValue.increment(1),
               });
               await agentDocRef.update({
@@ -8214,8 +8324,8 @@ exports.agentGateway = onRequest({
       lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
     }).catch(() => { });
 
-    // --- BALANCE ---
-    if (action === "balance") {
+    // --- BALANCE (wallet.balance) ---
+    if (action === "balance" || action === "wallet.balance") {
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, provider);
       const balanceWei = await tokenContract.balanceOf(agent.walletAddress);
@@ -8230,8 +8340,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- TRANSFER ---
-    if (action === "transfer") {
+    // --- TRANSFER (transfer.send) ---
+    if (action === "transfer" || action === "transfer.send") {
       const { to, amount } = req.body;
       if (!to || !amount) {
         return res.status(400).json({ error: "Missing required fields: to, amount" });
@@ -8301,8 +8411,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- REFERRAL ---
-    if (action === "referral") {
+    // --- REFERRAL (social.referral) ---
+    if (action === "referral" || action === "social.referral") {
       return res.status(200).json({
         success: true,
         agent_name: agent.agentName,
@@ -8314,8 +8424,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- LEADERBOARD ---
-    if (action === "leaderboard") {
+    // --- LEADERBOARD (social.leaderboard) ---
+    if (action === "leaderboard" || action === "social.leaderboard") {
       const { type: lbType = "rp" } = req.body;
       let query;
 
@@ -8366,8 +8476,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- PROFILE ---
-    if (action === "profile") {
+    // --- PROFILE (social.profile) ---
+    if (action === "profile" || action === "social.profile") {
       // Get recent transactions
       const txSnap = await db.collection("agents").doc(agent.id)
         .collection("transactions")
@@ -8420,8 +8530,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- TRANSACTIONS ---
-    if (action === "transactions") {
+    // --- TRANSACTIONS (wallet.tx_history) ---
+    if (action === "transactions" || action === "wallet.tx_history") {
       const { limit: txLimit = 20, type: txType } = req.body;
       const clampedLimit = Math.min(Math.max(parseInt(txLimit) || 20, 1), 100);
 
@@ -8462,8 +8572,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- STAKE ---
-    if (action === "stake") {
+    // --- STAKE (staking.deposit) ---
+    if (action === "stake" || action === "staking.deposit") {
       const { amount: stakeAmount } = req.body;
       if (!stakeAmount) {
         return res.status(400).json({ error: "Missing required field: amount (in VCN)" });
@@ -8557,8 +8667,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // --- UNSTAKE ---
-    if (action === "unstake") {
+    // --- UNSTAKE (staking.request_unstake) ---
+    if (action === "unstake" || action === "staking.request_unstake") {
       const { amount: unstakeAmount } = req.body;
       if (!unstakeAmount) {
         return res.status(400).json({ error: "Missing required field: amount (in VCN)" });
@@ -8621,8 +8731,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // --- CLAIM REWARDS ---
-    if (action === "claim_rewards") {
+    // --- CLAIM REWARDS (staking.claim) ---
+    if (action === "claim_rewards" || action === "staking.claim") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
@@ -8679,8 +8789,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // --- STAKING INFO ---
-    if (action === "staking_info") {
+    // --- STAKING INFO (staking.position) ---
+    if (action === "staking_info" || action === "staking.position") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
 
@@ -8722,8 +8832,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // --- NETWORK INFO ---
-    if (action === "network_info") {
+    // --- NETWORK INFO (system.network_info) ---
+    if (action === "network_info" || action === "system.network_info") {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const latestBlock = await provider.getBlockNumber();
@@ -8756,8 +8866,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // --- CONFIGURE HOSTING ---
-    if (action === "configure_hosting") {
+    // --- CONFIGURE HOSTING (hosting.configure) ---
+    if (action === "configure_hosting" || action === "hosting.configure") {
       const llmModel = body.llm_model || "deepseek-chat";
       const systemPrompt = body.system_prompt || "";
       const trigger = body.trigger || { type: "interval", interval_minutes: 60 };
@@ -8831,8 +8941,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- TOGGLE HOSTING ---
-    if (action === "toggle_hosting") {
+    // --- TOGGLE HOSTING (hosting.toggle) ---
+    if (action === "toggle_hosting" || action === "hosting.toggle") {
       const enabled = body.enabled === true || body.enabled === "true";
 
       // Check if hosting is configured
@@ -8880,8 +8990,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- HOSTING LOGS ---
-    if (action === "hosting_logs") {
+    // --- HOSTING LOGS (hosting.logs) ---
+    if (action === "hosting_logs" || action === "hosting.logs") {
       const logLimit = Math.min(Math.max(parseInt(body.limit) || 20, 1), 100);
 
       const logsSnap = await db.collection("agents").doc(agent.id)
@@ -8914,8 +9024,8 @@ exports.agentGateway = onRequest({
       });
     }
 
-    // --- DELETE AGENT ---
-    if (action === "delete_agent") {
+    // --- DELETE AGENT (system.delete_agent) ---
+    if (action === "delete_agent" || action === "system.delete_agent") {
       try {
         // Delete hosting_logs subcollection
         const logsSnap = await db.collection("agents").doc(agent.id)
