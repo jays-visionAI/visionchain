@@ -8349,7 +8349,10 @@ exports.agentGateway = onRequest({
       domains: {
         system: {
           actions: [
-            { action: "system.register", auth: false, tier: "T1", cost: "0", params: { agent_name: "required", platform: "required", owner_email: "required", platform_id: "optional", referral_code: "optional" }, response: ["agent.wallet_address", "agent.api_key", "agent.referral_code", "agent.sbt", "user.uid", "user.email"], desc: "Register agent, get wallet + API key + SBT" },
+            {
+              action: "system.register", auth: false, tier: "T1", cost: "0", params: { agent_name: "required", platform: "required", owner_email: "required", platform_id: "optional", referral_code: "optional" },
+              response: ["agent.wallet_address", "agent.api_key", "agent.referral_code", "agent.sbt", "user.uid", "user.email"], desc: "Register agent, get wallet + API key + SBT"
+            },
             { action: "system.network_info", auth: false, tier: "T1", cost: "0", params: {}, response: ["chain_id", "rpc_url", "block_height", "contracts", "token"], desc: "Chain info, contracts, block height" },
             { action: "system.delete_agent", auth: true, tier: "T2", cost: "0.1", params: {}, response: ["deleted"], desc: "Permanently delete agent" },
           ],
