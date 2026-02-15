@@ -8533,6 +8533,44 @@ exports.agentGateway = onRequest({
         });
       }
 
+      // === RATE LIMIT: Max 3 agents per email ===
+      const normalizedEmailCheck = ownerEmail.toLowerCase().trim();
+      const emailAgents = await db.collection("agents")
+        .where("ownerEmail", "==", normalizedEmailCheck)
+        .get();
+      if (emailAgents.size >= 3) {
+        return res.status(429).json({
+          error: "Registration limit reached: max 3 agents per email address",
+          current_count: emailAgents.size,
+          email: normalizedEmailCheck,
+        });
+      }
+
+      // === RATE LIMIT: Max 5 registrations per IP per hour ===
+      const clientIp = req.headers["x-forwarded-for"] ?
+        req.headers["x-forwarded-for"].split(",")[0].trim() :
+        req.ip || "unknown";
+      if (clientIp !== "unknown") {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const recentRegs = await db.collection("registration_ips")
+          .where("ip", "==", clientIp)
+          .where("created_at", ">", oneHourAgo)
+          .get();
+        if (recentRegs.size >= 5) {
+          return res.status(429).json({
+            error: "Too many registrations from this IP. Max 5 per hour.",
+            retry_after_seconds: 3600,
+          });
+        }
+        // Log this registration IP (auto-cleanup via TTL or periodic job)
+        await db.collection("registration_ips").add({
+          ip: clientIp,
+          email: normalizedEmailCheck,
+          agent_name: agentName,
+          created_at: new Date(),
+        });
+      }
+
       // Check if agent already exists
       const existingAgent = await db.collection("agents").doc(agentName.toLowerCase()).get();
       if (existingAgent.exists) {
@@ -8543,7 +8581,7 @@ exports.agentGateway = onRequest({
             agent_name: data.agentName,
             wallet_address: data.walletAddress,
             owner_uid: data.ownerUid || null,
-            dashboard_url: `https://visionchain.co/agent/${data.agentName}`,
+            dashboard_url: `https://${siteDomain}/agent/${data.agentName}`,
           },
         });
       }
