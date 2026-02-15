@@ -5,8 +5,10 @@
     ],
     "exclude": [
         "/assets/*",
+        "/docs/*",
         "/*.js",
         "/*.css",
+        "/*.md",
         "/*.ico",
         "/*.png",
         "/*.svg",
