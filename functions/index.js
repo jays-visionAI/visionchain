@@ -8351,7 +8351,7 @@ exports.agentGateway = onRequest({
           actions: [
             {
               action: "system.register", auth: false, tier: "T1", cost: "0", params: { agent_name: "required", platform: "required", owner_email: "required", platform_id: "optional", referral_code: "optional" },
-              response: ["agent.wallet_address", "agent.api_key", "agent.referral_code", "agent.sbt", "user.uid", "user.email"], desc: "Register agent, get wallet + API key + SBT"
+              response: ["agent.wallet_address", "agent.api_key", "agent.referral_code", "agent.sbt", "user.uid", "user.email"], desc: "Register agent, get wallet + API key + SBT",
             },
             { action: "system.network_info", auth: false, tier: "T1", cost: "0", params: {}, response: ["chain_id", "rpc_url", "block_height", "contracts", "token"], desc: "Chain info, contracts, block height" },
             { action: "system.delete_agent", auth: true, tier: "T2", cost: "0.1", params: {}, response: ["deleted"], desc: "Permanently delete agent" },
@@ -10605,7 +10605,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */ }
+          } catch (_e8) {/* non-critical */}
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10805,7 +10805,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */ }
+        } catch (_e9) {/* no existing SBT */}
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10820,7 +10820,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */ }
+          } catch (_e10) {/* skip */}
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10866,7 +10866,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */ }
+        } catch (_e11) {/* no SBT */}
 
         return res.status(200).json({
           success: true,
