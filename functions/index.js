@@ -8332,18 +8332,20 @@ exports.agentGateway = onRequest({
   if (req.method === "OPTIONS") return res.status(204).send("");
 
   // GET requests serve full API discovery for AI agents
+  const project = process.env.GCLOUD_PROJECT || "visionchain-d19ed";
+  const siteDomain = project === "visionchain-staging" ? "staging.visionchain.co" : "visionchain.co";
   if (req.method === "GET") {
     return res.status(200).json({
       name: "Vision Chain Agent Gateway",
       version: "5.0.0",
       description: "EVM-compatible L1 blockchain with gasless transactions for AI agents. 59 actions across 15 domains.",
-      base_url: `https://us-central1-${process.env.GCLOUD_PROJECT || "visionchain-d19ed"}.cloudfunctions.net/agentGateway`,
+      base_url: `https://us-central1-${project}.cloudfunctions.net/agentGateway`,
       method: "POST",
       content_type: "application/json",
-      skill_url: "https://visionchain.co/skill.md",
-      docs_url: "https://visionchain.co/docs/agent-api.md",
-      openapi_url: "https://visionchain.co/openapi.json",
-      docs_ui: "https://visionchain.co/docs/agent-api",
+      skill_url: `https://${siteDomain}/skill.md`,
+      docs_url: `https://${siteDomain}/docs/agent-api.md`,
+      openapi_url: `https://${siteDomain}/openapi.json`,
+      docs_ui: `https://${siteDomain}/docs/agent-api`,
       chain: { name: "Vision Chain", chain_id: 3151909, rpc: "https://api.visionchain.co/rpc-proxy", token: "VCN", decimals: 18, gasless: true },
       quick_start: "POST with { action: 'system.register', agent_name: 'your-name', platform: 'openai', owner_email: 'you@email.com' } to get wallet + API key + 99 VCN",
       domains: {
