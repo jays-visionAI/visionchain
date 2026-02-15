@@ -8554,8 +8554,6 @@ exports.agentGateway = onRequest({
         const oneHourAgo = Date.now() - 60 * 60 * 1000;
         const ipRegs = await db.collection("registration_ips")
           .where("ip", "==", clientIp)
-          .orderBy("created_at", "desc")
-          .limit(10)
           .get();
         const recentCount = ipRegs.docs.filter((d) => {
           const ts = d.data().created_at;
