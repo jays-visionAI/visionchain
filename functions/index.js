@@ -8551,12 +8551,18 @@ exports.agentGateway = onRequest({
         req.headers["x-forwarded-for"].split(",")[0].trim() :
         req.ip || "unknown";
       if (clientIp !== "unknown") {
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const recentRegs = await db.collection("registration_ips")
+        const oneHourAgo = Date.now() - 60 * 60 * 1000;
+        const ipRegs = await db.collection("registration_ips")
           .where("ip", "==", clientIp)
-          .where("created_at", ">", oneHourAgo)
+          .orderBy("created_at", "desc")
+          .limit(10)
           .get();
-        if (recentRegs.size >= 5) {
+        const recentCount = ipRegs.docs.filter((d) => {
+          const ts = d.data().created_at;
+          const ms = ts && ts.toMillis ? ts.toMillis() : new Date(ts).getTime();
+          return ms > oneHourAgo;
+        }).length;
+        if (recentCount >= 5) {
           return res.status(429).json({
             error: "Too many registrations from this IP. Max 5 per hour.",
             retry_after_seconds: 3600,
@@ -8567,7 +8573,7 @@ exports.agentGateway = onRequest({
           ip: clientIp,
           email: normalizedEmailCheck,
           agent_name: agentName,
-          created_at: new Date(),
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
 
