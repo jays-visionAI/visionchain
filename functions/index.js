@@ -8858,18 +8858,23 @@ exports.agentGateway = onRequest({
     }
 
     // --- All other actions require authentication ---
-    if (!apiKeyParam) {
+    // mobile_node.register & mobile_node.leaderboard are public (no auth required)
+    // mobile_node.heartbeat/status/claim_reward use their own vcn_mn_ key auth internally
+    const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward"];
+    if (!apiKeyParam && !skipAgentAuth.includes(action)) {
       return res.status(401).json({ error: "Missing api_key. Register first." });
     }
-    const agent = await authenticateAgent(apiKeyParam);
-    if (!agent) {
-      return res.status(401).json({ error: "Invalid api_key" });
+    let agent = null;
+    if (!skipAgentAuth.includes(action)) {
+      agent = await authenticateAgent(apiKeyParam);
+      if (!agent) {
+        return res.status(401).json({ error: "Invalid api_key" });
+      }
+      // Update last active
+      db.collection("agents").doc(agent.id).update({
+        lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => { });
     }
-
-    // Update last active
-    db.collection("agents").doc(agent.id).update({
-      lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
-    }).catch(() => { });
 
     // === API FEE DEDUCTION MIDDLEWARE ===
     // Map legacy action names to canonical domain.method for pricing lookup
@@ -8911,7 +8916,7 @@ exports.agentGateway = onRequest({
     };
 
     const actionTier = ACTION_TIER_MAP[canonicalAction] || "T2";
-    if (["T3", "T4"].includes(actionTier)) {
+    if (agent && ["T3", "T4"].includes(actionTier)) {
       try {
         const nodeSnap = await db.collection("agents").doc(agent.id)
           .collection("node").doc("status").get();
@@ -8968,8 +8973,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // Deduct fee if cost > 0
-    if (feeVcn > 0) {
+    // Deduct fee if cost > 0 and agent exists
+    if (feeVcn > 0 && agent) {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
@@ -10688,7 +10693,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */ }
+          } catch (_e8) {/* non-critical */}
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10888,7 +10893,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */ }
+        } catch (_e9) {/* no existing SBT */}
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10903,7 +10908,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */ }
+          } catch (_e10) {/* skip */}
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10949,7 +10954,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */ }
+        } catch (_e11) {/* no SBT */}
 
         return res.status(200).json({
           success: true,
@@ -11659,11 +11664,11 @@ exports.agentGateway = onRequest({
     // --- mobile_node.register ---
     if (action === "mobile_node.register") {
       try {
-        const { email, device_type, referral_code } = req.body;
-        if (!email || !device_type) {
+        const { email, device_type: deviceType, referral_code: referralCodeInput } = req.body;
+        if (!email || !deviceType) {
           return res.status(400).json({ error: "email and device_type (android|pwa) are required" });
         }
-        if (!["android", "pwa"].includes(device_type)) {
+        if (!["android", "pwa"].includes(deviceType)) {
           return res.status(400).json({ error: "device_type must be 'android' or 'pwa'" });
         }
         // Validate email format
@@ -11692,9 +11697,9 @@ exports.agentGateway = onRequest({
 
         // Handle referral
         let referredBy = null;
-        if (referral_code) {
+        if (referralCodeInput) {
           const refSnap = await db.collection("mobile_nodes")
-            .where("referral_code", "==", referral_code)
+            .where("referral_code", "==", referralCodeInput)
             .limit(1)
             .get();
           if (!refSnap.empty) {
@@ -11706,7 +11711,7 @@ exports.agentGateway = onRequest({
 
         const nodeDoc = {
           email,
-          device_type,
+          device_type: deviceType,
           wallet_address: nodeWallet.address,
           private_key_encrypted: nodeWallet.privateKey,
           api_key: nodeApiKey,
@@ -11732,7 +11737,7 @@ exports.agentGateway = onRequest({
 
         await db.collection("mobile_nodes").doc(nodeId).set(nodeDoc);
 
-        console.log(`[Mobile Node] Registered: ${nodeId} | ${email} | ${device_type}`);
+        console.log(`[Mobile Node] Registered: ${nodeId} | ${email} | ${deviceType}`);
 
         return res.status(201).json({
           success: true,
@@ -11740,7 +11745,7 @@ exports.agentGateway = onRequest({
           api_key: nodeApiKey,
           wallet_address: nodeWallet.address,
           referral_code: myReferralCode,
-          device_type,
+          device_type: deviceType,
           message: "Mobile node registered. Send heartbeats to start earning VCN.",
         });
       } catch (e) {
@@ -11753,7 +11758,7 @@ exports.agentGateway = onRequest({
     if (action === "mobile_node.heartbeat") {
       try {
         // Auth via api_key (mobile node specific)
-        const mnApiKey = apiKey;
+        const mnApiKey = apiKeyParam;
         if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
           return res.status(401).json({ error: "Invalid mobile node API key" });
         }
@@ -11770,7 +11775,7 @@ exports.agentGateway = onRequest({
           return res.status(403).json({ error: "Mobile node is deactivated" });
         }
 
-        const { mode, battery_pct, data_used_mb } = req.body;
+        const { mode, battery_pct: batteryPct, data_used_mb: dataUsedMb } = req.body;
         if (!mode || !["wifi_full", "cellular_min"].includes(mode)) {
           return res.status(400).json({ error: "mode must be 'wifi_full' or 'cellular_min'" });
         }
@@ -11841,8 +11846,8 @@ exports.agentGateway = onRequest({
         };
 
         // Track battery if provided
-        if (battery_pct !== undefined) updateData.last_battery_pct = battery_pct;
-        if (data_used_mb !== undefined) updateData.last_data_used_mb = data_used_mb;
+        if (batteryPct !== undefined) updateData.last_battery_pct = batteryPct;
+        if (dataUsedMb !== undefined) updateData.last_data_used_mb = dataUsedMb;
 
         await mnDoc.ref.update(updateData);
 
@@ -11852,7 +11857,7 @@ exports.agentGateway = onRequest({
           weight,
           uptime_delta: uptimeDelta,
           reward: heartbeatReward.toFixed(6),
-          battery_pct: battery_pct || null,
+          battery_pct: batteryPct || null,
           timestamp: admin.firestore.Timestamp.fromDate(now),
         });
 
@@ -11877,7 +11882,7 @@ exports.agentGateway = onRequest({
     // --- mobile_node.status ---
     if (action === "mobile_node.status") {
       try {
-        const mnApiKey = apiKey;
+        const mnApiKey = apiKeyParam;
         if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
           return res.status(401).json({ error: "Invalid mobile node API key" });
         }
@@ -11938,7 +11943,7 @@ exports.agentGateway = onRequest({
     // --- mobile_node.claim_reward ---
     if (action === "mobile_node.claim_reward") {
       try {
-        const mnApiKey = apiKey;
+        const mnApiKey = apiKeyParam;
         if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
           return res.status(401).json({ error: "Invalid mobile node API key" });
         }
@@ -12010,7 +12015,7 @@ exports.agentGateway = onRequest({
         const { scope = "global", limit: lim = 50 } = req.body;
         const safeLimit = Math.min(Math.max(parseInt(lim) || 50, 1), 100);
 
-        let query = db.collection("mobile_nodes")
+        const query = db.collection("mobile_nodes")
           .where("status", "==", "active")
           .orderBy("total_uptime_seconds", "desc")
           .limit(safeLimit);
