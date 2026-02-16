@@ -686,8 +686,8 @@
       ]
     },
     "/Users/sangjaeseo/Antigravity/Vision-Chain/contracts/VisionAgentSBT.sol": {
-      "lastModificationDate": 1770958275437,
-      "contentHash": "d72369ddbc430ceaf86f7def86a094fb",
+      "lastModificationDate": 1771222079526,
+      "contentHash": "48062a18e0856f15d93d5aaa994ffe03",
       "sourceName": "contracts/VisionAgentSBT.sol",
       "solcConfig": {
         "version": "0.8.20",

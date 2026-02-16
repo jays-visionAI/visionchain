@@ -4264,6 +4264,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 userNodes={ownedNodes()}
                                 claimNodeRewards={claimNodeRewards}
                                 purchaseNode={purchaseNode}
+                                userEmail={auth.user()?.email || undefined}
                             />
                         </Show>
 

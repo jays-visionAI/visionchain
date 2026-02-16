@@ -1,12 +1,14 @@
 import { For, Show } from 'solid-js';
 import { Check, Plus } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
+import { MobileNodeDashboard } from './MobileNodeDashboard';
 import { useI18n } from '../../i18n/i18nContext';
 
 interface WalletNodesProps {
     userNodes: any[];
     claimNodeRewards: () => void;
     purchaseNode: (tier: string) => void;
+    userEmail?: string;
 }
 
 // Constants for Pricing
@@ -40,6 +42,8 @@ export const WalletNodes = (props: WalletNodesProps) => {
                 />
 
                 <div class="space-y-10">
+                    {/* Mobile Node Dashboard */}
+                    <MobileNodeDashboard userEmail={props.userEmail} />
                     {/* Active Nodes List */}
                     <div class="space-y-4">
                         <h3 class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] px-1">{t('nodes.yourFleet')}</h3>
