@@ -8471,8 +8471,18 @@ exports.agentGateway = onRequest({
             { action: "social.profile", auth: true, tier: "T1", cost: "0", params: {}, response: ["agent_name", "wallet_address", "rp_points", "sbt", "created_at"], desc: "Full agent profile" },
           ],
         },
+        mobile_node: {
+          description: "Mobile Node (S-M Class) -- earn VCN by contributing network uptime from Android app or PWA.",
+          actions: [
+            { action: "mobile_node.register", auth: false, tier: "T1", cost: "0", params: { email: "required", device_type: "required (android|pwa)", referral_code: "optional" }, response: ["node_id", "api_key", "wallet_address"], desc: "Register mobile node, get API key + wallet" },
+            { action: "mobile_node.heartbeat", auth: true, tier: "T1", cost: "0", params: { mode: "required (wifi_full|cellular_min)", battery_pct: "optional", data_used_mb: "optional" }, response: ["accepted", "epoch", "uptime_today_sec", "pending_reward"], desc: "Send heartbeat (5min WiFi / 30min cellular)" },
+            { action: "mobile_node.status", auth: true, tier: "T1", cost: "0", params: {}, response: ["node_id", "device_type", "status", "total_uptime_hours", "current_epoch", "pending_reward", "claimed_reward", "weight", "network_rank", "total_nodes"], desc: "Full node status + rewards" },
+            { action: "mobile_node.claim_reward", auth: true, tier: "T1", cost: "0", params: {}, response: ["claimed_amount", "tx_hash", "new_balance"], desc: "Claim pending epoch rewards" },
+            { action: "mobile_node.leaderboard", auth: false, tier: "T1", cost: "0", params: { scope: "optional (global|country)", limit: "optional (1-100, default 50)" }, response: ["rankings[]", "total_nodes"], desc: "Node contribution leaderboard" },
+          ],
+        },
       },
-      total_actions: 59,
+      total_actions: 64,
       authentication: {
         methods: ["Authorization: Bearer <api_key>", "x-api-key: <api_key>", "POST body: api_key"],
         preferred: "Authorization: Bearer <api_key>",
@@ -10678,7 +10688,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */}
+          } catch (_e8) {/* non-critical */ }
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10878,7 +10888,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */}
+        } catch (_e9) {/* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10893,7 +10903,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */}
+          } catch (_e10) {/* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10939,7 +10949,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */}
+        } catch (_e11) {/* no SBT */ }
 
         return res.status(200).json({
           success: true,
@@ -11643,6 +11653,400 @@ exports.agentGateway = onRequest({
     }
 
     // =====================================================
+    // MOBILE NODE (S-M Class) -- Earn VCN with uptime
+    // =====================================================
+
+    // --- mobile_node.register ---
+    if (action === "mobile_node.register") {
+      try {
+        const { email, device_type, referral_code } = req.body;
+        if (!email || !device_type) {
+          return res.status(400).json({ error: "email and device_type (android|pwa) are required" });
+        }
+        if (!["android", "pwa"].includes(device_type)) {
+          return res.status(400).json({ error: "device_type must be 'android' or 'pwa'" });
+        }
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ error: "Invalid email format" });
+        }
+        // Check if already registered with this email
+        const existingSnap = await db.collection("mobile_nodes")
+          .where("email", "==", email)
+          .where("status", "==", "active")
+          .limit(1)
+          .get();
+        if (!existingSnap.empty) {
+          const existing = existingSnap.docs[0];
+          return res.status(409).json({
+            error: "Mobile node already registered for this email",
+            node_id: existing.id,
+            hint: "Use your existing api_key to send heartbeats",
+          });
+        }
+        // Generate wallet for mobile node
+        const nodeWallet = ethers.Wallet.createRandom();
+        const nodeApiKey = "vcn_mn_" + require("crypto").randomBytes(24).toString("hex");
+        const nodeId = "mn_" + require("crypto").randomBytes(8).toString("hex");
+
+        // Handle referral
+        let referredBy = null;
+        if (referral_code) {
+          const refSnap = await db.collection("mobile_nodes")
+            .where("referral_code", "==", referral_code)
+            .limit(1)
+            .get();
+          if (!refSnap.empty) {
+            referredBy = refSnap.docs[0].id;
+          }
+        }
+
+        const myReferralCode = "mn_" + require("crypto").randomBytes(4).toString("hex");
+
+        const nodeDoc = {
+          email,
+          device_type,
+          wallet_address: nodeWallet.address,
+          private_key_encrypted: nodeWallet.privateKey,
+          api_key: nodeApiKey,
+          referral_code: myReferralCode,
+          referred_by: referredBy,
+          status: "active",
+          current_mode: "offline",
+          weight: 0,
+          total_uptime_seconds: 0,
+          today_uptime_seconds: 0,
+          last_heartbeat: null,
+          last_heartbeat_mode: null,
+          current_epoch: 0,
+          pending_reward: "0",
+          claimed_reward: "0",
+          total_earned: "0",
+          heartbeat_count: 0,
+          streak_days: 0,
+          country: null,
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        await db.collection("mobile_nodes").doc(nodeId).set(nodeDoc);
+
+        console.log(`[Mobile Node] Registered: ${nodeId} | ${email} | ${device_type}`);
+
+        return res.status(201).json({
+          success: true,
+          node_id: nodeId,
+          api_key: nodeApiKey,
+          wallet_address: nodeWallet.address,
+          referral_code: myReferralCode,
+          device_type,
+          message: "Mobile node registered. Send heartbeats to start earning VCN.",
+        });
+      } catch (e) {
+        console.error("[Mobile Node] Register error:", e);
+        return res.status(500).json({ error: `Registration failed: ${e.message}` });
+      }
+    }
+
+    // --- mobile_node.heartbeat ---
+    if (action === "mobile_node.heartbeat") {
+      try {
+        // Auth via api_key (mobile node specific)
+        const mnApiKey = apiKey;
+        if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
+          return res.status(401).json({ error: "Invalid mobile node API key" });
+        }
+        const mnSnap = await db.collection("mobile_nodes")
+          .where("api_key", "==", mnApiKey)
+          .limit(1)
+          .get();
+        if (mnSnap.empty) {
+          return res.status(401).json({ error: "Mobile node not found" });
+        }
+        const mnDoc = mnSnap.docs[0];
+        const mnData = mnDoc.data();
+        if (mnData.status !== "active") {
+          return res.status(403).json({ error: "Mobile node is deactivated" });
+        }
+
+        const { mode, battery_pct, data_used_mb } = req.body;
+        if (!mode || !["wifi_full", "cellular_min"].includes(mode)) {
+          return res.status(400).json({ error: "mode must be 'wifi_full' or 'cellular_min'" });
+        }
+
+        // Weight based on mode and device type
+        const weightMap = {
+          android_wifi_full: 0.5,
+          android_cellular_min: 0.1,
+          pwa_wifi_full: 0.3,
+          pwa_cellular_min: 0,
+        };
+        const weightKey = `${mnData.device_type}_${mode}`;
+        const weight = weightMap[weightKey] || 0;
+
+        if (weight === 0) {
+          return res.status(200).json({
+            success: true,
+            accepted: false,
+            reason: "PWA cellular mode does not earn rewards",
+            weight: 0,
+          });
+        }
+
+        // Calculate time since last heartbeat
+        const now = new Date();
+        const lastHB = mnData.last_heartbeat?.toDate?.() || null;
+        let uptimeDelta = 0;
+        if (lastHB) {
+          const diffMs = now.getTime() - lastHB.getTime();
+          // Max credit: 10 min for wifi (5min interval + buffer), 40 min for cellular (30min interval + buffer)
+          const maxDeltaSec = mode === "wifi_full" ? 600 : 2400;
+          uptimeDelta = Math.min(Math.floor(diffMs / 1000), maxDeltaSec);
+        } else {
+          // First heartbeat - credit 1 minute
+          uptimeDelta = 60;
+        }
+
+        // Epoch calculation (24h epoch, starting midnight UTC)
+        const epochStart = new Date(now);
+        epochStart.setUTCHours(0, 0, 0, 0);
+        const currentEpoch = Math.floor(epochStart.getTime() / (24 * 3600 * 1000));
+
+        // Check if epoch changed (new day) -> reset daily uptime
+        const isNewEpoch = currentEpoch !== (mnData.current_epoch || 0);
+
+        // Calculate reward for this heartbeat interval
+        // Base reward rate: weight * uptimeDelta * REWARD_RATE_PER_SEC
+        // REWARD_RATE_PER_SEC is dynamically set, for now: 0.001 VCN/sec for weight=1.0
+        const REWARD_RATE_PER_SEC = 0.001;
+        const heartbeatReward = weight * uptimeDelta * REWARD_RATE_PER_SEC;
+
+        const prevPending = parseFloat(mnData.pending_reward || "0");
+        const newPending = isNewEpoch ? heartbeatReward : prevPending + heartbeatReward;
+
+        const prevTodayUptime = isNewEpoch ? 0 : (mnData.today_uptime_seconds || 0);
+
+        const updateData = {
+          last_heartbeat: admin.firestore.Timestamp.fromDate(now),
+          last_heartbeat_mode: mode,
+          current_mode: mode,
+          weight,
+          total_uptime_seconds: (mnData.total_uptime_seconds || 0) + uptimeDelta,
+          today_uptime_seconds: prevTodayUptime + uptimeDelta,
+          current_epoch: currentEpoch,
+          pending_reward: newPending.toFixed(6),
+          heartbeat_count: (mnData.heartbeat_count || 0) + 1,
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        // Track battery if provided
+        if (battery_pct !== undefined) updateData.last_battery_pct = battery_pct;
+        if (data_used_mb !== undefined) updateData.last_data_used_mb = data_used_mb;
+
+        await mnDoc.ref.update(updateData);
+
+        // Log heartbeat to subcollection for analytics
+        await mnDoc.ref.collection("heartbeats").add({
+          mode,
+          weight,
+          uptime_delta: uptimeDelta,
+          reward: heartbeatReward.toFixed(6),
+          battery_pct: battery_pct || null,
+          timestamp: admin.firestore.Timestamp.fromDate(now),
+        });
+
+        return res.status(200).json({
+          success: true,
+          accepted: true,
+          mode,
+          weight,
+          uptime_delta_sec: uptimeDelta,
+          epoch: currentEpoch,
+          uptime_today_sec: prevTodayUptime + uptimeDelta,
+          pending_reward: newPending.toFixed(6),
+          heartbeat_reward: heartbeatReward.toFixed(6),
+          next_heartbeat_sec: mode === "wifi_full" ? 300 : 1800,
+        });
+      } catch (e) {
+        console.error("[Mobile Node] Heartbeat error:", e);
+        return res.status(500).json({ error: `Heartbeat failed: ${e.message}` });
+      }
+    }
+
+    // --- mobile_node.status ---
+    if (action === "mobile_node.status") {
+      try {
+        const mnApiKey = apiKey;
+        if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
+          return res.status(401).json({ error: "Invalid mobile node API key" });
+        }
+        const mnSnap = await db.collection("mobile_nodes")
+          .where("api_key", "==", mnApiKey)
+          .limit(1)
+          .get();
+        if (mnSnap.empty) {
+          return res.status(401).json({ error: "Mobile node not found" });
+        }
+        const mnDoc = mnSnap.docs[0];
+        const mn = mnDoc.data();
+
+        // Get total active nodes count and rank
+        const totalNodesSnap = await db.collection("mobile_nodes")
+          .where("status", "==", "active")
+          .count()
+          .get();
+        const totalNodes = totalNodesSnap.data().count;
+
+        // Calculate rank by total_uptime_seconds
+        const higherRankSnap = await db.collection("mobile_nodes")
+          .where("status", "==", "active")
+          .where("total_uptime_seconds", ">", mn.total_uptime_seconds || 0)
+          .count()
+          .get();
+        const rank = higherRankSnap.data().count + 1;
+
+        return res.status(200).json({
+          success: true,
+          node_id: mnDoc.id,
+          email: mn.email,
+          device_type: mn.device_type,
+          wallet_address: mn.wallet_address,
+          status: mn.status,
+          current_mode: mn.current_mode || "offline",
+          weight: mn.weight || 0,
+          total_uptime_hours: parseFloat(((mn.total_uptime_seconds || 0) / 3600).toFixed(2)),
+          today_uptime_hours: parseFloat(((mn.today_uptime_seconds || 0) / 3600).toFixed(2)),
+          current_epoch: mn.current_epoch || 0,
+          pending_reward: mn.pending_reward || "0",
+          claimed_reward: mn.claimed_reward || "0",
+          total_earned: mn.total_earned || "0",
+          heartbeat_count: mn.heartbeat_count || 0,
+          streak_days: mn.streak_days || 0,
+          last_heartbeat: mn.last_heartbeat?.toDate?.()?.toISOString() || null,
+          network_rank: rank,
+          total_nodes: totalNodes,
+          referral_code: mn.referral_code,
+          created_at: mn.created_at?.toDate?.()?.toISOString() || null,
+        });
+      } catch (e) {
+        console.error("[Mobile Node] Status error:", e);
+        return res.status(500).json({ error: `Status failed: ${e.message}` });
+      }
+    }
+
+    // --- mobile_node.claim_reward ---
+    if (action === "mobile_node.claim_reward") {
+      try {
+        const mnApiKey = apiKey;
+        if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
+          return res.status(401).json({ error: "Invalid mobile node API key" });
+        }
+        const mnSnap = await db.collection("mobile_nodes")
+          .where("api_key", "==", mnApiKey)
+          .limit(1)
+          .get();
+        if (mnSnap.empty) {
+          return res.status(401).json({ error: "Mobile node not found" });
+        }
+        const mnDoc = mnSnap.docs[0];
+        const mn = mnDoc.data();
+
+        const pendingAmount = parseFloat(mn.pending_reward || "0");
+        if (pendingAmount < 0.001) {
+          return res.status(400).json({ error: "No pending rewards to claim (minimum 0.001 VCN)" });
+        }
+
+        // Transfer VCN to node wallet
+        const EXECUTOR_PK = process.env.VCN_EXECUTOR_PK || process.env.EXECUTOR_PK;
+        if (!EXECUTOR_PK) {
+          return res.status(500).json({ error: "Executor key not configured" });
+        }
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const executor = new ethers.Wallet(EXECUTOR_PK, provider);
+        const vcnContract = new ethers.Contract(VCN_TOKEN_ADDRESS, [
+          "function transfer(address to, uint256 amount) returns (bool)",
+        ], executor);
+
+        const amountWei = ethers.parseEther(pendingAmount.toFixed(6));
+        const tx = await vcnContract.transfer(mn.wallet_address, amountWei);
+        const receipt = await tx.wait();
+
+        // Update Firestore
+        const prevClaimed = parseFloat(mn.claimed_reward || "0");
+        const prevTotal = parseFloat(mn.total_earned || "0");
+        await mnDoc.ref.update({
+          pending_reward: "0",
+          claimed_reward: (prevClaimed + pendingAmount).toFixed(6),
+          total_earned: (prevTotal + pendingAmount).toFixed(6),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Log claim
+        await mnDoc.ref.collection("claims").add({
+          amount: pendingAmount.toFixed(6),
+          tx_hash: receipt.hash,
+          epoch: mn.current_epoch,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`[Mobile Node] Claimed ${pendingAmount.toFixed(6)} VCN for ${mnDoc.id} | tx: ${receipt.hash}`);
+
+        return res.status(200).json({
+          success: true,
+          claimed_amount: pendingAmount.toFixed(6),
+          tx_hash: receipt.hash,
+          new_claimed_total: (prevClaimed + pendingAmount).toFixed(6),
+        });
+      } catch (e) {
+        console.error("[Mobile Node] Claim error:", e);
+        return res.status(500).json({ error: `Claim failed: ${e.message}` });
+      }
+    }
+
+    // --- mobile_node.leaderboard ---
+    if (action === "mobile_node.leaderboard") {
+      try {
+        const { scope = "global", limit: lim = 50 } = req.body;
+        const safeLimit = Math.min(Math.max(parseInt(lim) || 50, 1), 100);
+
+        let query = db.collection("mobile_nodes")
+          .where("status", "==", "active")
+          .orderBy("total_uptime_seconds", "desc")
+          .limit(safeLimit);
+
+        const snap = await query.get();
+        const rankings = snap.docs.map((doc, index) => {
+          const d = doc.data();
+          return {
+            rank: index + 1,
+            node_id: doc.id,
+            device_type: d.device_type,
+            total_uptime_hours: parseFloat(((d.total_uptime_seconds || 0) / 3600).toFixed(2)),
+            total_earned: d.total_earned || "0",
+            heartbeat_count: d.heartbeat_count || 0,
+            streak_days: d.streak_days || 0,
+          };
+        });
+
+        const totalSnap = await db.collection("mobile_nodes")
+          .where("status", "==", "active")
+          .count()
+          .get();
+
+        return res.status(200).json({
+          success: true,
+          scope,
+          rankings,
+          total_nodes: totalSnap.data().count,
+        });
+      } catch (e) {
+        console.error("[Mobile Node] Leaderboard error:", e);
+        return res.status(500).json({ error: `Leaderboard failed: ${e.message}` });
+      }
+    }
+
+    // =====================================================
 
     return res.status(400).json({
       error: `Unknown action: ${action}`,
@@ -11663,6 +12067,8 @@ exports.agentGateway = onRequest({
         "webhook.subscribe", "webhook.unsubscribe", "webhook.list", "webhook.test", "webhook.logs",
         "social.referral", "social.leaderboard", "social.profile",
         "hosting.configure", "hosting.toggle", "hosting.logs",
+        "mobile_node.register", "mobile_node.heartbeat", "mobile_node.status",
+        "mobile_node.claim_reward", "mobile_node.leaderboard",
       ],
     });
   } catch (err) {
