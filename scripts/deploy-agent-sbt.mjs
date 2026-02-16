@@ -2,6 +2,7 @@
  * Deploy VisionAgentSBT contract using ethers.js directly.
  * Usage: PRIVATE_KEY=0x... node scripts/deploy-agent-sbt.mjs
  */
+import 'dotenv/config';
 import { ethers } from 'ethers';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -11,11 +12,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const RPC_URL = "https://api.visionchain.co/rpc-proxy";
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
+const PRIVATE_KEY = process.env.VCN_EXECUTOR_PK || process.env.EXECUTOR_PK || process.env.PRIVATE_KEY;
 
 if (!PRIVATE_KEY) {
-    console.error("Error: PRIVATE_KEY env variable required");
-    console.error("Usage: PRIVATE_KEY=0x... node scripts/deploy-agent-sbt.mjs");
+    console.error("Error: VCN_EXECUTOR_PK or PRIVATE_KEY env variable required");
+    console.error("Usage: VCN_EXECUTOR_PK=0x... node scripts/deploy-agent-sbt.mjs");
     process.exit(1);
 }
 

@@ -734,7 +734,7 @@ const BRIDGE_STAKING_ABI = [
 ];
 
 // --- VisionAgentSBT Contract Config (EIP-5192) ---
-const AGENT_SBT_ADDRESS = "0xc7398A445B0274531BCfA4d1011E7bAf8034831d";
+const AGENT_SBT_ADDRESS = "0x25fD5C55Dd5ed38DcaF2821AE5Cba1092f6BDffc";
 const AGENT_SBT_ABI = [
   "function mintAgentIdentity(address to, string agentName, string platform) external returns (uint256)",
   "function getAgentByAddress(address wallet) external view returns (uint256, string, string, uint256)",
@@ -742,7 +742,11 @@ const AGENT_SBT_ABI = [
   "function locked(uint256 tokenId) external view returns (bool)",
   "function isMinter(address) external view returns (bool)",
   "function setMinter(address minter, bool allowed) external",
+  "function revokeIdentity(uint256 tokenId) external",
+  "function isRevoked(uint256 tokenId) external view returns (bool)",
+  "function revoked(uint256 tokenId) external view returns (bool)",
   "event Locked(uint256 tokenId)",
+  "event Revoked(uint256 indexed tokenId, string agentName)",
   "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)",
 ];
 const SBT_MINT_FEE = "1"; // 1 VCN minting fee
@@ -9728,24 +9732,49 @@ exports.agentGateway = onRequest({
     // --- DELETE AGENT (system.delete_agent) ---
     if (action === "delete_agent" || action === "system.delete_agent") {
       try {
-        // Delete hosting_logs subcollection
-        const logsSnap = await db.collection("agents").doc(agent.id)
-          .collection("hosting_logs").limit(500).get();
-        const batch = db.batch();
-        logsSnap.forEach((doc) => batch.delete(doc.ref));
+        // Step 1: Revoke SBT on-chain (if agent has a wallet/SBT)
+        let sbtResult = { status: "skipped" };
+        if (agent.walletAddress) {
+          try {
+            const provider = new ethers.JsonRpcProvider(RPC_URL);
+            const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+            const sbtContract = new ethers.Contract(AGENT_SBT_ADDRESS, AGENT_SBT_ABI, adminWallet);
 
-        // Delete transactions subcollection
-        const txSnap = await db.collection("agents").doc(agent.id)
-          .collection("transactions").limit(500).get();
-        txSnap.forEach((doc) => batch.delete(doc.ref));
+            // Get tokenId for this agent's wallet
+            const [tokenId] = await sbtContract.getAgentByAddress(agent.walletAddress);
+            if (tokenId > 0n) {
+              const alreadyRevoked = await sbtContract.isRevoked(tokenId);
+              if (!alreadyRevoked) {
+                const gasOpts = { gasLimit: 200000, gasPrice: ethers.parseUnits("1", "gwei") };
+                const tx = await sbtContract.revokeIdentity(tokenId, gasOpts);
+                await tx.wait();
+                sbtResult = { status: "revoked", token_id: Number(tokenId), tx_hash: tx.hash };
+                console.log(`[Agent Gateway] SBT revoked: tokenId=${tokenId} tx=${tx.hash}`);
+              } else {
+                sbtResult = { status: "already_revoked", token_id: Number(tokenId) };
+              }
+            } else {
+              sbtResult = { status: "no_sbt_found" };
+            }
+          } catch (sbtErr) {
+            console.error("[Agent Gateway] SBT revoke failed:", sbtErr.message);
+            sbtResult = { status: "revoke_failed", error: sbtErr.message };
+          }
+        }
 
-        // Delete the agent document itself
-        batch.delete(db.collection("agents").doc(agent.id));
-        await batch.commit();
+        // Step 2: Soft-delete agent in Firestore (preserve for audit)
+        await db.collection("agents").doc(agent.id).update({
+          status: "deleted",
+          deletedAt: admin.firestore.FieldValue.serverTimestamp(),
+          apiKey: null, // Invalidate API key
+          previousApiKey: agent.apiKey, // Keep for reference
+        });
 
         return res.status(200).json({
           success: true,
-          message: `Agent '${agent.agentName}' has been permanently deleted.`,
+          message: `Agent '${agent.agentName}' has been deleted.`,
+          sbt: sbtResult,
+          note: "On-chain SBT record preserved as revoked. Firestore data soft-deleted.",
         });
       } catch (e) {
         console.error("[Agent Gateway] Delete failed:", e);

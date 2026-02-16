@@ -19,6 +19,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract VisionAgentSBT is ERC721, Ownable {
     // === Events (EIP-5192) ===
     event Locked(uint256 tokenId);
+    event Revoked(uint256 indexed tokenId, string agentName);
 
     // === State ===
     uint256 private _nextTokenId;
@@ -37,6 +38,8 @@ contract VisionAgentSBT is ERC721, Ownable {
     mapping(bytes32 => bool) public nameExists;
     // authorized minters
     mapping(address => bool) public isMinter;
+    // revoked tokens (agent deleted but on-chain record preserved)
+    mapping(uint256 => bool) public revoked;
 
     // === Errors ===
     error SoulBound();
@@ -44,6 +47,8 @@ contract VisionAgentSBT is ERC721, Ownable {
     error AgentNameTaken();
     error AlreadyHasSBT();
     error EmptyName();
+    error AlreadyRevoked();
+    error TokenNotExists();
 
     // === Modifiers ===
     modifier onlyMinter() {
@@ -171,6 +176,26 @@ contract VisionAgentSBT is ERC721, Ownable {
 
     function setMinter(address minter, bool allowed) external onlyOwner {
         isMinter[minter] = allowed;
+    }
+
+    /**
+     * @dev Revokes an agent's SBT. Token stays on-chain but is marked as invalid.
+     * Used when an agent is deleted — preserves on-chain history.
+     * @param tokenId The token ID to revoke
+     */
+    function revokeIdentity(uint256 tokenId) external onlyMinter {
+        if (tokenId == 0 || tokenId >= _nextTokenId) revert TokenNotExists();
+        if (revoked[tokenId]) revert AlreadyRevoked();
+        revoked[tokenId] = true;
+        AgentInfo memory info = agentInfo[tokenId];
+        emit Revoked(tokenId, info.agentName);
+    }
+
+    /**
+     * @dev Check if a token has been revoked.
+     */
+    function isRevoked(uint256 tokenId) external view returns (bool) {
+        return revoked[tokenId];
     }
 
     // === Internal Helpers ===
