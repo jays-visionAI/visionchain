@@ -10693,7 +10693,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */}
+          } catch (_e8) {/* non-critical */ }
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10893,7 +10893,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */}
+        } catch (_e9) {/* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10908,7 +10908,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */}
+          } catch (_e10) {/* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10954,7 +10954,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */}
+        } catch (_e11) {/* no SBT */ }
 
         return res.status(200).json({
           success: true,
@@ -11684,10 +11684,14 @@ exports.agentGateway = onRequest({
           .get();
         if (!existingSnap.empty) {
           const existing = existingSnap.docs[0];
-          return res.status(409).json({
-            error: "Mobile node already registered for this email",
+          const existingData = existing.data();
+          return res.status(200).json({
+            success: true,
             node_id: existing.id,
-            hint: "Use your existing api_key to send heartbeats",
+            api_key: existingData.api_key,
+            wallet_address: existingData.wallet_address,
+            referral_code: existingData.referral_code,
+            already_registered: true,
           });
         }
         // Generate wallet for mobile node
