@@ -1,8 +1,10 @@
 import { createSignal, onMount, onCleanup, Show, For, createEffect } from 'solid-js';
 
+import { ENV } from '../../services/envConfig';
+
 // ---------- API ----------
 const getApiUrl = () => {
-    if (import.meta.env.VITE_CHAIN_ENV === 'staging') {
+    if (ENV === 'staging') {
         return 'https://us-central1-visionchain-staging.cloudfunctions.net/agentGateway';
     }
     return 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway';
