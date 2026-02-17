@@ -9,12 +9,12 @@ const getApiUrl = () => {
 };
 
 const api = async (action: string, body: Record<string, unknown> = {}, apiKey?: string) => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    const payload: Record<string, unknown> = { action, ...body };
+    if (apiKey) payload.api_key = apiKey;
     const res = await fetch(getApiUrl(), {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ action, ...body }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
     });
     return res.json();
 };
@@ -452,8 +452,8 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                     <button
                                         onClick={() => isRunning() ? stopHeartbeat() : startHeartbeat()}
                                         class={`w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-2xl ${isRunning()
-                                                ? 'bg-gradient-to-br from-red-600 to-red-700 shadow-red-500/30 hover:shadow-red-500/50'
-                                                : 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/30 hover:shadow-cyan-500/50'
+                                            ? 'bg-gradient-to-br from-red-600 to-red-700 shadow-red-500/30 hover:shadow-red-500/50'
+                                            : 'bg-gradient-to-br from-cyan-500 to-blue-600 shadow-cyan-500/30 hover:shadow-cyan-500/50'
                                             }`}
                                     >
                                         <Show when={isRunning()} fallback={<PlayIcon class="w-6 h-6 text-white ml-0.5" />}>
@@ -592,9 +592,9 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                     {(entry) => (
                                         <div class={`flex items-center gap-4 px-6 py-3.5 hover:bg-white/[0.02] transition-colors ${entry.node_id === nodeId() ? 'bg-cyan-500/5' : ''}`}>
                                             <div class={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${entry.rank === 1 ? 'bg-yellow-500/10 text-yellow-400' :
-                                                    entry.rank === 2 ? 'bg-gray-400/10 text-gray-300' :
-                                                        entry.rank === 3 ? 'bg-amber-600/10 text-amber-500' :
-                                                            'bg-white/[0.03] text-gray-500'
+                                                entry.rank === 2 ? 'bg-gray-400/10 text-gray-300' :
+                                                    entry.rank === 3 ? 'bg-amber-600/10 text-amber-500' :
+                                                        'bg-white/[0.03] text-gray-500'
                                                 }`}>
                                                 {entry.rank}
                                             </div>
