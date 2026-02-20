@@ -10694,7 +10694,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */ }
+          } catch (_e8) {/* non-critical */}
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10894,7 +10894,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */ }
+        } catch (_e9) {/* no existing SBT */}
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10909,7 +10909,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */ }
+          } catch (_e10) {/* skip */}
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10955,7 +10955,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */ }
+        } catch (_e11) {/* no SBT */}
 
         return res.status(200).json({
           success: true,
