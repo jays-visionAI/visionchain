@@ -8478,6 +8478,7 @@ exports.agentGateway = onRequest({
             { action: "mobile_node.heartbeat", auth: true, tier: "T1", cost: "0", params: { mode: "required (wifi_full|cellular_min)", battery_pct: "optional", data_used_mb: "optional" }, response: ["accepted", "epoch", "uptime_today_sec", "pending_reward"], desc: "Send heartbeat (5min WiFi / 30min cellular)" },
             { action: "mobile_node.status", auth: true, tier: "T1", cost: "0", params: {}, response: ["node_id", "device_type", "status", "total_uptime_hours", "current_epoch", "pending_reward", "claimed_reward", "weight", "network_rank", "total_nodes"], desc: "Full node status + rewards" },
             { action: "mobile_node.claim_reward", auth: true, tier: "T1", cost: "0", params: {}, response: ["claimed_amount", "tx_hash", "new_balance"], desc: "Claim pending epoch rewards" },
+            { action: "mobile_node.submit_attestation", auth: true, tier: "T1", cost: "0", params: { attestations: "required (array of {block_number, block_hash, signer_valid, parent_hash_valid, timestamp_valid})" }, response: ["attestations_accepted", "bonus_weight"], desc: "Submit block header verification results" },
             { action: "mobile_node.leaderboard", auth: false, tier: "T1", cost: "0", params: { scope: "optional (global|country)", limit: "optional (1-100, default 50)" }, response: ["rankings[]", "total_nodes"], desc: "Node contribution leaderboard" },
           ],
         },
@@ -8860,7 +8861,7 @@ exports.agentGateway = onRequest({
     // --- All other actions require authentication ---
     // mobile_node.register & mobile_node.leaderboard are public (no auth required)
     // mobile_node.heartbeat/status/claim_reward use their own vcn_mn_ key auth internally
-    const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward"];
+    const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation"];
     if (!apiKeyParam && !skipAgentAuth.includes(action)) {
       return res.status(401).json({ error: "Missing api_key. Register first." });
     }
@@ -10693,7 +10694,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */}
+          } catch (_e8) {/* non-critical */ }
         })();
 
         await db.collection("agents").doc(agent.id).update({
@@ -10893,7 +10894,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */}
+        } catch (_e9) {/* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10908,7 +10909,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */}
+          } catch (_e10) {/* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10954,7 +10955,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */}
+        } catch (_e11) {/* no SBT */ }
 
         return res.status(200).json({
           success: true,
@@ -12013,6 +12014,92 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // --- mobile_node.submit_attestation ---
+    if (action === "mobile_node.submit_attestation") {
+      try {
+        const mnApiKey = apiKeyParam;
+        if (!mnApiKey || !mnApiKey.startsWith("vcn_mn_")) {
+          return res.status(401).json({ error: "Invalid mobile node API key" });
+        }
+        const mnSnap = await db.collection("mobile_nodes")
+          .where("api_key", "==", mnApiKey)
+          .limit(1)
+          .get();
+        if (mnSnap.empty) {
+          return res.status(401).json({ error: "Mobile node not found" });
+        }
+        const mnDoc = mnSnap.docs[0];
+        const mn = mnDoc.data();
+
+        const { attestations } = req.body;
+        if (!attestations || !Array.isArray(attestations) || attestations.length === 0) {
+          return res.status(400).json({ error: "attestations array is required" });
+        }
+        if (attestations.length > 50) {
+          return res.status(400).json({ error: "Maximum 50 attestations per batch" });
+        }
+
+        // Validate and store attestations
+        let validCount = 0;
+        let totalCount = 0;
+        const batch = db.batch();
+
+        for (const att of attestations) {
+          if (!att.block_number || !att.block_hash) continue;
+
+          totalCount++;
+          const isValid = att.signer_valid && att.parent_hash_valid && att.timestamp_valid;
+          if (isValid) validCount++;
+
+          const attRef = mnDoc.ref.collection("attestations").doc(`block_${att.block_number}`);
+          batch.set(attRef, {
+            block_number: att.block_number,
+            block_hash: att.block_hash,
+            signer_valid: !!att.signer_valid,
+            parent_hash_valid: !!att.parent_hash_valid,
+            timestamp_valid: !!att.timestamp_valid,
+            is_valid: isValid,
+            submitted_at: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+
+        await batch.commit();
+
+        // Calculate bonus weight based on verification accuracy
+        const accuracy = totalCount > 0 ? validCount / totalCount : 0;
+        let bonusWeight = 0;
+        if (totalCount >= 5) {
+          if (accuracy >= 0.95) bonusWeight = 0.2;
+          else if (accuracy >= 0.8) bonusWeight = 0.1;
+          else bonusWeight = 0.05;
+        }
+
+        // Update node stats
+        const prevVerified = mn.blocks_verified || 0;
+        const prevValid = mn.blocks_valid || 0;
+        await mnDoc.ref.update({
+          blocks_verified: prevVerified + totalCount,
+          blocks_valid: prevValid + validCount,
+          block_verify_bonus: bonusWeight,
+          last_attestation_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`[Mobile Node] Attestation from ${mnDoc.id}: ${validCount}/${totalCount} valid (bonus: ${bonusWeight}x)`);
+
+        return res.status(200).json({
+          success: true,
+          attestations_accepted: totalCount,
+          valid_count: validCount,
+          accuracy: totalCount > 0 ? Math.round(accuracy * 100) : 0,
+          bonus_weight: bonusWeight,
+        });
+      } catch (e) {
+        console.error("[Mobile Node] Attestation error:", e);
+        return res.status(500).json({ error: `Attestation failed: ${e.message}` });
+      }
+    }
+
     // --- mobile_node.leaderboard ---
     if (action === "mobile_node.leaderboard") {
       try {
@@ -12077,7 +12164,7 @@ exports.agentGateway = onRequest({
         "social.referral", "social.leaderboard", "social.profile",
         "hosting.configure", "hosting.toggle", "hosting.logs",
         "mobile_node.register", "mobile_node.heartbeat", "mobile_node.status",
-        "mobile_node.claim_reward", "mobile_node.leaderboard",
+        "mobile_node.claim_reward", "mobile_node.submit_attestation", "mobile_node.leaderboard",
       ],
     });
   } catch (err) {
