@@ -8320,6 +8320,53 @@ async function authenticateAgent(apiKey) {
   return { id: doc.id, ...doc.data() };
 }
 
+/**
+ * Authenticate a Firebase user via ID token for Agent Gateway.
+ * Returns a user-context object compatible with agent context.
+ * @param {string} idToken - Firebase ID token
+ * @returns {Promise<object|null>} User context or null
+ */
+async function authenticateFirebaseUser(idToken) {
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const uid = decoded.uid;
+    const email = decoded.email || "";
+
+    // Look up user doc to get walletAddress
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) {
+      // Try by email
+      const emailSnap = await db.collection("users")
+        .where("email", "==", email.toLowerCase())
+        .limit(1)
+        .get();
+      if (emailSnap.empty) return null;
+      const userData = emailSnap.docs[0].data();
+      return {
+        id: emailSnap.docs[0].id,
+        _isUser: true,
+        uid: uid,
+        email: email.toLowerCase(),
+        walletAddress: userData.walletAddress || "",
+        displayName: userData.displayName || email.split("@")[0],
+      };
+    }
+
+    const userData = userDoc.data();
+    return {
+      id: uid,
+      _isUser: true,
+      uid: uid,
+      email: (userData.email || email).toLowerCase(),
+      walletAddress: userData.walletAddress || "",
+      displayName: userData.displayName || email.split("@")[0],
+    };
+  } catch (err) {
+    console.warn("[Agent Gateway] Firebase auth failed:", err.message);
+    return null;
+  }
+}
+
 let _gwPricingCache = null;
 let _gwPricingCacheAt = 0;
 
@@ -8862,19 +8909,40 @@ exports.agentGateway = onRequest({
     // mobile_node.register & mobile_node.leaderboard are public (no auth required)
     // mobile_node.heartbeat/status/claim_reward use their own vcn_mn_ key auth internally
     const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation"];
-    if (!apiKeyParam && !skipAgentAuth.includes(action)) {
-      return res.status(401).json({ error: "Missing api_key. Register first." });
-    }
-    let agent = null;
-    if (!skipAgentAuth.includes(action)) {
-      agent = await authenticateAgent(apiKeyParam);
-      if (!agent) {
-        return res.status(401).json({ error: "Invalid api_key" });
+
+    // Detect Firebase ID token (non-vcn_ bearer tokens)
+    let firebaseIdToken = null;
+    if (authHeader && authHeader.startsWith("Bearer ") && !apiKeyParam?.startsWith("vcn_")) {
+      const token = authHeader.slice(7);
+      if (!token.startsWith("vcn_")) {
+        firebaseIdToken = token;
       }
-      // Update last active
-      db.collection("agents").doc(agent.id).update({
-        lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
-      }).catch(() => { });
+    }
+
+    if (!apiKeyParam && !firebaseIdToken && !skipAgentAuth.includes(action)) {
+      return res.status(401).json({ error: "Missing api_key or Firebase auth token. Register first or use Authorization: Bearer <firebase_id_token>." });
+    }
+
+    let agent = null;  // Can be agent context OR user context (with _isUser flag)
+    if (!skipAgentAuth.includes(action)) {
+      if (firebaseIdToken) {
+        // Firebase Auth user mode
+        agent = await authenticateFirebaseUser(firebaseIdToken);
+        if (!agent) {
+          return res.status(401).json({ error: "Invalid Firebase auth token" });
+        }
+        console.log(`[Agent Gateway] Firebase user authenticated: ${agent.email} (${agent.walletAddress})`);
+      } else if (apiKeyParam) {
+        // Agent API key mode (existing)
+        agent = await authenticateAgent(apiKeyParam);
+        if (!agent) {
+          return res.status(401).json({ error: "Invalid api_key" });
+        }
+        // Update last active
+        db.collection("agents").doc(agent.id).update({
+          lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => { });
+      }
     }
 
     // === API FEE DEDUCTION MIDDLEWARE ===
@@ -8974,8 +9042,8 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // Deduct fee if cost > 0 and agent exists
-    if (feeVcn > 0 && agent) {
+    // Deduct fee if cost > 0 and agent exists (skip for Firebase Auth users -- they pay via Paymaster fee)
+    if (feeVcn > 0 && agent && !agent._isUser) {
       try {
         const provider = new ethers.JsonRpcProvider(RPC_URL);
         const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
@@ -9054,10 +9122,11 @@ exports.agentGateway = onRequest({
 
       return res.status(200).json({
         success: true,
-        agent_name: agent.agentName,
+        agent_name: agent._isUser ? agent.displayName : agent.agentName,
         wallet_address: agent.walletAddress,
         balance_vcn: balance,
         rp_points: agent.rpPoints || 0,
+        auth_mode: agent._isUser ? "firebase" : "api_key",
       });
     }
 
@@ -9073,6 +9142,140 @@ exports.agentGateway = onRequest({
         return res.status(400).json({ error: "Invalid amount (must be 0 < amount <= 10000)" });
       }
 
+      // ========== USER MODE (Firebase Auth) ==========
+      if (agent._isUser) {
+        const { signature, deadline, fee: userFee } = req.body;
+        if (!signature || !deadline) {
+          return res.status(400).json({
+            error: "User-mode transfer requires: to, amount, signature, deadline. Sign an EIP-712 Permit with your wallet.",
+            hint: "The permit should authorize the Paymaster to spend (amount + fee) VCN on your behalf.",
+          });
+        }
+
+        const provider = new ethers.JsonRpcProvider(RPC_URL);
+        const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+
+        const transferAmountBigInt = ethers.parseEther(amount.toString());
+        const feeBigInt = userFee ? BigInt(userFee) : ethers.parseUnits("1.0", 18);
+        const totalAmountBigInt = transferAmountBigInt + feeBigInt;
+
+        // Check user balance
+        const userBal = await tokenContract.balanceOf(agent.walletAddress);
+        if (userBal < totalAmountBigInt) {
+          return res.status(400).json({
+            error: "Insufficient balance",
+            balance: ethers.formatEther(userBal),
+            required: ethers.formatEther(totalAmountBigInt),
+          });
+        }
+
+        // Parse permit signature
+        const { v, r, s: sigS } = parseSignature(signature);
+        if (!v) {
+          return res.status(400).json({ error: "Invalid signature format" });
+        }
+
+        // Get admin nonce
+        const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
+
+        // Execute permit
+        try {
+          const permitTx = await tokenContract.permit(
+            agent.walletAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
+            { nonce: startNonce }
+          );
+          await permitTx.wait();
+          console.log(`[Agent Gateway] User permit confirmed: ${permitTx.hash}`);
+        } catch (permitErr) {
+          console.error(`[Agent Gateway] User permit failed:`, permitErr.message);
+          return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+        }
+
+        // Execute transfer
+        let txHash;
+        try {
+          const transferTx = await tokenContract.transferFrom(
+            agent.walletAddress, to, transferAmountBigInt,
+            { nonce: startNonce + 1 }
+          );
+          await transferTx.wait();
+          txHash = transferTx.hash;
+          console.log(`[Agent Gateway] User transfer confirmed: ${txHash}`);
+        } catch (txErr) {
+          console.error(`[Agent Gateway] User transfer failed:`, txErr.message);
+          return res.status(500).json({ error: `Transfer failed: ${txErr.reason || txErr.message}` });
+        }
+
+        // Collect fee (transferFrom fee portion to admin)
+        try {
+          const feeTx = await tokenContract.transferFrom(
+            agent.walletAddress, adminWallet.address, feeBigInt,
+            { nonce: startNonce + 2 }
+          );
+          await feeTx.wait();
+          console.log(`[Agent Gateway] Fee collected: ${ethers.formatEther(feeBigInt)} VCN`);
+        } catch (feeErr) {
+          console.warn(`[Agent Gateway] Fee collection failed (transfer still succeeded):`, feeErr.message);
+        }
+
+        // Index transaction in Firestore
+        const txDocId = txHash || `user-transfer-${Date.now()}`;
+        db.collection("transactions").doc(txDocId).set({
+          hash: txHash,
+          chainId: 3151909,
+          type: "Transfer",
+          from_addr: agent.walletAddress.toLowerCase(),
+          to_addr: to.toLowerCase(),
+          value: amount.toString(),
+          timestamp: Date.now(),
+          status: "indexed",
+          metadata: { method: "Agent Gateway User Transfer", source: "agent_gateway", fee: ethers.formatEther(feeBigInt) },
+        }).catch((e) => console.warn("[Agent Gateway] Transfer indexing failed:", e.message));
+
+        // Send notifications (async, don't block response)
+        (async () => {
+          try {
+            // Notify sender
+            const senderEmail = agent.email;
+            if (senderEmail) {
+              await db.collection("users").doc(senderEmail).collection("notifications").add({
+                type: "alert",
+                title: "Transfer Successful",
+                content: `You successfully sent ${amount} VCN.`,
+                data: { amount, to, txHash },
+                read: false,
+                createdAt: admin.firestore.Timestamp.now(),
+              });
+            }
+            // Notify recipient (if registered user)
+            const recipientEmail = await getUserEmailByWallet(to);
+            if (recipientEmail) {
+              await db.collection("users").doc(recipientEmail).collection("notifications").add({
+                type: "transfer_received",
+                title: "Coins Received",
+                content: `You received ${amount} VCN from ${agent.displayName || agent.email}.`,
+                data: { amount, sender: senderEmail, senderAddress: agent.walletAddress, txHash },
+                read: false,
+                createdAt: admin.firestore.Timestamp.now(),
+              });
+            }
+          } catch (notiErr) {
+            console.warn("[Agent Gateway] Transfer notification failed:", notiErr.message);
+          }
+        })();
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: txHash,
+          from: agent.walletAddress,
+          to: to,
+          amount: amount.toString(),
+          fee: { charged: true, amount_vcn: ethers.formatEther(feeBigInt), method: "paymaster_permit" },
+        });
+      }
+
+      // ========== AGENT MODE (existing logic) ==========
       // Decrypt agent private key and send
       const provider = new ethers.JsonRpcProvider(RPC_URL);
       const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
@@ -9959,24 +10162,53 @@ exports.agentGateway = onRequest({
           });
         }
 
-        // Transfer from agent to admin first
-        const agentPK = serverDecrypt(agent.privateKey);
-        const agentWallet = new ethers.Wallet(agentPK, provider);
-        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+        // ========== Consolidate funds to admin ==========
+        if (agent._isUser) {
+          // USER MODE: Use permit to transfer total amount to admin
+          const { signature, deadline } = req.body;
+          if (!signature || !deadline) {
+            return res.status(400).json({
+              error: "User-mode batch requires: transactions, signature, deadline",
+              hint: "Sign an EIP-712 Permit for the total batch amount to authorize the transfers.",
+            });
+          }
 
-        const agentGas = await provider.getBalance(agent.walletAddress);
-        if (agentGas < ethers.parseEther("0.001")) {
-          const gasTx = await adminWallet.sendTransaction({
-            to: agent.walletAddress,
-            value: ethers.parseEther("0.01"),
-          });
-          await gasTx.wait();
+          const { v, r, s: sigS } = parseSignature(signature);
+          if (!v) return res.status(400).json({ error: "Invalid signature format" });
+
+          const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
+
+          const permitTx = await tokenContract.permit(
+            agent.walletAddress, adminWallet.address, totalAmount, deadline, v, r, sigS,
+            { nonce: startNonce }
+          );
+          await permitTx.wait();
+
+          const consolidateTx = await tokenContract.transferFrom(
+            agent.walletAddress, adminWallet.address, totalAmount,
+            { nonce: startNonce + 1 }
+          );
+          await consolidateTx.wait();
+        } else {
+          // AGENT MODE: Decrypt agent private key and transfer
+          const agentPK = serverDecrypt(agent.privateKey);
+          const agentWallet = new ethers.Wallet(agentPK, provider);
+          const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+          const agentGas = await provider.getBalance(agent.walletAddress);
+          if (agentGas < ethers.parseEther("0.001")) {
+            const gasTx = await adminWallet.sendTransaction({
+              to: agent.walletAddress,
+              value: ethers.parseEther("0.01"),
+            });
+            await gasTx.wait();
+          }
+
+          const consolidateTx = await agentToken.transfer(adminWallet.address, totalAmount);
+          await consolidateTx.wait();
         }
 
-        const consolidateTx = await agentToken.transfer(adminWallet.address, totalAmount);
-        await consolidateTx.wait();
-
-        // Execute batch from admin
+        // ========== Execute batch from admin (same for both modes) ==========
         const results = [];
         for (const tx of transactions) {
           try {
@@ -9989,21 +10221,38 @@ exports.agentGateway = onRequest({
           }
         }
 
-        // Stats
+        // Stats & Record
         const successCount = results.filter((r) => r.status === "success").length;
-        await db.collection("agents").doc(agent.id).update({
-          transferCount: admin.firestore.FieldValue.increment(successCount),
-          rpPoints: admin.firestore.FieldValue.increment(successCount * 5),
-        });
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
 
-        // Record
-        db.collection("agents").doc(agent.id).collection("transactions").add({
+        if (!agent._isUser) {
+          await db.collection("agents").doc(agent.id).update({
+            transferCount: admin.firestore.FieldValue.increment(successCount),
+            rpPoints: admin.firestore.FieldValue.increment(successCount * 5),
+          });
+        }
+
+        db.collection(parentCollection).doc(parentDocId).collection("transactions").add({
           type: "batch_transfer",
           count: transactions.length,
           success_count: successCount,
           total_amount: ethers.formatEther(totalAmount),
+          auth_mode: agent._isUser ? "firebase" : "api_key",
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => { });
+
+        // Notifications for user
+        if (agent._isUser && agent.email) {
+          db.collection("users").doc(agent.email).collection("notifications").add({
+            type: "alert",
+            title: "Batch Transfer Complete",
+            content: `${successCount}/${transactions.length} transfers completed. Total: ${ethers.formatEther(totalAmount)} VCN.`,
+            data: { successCount, totalCount: transactions.length, totalAmount: ethers.formatEther(totalAmount) },
+            read: false,
+            createdAt: admin.firestore.Timestamp.now(),
+          }).catch(() => { });
+        }
 
         return res.status(200).json({
           success: true,
@@ -10011,7 +10260,7 @@ exports.agentGateway = onRequest({
           completed: successCount,
           failed: transactions.length - successCount,
           results,
-          rp_earned: successCount * 5,
+          rp_earned: agent._isUser ? 0 : successCount * 5,
         });
       } catch (e) {
         return res.status(500).json({ error: `Batch transfer failed: ${e.reason || e.message}` });
@@ -10036,11 +10285,17 @@ exports.agentGateway = onRequest({
       }
 
       try {
-        const scheduleRef = await db.collection("agents").doc(agent.id).collection("scheduled_transfers").add({
+        // Determine Firestore collection based on auth mode
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
+
+        const scheduleRef = await db.collection(parentCollection).doc(parentDocId).collection("scheduled_transfers").add({
           to,
           amount: amount.toString(),
           execute_at: admin.firestore.Timestamp.fromDate(executeTime),
           status: "pending",
+          wallet_address: agent.walletAddress,
+          auth_mode: agent._isUser ? "firebase" : "api_key",
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
 
@@ -10625,7 +10880,7 @@ exports.agentGateway = onRequest({
         const BRIDGE_FEE = ethers.parseEther("1"); // 1 VCN fee
         const totalRequired = amountWei + BRIDGE_FEE;
 
-        // Check agent balance
+        // Check balance
         const bal = await tokenContract.balanceOf(agent.walletAddress);
         if (bal < totalRequired) {
           return res.status(400).json({
@@ -10636,21 +10891,52 @@ exports.agentGateway = onRequest({
           });
         }
 
-        // Transfer from agent to admin
-        const agentPK = serverDecrypt(agent.privateKey);
-        const agentWallet = new ethers.Wallet(agentPK, provider);
-        const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+        // ========== Transfer VCN to admin ==========
+        if (agent._isUser) {
+          // USER MODE: Use permit-based transfer
+          const { signature, deadline, fee: userFee } = req.body;
+          if (!signature || !deadline) {
+            return res.status(400).json({
+              error: "User-mode bridge requires: amount, destination_chain, signature, deadline",
+              hint: "Sign an EIP-712 Permit for (amount + 1 VCN bridge fee) to authorize the bridge.",
+            });
+          }
 
-        const agentGas = await provider.getBalance(agent.walletAddress);
-        if (agentGas < ethers.parseEther("0.001")) {
-          const gasTx = await adminWallet.sendTransaction({ to: agent.walletAddress, value: ethers.parseEther("0.01") });
-          await gasTx.wait();
+          const { v, r, s: sigS } = parseSignature(signature);
+          if (!v) return res.status(400).json({ error: "Invalid signature format" });
+
+          const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
+
+          // Execute permit
+          const permitTx = await tokenContract.permit(
+            agent.walletAddress, adminWallet.address, totalRequired, deadline, v, r, sigS,
+            { nonce: startNonce }
+          );
+          await permitTx.wait();
+
+          // Transfer VCN from user to admin
+          const transferTx = await tokenContract.transferFrom(
+            agent.walletAddress, adminWallet.address, totalRequired,
+            { nonce: startNonce + 1 }
+          );
+          await transferTx.wait();
+        } else {
+          // AGENT MODE: Decrypt agent private key and transfer
+          const agentPK = serverDecrypt(agent.privateKey);
+          const agentWallet = new ethers.Wallet(agentPK, provider);
+          const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+
+          const agentGas = await provider.getBalance(agent.walletAddress);
+          if (agentGas < ethers.parseEther("0.001")) {
+            const gasTx = await adminWallet.sendTransaction({ to: agent.walletAddress, value: ethers.parseEther("0.01") });
+            await gasTx.wait();
+          }
+
+          const transferTx = await agentToken.transfer(adminWallet.address, totalRequired);
+          await transferTx.wait();
         }
 
-        const transferTx = await agentToken.transfer(adminWallet.address, totalRequired);
-        await transferTx.wait();
-
-        // Commit intent
+        // ========== Commit intent (same for both modes) ==========
         const INTENT_COMMITMENT_ADDRESS = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
         const INTENT_ABI = [
           "function commitIntent(address recipient, uint256 amount, uint256 destChainId) external returns (bytes32)",
@@ -10672,8 +10958,11 @@ exports.agentGateway = onRequest({
           }
         }
 
-        // Record bridge in Firestore
-        const bridgeRef = await db.collection("agents").doc(agent.id).collection("bridge_history").add({
+        // Record bridge in Firestore (under correct collection)
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
+
+        const bridgeRef = await db.collection(parentCollection).doc(parentDocId).collection("bridge_history").add({
           type: "outbound",
           amount: amount.toString(),
           fee: "1",
@@ -10682,6 +10971,8 @@ exports.agentGateway = onRequest({
           recipient: bridgeRecipient,
           intent_hash: intentHash,
           commit_tx: commitTx.hash,
+          wallet_address: agent.walletAddress,
+          auth_mode: agent._isUser ? "firebase" : "api_key",
           status: "committed",
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -10694,14 +10985,29 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */}
+          } catch (_e8) {/* non-critical */ }
         })();
 
-        await db.collection("agents").doc(agent.id).update({
-          rpPoints: admin.firestore.FieldValue.increment(15),
-        });
+        if (!agent._isUser) {
+          await db.collection("agents").doc(agent.id).update({
+            rpPoints: admin.firestore.FieldValue.increment(15),
+          });
+        }
 
-        console.log(`[Agent Gateway] Bridge: ${agent.agentName} -> chain ${destChainId}: ${amount} VCN, intent: ${intentHash}`);
+        // Notification for user (fire-and-forget)
+        if (agent._isUser && agent.email) {
+          db.collection("users").doc(agent.email).collection("notifications").add({
+            type: "bridge_started",
+            title: "Bridge Initiated",
+            content: `Bridging ${amount} VCN to chain ${destChainId}. 15-min challenge period applies.`,
+            data: { amount, destChainId, intentHash, bridgeId: bridgeRef.id },
+            read: false,
+            createdAt: admin.firestore.Timestamp.now(),
+          }).catch(() => { });
+        }
+
+        const displayName = agent._isUser ? agent.displayName : agent.agentName;
+        console.log(`[Agent Gateway] Bridge: ${displayName} -> chain ${destChainId}: ${amount} VCN, intent: ${intentHash}`);
 
         return res.status(200).json({
           success: true,
@@ -10713,7 +11019,7 @@ exports.agentGateway = onRequest({
           destination_chain: destChainId,
           recipient: bridgeRecipient,
           status: "committed",
-          rp_earned: 15,
+          rp_earned: agent._isUser ? 0 : 15,
         });
       } catch (e) {
         console.error("[Agent Gateway] Bridge error:", e.message);
@@ -10730,13 +11036,15 @@ exports.agentGateway = onRequest({
 
       try {
         let bridgeDoc;
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
 
         if (bridgeId) {
-          const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridgeId).get();
+          const doc = await db.collection(parentCollection).doc(parentDocId).collection("bridge_history").doc(bridgeId).get();
           if (!doc.exists) return res.status(404).json({ error: "Bridge not found" });
           bridgeDoc = { id: doc.id, ...doc.data() };
         } else {
-          const snap = await db.collection("agents").doc(agent.id).collection("bridge_history")
+          const snap = await db.collection(parentCollection).doc(parentDocId).collection("bridge_history")
             .where("intent_hash", "==", intentHash)
             .limit(1)
             .get();
@@ -10774,7 +11082,10 @@ exports.agentGateway = onRequest({
       }
 
       try {
-        const doc = await db.collection("agents").doc(agent.id).collection("bridge_history").doc(bridgeId).get();
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
+
+        const doc = await db.collection(parentCollection).doc(parentDocId).collection("bridge_history").doc(bridgeId).get();
         if (!doc.exists) return res.status(404).json({ error: "Bridge not found" });
 
         const data = doc.data();
@@ -10820,8 +11131,10 @@ exports.agentGateway = onRequest({
     if (action === "bridge_history" || action === "bridge.history") {
       try {
         const limit = Math.min(Math.max(parseInt(req.body.limit) || 20, 1), 100);
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
 
-        const snap = await db.collection("agents").doc(agent.id).collection("bridge_history")
+        const snap = await db.collection(parentCollection).doc(parentDocId).collection("bridge_history")
           .orderBy("created_at", "desc")
           .limit(limit)
           .get();
@@ -10865,6 +11178,223 @@ exports.agentGateway = onRequest({
       });
     }
 
+    // --- REVERSE BRIDGE PREPARE (bridge.reverse_prepare) ---
+    // Sponsors Sepolia ETH gas so user can approve VCN on Sepolia
+    if (action === "bridge.reverse_prepare" || action === "bridge_reverse_prepare") {
+      try {
+        const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
+        if (!sepoliaRelayerPk) {
+          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured on server" });
+        }
+
+        const sepoliaProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+        const relayerWallet = new ethers.Wallet(sepoliaRelayerPk, sepoliaProvider);
+        const VCN_SEPOLIA_ADDRESS = (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim();
+
+        // Check user's Sepolia ETH balance for gas
+        const userEthBalance = await sepoliaProvider.getBalance(agent.walletAddress);
+        const GAS_SPONSOR_AMOUNT = ethers.parseEther("0.005");
+
+        let gasRefillTxHash = null;
+        if (userEthBalance < GAS_SPONSOR_AMOUNT) {
+          const relayerEthBal = await sepoliaProvider.getBalance(relayerWallet.address);
+          if (relayerEthBal < GAS_SPONSOR_AMOUNT + ethers.parseEther("0.01")) {
+            return res.status(503).json({ error: "Relayer ETH balance too low for gas sponsorship" });
+          }
+          const gasTx = await relayerWallet.sendTransaction({
+            to: agent.walletAddress,
+            value: GAS_SPONSOR_AMOUNT,
+            gasLimit: 21000,
+          });
+          await gasTx.wait();
+          gasRefillTxHash = gasTx.hash;
+          console.log(`[Agent Gateway] Reverse bridge gas sponsored: ${gasRefillTxHash}`);
+        }
+
+        return res.status(200).json({
+          success: true,
+          relayer_address: relayerWallet.address,
+          vcn_sepolia_address: VCN_SEPOLIA_ADDRESS,
+          gas_refill_tx: gasRefillTxHash,
+          user_eth_balance: ethers.formatEther(userEthBalance),
+        });
+      } catch (e) {
+        return res.status(500).json({ error: `Reverse bridge prepare failed: ${e.message}` });
+      }
+    }
+
+    // --- REVERSE BRIDGE (bridge.reverse) ---
+    // Sepolia VCN → Vision Chain VCN
+    if (action === "bridge.reverse" || action === "bridge_reverse") {
+      const { amount, recipient, signature, deadline } = req.body;
+      if (!amount) {
+        return res.status(400).json({ error: "Missing required field: amount (VCN to bridge from Sepolia)" });
+      }
+
+      try {
+        const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
+        if (!sepoliaRelayerPk) {
+          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+        }
+
+        const VCN_SEPOLIA_ADDRESS = (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim();
+        const amountWei = ethers.parseEther(amount.toString());
+        const BRIDGE_FEE = ethers.parseEther("1");
+        const totalAmount = amountWei + BRIDGE_FEE;
+        const visionRecipient = recipient || agent.walletAddress;
+
+        // Step 1: Lock VCN on Sepolia
+        const sepoliaProvider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+        const relayerWallet = new ethers.Wallet(sepoliaRelayerPk, sepoliaProvider);
+        const sepoliaToken = new ethers.Contract(VCN_SEPOLIA_ADDRESS, VCN_TOKEN_ABI, relayerWallet);
+
+        // Check user's Sepolia VCN balance
+        const userBalance = await sepoliaToken.balanceOf(agent.walletAddress);
+        if (userBalance < totalAmount) {
+          return res.status(400).json({
+            error: "Insufficient Sepolia VCN balance",
+            balance: ethers.formatEther(userBalance),
+            required: ethers.formatEther(totalAmount),
+          });
+        }
+
+        // Permit on Sepolia (if signature provided)
+        if (signature && deadline) {
+          try {
+            const { v, r, s: sigS } = parseSignature(signature);
+            const permitTx = await sepoliaToken.permit(
+              agent.walletAddress, relayerWallet.address, totalAmount, deadline, v, r, sigS
+            );
+            await permitTx.wait();
+            console.log(`[Agent Gateway] Sepolia permit confirmed`);
+          } catch (permitErr) {
+            console.error(`[Agent Gateway] Sepolia permit failed:`, permitErr.message);
+            return res.status(400).json({ error: `Sepolia permit failed: ${permitErr.reason || permitErr.message}` });
+          }
+        } else {
+          // Check existing allowance
+          const allowance = await sepoliaToken.allowance(agent.walletAddress, relayerWallet.address);
+          if (allowance < totalAmount) {
+            return res.status(400).json({
+              error: "Insufficient allowance. Either sign a permit or approve the relayer first.",
+              relayer_address: relayerWallet.address,
+              required_allowance: ethers.formatEther(totalAmount),
+              current_allowance: ethers.formatEther(allowance),
+            });
+          }
+        }
+
+        // Collect fee
+        try {
+          const feeTx = await sepoliaToken.transferFrom(agent.walletAddress, relayerWallet.address, BRIDGE_FEE);
+          await feeTx.wait();
+          console.log(`[Agent Gateway] Reverse bridge fee collected`);
+        } catch (feeErr) {
+          console.warn(`[Agent Gateway] Fee collection failed:`, feeErr.message);
+        }
+
+        // Lock user's VCN on Sepolia
+        let sepoliaLockTxHash;
+        try {
+          const lockTx = await sepoliaToken.transferFrom(agent.walletAddress, relayerWallet.address, amountWei);
+          await lockTx.wait();
+          sepoliaLockTxHash = lockTx.hash;
+          console.log(`[Agent Gateway] Locked ${amount} VCN Sepolia: ${sepoliaLockTxHash}`);
+        } catch (lockErr) {
+          return res.status(500).json({ error: `Failed to lock Sepolia VCN: ${lockErr.reason || lockErr.message}` });
+        }
+
+        // Step 2: Send VCN on Vision Chain
+        const visionProvider = new ethers.JsonRpcProvider(RPC_URL);
+        const visionAdmin = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, visionProvider);
+        const visionToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, visionAdmin);
+
+        let visionTxHash;
+        try {
+          const visionTx = await visionToken.transfer(visionRecipient, amountWei);
+          await visionTx.wait();
+          visionTxHash = visionTx.hash;
+          console.log(`[Agent Gateway] Vision Chain VCN sent: ${visionTxHash}`);
+        } catch (visionErr) {
+          // Critical: Sepolia locked but Vision failed
+          console.error(`[Agent Gateway] Vision Chain transfer failed:`, visionErr.message);
+          await db.collection("reverseBridgeFailures").add({
+            user: agent.walletAddress,
+            amount: amount.toString(),
+            sepolia_lock_tx: sepoliaLockTxHash,
+            error: visionErr.message,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return res.status(500).json({
+            error: "Vision Chain transfer failed. Sepolia VCN is locked. Contact support.",
+            sepolia_lock_tx: sepoliaLockTxHash,
+          });
+        }
+
+        // Record & notify
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
+
+        db.collection(parentCollection).doc(parentDocId).collection("bridge_history").add({
+          type: "reverse",
+          amount: amount.toString(),
+          fee: "1",
+          source_chain: 11155111,
+          destination_chain: 3151909,
+          recipient: visionRecipient,
+          sepolia_lock_tx: sepoliaLockTxHash,
+          vision_tx: visionTxHash,
+          wallet_address: agent.walletAddress,
+          auth_mode: agent._isUser ? "firebase" : "api_key",
+          status: "completed",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => { });
+
+        // Index transaction
+        db.collection("transactions").doc(visionTxHash).set({
+          hash: visionTxHash,
+          chainId: 3151909,
+          type: "Reverse Bridge",
+          from_addr: "bridge",
+          to_addr: visionRecipient.toLowerCase(),
+          value: amount.toString(),
+          timestamp: Date.now(),
+          status: "indexed",
+          metadata: { method: "Reverse Bridge", source: "agent_gateway", sepoliaLockTx: sepoliaLockTxHash },
+        }).catch(() => { });
+
+        // Notification
+        if (agent._isUser && agent.email) {
+          db.collection("users").doc(agent.email).collection("notifications").add({
+            type: "bridge_completed",
+            title: "Reverse Bridge Complete",
+            content: `${amount} VCN bridged from Sepolia to Vision Chain.`,
+            data: { amount, visionTxHash, sepoliaLockTxHash },
+            read: false,
+            createdAt: admin.firestore.Timestamp.now(),
+          }).catch(() => { });
+        }
+
+        const displayName = agent._isUser ? agent.displayName : agent.agentName;
+        console.log(`[Agent Gateway] Reverse Bridge: ${displayName} Sepolia→Vision: ${amount} VCN`);
+
+        return res.status(200).json({
+          success: true,
+          amount,
+          fee: "1",
+          source_chain: 11155111,
+          destination_chain: 3151909,
+          recipient: visionRecipient,
+          sepolia_lock_tx: sepoliaLockTxHash,
+          vision_tx: visionTxHash,
+          status: "completed",
+        });
+      } catch (e) {
+        console.error("[Agent Gateway] Reverse bridge error:", e.message);
+        return res.status(500).json({ error: `Reverse bridge failed: ${e.reason || e.message}` });
+      }
+    }
+
     // =====================================================
     // Phase 6: NFT / SBT (3 endpoints)
     // =====================================================
@@ -10894,7 +11424,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */}
+        } catch (_e9) {/* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -10909,7 +11439,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */}
+          } catch (_e10) {/* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -10955,7 +11485,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */}
+        } catch (_e11) {/* no SBT */ }
 
         return res.status(200).json({
           success: true,

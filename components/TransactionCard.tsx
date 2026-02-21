@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { createSignal, Show } from 'solid-js';
 import { contractService } from '../services/contractService';
+import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridge } from '../services/transferService';
 import { ArrowRight, ArrowUpRight, RefreshCw, Check, X, Zap, Clock } from 'lucide-solid';
 
 interface ProposedAction {
@@ -35,15 +36,54 @@ const TransactionCard = (props: TransactionCardProps) => {
         setLoading(true);
         setError(null);
         try {
-            if (props.action.data.type === 'GASLESS_HANDLER') {
-                // Gasless execution
+            const handlerType = props.action.data.type;
+
+            // === GASLESS SINGLE TRANSFER ===
+            if (handlerType === 'GASLESS_HANDLER') {
                 const { to, amount } = props.action.data;
-                const result = await contractService.sendGaslessTokens(to, amount);
-                props.onComplete(result.hash || result.transactionHash || "0x00");
+                const result = await sendTransfer(to, amount);
+                if (!result.success) throw new Error(result.error || 'Transfer failed');
+                props.onComplete(result.txHash || "0x00");
                 return;
             }
 
-            const signer = (contractService as any).signer; // Accessing internal signer
+            // === SCHEDULED TRANSFER ===
+            if (handlerType === 'SCHEDULE_HANDLER') {
+                const { to, amount, execute_at } = props.action.data;
+                const result = await scheduleTransfer(to, amount, execute_at);
+                if (!result.success) throw new Error(result.error || 'Schedule failed');
+                if (props.onOptimisticSchedule) {
+                    props.onOptimisticSchedule({
+                        id: result.scheduleId,
+                        summary: `${props.action.visualization?.amount} ${props.action.visualization?.asset} → ${props.action.visualization?.recipient?.slice(0, 6)}...`,
+                        timeLeft: props.action.visualization?.scheduleTime,
+                        timestamp: Date.now(),
+                    });
+                }
+                props.onComplete(result.scheduleId || "scheduled");
+                return;
+            }
+
+            // === BRIDGE (Vision Chain → External) ===
+            if (handlerType === 'BRIDGE_HANDLER') {
+                const { amount, destination_chain, recipient } = props.action.data;
+                const result = await initiateBridge(amount, destination_chain, recipient);
+                if (!result.success) throw new Error(result.error || 'Bridge failed');
+                props.onComplete(result.txHash || result.bridgeId || "0x00");
+                return;
+            }
+
+            // === REVERSE BRIDGE (External → Vision Chain) ===
+            if (handlerType === 'REVERSE_BRIDGE_HANDLER') {
+                const { amount, recipient, signature, deadline } = props.action.data;
+                const result = await reverseBridge(amount, { recipient, signature, deadline });
+                if (!result.success) throw new Error(result.error || 'Reverse bridge failed');
+                props.onComplete(result.txHash || "0x00");
+                return;
+            }
+
+            // === FALLBACK: Raw transaction (legacy) ===
+            const signer = (contractService as any).signer;
             if (!signer) throw new Error("Wallet not connected");
 
             const txResponse = await signer.sendTransaction({
@@ -58,21 +98,16 @@ const TransactionCard = (props: TransactionCardProps) => {
             // Only for Scheduled Transfers: Parse logs to get Queue ID immediately
             if (props.action.visualization?.type === 'SCHEDULE' && props.onOptimisticSchedule) {
                 try {
-                    // TimeLockAgent ABI (NativeTransferScheduled event)
-                    // event NativeTransferScheduled(bytes32 indexed scheduleId, address indexed sender, address indexed recipient, uint256 amount, uint256 unlockTime);
                     const iface = new ethers.Interface([
                         "event NativeTransferScheduled(bytes32 indexed scheduleId, address indexed sender, address indexed recipient, uint256 amount, uint256 unlockTime)"
                     ]);
 
                     let scheduleId = '';
-                    let unlockTime = 0;
-
                     for (const log of receipt.logs) {
                         try {
                             const parsed = iface.parseLog(log);
                             if (parsed && parsed.name === 'NativeTransferScheduled') {
                                 scheduleId = parsed.args.scheduleId;
-                                unlockTime = Number(parsed.args.unlockTime);
                                 break;
                             }
                         } catch (e) { continue; }
@@ -84,7 +119,6 @@ const TransactionCard = (props: TransactionCardProps) => {
                             summary: `${props.action.visualization.amount} ${props.action.visualization.asset} → ${props.action.visualization.recipient?.slice(0, 6)}...`,
                             timeLeft: props.action.visualization.scheduleTime,
                             timestamp: Date.now(),
-                            // We can approximate status or assume WAITING
                         });
                     }
                 } catch (logErr) {

@@ -91,6 +91,7 @@ import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services
 import { generateText, generateTextStream } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
+import { sendTransfer, scheduleTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
 import { WalletSidebar } from './wallet/WalletSidebar';
@@ -1196,130 +1197,18 @@ const Wallet = (): JSX.Element => {
 
                 // 3. Execute Send or Local Time-lock Schedule
                 if (isSchedulingTimeLock()) {
-                    let timeLockSuccess = false;
-                    let timeLockTxHash = '';
-                    let timeLockScheduleId = '';
-                    let usedPaymaster = false;
-
-                    // --- STRATEGY 1: Try Gasless Paymaster (Production Ready) ---
                     try {
-                        setLoadingMessage('AGENT: ESTIMATING GAS...');
-                        const feeQuote = await contractService.getFeeQuote('timelock', {
-                            recipient,
-                            amount,
-                            delaySeconds: lockDelaySeconds()
-                        });
-                        console.log("[Paymaster] Fee Quote:", feeQuote);
+                        setLoadingMessage('AGENT: SCHEDULING TRANSFER...');
+                        const executeAt = new Date(Date.now() + lockDelaySeconds() * 1000).toISOString();
+                        const result = await scheduleTransfer(recipient, amount, executeAt);
+                        if (!result.success) throw new Error(result.error || 'Scheduling failed');
 
-                        setLoadingMessage(`AGENT: SCHEDULING (Fee: ${feeQuote.totalFee} VCN)...`);
-                        const result = await contractService.scheduleTimeLockGasless(recipient, amount, lockDelaySeconds(), auth.user()?.email || undefined);
-                        console.log("[Paymaster] Time-lock Scheduled:", result);
-
-                        timeLockTxHash = result.txHash;
-                        timeLockScheduleId = result.scheduleId;
-                        timeLockSuccess = true;
-                        usedPaymaster = true; // Backend already saved to Firestore
-
-                    } catch (paymasterErr: any) {
-                        console.warn("[Paymaster] Failed, trying legacy method:", paymasterErr.message);
-
-                        // --- STRATEGY 2: Fallback to Legacy Auto-Seed (Testnet Only) ---
-                        try {
-                            setLoadingMessage('AGENT: SYNCING BALANCE...');
-
-                            // Auto-Seed Logic for Demo/Testnet
-                            // TODO: In production, restore purchasedVcn() check:
-                            //       if (parseFloat(onChainBal) < (numericAmount + gasBuffer) && purchasedVcn() >= numericAmount)
-                            // TEMPORARY: Allow airdrop without VCN purchase check for testing
-                            try {
-                                const onChainBal = await contractService.getNativeBalance(address);
-                                const numericAmount = parseFloat(amount.replace(/,/g, ''));
-                                const gasBuffer = 1; // Actual gas is ~0.0001 VCN, 1 VCN is already 10000x buffer
-
-                                // TEMPORARY: Always seed if balance is insufficient (for testnet demo only)
-                                if (parseFloat(onChainBal) < (numericAmount + gasBuffer)) {
-                                    setLoadingMessage('AGENT: AIRDROPPING VCN...');
-                                    console.log("[Legacy] Auto-seeding wallet from admin...");
-                                    console.log("[Legacy] Current balance:", onChainBal, "Required:", numericAmount + gasBuffer);
-                                    const seedAmount = numericAmount + gasBuffer;
-                                    const seedReceipt = await contractService.adminSendVCN(address, seedAmount.toString());
-                                    console.log("[Legacy] Airdrop confirmed. Hash:", seedReceipt.hash);
-
-                                    setLoadingMessage('AGENT: FINALIZING SYNC...');
-                                    await new Promise(r => setTimeout(r, 8000)); // Increased from 4s to 8s
-
-                                    // Poll for balance update (max 3 attempts)
-                                    let newBal = '0';
-                                    for (let i = 0; i < 3; i++) {
-                                        newBal = await contractService.getNativeBalance(address);
-                                        if (parseFloat(newBal) >= (numericAmount + gasBuffer)) {
-                                            break;
-                                        }
-                                        console.log(`[Legacy] Balance check ${i + 1}/3: ${newBal}, waiting...`);
-                                        await new Promise(r => setTimeout(r, 3000));
-                                    }
-
-                                    console.log("[Legacy] Verified post-airdrop balance:", newBal);
-
-                                    // Final check
-                                    if (parseFloat(newBal) < (numericAmount + gasBuffer)) {
-                                        throw new Error(`Balance still insufficient after airdrop. Have: ${newBal}, Need: ${numericAmount + gasBuffer}`);
-                                    }
-                                }
-                            } catch (seedErr) {
-                                console.error("[Legacy] Auto-seed failed:", seedErr);
-                                // Don't proceed if seed failed - throw to show error
-                                throw new Error("Auto-seed failed. Please try again.");
-                            }
-
-                            setLoadingMessage('AGENT: SCHEDULING TIME-LOCK...');
-                            const { receipt, scheduleId } = await contractService.scheduleTransferNative(recipient, amount, lockDelaySeconds());
-                            console.log("[Legacy] Time-lock Schedule Successful:", receipt.hash);
-
-                            timeLockTxHash = receipt.hash;
-                            timeLockScheduleId = scheduleId;
-                            timeLockSuccess = true;
-
-                        } catch (legacyErr: any) {
-                            console.error("[Legacy] Time-lock scheduling failed:", legacyErr);
-                            const isInsufficientFunds = legacyErr.code === 'INSUFFICIENT_FUNDS'
-                                || legacyErr.message?.includes('insufficient funds')
-                                || legacyErr.message?.includes('-32000');
-
-                            // All system messages in English only
-                            const errorMsg = isInsufficientFunds
-                                ? 'Insufficient balance. You need the transfer amount plus gas fees (~1 VCN).'
-                                : `Time-lock scheduling failed: ${legacyErr.shortMessage || legacyErr.message || 'Unknown error'}`;
-
-                            alert(errorMsg);
-                            throw legacyErr;
-                        }
-                    }
-
-                    // Register successful Time-lock with Firebase
-                    // NOTE: Only save from frontend for LEGACY path (Strategy 2).
-                    // Paymaster path (Strategy 1) already creates the Firestore doc
-                    // in handleTimeLock on the backend. Saving again here would create
-                    // a duplicate TIME LOCK AGENT entry.
-                    if (timeLockSuccess) {
-                        setLastTxHash(timeLockTxHash);
-
-                        // Check if this came from Paymaster or Legacy path
-                        // Paymaster backend already creates the Firestore doc,
-                        // so only save from frontend for Legacy path
-                        if (!usedPaymaster) {
-                            // Legacy path: frontend needs to save the task
-                            await saveScheduledTransfer({
-                                userEmail: userProfile().email,
-                                recipient: recipient,
-                                amount: amount,
-                                token: symbol,
-                                unlockTime: Math.floor(Date.now() / 1000) + lockDelaySeconds(),
-                                creationTx: timeLockTxHash,
-                                scheduleId: timeLockScheduleId,
-                                status: 'WAITING'
-                            });
-                        }
+                        console.log("[Gateway] Scheduled Transfer:", result);
+                        setLastTxHash(result.scheduleId || 'scheduled');
+                    } catch (schedErr: any) {
+                        console.error("[Gateway] Scheduling failed:", schedErr);
+                        alert(`Scheduling failed: ${schedErr.message || 'Unknown error'}`);
+                        throw schedErr;
                     }
 
                 } else if (symbol === 'VCN_SEPOLIA') {
@@ -1399,36 +1288,18 @@ const Wallet = (): JSX.Element => {
                     }
                 } else if (symbol === 'VCN') {
                     try {
-                        // Use Paymaster (Gasless) Logic for VCN
-                        const result = await contractService.sendGaslessTokens(recipient, amount);
-                        console.log("Gasless Send Successful (Fee 1 VCN):", result);
-
-                        // Extract hash from backend response if available, or just mark success
-                        // The Smart Relayer returns status: 'success'
-                        if (result && (result.txHash || result.hash)) {
-                            setLastTxHash(result.txHash || result.hash);
-                        }
+                        // Use unified Transfer Service (Agent Gateway API)
+                        const result = await sendTransfer(recipient, amount);
+                        if (!result.success) throw new Error(result.error || 'Transfer failed');
+                        console.log("Gateway Transfer Successful:", result.txHash);
+                        if (result.txHash) setLastTxHash(result.txHash);
                     } catch (error: any) {
-                        console.warn("Paymaster failed, attempting standard transfer...", error);
-                        try {
-                            // Fallback to Standard Send
-                            const receipt = await contractService.sendTokens(recipient, amount, symbol);
-                            console.log("Standard Send Successful (Fallback):", receipt.hash);
-                            setLastTxHash(receipt.hash);
-                        } catch (fallbackError: any) {
-                            console.error("Fallback Failed:", fallbackError);
-                            const isInsufficientFunds = fallbackError.code === 'INSUFFICIENT_FUNDS'
-                                || fallbackError.message?.includes('insufficient funds')
-                                || fallbackError.message?.includes('-32000');
-
-                            // All system messages in English only
-                            const errorMsg = isInsufficientFunds
-                                ? 'Insufficient balance. You need the transfer amount plus gas fees.'
-                                : `Transfer failed: ${fallbackError.shortMessage || fallbackError.reason || 'Unknown error'}`;
-
-                            alert(errorMsg);
-                            throw fallbackError; // Stop flow
-                        }
+                        console.error("Transfer Failed:", error);
+                        const errorMsg = error.message?.includes('insufficient') || error.message?.includes('Insufficient')
+                            ? 'Insufficient balance. You need the transfer amount plus fees.'
+                            : `Transfer failed: ${error.message || 'Unknown error'}`;
+                        alert(errorMsg);
+                        throw error;
                     }
                 } else {
                     // Standard Send for ETH/Other
@@ -1600,37 +1471,19 @@ const Wallet = (): JSX.Element => {
                         const intent = tx.intent || 'send';
                         if (intent === 'send') {
                             if (symbol === 'VCN') {
-                                try {
-                                    const result = await contractService.sendGaslessTokens(recipientAddr, tx.amount);
-                                    receipt = { hash: result?.txHash || result?.hash || '0x...' };
-                                    console.log(`[Batch] Gasless transfer ${i + 1}/${transactions.length} successful:`, receipt.hash);
-                                } catch (gcError: any) {
-                                    console.warn(`[Batch] Gasless failed for tx ${i + 1}, trying standard:`, gcError.message);
-                                    try {
-                                        receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
-                                        console.log(`[Batch] Standard transfer ${i + 1}/${transactions.length} successful:`, receipt?.hash);
-                                    } catch (stdError: any) {
-                                        console.error(`[Batch] Both gasless and standard failed for tx ${i + 1}:`, stdError.message);
-                                        throw new Error(`Transfer failed: ${stdError.message || gcError.message}`);
-                                    }
-                                }
+                                const result = await sendTransfer(recipientAddr, tx.amount);
+                                if (!result.success) throw new Error(result.error || 'Transfer failed');
+                                receipt = { hash: result.txHash || '0x...' };
+                                console.log(`[Batch] Gateway transfer ${i + 1}/${transactions.length} successful:`, receipt.hash);
                             } else {
                                 receipt = await contractService.sendTokens(recipientAddr, tx.amount, symbol);
                             }
                         } else if (tx.intent === 'schedule') {
                             const delay = tx.executeAt ? Math.max(60, Math.floor((tx.executeAt - Date.now()) / 1000)) : 300;
-                            const scheduleRes = await contractService.scheduleTransferNative(recipientAddr, tx.amount, delay);
-                            receipt = scheduleRes.receipt;
-                            await saveScheduledTransfer({
-                                userEmail: userProfile().email,
-                                recipient: recipientAddr,
-                                amount: tx.amount,
-                                token: tx.symbol || 'VCN',
-                                unlockTime: Math.floor(Date.now() / 1000) + delay,
-                                creationTx: receipt.hash,
-                                scheduleId: scheduleRes.scheduleId,
-                                status: 'WAITING'
-                            });
+                            const executeAt = new Date(Date.now() + delay * 1000).toISOString();
+                            const schedResult = await scheduleTransfer(recipientAddr, tx.amount, executeAt);
+                            if (!schedResult.success) throw new Error(schedResult.error || 'Schedule failed');
+                            receipt = { hash: schedResult.scheduleId || 'scheduled' };
                         }
 
                         finalResults.push({ success: true, hash: receipt?.hash, tx });
