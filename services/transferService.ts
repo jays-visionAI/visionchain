@@ -24,7 +24,7 @@ const getGatewayUrl = (): string => {
 
 // Contract addresses (must match contractService)
 const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
-const PAYMASTER_ADMIN = '0xc6176B597d40f9Db62ED60149FB7625CCa56990b'; // Executor wallet
+const PAYMASTER_ADMIN = '0x08A1B183a53a0f8f1D875945D504272738E3AF34'; // Executor wallet (matches server VCN_EXECUTOR_PK)
 const CHAIN_ID = 3151909;
 const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
 

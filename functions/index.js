@@ -9189,6 +9189,7 @@ exports.agentGateway = onRequest({
         const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
 
         // Execute permit
+        console.log(`[Agent Gateway] Permit params: owner=${userAddress}, spender=${adminWallet.address}, value=${totalAmountBigInt.toString()}, deadline=${deadline}, nonce=${startNonce}`);
         try {
           const permitTx = await tokenContract.permit(
             userAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
@@ -9198,7 +9199,17 @@ exports.agentGateway = onRequest({
           console.log(`[Agent Gateway] User permit confirmed: ${permitTx.hash}`);
         } catch (permitErr) {
           console.error(`[Agent Gateway] User permit failed:`, permitErr.message);
-          return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+          return res.status(400).json({
+            error: `Permit failed: ${permitErr.reason || permitErr.message}`,
+            debug: {
+              owner: userAddress,
+              spender: adminWallet.address,
+              value: totalAmountBigInt.toString(),
+              deadline,
+              frontendSpender: "0xc6176B597d40f9Db62ED60149FB7625CCa56990b",
+              match: adminWallet.address.toLowerCase() === "0xc6176B597d40f9Db62ED60149FB7625CCa56990b".toLowerCase(),
+            },
+          });
         }
 
         // Execute transfer
