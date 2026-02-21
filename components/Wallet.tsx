@@ -91,7 +91,7 @@ import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services
 import { generateText, generateTextStream } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
-import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge } from '../services/transferService';
+import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
 import { WalletSidebar } from './wallet/WalletSidebar';
@@ -1212,25 +1212,20 @@ const Wallet = (): JSX.Element => {
                     }
 
                 } else if (symbol === 'VCN_SEPOLIA') {
-                    // Sepolia VCN Transfer via Paymaster
+                    // Sepolia VCN Transfer via Agent Gateway API
                     try {
                         setLoadingMessage('SENDING VCN ON SEPOLIA...');
-                        const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app';
                         const amountWei = ethers.parseEther(amount);
                         const BRIDGE_FEE = ethers.parseEther('1');
                         const totalAmount = amountWei + BRIDGE_FEE;
                         const deadline = Math.floor(Date.now() / 1000) + 3600;
 
-                        // Get relayer address for Permit signing
-                        const infoRes = await fetch(PAYMASTER_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type: 'reverse_bridge_info' })
-                        });
-                        const infoData = await infoRes.json();
-                        const relayerAddress = infoData.relayerAddress;
-
-                        if (!relayerAddress) throw new Error('Could not fetch relayer address');
+                        // Get relayer address via Agent Gateway
+                        const prepResult = await reverseBridgePrepare();
+                        if (!prepResult.success || !prepResult.relayerAddress) {
+                            throw new Error(prepResult.error || 'Could not fetch relayer address');
+                        }
+                        const relayerAddress = prepResult.relayerAddress;
 
                         // Sign EIP-712 Permit for Sepolia VCN
                         const SEPOLIA_VCN_TOKEN = '0x07755968236333B5f8803E9D0fC294608B200d1b';
@@ -1262,21 +1257,9 @@ const Wallet = (): JSX.Element => {
                             { owner: walletAddress(), spender: relayerAddress, value: totalAmount, nonce, deadline }
                         );
 
-                        const response = await fetch(PAYMASTER_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                type: 'sepolia_transfer',
-                                user: walletAddress(),
-                                recipient,
-                                amount: amountWei.toString(),
-                                fee: BRIDGE_FEE.toString(),
-                                deadline,
-                                signature: permitSignature,
-                            })
-                        });
-                        const result = await response.json();
-                        if (!response.ok || !result.success) {
+                        // Call Agent Gateway for Sepolia transfer
+                        const result = await sepoliaTransfer(recipient, amount, permitSignature, deadline);
+                        if (!result.success) {
                             throw new Error(result.error || 'Sepolia transfer failed');
                         }
                         console.log('Sepolia VCN Transfer Successful:', result);

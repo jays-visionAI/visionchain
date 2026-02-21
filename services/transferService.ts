@@ -352,6 +352,39 @@ export async function reverseBridge(
 }
 
 /**
+ * Transfer VCN on Sepolia via the Agent Gateway API.
+ * The caller must provide a pre-signed EIP-712 permit for Sepolia VCN
+ * (the permit is on a different chain so transferService cannot sign it internally).
+ */
+export async function sepoliaTransfer(
+    to: string,
+    amount: string,
+    signature: string,
+    deadline: number,
+): Promise<TransferResult> {
+    try {
+        const result = await callGateway('transfer.sepolia', {
+            to,
+            amount,
+            signature,
+            deadline,
+        });
+
+        return {
+            success: true,
+            txHash: result.tx_hash,
+            from: result.from,
+            to: result.to,
+            amount: result.amount,
+            fee: result.fee,
+        };
+    } catch (error: any) {
+        console.error('[TransferService] sepoliaTransfer failed:', error);
+        return { success: false, error: error.message || 'Sepolia transfer failed' };
+    }
+}
+
+/**
  * Execute a batch of VCN transfers.
  */
 export async function sendBatchTransfer(

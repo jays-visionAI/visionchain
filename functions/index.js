@@ -8964,7 +8964,7 @@ exports.agentGateway = onRequest({
       "system.register": "T1", "system.network_info": "T1", "system.delete_agent": "T2",
       "wallet.balance": "T1", "wallet.tx_history": "T1", "wallet.token_info": "T1",
       "wallet.gas_estimate": "T1", "wallet.approve": "T3",
-      "transfer.send": "T2", "transfer.batch": "T4", "transfer.scheduled": "T3", "transfer.conditional": "T3",
+      "transfer.send": "T2", "transfer.batch": "T4", "transfer.scheduled": "T3", "transfer.conditional": "T3", "transfer.sepolia": "T3",
       "staking.deposit": "T3", "staking.request_unstake": "T3", "staking.withdraw": "T3",
       "staking.claim": "T3", "staking.compound": "T3", "staking.rewards": "T1",
       "staking.apy": "T1", "staking.cooldown": "T1", "staking.position": "T1",
@@ -10860,6 +10860,118 @@ exports.agentGateway = onRequest({
       });
     }
 
+    // --- SEPOLIA TRANSFER (transfer.sepolia) --- T3
+    if (action === "transfer.sepolia" || action === "transfer_sepolia") {
+      const { to, amount, signature, deadline } = req.body;
+      if (!to || !amount) {
+        return res.status(400).json({ error: "Missing required fields: to, amount" });
+      }
+      if (!signature || !deadline) {
+        return res.status(400).json({
+          error: "User-mode Sepolia transfer requires: to, amount, signature, deadline. Sign an EIP-712 Permit for Sepolia VCN.",
+        });
+      }
+
+      try {
+        const VCN_SEPOLIA_ADDRESS = (process.env.VCN_SEPOLIA_ADDRESS || "0x07755968236333B5f8803E9D0fC294608B200d1b").trim();
+        const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
+
+        const sepoliaRelayerPk = (process.env.SEPOLIA_RELAYER_PK || "").trim();
+        if (!sepoliaRelayerPk) {
+          return res.status(500).json({ error: "SEPOLIA_RELAYER_PK not configured" });
+        }
+        const sepoliaProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
+        const sepoliaRelayer = new ethers.Wallet(sepoliaRelayerPk, sepoliaProvider);
+        const relayerAddress = sepoliaRelayer.address;
+
+        const vcnAbi = [
+          "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
+          "function transferFrom(address from, address to, uint256 amount) returns (bool)",
+          "function balanceOf(address account) view returns (uint256)",
+          "function allowance(address owner, address spender) view returns (uint256)",
+        ];
+        const vcnContract = new ethers.Contract(VCN_SEPOLIA_ADDRESS, vcnAbi, sepoliaRelayer);
+
+        const transferAmount = ethers.parseEther(amount.toString());
+        const feeAmount = ethers.parseEther("1"); // 1 VCN fee
+        const totalAmount = transferAmount + feeAmount;
+
+        // Check user balance
+        const userBalance = await vcnContract.balanceOf(agent.walletAddress);
+        console.log(`[Agent Gateway] Sepolia transfer: user=${agent.walletAddress}, balance=${ethers.formatEther(userBalance)}, needed=${ethers.formatEther(totalAmount)}`);
+        if (userBalance < totalAmount) {
+          return res.status(400).json({
+            error: `Insufficient Sepolia VCN balance. Have: ${ethers.formatEther(userBalance)}, Need: ${ethers.formatEther(totalAmount)}`,
+          });
+        }
+
+        // Execute Permit
+        const { v, r, s: sigS } = parseSignature(signature);
+        if (v) {
+          try {
+            const permitTx = await vcnContract.permit(agent.walletAddress, relayerAddress, totalAmount, deadline, v, r, sigS);
+            await permitTx.wait();
+            console.log(`[Agent Gateway] Sepolia permit confirmed: ${permitTx.hash}`);
+          } catch (permitErr) {
+            console.error(`[Agent Gateway] Sepolia permit failed:`, permitErr.message);
+            const currentAllowance = await vcnContract.allowance(agent.walletAddress, relayerAddress);
+            if (currentAllowance < totalAmount) {
+              return res.status(400).json({ error: `Permit failed: ${permitErr.reason || permitErr.message}` });
+            }
+            console.log(`[Agent Gateway] Sepolia allowance already sufficient, continuing...`);
+          }
+        }
+
+        // Collect fee
+        try {
+          const feeTx = await vcnContract.transferFrom(agent.walletAddress, relayerAddress, feeAmount);
+          await feeTx.wait();
+          console.log(`[Agent Gateway] Sepolia fee collected: ${ethers.formatEther(feeAmount)} VCN`);
+        } catch (feeErr) {
+          console.error(`[Agent Gateway] Sepolia fee collection failed:`, feeErr.message);
+          return res.status(400).json({ error: `Fee collection failed: ${feeErr.reason || feeErr.message}` });
+        }
+
+        // Transfer to recipient
+        let txHash;
+        try {
+          const transferTx = await vcnContract.transferFrom(agent.walletAddress, to, transferAmount);
+          const receipt = await transferTx.wait();
+          txHash = receipt.hash;
+          console.log(`[Agent Gateway] Sepolia transfer: ${ethers.formatEther(transferAmount)} VCN -> ${to}, tx: ${txHash}`);
+        } catch (transferErr) {
+          console.error(`[Agent Gateway] Sepolia transfer failed:`, transferErr.message);
+          return res.status(500).json({ error: `Transfer failed: ${transferErr.reason || transferErr.message}` });
+        }
+
+        // Record to Firestore
+        db.collection("transactions").add({
+          type: "sepolia_transfer",
+          from: agent.walletAddress,
+          to,
+          amount: ethers.formatEther(transferAmount),
+          fee: ethers.formatEther(feeAmount),
+          txHash,
+          chain: "sepolia",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          status: "completed",
+          source: "agent_gateway",
+        }).catch((e) => console.warn("[Agent Gateway] Sepolia transfer indexing failed:", e.message));
+
+        return res.status(200).json({
+          success: true,
+          tx_hash: txHash,
+          from: agent.walletAddress,
+          to,
+          amount: amount.toString(),
+          fee: { charged: true, amount_vcn: "1.0", method: "sepolia_permit" },
+        });
+      } catch (err) {
+        console.error("[Agent Gateway] Sepolia transfer error:", err);
+        return res.status(500).json({ error: err.message || "Sepolia transfer failed" });
+      }
+    }
+
     // =====================================================
     // Phase 2a: Bridge (5 endpoints)
     // =====================================================
@@ -12697,7 +12809,7 @@ exports.agentGateway = onRequest({
       available_actions: [
         "system.register", "system.network_info", "system.delete_agent",
         "wallet.balance", "wallet.token_info", "wallet.gas_estimate", "wallet.approve", "wallet.tx_history",
-        "transfer.send", "transfer.batch", "transfer.scheduled", "transfer.conditional",
+        "transfer.send", "transfer.batch", "transfer.scheduled", "transfer.conditional", "transfer.sepolia",
         "staking.deposit", "staking.request_unstake", "staking.withdraw",
         "staking.claim", "staking.compound", "staking.rewards", "staking.apy", "staking.cooldown",
         "staking.position",
