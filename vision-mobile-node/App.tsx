@@ -1,12 +1,13 @@
 /**
  * Vision Mobile Node - Main App Entry
  *
- * Manages navigation between Register, Dashboard, Settings, and Leaderboard.
- * Initializes core services (network adapter, heartbeat, block observer, relay, cache).
+ * Manages navigation between Onboarding, Register, Dashboard, Settings, and Leaderboard.
+ * Shows onboarding flow on first launch, then register/login.
  */
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import OnboardingScreen from './src/screens/OnboardingScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -19,8 +20,11 @@ import { blockObserver } from './src/services/blockObserver';
 import { microRelay } from './src/services/microRelay';
 import { storageCache } from './src/services/storageCache';
 import { startBackgroundService, stopBackgroundService } from './src/services/nativeService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type Screen = 'loading' | 'register' | 'dashboard' | 'settings' | 'leaderboard';
+const ONBOARDING_KEY = '@vision_onboarding_complete';
+
+type Screen = 'loading' | 'onboarding' | 'register' | 'dashboard' | 'settings' | 'leaderboard';
 
 const App: React.FC = () => {
   const [screen, setScreen] = useState<Screen>('loading');
@@ -30,12 +34,24 @@ const App: React.FC = () => {
       const creds = await loadCredentials();
       if (creds) {
         setScreen('dashboard');
-      } else {
+        return;
+      }
+
+      // Check if onboarding was completed
+      const onboardingDone = await AsyncStorage.getItem(ONBOARDING_KEY);
+      if (onboardingDone) {
         setScreen('register');
+      } else {
+        setScreen('onboarding');
       }
     };
     checkAuth();
   }, []);
+
+  const handleOnboardingComplete = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    setScreen('register');
+  };
 
   const handleRegistered = () => {
     startBackgroundService();
@@ -72,6 +88,10 @@ const App: React.FC = () => {
     );
   }
 
+  if (screen === 'onboarding') {
+    return <OnboardingScreen onComplete={handleOnboardingComplete} />;
+  }
+
   if (screen === 'register') {
     return <RegisterScreen onRegistered={handleRegistered} />;
   }
@@ -96,11 +116,10 @@ const App: React.FC = () => {
 const styles = StyleSheet.create({
   loading: {
     flex: 1,
-    backgroundColor: '#0a0a1a',
+    backgroundColor: '#06061a',
     justifyContent: 'center',
     alignItems: 'center',
   },
 });
 
 export default App;
-
