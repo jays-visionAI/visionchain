@@ -1,25 +1,26 @@
 /**
  * Vision Mobile Node - Dashboard Screen
  *
- * Main screen showing node status, block verification stats,
- * rewards, and network contribution.
+ * Redesigned with Hash Rate display, glassmorphism cards,
+ * and premium UI matching Vision Chain web app.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     View,
     Text,
-    StyleSheet,
-    ScrollView,
     TouchableOpacity,
-    RefreshControl,
+    ScrollView,
+    StyleSheet,
     StatusBar,
-    Platform,
+    RefreshControl,
+    ActivityIndicator,
+    Animated,
 } from 'react-native';
-import { getStatus, StatusResponse, claimReward } from '../services/api';
+import { getStatus, claimReward, StatusResponse } from '../services/api';
 import { heartbeatService, HeartbeatData } from '../services/heartbeat';
+import { NetworkMode, networkAdapter } from '../services/networkAdapter';
 import { blockObserver, BlockObserverStats } from '../services/blockObserver';
-import { networkAdapter, NetworkMode } from '../services/networkAdapter';
 import { loadCredentials, NodeCredentials } from '../services/storage';
 import { microRelay, RelayStats } from '../services/microRelay';
 import { storageCache, CacheStats } from '../services/storageCache';
@@ -63,7 +64,6 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                 } catch (err) {
                     console.warn('[Dashboard] Block observer failed to start:', err);
                 }
-                // Start relay and cache on WiFi
                 microRelay.start(creds.apiKey);
                 await storageCache.start(creds.apiKey);
             }
@@ -133,7 +133,6 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
         try {
             const result = await claimReward(credentials.apiKey);
             if (result.success) {
-                // Refresh status
                 await onRefresh();
             }
         } catch (err) {
@@ -167,15 +166,33 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
             case 'wifi':
                 return 'Full Mode';
             case 'cellular':
-                return 'Minimal Mode';
+                return 'Light Mode';
             case 'offline':
                 return 'Offline';
         }
     };
 
+    /**
+     * Calculate Hash Rate from block verification stats
+     * Hash Rate = verified blocks per 5min interval, scaled for display
+     */
+    const getHashRate = (): string => {
+        if (!blockStats || !blockStats.isRunning || blockStats.blocksVerified === 0) {
+            return '0.0';
+        }
+        // Calculate blocks per minute, multiply by a display factor
+        const elapsedMs = blockStats.lastBlockTime
+            ? Date.now() - (blockStats.lastBlockTime - blockStats.blocksVerified * 5000)
+            : 60000;
+        const elapsedMinutes = Math.max(elapsedMs / 60000, 1);
+        const blocksPerMinute = blockStats.blocksVerified / elapsedMinutes;
+        const hashRate = blocksPerMinute * 10; // scale factor for display
+        return hashRate.toFixed(1);
+    };
+
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#0a0a1a" />
+            <StatusBar barStyle="light-content" backgroundColor="#06061a" />
 
             {/* Header */}
             <View style={styles.header}>
@@ -192,7 +209,9 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                     </View>
                 </View>
                 <TouchableOpacity onPress={onOpenSettings} style={styles.settingsBtn}>
-                    <Text style={styles.settingsBtnText}>Settings</Text>
+                    <View style={styles.settingsIcon}>
+                        <View style={styles.settingsGear} />
+                    </View>
                 </TouchableOpacity>
             </View>
 
@@ -205,43 +224,66 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                         tintColor="#6c5ce7"
                     />
                 }>
-                {/* Weight Card */}
-                <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Current Weight</Text>
-                    <Text style={styles.weightValue}>
-                        {heartbeat?.weight?.toFixed(1) || '0.0'}x
-                    </Text>
-                    <View style={styles.weightBreakdown}>
-                        <Text style={styles.breakdownItem}>
-                            Base: {networkMode === 'wifi' ? '0.01x' : networkMode === 'cellular' ? '0.005x' : '0x'}
-                        </Text>
-                        {blockStats && blockStats.blocksVerified > 0 && (
-                            <Text style={styles.breakdownItem}>
-                                + Block Verify: +0.2x
+
+                {/* Hash Rate Card */}
+                <View style={styles.heroCard}>
+                    <View style={styles.heroCardGlow} />
+                    <Text style={styles.heroLabel}>HASH RATE</Text>
+                    <View style={styles.heroValueRow}>
+                        <Text style={styles.heroValue}>{getHashRate()}</Text>
+                        <Text style={styles.heroUnit}>H/s</Text>
+                    </View>
+                    <View style={styles.heroDivider} />
+                    <View style={styles.heroSubRow}>
+                        <View style={styles.heroSubItem}>
+                            <View
+                                style={[
+                                    styles.heroSubDot,
+                                    { backgroundColor: blockStats?.isRunning ? '#00b894' : '#e74c3c' },
+                                ]}
+                            />
+                            <Text style={styles.heroSubText}>
+                                {blockStats?.isRunning
+                                    ? `${blockStats.blocksVerified} blocks verified`
+                                    : 'Block Observer off'}
                             </Text>
-                        )}
+                        </View>
+                        <Text style={styles.heroSubText}>
+                            {blockStats?.accuracy || 100}% accuracy
+                        </Text>
                     </View>
                 </View>
 
                 {/* Stats Row */}
                 <View style={styles.statsRow}>
-                    <View style={[styles.statCard, styles.statCardLeft]}>
+                    <View style={styles.statCard}>
                         <Text style={styles.statLabel}>Uptime</Text>
                         <Text style={styles.statValue}>
                             {formatUptime(status?.today_uptime_seconds || heartbeat?.sessionUptimeSeconds || 0)}
                         </Text>
                     </View>
-                    <View style={[styles.statCard, styles.statCardRight]}>
+                    <View style={[styles.statCard, styles.statCardMiddle]}>
                         <Text style={styles.statLabel}>Streak</Text>
                         <Text style={styles.statValue}>
-                            {status?.current_streak || 0} days
+                            {status?.current_streak || 0}
+                            <Text style={styles.statUnit}> days</Text>
+                        </Text>
+                    </View>
+                    <View style={styles.statCard}>
+                        <Text style={styles.statLabel}>Heartbeat</Text>
+                        <Text style={styles.statValue}>
+                            {heartbeat ? (
+                                <Text style={{ color: '#00b894' }}>Live</Text>
+                            ) : (
+                                <Text style={{ color: '#555' }}>--</Text>
+                            )}
                         </Text>
                     </View>
                 </View>
 
                 {/* Rewards Card */}
                 <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Rewards</Text>
+                    <Text style={styles.cardLabel}>REWARDS</Text>
                     <View style={styles.rewardsRow}>
                         <View style={styles.rewardCol}>
                             <Text style={styles.rewardAmount}>
@@ -249,6 +291,7 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                             </Text>
                             <Text style={styles.rewardLabel}>Pending VCN</Text>
                         </View>
+                        <View style={styles.rewardDivider} />
                         <View style={styles.rewardCol}>
                             <Text style={styles.rewardAmount}>
                                 {parseFloat(status?.total_earned || '0').toFixed(4)}
@@ -270,17 +313,20 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                     </TouchableOpacity>
                 </View>
 
-                {/* Block Observer Card */}
+                {/* Block Verification Card */}
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
-                        <Text style={styles.cardLabel}>Block Verification</Text>
+                        <Text style={styles.cardLabel}>BLOCK VERIFICATION</Text>
                         <View
                             style={[
                                 styles.statusBadge,
                                 {
                                     backgroundColor: blockStats?.isRunning
-                                        ? '#00b89422'
-                                        : '#e74c3c22',
+                                        ? 'rgba(0, 184, 148, 0.12)'
+                                        : 'rgba(231, 76, 60, 0.12)',
+                                    borderColor: blockStats?.isRunning
+                                        ? 'rgba(0, 184, 148, 0.3)'
+                                        : 'rgba(231, 76, 60, 0.3)',
                                 },
                             ]}>
                             <Text
@@ -320,14 +366,16 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                         <Text style={styles.inactiveText}>
                             {networkMode === 'wifi'
                                 ? 'Connecting to blockchain...'
-                                : 'Connect to WiFi to verify blocks'}
+                                : networkMode === 'cellular'
+                                    ? 'Block verification available on WiFi'
+                                    : 'Go online to verify blocks'}
                         </Text>
                     )}
                 </View>
 
                 {/* Node Info */}
                 <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Node Info</Text>
+                    <Text style={styles.cardLabel}>NODE INFO</Text>
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Node ID</Text>
                         <Text style={styles.infoValue}>
@@ -344,22 +392,16 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                     </View>
                     <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Referral Code</Text>
-                        <Text style={styles.infoValue}>
+                        <Text style={[styles.infoValue, { color: '#a29bfe' }]}>
                             {credentials?.referralCode || '-'}
-                        </Text>
-                    </View>
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Network Rank</Text>
-                        <Text style={styles.infoValue}>
-                            #{status?.referral_count || '-'}
                         </Text>
                     </View>
                 </View>
 
-                {/* Relay & Cache Card */}
+                {/* Network Services */}
                 {networkMode === 'wifi' && (
                     <View style={styles.card}>
-                        <Text style={styles.cardLabel}>Network Services</Text>
+                        <Text style={styles.cardLabel}>NETWORK SERVICES</Text>
                         <View style={styles.blockStatsGrid}>
                             <View style={styles.blockStatItem}>
                                 <Text style={styles.blockStatValue}>
@@ -385,10 +427,11 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
 
                 {/* Leaderboard Button */}
                 <TouchableOpacity
-                    style={[styles.card, { alignItems: 'center' }]}
+                    style={styles.leaderboardBtn}
                     onPress={onOpenLeaderboard}
                     activeOpacity={0.7}>
-                    <Text style={[styles.cardLabel, { marginBottom: 0, color: '#a29bfe' }]}>View Leaderboard</Text>
+                    <Text style={styles.leaderboardBtnText}>View Leaderboard</Text>
+                    <Text style={styles.leaderboardArrow}>&gt;</Text>
                 </TouchableOpacity>
 
                 {/* Logout */}
@@ -405,23 +448,22 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0a0a1a',
+        backgroundColor: '#06061a',
     },
+    // Header
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 56,
-        paddingBottom: 16,
-        backgroundColor: '#0a0a1a',
-        borderBottomWidth: 1,
-        borderBottomColor: '#1a1a3e',
+        paddingTop: 52,
+        paddingBottom: 12,
     },
     headerTitle: {
-        fontSize: 22,
-        fontWeight: '700',
+        fontSize: 24,
+        fontWeight: '800',
         color: '#ffffff',
+        letterSpacing: -0.5,
     },
     statusRow: {
         flexDirection: 'row',
@@ -439,128 +481,217 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     settingsBtn: {
-        backgroundColor: '#1a1a3e',
-        borderRadius: 8,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    settingsBtnText: {
-        color: '#a29bfe',
-        fontSize: 13,
-        fontWeight: '600',
+    settingsIcon: {
+        width: 18,
+        height: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    settingsGear: {
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 2,
+        borderColor: '#8888aa',
     },
     scroll: {
         flex: 1,
         paddingHorizontal: 16,
     },
-    card: {
-        backgroundColor: '#12122a',
-        borderRadius: 16,
-        padding: 20,
-        marginTop: 16,
+    // Hero Hash Rate Card
+    heroCard: {
+        backgroundColor: 'rgba(108, 92, 231, 0.08)',
+        borderRadius: 24,
         borderWidth: 1,
-        borderColor: '#1e1e40',
+        borderColor: 'rgba(108, 92, 231, 0.2)',
+        padding: 24,
+        marginBottom: 12,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    heroCardGlow: {
+        position: 'absolute',
+        top: -30,
+        right: -30,
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: 'rgba(108, 92, 231, 0.15)',
+    },
+    heroLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#7a7a9e',
+        letterSpacing: 1.5,
+        marginBottom: 8,
+    },
+    heroValueRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+    },
+    heroValue: {
+        fontSize: 48,
+        fontWeight: '800',
+        color: '#a29bfe',
+        letterSpacing: -1,
+    },
+    heroUnit: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#6c5ce7',
+        marginLeft: 6,
+    },
+    heroDivider: {
+        height: 1,
+        backgroundColor: 'rgba(108, 92, 231, 0.15)',
+        marginVertical: 16,
+    },
+    heroSubRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    heroSubItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    heroSubDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        marginRight: 6,
+    },
+    heroSubText: {
+        fontSize: 12,
+        color: '#7a7a9e',
+        fontWeight: '500',
+    },
+    // Stats Row
+    statsRow: {
+        flexDirection: 'row',
+        marginBottom: 12,
+        gap: 8,
+    },
+    statCard: {
+        flex: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+        paddingVertical: 16,
+        paddingHorizontal: 12,
+    },
+    statCardMiddle: {
+        marginHorizontal: 0,
+    },
+    statLabel: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#555577',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: 6,
+    },
+    statValue: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#ffffff',
+    },
+    statUnit: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#7a7a9e',
+    },
+    // Generic Card
+    card: {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+        padding: 20,
+        marginBottom: 12,
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
-    },
-    cardLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#8888aa',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: 12,
-    },
-    weightValue: {
-        fontSize: 48,
-        fontWeight: '800',
-        color: '#a29bfe',
-        textAlign: 'center',
-    },
-    weightBreakdown: {
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    breakdownItem: {
-        fontSize: 12,
-        color: '#666688',
-    },
-    statsRow: {
-        flexDirection: 'row',
-        marginTop: 16,
-        gap: 12,
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: '#12122a',
-        borderRadius: 16,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#1e1e40',
-    },
-    statCardLeft: {
-        marginRight: 6,
-    },
-    statCardRight: {
-        marginLeft: 6,
-    },
-    statLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#8888aa',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-    statValue: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: '#ffffff',
-        marginTop: 4,
-    },
-    rewardsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
         marginBottom: 16,
     },
-    rewardCol: {
+    cardLabel: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#6a6a8e',
+        letterSpacing: 1,
+        marginBottom: 16,
+    },
+    // Rewards
+    rewardsRow: {
+        flexDirection: 'row',
         alignItems: 'center',
     },
+    rewardCol: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    rewardDivider: {
+        width: 1,
+        height: 40,
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    },
     rewardAmount: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: '700',
-        color: '#ffd700',
+        color: '#00b894',
+        marginBottom: 4,
     },
     rewardLabel: {
         fontSize: 12,
-        color: '#8888aa',
-        marginTop: 4,
+        color: '#7a7a9e',
+        fontWeight: '500',
     },
     claimButton: {
         backgroundColor: '#6c5ce7',
-        borderRadius: 12,
+        borderRadius: 14,
         paddingVertical: 14,
         alignItems: 'center',
+        marginTop: 20,
+        shadowColor: '#6c5ce7',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 4,
     },
     claimButtonDisabled: {
-        opacity: 0.5,
+        backgroundColor: 'rgba(108, 92, 231, 0.3)',
+        shadowOpacity: 0,
+        elevation: 0,
     },
     claimButtonText: {
+        color: '#ffffff',
         fontSize: 15,
         fontWeight: '700',
-        color: '#ffffff',
     },
+    // Block Stats
     statusBadge: {
-        borderRadius: 8,
         paddingHorizontal: 10,
         paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
     },
     statusBadgeText: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: 11,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     blockStatsGrid: {
         flexDirection: 'row',
@@ -570,48 +701,73 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     blockStatValue: {
-        fontSize: 20,
+        fontSize: 18,
         fontWeight: '700',
         color: '#ffffff',
+        marginBottom: 4,
     },
     blockStatLabel: {
         fontSize: 11,
-        color: '#8888aa',
-        marginTop: 4,
+        color: '#7a7a9e',
+        fontWeight: '500',
     },
     inactiveText: {
-        fontSize: 13,
         color: '#555577',
+        fontSize: 13,
         textAlign: 'center',
         fontStyle: 'italic',
     },
+    // Node Info
     infoRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingVertical: 8,
+        alignItems: 'center',
+        paddingVertical: 10,
         borderBottomWidth: 1,
-        borderBottomColor: '#1a1a3e',
+        borderBottomColor: 'rgba(255, 255, 255, 0.04)',
     },
     infoLabel: {
-        fontSize: 14,
-        color: '#8888aa',
+        fontSize: 13,
+        color: '#7a7a9e',
+        fontWeight: '500',
     },
     infoValue: {
-        fontSize: 14,
-        color: '#ffffff',
-        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 13,
+        color: '#ccccdd',
+        fontWeight: '600',
+        fontFamily: 'monospace',
     },
-    logoutButton: {
-        marginTop: 24,
-        paddingVertical: 14,
-        borderRadius: 12,
+    // Leaderboard
+    leaderboardBtn: {
+        backgroundColor: 'rgba(162, 155, 254, 0.08)',
+        borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#e74c3c44',
+        borderColor: 'rgba(162, 155, 254, 0.2)',
+        paddingVertical: 16,
+        paddingHorizontal: 20,
+        marginBottom: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    leaderboardBtnText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#a29bfe',
+    },
+    leaderboardArrow: {
+        fontSize: 18,
+        color: '#a29bfe',
+        fontWeight: '700',
+    },
+    // Logout
+    logoutButton: {
+        paddingVertical: 14,
         alignItems: 'center',
     },
     logoutText: {
         color: '#e74c3c',
-        fontSize: 15,
+        fontSize: 14,
         fontWeight: '600',
     },
     bottomSpacer: {

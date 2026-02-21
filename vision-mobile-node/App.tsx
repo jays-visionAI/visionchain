@@ -12,6 +12,7 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import { loadCredentials, clearCredentials } from './src/services/storage';
+import { firebaseSignOut } from './src/services/firebaseAuth';
 import { networkAdapter } from './src/services/networkAdapter';
 import { heartbeatService } from './src/services/heartbeat';
 import { blockObserver } from './src/services/blockObserver';
@@ -49,6 +50,9 @@ const App: React.FC = () => {
     await storageCache.stop();
     networkAdapter.stop();
     await stopBackgroundService();
+
+    // Sign out from Firebase
+    await firebaseSignOut();
 
     // Clear stored credentials
     await clearCredentials();

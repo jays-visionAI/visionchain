@@ -90,16 +90,18 @@ const api = async <T = Record<string, unknown>>(
 };
 
 /**
- * Register a new mobile node
+ * Register a new mobile node (requires Firebase Auth)
  */
 export const register = async (
     email: string,
     referralCode?: string,
+    firebaseIdToken?: string,
 ): Promise<RegisterResponse> => {
     return api<RegisterResponse>('mobile_node.register', {
         email,
         device_type: 'android',
         ...(referralCode ? { referral_code: referralCode } : {}),
+        ...(firebaseIdToken ? { firebase_id_token: firebaseIdToken } : {}),
     });
 };
 

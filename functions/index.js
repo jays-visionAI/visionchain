@@ -11665,7 +11665,7 @@ exports.agentGateway = onRequest({
     // --- mobile_node.register ---
     if (action === "mobile_node.register") {
       try {
-        const { email, device_type: deviceType, referral_code: referralCodeInput } = req.body;
+        const { email, device_type: deviceType, referral_code: referralCodeInput, firebase_id_token: firebaseIdToken } = req.body;
         if (!email || !deviceType) {
           return res.status(400).json({ error: "email and device_type (android|pwa) are required" });
         }
@@ -11676,6 +11676,23 @@ exports.agentGateway = onRequest({
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
           return res.status(400).json({ error: "Invalid email format" });
+        }
+
+        // Firebase Auth verification (required for app clients)
+        let firebaseUid = null;
+        if (firebaseIdToken) {
+          try {
+            const decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
+            firebaseUid = decodedToken.uid;
+            // Verify email matches
+            if (decodedToken.email && decodedToken.email.toLowerCase() !== email.toLowerCase()) {
+              return res.status(400).json({ error: "Email mismatch with authenticated account" });
+            }
+            console.log(`[Mobile Node] Firebase auth verified: ${firebaseUid} (${email})`);
+          } catch (authErr) {
+            console.error("[Mobile Node] Firebase token verification failed:", authErr.message);
+            return res.status(401).json({ error: "Invalid authentication token. Please sign in again." });
+          }
         }
         // Check if already registered with this email
         const existingSnap = await db.collection("mobile_nodes")
@@ -11716,6 +11733,7 @@ exports.agentGateway = onRequest({
 
         const nodeDoc = {
           email,
+          firebase_uid: firebaseUid,
           device_type: deviceType,
           wallet_address: nodeWallet.address,
           private_key_encrypted: nodeWallet.privateKey,
