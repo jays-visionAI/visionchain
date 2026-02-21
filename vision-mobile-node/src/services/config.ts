@@ -10,8 +10,8 @@ export const CONFIG = {
     PRODUCTION_API: 'https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway',
 
     // RPC WebSocket Endpoints (for Block Observer)
-    STAGING_WS_RPC: 'ws://46.224.221.201:8545',
-    PRODUCTION_WS_RPC: 'ws://46.224.221.201:8545',
+    STAGING_WS_RPC: 'wss://ws.rpc.visionchain.co',
+    PRODUCTION_WS_RPC: 'wss://ws.rpc.visionchain.co',
 
     // Chain Config
     CHAIN_ID: 3151909,
