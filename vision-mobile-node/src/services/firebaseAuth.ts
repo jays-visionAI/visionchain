@@ -1,49 +1,13 @@
 /**
  * Vision Mobile Node - Firebase Auth Service
  *
- * Uses Firebase Web SDK (firebase/auth) for email+password authentication.
- * Properly initialized for React Native with AsyncStorage persistence.
+ * Uses Firebase Auth REST API directly instead of SDK.
+ * This avoids all React Native + Firebase SDK compatibility issues.
+ * https://firebase.google.com/docs/reference/rest/auth
  */
 
-import { initializeApp, getApps } from 'firebase/app';
-import {
-    initializeAuth,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    signOut,
-    onAuthStateChanged as fbOnAuthStateChanged,
-    User,
-    Auth,
-    // @ts-ignore - available in firebase 10.x for React Native
-    getReactNativePersistence,
-} from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Firebase config
-const firebaseConfig = {
-    apiKey: 'AIzaSyAZ-wTAWNkQvlHAh1_bh0jIrzYGfOCENQI',
-    authDomain: 'visionchain-d19ed.firebaseapp.com',
-    projectId: 'visionchain-d19ed',
-    storageBucket: 'visionchain-d19ed.firebasestorage.app',
-    messagingSenderId: '451188892027',
-    appId: '1:451188892027:android:75174a12b89eb198ee1dde',
-};
-
-// Initialize Firebase App (only once)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-
-// Initialize Auth with React Native persistence (NOT getAuth which uses browser persistence)
-let auth: Auth;
-try {
-    auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage),
-    });
-} catch (err: any) {
-    // If already initialized (hot reload), just get the existing auth instance
-    // initializeAuth can only be called once per app
-    const { getAuth } = require('firebase/auth');
-    auth = getAuth(app);
-}
+const FIREBASE_API_KEY = 'AIzaSyAZ-wTAWNkQvlHAh1_bh0jIrzYGfOCENQI';
+const AUTH_BASE_URL = 'https://identitytoolkit.googleapis.com/v1/accounts';
 
 /** Error codes for scenario-specific UI handling */
 export type AuthErrorCode =
@@ -59,143 +23,161 @@ export type AuthErrorCode =
 
 export interface AuthResult {
     success: boolean;
-    user?: User;
     idToken?: string;
+    email?: string;
+    localId?: string;
     error?: string;
     errorCode?: AuthErrorCode;
 }
 
 /**
- * Sign in with email and password
+ * Sign in with email and password via Firebase REST API
  */
 export const signIn = async (email: string, password: string): Promise<AuthResult> => {
     try {
-        const credential = await signInWithEmailAndPassword(auth, email, password);
-        const idToken = await credential.user.getIdToken();
-        return { success: true, user: credential.user, idToken };
+        console.log('[Auth] Calling Firebase REST signInWithPassword...');
+        const response = await fetch(
+            `${AUTH_BASE_URL}:signInWithPassword?key=${FIREBASE_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    password,
+                    returnSecureToken: true,
+                }),
+            },
+        );
+
+        const data = await response.json();
+        console.log('[Auth] signIn response status:', response.status);
+
+        if (!response.ok || data.error) {
+            const errorCode = mapFirebaseError(data.error?.message || '');
+            const errorMsg = getAuthErrorMessage(data.error?.message || '');
+            console.log('[Auth] signIn error:', data.error?.message, '->', errorCode);
+            return { success: false, error: errorMsg, errorCode };
+        }
+
+        console.log('[Auth] signIn success, got idToken');
+        return {
+            success: true,
+            idToken: data.idToken,
+            email: data.email,
+            localId: data.localId,
+        };
     } catch (err: any) {
-        console.warn('[Firebase Auth] signIn error:', err?.code, err?.message);
-        const errorCode = mapErrorCode(err?.code || '');
+        console.warn('[Auth] signIn network error:', err?.message);
         return {
             success: false,
-            error: getAuthErrorMessage(err?.code || ''),
-            errorCode,
+            error: 'Network error. Please check your connection.',
+            errorCode: 'network-error',
         };
     }
 };
 
 /**
- * Sign up with email and password
+ * Sign up with email and password via Firebase REST API
  */
 export const signUp = async (email: string, password: string): Promise<AuthResult> => {
     try {
-        const credential = await createUserWithEmailAndPassword(auth, email, password);
-        const idToken = await credential.user.getIdToken();
-        return { success: true, user: credential.user, idToken };
+        console.log('[Auth] Calling Firebase REST signUp...');
+        const response = await fetch(
+            `${AUTH_BASE_URL}:signUp?key=${FIREBASE_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    password,
+                    returnSecureToken: true,
+                }),
+            },
+        );
+
+        const data = await response.json();
+        console.log('[Auth] signUp response status:', response.status);
+
+        if (!response.ok || data.error) {
+            const errorCode = mapFirebaseError(data.error?.message || '');
+            const errorMsg = getAuthErrorMessage(data.error?.message || '');
+            console.log('[Auth] signUp error:', data.error?.message, '->', errorCode);
+            return { success: false, error: errorMsg, errorCode };
+        }
+
+        console.log('[Auth] signUp success, got idToken');
+        return {
+            success: true,
+            idToken: data.idToken,
+            email: data.email,
+            localId: data.localId,
+        };
     } catch (err: any) {
-        console.warn('[Firebase Auth] signUp error:', err?.code, err?.message);
-        const errorCode = mapErrorCode(err?.code || '');
+        console.warn('[Auth] signUp network error:', err?.message);
         return {
             success: false,
-            error: getAuthErrorMessage(err?.code || ''),
-            errorCode,
+            error: 'Network error. Please check your connection.',
+            errorCode: 'network-error',
         };
     }
 };
 
 /**
- * Sign out
+ * Sign out (no-op for REST API -- we just clear local state)
  */
 export const firebaseSignOut = async (): Promise<void> => {
-    try {
-        await signOut(auth);
-    } catch (err) {
-        console.warn('[Firebase Auth] signOut error:', err);
-    }
+    // REST API doesn't maintain session state -- handled by clearing credentials
+    console.log('[Auth] signOut (REST API no-op)');
 };
 
 /**
- * Get current user
- */
-export const getCurrentUser = (): User | null => {
-    try {
-        return auth.currentUser;
-    } catch {
-        return null;
-    }
-};
-
-/**
- * Get fresh ID token for backend API calls
+ * Get ID token -- not available via REST API, return null
+ * (ID token is returned directly from signIn/signUp)
  */
 export const getIdToken = async (): Promise<string | null> => {
-    try {
-        const user = auth.currentUser;
-        if (!user) { return null; }
-        return await user.getIdToken(true);
-    } catch (err) {
-        console.warn('[Firebase Auth] getIdToken error:', err);
-        return null;
-    }
+    return null;
 };
 
 /**
- * Listen to auth state changes
+ * Map Firebase REST API error messages to our AuthErrorCode
  */
-export const onAuthStateChanged = (
-    callback: (user: User | null) => void,
-): (() => void) => {
-    return fbOnAuthStateChanged(auth, callback);
+const mapFirebaseError = (message: string): AuthErrorCode => {
+    const msg = message.toUpperCase();
+    if (msg.includes('EMAIL_NOT_FOUND')) { return 'user-not-found'; }
+    if (msg.includes('INVALID_PASSWORD')) { return 'wrong-password'; }
+    if (msg.includes('INVALID_LOGIN_CREDENTIALS')) { return 'invalid-credential'; }
+    if (msg.includes('EMAIL_EXISTS')) { return 'email-in-use'; }
+    if (msg.includes('WEAK_PASSWORD')) { return 'weak-password'; }
+    if (msg.includes('TOO_MANY_ATTEMPTS')) { return 'too-many-requests'; }
+    if (msg.includes('INVALID_EMAIL')) { return 'invalid-email'; }
+    return 'unknown';
 };
 
 /**
- * Map Firebase error code string to our AuthErrorCode enum
+ * Translate Firebase REST API errors to user-friendly messages
  */
-const mapErrorCode = (code: string): AuthErrorCode => {
-    switch (code) {
-        case 'auth/user-not-found':
-            return 'user-not-found';
-        case 'auth/wrong-password':
-            return 'wrong-password';
-        case 'auth/invalid-credential':
-            return 'invalid-credential';
-        case 'auth/email-already-in-use':
-            return 'email-in-use';
-        case 'auth/weak-password':
-            return 'weak-password';
-        case 'auth/too-many-requests':
-            return 'too-many-requests';
-        case 'auth/network-request-failed':
-            return 'network-error';
-        case 'auth/invalid-email':
-            return 'invalid-email';
-        default:
-            return 'unknown';
+const getAuthErrorMessage = (message: string): string => {
+    const msg = message.toUpperCase();
+    if (msg.includes('EMAIL_NOT_FOUND')) {
+        return 'No account found with this email.';
     }
-};
-
-/**
- * Translate Firebase error codes to user-friendly messages
- */
-const getAuthErrorMessage = (code: string): string => {
-    switch (code) {
-        case 'auth/email-already-in-use':
-            return 'This email is already registered.';
-        case 'auth/invalid-email':
-            return 'Please enter a valid email address.';
-        case 'auth/user-not-found':
-            return 'No account found with this email. Please sign up.';
-        case 'auth/wrong-password':
-            return 'Incorrect password. Please try again.';
-        case 'auth/weak-password':
-            return 'Password must be at least 6 characters.';
-        case 'auth/too-many-requests':
-            return 'Too many attempts. Please wait a moment and try again.';
-        case 'auth/network-request-failed':
-            return 'Network error. Please check your connection and try again.';
-        case 'auth/invalid-credential':
-            return 'Invalid email or password. Please check and try again.';
-        default:
-            return `Authentication failed. Please try again.`;
+    if (msg.includes('INVALID_PASSWORD')) {
+        return 'Incorrect password.';
     }
+    if (msg.includes('INVALID_LOGIN_CREDENTIALS')) {
+        return 'Invalid email or password.';
+    }
+    if (msg.includes('EMAIL_EXISTS')) {
+        return 'This email is already registered.';
+    }
+    if (msg.includes('WEAK_PASSWORD')) {
+        return 'Password must be at least 6 characters.';
+    }
+    if (msg.includes('TOO_MANY_ATTEMPTS')) {
+        return 'Too many attempts. Please wait and try again.';
+    }
+    if (msg.includes('INVALID_EMAIL')) {
+        return 'Please enter a valid email address.';
+    }
+    return `Authentication failed. Please try again.`;
 };
