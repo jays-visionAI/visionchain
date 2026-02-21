@@ -9144,12 +9144,21 @@ exports.agentGateway = onRequest({
 
       // ========== USER MODE (Firebase Auth) ==========
       if (agent._isUser) {
-        const { signature, deadline, fee: userFee } = req.body;
+        const { signature, deadline, fee: userFee, from: userFrom } = req.body;
         if (!signature || !deadline) {
           return res.status(400).json({
             error: "User-mode transfer requires: to, amount, signature, deadline. Sign an EIP-712 Permit with your wallet.",
             hint: "The permit should authorize the Paymaster to spend (amount + fee) VCN on your behalf.",
           });
+        }
+
+        // Use the explicitly provided 'from' address (actual signer), fall back to Firestore wallet
+        const userAddress = userFrom || agent.walletAddress;
+        if (!userAddress) {
+          return res.status(400).json({ error: "No wallet address found. Please provide 'from' parameter with your wallet address." });
+        }
+        if (userFrom && agent.walletAddress && userFrom.toLowerCase() !== agent.walletAddress.toLowerCase()) {
+          console.warn(`[Agent Gateway] User address mismatch: from=${userFrom}, firestore=${agent.walletAddress}`);
         }
 
         const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -9161,7 +9170,7 @@ exports.agentGateway = onRequest({
         const totalAmountBigInt = transferAmountBigInt + feeBigInt;
 
         // Check user balance
-        const userBal = await tokenContract.balanceOf(agent.walletAddress);
+        const userBal = await tokenContract.balanceOf(userAddress);
         if (userBal < totalAmountBigInt) {
           return res.status(400).json({
             error: "Insufficient balance",
@@ -9182,7 +9191,7 @@ exports.agentGateway = onRequest({
         // Execute permit
         try {
           const permitTx = await tokenContract.permit(
-            agent.walletAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
+            userAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
             { nonce: startNonce },
           );
           await permitTx.wait();
@@ -9196,7 +9205,7 @@ exports.agentGateway = onRequest({
         let txHash;
         try {
           const transferTx = await tokenContract.transferFrom(
-            agent.walletAddress, to, transferAmountBigInt,
+            userAddress, to, transferAmountBigInt,
             { nonce: startNonce + 1 },
           );
           await transferTx.wait();
@@ -9210,7 +9219,7 @@ exports.agentGateway = onRequest({
         // Collect fee (transferFrom fee portion to admin)
         try {
           const feeTx = await tokenContract.transferFrom(
-            agent.walletAddress, adminWallet.address, feeBigInt,
+            userAddress, adminWallet.address, feeBigInt,
             { nonce: startNonce + 2 },
           );
           await feeTx.wait();
@@ -9225,7 +9234,7 @@ exports.agentGateway = onRequest({
           hash: txHash,
           chainId: 3151909,
           type: "Transfer",
-          from_addr: agent.walletAddress.toLowerCase(),
+          from_addr: userAddress.toLowerCase(),
           to_addr: to.toLowerCase(),
           value: amount.toString(),
           timestamp: Date.now(),
@@ -11097,7 +11106,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */}
+          } catch (_e8) {/* non-critical */ }
         })();
 
         if (!agent._isUser) {
@@ -11536,7 +11545,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */}
+        } catch (_e9) {/* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -11551,7 +11560,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */}
+          } catch (_e10) {/* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -11597,7 +11606,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */}
+        } catch (_e11) {/* no SBT */ }
 
         return res.status(200).json({
           success: true,

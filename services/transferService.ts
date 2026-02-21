@@ -179,10 +179,12 @@ export async function sendTransfer(
         const fee = '1.0';
         const totalVcn = (parseFloat(amount) + parseFloat(fee)).toString();
         const permit = await signPermit(activeSigner, totalVcn);
+        const fromAddress = await activeSigner.getAddress();
 
         const result = await callGateway('transfer.send', {
             to,
             amount,
+            from: fromAddress,
             signature: permit.signature,
             deadline: permit.deadline,
             fee: ethers.parseUnits(fee, 18).toString(),
