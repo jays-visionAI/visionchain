@@ -79,37 +79,69 @@ export const AdminDashboard: Component = () => {
     const [mobileNodesTotal, setMobileNodesTotal] = createSignal(0);
     const [mobileNodesOnline, setMobileNodesOnline] = createSignal(0);
 
-    const API_URL = "https://api.visionchain.co/api/transactions";
 
     const fetchRecentTransactions = async () => {
         try {
-            // Fix: remove spaces in query params
-            const response = await fetch(`${API_URL}?limit=10`);
+            const db = getFirebaseDb();
+            const results: any[] = [];
 
-            if (!response.ok) {
-                // If 404 or other error, fallback to empty to avoid crash
-                console.warn(`[Dashboard] Transaction fetch failed: ${response.status}`);
-                setRecentTransactions([]);
-                return;
+            // 1. Fetch from 'transactions' collection (direct chain tx records)
+            try {
+                const txRef = collection(db, 'transactions');
+                const txQuery = query(txRef, orderBy('timestamp', 'desc'), limit(15));
+                const txSnap = await getDocs(txQuery);
+                txSnap.forEach((doc) => {
+                    const d = doc.data();
+                    results.push({
+                        hash: (d.hash || doc.id).slice(0, 10) + '...',
+                        type: d.type || 'Transfer',
+                        from: d.from_addr ? (d.from_addr.slice(0, 6) + '...' + d.from_addr.slice(-4)) : 'Unknown',
+                        to: d.to_addr ? (d.to_addr.slice(0, 6) + '...' + d.to_addr.slice(-4)) : 'Unknown',
+                        amount: d.value ? (parseFloat(d.value) > 1e15 ? (parseFloat(d.value) / 1e18).toFixed(2) : d.value) : '0',
+                        time: Math.max(0, Math.floor((Date.now() - (d.timestamp || Date.now())) / 60000)),
+                        _ts: d.timestamp || 0,
+                    });
+                });
+            } catch (e) {
+                console.warn('[Dashboard] transactions collection fetch failed:', e);
             }
 
-            const data = await response.json();
-
-            // Fix: Ensure data is an array before mapping
-            if (Array.isArray(data)) {
-                const formatted = data.map((tx: any) => ({
-                    hash: tx.hash,
-                    type: tx.type,
-                    from: tx.from_addr ? (tx.from_addr.slice(0, 6) + '...' + tx.from_addr.slice(-4)) : 'Unknown',
-                    to: tx.to_addr ? (tx.to_addr.slice(0, 6) + '...' + tx.to_addr.slice(-4)) : 'Unknown',
-                    amount: tx.value,
-                    time: Math.floor((Date.now() - (tx.timestamp || Date.now())) / 60000)
-                }));
-                setRecentTransactions(formatted);
-            } else {
-                console.warn("[Dashboard] Transaction API returned unexpected format:", data);
-                setRecentTransactions([]);
+            // 2. Fetch from 'scheduledTransfers' (agent / timelock transfers with SENT status)
+            try {
+                const stRef = collection(db, 'scheduledTransfers');
+                const stQuery = query(stRef, where('status', '==', 'SENT'), limit(15));
+                const stSnap = await getDocs(stQuery);
+                stSnap.forEach((doc) => {
+                    const d = doc.data();
+                    const ts = d.executedAt ? new Date(d.executedAt).getTime() : (d.timestamp || Date.now());
+                    // Normalize amount from possible wei
+                    let amt = d.amount || '0';
+                    if (typeof amt === 'string' && amt.length > 15 && !amt.includes('.')) {
+                        try { amt = (Number(BigInt(amt)) / 1e18).toFixed(2); } catch { /* keep */ }
+                    }
+                    results.push({
+                        hash: (d.txHash || d.executionTx || doc.id).slice(0, 10) + '...',
+                        type: d.type === 'BATCH' ? 'Batch Transfer' : 'Time Lock',
+                        from: d.userEmail ? d.userEmail.split('@')[0] : 'Agent',
+                        to: d.recipient ? (d.recipient.slice(0, 6) + '...' + d.recipient.slice(-4)) : 'Unknown',
+                        amount: amt,
+                        time: Math.max(0, Math.floor((Date.now() - ts) / 60000)),
+                        _ts: ts,
+                    });
+                });
+            } catch (e) {
+                console.warn('[Dashboard] scheduledTransfers fetch failed:', e);
             }
+
+            // 3. Deduplicate by hash, sort by timestamp desc, take top 10
+            const seen = new Set<string>();
+            const unique = results.filter(r => {
+                if (seen.has(r.hash)) return false;
+                seen.add(r.hash);
+                return true;
+            });
+            unique.sort((a, b) => (b._ts || 0) - (a._ts || 0));
+            setRecentTransactions(unique.slice(0, 10));
         } catch (error) {
             console.error("Failed to fetch dashboard transactions:", error);
             setRecentTransactions([]);
