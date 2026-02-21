@@ -118,6 +118,7 @@ render(() => (
         <Route path="/adminsystem/vision-insight" component={Admin.AdminVisionInsightPage} />
         <Route path="/adminsystem/social-media" component={Admin.AdminSocialMediaPage} />
         <Route path="/adminsystem/api-pricing" component={Admin.AdminApiPricingPage} />
+        <Route path="/adminsystem/mobile-nodes" component={Admin.AdminMobileNodesPage} />
 
       </Router>
     </I18nProvider>

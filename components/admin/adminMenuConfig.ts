@@ -24,7 +24,8 @@ import {
     LineChart,
     Eye,
     Share2,
-    Coins
+    Coins,
+    Smartphone
 } from 'lucide-solid';
 
 
@@ -54,7 +55,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     LineChart,
     Eye,
     Share2,
-    Coins
+    Coins,
+    Smartphone
 };
 
 // Menu item interface with optional children for sub-menus
@@ -261,6 +263,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 16,
+        requiredRole: 'admin'
+    },
+    {
+        id: 'mobile-nodes',
+        path: '/adminsystem/mobile-nodes',
+        label: 'Mobile Nodes',
+        icon: 'Smartphone',
+        badge: 'NEW',
+        category: 'custom',
+        order: 17,
         requiredRole: 'admin'
     },
 
