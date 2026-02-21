@@ -8923,7 +8923,7 @@ exports.agentGateway = onRequest({
       return res.status(401).json({ error: "Missing api_key or Firebase auth token. Register first or use Authorization: Bearer <firebase_id_token>." });
     }
 
-    let agent = null;  // Can be agent context OR user context (with _isUser flag)
+    let agent = null; // Can be agent context OR user context (with _isUser flag)
     if (!skipAgentAuth.includes(action)) {
       if (firebaseIdToken) {
         // Firebase Auth user mode
@@ -9183,7 +9183,7 @@ exports.agentGateway = onRequest({
         try {
           const permitTx = await tokenContract.permit(
             agent.walletAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
-            { nonce: startNonce }
+            { nonce: startNonce },
           );
           await permitTx.wait();
           console.log(`[Agent Gateway] User permit confirmed: ${permitTx.hash}`);
@@ -9197,7 +9197,7 @@ exports.agentGateway = onRequest({
         try {
           const transferTx = await tokenContract.transferFrom(
             agent.walletAddress, to, transferAmountBigInt,
-            { nonce: startNonce + 1 }
+            { nonce: startNonce + 1 },
           );
           await transferTx.wait();
           txHash = transferTx.hash;
@@ -9211,7 +9211,7 @@ exports.agentGateway = onRequest({
         try {
           const feeTx = await tokenContract.transferFrom(
             agent.walletAddress, adminWallet.address, feeBigInt,
-            { nonce: startNonce + 2 }
+            { nonce: startNonce + 2 },
           );
           await feeTx.wait();
           console.log(`[Agent Gateway] Fee collected: ${ethers.formatEther(feeBigInt)} VCN`);
@@ -10180,13 +10180,13 @@ exports.agentGateway = onRequest({
 
           const permitTx = await tokenContract.permit(
             agent.walletAddress, adminWallet.address, totalAmount, deadline, v, r, sigS,
-            { nonce: startNonce }
+            { nonce: startNonce },
           );
           await permitTx.wait();
 
           const consolidateTx = await tokenContract.transferFrom(
             agent.walletAddress, adminWallet.address, totalAmount,
-            { nonce: startNonce + 1 }
+            { nonce: startNonce + 1 },
           );
           await consolidateTx.wait();
         } else {
@@ -11022,14 +11022,14 @@ exports.agentGateway = onRequest({
           // Execute permit
           const permitTx = await tokenContract.permit(
             agent.walletAddress, adminWallet.address, totalRequired, deadline, v, r, sigS,
-            { nonce: startNonce }
+            { nonce: startNonce },
           );
           await permitTx.wait();
 
           // Transfer VCN from user to admin
           const transferTx = await tokenContract.transferFrom(
             agent.walletAddress, adminWallet.address, totalRequired,
-            { nonce: startNonce + 1 }
+            { nonce: startNonce + 1 },
           );
           await transferTx.wait();
         } else {
@@ -11097,7 +11097,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */ }
+          } catch (_e8) {/* non-critical */}
         })();
 
         if (!agent._isUser) {
@@ -11375,7 +11375,7 @@ exports.agentGateway = onRequest({
           try {
             const { v, r, s: sigS } = parseSignature(signature);
             const permitTx = await sepoliaToken.permit(
-              agent.walletAddress, relayerWallet.address, totalAmount, deadline, v, r, sigS
+              agent.walletAddress, relayerWallet.address, totalAmount, deadline, v, r, sigS,
             );
             await permitTx.wait();
             console.log(`[Agent Gateway] Sepolia permit confirmed`);
@@ -11536,7 +11536,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */ }
+        } catch (_e9) {/* no existing SBT */}
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -11551,7 +11551,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */ }
+          } catch (_e10) {/* skip */}
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -11597,7 +11597,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */ }
+        } catch (_e11) {/* no SBT */}
 
         return res.status(200).json({
           success: true,
