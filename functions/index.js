@@ -10162,7 +10162,8 @@ exports.agentGateway = onRequest({
         }
 
         // Check balance
-        const bal = await tokenContract.balanceOf(agent.walletAddress);
+        const batchUserAddr = req.body.from || agent.walletAddress;
+        const bal = await tokenContract.balanceOf(batchUserAddr);
         if (bal < totalAmount) {
           return res.status(400).json({
             error: "Insufficient balance for batch",
@@ -10188,13 +10189,13 @@ exports.agentGateway = onRequest({
           const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
 
           const permitTx = await tokenContract.permit(
-            agent.walletAddress, adminWallet.address, totalAmount, deadline, v, r, sigS,
+            batchUserAddr, adminWallet.address, totalAmount, deadline, v, r, sigS,
             { nonce: startNonce },
           );
           await permitTx.wait();
 
           const consolidateTx = await tokenContract.transferFrom(
-            agent.walletAddress, adminWallet.address, totalAmount,
+            batchUserAddr, adminWallet.address, totalAmount,
             { nonce: startNonce + 1 },
           );
           await consolidateTx.wait();
@@ -11002,7 +11003,8 @@ exports.agentGateway = onRequest({
         const totalRequired = amountWei + BRIDGE_FEE;
 
         // Check balance
-        const bal = await tokenContract.balanceOf(agent.walletAddress);
+        const bridgeUserAddr = req.body.from || agent.walletAddress;
+        const bal = await tokenContract.balanceOf(bridgeUserAddr);
         if (bal < totalRequired) {
           return res.status(400).json({
             error: "Insufficient balance",
@@ -11030,14 +11032,14 @@ exports.agentGateway = onRequest({
 
           // Execute permit
           const permitTx = await tokenContract.permit(
-            agent.walletAddress, adminWallet.address, totalRequired, deadline, v, r, sigS,
+            bridgeUserAddr, adminWallet.address, totalRequired, deadline, v, r, sigS,
             { nonce: startNonce },
           );
           await permitTx.wait();
 
           // Transfer VCN from user to admin
           const transferTx = await tokenContract.transferFrom(
-            agent.walletAddress, adminWallet.address, totalRequired,
+            bridgeUserAddr, adminWallet.address, totalRequired,
             { nonce: startNonce + 1 },
           );
           await transferTx.wait();
@@ -11106,7 +11108,7 @@ exports.agentGateway = onRequest({
             await approveTx.wait();
             const depositTx = await stakingContract.depositFees(BRIDGE_FEE);
             await depositTx.wait();
-          } catch (_e8) {/* non-critical */ }
+          } catch (_e8) { /* non-critical */ }
         })();
 
         if (!agent._isUser) {
@@ -11545,7 +11547,7 @@ exports.agentGateway = onRequest({
               agent_name: existing[1],
             });
           }
-        } catch (_e9) {/* no existing SBT */ }
+        } catch (_e9) { /* no existing SBT */ }
 
         const gasOpts = { gasLimit: 500000, gasPrice: ethers.parseUnits("1", "gwei") };
         const mintTx = await sbtContract.mintAgentIdentity(targetAddress, agent.agentName, "agent_gateway", gasOpts);
@@ -11560,7 +11562,7 @@ exports.agentGateway = onRequest({
               tokenId = parsed.args[2].toString();
               break;
             }
-          } catch (_e10) {/* skip */ }
+          } catch (_e10) { /* skip */ }
         }
 
         await db.collection("agents").doc(agent.id).update({
@@ -11606,7 +11608,7 @@ exports.agentGateway = onRequest({
               contract: AGENT_SBT_ADDRESS,
             };
           }
-        } catch (_e11) {/* no SBT */ }
+        } catch (_e11) { /* no SBT */ }
 
         return res.status(200).json({
           success: true,

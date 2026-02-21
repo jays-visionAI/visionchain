@@ -252,10 +252,12 @@ export async function initiateBridge(
         // Bridge fee = 1 VCN
         const totalVcn = (parseFloat(amount) + 1).toString();
         const permit = await signPermit(activeSigner, totalVcn);
+        const fromAddress = await activeSigner.getAddress();
 
         const params: Record<string, any> = {
             amount,
             destination_chain: destinationChain,
+            from: fromAddress,
             signature: permit.signature,
             deadline: permit.deadline,
         };
