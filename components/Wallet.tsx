@@ -91,7 +91,7 @@ import { initPriceService, getVcnPrice, getDailyOpeningPrice } from '../services
 import { generateText, generateTextStream } from '../services/ai';
 import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
-import { sendTransfer, scheduleTransfer } from '../services/transferService';
+import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
 import { WalletSidebar } from './wallet/WalletSidebar';
@@ -2571,20 +2571,14 @@ const Wallet = (): JSX.Element => {
                     : "Wallet address not found.");
             }
 
-            // Vision Chain Constants
-            const VISION_CHAIN_ID = 1337;
-            const SEPOLIA_CHAIN_ID = 11155111;
-            const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app';
-
             // Determine destination chain ID
+            const SEPOLIA_CHAIN_ID = 11155111;
             const chainUpper = bridge.destinationChain.toUpperCase();
             const ethereumKeywords = ['ETHEREUM', 'ETH', 'SEPOLIA', 'ERC-20', 'ERC20', '이더리움', '이더', '세폴리아'];
             const dstChainId = ethereumKeywords.some(kw => chainUpper.includes(kw)) ? SEPOLIA_CHAIN_ID : 137;
 
-            const amountWei = ethers.parseEther(bridge.amount).toString();
-
-            console.log('[Bridge] Calling Paymaster API for gasless bridge...');
-            console.log(`[Bridge] User: ${userAddr}, Amount: ${amountWei}, DstChain: ${dstChainId}`);
+            console.log('[Bridge] Calling Agent Gateway for gasless bridge...');
+            console.log(`[Bridge] User: ${userAddr}, Amount: ${bridge.amount}, DstChain: ${dstChainId}`);
 
             // Immediately add an optimistic bridge task so Agent Chip shows loading state
             const optimisticId = `bridge_optimistic_${Date.now()}`;
@@ -2608,12 +2602,10 @@ const Wallet = (): JSX.Element => {
             // Resolve recipient name to Ethereum address if specified
             let resolvedRecipientAddr = userAddr; // Default: bridge to self
             if (bridge.recipient) {
-                // Check if it's already a valid Ethereum address
                 if (ethers.isAddress(bridge.recipient)) {
                     resolvedRecipientAddr = bridge.recipient;
                     console.log(`[Bridge] Recipient is already an address: ${resolvedRecipientAddr}`);
                 } else {
-                    // Resolve name to address via contacts/users
                     console.log(`[Bridge] Resolving recipient name: ${bridge.recipient}`);
                     const resolved = await resolveRecipient(bridge.recipient, userProfile().email);
                     if (resolved && resolved.address) {
@@ -2629,94 +2621,19 @@ const Wallet = (): JSX.Element => {
 
             console.log(`[Bridge] Final recipient address: ${resolvedRecipientAddr}`);
 
-            // === Generate EIP-712 Permit Signature for Paymaster fee collection ===
-            const BRIDGE_FEE = ethers.parseEther("1"); // 1 VCN fee
-            const bridgeAmountBn = ethers.parseEther(bridge.amount);
-            const totalAmount = bridgeAmountBn + BRIDGE_FEE; // amount + fee
-            const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour validity
+            // === Use Transfer Service (Agent Gateway API) for bridge ===
+            // initiateBridge() handles permit signing + API call internally
+            const result = await initiateBridge(
+                bridge.amount,
+                dstChainId,
+                resolvedRecipientAddr !== userAddr ? resolvedRecipientAddr : undefined
+            );
 
-            // Get VCN token contract via signer for permit
-            const VCN_TOKEN_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-            const PAYMASTER_ADMIN = "0x08A1B183a53a0f8f1D875945D504272738E3AF34";
-
-            const tokenAbi = [
-                "function nonces(address owner) view returns (uint256)",
-                "function name() view returns (string)"
-            ];
-            const signer = contractService.getSigner();
-            if (!signer) {
-                throw new Error("Signer not available. Please unlock your wallet.");
-            }
-            const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, tokenAbi, signer);
-
-            const tokenName = await tokenContract.name();
-            const nonce = await tokenContract.nonces(userAddr);
-
-            const domain = {
-                name: tokenName,
-                version: "1",
-                chainId: 3151909, // Vision Chain v2
-                verifyingContract: VCN_TOKEN_ADDRESS
-            };
-
-            const types = {
-                Permit: [
-                    { name: "owner", type: "address" },
-                    { name: "spender", type: "address" },
-                    { name: "value", type: "uint256" },
-                    { name: "nonce", type: "uint256" },
-                    { name: "deadline", type: "uint256" }
-                ]
-            };
-
-            const values = {
-                owner: userAddr,
-                spender: PAYMASTER_ADMIN,
-                value: totalAmount,
-                nonce: nonce,
-                deadline: deadline
-            };
-
-            console.log('[Bridge] Signing EIP-712 permit...', {
-                owner: userAddr,
-                spender: PAYMASTER_ADMIN,
-                value: ethers.formatEther(totalAmount),
-                nonce: nonce.toString(),
-                deadline
-            });
-
-            const signature = await signer.signTypedData(domain, types, values);
-            console.log('[Bridge] Permit signature generated successfully');
-
-            // Call Paymaster API to execute bridge (gasless) with permit signature
-            // Use AbortController with 180s timeout - bridge involves multiple chain txns
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 180000);
-            const response = await fetch(PAYMASTER_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                signal: controller.signal,
-                body: JSON.stringify({
-                    type: 'bridge',
-                    user: userAddr,
-                    recipient: resolvedRecipientAddr,
-                    amount: amountWei,
-                    srcChainId: VISION_CHAIN_ID,
-                    dstChainId: dstChainId,
-                    fee: BRIDGE_FEE.toString(),
-                    deadline: deadline,
-                    signature: signature,
-                })
-            });
-            clearTimeout(timeoutId);
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'Bridge Paymaster request failed');
+            if (!result.success) {
+                throw new Error(result.error || 'Bridge request failed');
             }
 
-            console.log('[Bridge] Paymaster response:', result);
+            console.log('[Bridge] Agent Gateway response:', result);
 
             // Update optimistic task with real data (keep it until Firestore onSnapshot picks up the real doc)
             setBridgeTasks(prev => prev.map(t =>
@@ -2729,7 +2646,7 @@ const Wallet = (): JSX.Element => {
                 setBridgeTasks(prev => prev.filter(t => t.id !== optimisticId));
             }, 10000);
 
-            const resultTxHash = result.lockTxHash || result.commitTxHash;
+            const resultTxHash = result.txHash || '';
             const intentHash = result.intentHash;
 
             // Success message - NO link until bridge is complete
@@ -2778,8 +2695,8 @@ const Wallet = (): JSX.Element => {
                     type: 'Bridge',
                     bridgeStatus: 'LOCKED', // Relayer will update to SUBMITTED → COMPLETED
                     intentHash: intentHash,
-                    commitTxHash: result.commitTxHash,
-                    lockTxHash: result.lockTxHash,
+                    commitTxHash: result.txHash,
+                    lockTxHash: result.bridgeId,
                     challengeEndTime: Date.now(), // Testnet: immediate (no challenge logic implemented yet)
                     metadata: {
                         destinationChain: bridge.destinationChain,
@@ -2826,7 +2743,6 @@ const Wallet = (): JSX.Element => {
             }
 
             const SEPOLIA_VCN_TOKEN = '0x07755968236333B5f8803E9D0fC294608B200d1b';
-            const PAYMASTER_URL = 'https://paymaster-sapjcm3s5a-uc.a.run.app';
 
             // Check Sepolia VCN balance first
             const currentSepoliaBalance = sepoliaVcnBalance();
@@ -2877,41 +2793,20 @@ const Wallet = (): JSX.Element => {
                 }
             }
 
-            // === STEP 1: Call reverse_bridge_prepare for gas sponsorship + relayer address ===
+            // === STEP 1: Prepare reverse bridge via Agent Gateway API ===
             console.log('[ReverseBridge] Step 1: Preparing (gas sponsorship)...');
             setLoadingMessage(lastLocale() === 'ko' ? '가스비 준비 중... (1/3)' : 'Preparing gas... (1/3)');
 
-            const prepController = new AbortController();
-            const prepTimeout = setTimeout(() => prepController.abort(), 60000); // 60s timeout for prepare
-            let prepareData;
-            try {
-                const prepareRes = await fetch(PAYMASTER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: prepController.signal,
-                    body: JSON.stringify({ type: 'reverse_bridge_prepare', user: userAddr })
-                });
-                prepareData = await prepareRes.json();
-                clearTimeout(prepTimeout);
-
-                if (!prepareRes.ok || !prepareData.success) {
-                    throw new Error(prepareData.error || 'Failed to prepare reverse bridge');
-                }
-            } catch (prepErr: any) {
-                clearTimeout(prepTimeout);
-                if (prepErr.name === 'AbortError') {
-                    throw new Error(lastLocale() === 'ko'
-                        ? '가스비 준비 시간이 초과되었습니다. 다시 시도해주세요.'
-                        : 'Gas preparation timed out. Please try again.');
-                }
-                throw prepErr;
+            const prepareData = await reverseBridgePrepare();
+            if (!prepareData.success) {
+                throw new Error(prepareData.error || 'Failed to prepare reverse bridge');
             }
 
             const relayerAddress = prepareData.relayerAddress;
-            console.log(`[ReverseBridge] Relayer: ${relayerAddress}, Gas refill: ${prepareData.gasRefillTxHash || 'skipped'}`);
+            console.log(`[ReverseBridge] Relayer: ${relayerAddress}, Gas refill: ${prepareData.gasRefillTx || 'skipped'}`);
 
             // If gas was refilled, wait a moment for the tx to be mined
-            if (prepareData.gasRefillTxHash) {
+            if (prepareData.gasRefillTx) {
                 console.log('[ReverseBridge] Gas refill sent, waiting for confirmation...');
                 setLoadingMessage(lastLocale() === 'ko' ? '가스비 전송 확인 중...' : 'Confirming gas refill...');
                 await new Promise(r => setTimeout(r, 3000)); // Wait 3s for mining
@@ -2951,7 +2846,7 @@ const Wallet = (): JSX.Element => {
                 console.log(`[ReverseBridge] Allowance already sufficient: ${ethers.formatEther(existingAllowance)}`);
             }
 
-            // === STEP 3: Call Paymaster for reverse bridge execution ===
+            // === STEP 3: Execute reverse bridge via Agent Gateway API ===
             console.log('[ReverseBridge] Step 3: Executing reverse bridge...');
             setLoadingMessage(lastLocale() === 'ko' ? '역브릿지 실행 중... (3/3)' : 'Executing reverse bridge... (3/3)');
 
@@ -2975,38 +2870,12 @@ const Wallet = (): JSX.Element => {
                 console.warn('[ReverseBridge] Start notification failed:', notiErr);
             }
 
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
-            let result;
-            try {
-                const response = await fetch(PAYMASTER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    signal: controller.signal,
-                    body: JSON.stringify({
-                        type: 'reverse_bridge',
-                        user: userAddr,
-                        recipient: resolvedRecipientAddr,
-                        amount: bridgeAmountBn.toString(),
-                        fee: BRIDGE_FEE.toString(),
-                        // No signature/deadline - using approve-based flow
-                    })
-                });
-                clearTimeout(timeoutId);
+            const result = await reverseBridge(bridge.amount, {
+                recipient: resolvedRecipientAddr !== userAddr ? resolvedRecipientAddr : undefined,
+            });
 
-                result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.error || 'Reverse bridge request failed');
-                }
-            } catch (fetchErr: any) {
-                clearTimeout(timeoutId);
-                if (fetchErr.name === 'AbortError') {
-                    throw new Error(lastLocale() === 'ko'
-                        ? '역브릿지 실행 시간이 초과되었습니다 (90초). 네트워크가 혼잡할 수 있습니다. 잠시 후 다시 시도해주세요.'
-                        : 'Reverse bridge execution timed out (90s). Network may be congested. Please try again later.');
-                }
-                throw fetchErr;
+            if (!result.success) {
+                throw new Error(result.error || 'Reverse bridge request failed');
             }
 
             console.log('[ReverseBridge] Success:', result);
@@ -3021,7 +2890,7 @@ const Wallet = (): JSX.Element => {
                 setBridgeTasks(prev => prev.filter(t => t.id !== optimisticId));
             }, 10000);
 
-            const resultTxHash = result.visionTxHash || result.sepoliaLockTxHash || '';
+            const resultTxHash = result.txHash || '';
 
             // Success message
             const successMsg = lastLocale() === 'ko'
@@ -3047,8 +2916,8 @@ const Wallet = (): JSX.Element => {
                         amount: bridge.amount,
                         sourceChain: 'Ethereum Sepolia',
                         destinationChain: 'Vision Chain',
-                        visionTxHash: result.visionTxHash,
-                        sepoliaLockTxHash: result.sepoliaLockTxHash,
+                        visionTxHash: result.txHash,
+                        sepoliaLockTxHash: result.txHash,
                         direction: 'reverse',
                         status: 'completed'
                     }
@@ -3071,8 +2940,8 @@ const Wallet = (): JSX.Element => {
                     timestamp: Date.now(),
                     type: 'ReverseBridge',
                     bridgeStatus: 'COMPLETED',
-                    sepoliaLockTxHash: result.sepoliaLockTxHash,
-                    visionTxHash: result.visionTxHash,
+                    sepoliaLockTxHash: result.txHash,
+                    visionTxHash: result.txHash,
                     metadata: {
                         sourceChain: 'Ethereum Sepolia',
                         destinationChain: 'Vision Chain',
