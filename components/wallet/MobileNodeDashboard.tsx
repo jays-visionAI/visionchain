@@ -372,10 +372,12 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                     <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-blue-500/5 pointer-events-none" />
                     <div class="relative z-10 space-y-6">
                         <div class="text-center space-y-2">
-                            <h4 class="text-xl font-bold text-white">Start Earning VCN</h4>
+                            <h4 class="text-xl font-bold text-white">{props.userEmail ? 'Launch Mobile Node' : 'Start Earning VCN'}</h4>
                             <p class="text-sm text-gray-400 max-w-sm mx-auto">
-                                Register your device as a Mobile Node and earn rewards while browsing.
-                                No downloads required.
+                                {props.userEmail
+                                    ? 'Your mobile node is ready. Tap below to activate and start earning VCN.'
+                                    : 'Register your device as a Mobile Node and earn rewards while browsing. No downloads required.'
+                                }
                             </p>
                         </div>
 
@@ -395,7 +397,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                 disabled={regLoading() || !regEmail()}
                                 class="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-cyan-500/20 disabled:opacity-40 active:scale-[0.98]"
                             >
-                                {regLoading() ? 'Registering...' : 'Register Mobile Node'}
+                                {regLoading() ? 'Launching...' : (props.userEmail ? 'Launch Mobile Node' : 'Register Mobile Node')}
                             </button>
                         </div>
 
@@ -469,7 +471,7 @@ export const MobileNodeDashboard = (props: MobileNodeDashboardProps) => {
                                     <div class="flex items-center justify-center gap-4 text-xs text-gray-400">
                                         <span>Mode: <b class="text-white">{lastHeartbeatResult()?.mode === 'wifi_full' ? 'WiFi' : 'Cellular'}</b></span>
                                         <span class="w-1 h-1 rounded-full bg-gray-700" />
-                                        <span>Weight: <b class="text-cyan-400">{lastHeartbeatResult()?.weight}x</b></span>
+                                        <span>Hash Rate: <b class="text-cyan-400">{lastHeartbeatResult()?.weight}x</b></span>
                                         <span class="w-1 h-1 rounded-full bg-gray-700" />
                                         <span>Next: <b class="text-white">5 min</b></span>
                                     </div>

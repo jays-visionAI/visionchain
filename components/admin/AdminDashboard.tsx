@@ -15,7 +15,8 @@ import {
     Clock,
     Zap,
     Bot,
-    Users
+    Users,
+    Smartphone
 } from 'lucide-solid';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { MetricCard } from './dashboard/MetricCard';
@@ -75,6 +76,8 @@ export const AdminDashboard: Component = () => {
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
     const [paymasterBal, setPaymasterBal] = createSignal("0");
     const [gaslessCount, setGaslessCount] = createSignal(0);
+    const [mobileNodesTotal, setMobileNodesTotal] = createSignal(0);
+    const [mobileNodesOnline, setMobileNodesOnline] = createSignal(0);
 
     const API_URL = "https://api.visionchain.co/api/transactions";
 
@@ -201,6 +204,23 @@ export const AdminDashboard: Component = () => {
         }
     };
 
+    const fetchMobileNodeStats = async () => {
+        try {
+            const db = getFirebaseDb();
+            const nodesRef = collection(db, 'mobile_nodes');
+            const totalSnap = await getCountFromServer(nodesRef);
+            setMobileNodesTotal(totalSnap.data().count);
+
+            // Count online nodes (last heartbeat within 5 minutes)
+            const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+            const onlineQuery = query(nodesRef, where('last_heartbeat', '>=', fiveMinAgo));
+            const onlineSnap = await getCountFromServer(onlineQuery);
+            setMobileNodesOnline(onlineSnap.data().count);
+        } catch (e) {
+            console.error('Failed to fetch mobile node stats:', e);
+        }
+    };
+
     // Fetch real data on mount & Simulate TPS
     onMount(() => {
         // Fetch all data on mount
@@ -209,6 +229,7 @@ export const AdminDashboard: Component = () => {
         fetchUserStats();
         fetchTVLData();
         fetchDAUData();
+        fetchMobileNodeStats();
 
         // Refresh only fast-changing data every 30s (was 5s - too aggressive)
         // User stats and TVL change infrequently, no need to poll
@@ -298,6 +319,36 @@ export const AdminDashboard: Component = () => {
                                 </div>
                                 <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
                                     <div class="bg-cyan-500 h-full rounded-full transition-all" style={`width: ${wallets() > 0 ? (agentCount() / wallets() * 100) : 0}%`} />
+                                </div>
+                            </div>
+                        </div>
+                    </MetricCard>
+
+                    {/* Mobile Nodes */}
+                    <MetricCard
+                        title="Mobile Nodes"
+                        value={mobileNodesTotal()}
+                        subValue="Registered"
+                        icon={Smartphone}
+                        color="cyan"
+                    >
+                        <div class="mt-4 space-y-3">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-slate-500">Online Now</span>
+                                    <span class="text-green-400 font-mono">{mobileNodesOnline()}</span>
+                                </div>
+                                <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-green-500 h-full rounded-full transition-all" style={`width: ${mobileNodesTotal() > 0 ? (mobileNodesOnline() / mobileNodesTotal() * 100) : 0}%`} />
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span class="text-slate-500">Idle / Offline</span>
+                                    <span class="text-gray-400 font-mono">{mobileNodesTotal() - mobileNodesOnline()}</span>
+                                </div>
+                                <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                    <div class="bg-gray-500 h-full rounded-full transition-all" style={`width: ${mobileNodesTotal() > 0 ? ((mobileNodesTotal() - mobileNodesOnline()) / mobileNodesTotal() * 100) : 0}%`} />
                                 </div>
                             </div>
                         </div>
