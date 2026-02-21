@@ -770,6 +770,35 @@ const endpoints: ApiEndpoint[] = [
         requestExample: { action: 'transfer.conditional', api_key: 'vcn_your_api_key', to: '0xRecipient', amount: '50', condition: { type: 'balance_above', value: '100' } },
         responseExample: { success: true, condition_id: 'cond_xyz789', to: '0xRecipient', amount: '50', condition: { type: 'balance_above', value: '100' }, status: 'watching' },
     },
+    {
+        id: 'transfer_sepolia', action: 'transfer.sepolia', title: 'Sepolia Transfer', category: 'Transfer',
+        description: 'Transfer VCN on Ethereum Sepolia (cross-chain). Requires an EIP-712 permit signature for Sepolia VCN. A 1 VCN fee is collected for gas sponsorship.', auth: true, method: 'POST',
+        fields: [
+            { name: 'to', type: 'string', required: true, description: 'Recipient address on Sepolia' },
+            { name: 'amount', type: 'string', required: true, description: 'Amount of VCN to transfer' },
+            { name: 'signature', type: 'string', required: true, description: 'EIP-712 permit signature for Sepolia VCN (authorizing amount + 1 VCN fee)' },
+            { name: 'deadline', type: 'number', required: true, description: 'Permit deadline (Unix timestamp)' },
+        ],
+        requestExample: {
+            action: 'transfer.sepolia', api_key: 'vcn_your_api_key',
+            to: '0xRecipientAddress...', amount: '10',
+            signature: '0xPermitSignature...', deadline: 1740200000,
+        },
+        responseExample: {
+            success: true, tx_hash: '0xsepoliatx...abc', from: '0xYourAddress', to: '0xRecipient',
+            amount: '10', fee: { charged: true, amount_vcn: '1.0', method: 'sepolia_permit' },
+        },
+        errors: [
+            { code: 400, message: 'Insufficient Sepolia VCN balance' },
+            { code: 400, message: 'Permit failed: invalid signature' },
+            { code: 500, message: 'SEPOLIA_RELAYER_PK not configured' },
+        ],
+        notes: [
+            'Sepolia VCN contract: 0x07755968236333B5f8803E9D0fC294608B200d1b',
+            'Requires EIP-712 permit signed on Sepolia (chainId: 11155111)',
+            '1 VCN fee is deducted for gas sponsorship on Sepolia',
+        ],
+    },
     // --- STAKING EXTRAS ---
     {
         id: 'staking_withdraw', action: 'staking.withdraw', title: 'Withdraw Unstaked', category: 'Staking',
