@@ -1,15 +1,46 @@
 /**
  * Vision Mobile Node - Firebase Auth Service
  *
- * Wraps @react-native-firebase/auth for email+password authentication.
+ * Uses Firebase Web SDK (firebase/auth) for email+password authentication.
  * Returns Firebase ID Token for backend verification.
  */
 
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { initializeApp } from 'firebase/app';
+import {
+    getAuth,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged as fbOnAuthStateChanged,
+    User,
+    Auth,
+} from 'firebase/auth';
+// @ts-ignore - React Native needs this polyfill for firebase/auth
+import { getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Firebase config from google-services.json
+const firebaseConfig = {
+    apiKey: 'AIzaSyAZ-wTAWNkQvlHAh1_bh0jIrzYGfOCENQI',
+    authDomain: 'visionchain-d19ed.firebaseapp.com',
+    projectId: 'visionchain-d19ed',
+    storageBucket: 'visionchain-d19ed.firebasestorage.app',
+    messagingSenderId: '451188892027',
+    appId: '1:451188892027:android:75174a12b89eb198ee1dde',
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+let auth: Auth;
+try {
+    auth = getAuth(app);
+} catch {
+    auth = getAuth(app);
+}
 
 export interface AuthResult {
     success: boolean;
-    user?: FirebaseAuthTypes.User;
+    user?: User;
     idToken?: string;
     error?: string;
 }
@@ -19,7 +50,7 @@ export interface AuthResult {
  */
 export const signIn = async (email: string, password: string): Promise<AuthResult> => {
     try {
-        const credential = await auth().signInWithEmailAndPassword(email, password);
+        const credential = await signInWithEmailAndPassword(auth, email, password);
         const idToken = await credential.user.getIdToken();
         return { success: true, user: credential.user, idToken };
     } catch (err: any) {
@@ -32,7 +63,7 @@ export const signIn = async (email: string, password: string): Promise<AuthResul
  */
 export const signUp = async (email: string, password: string): Promise<AuthResult> => {
     try {
-        const credential = await auth().createUserWithEmailAndPassword(email, password);
+        const credential = await createUserWithEmailAndPassword(auth, email, password);
         const idToken = await credential.user.getIdToken();
         return { success: true, user: credential.user, idToken };
     } catch (err: any) {
@@ -44,21 +75,21 @@ export const signUp = async (email: string, password: string): Promise<AuthResul
  * Sign out
  */
 export const firebaseSignOut = async (): Promise<void> => {
-    await auth().signOut();
+    await signOut(auth);
 };
 
 /**
  * Get current user
  */
-export const getCurrentUser = (): FirebaseAuthTypes.User | null => {
-    return auth().currentUser;
+export const getCurrentUser = (): User | null => {
+    return auth.currentUser;
 };
 
 /**
  * Get fresh ID token for backend API calls
  */
 export const getIdToken = async (): Promise<string | null> => {
-    const user = auth().currentUser;
+    const user = auth.currentUser;
     if (!user) { return null; }
     return user.getIdToken(true);
 };
@@ -67,9 +98,9 @@ export const getIdToken = async (): Promise<string | null> => {
  * Listen to auth state changes
  */
 export const onAuthStateChanged = (
-    callback: (user: FirebaseAuthTypes.User | null) => void,
+    callback: (user: User | null) => void,
 ): (() => void) => {
-    return auth().onAuthStateChanged(callback);
+    return fbOnAuthStateChanged(auth, callback);
 };
 
 /**
