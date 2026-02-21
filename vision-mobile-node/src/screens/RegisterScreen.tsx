@@ -5,7 +5,7 @@
  * and premium glassmorphism UI matching Vision Chain web app.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -19,7 +19,7 @@ import {
     ScrollView,
     Dimensions,
 } from 'react-native';
-import { signIn, signUp, getIdToken } from '../services/firebaseAuth';
+import { signIn, signUp, getIdToken, AuthErrorCode } from '../services/firebaseAuth';
 import { register } from '../services/api';
 import { saveCredentials } from '../services/storage';
 
@@ -39,28 +39,85 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
     const [referralCode, setReferralCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [errorSuggestion, setErrorSuggestion] = useState('');
+    const [showSwitchPrompt, setShowSwitchPrompt] = useState<'signup' | 'signin' | null>(null);
+
+    const clearErrors = () => {
+        setError('');
+        setErrorSuggestion('');
+        setShowSwitchPrompt(null);
+    };
+
+    const handleAuthError = (errorCode: AuthErrorCode | undefined, errorMsg: string) => {
+        setError(errorMsg);
+        setShowSwitchPrompt(null);
+        setErrorSuggestion('');
+
+        switch (errorCode) {
+            case 'user-not-found':
+                setErrorSuggestion('This email is not registered yet.');
+                setShowSwitchPrompt('signup');
+                break;
+            case 'wrong-password':
+                setErrorSuggestion('Please check your password and try again.');
+                break;
+            case 'invalid-credential':
+                if (mode === 'signin') {
+                    setErrorSuggestion('Email or password is incorrect. Check and try again, or create a new account.');
+                    setShowSwitchPrompt('signup');
+                }
+                break;
+            case 'email-in-use':
+                setErrorSuggestion('You already have an account.');
+                setShowSwitchPrompt('signin');
+                break;
+            case 'too-many-requests':
+                setErrorSuggestion('Please wait 30 seconds before trying again.');
+                break;
+            case 'network-error':
+                setErrorSuggestion('Check your WiFi or cellular connection.');
+                break;
+            case 'weak-password':
+                setErrorSuggestion('Use at least 6 characters with letters and numbers.');
+                break;
+            default:
+                setErrorSuggestion('Please try again.');
+                break;
+        }
+    };
+
+    const handleSwitchPrompt = () => {
+        if (showSwitchPrompt) {
+            setMode(showSwitchPrompt);
+            clearErrors();
+        }
+    };
 
     const handleAuth = async () => {
         // Validation
         if (!email.trim()) {
             setError('Email is required');
+            setErrorSuggestion('Please enter your email address.');
             return;
         }
         if (!password) {
             setError('Password is required');
+            setErrorSuggestion('Please enter your password.');
             return;
         }
         if (mode === 'signup' && password.length < 6) {
-            setError('Password must be at least 6 characters');
+            setError('Password too short');
+            setErrorSuggestion('Password must be at least 6 characters.');
             return;
         }
         if (mode === 'signup' && password !== confirmPassword) {
             setError('Passwords do not match');
+            setErrorSuggestion('Please re-enter your password.');
             return;
         }
 
         setLoading(true);
-        setError('');
+        clearErrors();
 
         try {
             // Step 1: Firebase Auth
@@ -69,7 +126,7 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
                 : await signUp(email.trim(), password);
 
             if (!authResult.success) {
-                setError(authResult.error || 'Authentication failed');
+                handleAuthError(authResult.errorCode, authResult.error || 'Authentication failed');
                 setLoading(false);
                 return;
             }
@@ -78,31 +135,41 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
             const idToken = authResult.idToken || await getIdToken();
             if (!idToken) {
                 setError('Failed to get authentication token');
+                setErrorSuggestion('Please try signing in again.');
                 setLoading(false);
                 return;
             }
 
             // Step 3: Register mobile node with backend
-            const result = await register(
-                email.trim(),
-                referralCode.trim() || undefined,
-                idToken,
-            );
+            try {
+                const result = await register(
+                    email.trim(),
+                    referralCode.trim() || undefined,
+                    idToken,
+                );
 
-            if (result.success) {
-                await saveCredentials({
-                    apiKey: result.api_key,
-                    nodeId: result.node_id,
-                    email: email.trim(),
-                    walletAddress: result.wallet_address,
-                    referralCode: result.referral_code,
-                });
-                onRegistered();
-            } else {
-                setError(result.error || 'Node registration failed');
+                if (result.success) {
+                    await saveCredentials({
+                        apiKey: result.api_key,
+                        nodeId: result.node_id,
+                        email: email.trim(),
+                        walletAddress: result.wallet_address,
+                        referralCode: result.referral_code,
+                    });
+                    onRegistered();
+                } else {
+                    setError(result.error || 'Node registration failed');
+                    setErrorSuggestion('The server could not register your node. Please try again.');
+                }
+            } catch (regErr: any) {
+                console.warn('Registration API error:', regErr);
+                setError('Server connection failed');
+                setErrorSuggestion('Could not reach the server. Please check your connection and try again.');
             }
         } catch (err: any) {
-            setError(err.message || 'An unexpected error occurred');
+            console.warn('Auth unexpected error:', err);
+            setError('An unexpected error occurred');
+            setErrorSuggestion('Please restart the app and try again.');
         } finally {
             setLoading(false);
         }
@@ -138,7 +205,7 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
                 <View style={styles.tabContainer}>
                     <TouchableOpacity
                         style={[styles.tab, mode === 'signin' && styles.tabActive]}
-                        onPress={() => { setMode('signin'); setError(''); }}
+                        onPress={() => { setMode('signin'); clearErrors(); }}
                         activeOpacity={0.8}>
                         <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
                             Sign In
@@ -146,7 +213,7 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.tab, mode === 'signup' && styles.tabActive]}
-                        onPress={() => { setMode('signup'); setError(''); }}
+                        onPress={() => { setMode('signup'); clearErrors(); }}
                         activeOpacity={0.8}>
                         <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
                             Sign Up
@@ -209,7 +276,20 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
 
                     {error ? (
                         <View style={styles.errorContainer}>
-                            <Text style={styles.errorText}>{error}</Text>
+                            <Text style={styles.errorTitle}>{error}</Text>
+                            {errorSuggestion ? (
+                                <Text style={styles.errorText}>{errorSuggestion}</Text>
+                            ) : null}
+                            {showSwitchPrompt ? (
+                                <TouchableOpacity
+                                    style={styles.errorAction}
+                                    onPress={handleSwitchPrompt}
+                                    activeOpacity={0.7}>
+                                    <Text style={styles.errorActionText}>
+                                        {showSwitchPrompt === 'signup' ? 'Create New Account' : 'Go to Sign In'}
+                                    </Text>
+                                </TouchableOpacity>
+                            ) : null}
                         </View>
                     ) : null}
 
@@ -238,10 +318,20 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
                 {mode === 'signin' && (
                     <TouchableOpacity
                         style={styles.signupPrompt}
-                        onPress={() => { setMode('signup'); setError(''); }}>
+                        onPress={() => { setMode('signup'); clearErrors(); }}>
                         <Text style={styles.signupPromptText}>
                             New to Vision Chain?{' '}
                             <Text style={styles.signupPromptLink}>Create Account</Text>
+                        </Text>
+                    </TouchableOpacity>
+                )}
+                {mode === 'signup' && (
+                    <TouchableOpacity
+                        style={styles.signupPrompt}
+                        onPress={() => { setMode('signin'); clearErrors(); }}>
+                        <Text style={styles.signupPromptText}>
+                            Already have an account?{' '}
+                            <Text style={styles.signupPromptLink}>Sign In</Text>
                         </Text>
                     </TouchableOpacity>
                 )}
@@ -379,19 +469,41 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     errorContainer: {
-        backgroundColor: 'rgba(231, 76, 60, 0.12)',
+        backgroundColor: 'rgba(231, 76, 60, 0.1)',
         borderWidth: 1,
-        borderColor: 'rgba(231, 76, 60, 0.3)',
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
+        borderColor: 'rgba(231, 76, 60, 0.25)',
+        borderRadius: 14,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         marginBottom: 16,
     },
-    errorText: {
+    errorTitle: {
         color: '#e74c3c',
+        fontSize: 14,
+        fontWeight: '700',
+        textAlign: 'center',
+        marginBottom: 4,
+    },
+    errorText: {
+        color: '#cc8888',
         fontSize: 13,
         textAlign: 'center',
         lineHeight: 18,
+    },
+    errorAction: {
+        marginTop: 10,
+        backgroundColor: 'rgba(108, 92, 231, 0.2)',
+        borderWidth: 1,
+        borderColor: 'rgba(108, 92, 231, 0.4)',
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+    },
+    errorActionText: {
+        color: '#a29bfe',
+        fontSize: 14,
+        fontWeight: '700',
     },
     button: {
         backgroundColor: '#6c5ce7',

@@ -3,6 +3,7 @@
  *
  * Uses Firebase Web SDK (firebase/auth) for email+password authentication.
  * Returns Firebase ID Token for backend verification.
+ * Includes error codes for scenario-specific handling in UI.
  */
 
 import { initializeApp } from 'firebase/app';
@@ -38,11 +39,24 @@ try {
     auth = getAuth(app);
 }
 
+/** Error codes for scenario-specific UI handling */
+export type AuthErrorCode =
+    | 'user-not-found'
+    | 'wrong-password'
+    | 'invalid-credential'
+    | 'email-in-use'
+    | 'weak-password'
+    | 'too-many-requests'
+    | 'network-error'
+    | 'invalid-email'
+    | 'unknown';
+
 export interface AuthResult {
     success: boolean;
     user?: User;
     idToken?: string;
     error?: string;
+    errorCode?: AuthErrorCode;
 }
 
 /**
@@ -54,7 +68,12 @@ export const signIn = async (email: string, password: string): Promise<AuthResul
         const idToken = await credential.user.getIdToken();
         return { success: true, user: credential.user, idToken };
     } catch (err: any) {
-        return { success: false, error: getAuthErrorMessage(err.code) };
+        const errorCode = mapErrorCode(err.code);
+        return {
+            success: false,
+            error: getAuthErrorMessage(err.code),
+            errorCode,
+        };
     }
 };
 
@@ -67,7 +86,12 @@ export const signUp = async (email: string, password: string): Promise<AuthResul
         const idToken = await credential.user.getIdToken();
         return { success: true, user: credential.user, idToken };
     } catch (err: any) {
-        return { success: false, error: getAuthErrorMessage(err.code) };
+        const errorCode = mapErrorCode(err.code);
+        return {
+            success: false,
+            error: getAuthErrorMessage(err.code),
+            errorCode,
+        };
     }
 };
 
@@ -75,7 +99,11 @@ export const signUp = async (email: string, password: string): Promise<AuthResul
  * Sign out
  */
 export const firebaseSignOut = async (): Promise<void> => {
-    await signOut(auth);
+    try {
+        await signOut(auth);
+    } catch (err) {
+        console.warn('Firebase sign out error:', err);
+    }
 };
 
 /**
@@ -89,9 +117,14 @@ export const getCurrentUser = (): User | null => {
  * Get fresh ID token for backend API calls
  */
 export const getIdToken = async (): Promise<string | null> => {
-    const user = auth.currentUser;
-    if (!user) { return null; }
-    return user.getIdToken(true);
+    try {
+        const user = auth.currentUser;
+        if (!user) { return null; }
+        return await user.getIdToken(true);
+    } catch (err) {
+        console.warn('getIdToken error:', err);
+        return null;
+    }
 };
 
 /**
@@ -104,27 +137,53 @@ export const onAuthStateChanged = (
 };
 
 /**
+ * Map Firebase error code string to our AuthErrorCode enum
+ */
+const mapErrorCode = (code: string): AuthErrorCode => {
+    switch (code) {
+        case 'auth/user-not-found':
+            return 'user-not-found';
+        case 'auth/wrong-password':
+            return 'wrong-password';
+        case 'auth/invalid-credential':
+            return 'invalid-credential';
+        case 'auth/email-already-in-use':
+            return 'email-in-use';
+        case 'auth/weak-password':
+            return 'weak-password';
+        case 'auth/too-many-requests':
+            return 'too-many-requests';
+        case 'auth/network-request-failed':
+            return 'network-error';
+        case 'auth/invalid-email':
+            return 'invalid-email';
+        default:
+            return 'unknown';
+    }
+};
+
+/**
  * Translate Firebase error codes to user-friendly messages
  */
 const getAuthErrorMessage = (code: string): string => {
     switch (code) {
         case 'auth/email-already-in-use':
-            return 'This email is already registered. Please sign in.';
+            return 'This email is already registered.';
         case 'auth/invalid-email':
             return 'Please enter a valid email address.';
         case 'auth/user-not-found':
-            return 'No account found with this email.';
+            return 'No account found with this email. Please sign up.';
         case 'auth/wrong-password':
             return 'Incorrect password. Please try again.';
         case 'auth/weak-password':
             return 'Password must be at least 6 characters.';
         case 'auth/too-many-requests':
-            return 'Too many attempts. Please try again later.';
+            return 'Too many attempts. Please wait a moment and try again.';
         case 'auth/network-request-failed':
-            return 'Network error. Please check your connection.';
+            return 'Network error. Please check your connection and try again.';
         case 'auth/invalid-credential':
-            return 'Invalid email or password.';
+            return 'Invalid email or password. Please check and try again.';
         default:
-            return `Authentication failed (${code})`;
+            return `Authentication failed. Please try again. (${code || 'unknown'})`;
     }
 };
