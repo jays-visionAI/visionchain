@@ -474,16 +474,16 @@ const eps: Endpoint[] = [
         notes: ['No agent authentication required -- this is a standalone registration', 'API key prefix vcn_mn_ distinguishes mobile node keys from agent keys', 'A wallet is auto-generated for each mobile node'],
     },
     {
-        id: 'mn_heartbeat', action: 'mobile_node.heartbeat', title: 'Send Heartbeat', cat: 'Mobile Node', desc: 'Send a heartbeat to prove liveness and earn epoch rewards. Should be called every 5 minutes while the device is active. Weight multiplier depends on mode (WiFi = 1.0x, Cellular = 0.5x).', auth: true,
+        id: 'mn_heartbeat', action: 'mobile_node.heartbeat', title: 'Send Heartbeat', cat: 'Mobile Node', desc: 'Send a heartbeat to prove liveness and earn epoch rewards. Should be called every 5 minutes while the device is active. Weight multiplier depends on mode (WiFi = 0.01x, Cellular = 0.005x).', auth: true,
         fields: [
-            { name: 'mode', type: 'string', required: false, desc: '"wifi_full" (default, 1.0x weight) or "cellular_min" (0.5x weight)' },
+            { name: 'mode', type: 'string', required: false, desc: '"wifi_full" (default, 0.01x weight) or "cellular_min" (0.005x weight)' },
             { name: 'battery_pct', type: 'number', required: false, desc: 'Current battery percentage (0-100)' },
             { name: 'data_used_mb', type: 'number', required: false, desc: 'Optional data usage in MB' },
         ],
         req: { action: 'mobile_node.heartbeat', api_key: 'vcn_mn_550a3747...', mode: 'wifi_full', battery_pct: 85 },
-        res: { success: true, node_id: 'mn_abc123', epoch: 42, weight: 1.0, mode: 'wifi_full', streak_days: 7, battery_pct: 85, next_heartbeat_seconds: 300 },
+        res: { success: true, node_id: 'mn_abc123', epoch: 42, weight: 0.01, mode: 'wifi_full', streak_days: 7, battery_pct: 85, next_heartbeat_seconds: 300 },
         errors: [{ code: 401, msg: 'Invalid mobile node API key' }, { code: 429, msg: 'Heartbeat too frequent (min 4 min interval)' }],
-        notes: ['Heartbeat interval: 5 minutes recommended, minimum 4 minutes', 'WiFi mode (wifi_full) earns full weight, cellular (cellular_min) earns 0.5x', 'Consecutive daily heartbeats build a streak multiplier'],
+        notes: ['Heartbeat interval: 5 minutes recommended, minimum 4 minutes', 'WiFi mode (wifi_full) earns 0.01x weight, cellular (cellular_min) earns 0.005x', 'Consecutive daily heartbeats build a streak multiplier'],
     },
     {
         id: 'mn_status', action: 'mobile_node.status', title: 'Node Status', cat: 'Mobile Node', desc: 'Get comprehensive status of your mobile node including pending rewards, uptime, epoch info, network rank, and streak days.', auth: true,
@@ -930,7 +930,7 @@ def verify_webhook(payload: bytes, signature: str, secret: str) -> bool:
                     {[
                         { t: 'Zero Setup', d: 'No downloads, no hardware. Register with email and start earning in seconds.' },
                         { t: 'Passive Income', d: 'Earn VCN rewards automatically while browsing or keeping your phone unlocked.' },
-                        { t: 'WiFi or Cellular', d: 'Works on any connection. WiFi earns at full weight (1.0x), cellular at efficient mode (0.5x).' },
+                        { t: 'WiFi or Cellular', d: 'Works on any connection. WiFi earns 0.01x weight, cellular at efficient mode (0.005x).' },
                     ].map(c => (
                         <div class="bg-black/20 border border-white/5 rounded-xl p-4">
                             <div class="text-sm font-bold text-white mb-1">{c.t}</div>
@@ -969,8 +969,8 @@ def verify_webhook(payload: bytes, signature: str, secret: str) -> bool:
                     <div class="grid grid-cols-[1.2fr_2fr_0.8fr] gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Factor</div><div>Description</div><div>Impact</div></div>
                     {[
                         { f: 'Base Heartbeat', d: 'VCN reward per valid heartbeat (every 5 min)', i: '+VCN per beat' },
-                        { f: 'WiFi Mode', d: 'Full-bandwidth mode on WiFi connection', i: '1.0x weight' },
-                        { f: 'Cellular Mode', d: 'Reduced-bandwidth mode on cellular data', i: '0.5x weight' },
+                        { f: 'WiFi Mode', d: 'Full-bandwidth mode on WiFi connection', i: '0.01x weight' },
+                        { f: 'Cellular Mode', d: 'Reduced-bandwidth mode on cellular data', i: '0.005x weight' },
                         { f: 'Daily Streak', d: 'Consecutive days with at least 1 heartbeat', i: 'Streak bonus' },
                         { f: 'Epoch Accumulation', d: 'Rewards accumulate per epoch, claimable anytime', i: 'Compound' },
                         { f: 'Referral Bonus', d: 'Invite new nodes via your referral code', i: '+VCN per ref' },

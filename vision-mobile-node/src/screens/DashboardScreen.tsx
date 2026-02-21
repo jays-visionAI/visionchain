@@ -213,7 +213,7 @@ const DashboardScreen: React.FC<Props> = ({ onLogout, onOpenSettings, onOpenLead
                     </Text>
                     <View style={styles.weightBreakdown}>
                         <Text style={styles.breakdownItem}>
-                            Base: {networkMode === 'wifi' ? '0.5x' : networkMode === 'cellular' ? '0.1x' : '0x'}
+                            Base: {networkMode === 'wifi' ? '0.01x' : networkMode === 'cellular' ? '0.005x' : '0x'}
                         </Text>
                         {blockStats && blockStats.blocksVerified > 0 && (
                             <Text style={styles.breakdownItem}>

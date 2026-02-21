@@ -26,15 +26,15 @@ const CONTRIBUTION_LEVELS: Record<NetworkMode, ContributionLevel> = {
         blockObserverEnabled: true,
         relayEnabled: true,
         cacheEnabled: true,
-        weight: 0.5,
+        weight: 0.01,
     },
     cellular: {
         mode: 'cellular',
         heartbeatIntervalMs: CONFIG.HEARTBEAT_INTERVAL_CELLULAR_MS,
-        blockObserverEnabled: false,
+        blockObserverEnabled: true,
         relayEnabled: false,
         cacheEnabled: false,
-        weight: 0.1,
+        weight: 0.005,
     },
     offline: {
         mode: 'offline',
