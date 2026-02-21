@@ -2,25 +2,24 @@
  * Vision Mobile Node - Firebase Auth Service
  *
  * Uses Firebase Web SDK (firebase/auth) for email+password authentication.
- * Returns Firebase ID Token for backend verification.
- * Includes error codes for scenario-specific handling in UI.
+ * Properly initialized for React Native with AsyncStorage persistence.
  */
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import {
-    getAuth,
+    initializeAuth,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged as fbOnAuthStateChanged,
     User,
     Auth,
+    // @ts-ignore - available in firebase 10.x for React Native
+    getReactNativePersistence,
 } from 'firebase/auth';
-// @ts-ignore - React Native needs this polyfill for firebase/auth
-import { getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Firebase config from google-services.json
+// Firebase config
 const firebaseConfig = {
     apiKey: 'AIzaSyAZ-wTAWNkQvlHAh1_bh0jIrzYGfOCENQI',
     authDomain: 'visionchain-d19ed.firebaseapp.com',
@@ -30,12 +29,19 @@ const firebaseConfig = {
     appId: '1:451188892027:android:75174a12b89eb198ee1dde',
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase App (only once)
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
+// Initialize Auth with React Native persistence (NOT getAuth which uses browser persistence)
 let auth: Auth;
 try {
-    auth = getAuth(app);
-} catch {
+    auth = initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+    });
+} catch (err: any) {
+    // If already initialized (hot reload), just get the existing auth instance
+    // initializeAuth can only be called once per app
+    const { getAuth } = require('firebase/auth');
     auth = getAuth(app);
 }
 
@@ -68,10 +74,11 @@ export const signIn = async (email: string, password: string): Promise<AuthResul
         const idToken = await credential.user.getIdToken();
         return { success: true, user: credential.user, idToken };
     } catch (err: any) {
-        const errorCode = mapErrorCode(err.code);
+        console.warn('[Firebase Auth] signIn error:', err?.code, err?.message);
+        const errorCode = mapErrorCode(err?.code || '');
         return {
             success: false,
-            error: getAuthErrorMessage(err.code),
+            error: getAuthErrorMessage(err?.code || ''),
             errorCode,
         };
     }
@@ -86,10 +93,11 @@ export const signUp = async (email: string, password: string): Promise<AuthResul
         const idToken = await credential.user.getIdToken();
         return { success: true, user: credential.user, idToken };
     } catch (err: any) {
-        const errorCode = mapErrorCode(err.code);
+        console.warn('[Firebase Auth] signUp error:', err?.code, err?.message);
+        const errorCode = mapErrorCode(err?.code || '');
         return {
             success: false,
-            error: getAuthErrorMessage(err.code),
+            error: getAuthErrorMessage(err?.code || ''),
             errorCode,
         };
     }
@@ -102,7 +110,7 @@ export const firebaseSignOut = async (): Promise<void> => {
     try {
         await signOut(auth);
     } catch (err) {
-        console.warn('Firebase sign out error:', err);
+        console.warn('[Firebase Auth] signOut error:', err);
     }
 };
 
@@ -110,7 +118,11 @@ export const firebaseSignOut = async (): Promise<void> => {
  * Get current user
  */
 export const getCurrentUser = (): User | null => {
-    return auth.currentUser;
+    try {
+        return auth.currentUser;
+    } catch {
+        return null;
+    }
 };
 
 /**
@@ -122,7 +134,7 @@ export const getIdToken = async (): Promise<string | null> => {
         if (!user) { return null; }
         return await user.getIdToken(true);
     } catch (err) {
-        console.warn('getIdToken error:', err);
+        console.warn('[Firebase Auth] getIdToken error:', err);
         return null;
     }
 };
@@ -184,6 +196,6 @@ const getAuthErrorMessage = (code: string): string => {
         case 'auth/invalid-credential':
             return 'Invalid email or password. Please check and try again.';
         default:
-            return `Authentication failed. Please try again. (${code || 'unknown'})`;
+            return `Authentication failed. Please try again.`;
     }
 };

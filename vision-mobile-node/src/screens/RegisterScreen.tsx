@@ -121,18 +121,37 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
 
         try {
             // Step 1: Firebase Auth
-            const authResult = mode === 'signin'
-                ? await signIn(email.trim(), password)
-                : await signUp(email.trim(), password);
+            console.log('[Auth] Starting Firebase auth, mode:', mode);
+            let authResult;
+            try {
+                authResult = mode === 'signin'
+                    ? await signIn(email.trim(), password)
+                    : await signUp(email.trim(), password);
+            } catch (authErr: any) {
+                console.warn('[Auth] Firebase auth threw:', authErr);
+                setError('Authentication service error');
+                setErrorSuggestion('Please try again in a moment.');
+                setLoading(false);
+                return;
+            }
 
             if (!authResult.success) {
+                console.log('[Auth] Auth failed:', authResult.errorCode, authResult.error);
                 handleAuthError(authResult.errorCode, authResult.error || 'Authentication failed');
                 setLoading(false);
                 return;
             }
 
+            console.log('[Auth] Firebase auth succeeded');
+
             // Step 2: Get Firebase ID Token
-            const idToken = authResult.idToken || await getIdToken();
+            let idToken: string | null = null;
+            try {
+                idToken = authResult.idToken || await getIdToken();
+            } catch (tokenErr: any) {
+                console.warn('[Auth] getIdToken threw:', tokenErr);
+            }
+
             if (!idToken) {
                 setError('Failed to get authentication token');
                 setErrorSuggestion('Please try signing in again.');
@@ -140,13 +159,19 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
                 return;
             }
 
+            console.log('[Auth] Got ID token, calling register API');
+
             // Step 3: Register mobile node with backend
+            // For sign-in, the backend should return existing node info
+            // For sign-up, it creates a new node
             try {
                 const result = await register(
                     email.trim(),
                     referralCode.trim() || undefined,
                     idToken,
                 );
+
+                console.log('[Auth] Register result:', JSON.stringify(result));
 
                 if (result.success) {
                     await saveCredentials({
@@ -158,18 +183,22 @@ const RegisterScreen: React.FC<Props> = ({ onRegistered }) => {
                     });
                     onRegistered();
                 } else {
-                    setError(result.error || 'Node registration failed');
-                    setErrorSuggestion('The server could not register your node. Please try again.');
+                    // If sign-in and node already exists, backend might return error
+                    // but with node info -- try to extract it
+                    const errorMsg = result.error || 'Node registration failed';
+                    console.warn('[Auth] Register failed:', errorMsg);
+                    setError(errorMsg);
+                    setErrorSuggestion('The server could not process your request. Please try again.');
                 }
             } catch (regErr: any) {
-                console.warn('Registration API error:', regErr);
+                console.warn('[Auth] Register API threw:', regErr?.message || regErr);
                 setError('Server connection failed');
-                setErrorSuggestion('Could not reach the server. Please check your connection and try again.');
+                setErrorSuggestion('Could not reach the server. Please check your internet connection and try again.');
             }
         } catch (err: any) {
-            console.warn('Auth unexpected error:', err);
+            console.warn('[Auth] Unexpected error:', err?.message || err);
             setError('An unexpected error occurred');
-            setErrorSuggestion('Please restart the app and try again.');
+            setErrorSuggestion('Please close and reopen the app, then try again.');
         } finally {
             setLoading(false);
         }
