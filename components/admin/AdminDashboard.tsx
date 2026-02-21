@@ -244,8 +244,8 @@ export const AdminDashboard: Component = () => {
             setMobileNodesTotal(totalSnap.data().count);
 
             // Count online nodes (last heartbeat within 5 minutes)
-            const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
-            const onlineQuery = query(nodesRef, where('last_heartbeat', '>=', fiveMinAgo));
+            const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+            const onlineQuery = query(nodesRef, where('last_heartbeat', '>=', tenMinAgo));
             const onlineSnap = await getCountFromServer(onlineQuery);
             setMobileNodesOnline(onlineSnap.data().count);
         } catch (e) {

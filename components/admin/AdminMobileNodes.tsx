@@ -44,7 +44,7 @@ export default function AdminMobileNodes() {
     const [sortField, setSortField] = createSignal<'total_earned' | 'total_uptime_seconds' | 'heartbeat_count' | 'streak_days' | 'last_heartbeat'>('total_earned');
     const [sortDir, setSortDir] = createSignal<'asc' | 'desc'>('desc');
 
-    const fiveMinAgo = () => new Date(Date.now() - 5 * 60 * 1000);
+    const tenMinAgo = () => new Date(Date.now() - 10 * 60 * 1000);
 
     const formatUptime = (seconds: number) => {
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
@@ -104,7 +104,7 @@ export default function AdminMobileNodes() {
                 // Check if online (heartbeat within last 5 min)
                 if (node.last_heartbeat) {
                     const hbTime = node.last_heartbeat.toDate ? node.last_heartbeat.toDate() : new Date(node.last_heartbeat);
-                    if (hbTime > fiveMinAgo()) onlineCount++;
+                    if (hbTime > tenMinAgo()) onlineCount++;
                 }
 
                 if (node.device_type === 'android') devices.android++;
@@ -180,7 +180,7 @@ export default function AdminMobileNodes() {
     const isOnline = (node: MobileNodeRow) => {
         if (!node.last_heartbeat) return false;
         const hbTime = node.last_heartbeat.toDate ? node.last_heartbeat.toDate() : new Date(node.last_heartbeat);
-        return hbTime > fiveMinAgo();
+        return hbTime > tenMinAgo();
     };
 
     const timeAgo = (ts: any) => {
