@@ -1882,6 +1882,8 @@ export interface UserData {
     walletReady?: boolean;
     photoURL?: string;
     createdAt?: string;        // Account creation date (ISO string)
+    partnerCode?: string;      // Partner/referral code used during registration
+    vestingTx?: string;        // Vesting contract deployment tx hash
 
     // Referral System Fields
     referralCode?: string;
@@ -2047,7 +2049,9 @@ export const getAllUsers = async (limitCount = 500): Promise<UserData[]> => {
                 tier: saleDoc?.tier || 0,
                 amountToken: saleDoc?.amountToken || saleDoc?.amount || 0,
                 referralCode: userDoc?.referralCode || saleDoc?.referralCode || '',
-                referrerId: userDoc?.referrerId || saleDoc?.referrerId || ''
+                referrerId: userDoc?.referrerId || saleDoc?.referrerId || '',
+                partnerCode: saleDoc?.partnerCode || userDoc?.partnerCode || '',
+                vestingTx: saleDoc?.vestingTx || userDoc?.vestingTx || '',
             });
         });
 
