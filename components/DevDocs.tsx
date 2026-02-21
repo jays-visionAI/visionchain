@@ -627,7 +627,7 @@ export default function DevDocs(): JSX.Element {
         <div class="space-y-8">
             <div>
                 <h2 class="text-3xl font-black tracking-tight mb-3">Vision Chain Developer API</h2>
-                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 59 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
+                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 60 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
             </div>
             <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center gap-3">
                 <span class="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded">BASE URL</span>
