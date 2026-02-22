@@ -12850,8 +12850,9 @@ exports.agentGateway = onRequest({
     // Node reports which chunks it currently holds
     if (action === "storage_node.register_chunks" || action === "chunk.register") {
       try {
-        const { node_id, chunks } = params;
-        if (!node_id || !Array.isArray(chunks) || chunks.length === 0) {
+        const nodeId = body.node_id;
+        const chunks = body.chunks;
+        if (!nodeId || !Array.isArray(chunks) || chunks.length === 0) {
           return res.status(400).json({ error: "node_id and chunks[] required" });
         }
         const batch = db.batch();
@@ -12859,23 +12860,24 @@ exports.agentGateway = onRequest({
         let registered = 0;
 
         for (const chunk of chunks.slice(0, 500)) {
-          const { hash, file_key, size, index } = chunk;
-          if (!hash) continue;
+          const chunkHash = chunk.hash;
+          const fileKey = chunk.file_key;
+          if (!chunkHash) continue;
 
           // Register in chunk_registry collection
-          const chunkRef = db.collection("chunk_registry").doc(hash);
+          const chunkRef = db.collection("chunk_registry").doc(chunkHash);
           batch.set(chunkRef, {
-            hash,
-            file_key: file_key || "",
-            size: size || 0,
-            index: index || 0,
+            hash: chunkHash,
+            file_key: fileKey || "",
+            size: chunk.size || 0,
+            index: chunk.index || 0,
             updated_at: now,
           }, { merge: true });
 
           // Add this node as a holder
-          const holderRef = chunkRef.collection("holders").doc(node_id);
+          const holderRef = chunkRef.collection("holders").doc(nodeId);
           batch.set(holderRef, {
-            node_id,
+            node_id: nodeId,
             registered_at: now,
             last_verified: now,
             status: "active",
@@ -12889,7 +12891,7 @@ exports.agentGateway = onRequest({
         return res.json({
           success: true,
           registered,
-          message: `Registered ${registered} chunks for node ${node_id}`,
+          message: `Registered ${registered} chunks for node ${nodeId}`,
         });
       } catch (e) {
         console.error("[Chunk Registry] register_chunks error:", e);
@@ -12901,8 +12903,8 @@ exports.agentGateway = onRequest({
     // Node asks which chunks it should store (replication assignments)
     if (action === "storage_node.get_assignments" || action === "chunk.assignments") {
       try {
-        const { node_id, capacity_mb, node_class } = params;
-        if (!node_id) {
+        const nodeId = body.node_id;
+        if (!nodeId) {
           return res.status(400).json({ error: "node_id required" });
         }
 
@@ -12920,7 +12922,7 @@ exports.agentGateway = onRequest({
 
           if (holdersSnap.size < 3) {
             // Check if this node already holds it
-            const alreadyHolds = holdersSnap.docs.some(h => h.id === node_id);
+            const alreadyHolds = holdersSnap.docs.some((h) => h.id === nodeId);
             if (!alreadyHolds) {
               underReplicated.push({
                 hash: doc.id,
@@ -12936,7 +12938,7 @@ exports.agentGateway = onRequest({
 
         return res.json({
           success: true,
-          node_id,
+          node_id: nodeId,
           assignments: underReplicated,
           total_assignments: underReplicated.length,
         });
@@ -12950,21 +12952,22 @@ exports.agentGateway = onRequest({
     // Node confirms it has stored an assigned chunk
     if (action === "storage_node.chunk_stored" || action === "chunk.stored") {
       try {
-        const { node_id, hash, size } = params;
-        if (!node_id || !hash) {
+        const nodeId = body.node_id;
+        const hash = body.hash;
+        if (!nodeId || !hash) {
           return res.status(400).json({ error: "node_id and hash required" });
         }
 
         const chunkRef = db.collection("chunk_registry").doc(hash);
-        const holderRef = chunkRef.collection("holders").doc(node_id);
+        const holderRef = chunkRef.collection("holders").doc(nodeId);
         const now = Date.now();
 
         await holderRef.set({
-          node_id,
+          node_id: nodeId,
           registered_at: now,
           last_verified: now,
           status: "active",
-          size: size || 0,
+          size: body.size || 0,
         }, { merge: true });
 
         // Count total holders
@@ -12989,14 +12992,14 @@ exports.agentGateway = onRequest({
     // Node requests a storage proof challenge to prove it holds data
     if (action === "storage_node.proof_challenge" || action === "chunk.proof_challenge") {
       try {
-        const { node_id } = params;
-        if (!node_id) {
+        const nodeId = body.node_id;
+        if (!nodeId) {
           return res.status(400).json({ error: "node_id required" });
         }
 
         // Find random chunks this node holds
         const holdingsSnap = await db.collectionGroup("holders")
-          .where("node_id", "==", node_id)
+          .where("node_id", "==", nodeId)
           .where("status", "==", "active")
           .limit(50)
           .get();
@@ -13012,13 +13015,13 @@ exports.agentGateway = onRequest({
         // Pick up to 3 random chunks for challenge
         const allHoldings = holdingsSnap.docs;
         const selected = [];
-        const used = new Set();
-        const count = Math.min(3, allHoldings.length);
+        const usedSet = new Set();
+        const cnt = Math.min(3, allHoldings.length);
 
-        while (selected.length < count) {
+        while (selected.length < cnt) {
           const idx = Math.floor(Math.random() * allHoldings.length);
-          if (used.has(idx)) continue;
-          used.add(idx);
+          if (usedSet.has(idx)) continue;
+          usedSet.add(idx);
 
           const holder = allHoldings[idx];
           const chunkHash = holder.ref.parent.parent.id;
@@ -13027,12 +13030,12 @@ exports.agentGateway = onRequest({
           const chunkDoc = await holder.ref.parent.parent.get();
           const chunkSize = chunkDoc.data()?.size || 262144; // default 256KB
           const offset = Math.floor(Math.random() * Math.max(1, chunkSize - 32));
-          const challengeId = `pc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+          const cId = `pc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
           // Store challenge
-          await db.collection("proof_challenges").doc(challengeId).set({
-            challenge_id: challengeId,
-            node_id,
+          await db.collection("proof_challenges").doc(cId).set({
+            challenge_id: cId,
+            node_id: nodeId,
             chunk_hash: chunkHash,
             offset,
             read_bytes: 32,
@@ -13042,7 +13045,7 @@ exports.agentGateway = onRequest({
           });
 
           selected.push({
-            challenge_id: challengeId,
+            challenge_id: cId,
             chunk_hash: chunkHash,
             offset,
             read_bytes: 32,
@@ -13051,7 +13054,7 @@ exports.agentGateway = onRequest({
 
         return res.json({
           success: true,
-          node_id,
+          node_id: nodeId,
           challenges: selected,
           expires_in_seconds: 300,
         });
@@ -13065,8 +13068,9 @@ exports.agentGateway = onRequest({
     // Node submits proof that it holds the challenged chunks
     if (action === "storage_node.proof_response" || action === "chunk.proof_response") {
       try {
-        const { node_id, responses } = params;
-        if (!node_id || !Array.isArray(responses)) {
+        const nodeId = body.node_id;
+        const proofResponses = body.responses;
+        if (!nodeId || !Array.isArray(proofResponses)) {
           return res.status(400).json({ error: "node_id and responses[] required" });
         }
 
@@ -13074,15 +13078,16 @@ exports.agentGateway = onRequest({
         let passed = 0;
         let failed = 0;
 
-        for (const resp of responses) {
-          const { challenge_id, proof_hash } = resp;
-          if (!challenge_id || !proof_hash) continue;
+        for (const resp of proofResponses) {
+          const cId = resp.challenge_id;
+          const pHash = resp.proof_hash;
+          if (!cId || !pHash) continue;
 
-          const challengeRef = db.collection("proof_challenges").doc(challenge_id);
+          const challengeRef = db.collection("proof_challenges").doc(cId);
           const challengeDoc = await challengeRef.get();
 
           if (!challengeDoc.exists) {
-            results.push({ challenge_id, status: "not_found" });
+            results.push({ challenge_id: cId, status: "not_found" });
             failed++;
             continue;
           }
@@ -13092,14 +13097,14 @@ exports.agentGateway = onRequest({
           // Check expiry
           if (Date.now() > challenge.expires_at) {
             await challengeRef.update({ status: "expired" });
-            results.push({ challenge_id, status: "expired" });
+            results.push({ challenge_id: cId, status: "expired" });
             failed++;
             continue;
           }
 
           // Check node ownership
-          if (challenge.node_id !== node_id) {
-            results.push({ challenge_id, status: "wrong_node" });
+          if (challenge.node_id !== nodeId) {
+            results.push({ challenge_id: cId, status: "wrong_node" });
             failed++;
             continue;
           }
@@ -13108,7 +13113,7 @@ exports.agentGateway = onRequest({
           // For now, any non-empty proof_hash is accepted
           await challengeRef.update({
             status: "verified",
-            proof_hash,
+            proof_hash: pHash,
             verified_at: Date.now(),
           });
 
@@ -13116,15 +13121,15 @@ exports.agentGateway = onRequest({
           const holderRef = db.collection("chunk_registry")
             .doc(challenge.chunk_hash)
             .collection("holders")
-            .doc(node_id);
+            .doc(nodeId);
           await holderRef.update({ last_verified: Date.now() });
 
-          results.push({ challenge_id, status: "verified" });
+          results.push({ challenge_id: cId, status: "verified" });
           passed++;
         }
 
         // Update node's proof stats
-        const nodeRef = db.collection("vision_nodes").doc(node_id);
+        const nodeRef = db.collection("vision_nodes").doc(nodeId);
         await nodeRef.set({
           proof_stats: {
             last_challenge: Date.now(),
@@ -13135,7 +13140,7 @@ exports.agentGateway = onRequest({
 
         return res.json({
           success: true,
-          node_id,
+          node_id: nodeId,
           passed,
           failed,
           results,
@@ -13150,7 +13155,7 @@ exports.agentGateway = onRequest({
     // Check replication status of specific chunks
     if (action === "storage_node.chunk_status" || action === "chunk.status") {
       try {
-        const { hashes } = params;
+        const hashes = body.hashes;
         if (!Array.isArray(hashes) || hashes.length === 0) {
           return res.status(400).json({ error: "hashes[] required" });
         }
@@ -13167,7 +13172,7 @@ exports.agentGateway = onRequest({
             .where("status", "==", "active")
             .get();
 
-          const holders = holdersSnap.docs.map(h => ({
+          const holderList = holdersSnap.docs.map((h) => ({
             node_id: h.id,
             last_verified: h.data().last_verified,
           }));
@@ -13178,7 +13183,7 @@ exports.agentGateway = onRequest({
             replicas: holdersSnap.size,
             fully_replicated: holdersSnap.size >= 3,
             file_key: chunkDoc.data().file_key,
-            holders,
+            holders: holderList,
           });
         }
 
