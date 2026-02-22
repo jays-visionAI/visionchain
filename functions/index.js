@@ -12843,6 +12843,356 @@ exports.agentGateway = onRequest({
     }
 
     // =====================================================
+    // CHUNK REGISTRY + REPLICATION + STORAGE PROOF
+    // =====================================================
+
+    // --- storage_node.register_chunks ---
+    // Node reports which chunks it currently holds
+    if (action === "storage_node.register_chunks" || action === "chunk.register") {
+      try {
+        const { node_id, chunks } = params;
+        if (!node_id || !Array.isArray(chunks) || chunks.length === 0) {
+          return res.status(400).json({ error: "node_id and chunks[] required" });
+        }
+        const batch = db.batch();
+        const now = Date.now();
+        let registered = 0;
+
+        for (const chunk of chunks.slice(0, 500)) {
+          const { hash, file_key, size, index } = chunk;
+          if (!hash) continue;
+
+          // Register in chunk_registry collection
+          const chunkRef = db.collection("chunk_registry").doc(hash);
+          batch.set(chunkRef, {
+            hash,
+            file_key: file_key || "",
+            size: size || 0,
+            index: index || 0,
+            updated_at: now,
+          }, { merge: true });
+
+          // Add this node as a holder
+          const holderRef = chunkRef.collection("holders").doc(node_id);
+          batch.set(holderRef, {
+            node_id,
+            registered_at: now,
+            last_verified: now,
+            status: "active",
+          }, { merge: true });
+
+          registered++;
+        }
+
+        await batch.commit();
+
+        return res.json({
+          success: true,
+          registered,
+          message: `Registered ${registered} chunks for node ${node_id}`,
+        });
+      } catch (e) {
+        console.error("[Chunk Registry] register_chunks error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // --- storage_node.get_assignments ---
+    // Node asks which chunks it should store (replication assignments)
+    if (action === "storage_node.get_assignments" || action === "chunk.assignments") {
+      try {
+        const { node_id, capacity_mb, node_class } = params;
+        if (!node_id) {
+          return res.status(400).json({ error: "node_id required" });
+        }
+
+        // Find under-replicated chunks (less than 3 holders)
+        const underReplicated = [];
+        const chunksSnap = await db.collection("chunk_registry")
+          .orderBy("updated_at", "desc")
+          .limit(100)
+          .get();
+
+        for (const doc of chunksSnap.docs) {
+          const holdersSnap = await doc.ref.collection("holders")
+            .where("status", "==", "active")
+            .get();
+
+          if (holdersSnap.size < 3) {
+            // Check if this node already holds it
+            const alreadyHolds = holdersSnap.docs.some(h => h.id === node_id);
+            if (!alreadyHolds) {
+              underReplicated.push({
+                hash: doc.id,
+                file_key: doc.data().file_key,
+                size: doc.data().size,
+                current_replicas: holdersSnap.size,
+                target_replicas: 3,
+              });
+            }
+          }
+          if (underReplicated.length >= 20) break;
+        }
+
+        return res.json({
+          success: true,
+          node_id,
+          assignments: underReplicated,
+          total_assignments: underReplicated.length,
+        });
+      } catch (e) {
+        console.error("[Chunk Registry] get_assignments error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // --- storage_node.chunk_stored ---
+    // Node confirms it has stored an assigned chunk
+    if (action === "storage_node.chunk_stored" || action === "chunk.stored") {
+      try {
+        const { node_id, hash, size } = params;
+        if (!node_id || !hash) {
+          return res.status(400).json({ error: "node_id and hash required" });
+        }
+
+        const chunkRef = db.collection("chunk_registry").doc(hash);
+        const holderRef = chunkRef.collection("holders").doc(node_id);
+        const now = Date.now();
+
+        await holderRef.set({
+          node_id,
+          registered_at: now,
+          last_verified: now,
+          status: "active",
+          size: size || 0,
+        }, { merge: true });
+
+        // Count total holders
+        const holdersSnap = await chunkRef.collection("holders")
+          .where("status", "==", "active")
+          .get();
+
+        return res.json({
+          success: true,
+          hash,
+          current_replicas: holdersSnap.size,
+          target_replicas: 3,
+          fully_replicated: holdersSnap.size >= 3,
+        });
+      } catch (e) {
+        console.error("[Chunk Registry] chunk_stored error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // --- storage_node.proof_challenge ---
+    // Node requests a storage proof challenge to prove it holds data
+    if (action === "storage_node.proof_challenge" || action === "chunk.proof_challenge") {
+      try {
+        const { node_id } = params;
+        if (!node_id) {
+          return res.status(400).json({ error: "node_id required" });
+        }
+
+        // Find random chunks this node holds
+        const holdingsSnap = await db.collectionGroup("holders")
+          .where("node_id", "==", node_id)
+          .where("status", "==", "active")
+          .limit(50)
+          .get();
+
+        if (holdingsSnap.empty) {
+          return res.json({
+            success: true,
+            challenges: [],
+            message: "No chunks to challenge",
+          });
+        }
+
+        // Pick up to 3 random chunks for challenge
+        const allHoldings = holdingsSnap.docs;
+        const selected = [];
+        const used = new Set();
+        const count = Math.min(3, allHoldings.length);
+
+        while (selected.length < count) {
+          const idx = Math.floor(Math.random() * allHoldings.length);
+          if (used.has(idx)) continue;
+          used.add(idx);
+
+          const holder = allHoldings[idx];
+          const chunkHash = holder.ref.parent.parent.id;
+
+          // Generate random offset for proof
+          const chunkDoc = await holder.ref.parent.parent.get();
+          const chunkSize = chunkDoc.data()?.size || 262144; // default 256KB
+          const offset = Math.floor(Math.random() * Math.max(1, chunkSize - 32));
+          const challengeId = `pc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+          // Store challenge
+          await db.collection("proof_challenges").doc(challengeId).set({
+            challenge_id: challengeId,
+            node_id,
+            chunk_hash: chunkHash,
+            offset,
+            read_bytes: 32,
+            created_at: Date.now(),
+            status: "pending",
+            expires_at: Date.now() + 5 * 60 * 1000, // 5 min expiry
+          });
+
+          selected.push({
+            challenge_id: challengeId,
+            chunk_hash: chunkHash,
+            offset,
+            read_bytes: 32,
+          });
+        }
+
+        return res.json({
+          success: true,
+          node_id,
+          challenges: selected,
+          expires_in_seconds: 300,
+        });
+      } catch (e) {
+        console.error("[Storage Proof] challenge error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // --- storage_node.proof_response ---
+    // Node submits proof that it holds the challenged chunks
+    if (action === "storage_node.proof_response" || action === "chunk.proof_response") {
+      try {
+        const { node_id, responses } = params;
+        if (!node_id || !Array.isArray(responses)) {
+          return res.status(400).json({ error: "node_id and responses[] required" });
+        }
+
+        const results = [];
+        let passed = 0;
+        let failed = 0;
+
+        for (const resp of responses) {
+          const { challenge_id, proof_hash } = resp;
+          if (!challenge_id || !proof_hash) continue;
+
+          const challengeRef = db.collection("proof_challenges").doc(challenge_id);
+          const challengeDoc = await challengeRef.get();
+
+          if (!challengeDoc.exists) {
+            results.push({ challenge_id, status: "not_found" });
+            failed++;
+            continue;
+          }
+
+          const challenge = challengeDoc.data();
+
+          // Check expiry
+          if (Date.now() > challenge.expires_at) {
+            await challengeRef.update({ status: "expired" });
+            results.push({ challenge_id, status: "expired" });
+            failed++;
+            continue;
+          }
+
+          // Check node ownership
+          if (challenge.node_id !== node_id) {
+            results.push({ challenge_id, status: "wrong_node" });
+            failed++;
+            continue;
+          }
+
+          // Accept the proof (in production, we'd verify the hash against stored data)
+          // For now, any non-empty proof_hash is accepted
+          await challengeRef.update({
+            status: "verified",
+            proof_hash,
+            verified_at: Date.now(),
+          });
+
+          // Update holder's last_verified timestamp
+          const holderRef = db.collection("chunk_registry")
+            .doc(challenge.chunk_hash)
+            .collection("holders")
+            .doc(node_id);
+          await holderRef.update({ last_verified: Date.now() });
+
+          results.push({ challenge_id, status: "verified" });
+          passed++;
+        }
+
+        // Update node's proof stats
+        const nodeRef = db.collection("vision_nodes").doc(node_id);
+        await nodeRef.set({
+          proof_stats: {
+            last_challenge: Date.now(),
+            total_passed: admin.firestore.FieldValue.increment(passed),
+            total_failed: admin.firestore.FieldValue.increment(failed),
+          },
+        }, { merge: true });
+
+        return res.json({
+          success: true,
+          node_id,
+          passed,
+          failed,
+          results,
+        });
+      } catch (e) {
+        console.error("[Storage Proof] response error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // --- storage_node.chunk_status ---
+    // Check replication status of specific chunks
+    if (action === "storage_node.chunk_status" || action === "chunk.status") {
+      try {
+        const { hashes } = params;
+        if (!Array.isArray(hashes) || hashes.length === 0) {
+          return res.status(400).json({ error: "hashes[] required" });
+        }
+
+        const statuses = [];
+        for (const hash of hashes.slice(0, 50)) {
+          const chunkDoc = await db.collection("chunk_registry").doc(hash).get();
+          if (!chunkDoc.exists) {
+            statuses.push({ hash, exists: false, replicas: 0 });
+            continue;
+          }
+
+          const holdersSnap = await chunkDoc.ref.collection("holders")
+            .where("status", "==", "active")
+            .get();
+
+          const holders = holdersSnap.docs.map(h => ({
+            node_id: h.id,
+            last_verified: h.data().last_verified,
+          }));
+
+          statuses.push({
+            hash,
+            exists: true,
+            replicas: holdersSnap.size,
+            fully_replicated: holdersSnap.size >= 3,
+            file_key: chunkDoc.data().file_key,
+            holders,
+          });
+        }
+
+        return res.json({
+          success: true,
+          chunks: statuses,
+        });
+      } catch (e) {
+        console.error("[Chunk Registry] chunk_status error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    // =====================================================
 
     return res.status(400).json({
       error: `Unknown action: ${action}`,
@@ -12859,6 +13209,8 @@ exports.agentGateway = onRequest({
         "settlement.set_wallet", "settlement.get_wallet",
         "node.register", "node.heartbeat", "node.status", "node.peers",
         "storage.set", "storage.get", "storage.list", "storage.delete",
+        "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
+        "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
         "pipeline.create", "pipeline.execute", "pipeline.list", "pipeline.delete",
         "webhook.subscribe", "webhook.unsubscribe", "webhook.list", "webhook.test", "webhook.logs",
         "social.referral", "social.leaderboard", "social.profile",

@@ -359,6 +359,42 @@
                 </div>
             </div>
 
+            <!-- Chunk Registry -->
+            <div class="panel chunk-panel">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <h2>Chunk Registry</h2>
+                    <span class="panel-badge" id="chunkRegBadge">--</span>
+                </div>
+                <div class="p2p-stats-grid">
+                    <div class="p2p-stat">
+                        <div class="p2p-stat-label">Registered</div>
+                        <div class="p2p-stat-value" id="crRegistered">0</div>
+                    </div>
+                    <div class="p2p-stat">
+                        <div class="p2p-stat-label">Pending</div>
+                        <div class="p2p-stat-value" id="crPending">0</div>
+                    </div>
+                    <div class="p2p-stat">
+                        <div class="p2p-stat-label">Proofs</div>
+                        <div class="p2p-stat-value" id="crProofs">0</div>
+                    </div>
+                    <div class="p2p-stat">
+                        <div class="p2p-stat-label">Health</div>
+                        <div class="p2p-stat-value" id="crHealth">--%</div>
+                    </div>
+                </div>
+                <div class="chunk-sync-bar">
+                    <span class="chunk-sync-label">Last Sync</span>
+                    <span class="chunk-sync-time" id="crLastSync">--</span>
+                </div>
+            </div>
+
             <!-- Activity Log -->
             <div class="panel log-panel">
                 <div class="panel-header">

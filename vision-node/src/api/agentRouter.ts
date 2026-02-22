@@ -34,6 +34,7 @@ import { nodeManager } from '../core/nodeManager.js';
 import { storageService } from '../core/storageService.js';
 import { heartbeatService } from '../core/heartbeat.js';
 import { p2pNetwork } from '../core/p2pNetwork.js';
+import { chunkRegistry } from '../core/chunkRegistry.js';
 import { configManager } from '../config/nodeConfig.js';
 
 export function createAgentRouter(): Router {
@@ -89,6 +90,8 @@ export function createAgentRouter(): Router {
                 { method: 'POST', path: '/agent/v1/p2p/peers', description: 'List connected peers' },
                 { method: 'POST', path: '/agent/v1/p2p/connect', description: 'Connect to a peer', params: { address: 'string', port: 'number' } },
                 { method: 'POST', path: '/agent/v1/p2p/broadcast', description: 'Broadcast a message to all peers', params: { type: 'string', payload: 'object' } },
+                { method: 'POST', path: '/agent/v1/chunks/status', description: 'Get chunk registry sync status' },
+                { method: 'POST', path: '/agent/v1/chunks/sync', description: 'Force chunk registry sync' },
             ],
         });
     });
@@ -313,6 +316,25 @@ export function createAgentRouter(): Router {
 
         p2pNetwork.broadcast(type, payload || {});
         res.json({ success: true, message: `Broadcast sent: ${type}` });
+    });
+
+    // ══════════════════════════════════════
+    // CHUNK REGISTRY
+    // ══════════════════════════════════════
+
+    router.post('/chunks/status', (_req: Request, res: Response) => {
+        const stats = chunkRegistry.getStats();
+        res.json({ success: true, ...stats });
+    });
+
+    router.post('/chunks/sync', async (_req: Request, res: Response) => {
+        try {
+            await chunkRegistry.sync();
+            const stats = chunkRegistry.getStats();
+            res.json({ success: true, message: 'Sync completed', ...stats });
+        } catch (err) {
+            res.status(500).json({ success: false, error: String(err) });
+        }
     });
 
     return router;

@@ -752,6 +752,33 @@ table tr:hover td {
     text-align: right;
 }
 
+/* Chunk Registry Panel */
+.chunk-panel {
+    margin-bottom: 24px;
+}
+
+.chunk-sync-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-deep);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+}
+
+.chunk-sync-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.chunk-sync-time {
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+}
+
 /* Log */
 .log-panel {
     margin-bottom: 24px;

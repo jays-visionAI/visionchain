@@ -9,6 +9,7 @@ import { configManager, type NodeClass } from '../config/nodeConfig.js';
 import { heartbeatService } from './heartbeat.js';
 import { storageService } from './storageService.js';
 import { p2pNetwork } from './p2pNetwork.js';
+import { chunkRegistry } from './chunkRegistry.js';
 import { startDashboard, stopDashboard } from '../dashboard/server.js';
 import { mkdirSync, existsSync } from 'fs';
 import { cpus, totalmem, freemem, platform, arch, hostname } from 'os';
@@ -59,6 +60,16 @@ export interface NodeStatus {
             reputation: number;
         }>;
     };
+    chunkRegistry: {
+        isRunning: boolean;
+        lastSync: number;
+        totalChunksRegistered: number;
+        pendingAssignments: number;
+        proofsCompleted: number;
+        proofsPassed: number;
+        proofsFailed: number;
+        replicationHealth: number;
+    };
 }
 
 class NodeManager {
@@ -101,6 +112,9 @@ class NodeManager {
         // Start P2P network
         p2pNetwork.start();
 
+        // Start chunk registry sync
+        chunkRegistry.start();
+
         console.log('[Node] All services started');
     }
 
@@ -114,6 +128,7 @@ class NodeManager {
 
         console.log('[Node] Stopping...');
         heartbeatService.stop();
+        chunkRegistry.stop();
         p2pNetwork.stop();
         stopDashboard();
         await storageService.stop();
@@ -174,6 +189,7 @@ class NodeManager {
                     reputation: p.reputation,
                 })),
             },
+            chunkRegistry: chunkRegistry.getStats(),
         };
     }
 

@@ -327,6 +327,19 @@
                 }
             }
         }
+
+        // ── Chunk Registry ──
+        if (status.chunkRegistry) {
+            const cr = status.chunkRegistry;
+            setText('chunkRegBadge', cr.isRunning ? 'Syncing' : 'Idle');
+            setText('crRegistered', String(cr.totalChunksRegistered || 0));
+            setText('crPending', String(cr.pendingAssignments || 0));
+            setText('crProofs', String(cr.proofsCompleted || 0));
+            setText('crHealth', (cr.replicationHealth || 0) + '%');
+            if (cr.lastSync > 0) {
+                setText('crLastSync', new Date(cr.lastSync).toLocaleTimeString());
+            }
+        }
     }
 
     function updateFilesTable() {
