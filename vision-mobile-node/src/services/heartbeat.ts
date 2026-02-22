@@ -121,7 +121,11 @@ class HeartbeatService {
         }
 
         try {
-            const result: HeartbeatResponse = await sendHeartbeat(this.apiKey, mode);
+            // Map network mode to server-expected format
+            // Server expects: 'wifi_full' or 'cellular_min'
+            // networkAdapter returns: 'wifi' or 'cellular'
+            const apiMode = mode === 'wifi' ? 'wifi_full' : 'cellular_min';
+            const result: HeartbeatResponse = await sendHeartbeat(this.apiKey, apiMode);
 
             if (result.success) {
                 this.data.lastHeartbeat = Date.now();

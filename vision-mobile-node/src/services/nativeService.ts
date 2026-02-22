@@ -80,8 +80,11 @@ const headlessHeartbeatTask = async (): Promise<void> => {
             return;
         }
 
+        // Map network mode to server-expected format
+        const apiMode = level.mode === 'wifi' ? 'wifi_full' : 'cellular_min';
+
         // Send heartbeat
-        const result = await sendHeartbeat(creds.apiKey, level.mode);
+        const result = await sendHeartbeat(creds.apiKey, apiMode);
         if (result.success) {
             console.log(
                 `[HeadlessTask] Heartbeat OK - weight: ${result.weight}x, reward: ${result.pending_reward}`,
