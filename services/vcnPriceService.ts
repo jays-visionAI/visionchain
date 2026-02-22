@@ -11,18 +11,11 @@ export interface VcnPriceSettings {
     lastUpdate: number;
 }
 
-const DEFAULT_SETTINGS: VcnPriceSettings = {
-    minPrice: 0.3500,
-    maxPrice: 0.4500,
-    volatilityPeriod: 60, // 60 seconds for a full major cycle
-    volatilityRange: 5,   // 5% default range
-    enabled: true,
-    lastUpdate: Date.now()
-};
-
-const [currentPrice, setCurrentPrice] = createSignal(0.3750);
+// No DEFAULT_SETTINGS -- Firestore is the ONLY source of truth.
+// Initial signal is null until Firestore loads.
+const [currentPrice, setCurrentPrice] = createSignal(0);
 const [priceHistory, setPriceHistory] = createSignal<number[]>([]);
-const [priceSettings, setPriceSettings] = createSignal<VcnPriceSettings>(DEFAULT_SETTINGS);
+const [priceSettings, setPriceSettings] = createSignal<VcnPriceSettings | null>(null);
 
 // Multi-chain price signals
 const [ethPrice, setEthPrice] = createSignal(0);
@@ -35,8 +28,6 @@ const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number
     const PHI = 1.61803398875;
     const now = (targetTime || Date.now()) / 1000; // time in seconds
 
-    // Period adjustment: 2x slower than previous (previous was ~8s for small cycle, now user-defined)
-    // We use settings.volatilityPeriod as the base cycle
     const period = settings.volatilityPeriod || 60;
     const range = Math.max(0.0001, settings.maxPrice - settings.minPrice);
     const mid = settings.minPrice + range / 2;
@@ -45,16 +36,13 @@ const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number
     const activeRange = (mid * (settings.volatilityRange / 100)) / 2;
 
     // Fibonacci Harmonics: Summing waves at phi-scaled frequencies
-    // This creates "waves within waves" typical of Elliott Wave/Fibonacci theory
     let wave = 0;
-    wave += Math.sin((2 * Math.PI * now) / period);             // Primary Wave (1)
-    wave += Math.sin((2 * Math.PI * now * PHI) / period) / PHI;  // Secondary Corrective (0.618)
-    wave += Math.sin((2 * Math.PI * now * PHI * PHI) / period) / (PHI * PHI); // Noise (0.382)
+    wave += Math.sin((2 * Math.PI * now) / period);
+    wave += Math.sin((2 * Math.PI * now * PHI) / period) / PHI;
+    wave += Math.sin((2 * Math.PI * now * PHI * PHI) / period) / (PHI * PHI);
 
-    // Volatility reduced by 10x for the final signal as requested
     const normalizedWave = (wave / 2) * 0.1;
-
-    let result = mid + (normalizedWave * activeRange * 20); // Scale up to meet the percentage goal
+    let result = mid + (normalizedWave * activeRange * 20);
 
     // Clamp to min/max
     return Math.max(settings.minPrice, Math.min(settings.maxPrice, result));
@@ -62,11 +50,9 @@ const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number
 
 // Fetch market prices from CoinGecko (free API, no key required)
 const fetchMarketPrices = async () => {
-    // Rate limit: only fetch every 60 seconds
     if (Date.now() - lastPriceFetch() < 60000) return;
 
     try {
-        // Note: MATIC is now POL (polygon-ecosystem-token) on CoinGecko
         const response = await fetch(
             'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,polygon-ecosystem-token&vs_currencies=usd',
             { headers: { 'Accept': 'application/json' } }
@@ -81,7 +67,6 @@ const fetchMarketPrices = async () => {
         }
     } catch (err) {
         console.debug('[PriceService] Failed to fetch market prices:', err);
-        // Use fallback prices if API fails
         if (ethPrice() === 0) setEthPrice(3200);
         if (maticPrice() === 0) setMaticPrice(0.45);
     }
@@ -96,33 +81,26 @@ export const initPriceService = () => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'vcn_price');
 
+    // Subscribe to Firestore -- the ONLY place settings come from.
+    // No hardcoded defaults anywhere. Admin-saved values are the single source of truth.
     onSnapshot(docRef, (snapshot) => {
         if (snapshot.exists()) {
             const data = snapshot.data() as VcnPriceSettings;
-            // Use Firestore data as-is; only fill in missing fields with current signal values
-            // This ensures admin-configured values are NEVER overwritten by hardcoded defaults
-            setPriceSettings({
-                minPrice: data.minPrice ?? priceSettings().minPrice,
-                maxPrice: data.maxPrice ?? priceSettings().maxPrice,
-                volatilityPeriod: data.volatilityPeriod ?? priceSettings().volatilityPeriod,
-                volatilityRange: data.volatilityRange ?? priceSettings().volatilityRange,
-                enabled: data.enabled ?? true,
-                lastUpdate: data.lastUpdate ?? Date.now()
-            });
+            setPriceSettings(data);
+            console.log('[PriceService] Loaded settings from Firestore:', data);
         }
-        // If document doesn't exist, keep current signal values (don't write defaults to Firestore)
+        // If no document exists, settings remain null and price engine won't run.
     });
 
-    // Fetch market prices immediately
     fetchMarketPrices();
 
-    // Update the live price signal every second
+    // Price ticker -- only runs when Firestore settings have been loaded
     setInterval(() => {
-        if (priceSettings().enabled) {
-            const newPrice = calculateFibonacciPrice(priceSettings());
+        const settings = priceSettings();
+        if (settings && settings.enabled) {
+            const newPrice = calculateFibonacciPrice(settings);
             setCurrentPrice(newPrice);
 
-            // Maintain 60 points of history for the admin chart
             setPriceHistory(prev => {
                 const next = [...prev, newPrice];
                 if (next.length > 60) return next.slice(next.length - 60);
@@ -131,27 +109,31 @@ export const initPriceService = () => {
         }
     }, 1000);
 
-    // Refresh market prices every 60 seconds
     setInterval(fetchMarketPrices, 60000);
 };
 
 export const getVcnPrice = () => currentPrice();
 export const getVcnPriceHistory = () => priceHistory();
-export const getVcnPriceSettings = () => priceSettings();
+// Provide a safe accessor that returns zeroed fields if Firestore hasn't loaded yet
+export const getVcnPriceSettings = () => priceSettings() || { minPrice: 0, maxPrice: 0, volatilityPeriod: 60, volatilityRange: 5, enabled: true, lastUpdate: 0 };
 
 // Multi-chain price getters
-export const getEthPrice = () => ethPrice() || 3200; // fallback
-export const getMaticPrice = () => maticPrice() || 0.45; // fallback
+export const getEthPrice = () => ethPrice() || 3200;
+export const getMaticPrice = () => maticPrice() || 0.45;
 
 // Get the price at midnight today (local time)
 export const getDailyOpeningPrice = () => {
+    const settings = priceSettings();
+    if (!settings) return 0;
     const now = new Date();
     const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    return calculateFibonacciPrice(priceSettings(), midnight.getTime());
+    return calculateFibonacciPrice(settings, midnight.getTime());
 };
 
 export const updateVcnPriceSettings = async (settings: Partial<VcnPriceSettings>) => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'vcn_price');
-    await setDoc(docRef, { ...priceSettings(), ...settings, lastUpdate: Date.now() }, { merge: true });
+    const current = priceSettings();
+    // Write directly to Firestore -- no merging with any defaults
+    await setDoc(docRef, { ...current, ...settings, lastUpdate: Date.now() });
 };
