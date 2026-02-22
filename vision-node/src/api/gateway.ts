@@ -87,12 +87,14 @@ export class GatewayClient {
         maxSizeBytes: number;
         chunkCount: number;
     }): Promise<HeartbeatResponse> {
+        const config = configManager.get();
         const body: Record<string, unknown> = {
             action: 'mobile_node.heartbeat',
             api_key: this.apiKey,
             mode: 'wifi_full', // Desktop nodes always use full mode
             platform: process.platform,
-            node_class: configManager.get().nodeClass,
+            node_class: config.nodeClass,
+            storage_max_gb: config.storageMaxGB,
             version: '1.0.0',
             system_info: this.getSystemInfo(),
         };

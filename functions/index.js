@@ -12598,6 +12598,13 @@ exports.agentGateway = onRequest({
         if (batteryPct !== undefined) updateData.last_battery_pct = batteryPct;
         if (dataUsedMb !== undefined) updateData.last_data_used_mb = dataUsedMb;
 
+        // Track platform info from desktop/CLI nodes
+        const { platform: hbPlatform, node_class: hbNodeClass, storage_max_gb: hbStorageMaxGB, version: hbVersion } = req.body;
+        if (hbPlatform && !mnData.platform) updateData.platform = hbPlatform;
+        if (hbNodeClass && mnData.node_class !== hbNodeClass) updateData.node_class = hbNodeClass;
+        if (hbStorageMaxGB && !mnData.storage_max_gb) updateData.storage_max_gb = hbStorageMaxGB;
+        if (hbVersion) updateData.client_version = hbVersion;
+
         await mnDoc.ref.update(updateData);
 
         // Log heartbeat to subcollection for analytics
