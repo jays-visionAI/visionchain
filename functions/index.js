@@ -8981,7 +8981,12 @@ exports.agentGateway = onRequest({
     // mobile_node.register & mobile_node.leaderboard are public (no auth required)
     // mobile_node.heartbeat/status/claim_reward use their own vcn_mn_ key auth internally
     // storage_node.* actions use node api_key auth internally
-    const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation", "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored", "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status"];
+    const skipAgentAuth = [
+      "mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat",
+      "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation",
+      "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored",
+      "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status",
+    ];
 
     // Detect Firebase ID token (non-vcn_ bearer tokens)
     let firebaseIdToken = null;
