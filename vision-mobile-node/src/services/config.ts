@@ -29,8 +29,8 @@ export const CONFIG = {
     MAX_CACHE_SIZE_MB: 50,
 
     // App Info
-    APP_VERSION: '1.0.1',
-    BUILD_NUMBER: 2,
+    APP_VERSION: '1.0.2',
+    BUILD_NUMBER: 3,
 };
 
 export type Environment = 'staging' | 'production';

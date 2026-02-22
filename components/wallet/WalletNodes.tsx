@@ -76,7 +76,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                             </div>
                             {/* Download Button */}
                             <a
-                                href="https://github.com/jays-visionAI/visionchain/releases/latest/download/visionchain-node-v1.0.1.apk"
+                                href="https://github.com/jays-visionAI/visionchain/releases/latest/download/visionchain-node-v1.0.2.apk"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="shrink-0 flex items-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95"

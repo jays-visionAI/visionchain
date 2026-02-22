@@ -4,13 +4,16 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Promise
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.util.Log
 
 /**
  * React Native Native Module to control the Foreground Service from JS.
  *
- * Exposes start/stop methods to JavaScript so the app can control
- * the background service lifecycle.
+ * Exposes start/stop methods and battery level to JavaScript.
  */
 class NodeServiceModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -24,7 +27,6 @@ class NodeServiceModule(reactContext: ReactApplicationContext) :
 
     /**
      * Start the foreground service.
-     * Called from JS when the user registers or logs in.
      */
     @ReactMethod
     fun startService(promise: Promise) {
@@ -40,7 +42,6 @@ class NodeServiceModule(reactContext: ReactApplicationContext) :
 
     /**
      * Stop the foreground service.
-     * Called from JS when the user logs out or disconnects.
      */
     @ReactMethod
     fun stopService(promise: Promise) {
@@ -60,9 +61,47 @@ class NodeServiceModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun isServiceRunning(promise: Promise) {
         try {
-            // Simple check: if we can start/stop, service exists
             promise.resolve(true)
         } catch (e: Exception) {
+            promise.resolve(false)
+        }
+    }
+
+    /**
+     * Get current battery level as a percentage (0-100).
+     * Returns -1 if unable to determine.
+     */
+    @ReactMethod
+    fun getBatteryLevel(promise: Promise) {
+        try {
+            val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { filter ->
+                reactApplicationContext.registerReceiver(null, filter)
+            }
+            val level = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+            val pct = if (level >= 0 && scale > 0) (level * 100) / scale else -1
+            promise.resolve(pct)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get battery level: ${e.message}")
+            promise.resolve(-1)
+        }
+    }
+
+    /**
+     * Check if the device is currently charging.
+     */
+    @ReactMethod
+    fun isCharging(promise: Promise) {
+        try {
+            val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { filter ->
+                reactApplicationContext.registerReceiver(null, filter)
+            }
+            val status = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                             status == BatteryManager.BATTERY_STATUS_FULL
+            promise.resolve(isCharging)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check charging status: ${e.message}")
             promise.resolve(false)
         }
     }
