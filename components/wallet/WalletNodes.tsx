@@ -42,6 +42,53 @@ export const WalletNodes = (props: WalletNodesProps) => {
                 />
 
                 <div class="space-y-10">
+                    {/* Android Mobile Node Download Banner */}
+                    <div class="bg-gradient-to-r from-[#111113] to-[#0f1117] border border-white/[0.06] rounded-[28px] p-6 relative overflow-hidden group hover:border-emerald-500/20 transition-all duration-500">
+                        {/* Background Gradient */}
+                        <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        <div class="relative z-10 flex flex-col sm:flex-row items-center gap-5">
+                            {/* Android Icon */}
+                            <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-green-600/20 border border-emerald-500/20 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/10">
+                                <svg viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8 text-emerald-400">
+                                    <path d="M17.523 2.236a.5.5 0 0 0-.858.514l1.083 1.808A7.456 7.456 0 0 0 12 2.5a7.456 7.456 0 0 0-5.748 2.058l1.083-1.808a.5.5 0 0 0-.858-.514L5.05 4.96A7.97 7.97 0 0 0 4 9h16a7.97 7.97 0 0 0-1.05-4.04l-1.427-2.724zM9 7.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm6 0a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zM4 10h16v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-8z" />
+                                </svg>
+                            </div>
+                            {/* Text Content */}
+                            <div class="flex-1 text-center sm:text-left">
+                                <h3 class="text-lg font-bold text-white mb-1">Android Mobile Node</h3>
+                                <p class="text-sm text-gray-400 leading-relaxed">
+                                    Install the dedicated Android app for background mining with higher rewards and better uptime stability.
+                                </p>
+                                <div class="flex flex-wrap justify-center sm:justify-start gap-3 mt-3">
+                                    <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>
+                                        Background Mining
+                                    </div>
+                                    <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>
+                                        Higher Rewards
+                                    </div>
+                                    <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>
+                                        Auto Reconnect
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Download Button */}
+                            <a
+                                href="https://visionchain.co/download/visionchain-node.apk"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="shrink-0 flex items-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
+                                Download APK
+                            </a>
+                        </div>
+                    </div>
+
                     {/* Mobile Node Dashboard */}
                     <MobileNodeDashboard userEmail={props.userEmail} />
                     {/* Active Nodes List */}
