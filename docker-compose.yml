@@ -1,10 +1,11 @@
 version: '3.8'
 
 services:
-  # Node 1: Bootnode & Primary RPC
+  # Node 1: Bootnode & Primary Sealer
   node-1:
     image: ethereum/client-go:v1.13.15
     container_name: vision-node-1
+    restart: unless-stopped
     networks:
       vision-net:
         ipv4_address: 172.20.0.11
@@ -13,8 +14,9 @@ services:
       - "30303:30303" # P2P
     volumes:
       - ./deploy/v2-testnet/node1:/root/.ethereum
+      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug,clique" --allow-insecure-unlock --unlock "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --password /root/.ethereum/password.txt --mine --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --nat extip:172.20.0.11
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin,debug,clique" --http.corsdomain "*" --allow-insecure-unlock --unlock "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --password /root/.ethereum/password.txt --mine --miner.etherbase "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" --nat extip:172.20.0.11 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -25,6 +27,7 @@ services:
   node-2:
     image: ethereum/client-go:v1.13.15
     container_name: vision-node-2
+    restart: unless-stopped
     networks:
       vision-net:
         ipv4_address: 172.20.0.12
@@ -33,8 +36,9 @@ services:
       - "30304:30303" # P2P mapped to 30304
     volumes:
       - ./deploy/v2-testnet/node2:/root/.ethereum
+      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.12
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.12 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -45,6 +49,7 @@ services:
   node-3:
     image: ethereum/client-go:v1.13.15
     container_name: vision-node-3
+    restart: unless-stopped
     networks:
       vision-net:
         ipv4_address: 172.20.0.13
@@ -53,8 +58,9 @@ services:
       - "30305:30303"
     volumes:
       - ./deploy/v2-testnet/node3:/root/.ethereum
+      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.13
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.13 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -65,6 +71,7 @@ services:
   node-4:
     image: ethereum/client-go:v1.13.15
     container_name: vision-node-4
+    restart: unless-stopped
     networks:
       vision-net:
         ipv4_address: 172.20.0.14
@@ -73,8 +80,9 @@ services:
       - "30306:30303"
     volumes:
       - ./deploy/v2-testnet/node4:/root/.ethereum
+      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.14
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.14 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -85,6 +93,7 @@ services:
   node-5:
     image: ethereum/client-go:v1.13.15
     container_name: vision-node-5
+    restart: unless-stopped
     networks:
       vision-net:
         ipv4_address: 172.20.0.15
@@ -93,8 +102,9 @@ services:
       - "30307:30303"
     volumes:
       - ./deploy/v2-testnet/node5:/root/.ethereum
+      - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://235a0de479fcb6e9f325e95b42887446385a375789fd609a5bf92d8dccf57557fe8f044febf55381b8b4e03cf89422b64521e6506b0c50d60ecfdb7ac2a40f2a@172.20.0.11:30303" --nat extip:172.20.0.15
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.15 --maxpeers 25
     deploy:
       resources:
         limits:

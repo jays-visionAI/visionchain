@@ -769,6 +769,8 @@ const VCN_TOKEN_ABI = [
   "function allowance(address owner, address spender) external view returns (uint256)",
   "function approve(address spender, uint256 amount) external returns (bool)",
   "function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external",
+  "function nonces(address owner) external view returns (uint256)",
+  "function DOMAIN_SEPARATOR() external view returns (bytes32)",
 ];
 
 /**
@@ -9185,15 +9187,45 @@ exports.agentGateway = onRequest({
           return res.status(400).json({ error: "Invalid signature format" });
         }
 
-        // Get admin nonce
+        // Get admin nonce and verify on-chain permit nonce
         const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
+        const onChainPermitNonce = await tokenContract.nonces(userAddress);
+        console.log(`[Agent Gateway] On-chain permit nonce for ${userAddress}: ${onChainPermitNonce.toString()}`);
 
         // Execute permit
-        console.log(`[Agent Gateway] Permit params: owner=${userAddress}, spender=${adminWallet.address}, value=${totalAmountBigInt.toString()}, deadline=${deadline}, nonce=${startNonce}`);
+        console.log(`[Agent Gateway] Permit params: owner=${userAddress}, spender=${adminWallet.address}, value=${totalAmountBigInt.toString()}, deadline=${deadline}`);
+        console.log(`[Agent Gateway] Permit v=${v}, r=${r}, s=${sigS}`);
+        console.log(`[Agent Gateway] Raw signature: ${signature}`);
+
+        // Verify: try to recover signer from the signature to check before sending on-chain
+        try {
+          const permitTypeHash = ethers.keccak256(ethers.toUtf8Bytes("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"));
+          // eslint-disable-next-line new-cap
+          const domainSeparator = await tokenContract.DOMAIN_SEPARATOR();
+          // eslint-disable-next-line new-cap
+          const abiCoder = new ethers.AbiCoder();
+          const structHash = ethers.keccak256(abiCoder.encode(
+            ["bytes32", "address", "address", "uint256", "uint256", "uint256"],
+            [permitTypeHash, userAddress, adminWallet.address, totalAmountBigInt, onChainPermitNonce, deadline],
+          ));
+          const digest = ethers.keccak256(ethers.concat([
+            ethers.toUtf8Bytes("\x19\x01"),
+            domainSeparator,
+            structHash,
+          ]));
+          const recovered = ethers.recoverAddress(digest, { v, r, s: sigS });
+          console.log(`[Agent Gateway] Digest: ${digest}`);
+          console.log(`[Agent Gateway] Recovered signer: ${recovered}`);
+          console.log(`[Agent Gateway] Expected owner: ${userAddress}`);
+          console.log(`[Agent Gateway] Signer match: ${recovered.toLowerCase() === userAddress.toLowerCase()}`);
+        } catch (recoverErr) {
+          console.warn(`[Agent Gateway] Recovery check failed:`, recoverErr.message);
+        }
+
         try {
           const permitTx = await tokenContract.permit(
             userAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
-            { nonce: startNonce },
+            { nonce: startNonce, gasLimit: 200000 },
           );
           await permitTx.wait();
           console.log(`[Agent Gateway] User permit confirmed: ${permitTx.hash}`);
@@ -9206,8 +9238,8 @@ exports.agentGateway = onRequest({
               spender: adminWallet.address,
               value: totalAmountBigInt.toString(),
               deadline,
-              frontendSpender: "0xc6176B597d40f9Db62ED60149FB7625CCa56990b",
-              match: adminWallet.address.toLowerCase() === "0xc6176B597d40f9Db62ED60149FB7625CCa56990b".toLowerCase(),
+              onChainPermitNonce: onChainPermitNonce.toString(),
+              v, r, s: sigS,
             },
           });
         }
