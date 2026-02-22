@@ -28,7 +28,8 @@ import {
     Share2,
     Coins,
     Smartphone,
-    Server
+    Server,
+    Globe
 } from 'lucide-solid';
 
 
@@ -60,7 +61,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Share2,
     Coins,
     Smartphone,
-    Server
+    Server,
+    Globe
 };
 
 // Menu item interface with optional children for sub-menus
@@ -267,6 +269,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 16,
+        requiredRole: 'admin'
+    },
+    {
+        id: 'vision-nodes',
+        path: '/adminsystem/vision-nodes',
+        label: 'Vision Nodes',
+        icon: 'Globe',
+        badge: 'NEW',
+        category: 'custom',
+        order: 16.5,
         requiredRole: 'admin'
     },
     {
