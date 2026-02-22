@@ -93,6 +93,14 @@ class ChunkRegistryClient {
                 return;
             }
 
+            const storageStats = storageService.getStats();
+
+            // Skip sync if no local chunks - nothing to register or prove
+            if (storageStats.totalChunks === 0) {
+                this.stats.lastSync = Date.now();
+                return;
+            }
+
             // 1. Register locally stored chunks with backend
             await this.registerLocalChunks();
 
@@ -105,7 +113,10 @@ class ChunkRegistryClient {
             this.stats.lastSync = Date.now();
 
         } catch (err) {
-            console.error('[ChunkRegistry] Sync error:', err);
+            // Log silently to avoid spamming when backend APIs aren't available yet
+            if (this.stats.lastSync === 0) {
+                console.warn('[ChunkRegistry] Backend APIs not available yet (will retry silently)');
+            }
         }
     }
 

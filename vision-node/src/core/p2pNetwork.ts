@@ -64,8 +64,8 @@ type MessageHandler = (msg: P2PMessage, peer: PeerInfo) => void;
 
 const SIGNAL_SERVER = 'wss://signal.visionchain.co';
 const PING_INTERVAL = 30_000;        // 30s
-const RECONNECT_DELAY = 5_000;       // 5s
-const MAX_RECONNECT_DELAY = 60_000;  // 60s
+const RECONNECT_DELAY = 10_000;      // 10s
+const MAX_RECONNECT_DELAY = 300_000;  // 5min
 const MAX_TTL = 5;                    // max hops for gossip
 const MAX_PEERS = 12;                 // max direct connections
 const SEEN_MSG_CACHE = 1000;          // dedup cache size
@@ -84,6 +84,7 @@ class P2PNetwork {
     private pingTimer: ReturnType<typeof setInterval> | null = null;
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private reconnectDelay = RECONNECT_DELAY;
+    private reconnectAttempts = 0;
 
     private stats = {
         totalMessagesSent: 0,
@@ -358,7 +359,9 @@ class P2PNetwork {
             });
 
             this.signalWs.on('close', () => {
-                console.log('[P2P] Signal server disconnected');
+                if (this.reconnectAttempts === 0) {
+                    console.log('[P2P] Signal server not available (will retry in background)');
+                }
                 this.scheduleReconnect();
             });
 
@@ -374,13 +377,16 @@ class P2PNetwork {
     private scheduleReconnect(): void {
         if (!this.running) return;
 
+        this.reconnectAttempts++;
         this.reconnectTimer = setTimeout(() => {
-            console.log('[P2P] Reconnecting to signal server...');
+            if (this.reconnectAttempts % 5 === 0) {
+                console.log(`[P2P] Signal server reconnect attempt #${this.reconnectAttempts}...`);
+            }
             this.connectToSignalServer();
         }, this.reconnectDelay);
 
         // Exponential backoff
-        this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, MAX_RECONNECT_DELAY);
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, MAX_RECONNECT_DELAY);
     }
 
     // ── Private: Connection Handling ──

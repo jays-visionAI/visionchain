@@ -12533,6 +12533,8 @@ exports.agentGateway = onRequest({
           android_cellular_min: 0.005,
           pwa_wifi_full: 0.002,
           pwa_cellular_min: 0.0005,
+          desktop_wifi_full: 0.02,
+          desktop_cellular_min: 0.01,
         };
         const weightKey = `${mnData.device_type}_${mode}`;
         const weight = weightMap[weightKey] || 0;
@@ -12541,7 +12543,7 @@ exports.agentGateway = onRequest({
           return res.status(200).json({
             success: true,
             accepted: false,
-            reason: "PWA cellular mode does not earn rewards",
+            reason: `Unsupported device_type/mode combination: ${weightKey}`,
             weight: 0,
           });
         }
