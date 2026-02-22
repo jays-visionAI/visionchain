@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import { configManager } from './config/nodeConfig.js';
 import { gatewayClient } from './api/gateway.js';
 import { nodeManager } from './core/nodeManager.js';
+import { acquireLock, releaseLock, lockHolderDescription } from './core/processLock.js';
 import { heartbeatService } from './core/heartbeat.js';
 import { storageService } from './core/storageService.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -129,6 +130,16 @@ program
             process.exit(1);
         }
 
+        // Check for another running instance
+        const lockHolder = acquireLock('cli');
+        if (lockHolder) {
+            console.error(chalk.red(`\n  Another Vision Node instance is already running:`));
+            console.error(chalk.red(`  ${lockHolderDescription(lockHolder)}`));
+            console.error(chalk.yellow(`\n  Only one node per machine is allowed.`));
+            console.error(chalk.gray(`  Stop the other instance first, or delete ~/.visionnode/node.lock\n`));
+            process.exit(1);
+        }
+
         printBanner();
 
         const config = configManager.get();
@@ -157,6 +168,7 @@ program
         const shutdown = async () => {
             console.log(chalk.yellow('\n  Shutting down...'));
             await nodeManager.stop();
+            releaseLock();
             console.log(chalk.green('  Node stopped. Goodbye!\n'));
             process.exit(0);
         };
