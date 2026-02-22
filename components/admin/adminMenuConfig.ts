@@ -27,7 +27,6 @@ import {
     Eye,
     Share2,
     Coins,
-    Smartphone,
     Server,
     Globe
 } from 'lucide-solid';
@@ -60,7 +59,6 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Eye,
     Share2,
     Coins,
-    Smartphone,
     Server,
     Globe
 };
@@ -279,16 +277,6 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 16.5,
-        requiredRole: 'admin'
-    },
-    {
-        id: 'mobile-nodes',
-        path: '/adminsystem/mobile-nodes',
-        label: 'Mobile Nodes',
-        icon: 'Smartphone',
-        badge: 'NEW',
-        category: 'custom',
-        order: 17,
         requiredRole: 'admin'
     },
     {

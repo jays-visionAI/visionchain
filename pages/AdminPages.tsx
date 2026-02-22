@@ -24,7 +24,6 @@ export const AdminCexPortfolio = lazy(() => import('../components/admin/AdminCex
 export const AdminVisionInsight = lazy(() => import('../components/admin/AdminVisionInsight'));
 export const AdminSocialMedia = lazy(() => import('../components/admin/AdminSocialMedia'));
 export const AdminApiPricing = lazy(() => import('../components/admin/AdminApiPricing'));
-export const AdminMobileNodes = lazy(() => import('../components/admin/AdminMobileNodes'));
 export const AdminNodeHealth = lazy(() => import('../components/admin/AdminNodeHealth'));
 export const AdminVisionNodes = lazy(() => import('../components/admin/AdminVisionNodes'));
 
@@ -286,17 +285,6 @@ export function AdminVisionNodesPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminVisionNodes />
-            </AdminLayout>
-        </Suspense>
-    );
-}
-
-export function AdminMobileNodesPage() {
-    document.title = 'Mobile Nodes | Admin';
-    return (
-        <Suspense fallback={<PageLoader />}>
-            <AdminLayout>
-                <AdminMobileNodes />
             </AdminLayout>
         </Suspense>
     );
