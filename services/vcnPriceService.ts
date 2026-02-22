@@ -13,7 +13,7 @@ export interface VcnPriceSettings {
 
 const DEFAULT_SETTINGS: VcnPriceSettings = {
     minPrice: 0.3500,
-    maxPrice: 0.8500,
+    maxPrice: 0.4500,
     volatilityPeriod: 60, // 60 seconds for a full major cycle
     volatilityRange: 5,   // 5% default range
     enabled: true,
@@ -99,14 +99,18 @@ export const initPriceService = () => {
     onSnapshot(docRef, (snapshot) => {
         if (snapshot.exists()) {
             const data = snapshot.data() as VcnPriceSettings;
-            // Ensure defaults for new fields if they don't exist in DB
+            // Use Firestore data as-is; only fill in missing fields with current signal values
+            // This ensures admin-configured values are NEVER overwritten by hardcoded defaults
             setPriceSettings({
-                ...DEFAULT_SETTINGS,
-                ...data
+                minPrice: data.minPrice ?? priceSettings().minPrice,
+                maxPrice: data.maxPrice ?? priceSettings().maxPrice,
+                volatilityPeriod: data.volatilityPeriod ?? priceSettings().volatilityPeriod,
+                volatilityRange: data.volatilityRange ?? priceSettings().volatilityRange,
+                enabled: data.enabled ?? true,
+                lastUpdate: data.lastUpdate ?? Date.now()
             });
-        } else {
-            setDoc(docRef, DEFAULT_SETTINGS);
         }
+        // If document doesn't exist, keep current signal values (don't write defaults to Firestore)
     });
 
     // Fetch market prices immediately
