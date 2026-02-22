@@ -540,12 +540,12 @@ function slashNode(bytes32 nodeId, string reason) external; // Admin only
 
 ### Phase 8: Polish & Production (1주)
 
-- [ ] Docker Compose 멀티 서비스 구성
-- [ ] CI/CD 파이프라인 (GitHub Actions)
-- [ ] 설치 스크립트 (curl one-liner)
-- [ ] 문서 작성 (README, API docs)
-- [ ] 성능 벤치마크
-- [ ] 보안 감사 (API 인증, 데이터 암호화 검증)
+- [x] Docker Compose 멀티 서비스 구성
+- [x] CI/CD 파이프라인 (GitHub Actions)
+- [x] 설치 스크립트 (curl one-liner)
+- [x] 문서 작성 (README, API docs)
+- [x] 성능 벤치마크
+- [x] 보안 감사 (API 인증, 데이터 암호화 검증)
 
 **결과물**: 프로덕션 배포 준비 완료
 

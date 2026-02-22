@@ -58,8 +58,9 @@ export function createAgentRouter(): Router {
         const token = authHeader.slice(7);
         const config = configManager.get();
 
-        // Accept either the node's API key or a special agent key
-        if (token !== config.apiKey && token !== 'vision-agent-local') {
+        // Accept the node's API key, or 'vision-agent-local' only from localhost
+        const isLocalhost = req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1';
+        if (token !== config.apiKey && !(token === 'vision-agent-local' && isLocalhost)) {
             return res.status(403).json({
                 success: false,
                 error: 'Invalid API key',
