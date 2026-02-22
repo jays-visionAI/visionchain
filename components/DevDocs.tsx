@@ -717,7 +717,7 @@ export default function DevDocs(): JSX.Element {
         <div class="space-y-8">
             <div>
                 <h2 class="text-3xl font-black tracking-tight mb-3">Vision Chain Developer API</h2>
-                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 60 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
+                <p class="text-gray-400 leading-relaxed max-w-2xl">The Agent Gateway API provides a single REST endpoint for AI agents and developers to interact with Vision Chain. All 76 actions are accessible via <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">POST</code> requests to one URL.</p>
             </div>
             <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center gap-3">
                 <span class="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded">BASE URL</span>
@@ -725,7 +725,7 @@ export default function DevDocs(): JSX.Element {
                 <CopyBtn text={API} id="base-url" />
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[{ n: '59', l: 'API Actions', d: 'Wallet, Staking, Bridge, NFT, Node, Storage, Pipeline, Hosting' }, { n: '0', l: 'Gas Fees', d: 'All transactions are gasless' }, { n: '100', l: 'VCN Funded', d: 'Auto-funded on registration' }].map(c => (
+                {[{ n: '76', l: 'API Actions', d: 'Wallet, Staking, Bridge, NFT, Node, Vision Node, Storage, Pipeline, Hosting' }, { n: '0', l: 'Gas Fees', d: 'All transactions are gasless' }, { n: '100', l: 'VCN Funded', d: 'Auto-funded on registration' }].map(c => (
                     <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                         <div class="text-3xl font-black text-white mb-1">{c.n}</div>
                         <div class="text-sm font-bold text-gray-300 mb-1">{c.l}</div>
