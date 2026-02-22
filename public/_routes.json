@@ -6,6 +6,7 @@
     "exclude": [
         "/assets/*",
         "/docs/*",
+        "/download/*",
         "/*.js",
         "/*.css",
         "/*.md",
@@ -20,6 +21,7 @@
         "/*.woff",
         "/*.woff2",
         "/*.ttf",
-        "/*.eot"
+        "/*.eot",
+        "/*.apk"
     ]
 }
