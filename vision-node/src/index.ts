@@ -11,7 +11,8 @@ import { configManager } from './config/nodeConfig.js';
 import { gatewayClient } from './api/gateway.js';
 import { nodeManager } from './core/nodeManager.js';
 import { heartbeatService } from './core/heartbeat.js';
-import { readFileSync } from 'fs';
+import { storageService } from './core/storageService.js';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -261,6 +262,125 @@ program
         }
     });
 
+// ─── STORAGE ───
+const storageCmd = program
+    .command('storage')
+    .description('Manage node storage');
+
+storageCmd
+    .command('stats')
+    .description('Show storage statistics')
+    .action(async () => {
+        configManager.load();
+        await storageService.start();
+
+        const stats = storageService.getStats();
+        console.log(chalk.bold('\n  Storage Statistics\n'));
+        console.log(`  Status:      ${stats.isRunning ? chalk.green('running') : chalk.red('stopped')}`);
+        console.log(`  Files:       ${chalk.cyan(String(stats.totalFiles))}`);
+        console.log(`  Chunks:      ${chalk.cyan(String(stats.totalChunks))}`);
+        console.log(`  Used:        ${chalk.cyan(formatSize(stats.totalSizeBytes))}`);
+        console.log(`  Max:         ${chalk.cyan(formatSize(stats.maxSizeBytes))}`);
+        console.log(`  Usage:       ${stats.usagePercent > 80 ? chalk.red(stats.usagePercent + '%') : chalk.green(stats.usagePercent + '%')}`);
+        console.log(`  Path:        ${chalk.gray(configManager.get().storagePath)}`);
+        console.log('');
+
+        await storageService.stop();
+    });
+
+storageCmd
+    .command('put <filepath>')
+    .description('Store a file in the distributed storage')
+    .action(async (filepath: string) => {
+        configManager.load();
+
+        const absPath = filepath.startsWith('/') ? filepath : join(process.cwd(), filepath);
+        if (!existsSync(absPath)) {
+            console.error(chalk.red(`\n  File not found: ${absPath}\n`));
+            process.exit(1);
+        }
+
+        await storageService.start();
+
+        const data = readFileSync(absPath);
+        console.log(chalk.gray(`\n  Storing ${formatSize(data.length)}...`));
+
+        const result = storageService.upload(data, { originalPath: filepath });
+        if (result.success) {
+            console.log(chalk.green('\n  Stored successfully!'));
+            console.log(`  File Key:    ${chalk.cyan(result.fileKey)}`);
+            console.log(`  CID:         ${chalk.cyan(result.cid)}`);
+            console.log(`  Merkle Root: ${chalk.gray(result.merkleRoot.slice(0, 24) + '...')}`);
+            console.log(`  Size:        ${chalk.cyan(formatSize(result.totalSize))}`);
+            console.log(`  Chunks:      ${chalk.cyan(String(result.chunkCount))}`);
+            console.log('');
+        } else {
+            console.error(chalk.red(`\n  Failed: ${result.error}\n`));
+        }
+
+        await storageService.stop();
+    });
+
+storageCmd
+    .command('get <fileKey> <outputPath>')
+    .description('Retrieve a file from storage')
+    .action(async (fileKey: string, outputPath: string) => {
+        configManager.load();
+        await storageService.start();
+
+        const result = storageService.download(fileKey);
+        if (result.success && result.data) {
+            const absPath = outputPath.startsWith('/') ? outputPath : join(process.cwd(), outputPath);
+            writeFileSync(absPath, result.data);
+            console.log(chalk.green(`\n  Retrieved ${formatSize(result.data.length)} -> ${absPath}\n`));
+        } else {
+            console.error(chalk.red(`\n  Failed: ${result.error}\n`));
+        }
+
+        await storageService.stop();
+    });
+
+storageCmd
+    .command('ls')
+    .description('List stored files')
+    .action(async () => {
+        configManager.load();
+        await storageService.start();
+
+        const files = storageService.listFiles();
+        if (files.length === 0) {
+            console.log(chalk.gray('\n  No files stored.\n'));
+        } else {
+            console.log(chalk.bold(`\n  Stored Files (${files.length})\n`));
+            console.log(chalk.gray('  FILE KEY                SIZE         CHUNKS   CREATED'));
+            console.log(chalk.gray('  ' + '-'.repeat(70)));
+            for (const f of files) {
+                const date = new Date(f.createdAt).toLocaleString();
+                console.log(`  ${f.fileKey.padEnd(22)} ${formatSize(f.totalSize).padEnd(13)} ${String(f.chunkCount).padEnd(9)} ${date}`);
+            }
+            console.log('');
+        }
+
+        await storageService.stop();
+    });
+
+storageCmd
+    .command('rm <fileKey>')
+    .description('Delete a file from storage')
+    .action(async (fileKey: string) => {
+        configManager.load();
+        await storageService.start();
+
+        const deleted = storageService.delete(fileKey);
+        if (deleted) {
+            console.log(chalk.green(`\n  Deleted: ${fileKey}\n`));
+        } else {
+            console.log(chalk.red(`\n  File not found: ${fileKey}\n`));
+        }
+
+        await storageService.stop();
+    });
+
 // ─── HELPERS ───
 
 function parseStorageSize(input: string): number {
@@ -276,6 +396,13 @@ function parseStorageSize(input: string): number {
         case 'TB': return value * 1024;
         default: return -1;
     }
+}
+
+function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)}GB`;
 }
 
 function printBanner(): void {

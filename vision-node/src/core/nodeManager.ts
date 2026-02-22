@@ -7,6 +7,7 @@
 
 import { configManager, type NodeClass } from '../config/nodeConfig.js';
 import { heartbeatService } from './heartbeat.js';
+import { storageService } from './storageService.js';
 import { mkdirSync, existsSync } from 'fs';
 import { cpus, totalmem, freemem, platform, arch, hostname } from 'os';
 
@@ -38,6 +39,9 @@ export interface NodeStatus {
         path: string;
         maxGB: number;
         usedBytes: number;
+        totalChunks: number;
+        totalFiles: number;
+        usagePercent: number;
     };
 }
 
@@ -69,6 +73,9 @@ class NodeManager {
         console.log(`[Node] Storage: ${config.storagePath} (max ${config.storageMaxGB}GB)`);
         console.log(`[Node] API: ${config.environment}`);
 
+        // Start storage engine
+        await storageService.start();
+
         // Start heartbeat
         heartbeatService.start();
 
@@ -85,6 +92,7 @@ class NodeManager {
 
         console.log('[Node] Stopping...');
         heartbeatService.stop();
+        await storageService.stop();
         this.running = false;
         console.log('[Node] Stopped');
     }
@@ -123,7 +131,10 @@ class NodeManager {
             storage: {
                 path: config.storagePath,
                 maxGB: config.storageMaxGB,
-                usedBytes: 0, // TODO: Calculate from storage engine
+                usedBytes: storageService.getStats().totalSizeBytes,
+                totalChunks: storageService.getStats().totalChunks,
+                totalFiles: storageService.getStats().totalFiles,
+                usagePercent: storageService.getStats().usagePercent,
             },
         };
     }
