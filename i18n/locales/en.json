@@ -219,7 +219,11 @@
             "stake": "Stake",
             "allNetworks": "All Networks",
             "mainnet": "Mainnet",
-            "testnet": "Testnet"
+            "testnet": "Testnet",
+            "totalValue": "Total Value",
+            "swap": "Swap",
+            "mint": "Mint",
+            "localMissing": "Local Wallet Not Found"
         },
         "send": {
             "title": "SEND",

@@ -219,7 +219,11 @@
             "stake": "스테이킹",
             "allNetworks": "전체 네트워크",
             "mainnet": "메인넷",
-            "testnet": "테스트넷"
+            "testnet": "테스트넷",
+            "totalValue": "총 자산 가치",
+            "swap": "스왑",
+            "mint": "민트",
+            "localMissing": "로컬 지갑이 없습니다"
         },
         "send": {
             "title": "자산",
