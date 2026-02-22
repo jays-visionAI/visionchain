@@ -507,11 +507,100 @@ const eps: Endpoint[] = [
         res: { success: true, total_nodes: 42, rankings: [{ rank: 1, node_id: 'mn_top1', device_type: 'pwa', total_uptime_hours: 720.5, total_earned: '250.0000', heartbeat_count: 8640, streak_days: 30 }, { rank: 2, node_id: 'mn_top2', device_type: 'android', total_uptime_hours: 680.2, total_earned: '230.5000', heartbeat_count: 8162, streak_days: 28 }] },
         notes: ['Public endpoint -- no API key required', 'Rankings update after each epoch'],
     },
+    // --- VISION NODE LOCAL API ---
+    {
+        id: 'vn_actions', action: 'GET /agent/v1/actions', title: 'List Actions', cat: 'Vision Node', desc: 'Auto-discovery endpoint listing all available Vision Node API actions. No authentication required.', auth: false,
+        fields: [],
+        req: {},
+        res: { success: true, version: '1.0.0', actions: [{ method: 'POST', path: '/agent/v1/node/status', description: 'Get current node status' }] },
+        notes: ['Base URL: http://localhost:9090', 'No Bearer token required for this endpoint', 'Returns all available actions with method, path, and description'],
+    },
+    {
+        id: 'vn_node_status', action: 'POST /agent/v1/node/status', title: 'Node Status', cat: 'Vision Node', desc: 'Get comprehensive node status including uptime, heartbeat, system resources, and storage statistics.', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, isRunning: true, nodeId: 'mn_4447f5224bc4927f', nodeClass: 'full', email: 'user@example.com', uptimeSeconds: 3600, heartbeat: { isRunning: true, totalHeartbeats: 12, weight: 1.0 }, system: { hostname: 'my-node', platform: 'darwin', arch: 'arm64', cpus: 10, totalMemoryMB: 16384, freeMemoryMB: 8000 }, storage: { path: '~/.visionnode/storage', maxGB: 100, usedBytes: 0, totalChunks: 0, totalFiles: 0, usagePercent: 0 } },
+        notes: ['Auth: Bearer token in Authorization header', 'Bearer token is the node API key or "vision-agent-local"'],
+    },
+    {
+        id: 'vn_node_start', action: 'POST /agent/v1/node/start', title: 'Start Node', cat: 'Vision Node', desc: 'Start the Vision Node and all services (heartbeat, storage, dashboard).', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, message: 'Node started' },
+        errors: [{ code: 500, msg: 'Failed to start node' }],
+    },
+    {
+        id: 'vn_node_stop', action: 'POST /agent/v1/node/stop', title: 'Stop Node', cat: 'Vision Node', desc: 'Gracefully stop the Vision Node and all services.', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, message: 'Node stopped' },
+    },
+    {
+        id: 'vn_node_config', action: 'POST /agent/v1/node/config', title: 'Node Config', cat: 'Vision Node', desc: 'Get or update node configuration. Pass a "set" object with key-value pairs to update settings.', auth: true,
+        fields: [
+            { name: 'set', type: 'object', required: false, desc: 'Key-value pairs to update: storageMaxGB, heartbeatIntervalMs, dashboardPort, p2pPort, nodeClass, environment' },
+        ],
+        req: { set: { storageMaxGB: 200 } },
+        res: { success: true, updated: ['storageMaxGB'], rejected: [], config: { nodeId: 'mn_abc', nodeClass: 'full', storageMaxGB: 200 } },
+        notes: ['Only allowlisted keys can be updated: storageMaxGB, heartbeatIntervalMs, dashboardPort, p2pPort, nodeClass, environment', 'Sensitive fields like apiKey are never exposed'],
+    },
+    {
+        id: 'vn_storage_upload', action: 'POST /agent/v1/storage/upload', title: 'Upload Data', cat: 'Vision Node', desc: 'Upload data to the node\'s local distributed storage. Data must be base64-encoded. Files are automatically chunked, hashed, and assigned a CID.', auth: true,
+        fields: [
+            { name: 'data', type: 'string', required: true, desc: 'Base64-encoded file data' },
+            { name: 'metadata', type: 'object', required: false, desc: 'Optional metadata key-value pairs' },
+        ],
+        req: { data: 'SGVsbG8gV29ybGQ=', metadata: { source: 'agent' } },
+        res: { success: true, file_key: 'file_c2df782428d3', cid: 'vcn://1cda25e4f184...', merkle_root: '1cda25e4f184...', total_size: 11, chunk_count: 1 },
+        notes: ['Max upload size: 50MB per request', 'Files automatically chunked into 1MB pieces', 'Each chunk is SHA-256 hashed, Merkle tree root computed as CID'],
+    },
+    {
+        id: 'vn_storage_download', action: 'POST /agent/v1/storage/download', title: 'Download Data', cat: 'Vision Node', desc: 'Download a file by its file_key. Returns base64-encoded data.', auth: true,
+        fields: [
+            { name: 'file_key', type: 'string', required: true, desc: 'File key returned from upload' },
+        ],
+        req: { file_key: 'file_c2df782428d3' },
+        res: { success: true, data: 'SGVsbG8gV29ybGQ=', size: 11 },
+        errors: [{ code: 404, msg: 'File not found' }],
+    },
+    {
+        id: 'vn_storage_delete', action: 'POST /agent/v1/storage/delete', title: 'Delete File', cat: 'Vision Node', desc: 'Delete a stored file by file_key.', auth: true,
+        fields: [
+            { name: 'file_key', type: 'string', required: true, desc: 'File key to delete' },
+        ],
+        req: { file_key: 'file_c2df782428d3' },
+        res: { success: true, message: 'File deleted' },
+    },
+    {
+        id: 'vn_storage_list', action: 'POST /agent/v1/storage/list', title: 'List Files', cat: 'Vision Node', desc: 'List all files stored on this node with metadata.', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, count: 2, files: [{ file_key: 'file_abc123', merkle_root: '1cda...', total_size: 1024, chunk_count: 1, created_at: 1708000000000 }] },
+    },
+    {
+        id: 'vn_storage_stats', action: 'POST /agent/v1/storage/stats', title: 'Storage Stats', cat: 'Vision Node', desc: 'Get storage engine statistics: total chunks, files, usage percentage, and capacity.', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, totalChunks: 15, totalSizeBytes: 5242880, maxSizeBytes: 107374182400, usagePercent: 0.005, totalFiles: 3 },
+    },
+    {
+        id: 'vn_heartbeat_stats', action: 'POST /agent/v1/heartbeat/stats', title: 'Heartbeat Stats', cat: 'Vision Node', desc: 'Get heartbeat service statistics including total beats, weight multiplier, and pending reward.', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, isRunning: true, lastHeartbeat: 1708000000000, totalHeartbeats: 288, consecutiveFailures: 0, weight: 1.0, pendingReward: 12.35, uptimeHours: 24 },
+    },
+    {
+        id: 'vn_heartbeat_beat', action: 'POST /agent/v1/heartbeat/beat', title: 'Force Heartbeat', cat: 'Vision Node', desc: 'Force an immediate heartbeat to the Vision Chain backend. Useful for testing or ensuring node is marked active.', auth: true,
+        fields: [],
+        req: {},
+        res: { success: true, message: 'Heartbeat sent', totalHeartbeats: 289, weight: 1.0, pendingReward: 12.39 },
+        errors: [{ code: 500, msg: 'Heartbeat failed' }],
+    },
 ];
 
-const cats = ['System', 'Wallet', 'Transfer', 'Staking', 'Bridge', 'NFT', 'Authority', 'Settlement', 'Node', 'Mobile Node', 'Storage', 'Pipeline', 'Webhook', 'Hosting', 'Social', 'Network'];
-const guideSections = ['overview', 'authentication', 'quickstart', 'sdks', 'rate-limits', 'errors', 'network', 'webhooks', 'rp-system', 'mobile-node'];
-const guideLabels: Record<string, string> = { overview: 'Overview', authentication: 'Authentication', quickstart: 'Quick Start', sdks: 'SDKs & Install', 'rate-limits': 'Rate Limits', errors: 'Error Codes', network: 'Network Config', webhooks: 'Webhooks', 'rp-system': 'RP Rewards', 'mobile-node': 'Mobile Node' };
+const cats = ['System', 'Wallet', 'Transfer', 'Staking', 'Bridge', 'NFT', 'Authority', 'Settlement', 'Node', 'Mobile Node', 'Vision Node', 'Storage', 'Pipeline', 'Webhook', 'Hosting', 'Social', 'Network'];
+const guideSections = ['overview', 'authentication', 'quickstart', 'sdks', 'rate-limits', 'errors', 'network', 'webhooks', 'rp-system', 'mobile-node', 'vision-node'];
+const guideLabels: Record<string, string> = { overview: 'Overview', authentication: 'Authentication', quickstart: 'Quick Start', sdks: 'SDKs & Install', 'rate-limits': 'Rate Limits', errors: 'Error Codes', network: 'Network Config', webhooks: 'Webhooks', 'rp-system': 'RP Rewards', 'mobile-node': 'Mobile Node', 'vision-node': 'Vision Node' };
 
 // ─── Code generators ───
 type Lang = 'curl' | 'python' | 'js' | 'ts' | 'go' | 'rust' | 'ethers';
@@ -620,6 +709,7 @@ export default function DevDocs(): JSX.Element {
         if (s === 'webhooks') return renderWebhooks();
         if (s === 'rp-system') return renderRP();
         if (s === 'mobile-node') return renderMobileNode();
+        if (s === 'vision-node') return renderVisionNode();
         return null;
     };
 
@@ -1022,6 +1112,86 @@ def verify_webhook(payload: bytes, signature: str, secret: str) -> bool:
             <div class="bg-gradient-to-r from-cyan-500/5 to-purple-500/5 border border-cyan-500/10 rounded-xl p-6">
                 <h4 class="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3">The Bigger Picture</h4>
                 <p class="text-sm text-gray-400 leading-relaxed">Mobile Nodes represent Vision Chain's commitment to true decentralization. By turning every browser tab and mobile device into a network participant, we're building infrastructure that scales with its community rather than its cloud budget. Every heartbeat you send strengthens the network, earns you VCN, and moves us closer to a world where blockchain infrastructure is powered by the people who use it.</p>
+            </div>
+        </div>
+    );
+
+    const renderVisionNode = () => (
+        <div class="space-y-8">
+            <div>
+                <h2 class="text-3xl font-black tracking-tight mb-3">Vision Node Local API</h2>
+                <p class="text-gray-400 leading-relaxed max-w-2xl">Vision Node is a desktop CLI node that runs locally on your machine. It provides a REST API at <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">localhost:9090</code> for programmatic control by AI agents.</p>
+            </div>
+
+            <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center gap-3">
+                <span class="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded">BASE URL</span>
+                <code class="text-sm text-gray-300 font-mono break-all flex-1">http://localhost:9090/agent/v1</code>
+                <CopyBtn text="http://localhost:9090/agent/v1" id="vn-base-url" />
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[{ n: '11', l: 'API Endpoints', d: 'Node control, Storage, Heartbeat' }, { n: '9090', l: 'Default Port', d: 'Dashboard + API on same port' }, { n: '50MB', l: 'Upload Limit', d: 'Per request, auto-chunked' }].map(c => (
+                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                        <div class="text-3xl font-black text-white mb-1">{c.n}</div>
+                        <div class="text-sm font-bold text-gray-300 mb-1">{c.l}</div>
+                        <div class="text-xs text-gray-500">{c.d}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div class="bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 border border-emerald-500/10 rounded-xl p-6 space-y-4">
+                <h3 class="text-lg font-bold text-white">Architecture</h3>
+                <p class="text-sm text-gray-400 leading-relaxed">Vision Node runs as a local process with an Express server hosting both the web dashboard (HTML/CSS/JS) and the Agent REST API. The dashboard provides real-time monitoring via SVG gauges and SSE, while the API enables programmatic control.</p>
+                <div class="flex flex-wrap justify-center gap-4 text-xs mt-4">
+                    {[
+                        { label: 'Vision Node CLI', sub: 'init / start / stop', color: 'from-emerald-500/20 to-green-500/20', border: 'border-emerald-500/20' },
+                        { label: 'Express Server', sub: 'Port 9090', color: 'from-blue-500/20 to-cyan-500/20', border: 'border-blue-500/20' },
+                        { label: 'Agent API', sub: '/agent/v1/*', color: 'from-purple-500/20 to-indigo-500/20', border: 'border-purple-500/20' },
+                        { label: 'Storage Engine', sub: 'SQLite + Chunks', color: 'from-amber-500/20 to-orange-500/20', border: 'border-amber-500/20' },
+                        { label: 'Vision Chain', sub: 'Heartbeat + Rewards', color: 'from-pink-500/20 to-red-500/20', border: 'border-pink-500/20' },
+                    ].map((node, i) => (
+                        <div class="flex items-center gap-3">
+                            <div class={`bg-gradient-to-br ${node.color} border ${node.border} rounded-xl px-4 py-3 text-center min-w-[130px]`}>
+                                <div class="text-white font-bold text-xs">{node.label}</div>
+                                <div class="text-gray-500 text-[10px] mt-0.5">{node.sub}</div>
+                            </div>
+                            <Show when={i < 4}>
+                                <svg class="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7" />
+                                </svg>
+                            </Show>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-lg font-bold text-white mb-3">Authentication</h3>
+                <p class="text-sm text-gray-400 mb-4">Vision Node API uses Bearer token authentication. Include the token in the <code class="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">Authorization</code> header.</p>
+                <CodeBlock code={`curl -X POST http://localhost:9090/agent/v1/node/status \\
+  -H "Authorization: Bearer vision-agent-local" \\
+  -H "Content-Type: application/json"`} id="vn-auth-example" label="bash" />
+            </div>
+
+            <div class="bg-amber-500/5 border border-amber-500/15 rounded-xl p-5">
+                <h4 class="text-xs font-black uppercase tracking-widest text-amber-400 mb-2">Auth Tokens</h4>
+                <ul class="space-y-1.5 text-sm text-gray-400"><li>- The node's <strong class="text-white">API key</strong> from config (set during <code class="text-cyan-400 text-xs">vision-node init</code>)</li><li>- The local agent key: <code class="text-cyan-400 text-xs">vision-agent-local</code></li><li>- The discovery endpoint <code class="text-cyan-400 text-xs">GET /agent/v1/actions</code> requires <strong class="text-white">no auth</strong></li></ul>
+            </div>
+
+            <div>
+                <h3 class="text-lg font-bold text-white mb-3">Quick Start</h3>
+                <CodeBlock code={`# 1. Install and initialize\nnpm install -g @visionchain/node\nvision-node init\n\n# 2. Start the node (dashboard + API)\nvision-node start\n\n# 3. Discover available endpoints\ncurl http://localhost:9090/agent/v1/actions\n\n# 4. Check node status\ncurl -X POST http://localhost:9090/agent/v1/node/status \\
+  -H "Authorization: Bearer vision-agent-local"\n\n# 5. Upload data (base64 encoded)\ncurl -X POST http://localhost:9090/agent/v1/storage/upload \\
+  -H "Authorization: Bearer vision-agent-local" \\
+  -H "Content-Type: application/json" \\
+  -d '{"data": "SGVsbG8gV29ybGQ=", "metadata": {"source": "agent"}}'\n\n# 6. List stored files\ncurl -X POST http://localhost:9090/agent/v1/storage/list \\
+  -H "Authorization: Bearer vision-agent-local"\n\n# 7. Force a heartbeat\ncurl -X POST http://localhost:9090/agent/v1/heartbeat/beat \\
+  -H "Authorization: Bearer vision-agent-local"`} id="vn-quickstart" label="bash" />
+            </div>
+
+            <div class="bg-gradient-to-r from-emerald-500/5 to-purple-500/5 border border-emerald-500/10 rounded-xl p-6">
+                <h4 class="text-xs font-black uppercase tracking-widest text-emerald-400 mb-3">What Vision Node Does</h4>
+                <p class="text-sm text-gray-400 leading-relaxed">Vision Node turns your desktop into a full participant of the Vision Chain distributed storage network. It stores data chunks locally, sends heartbeats to earn VCN rewards, and exposes a REST API so AI agents can programmatically store and retrieve data. The web dashboard at localhost:9090 provides real-time monitoring with gauges, charts, and network contribution visualization.</p>
             </div>
         </div>
     );
