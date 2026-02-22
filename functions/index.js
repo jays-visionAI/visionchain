@@ -8425,8 +8425,8 @@ exports.agentGateway = onRequest({
           actions: [
             { action: "transfer.send", auth: true, tier: "T2", cost: "0.1", params: { to: "required", amount: "required (max 10000)" }, response: ["tx_hash", "from", "to", "amount", "rp_earned"], desc: "Send VCN (gasless)" },
             { action: "transfer.batch", auth: true, tier: "T4", cost: "1.0", params: { transfers: "required (array of {to, amount})" }, response: ["results[]", "total_sent", "rp_earned"], desc: "Batch transfer" },
-            { action: "transfer.scheduled", auth: true, tier: "T3", cost: "0.5", params: { to: "required", amount: "required", execute_at: "required (ISO 8601)" }, response: ["schedule_id", "execute_at", "status"], desc: "Scheduled transfer" },
-            { action: "transfer.conditional", auth: true, tier: "T3", cost: "0.5", params: { to: "required", amount: "required", condition: "required ({type, value})" }, response: ["condition_id", "condition", "status"], desc: "Conditional transfer" },
+            // eslint-disable-next-line max-len
+            { action: "transfer.conditional", auth: true, tier: "T3", cost: "0.5", params: { to: "required", amount: "required", condition: "required ({type, value})" }, response: ["condition_id", "condition", "status"], desc: "Conditional/scheduled transfer. Conditions: time_after, balance_above, balance_below. transfer.scheduled is an alias." },
           ],
         },
         staking: {
@@ -8966,7 +8966,7 @@ exports.agentGateway = onRequest({
       "system.register": "T1", "system.network_info": "T1", "system.delete_agent": "T2",
       "wallet.balance": "T1", "wallet.tx_history": "T1", "wallet.token_info": "T1",
       "wallet.gas_estimate": "T1", "wallet.approve": "T3",
-      "transfer.send": "T2", "transfer.batch": "T4", "transfer.scheduled": "T3", "transfer.conditional": "T3", "transfer.sepolia": "T3",
+      "transfer.send": "T2", "transfer.batch": "T4", "transfer.scheduled": "T3", "transfer.conditional": "T3", "scheduled_transfer": "T3", "conditional_transfer": "T3", "transfer.sepolia": "T3",
       "staking.deposit": "T3", "staking.request_unstake": "T3", "staking.withdraw": "T3",
       "staking.claim": "T3", "staking.compound": "T3", "staking.rewards": "T1",
       "staking.apy": "T1", "staking.cooldown": "T1", "staking.position": "T1",
@@ -8987,7 +8987,7 @@ exports.agentGateway = onRequest({
     };
 
     const actionTier = ACTION_TIER_MAP[canonicalAction] || "T2";
-    if (agent && ["T3", "T4"].includes(actionTier)) {
+    if (agent && !agent._isUser && ["T3", "T4"].includes(actionTier)) {
       try {
         const nodeSnap = await db.collection("agents").doc(agent.id)
           .collection("node").doc("status").get();
@@ -10281,7 +10281,7 @@ exports.agentGateway = onRequest({
       }
     }
 
-    // --- SCHEDULED TRANSFER (transfer.scheduled) --- T3
+    // --- SCHEDULED TRANSFER (alias -> conditional with time_after) --- T3
     if (action === "scheduled_transfer" || action === "transfer.scheduled") {
       const { to, amount, execute_at: executeAt } = req.body;
       if (!to || !amount || !executeAt) {
@@ -10292,49 +10292,23 @@ exports.agentGateway = onRequest({
       if (isNaN(executeTime.getTime()) || executeTime.getTime() <= Date.now()) {
         return res.status(400).json({ error: "execute_at must be a future timestamp" });
       }
-
-      // Max 30 days in the future
       if (executeTime.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000) {
         return res.status(400).json({ error: "execute_at cannot be more than 30 days in the future" });
       }
 
-      try {
-        // Determine Firestore collection based on auth mode
-        const parentCollection = agent._isUser ? "users" : "agents";
-        const parentDocId = agent._isUser ? agent.uid : agent.id;
-
-        const scheduleRef = await db.collection(parentCollection).doc(parentDocId).collection("scheduled_transfers").add({
-          to,
-          amount: amount.toString(),
-          execute_at: admin.firestore.Timestamp.fromDate(executeTime),
-          status: "pending",
-          wallet_address: agent.walletAddress,
-          auth_mode: agent._isUser ? "firebase" : "api_key",
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        return res.status(200).json({
-          success: true,
-          schedule_id: scheduleRef.id,
-          to,
-          amount: amount.toString(),
-          execute_at: executeTime.toISOString(),
-          status: "pending",
-          message: "Transfer scheduled. Will execute at the specified time.",
-        });
-      } catch (e) {
-        return res.status(500).json({ error: `Schedule failed: ${e.message}` });
-      }
+      // Convert to conditional format with time_after condition
+      req.body.condition = { type: "time_after", value: executeTime.toISOString() };
+      // Fall through to conditional handler below
     }
 
-    // --- CONDITIONAL TRANSFER (transfer.conditional) --- T3
-    if (action === "conditional_transfer" || action === "transfer.conditional") {
+    // --- CONDITIONAL TRANSFER (unified: time_after, balance_above, balance_below) --- T3
+    if (action === "conditional_transfer" || action === "transfer.conditional" ||
+      action === "scheduled_transfer" || action === "transfer.scheduled") {
       const { to, amount, condition } = req.body;
       if (!to || !amount || !condition) {
-        return res.status(400).json({ error: "Missing required fields: to, amount, condition" });
+        return res.status(400).json({ error: "Missing required fields: to, amount, condition ({type, value})" });
       }
 
-      // condition = { type: "balance_above" | "balance_below" | "time_after", value: "..." }
       const validConditions = ["balance_above", "balance_below", "time_after"];
       if (!condition.type || !validConditions.includes(condition.type)) {
         return res.status(400).json({
@@ -10343,22 +10317,31 @@ exports.agentGateway = onRequest({
       }
 
       try {
-        const condRef = await db.collection("agents").doc(agent.id).collection("conditional_transfers").add({
+        const parentCollection = agent._isUser ? "users" : "agents";
+        const parentDocId = agent._isUser ? agent.uid : agent.id;
+
+        const condRef = await db.collection(parentCollection).doc(parentDocId).collection("conditional_transfers").add({
           to,
           amount: amount.toString(),
           condition,
           status: "watching",
+          wallet_address: agent.walletAddress,
+          auth_mode: agent._isUser ? "firebase" : "api_key",
           created_at: admin.firestore.FieldValue.serverTimestamp(),
         });
 
+        const isScheduled = action === "scheduled_transfer" || action === "transfer.scheduled";
         return res.status(200).json({
           success: true,
           condition_id: condRef.id,
+          ...(isScheduled ? { schedule_id: condRef.id } : {}),
           to,
           amount: amount.toString(),
           condition,
           status: "watching",
-          message: "Conditional transfer created. Will execute when condition is met.",
+          message: condition.type === "time_after" ?
+            `Transfer scheduled. Will execute after ${condition.value}.` :
+            `Conditional transfer created. Will execute when ${condition.type} ${condition.value}.`,
         });
       } catch (e) {
         return res.status(500).json({ error: `Conditional transfer failed: ${e.message}` });
@@ -15561,251 +15544,154 @@ exports.onRoundEndAutoPost = onSchedule({
 });
 
 // =====================================================
-// AGENT SCHEDULED TRANSFER EXECUTOR
-// Runs every 1 minute, executes pending agent scheduled transfers
-// Scans agents/{id}/scheduled_transfers for due "pending" entries
+// UNIFIED CONDITIONAL TRANSFER MONITOR
+// Runs every 1 minute, checks all conditions and executes matching transfers
+// Handles: time_after (scheduled), balance_above, balance_below
+// Scans both agents/{id} and users/{id} conditional_transfers
 // =====================================================
-exports.agentScheduledTransferExecutor = onSchedule({
+exports.conditionalTransferMonitor = onSchedule({
   schedule: "every 1 minutes",
   timeoutSeconds: 120,
   memory: "512MiB",
   secrets: ["VCN_EXECUTOR_PK"],
 }, async () => {
-  console.log("[AgentScheduledTx] Running:", new Date().toISOString());
+  console.log("[ConditionalTx] Running:", new Date().toISOString());
 
   try {
-    const agentsSnap = await db.collection("agents").get();
-    let totalProcessed = 0;
-
-    for (const agentDoc of agentsSnap.docs) {
-      const agent = agentDoc.data();
-      if (!agent.walletAddress || !agent.privateKey) continue;
-
-      // Find due scheduled transfers for this agent
-      const schedSnap = await agentDoc.ref
-        .collection("scheduled_transfers")
-        .where("status", "==", "pending")
-        .limit(10)
-        .get();
-
-      if (schedSnap.empty) continue;
-
-      // Filter in-memory for due entries
-      const dueTransfers = schedSnap.docs.filter((doc) => {
-        const data = doc.data();
-        if (!data.execute_at) return false;
-        return data.execute_at.toMillis() <= Date.now();
-      });
-
-      if (dueTransfers.length === 0) continue;
-
-      // Setup blockchain connection
-      const provider = new ethers.JsonRpcProvider(RPC_URL);
-      const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-
-      const agentPK = serverDecrypt(agent.privateKey);
-      const agentWallet = new ethers.Wallet(agentPK, provider);
-      const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
-
-      // Ensure agent has gas
-      const agentGas = await provider.getBalance(agent.walletAddress);
-      if (agentGas < ethers.parseEther("0.001")) {
-        try {
-          const gasTx = await adminWallet.sendTransaction({
-            to: agent.walletAddress,
-            value: ethers.parseEther("0.01"),
-          });
-          await gasTx.wait();
-        } catch (gasErr) {
-          console.error(`[AgentScheduledTx] Gas funding failed for ${agent.agentName}:`, gasErr.message);
-          continue;
-        }
-      }
-
-      for (const schedDoc of dueTransfers) {
-        const data = schedDoc.data();
-        try {
-          await schedDoc.ref.update({ status: "executing" });
-
-          const amountWei = ethers.parseEther(data.amount);
-
-          // Check balance
-          const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, provider);
-          const bal = await tokenContract.balanceOf(agent.walletAddress);
-          if (bal < amountWei) {
-            await schedDoc.ref.update({
-              status: "failed",
-              error: "Insufficient balance at execution time",
-              executed_at: admin.firestore.FieldValue.serverTimestamp(),
-            });
-            continue;
-          }
-
-          const tx = await agentToken.transfer(data.to, amountWei);
-          await tx.wait();
-
-          await schedDoc.ref.update({
-            status: "completed",
-            tx_hash: tx.hash,
-            executed_at: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          await agentDoc.ref.collection("transactions").add({
-            type: "scheduled_transfer",
-            to: data.to,
-            amount: data.amount,
-            txHash: tx.hash,
-            schedule_id: schedDoc.id,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            status: "confirmed",
-          });
-
-          totalProcessed++;
-          console.log(`[AgentScheduledTx] Executed: ${agent.agentName} -> ${data.to}: ${data.amount} VCN, tx: ${tx.hash}`);
-        } catch (execErr) {
-          console.error(`[AgentScheduledTx] Failed ${schedDoc.id}:`, execErr.message);
-          await schedDoc.ref.update({
-            status: "failed",
-            error: execErr.reason || execErr.message,
-            executed_at: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
-      }
-    }
-
-    console.log(`[AgentScheduledTx] Complete. Processed: ${totalProcessed}`);
-  } catch (err) {
-    console.error("[AgentScheduledTx] Fatal error:", err);
-  }
-});
-
-// =====================================================
-// AGENT CONDITIONAL TRANSFER MONITOR
-// Runs every 5 minutes, checks conditions and executes matching transfers
-// Conditions: balance_above, balance_below, time_after
-// =====================================================
-exports.agentConditionalTransferMonitor = onSchedule({
-  schedule: "every 5 minutes",
-  timeoutSeconds: 120,
-  memory: "512MiB",
-  secrets: ["VCN_EXECUTOR_PK"],
-}, async () => {
-  console.log("[AgentConditionalTx] Running:", new Date().toISOString());
-
-  try {
-    const agentsSnap = await db.collection("agents").get();
     let totalTriggered = 0;
+    const provider = new ethers.JsonRpcProvider(RPC_URL);
+    const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
+    const nowSec = Math.floor(Date.now() / 1000);
 
-    for (const agentDoc of agentsSnap.docs) {
-      const agent = agentDoc.data();
-      if (!agent.walletAddress || !agent.privateKey) continue;
+    // Process both agents and users
+    const collections = [
+      { parent: "agents", isUser: false },
+      { parent: "users", isUser: true },
+    ];
 
-      const condSnap = await agentDoc.ref
-        .collection("conditional_transfers")
-        .where("status", "==", "watching")
-        .limit(20)
-        .get();
+    for (const { parent, isUser } of collections) {
+      const parentSnap = await db.collection(parent).get();
 
-      if (condSnap.empty) continue;
+      for (const parentDoc of parentSnap.docs) {
+        const entity = parentDoc.data();
+        const walletAddress = entity.walletAddress;
+        if (!walletAddress) continue;
+        // Agents need privateKey, users use permit-based execution
+        if (!isUser && !entity.privateKey) continue;
 
-      const provider = new ethers.JsonRpcProvider(RPC_URL);
-      const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, [
-        "function balanceOf(address) view returns (uint256)",
-      ], provider);
+        const condSnap = await parentDoc.ref
+          .collection("conditional_transfers")
+          .where("status", "==", "watching")
+          .limit(20)
+          .get();
 
-      const agentBalance = await tokenContract.balanceOf(agent.walletAddress);
-      const agentBalanceEth = parseFloat(ethers.formatEther(agentBalance));
-      const nowSec = Math.floor(Date.now() / 1000);
+        if (condSnap.empty) continue;
 
-      for (const condDoc of condSnap.docs) {
-        const data = condDoc.data();
-        const cond = data.condition;
-        let shouldExecute = false;
+        // Get balance once per entity
+        const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, [
+          "function balanceOf(address) view returns (uint256)",
+          "function transferFrom(address,address,uint256) returns (bool)",
+        ], provider);
+        const balance = await tokenContract.balanceOf(walletAddress);
+        const balanceEth = parseFloat(ethers.formatEther(balance));
 
-        switch (cond.type) {
-          case "balance_above":
-            shouldExecute = agentBalanceEth > parseFloat(cond.value);
-            break;
-          case "balance_below":
-            shouldExecute = agentBalanceEth < parseFloat(cond.value);
-            break;
-          case "time_after": {
-            const targetTime = typeof cond.value === "number" ? cond.value : Math.floor(new Date(cond.value).getTime() / 1000);
-            shouldExecute = nowSec >= targetTime;
-            break;
+        for (const condDoc of condSnap.docs) {
+          const data = condDoc.data();
+          const cond = data.condition;
+          let shouldExecute = false;
+
+          switch (cond.type) {
+            case "balance_above":
+              shouldExecute = balanceEth > parseFloat(cond.value);
+              break;
+            case "balance_below":
+              shouldExecute = balanceEth < parseFloat(cond.value);
+              break;
+            case "time_after": {
+              const targetTime = typeof cond.value === "number" ? cond.value : Math.floor(new Date(cond.value).getTime() / 1000);
+              shouldExecute = nowSec >= targetTime;
+              break;
+            }
+            default:
+              await condDoc.ref.update({ status: "error", error: `Unknown condition: ${cond.type}` });
+              continue;
           }
-          default:
-            await condDoc.ref.update({ status: "error", error: `Unknown condition: ${cond.type}` });
-            continue;
-        }
 
-        if (!shouldExecute) continue;
+          if (!shouldExecute) continue;
 
-        try {
-          await condDoc.ref.update({ status: "executing" });
+          try {
+            await condDoc.ref.update({ status: "executing" });
+            const amountWei = ethers.parseEther(data.amount);
 
-          const adminWallet = new ethers.Wallet(EXECUTOR_PRIVATE_KEY, provider);
-          const agentPK = serverDecrypt(agent.privateKey);
-          const agentWallet = new ethers.Wallet(agentPK, provider);
-          const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+            if (balance < amountWei) {
+              await condDoc.ref.update({
+                status: "failed",
+                error: "Insufficient balance when condition triggered",
+                triggered_at: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              continue;
+            }
 
-          const amountWei = ethers.parseEther(data.amount);
+            let tx;
+            if (isUser) {
+              // User mode: use admin wallet with transferFrom (requires prior permit/approval)
+              const tokenWithAdmin = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, adminWallet);
+              tx = await tokenWithAdmin.transferFrom(walletAddress, data.to, amountWei);
+            } else {
+              // Agent mode: use agent's own wallet
+              const agentPK = serverDecrypt(entity.privateKey);
+              const agentWallet = new ethers.Wallet(agentPK, provider);
 
-          if (agentBalance < amountWei) {
+              // Ensure agent has gas
+              const agentGas = await provider.getBalance(walletAddress);
+              if (agentGas < ethers.parseEther("0.001")) {
+                const gasTx = await adminWallet.sendTransaction({
+                  to: walletAddress,
+                  value: ethers.parseEther("0.01"),
+                });
+                await gasTx.wait();
+              }
+
+              const agentToken = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, agentWallet);
+              tx = await agentToken.transfer(data.to, amountWei);
+            }
+            await tx.wait();
+
             await condDoc.ref.update({
-              status: "failed",
-              error: "Insufficient balance when condition triggered",
+              status: "completed",
+              tx_hash: tx.hash,
               triggered_at: admin.firestore.FieldValue.serverTimestamp(),
             });
-            continue;
-          }
 
-          // Ensure gas
-          const agentGas = await provider.getBalance(agent.walletAddress);
-          if (agentGas < ethers.parseEther("0.001")) {
-            const gasTx = await adminWallet.sendTransaction({
-              to: agent.walletAddress,
-              value: ethers.parseEther("0.01"),
+            await parentDoc.ref.collection("transactions").add({
+              type: "conditional_transfer",
+              to: data.to,
+              amount: data.amount,
+              condition: cond,
+              txHash: tx.hash,
+              condition_id: condDoc.id,
+              timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              status: "confirmed",
             });
-            await gasTx.wait();
+
+            totalTriggered++;
+            const name = isUser ? parentDoc.id : (entity.agentName || parentDoc.id);
+            console.log(`[ConditionalTx] Triggered: ${name} -> ${data.to}: ${data.amount} VCN (${cond.type}=${cond.value}), tx: ${tx.hash}`);
+          } catch (execErr) {
+            console.error(`[ConditionalTx] Failed ${condDoc.id}:`, execErr.message);
+            await condDoc.ref.update({
+              status: "failed",
+              error: execErr.reason || execErr.message,
+              triggered_at: admin.firestore.FieldValue.serverTimestamp(),
+            });
           }
-
-          const tx = await agentToken.transfer(data.to, amountWei);
-          await tx.wait();
-
-          await condDoc.ref.update({
-            status: "completed",
-            tx_hash: tx.hash,
-            triggered_at: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          await agentDoc.ref.collection("transactions").add({
-            type: "conditional_transfer",
-            to: data.to,
-            amount: data.amount,
-            condition: cond,
-            txHash: tx.hash,
-            condition_id: condDoc.id,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            status: "confirmed",
-          });
-
-          totalTriggered++;
-          console.log(`[AgentConditionalTx] Triggered: ${agent.agentName} -> ${data.to}: ${data.amount} VCN (${cond.type}=${cond.value}), tx: ${tx.hash}`);
-        } catch (execErr) {
-          console.error(`[AgentConditionalTx] Failed ${condDoc.id}:`, execErr.message);
-          await condDoc.ref.update({
-            status: "failed",
-            error: execErr.reason || execErr.message,
-            triggered_at: admin.firestore.FieldValue.serverTimestamp(),
-          });
         }
       }
     }
 
-    console.log(`[AgentConditionalTx] Complete. Triggered: ${totalTriggered}`);
+    console.log(`[ConditionalTx] Complete. Triggered: ${totalTriggered}`);
   } catch (err) {
-    console.error("[AgentConditionalTx] Fatal error:", err);
+    console.error("[ConditionalTx] Fatal error:", err);
   }
 });
 
