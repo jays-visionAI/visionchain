@@ -14,6 +14,7 @@ import { nodeManager } from '../core/nodeManager.js';
 import { heartbeatService } from '../core/heartbeat.js';
 import { storageService } from '../core/storageService.js';
 import { configManager } from '../config/nodeConfig.js';
+import { createAgentRouter } from '../api/agentRouter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -21,6 +22,12 @@ let server: ReturnType<typeof express.application.listen> | null = null;
 
 export function startDashboard(port: number): void {
     const app = express();
+
+    // JSON body parser for Agent API
+    app.use(express.json({ limit: '50mb' }));
+
+    // Mount Agent API
+    app.use('/agent/v1', createAgentRouter());
 
     // Serve static files
     app.use(express.static(join(__dirname, '..', '..', 'src', 'dashboard', 'public')));
@@ -80,6 +87,7 @@ export function startDashboard(port: number): void {
 
     server = app.listen(port, () => {
         console.log(`[Dashboard] Running at http://localhost:${port}`);
+        console.log(`[Agent API] Endpoints at http://localhost:${port}/agent/v1/actions`);
     });
 }
 
