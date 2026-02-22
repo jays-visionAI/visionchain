@@ -172,67 +172,70 @@ function AdminLayoutInner(props: AdminLayoutProps) {
                     class={`fixed top-0 left-0 h-full w-64 bg-[#08080c]/80 backdrop-blur-2xl border-r border-white/5 z-50 transform transition-all duration-500 lg:translate-x-0 ${isSidebarOpen() ? 'translate-x-0 shadow-2xl shadow-cyan-500/10' : '-translate-x-full'
                         }`}
                 >
-                    {/* Glowing Accent */}
-                    <div class="absolute top-0 right-0 w-[1px] h-full bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
+                    {/* Flex column layout to prevent bottom panel from covering scroll area */}
+                    <div class="flex flex-col h-full">
+                        {/* Glowing Accent */}
+                        <div class="absolute top-0 right-0 w-[1px] h-full bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
 
-                    {/* Logo Section */}
-                    <div class="h-20 flex items-center px-6 relative overflow-hidden">
-                        <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-50" />
-                        <div class="relative flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                                <Shield class="w-5 h-5 text-white" />
+                        {/* Logo Section */}
+                        <div class="h-20 flex items-center px-6 relative overflow-hidden">
+                            <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 to-transparent opacity-50" />
+                            <div class="relative flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                                    <Shield class="w-5 h-5 text-white" />
+                                </div>
+                                <span class="text-lg font-black tracking-tight bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent italic uppercase">
+                                    Vision<span class="text-cyan-400">HQ</span>
+                                </span>
                             </div>
-                            <span class="text-lg font-black tracking-tight bg-gradient-to-r from-white via-white to-white/50 bg-clip-text text-transparent italic uppercase">
-                                Vision<span class="text-cyan-400">HQ</span>
-                            </span>
                         </div>
-                    </div>
 
-                    {/* Navigation Container */}
-                    <div class="px-3 py-4 overflow-y-auto h-[calc(100vh-220px)] custom-scrollbar">
-                        <div class="mb-4 px-3 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Management</div>
-                        <nav class="space-y-1.5 px-1">
-                            <For each={menuItems()}>
-                                {(item) => <MenuItem item={item} />}
-                            </For>
-                        </nav>
-                    </div>
+                        {/* Navigation Container */}
+                        <div class="px-3 py-4 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                            <div class="mb-4 px-3 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Management</div>
+                            <nav class="space-y-1.5 px-1">
+                                <For each={menuItems()}>
+                                    {(item) => <MenuItem item={item} />}
+                                </For>
+                            </nav>
+                        </div>
 
-                    {/* Bottom Utility Section */}
-                    <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-white/5 bg-[#08080c]/40 backdrop-blur-md">
-                        {/* System Status Indicator */}
-                        <div class="mb-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">System Status</span>
-                                <div class="flex items-center gap-1.5">
-                                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                    <span class="text-[10px] font-bold text-green-400 uppercase">Online</span>
+                        {/* Bottom Utility Section */}
+                        <div class="flex-shrink-0 p-4 border-t border-white/5 bg-[#08080c]/40 backdrop-blur-md">
+                            {/* System Status Indicator */}
+                            <div class="mb-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">System Status</span>
+                                    <div class="flex items-center gap-1.5">
+                                        <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                        <span class="text-[10px] font-bold text-green-400 uppercase">Online</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <Activity class="w-3.5 h-3.5 text-cyan-400 opacity-50" />
+                                    <div class="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div class="h-full w-[85%] bg-gradient-to-r from-cyan-500 to-blue-500" />
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <Activity class="w-3.5 h-3.5 text-cyan-400 opacity-50" />
-                                <div class="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
-                                    <div class="h-full w-[85%] bg-gradient-to-r from-cyan-500 to-blue-500" />
-                                </div>
+
+
+                            {/* Role Badge */}
+                            <div class={`mb-3 px-4 py-2 rounded-lg text-center text-[10px] font-black uppercase tracking-[0.2em] ${isAdmin()
+                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                }`}>
+                                {isAdmin() ? 'Admin' : 'Partner'}
                             </div>
+
+                            <button
+                                onClick={handleLogout}
+                                class="w-full flex items-center gap-3 px-4 py-3 mt-1 rounded-xl text-red-400/70 hover:text-red-400 hover:bg-red-500/5 transition-all duration-300"
+                            >
+                                <LogOut class="w-5 h-5" />
+                                <span class="font-medium text-sm">Logout Session</span>
+                            </button>
                         </div>
-
-
-                        {/* Role Badge */}
-                        <div class={`mb-3 px-4 py-2 rounded-lg text-center text-[10px] font-black uppercase tracking-[0.2em] ${isAdmin()
-                            ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                            }`}>
-                            {isAdmin() ? 'Admin' : 'Partner'}
-                        </div>
-
-                        <button
-                            onClick={handleLogout}
-                            class="w-full flex items-center gap-3 px-4 py-3 mt-1 rounded-xl text-red-400/70 hover:text-red-400 hover:bg-red-500/5 transition-all duration-300"
-                        >
-                            <LogOut class="w-5 h-5" />
-                            <span class="font-medium text-sm">Logout Session</span>
-                        </button>
                     </div>
                 </aside>
 
