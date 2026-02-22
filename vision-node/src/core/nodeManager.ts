@@ -8,6 +8,7 @@
 import { configManager, type NodeClass } from '../config/nodeConfig.js';
 import { heartbeatService } from './heartbeat.js';
 import { storageService } from './storageService.js';
+import { startDashboard, stopDashboard } from '../dashboard/server.js';
 import { mkdirSync, existsSync } from 'fs';
 import { cpus, totalmem, freemem, platform, arch, hostname } from 'os';
 
@@ -79,6 +80,9 @@ class NodeManager {
         // Start heartbeat
         heartbeatService.start();
 
+        // Start dashboard
+        startDashboard(config.dashboardPort);
+
         console.log('[Node] All services started');
     }
 
@@ -92,6 +96,7 @@ class NodeManager {
 
         console.log('[Node] Stopping...');
         heartbeatService.stop();
+        stopDashboard();
         await storageService.stop();
         this.running = false;
         console.log('[Node] Stopped');

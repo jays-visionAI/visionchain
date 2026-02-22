@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Node Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app">
+        <!-- Animated background particles -->
+        <canvas id="particleCanvas" class="particle-bg"></canvas>
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                        <rect width="36" height="36" rx="10" fill="url(#lg1)" />
+                        <path d="M18 7L28 18L18 29L8 18L18 7Z" fill="white" opacity="0.9" />
+                        <path d="M18 12L24 18L18 24L12 18L18 12Z" fill="url(#lg1)" opacity="0.6" />
+                        <defs>
+                            <linearGradient id="lg1" x1="0" y1="0" x2="36" y2="36">
+                                <stop stop-color="#10b981" />
+                                <stop offset="1" stop-color="#06d6a0" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="logo-info">
+                        <span class="logo-text">Vision Node</span>
+                        <span class="logo-sub" id="nodeIdHeader">--</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="live-indicator" id="liveIndicator">
+                    <svg class="live-pulse" width="10" height="10" viewBox="0 0 10 10">
+                        <circle cx="5" cy="5" r="5" fill="#10b981" />
+                    </svg>
+                    <span id="statusText">Connecting</span>
+                </div>
+                <span class="env-badge" id="envBadge">--</span>
+                <span class="version-tag">v1.0.0</span>
+            </div>
+        </header>
+
+        <main class="main">
+            <!-- Hero Stats -->
+            <div class="hero-section">
+                <!-- Big Gauge: Storage -->
+                <div class="gauge-card">
+                    <div class="gauge-title">Storage Usage</div>
+                    <div class="gauge-container">
+                        <svg class="gauge-svg" viewBox="0 0 200 200">
+                            <defs>
+                                <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#10b981" />
+                                    <stop offset="50%" stop-color="#06d6a0" />
+                                    <stop offset="100%" stop-color="#34d399" />
+                                </linearGradient>
+                                <linearGradient id="gaugeWarn" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#f59e0b" />
+                                    <stop offset="100%" stop-color="#ef4444" />
+                                </linearGradient>
+                            </defs>
+                            <circle cx="100" cy="100" r="85" fill="none" stroke="#1e293b" stroke-width="14" />
+                            <circle id="gaugeArc" cx="100" cy="100" r="85" fill="none" stroke="url(#gaugeGrad)"
+                                stroke-width="14" stroke-linecap="round" stroke-dasharray="534" stroke-dashoffset="534"
+                                transform="rotate(-90 100 100)"
+                                style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)" />
+                        </svg>
+                        <div class="gauge-center">
+                            <div class="gauge-value" id="storagePercent">0%</div>
+                            <div class="gauge-detail"><span id="storageUsed">0B</span> / <span
+                                    id="storageMax">0GB</span></div>
+                        </div>
+                    </div>
+                    <div class="gauge-footer">
+                        <div class="gauge-stat">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981"
+                                stroke-width="2">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            <span id="totalFiles">0</span> files
+                        </div>
+                        <div class="gauge-stat">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06d6a0"
+                                stroke-width="2">
+                                <rect x="3" y="3" width="7" height="7" />
+                                <rect x="14" y="3" width="7" height="7" />
+                                <rect x="14" y="14" width="7" height="7" />
+                                <rect x="3" y="14" width="7" height="7" />
+                            </svg>
+                            <span id="totalChunks">0</span> chunks
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mini Rings Row -->
+                <div class="rings-column">
+                    <!-- Uptime Ring -->
+                    <div class="ring-card">
+                        <svg class="ring-svg" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" stroke-width="8" />
+                            <circle id="uptimeRing" cx="50" cy="50" r="40" fill="none" stroke="#3b82f6" stroke-width="8"
+                                stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"
+                                transform="rotate(-90 50 50)" style="transition: stroke-dashoffset 1s ease" />
+                        </svg>
+                        <div class="ring-center">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                        </div>
+                        <div class="ring-label">Uptime</div>
+                        <div class="ring-value" id="uptimeValue">--</div>
+                    </div>
+
+                    <!-- Heartbeat Ring -->
+                    <div class="ring-card">
+                        <svg class="ring-svg" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" stroke-width="8" />
+                            <circle id="heartbeatRing" cx="50" cy="50" r="40" fill="none" stroke="#f43f5e"
+                                stroke-width="8" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"
+                                transform="rotate(-90 50 50)" style="transition: stroke-dashoffset 1s ease" />
+                        </svg>
+                        <div class="ring-center">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f43f5e"
+                                stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                            </svg>
+                        </div>
+                        <div class="ring-label">Heartbeats</div>
+                        <div class="ring-value" id="heartbeatValue">0</div>
+                    </div>
+
+                    <!-- Weight Ring -->
+                    <div class="ring-card">
+                        <svg class="ring-svg" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" stroke-width="8" />
+                            <circle id="weightRing" cx="50" cy="50" r="40" fill="none" stroke="#a855f7" stroke-width="8"
+                                stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"
+                                transform="rotate(-90 50 50)" style="transition: stroke-dashoffset 1s ease" />
+                        </svg>
+                        <div class="ring-center">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7"
+                                stroke-width="2">
+                                <polygon
+                                    points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                            </svg>
+                        </div>
+                        <div class="ring-label">Weight</div>
+                        <div class="ring-value" id="weightValue">0.00x</div>
+                    </div>
+                </div>
+
+                <!-- Reward Card -->
+                <div class="reward-card">
+                    <div class="reward-glow"></div>
+                    <div class="reward-label">Pending Reward</div>
+                    <div class="reward-amount">
+                        <span class="reward-number" id="rewardValue">0.0000</span>
+                        <span class="reward-unit">VCN</span>
+                    </div>
+                    <div class="reward-bar">
+                        <div class="reward-bar-fill" id="rewardBar"></div>
+                    </div>
+                    <div class="reward-sub" id="rewardSub">Start earning by keeping your node online</div>
+
+                    <!-- Network Contribution -->
+                    <div class="contribution-section">
+                        <div class="contribution-title">Network Contribution</div>
+                        <div class="contribution-bars">
+                            <div class="contrib-row">
+                                <span class="contrib-label">Uptime</span>
+                                <div class="contrib-bar">
+                                    <div class="contrib-fill uptime-fill" id="contribUptime" style="width:0%"></div>
+                                </div>
+                                <span class="contrib-pct" id="contribUptimePct">0%</span>
+                            </div>
+                            <div class="contrib-row">
+                                <span class="contrib-label">Storage</span>
+                                <div class="contrib-bar">
+                                    <div class="contrib-fill storage-fill" id="contribStorage" style="width:0%"></div>
+                                </div>
+                                <span class="contrib-pct" id="contribStoragePct">0%</span>
+                            </div>
+                            <div class="contrib-row">
+                                <span class="contrib-label">Relay</span>
+                                <div class="contrib-bar">
+                                    <div class="contrib-fill relay-fill" id="contribRelay" style="width:0%"></div>
+                                </div>
+                                <span class="contrib-pct" id="contribRelayPct">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Heartbeat Timeline Chart -->
+            <div class="panel chart-panel">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                    <h2>Heartbeat Timeline</h2>
+                    <span class="panel-badge" id="hbRate">-- / 5min</span>
+                </div>
+                <canvas id="heartbeatChart" class="chart-canvas" height="120"></canvas>
+            </div>
+
+            <!-- Bottom Grid -->
+            <div class="bottom-grid">
+                <!-- Node Info -->
+                <div class="panel info-panel">
+                    <div class="panel-header">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="2" y="2" width="20" height="20" rx="5" />
+                            <path d="M12 8v8M8 12h8" />
+                        </svg>
+                        <h2>Node Details</h2>
+                    </div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-key">Node ID</span>
+                            <span class="info-val mono" id="nodeId">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-key">Email</span>
+                            <span class="info-val" id="email">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-key">Class</span>
+                            <span class="info-val badge-class" id="nodeClass">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-key">Platform</span>
+                            <span class="info-val" id="platform">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-key">Hostname</span>
+                            <span class="info-val" id="hostname">--</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-key">Storage Path</span>
+                            <span class="info-val mono small" id="storagePath">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Resources -->
+                <div class="panel sys-panel">
+                    <div class="panel-header">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="4" y="4" width="16" height="16" rx="2" />
+                            <rect x="9" y="9" width="6" height="6" />
+                            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3" />
+                        </svg>
+                        <h2>System Resources</h2>
+                    </div>
+                    <div class="sys-gauges">
+                        <div class="sys-gauge">
+                            <div class="sys-gauge-label">CPU Cores</div>
+                            <div class="sys-gauge-big" id="cpuCores">--</div>
+                        </div>
+                        <div class="sys-gauge">
+                            <div class="sys-gauge-label">Memory</div>
+                            <div class="sys-memory-bar">
+                                <div class="sys-memory-fill" id="memoryBar" style="width:0%"></div>
+                            </div>
+                            <div class="sys-memory-text">
+                                <span id="memFree">--</span> free / <span id="memTotal">--</span>
+                            </div>
+                        </div>
+                        <div class="sys-gauge">
+                            <div class="sys-gauge-label">Architecture</div>
+                            <div class="sys-gauge-big mono" id="archInfo">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stored Files -->
+            <div class="panel files-panel">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <h2>Stored Files</h2>
+                    <span class="panel-badge" id="fileCount">0 files</span>
+                </div>
+                <div class="table-container" id="filesTable">
+                    <div class="table-empty">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="9" y1="15" x2="15" y2="15" />
+                        </svg>
+                        <p>No files stored yet</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="panel log-panel">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+                    </svg>
+                    <h2>Activity Log</h2>
+                </div>
+                <div class="log-container" id="logContainer">
+                    <div class="log-entry info"><span class="log-time">--:--:--</span> Initializing dashboard...</div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <span>Vision Chain Distributed Storage Network</span>
+            <span id="lastUpdate">--</span>
+        </footer>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+
+</html>
