@@ -8,6 +8,7 @@
 import { configManager, type NodeClass } from '../config/nodeConfig.js';
 import { heartbeatService } from './heartbeat.js';
 import { storageService } from './storageService.js';
+import { p2pNetwork } from './p2pNetwork.js';
 import { startDashboard, stopDashboard } from '../dashboard/server.js';
 import { mkdirSync, existsSync } from 'fs';
 import { cpus, totalmem, freemem, platform, arch, hostname } from 'os';
@@ -43,6 +44,20 @@ export interface NodeStatus {
         totalChunks: number;
         totalFiles: number;
         usagePercent: number;
+    };
+    p2p: {
+        isRunning: boolean;
+        listeningPort: number;
+        connectedPeers: number;
+        totalMessagesSent: number;
+        totalMessagesReceived: number;
+        totalChunksShared: number;
+        peers: Array<{
+            nodeId: string;
+            address: string;
+            latencyMs: number;
+            reputation: number;
+        }>;
     };
 }
 
@@ -83,6 +98,9 @@ class NodeManager {
         // Start dashboard
         startDashboard(config.dashboardPort);
 
+        // Start P2P network
+        p2pNetwork.start();
+
         console.log('[Node] All services started');
     }
 
@@ -96,6 +114,7 @@ class NodeManager {
 
         console.log('[Node] Stopping...');
         heartbeatService.stop();
+        p2pNetwork.stop();
         stopDashboard();
         await storageService.stop();
         this.running = false;
@@ -140,6 +159,20 @@ class NodeManager {
                 totalChunks: storageService.getStats().totalChunks,
                 totalFiles: storageService.getStats().totalFiles,
                 usagePercent: storageService.getStats().usagePercent,
+            },
+            p2p: {
+                isRunning: p2pNetwork.getStats().isRunning,
+                listeningPort: p2pNetwork.getStats().listeningPort,
+                connectedPeers: p2pNetwork.getStats().connectedPeers,
+                totalMessagesSent: p2pNetwork.getStats().totalMessagesSent,
+                totalMessagesReceived: p2pNetwork.getStats().totalMessagesReceived,
+                totalChunksShared: p2pNetwork.getStats().totalChunksShared,
+                peers: p2pNetwork.getStats().peers.map(p => ({
+                    nodeId: p.nodeId,
+                    address: p.address,
+                    latencyMs: p.latencyMs,
+                    reputation: p.reputation,
+                })),
             },
         };
     }

@@ -649,6 +649,109 @@ table tr:hover td {
     background: rgba(16, 185, 129, 0.03);
 }
 
+/* P2P Panel */
+.p2p-panel {
+    margin-bottom: 24px;
+}
+
+.p2p-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.p2p-stat {
+    background: var(--bg-deep);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    text-align: center;
+}
+
+.p2p-stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.p2p-stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+}
+
+.p2p-peers-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.peer-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(30, 45, 79, 0.5);
+    font-size: 12px;
+    transition: background 0.2s ease;
+}
+
+.peer-item:hover {
+    background: rgba(16, 185, 129, 0.03);
+}
+
+.peer-item:last-child {
+    border-bottom: none;
+}
+
+.peer-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.peer-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.peer-class {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    background: rgba(168, 85, 247, 0.12);
+    color: var(--purple);
+}
+
+.peer-latency {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    width: 52px;
+    text-align: right;
+}
+
+.peer-rep {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    width: 40px;
+    text-align: right;
+}
+
 /* Log */
 .log-panel {
     margin-bottom: 24px;

@@ -164,6 +164,13 @@ class StorageService {
     }
 
     /**
+     * Get a chunk's data by hash (for P2P sharing)
+     */
+    getChunk(hash: string): Buffer | null {
+        return storageEngine.getChunk(hash);
+    }
+
+    /**
      * Get storage statistics
      */
     getStats(): StorageStats {

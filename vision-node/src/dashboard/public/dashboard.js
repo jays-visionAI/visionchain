@@ -299,6 +299,34 @@
                 addLog(msg, heartbeat.consecutiveFailures > 0 ? 'warn' : 'success');
             }
         }
+
+        // ── P2P Network ──
+        if (status.p2p) {
+            const p2p = status.p2p;
+            setText('peerCount', p2p.connectedPeers + ' peers');
+            setText('p2pPort', String(p2p.listeningPort || '--'));
+            setText('p2pMsgSent', String(p2p.totalMessagesSent || 0));
+            setText('p2pMsgRecv', String(p2p.totalMessagesReceived || 0));
+            setText('p2pChunksShared', String(p2p.totalChunksShared || 0));
+
+            const peersEl = document.getElementById('peersList');
+            if (peersEl) {
+                if (!p2p.peers || p2p.peers.length === 0) {
+                    peersEl.innerHTML = '<div class="table-empty" style="padding:16px"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg><p>Discovering peers...</p></div>';
+                } else {
+                    let html = '';
+                    for (const peer of p2p.peers) {
+                        html += '<div class="peer-item">'
+                            + '<div class="peer-dot"></div>'
+                            + '<span class="peer-id">' + esc(peer.nodeId || '--') + '</span>'
+                            + '<span class="peer-latency">' + (peer.latencyMs || 0) + 'ms</span>'
+                            + '<span class="peer-rep">R:' + (peer.reputation || 0) + '</span>'
+                            + '</div>';
+                    }
+                    peersEl.innerHTML = html;
+                }
+            }
+        }
     }
 
     function updateFilesTable() {

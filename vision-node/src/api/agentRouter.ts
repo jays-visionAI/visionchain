@@ -21,6 +21,11 @@
  *   POST /agent/v1/heartbeat/stats  - Heartbeat stats
  *   POST /agent/v1/heartbeat/beat   - Force a heartbeat
  *
+ *   POST /agent/v1/p2p/stats        - P2P network stats
+ *   POST /agent/v1/p2p/peers        - List connected peers
+ *   POST /agent/v1/p2p/connect      - Connect to a peer
+ *   POST /agent/v1/p2p/broadcast    - Broadcast a message
+ *
  *   GET  /agent/v1/actions         - List all available actions
  */
 
@@ -28,6 +33,7 @@ import { Router, type Request, type Response } from 'express';
 import { nodeManager } from '../core/nodeManager.js';
 import { storageService } from '../core/storageService.js';
 import { heartbeatService } from '../core/heartbeat.js';
+import { p2pNetwork } from '../core/p2pNetwork.js';
 import { configManager } from '../config/nodeConfig.js';
 
 export function createAgentRouter(): Router {
@@ -79,6 +85,10 @@ export function createAgentRouter(): Router {
                 { method: 'POST', path: '/agent/v1/storage/stats', description: 'Get storage statistics' },
                 { method: 'POST', path: '/agent/v1/heartbeat/stats', description: 'Get heartbeat statistics' },
                 { method: 'POST', path: '/agent/v1/heartbeat/beat', description: 'Force an immediate heartbeat' },
+                { method: 'POST', path: '/agent/v1/p2p/stats', description: 'Get P2P network statistics' },
+                { method: 'POST', path: '/agent/v1/p2p/peers', description: 'List connected peers' },
+                { method: 'POST', path: '/agent/v1/p2p/connect', description: 'Connect to a peer', params: { address: 'string', port: 'number' } },
+                { method: 'POST', path: '/agent/v1/p2p/broadcast', description: 'Broadcast a message to all peers', params: { type: 'string', payload: 'object' } },
             ],
         });
     });
@@ -261,6 +271,48 @@ export function createAgentRouter(): Router {
         } catch (err) {
             res.status(500).json({ success: false, error: String(err) });
         }
+    });
+
+    // ══════════════════════════════════════
+    // P2P NETWORK
+    // ══════════════════════════════════════
+
+    router.post('/p2p/stats', (_req: Request, res: Response) => {
+        const stats = p2pNetwork.getStats();
+        res.json({ success: true, ...stats });
+    });
+
+    router.post('/p2p/peers', (_req: Request, res: Response) => {
+        const stats = p2pNetwork.getStats();
+        res.json({
+            success: true,
+            connectedPeers: stats.connectedPeers,
+            peers: stats.peers,
+        });
+    });
+
+    router.post('/p2p/connect', (req: Request, res: Response) => {
+        const { address, port } = req.body || {};
+        if (!address || !port) {
+            return res.status(400).json({ success: false, error: 'Missing address or port' });
+        }
+
+        try {
+            p2pNetwork.connectToPeer(address, Number(port));
+            res.json({ success: true, message: `Connecting to ${address}:${port}` });
+        } catch (err) {
+            res.status(500).json({ success: false, error: String(err) });
+        }
+    });
+
+    router.post('/p2p/broadcast', (req: Request, res: Response) => {
+        const { type, payload } = req.body || {};
+        if (!type) {
+            return res.status(400).json({ success: false, error: 'Missing message type' });
+        }
+
+        p2pNetwork.broadcast(type, payload || {});
+        res.json({ success: true, message: `Broadcast sent: ${type}` });
     });
 
     return router;
