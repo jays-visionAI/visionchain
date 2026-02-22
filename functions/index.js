@@ -757,6 +757,42 @@ const ERC20_ABI = [
   "function balanceOf(address account) external view returns (uint256)",
 ];
 
+// --- Storage Contracts ---
+const STORAGE_REGISTRY_ADDRESS = "0x26d4b785e5861694Bd6B8EAA08b5e5A7458D6739";
+const STORAGE_PROOF_ADDRESS = "0x4C8789B177A2271252A1b8D054778326D40cADC4";
+const STORAGE_REWARDS_ADDRESS = "0x30268b6f5448B863d4C9f6f471a2A79180eed4DF";
+
+const STORAGE_REGISTRY_ABI = [
+  "function registerNode(bytes32 nodeId, address operator, uint256 capacityGB, string nodeClass) external",
+  "function updateNode(bytes32 nodeId, uint256 capacityGB, uint256 usedGB) external",
+  "function recordHeartbeat(bytes32 nodeId) external",
+  "function recordHeartbeatBatch(bytes32[] nodeIds) external",
+  "function setNodeStatus(bytes32 nodeId, uint8 status) external",
+  "function recordProofResult(bytes32 nodeId, bool passed) external",
+  "function recordMerkleRoot(bytes32 fileKey, bytes32 merkleRoot) external",
+  "function verifyMerkleRoot(bytes32 fileKey, bytes32 merkleRoot) external view returns (bool)",
+  "function getNode(bytes32 nodeId) external view returns (tuple(bytes32,address,uint256,uint256,string,uint256,uint256,uint8,uint256,uint256))",
+  "function getNetworkStats() external view returns (uint256,uint256,uint256,uint256)",
+];
+
+const STORAGE_PROOF_ABI = [
+  "function issueChallenges(bytes32[] challengeIds, bytes32[] nodeIds, bytes32[] chunkHashes, uint256[] offsets, uint256[] readBytesArr) external",
+  "function submitProofs(bytes32[] challengeIds, bytes32[] proofHashes) external",
+  "function verifyProofs(bytes32[] challengeIds, bytes32[] expectedHashes) external",
+  "function getNodeProofStats(bytes32 nodeId) external view returns (uint256,uint256,uint256,uint256)",
+];
+
+const STORAGE_REWARDS_ABI = [
+  "function setNodeWallet(bytes32 nodeId, address wallet) external",
+  "function accrueReward(bytes32 nodeId, uint256 uptimeHours, uint256 capacityGB, uint256 proofSuccessRate, uint256 weightBp) external",
+  "function claimReward(bytes32 nodeId) external",
+  "function slashNode(bytes32 nodeId, string reason) external",
+  "function getRewardInfo(bytes32 nodeId) external view returns (tuple(uint256,uint256,uint256,uint256,bool))",
+  "function calculatePendingReward(bytes32 nodeId) external view returns (uint256)",
+  "function getPoolStats() external view returns (uint256,uint256,uint256)",
+  "function fundPool() external payable",
+];
+
 // =============================================================================
 // UNIFIED PAYMASTER - Single entry point for all gasless transfers
 // Supports: transfer (immediate), timelock (scheduled), batch (multiple)
@@ -8944,7 +8980,8 @@ exports.agentGateway = onRequest({
     // --- All other actions require authentication ---
     // mobile_node.register & mobile_node.leaderboard are public (no auth required)
     // mobile_node.heartbeat/status/claim_reward use their own vcn_mn_ key auth internally
-    const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation"];
+    // storage_node.* actions use node api_key auth internally
+    const skipAgentAuth = ["mobile_node.register", "mobile_node.leaderboard", "mobile_node.heartbeat", "mobile_node.status", "mobile_node.claim_reward", "mobile_node.submit_attestation", "storage_node.register_chunks", "storage_node.get_assignments", "storage_node.chunk_stored", "storage_node.proof_challenge", "storage_node.proof_response", "storage_node.chunk_status"];
 
     // Detect Firebase ID token (non-vcn_ bearer tokens)
     let firebaseIdToken = null;
@@ -13137,6 +13174,25 @@ exports.agentGateway = onRequest({
             total_failed: admin.firestore.FieldValue.increment(failed),
           },
         }, { merge: true });
+
+        // Record proof results on-chain (fire-and-forget)
+        try {
+          const executorPk = process.env.VCN_EXECUTOR_PK;
+          if (executorPk) {
+            const onchainProvider = new ethers.JsonRpcProvider("https://api.visionchain.co/rpc-proxy");
+            const executorWallet = new ethers.Wallet(executorPk, onchainProvider);
+            const registryContract = new ethers.Contract(STORAGE_REGISTRY_ADDRESS, STORAGE_REGISTRY_ABI, executorWallet);
+            const nodeIdBytes = ethers.zeroPadValue(ethers.toUtf8Bytes(nodeId.slice(0, 31)), 32);
+            // Record each individual proof result
+            for (const r of results) {
+              if (r.status === "verified" || r.status === "not_found" || r.status === "expired") {
+                await registryContract.recordProofResult(nodeIdBytes, r.status === "verified", { gasLimit: 100000, gasPrice: ethers.parseUnits("1", "gwei") });
+              }
+            }
+          }
+        } catch (onchainErr) {
+          console.warn("[Storage Proof] On-chain recording failed (non-blocking):", onchainErr.message);
+        }
 
         return res.json({
           success: true,
