@@ -1,4 +1,6 @@
-import { Component } from 'solid-js';
+import { Component, createSignal } from 'solid-js';
+import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
+import { getFirebaseApp } from '../../services/firebaseService';
 import {
     LayoutDashboard,
     Users,
@@ -339,13 +341,67 @@ export const adminMenuConfig: AdminMenuItem[] = [
     }
 ];
 
+// ---------- Partner Menu Visibility (Firestore-backed) ----------
+const PARTNER_MENU_DOC = 'admin_settings/partner_menu_access';
+
+// Reactive signal for partner menu visibility
+const [partnerMenuAccess, setPartnerMenuAccess] = createSignal<Record<string, boolean>>({});
+const [partnerMenuLoaded, setPartnerMenuLoaded] = createSignal(false);
+
+export const getPartnerMenuAccess = () => partnerMenuAccess();
+export const isPartnerMenuLoaded = () => partnerMenuLoaded();
+
+// Load partner menu access settings from Firestore
+export const loadPartnerMenuAccess = async () => {
+    try {
+        const db = getFirestore(getFirebaseApp());
+        const snap = await getDoc(doc(db, PARTNER_MENU_DOC));
+        if (snap.exists()) {
+            setPartnerMenuAccess(snap.data() as Record<string, boolean>);
+        }
+        setPartnerMenuLoaded(true);
+    } catch (e) {
+        console.warn('[AdminMenu] Failed to load partner menu access:', e);
+        setPartnerMenuLoaded(true);
+    }
+};
+
+// Save partner menu access settings to Firestore
+export const savePartnerMenuAccess = async (access: Record<string, boolean>) => {
+    try {
+        const db = getFirestore(getFirebaseApp());
+        await setDoc(doc(db, PARTNER_MENU_DOC), access);
+        setPartnerMenuAccess(access);
+    } catch (e) {
+        console.error('[AdminMenu] Failed to save partner menu access:', e);
+        throw e;
+    }
+};
+
 // Helper function to get menu items sorted by order, optionally filtered by role
 export const getSortedMenuItems = (role?: 'admin' | 'partner' | 'user') => {
     let items = [...adminMenuConfig];
     if (role && role !== 'admin') {
-        items = items.filter(item => !item.requiredRole);
+        const access = partnerMenuAccess();
+        items = items.filter(item => {
+            // Settings is always visible
+            if (item.id === 'settings') return true;
+            // If the item has requiredRole: 'admin', check if partner access is explicitly granted
+            if (item.requiredRole === 'admin') {
+                return access[item.id] === true;
+            }
+            // For items without requiredRole, check if partner access is explicitly denied
+            return access[item.id] !== false;
+        });
     }
     return items.sort((a, b) => (a.order || 0) - (b.order || 0));
+};
+
+// Get all menu items that can have their visibility toggled for partners
+export const getToggleableMenuItems = () => {
+    return adminMenuConfig
+        .filter(item => item.id !== 'settings') // Settings is always visible
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
 };
 
 // Helper function to get icon component by name

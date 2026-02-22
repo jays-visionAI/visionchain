@@ -1,7 +1,7 @@
 import { createSignal, createMemo, Show, For, onMount, createEffect, onCleanup } from 'solid-js';
 import { A, useLocation, useNavigate, Navigate } from '@solidjs/router';
 import { Menu, X, ChevronRight, ChevronDown, LogOut, Shield, Activity } from 'lucide-solid';
-import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem } from './adminMenuConfig';
+import { adminMenuConfig, getIconComponent, getSortedMenuItems, AdminMenuItem, loadPartnerMenuAccess } from './adminMenuConfig';
 import { onAdminAuthStateChanged, adminLogout } from '../../services/firebaseService';
 import { AdminRoleProvider, useAdminRole } from './adminRoleContext';
 import { User } from 'firebase/auth';
@@ -29,6 +29,7 @@ function AdminLayoutInner(props: AdminLayoutProps) {
     const [loading, setLoading] = createSignal(true);
 
     onMount(() => {
+        loadPartnerMenuAccess(); // Load partner menu visibility settings
         const unsubscribe = onAdminAuthStateChanged((user) => {
             setAdminUser(user);
             setLoading(false);

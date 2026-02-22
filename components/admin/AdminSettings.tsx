@@ -1,4 +1,4 @@
-import { createSignal, Show, onMount, createEffect } from 'solid-js';
+import { createSignal, Show, onMount, createEffect, For } from 'solid-js';
 import {
     Sparkles,
     Zap,
@@ -11,10 +11,12 @@ import {
     RefreshCw,
     TrendingUp,
     Activity,
+    Users,
 } from 'lucide-solid';
 import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory, initPriceService } from '../../services/vcnPriceService';
 import AdminAIManagement from './AdminAIManagement';
 import { contractService } from '../../services/contractService';
+import { getToggleableMenuItems, getPartnerMenuAccess, savePartnerMenuAccess, loadPartnerMenuAccess, getIconComponent } from './adminMenuConfig';
 
 export default function AdminSettings() {
     const [settingsSubView, setSettingsSubView] = createSignal<'main' | 'ai' | 'infra' | 'gov'>('main');
@@ -39,6 +41,11 @@ export default function AdminSettings() {
     });
     const [isSavingPrice, setIsSavingPrice] = createSignal(false);
     const [priceSaveStatus, setPriceSaveStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
+
+    // Partner menu access state
+    const [localMenuAccess, setLocalMenuAccess] = createSignal<Record<string, boolean>>({});
+    const [menuSaving, setMenuSaving] = createSignal(false);
+    const [menuSaveStatus, setMenuSaveStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
 
     const PriceChart = () => {
         const history = getVcnPriceHistory();
@@ -91,6 +98,24 @@ export default function AdminSettings() {
     onMount(() => {
         initPriceService();
         refreshNodeStats();
+
+        // Load partner menu settings
+        loadPartnerMenuAccess().then(() => {
+            const current = getPartnerMenuAccess();
+            // Initialize local state with current Firestore values;
+            // for items not in Firestore, default based on requiredRole
+            const toggleable = getToggleableMenuItems();
+            const init: Record<string, boolean> = {};
+            toggleable.forEach(item => {
+                if (current[item.id] !== undefined) {
+                    init[item.id] = current[item.id];
+                } else {
+                    // Default: admin-only items are OFF for partners, others are ON
+                    init[item.id] = !item.requiredRole;
+                }
+            });
+            setLocalMenuAccess(init);
+        });
 
         // Polling nodes every 30s
         const interval = setInterval(refreshNodeStats, 30000);
@@ -419,6 +444,90 @@ export default function AdminSettings() {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Section 5: Partner Menu Access */}
+                        <div class="space-y-3">
+                            <h2 class="text-xs font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Partner Menu Access</h2>
+                            <div class="bg-[#15151a] border border-white/[0.06] rounded-2xl p-6">
+                                <div class="flex items-center gap-4 mb-5">
+                                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                        <Users class="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-white">Partner Role Visibility</h3>
+                                        <p class="text-xs text-gray-500 mt-0.5">Control which admin menu items are visible to Partner accounts</p>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                                    <For each={getToggleableMenuItems()}>
+                                        {(item) => {
+                                            const Icon = getIconComponent(item.icon);
+                                            const isEnabled = () => localMenuAccess()[item.id] ?? !item.requiredRole;
+                                            return (
+                                                <div class={`flex items-center justify-between px-4 py-3 rounded-xl transition-all ${isEnabled() ? 'bg-white/[0.03] hover:bg-white/[0.05]' : 'bg-white/[0.01] opacity-60'}`}>
+                                                    <div class="flex items-center gap-3">
+                                                        <div class={`w-8 h-8 rounded-lg flex items-center justify-center ${isEnabled() ? 'bg-cyan-500/10 text-cyan-400' : 'bg-white/5 text-gray-500'}`}>
+                                                            <Icon class="w-4 h-4" />
+                                                        </div>
+                                                        <div>
+                                                            <span class="text-sm font-medium text-white">{item.label}</span>
+                                                            <Show when={item.requiredRole === 'admin'}>
+                                                                <span class="ml-2 text-[9px] font-bold text-amber-400/70 uppercase tracking-wider">Admin Only</span>
+                                                            </Show>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const updated = { ...localMenuAccess(), [item.id]: !isEnabled() };
+                                                            setLocalMenuAccess(updated);
+                                                        }}
+                                                        class={`w-11 h-6 rounded-full flex items-center px-0.5 transition-all duration-200 ${isEnabled() ? 'bg-cyan-500' : 'bg-white/10'}`}
+                                                    >
+                                                        <div class={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${isEnabled() ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                    </button>
+                                                </div>
+                                            );
+                                        }}
+                                    </For>
+                                </div>
+
+                                <button
+                                    onClick={async () => {
+                                        setMenuSaving(true);
+                                        setMenuSaveStatus('idle');
+                                        try {
+                                            await savePartnerMenuAccess(localMenuAccess());
+                                            setMenuSaveStatus('success');
+                                            setTimeout(() => setMenuSaveStatus('idle'), 3000);
+                                        } catch {
+                                            setMenuSaveStatus('error');
+                                            setTimeout(() => setMenuSaveStatus('idle'), 3000);
+                                        } finally {
+                                            setMenuSaving(false);
+                                        }
+                                    }}
+                                    disabled={menuSaving()}
+                                    class={`w-full mt-5 py-3.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 ${menuSaveStatus() === 'success'
+                                        ? 'bg-green-600 shadow-green-600/20'
+                                        : menuSaveStatus() === 'error'
+                                            ? 'bg-red-600 shadow-red-600/20'
+                                            : 'bg-cyan-600 hover:bg-cyan-500 shadow-cyan-600/20'
+                                        } text-white disabled:opacity-50`}
+                                >
+                                    <Show when={menuSaving()}>
+                                        <RefreshCw class="w-4 h-4 animate-spin" />
+                                    </Show>
+                                    {menuSaveStatus() === 'success'
+                                        ? 'Saved Successfully!'
+                                        : menuSaveStatus() === 'error'
+                                            ? 'Save Failed'
+                                            : menuSaving()
+                                                ? 'Saving...'
+                                                : 'Save Partner Menu Settings'}
+                                </button>
                             </div>
                         </div>
                     </div>
