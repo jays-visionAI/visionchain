@@ -25,6 +25,7 @@ export const AdminVisionInsight = lazy(() => import('../components/admin/AdminVi
 export const AdminSocialMedia = lazy(() => import('../components/admin/AdminSocialMedia'));
 export const AdminApiPricing = lazy(() => import('../components/admin/AdminApiPricing'));
 export const AdminMobileNodes = lazy(() => import('../components/admin/AdminMobileNodes'));
+export const AdminNodeHealth = lazy(() => import('../components/admin/AdminNodeHealth'));
 
 
 // Loading spinner component
@@ -284,6 +285,17 @@ export function AdminMobileNodesPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminMobileNodes />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminNodeHealthPage() {
+    document.title = 'Node Health | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminNodeHealth />
             </AdminLayout>
         </Suspense>
     );

@@ -124,37 +124,7 @@ async function signPermit(
         deadline: deadline,
     };
 
-    console.log('[Permit Debug] Domain:', JSON.stringify({
-        name: tokenName,
-        version: '1',
-        chainId: CHAIN_ID,
-        verifyingContract: VCN_TOKEN,
-    }));
-    console.log('[Permit Debug] Values:', JSON.stringify({
-        owner: userAddress,
-        spender: PAYMASTER_ADMIN,
-        value: totalAmount.toString(),
-        nonce: nonce.toString(),
-        deadline,
-    }));
-
     const signature = await signer.signTypedData(domain, types, values);
-
-    // Verify: recover signer from signature
-    try {
-        const domainSep = ethers.TypedDataEncoder.hashDomain(domain);
-        const structHash = ethers.TypedDataEncoder.hashStruct('Permit', types, values);
-        const digest = ethers.solidityPackedKeccak256(
-            ['string', 'bytes32', 'bytes32'],
-            ['\x19\x01', domainSep, structHash]
-        );
-        const recovered = ethers.recoverAddress(digest, signature);
-        console.log('[Permit Debug] Signer address:', userAddress);
-        console.log('[Permit Debug] Recovered from sig:', recovered);
-        console.log('[Permit Debug] Match:', recovered.toLowerCase() === userAddress.toLowerCase());
-    } catch (e: any) {
-        console.warn('[Permit Debug] Recovery check failed:', e.message);
-    }
 
     return { signature, deadline, totalWei: totalAmount.toString() };
 }

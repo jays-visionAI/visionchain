@@ -25,7 +25,8 @@ import {
     Eye,
     Share2,
     Coins,
-    Smartphone
+    Smartphone,
+    Server
 } from 'lucide-solid';
 
 
@@ -56,7 +57,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Eye,
     Share2,
     Coins,
-    Smartphone
+    Smartphone,
+    Server
 };
 
 // Menu item interface with optional children for sub-menus
@@ -273,6 +275,15 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'custom',
         order: 17,
+        requiredRole: 'admin'
+    },
+    {
+        id: 'node-health',
+        path: '/adminsystem/node-health',
+        label: 'Node Health',
+        icon: 'Server',
+        category: 'custom',
+        order: 18,
         requiredRole: 'admin'
     },
 

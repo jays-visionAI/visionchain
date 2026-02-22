@@ -9187,45 +9187,14 @@ exports.agentGateway = onRequest({
           return res.status(400).json({ error: "Invalid signature format" });
         }
 
-        // Get admin nonce and verify on-chain permit nonce
+        // Get admin nonce
         const startNonce = await provider.getTransactionCount(adminWallet.address, "pending");
-        const onChainPermitNonce = await tokenContract.nonces(userAddress);
-        console.log(`[Agent Gateway] On-chain permit nonce for ${userAddress}: ${onChainPermitNonce.toString()}`);
 
         // Execute permit
-        console.log(`[Agent Gateway] Permit params: owner=${userAddress}, spender=${adminWallet.address}, value=${totalAmountBigInt.toString()}, deadline=${deadline}`);
-        console.log(`[Agent Gateway] Permit v=${v}, r=${r}, s=${sigS}`);
-        console.log(`[Agent Gateway] Raw signature: ${signature}`);
-
-        // Verify: try to recover signer from the signature to check before sending on-chain
-        try {
-          const permitTypeHash = ethers.keccak256(ethers.toUtf8Bytes("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"));
-          // eslint-disable-next-line new-cap
-          const domainSeparator = await tokenContract.DOMAIN_SEPARATOR();
-          // eslint-disable-next-line new-cap
-          const abiCoder = new ethers.AbiCoder();
-          const structHash = ethers.keccak256(abiCoder.encode(
-            ["bytes32", "address", "address", "uint256", "uint256", "uint256"],
-            [permitTypeHash, userAddress, adminWallet.address, totalAmountBigInt, onChainPermitNonce, deadline],
-          ));
-          const digest = ethers.keccak256(ethers.concat([
-            ethers.toUtf8Bytes("\x19\x01"),
-            domainSeparator,
-            structHash,
-          ]));
-          const recovered = ethers.recoverAddress(digest, { v, r, s: sigS });
-          console.log(`[Agent Gateway] Digest: ${digest}`);
-          console.log(`[Agent Gateway] Recovered signer: ${recovered}`);
-          console.log(`[Agent Gateway] Expected owner: ${userAddress}`);
-          console.log(`[Agent Gateway] Signer match: ${recovered.toLowerCase() === userAddress.toLowerCase()}`);
-        } catch (recoverErr) {
-          console.warn(`[Agent Gateway] Recovery check failed:`, recoverErr.message);
-        }
-
         try {
           const permitTx = await tokenContract.permit(
             userAddress, adminWallet.address, totalAmountBigInt, deadline, v, r, sigS,
-            { nonce: startNonce, gasLimit: 200000 },
+            { nonce: startNonce },
           );
           await permitTx.wait();
           console.log(`[Agent Gateway] User permit confirmed: ${permitTx.hash}`);
@@ -9233,14 +9202,6 @@ exports.agentGateway = onRequest({
           console.error(`[Agent Gateway] User permit failed:`, permitErr.message);
           return res.status(400).json({
             error: `Permit failed: ${permitErr.reason || permitErr.message}`,
-            debug: {
-              owner: userAddress,
-              spender: adminWallet.address,
-              value: totalAmountBigInt.toString(),
-              deadline,
-              onChainPermitNonce: onChainPermitNonce.toString(),
-              v, r, s: sigS,
-            },
           });
         }
 
@@ -16074,3 +16035,175 @@ async function dispatchWebhook(db, agentId, hook, event, data, axios, crypto) {
     .collection("webhooks").doc(hook.id)
     .update(updateData);
 }
+
+// ============================================================================
+// Node Health Monitoring API
+// ============================================================================
+
+const NODE_ENDPOINTS = [
+  { name: "node-1", url: "http://46.224.221.201:8545", port: 8545, role: "Bootnode & Sealer", enode: "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" },
+  { name: "node-2", url: "http://46.224.221.201:8546", port: 8546, role: "Validator 1", enode: "enode://f394a0fd8fff8e8449dc0a2731fa78fe2939d27131c695eb4006c022b11c1ab9adb309798cc168e020ecf2822e5bb103f2a215ca4c6c20d43cd3072522bd94ac@172.20.0.12:30303" },
+  { name: "node-3", url: "http://46.224.221.201:8547", port: 8547, role: "Validator 2", enode: "enode://7286cdb2cdec31865c78f65552532aa6e28c937670b027b5144c2b4cf77c480039bb74914f0e2d1999ef9d251d3b3447e7cd1e9782a8615633ae5f07290ec59a@172.20.0.13:30303" },
+  { name: "node-4", url: "http://46.224.221.201:8548", port: 8548, role: "Validator 3", enode: "enode://6d91ebc2038227b422afe67f1e5f92a61dc1b3a0310be4decfaae59cd7fcfedf7bea46d9b1f484d04712668751253171f87bc3a5fb7b607bac84bba0a29d890c@172.20.0.14:30303" },
+  { name: "node-5", url: "http://46.224.221.201:8549", port: 8549, role: "Validator 4", enode: "enode://2198afd2651575351095d6b248d4910a7990b57736d9a4a10c72b92cd8a4dabb6bea72382fe1bb095ddafb15d2e75677e35eeabab8973f4f5180ef8dfdcf4330@172.20.0.15:30303" },
+];
+
+async function nodeRpc(url, method, params = []) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+      signal: controller.signal,
+    });
+    const data = await resp.json();
+    return data.result;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function getNodeStatuses() {
+  const results = await Promise.all(NODE_ENDPOINTS.map(async (node) => {
+    try {
+      const [blockHex, peerHex, mining] = await Promise.all([
+        nodeRpc(node.url, "eth_blockNumber"),
+        nodeRpc(node.url, "net_peerCount"),
+        nodeRpc(node.url, "eth_mining"),
+      ]);
+      return {
+        name: node.name,
+        role: node.role,
+        port: node.port,
+        online: blockHex !== null,
+        block: blockHex ? parseInt(blockHex, 16) : 0,
+        peers: peerHex ? parseInt(peerHex, 16) : 0,
+        mining: mining || false,
+      };
+    } catch {
+      return {
+        name: node.name,
+        role: node.role,
+        port: node.port,
+        online: false,
+        block: 0,
+        peers: 0,
+        mining: false,
+      };
+    }
+  }));
+
+  const onlineNodes = results.filter((n) => n.online);
+  const maxBlock = Math.max(...onlineNodes.map((n) => n.block), 0);
+  const minBlock = Math.min(...onlineNodes.map((n) => n.block), 0);
+  const forked = onlineNodes.length > 1 && (maxBlock - minBlock) > 10;
+
+  return {
+    nodes: results,
+    summary: {
+      total: results.length,
+      online: onlineNodes.length,
+      forked,
+      maxBlock,
+      minBlock,
+      blockDiff: maxBlock - minBlock,
+    },
+  };
+}
+
+async function forceSyncNodes() {
+  let addCount = 0;
+  for (const node of NODE_ENDPOINTS) {
+    for (const peer of NODE_ENDPOINTS) {
+      if (node.name === peer.name) continue;
+      const result = await nodeRpc(node.url, "admin_addPeer", [peer.enode]);
+      if (result) addCount++;
+    }
+  }
+  return { addPeerRequests: addCount, totalPossible: NODE_ENDPOINTS.length * (NODE_ENDPOINTS.length - 1) };
+}
+
+exports.nodeHealth = onRequest({ cors: true }, async (req, res) => {
+  // Verify admin auth
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "");
+  if (!token) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    const email = decoded.email || "";
+    const adminDoc = await db.collection("admins").doc(email).get();
+    if (!adminDoc.exists) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+
+  if (req.method === "GET") {
+    const status = await getNodeStatuses();
+
+    // Get last 24 health checks from Firestore
+    const historySnap = await db.collection("node_health_checks")
+      .orderBy("timestamp", "desc")
+      .limit(24)
+      .get();
+    const history = historySnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    return res.json({ ...status, history });
+  }
+
+  if (req.method === "POST") {
+    const { action } = req.body;
+
+    if (action === "force_sync") {
+      const result = await forceSyncNodes();
+      // Wait 3 seconds for connections
+      await new Promise((r) => setTimeout(r, 3000));
+      const status = await getNodeStatuses();
+      return res.json({ syncResult: result, ...status });
+    }
+
+    return res.status(400).json({ error: "Invalid action" });
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
+});
+
+// Scheduled health check - runs every hour
+exports.scheduledNodeHealthCheck = onSchedule("every 60 minutes", async () => {
+  console.log("[NodeHealth] Running scheduled health check...");
+  const status = await getNodeStatuses();
+
+  // Store in Firestore
+  await db.collection("node_health_checks").add({
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    ...status,
+  });
+
+  // Auto-fix if forked or low peers
+  const lowPeerNodes = status.nodes.filter((n) => n.online && n.peers < 2);
+  if (status.summary.forked || lowPeerNodes.length > 0) {
+    console.log(`[NodeHealth] Issue detected: forked=${status.summary.forked}, lowPeerNodes=${lowPeerNodes.length}. Auto-reconnecting...`);
+    const syncResult = await forceSyncNodes();
+    console.log(`[NodeHealth] Auto-reconnect result: ${syncResult.addPeerRequests}/${syncResult.totalPossible} peers added`);
+  }
+
+  // Prune old records (keep last 7 days = 168 checks)
+  const oldSnap = await db.collection("node_health_checks")
+    .orderBy("timestamp", "desc")
+    .offset(168)
+    .limit(50)
+    .get();
+  const batch = db.batch();
+  oldSnap.docs.forEach((doc) => batch.delete(doc.ref));
+  if (!oldSnap.empty) await batch.commit();
+
+  console.log(`[NodeHealth] Check complete. Online: ${status.summary.online}/${status.summary.total}, Forked: ${status.summary.forked}`);
+});
+
