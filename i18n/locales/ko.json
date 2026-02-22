@@ -221,7 +221,7 @@
             "mainnet": "메인넷",
             "testnet": "테스트넷",
             "totalValue": "총 자산 가치",
-            "swap": "스왑",
+            "swap": "브릿지",
             "mint": "민트",
             "localMissing": "로컬 지갑이 없습니다"
         },
@@ -557,10 +557,10 @@
     "bridge": {
         "tag": "크로스체인 전송",
         "title": "비전",
-        "titleAccent": "스왑",
+        "titleAccent": "브릿지",
         "description": "이더리움과 Vision Chain 간 자산을 낙관적 종결성 보안으로 전송하세요.",
         "spendingPasswordRequired": "결제 비밀번호 필요",
-        "enterSpendingPassword": "이 스왑 트랜잭션을 승인하려면 결제 비밀번호를 입력하세요.",
+        "enterSpendingPassword": "이 브릿지 트랜잭션을 승인하려면 결제 비밀번호를 입력하세요.",
         "enterPassword": "결제 비밀번호 입력",
         "loadingWallet": "지갑 로딩 중...",
         "connectingWallet": "지갑에 연결하는 중입니다. 잠시만 기다려주세요.",
@@ -609,7 +609,7 @@
         "transferInitiatedDesc1": "",
         "transferInitiatedDesc2": "이(가) 다음으로 브릿지 중입니다:",
         "transferInitiatedDesc3": "15분 챌린지 기간 후 사용 가능합니다.",
-        "enterPasswordDesc": "이 스왑 트랜잭션을 승인하려면 지출 비밀번호를 입력하세요.",
+        "enterPasswordDesc": "이 브릿지 트랜잭션을 승인하려면 지출 비밀번호를 입력하세요.",
         "confirm": "확인",
         "loadingWalletDesc": "지갑에 연결 중입니다. 잠시만 기다려주세요."
     },

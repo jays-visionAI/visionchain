@@ -221,7 +221,7 @@
             "mainnet": "Mainnet",
             "testnet": "Testnet",
             "totalValue": "Total Value",
-            "swap": "Swap",
+            "swap": "Bridge",
             "mint": "Mint",
             "localMissing": "Local Wallet Not Found"
         },
@@ -557,7 +557,7 @@
     "bridge": {
         "tag": "Cross-Chain Transfer",
         "title": "VISION",
-        "titleAccent": "SWAP",
+        "titleAccent": "BRIDGE",
         "description": "Transfer assets between Ethereum and Vision Chain with optimistic finality security.",
         "spendingPasswordRequired": "Spending Password Required",
         "enterSpendingPassword": "Enter your spending password to authorize this swap transaction.",

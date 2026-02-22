@@ -89,7 +89,7 @@ export const WalletAssets = (props: WalletAssetsProps) => {
                         <span class="text-xs font-black text-white uppercase tracking-widest">{t('wallet.assets.receive')}</span>
                     </button>
                     <button
-                        onClick={() => props.startFlow('swap')}
+                        onClick={() => props.setActiveView('bridge')}
                         class="flex items-center justify-center gap-2 p-3 bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl transition-all group active:scale-95">
                         <RefreshCw class="w-4 h-4 text-purple-400 group-hover:rotate-180 transition-transform duration-700" />
                         <span class="text-xs font-black text-white uppercase tracking-widest">{t('wallet.assets.swap')}</span>
