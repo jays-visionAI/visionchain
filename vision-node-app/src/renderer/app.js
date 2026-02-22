@@ -21,6 +21,9 @@ async function init() {
     window.visionNode.onStopped(onNodeStopped);
     window.visionNode.onHeartbeat(onHeartbeat);
     window.visionNode.onStats(onStatsUpdate);
+    window.visionNode.onError((data) => {
+        addActivity('error', data.message || 'Unknown error');
+    });
 
     // Periodic refresh
     setInterval(refreshStatus, 10000);
@@ -173,7 +176,7 @@ function updateUI(s) {
     document.getElementById('stat-uptime').textContent = formatUptime(s.uptimeSeconds || 0);
     document.getElementById('stat-heartbeats').textContent = (s.heartbeatCount || 0).toLocaleString();
     document.getElementById('stat-storage').textContent = `${s.storageMaxGB || 0} GB`;
-    document.getElementById('stat-weight').textContent = `${(s.weight || 0).toFixed(2)}x`;
+    document.getElementById('stat-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
 
     // Node info
     document.getElementById('overview-node-id').textContent = s.nodeId || '';
@@ -183,9 +186,9 @@ function updateUI(s) {
     document.getElementById('info-env').textContent = capitalize(s.environment || '-');
 
     // Rewards
-    document.getElementById('reward-pending').textContent = (s.pendingReward || 0).toFixed(6);
-    document.getElementById('reward-earned').textContent = (s.totalEarned || 0).toFixed(4);
-    document.getElementById('reward-weight').textContent = `${(s.weight || 0).toFixed(2)}x`;
+    document.getElementById('reward-pending').textContent = parseFloat(s.pendingReward || 0).toFixed(6);
+    document.getElementById('reward-earned').textContent = parseFloat(s.totalEarned || 0).toFixed(4);
+    document.getElementById('reward-weight').textContent = `${parseFloat(s.weight || 0).toFixed(2)}x`;
 
     // Settings
     const config = s;
