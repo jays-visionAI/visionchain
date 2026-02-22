@@ -145,6 +145,9 @@ program
             console.log(chalk.yellow('  Daemon mode not yet implemented. Running in foreground.\n'));
         }
 
+        // Refresh gateway client with loaded config (apiKey, apiUrl)
+        gatewayClient.refresh();
+
         // Start the node
         await nodeManager.start();
 
