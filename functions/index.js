@@ -12349,10 +12349,10 @@ exports.agentGateway = onRequest({
       try {
         const { email, device_type: deviceType, referral_code: referralCodeInput, firebase_id_token: firebaseIdToken } = req.body;
         if (!email || !deviceType) {
-          return res.status(400).json({ error: "email and device_type (android|pwa) are required" });
+          return res.status(400).json({ error: "email and device_type (android|pwa|desktop) are required" });
         }
-        if (!["android", "pwa"].includes(deviceType)) {
-          return res.status(400).json({ error: "device_type must be 'android' or 'pwa'" });
+        if (!["android", "pwa", "desktop"].includes(deviceType)) {
+          return res.status(400).json({ error: "device_type must be 'android', 'pwa', or 'desktop'" });
         }
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
