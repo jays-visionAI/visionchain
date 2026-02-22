@@ -8328,9 +8328,43 @@ async function authenticateAgent(apiKey) {
  * @param {string} idToken - Firebase ID token
  * @returns {Promise<object|null>} User context or null
  */
+// Secondary Firebase Admin for cross-project token verification (staging <-> production)
+let prodAdminApp = null;
+function getProdAdmin() {
+  if (!prodAdminApp) {
+    const currentProject = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "";
+    const prodProjectId = "visionchain-d19ed";
+    if (currentProject === prodProjectId) return null; // Already production
+    try {
+      prodAdminApp = admin.initializeApp({ projectId: prodProjectId }, "prod-auth");
+    } catch (e) {
+      if (e.code === "app/duplicate-app") {
+        prodAdminApp = admin.app("prod-auth");
+      }
+    }
+  }
+  return prodAdminApp;
+}
+
 async function authenticateFirebaseUser(idToken) {
   try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
+    let decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(idToken);
+    } catch (primaryErr) {
+      // If audience mismatch, try production Firebase Auth
+      if (primaryErr.code === "auth/argument-error" || primaryErr.message?.includes("audience")) {
+        const prodApp = getProdAdmin();
+        if (prodApp) {
+          decoded = await prodApp.auth().verifyIdToken(idToken);
+          console.log("[Agent Gateway] Token verified via production Firebase Auth fallback");
+        } else {
+          throw primaryErr;
+        }
+      } else {
+        throw primaryErr;
+      }
+    }
     const uid = decoded.uid;
     const email = decoded.email || "";
 
