@@ -9386,10 +9386,10 @@ exports.agentGateway = onRequest({
 
       // Agent needs gas - send minimal gas from admin
       const agentBalance = await provider.getBalance(agent.walletAddress);
-      if (agentBalance < ethers.parseEther("0.001")) {
+      if (agentBalance < ethers.parseEther("0.02")) {
         const gasTx = await adminWallet.sendTransaction({
           to: agent.walletAddress,
-          value: ethers.parseEther("0.01"),
+          value: ethers.parseEther("0.05"),
         });
         await gasTx.wait();
       }
