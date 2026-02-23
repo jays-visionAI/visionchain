@@ -1,0 +1,131 @@
+name: Build Vision Node Desktop App
+
+on:
+  push:
+    tags:
+      - 'node-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: vision-node-app
+        run: npm ci
+      
+      - name: Build macOS DMG (arm64 + x64)
+        working-directory: vision-node-app
+        run: npm run build:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installers
+          path: |
+            vision-node-app/dist/*.dmg
+          retention-days: 7
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: vision-node-app
+        run: npm ci
+      
+      - name: Build Windows NSIS installer
+        working-directory: vision-node-app
+        run: npm run build:win
+      
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            vision-node-app/dist/*.exe
+          retention-days: 7
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installers
+          path: dist/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/
+
+      - name: List artifacts
+        run: ls -lh dist/
+
+      - name: Rename artifacts for clean URLs
+        run: |
+          cd dist
+          for f in *arm64*.dmg; do [ -f "$f" ] && mv "$f" "VisionNode-arm64.dmg"; done
+          for f in *x64*.dmg *.dmg; do [ -f "$f" ] && [[ "$f" != *arm64* ]] && mv "$f" "VisionNode-x64.dmg" && break; done
+          for f in *.exe; do [ -f "$f" ] && mv "$f" "VisionNode-Setup.exe"; done
+          ls -lh .
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "TAG=node-v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            TAG="${{ github.ref_name }}"
+            echo "TAG=$TAG" >> $GITHUB_OUTPUT
+            echo "VERSION=${TAG#node-v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create or update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: "Vision Node v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## Vision Node Desktop App v${{ steps.version.outputs.VERSION }}
+
+            ### Downloads
+            - **macOS (Apple Silicon)**: `VisionNode-arm64.dmg`
+            - **macOS (Intel)**: `VisionNode-x64.dmg`
+            - **Windows**: `VisionNode-Setup.exe` (NSIS installer)
+
+            ### Installation
+            1. Download the file for your OS
+            2. macOS: Open the .dmg, drag Vision Node to Applications
+            3. Windows: Run VisionNode-Setup.exe, follow installer
+            4. Launch the app and enter your email to get started
+          files: |
+            dist/VisionNode-arm64.dmg
+            dist/VisionNode-x64.dmg
+            dist/VisionNode-Setup.exe
+          draft: false
+          prerelease: false
