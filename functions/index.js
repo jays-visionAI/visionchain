@@ -16801,7 +16801,7 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const ordersSnap = await db.collection("dex/orders/list")
           .where("status", "in", ["open", "partial"])
           .orderBy("price").limit(100).get();
-        const bids = [], asks = [];
+        const bids = []; const asks = [];
         ordersSnap.forEach((doc) => {
           const o = doc.data();
           const entry = { price: o.price, amount: o.remainingAmount || o.amount, agentId: o.agentId };
@@ -16860,10 +16860,20 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const agents = [];
         snap.forEach((doc) => {
           const a = doc.data();
-          agents.push({ agentId: a.id, agentName: a.name, ownerUid: a.ownerUid, strategyPreset: a.strategy?.preset, pnlPercent: a.performance?.totalPnLPercent || 0, pnlAbsolute: a.performance?.totalPnL || 0, winRate: a.performance?.totalTrades > 0 ? (a.performance.winCount / a.performance.totalTrades) * 100 : 0, totalTrades: a.performance?.totalTrades || 0 });
+          agents.push({
+            agentId: a.id, agentName: a.name, ownerUid: a.ownerUid,
+            strategyPreset: a.strategy?.preset,
+            pnlPercent: a.performance?.totalPnLPercent || 0,
+            pnlAbsolute: a.performance?.totalPnL || 0,
+            winRate: a.performance?.totalTrades > 0 ?
+              (a.performance.winCount / a.performance.totalTrades) * 100 : 0,
+            totalTrades: a.performance?.totalTrades || 0,
+          });
         });
         agents.sort((a, b) => b.pnlPercent - a.pnlPercent);
-        agents.forEach((a, i) => { a.rank = i + 1; });
+        agents.forEach((a, i) => {
+          a.rank = i + 1;
+        });
         return res.json({ success: true, leaderboard: agents.slice(0, limit) });
       }
       case "updateAgent": {
@@ -16907,7 +16917,9 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const roundSnap = await db.doc("dex/settings/config/roundCounter").get();
         const current = roundSnap.exists ? roundSnap.data().current || 0 : 0;
         let lastRound = null;
-        if (current > 0) { const logSnap = await db.doc(`dex/rounds/log/${current}`).get(); lastRound = logSnap.exists ? logSnap.data() : null; }
+        if (current > 0) {
+          const logSnap = await db.doc(`dex/rounds/log/${current}`).get(); lastRound = logSnap.exists ? logSnap.data() : null;
+        }
         const settingsSnap = await db.doc("dex/settings/config/main").get();
         return res.json({ success: true, roundNumber: current, lastRound, settings: settingsSnap.exists ? settingsSnap.data() : {} });
       }

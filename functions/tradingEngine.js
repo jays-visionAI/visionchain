@@ -53,7 +53,9 @@ class CloudOrderBook {
                 if (side === "buy" && top.price > limitPrice) break;
                 if (side === "sell" && top.price < limitPrice) break;
             }
-            if (top.ownerUid === takerUid && !top.isMMOrder) { bookSide.shift(); continue; }
+            if (top.ownerUid === takerUid && !top.isMMOrder) {
+ bookSide.shift(); continue;
+}
 
             const fillAmount = Math.min(remaining, top.remainingAmount);
             const fillTotal = fillAmount * top.price;
@@ -80,15 +82,25 @@ class CloudOrderBook {
         this.asks = this.asks.filter((o) => o.agentId !== agentId);
     }
 
-    getBestBid() { return this.bids.length > 0 ? this.bids[0].price : 0; }
-    getBestAsk() { return this.asks.length > 0 ? this.asks[0].price : this.lastPrice * 1.005; }
+    getBestBid() {
+ return this.bids.length > 0 ? this.bids[0].price : 0;
+}
+    getBestAsk() {
+ return this.asks.length > 0 ? this.asks[0].price : this.lastPrice * 1.005;
+}
     getSpreadPct() {
-        const b = this.getBestBid(), a = this.getBestAsk();
+        const b = this.getBestBid(); const a = this.getBestAsk();
         return b > 0 ? ((a - b) / this.lastPrice * 100).toFixed(3) : "0";
     }
-    getBidDepth() { return this.bids.reduce((s, o) => s + o.remainingAmount, 0); }
-    getAskDepth() { return this.asks.reduce((s, o) => s + o.remainingAmount, 0); }
-    getOpenCount() { return this.bids.length + this.asks.length; }
+    getBidDepth() {
+ return this.bids.reduce((s, o) => s + o.remainingAmount, 0);
+}
+    getAskDepth() {
+ return this.asks.reduce((s, o) => s + o.remainingAmount, 0);
+}
+    getOpenCount() {
+ return this.bids.length + this.asks.length;
+}
 }
 
 // ─── MM Order Generation ───────────────────────────────────────────────────
@@ -133,56 +145,88 @@ function executePresetAlgorithm(preset, agent, md) {
 
     switch (preset) {
         case "momentum": {
-            if (priceDiff > 3) { const a = Math.round((md.usdtBalance * maxPct * 0.6) / md.bestAsk); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "market", amount: a, price: 0, reasoning: `Uptrend +${priceDiff.toFixed(1)}%` } : h("Uptrend, low bal"); }
-            if (priceDiff < -3) { const a = Math.round(md.vcnBalance * maxPct * 0.6); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "market", amount: a, price: 0, reasoning: `Downtrend ${priceDiff.toFixed(1)}%` } : h("Downtrend, no VCN"); }
-            if (priceDiff > 1) { const a = Math.round((md.usdtBalance * maxPct * 0.3) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4((md.bestBid + cp) / 2), reasoning: `Mild up +${priceDiff.toFixed(1)}%` } : h("Mild, small"); }
+            if (priceDiff > 3) {
+ const a = Math.round((md.usdtBalance * maxPct * 0.6) / md.bestAsk); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "market", amount: a, price: 0, reasoning: `Uptrend +${priceDiff.toFixed(1)}%` } : h("Uptrend, low bal");
+}
+            if (priceDiff < -3) {
+ const a = Math.round(md.vcnBalance * maxPct * 0.6); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "market", amount: a, price: 0, reasoning: `Downtrend ${priceDiff.toFixed(1)}%` } : h("Downtrend, no VCN");
+}
+            if (priceDiff > 1) {
+ const a = Math.round((md.usdtBalance * maxPct * 0.3) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4((md.bestBid + cp) / 2), reasoning: `Mild up +${priceDiff.toFixed(1)}%` } : h("Mild, small");
+}
             return h(`Unclear (${priceDiff.toFixed(1)}%)`);
         }
         case "value": {
             const drop = avg > 0 ? ((avg - cp) / avg) * 100 : 0;
-            if (drop > 15) { const a = Math.round((md.usdtBalance * maxPct * 0.5) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.995), reasoning: `${drop.toFixed(1)}% below avg` } : h("Undervalued, no USDT"); }
-            if (drop < -50) { const a = Math.round(md.vcnBalance * maxPct * 0.3); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.005), reasoning: `+${Math.abs(drop).toFixed(1)}% profit` } : h("No VCN"); }
+            if (drop > 15) {
+ const a = Math.round((md.usdtBalance * maxPct * 0.5) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.995), reasoning: `${drop.toFixed(1)}% below avg` } : h("Undervalued, no USDT");
+}
+            if (drop < -50) {
+ const a = Math.round(md.vcnBalance * maxPct * 0.3); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.005), reasoning: `+${Math.abs(drop).toFixed(1)}% profit` } : h("No VCN");
+}
             return h("Waiting for value");
         }
         case "scalper": {
             const sp = parseFloat(md.spread) || 0;
-            if (sp > 0.3 && md.usdtBalance > 100) { const a = Math.round((md.usdtBalance * maxPct) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(md.bestBid + (md.bestAsk - md.bestBid) * 0.3), reasoning: `Scalp, spread ${sp.toFixed(2)}%` } : h("Small"); }
-            if (md.vcnBalance > DEX_MIN_ORDER) { const a = Math.round(md.vcnBalance * maxPct); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.005), reasoning: "Scalp sell" } : h("Small VCN"); }
+            if (sp > 0.3 && md.usdtBalance > 100) {
+ const a = Math.round((md.usdtBalance * maxPct) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(md.bestBid + (md.bestAsk - md.bestBid) * 0.3), reasoning: `Scalp, spread ${sp.toFixed(2)}%` } : h("Small");
+}
+            if (md.vcnBalance > DEX_MIN_ORDER) {
+ const a = Math.round(md.vcnBalance * maxPct); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.005), reasoning: "Scalp sell" } : h("Small VCN");
+}
             return h("No scalp opp");
         }
         case "contrarian": {
             const ch = md.change24h || 0;
-            if (ch > 5) { const a = Math.round(md.vcnBalance * maxPct * 0.5); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.002), reasoning: `Overbought +${ch.toFixed(1)}%` } : h("OB no VCN"); }
-            if (ch < -5) { const a = Math.round((md.usdtBalance * maxPct * 0.5) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.998), reasoning: `Oversold ${ch.toFixed(1)}%` } : h("OS no USDT"); }
+            if (ch > 5) {
+ const a = Math.round(md.vcnBalance * maxPct * 0.5); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.002), reasoning: `Overbought +${ch.toFixed(1)}%` } : h("OB no VCN");
+}
+            if (ch < -5) {
+ const a = Math.round((md.usdtBalance * maxPct * 0.5) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.998), reasoning: `Oversold ${ch.toFixed(1)}%` } : h("OS no USDT");
+}
             return h("Waiting extreme");
         }
         case "grid": {
             const gl = Math.floor(cp / (cp * 0.01));
-            if (gl % 2 === 0) { const a = Math.round((md.usdtBalance * maxPct) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.99), reasoning: `Grid buy lv${gl}` } : h("Grid no USDT"); }
+            if (gl % 2 === 0) {
+ const a = Math.round((md.usdtBalance * maxPct) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.99), reasoning: `Grid buy lv${gl}` } : h("Grid no USDT");
+}
             const a = Math.round(md.vcnBalance * maxPct); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.01), reasoning: `Grid sell lv${gl}` } : h("Grid no VCN");
         }
         case "breakout": {
-            if (priceDiff > 2) { const a = Math.round((md.usdtBalance * maxPct * 0.8) / md.bestAsk); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "market", amount: a, price: 0, reasoning: `Breakout +${priceDiff.toFixed(1)}%` } : h("BO no USDT"); }
-            if (priceDiff < -2) { const a = Math.round(md.vcnBalance * maxPct * 0.8); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "market", amount: a, price: 0, reasoning: `Breakdown ${priceDiff.toFixed(1)}%` } : h("BD no VCN"); }
+            if (priceDiff > 2) {
+ const a = Math.round((md.usdtBalance * maxPct * 0.8) / md.bestAsk); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "market", amount: a, price: 0, reasoning: `Breakout +${priceDiff.toFixed(1)}%` } : h("BO no USDT");
+}
+            if (priceDiff < -2) {
+ const a = Math.round(md.vcnBalance * maxPct * 0.8); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "market", amount: a, price: 0, reasoning: `Breakdown ${priceDiff.toFixed(1)}%` } : h("BD no VCN");
+}
             return h("No breakout");
         }
         case "twap": {
             const a = Math.round((md.usdtBalance * 0.04) / md.bestAsk);
             if (a < DEX_MIN_ORDER) return h("TWAP no USDT");
-            return parseFloat(md.spread) > 0.5
-                ? { action: "buy", orderType: "limit", amount: a, price: r4(md.bestBid + (md.bestAsk - md.bestBid) * 0.4), reasoning: "TWAP limit" }
-                : { action: "buy", orderType: "market", amount: a, price: 0, reasoning: "TWAP market" };
+            return parseFloat(md.spread) > 0.5 ?
+                { action: "buy", orderType: "limit", amount: a, price: r4(md.bestBid + (md.bestAsk - md.bestBid) * 0.4), reasoning: "TWAP limit" } :
+                { action: "buy", orderType: "market", amount: a, price: 0, reasoning: "TWAP market" };
         }
         case "sentiment": {
             const vr = md.bidDepth > 0 ? md.askDepth / md.bidDepth : 1;
-            if (vr < 0.7) { const a = Math.round((md.usdtBalance * maxPct * 0.4) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.998), reasoning: "Bullish flow" } : h("Bull no USDT"); }
-            if (vr > 1.5) { const a = Math.round(md.vcnBalance * maxPct * 0.4); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.002), reasoning: "Bearish flow" } : h("Bear no VCN"); }
+            if (vr < 0.7) {
+ const a = Math.round((md.usdtBalance * maxPct * 0.4) / cp); return a >= DEX_MIN_ORDER ? { action: "buy", orderType: "limit", amount: a, price: r4(cp * 0.998), reasoning: "Bullish flow" } : h("Bull no USDT");
+}
+            if (vr > 1.5) {
+ const a = Math.round(md.vcnBalance * maxPct * 0.4); return a >= DEX_MIN_ORDER ? { action: "sell", orderType: "limit", amount: a, price: r4(cp * 1.002), reasoning: "Bearish flow" } : h("Bear no VCN");
+}
             return h("Neutral");
         }
         case "random": {
-            const rnd = Math.random(), sz = 0.05 + Math.random() * 0.10;
-            if (rnd < 0.33) { const a = Math.round((md.usdtBalance * Math.min(sz, maxPct)) / cp); if (a < DEX_MIN_ORDER) return h("Rnd no USDT"); const lim = Math.random() > 0.5; return { action: "buy", orderType: lim ? "limit" : "market", amount: a, price: lim ? r4(cp * (0.99 + Math.random() * 0.02)) : 0, reasoning: "Random buy" }; }
-            if (rnd < 0.66) { const a = Math.round(md.vcnBalance * Math.min(sz, maxPct)); if (a < DEX_MIN_ORDER) return h("Rnd no VCN"); const lim = Math.random() > 0.5; return { action: "sell", orderType: lim ? "limit" : "market", amount: a, price: lim ? r4(cp * (0.99 + Math.random() * 0.02)) : 0, reasoning: "Random sell" }; }
+            const rnd = Math.random(); const sz = 0.05 + Math.random() * 0.10;
+            if (rnd < 0.33) {
+ const a = Math.round((md.usdtBalance * Math.min(sz, maxPct)) / cp); if (a < DEX_MIN_ORDER) return h("Rnd no USDT"); const lim = Math.random() > 0.5; return { action: "buy", orderType: lim ? "limit" : "market", amount: a, price: lim ? r4(cp * (0.99 + Math.random() * 0.02)) : 0, reasoning: "Random buy" };
+}
+            if (rnd < 0.66) {
+ const a = Math.round(md.vcnBalance * Math.min(sz, maxPct)); if (a < DEX_MIN_ORDER) return h("Rnd no VCN"); const lim = Math.random() > 0.5; return { action: "sell", orderType: lim ? "limit" : "market", amount: a, price: lim ? r4(cp * (0.99 + Math.random() * 0.02)) : 0, reasoning: "Random sell" };
+}
             return h("Random hold");
         }
         case "dca": {
@@ -263,7 +307,9 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
 
     const settingsSnap = await db.doc("dex/settings/config/main").get();
     const settings = settingsSnap.exists ? settingsSnap.data() : {};
-    if (settings.paused) { console.log("[TradingEngine] Paused."); return; }
+    if (settings.paused) {
+ console.log("[TradingEngine] Paused."); return;
+}
 
     const roundRef = db.doc("dex/settings/config/roundCounter");
     const roundSnap = await roundRef.get();
@@ -274,12 +320,16 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     const sessionOpen = marketData.lastPrice || 0.10;
 
     const agentsSnap = await db.collection("dex/agents/list").where("status", "==", "active").get();
-    if (agentsSnap.empty) { console.log("[TradingEngine] No agents."); return; }
+    if (agentsSnap.empty) {
+ console.log("[TradingEngine] No agents."); return;
+}
 
     const agents = [];
     agentsSnap.forEach((doc) => agents.push({ id: doc.id, ...doc.data() }));
     const agentMap = {};
-    agents.forEach((a) => { agentMap[a.id] = a; });
+    agents.forEach((a) => {
+ agentMap[a.id] = a;
+});
 
     const mmAgents = agents.filter((a) => a.role === "market_maker");
     const presetAgents = agents.filter((a) => a.role === "trader" && a.strategy?.preset !== "custom");
@@ -369,11 +419,19 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             const mk = agentMap[f.makerAgentId];
             const tk = agentMap[f.takerAgentId];
             if (f.takerSide === "buy") {
-                if (tk) { tk.balances.USDT -= (f.total + f.takerFee); tk.balances.VCN += f.amount; }
-                if (mk) { mk.balances.VCN -= f.amount; mk.balances.USDT += (f.total - f.makerFee); }
+                if (tk) {
+ tk.balances.USDT -= (f.total + f.takerFee); tk.balances.VCN += f.amount;
+}
+                if (mk) {
+ mk.balances.VCN -= f.amount; mk.balances.USDT += (f.total - f.makerFee);
+}
             } else {
-                if (tk) { tk.balances.VCN -= f.amount; tk.balances.USDT += (f.total - f.takerFee); }
-                if (mk) { mk.balances.USDT -= (f.total + f.makerFee); mk.balances.VCN += f.amount; }
+                if (tk) {
+ tk.balances.VCN -= f.amount; tk.balances.USDT += (f.total - f.takerFee);
+}
+                if (mk) {
+ mk.balances.USDT -= (f.total + f.makerFee); mk.balances.VCN += f.amount;
+}
             }
         }
 
@@ -435,7 +493,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             "balances.USDT": ag.balances.USDT, "balances.VCN": ag.balances.VCN,
             "performance.currentValueUSDT": val, "performance.totalPnL": val - iv,
             "performance.totalPnLPercent": iv > 0 ? ((val - iv) / iv) * 100 : 0,
-            updatedAt: admin.firestore.Timestamp.now(),
+            "updatedAt": admin.firestore.Timestamp.now(),
         });
         bc++;
     }
