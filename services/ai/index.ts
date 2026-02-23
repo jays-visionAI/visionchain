@@ -208,6 +208,7 @@ export const generateText = async (
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
         const localeInfo = `[System Time Context - Use this for ALL date/time calculations]
+CURRENT_LOCAL_TIME: ${now.toLocaleString(userLocale, { timeZone: userTimezone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
 CURRENT_UTC_TIME: ${now.toISOString()}
 CURRENT_TIMESTAMP_MS: ${Date.now()}
 TIMEZONE: ${userTimezone}
@@ -217,7 +218,8 @@ TODAY_DD_MM_YYYY: ${formatDateForCoinGecko(now)}
 YESTERDAY_DD_MM_YYYY: ${formatDateForCoinGecko(yesterday)}
 ONE_WEEK_AGO_DD_MM_YYYY: ${formatDateForCoinGecko(oneWeekAgo)}
 
-IMPORTANT: When user asks for "current" or "now" price, use get_current_price tool.
+IMPORTANT: When user asks about the current time, ALWAYS use CURRENT_LOCAL_TIME (not UTC). The user is in ${userTimezone}.
+When user asks for "current" or "now" price, use get_current_price tool.
 When user asks for historical price (past dates), use get_historical_price with the date in DD-MM-YYYY format.
 For "yesterday", use YESTERDAY_DD_MM_YYYY. For "a week ago", use ONE_WEEK_AGO_DD_MM_YYYY.`;
 
@@ -685,6 +687,7 @@ export const generateTextStream = async (
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
         const localeInfo = `[System Time Context - Use this for ALL date/time calculations]
+CURRENT_LOCAL_TIME: ${now.toLocaleString(userLocale, { timeZone: userTimezone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
 CURRENT_UTC_TIME: ${now.toISOString()}
 CURRENT_TIMESTAMP_MS: ${Date.now()}
 TIMEZONE: ${userTimezone}
@@ -694,7 +697,8 @@ TODAY_DD_MM_YYYY: ${formatDateForCoinGecko(now)}
 YESTERDAY_DD_MM_YYYY: ${formatDateForCoinGecko(yesterday)}
 ONE_WEEK_AGO_DD_MM_YYYY: ${formatDateForCoinGecko(oneWeekAgo)}
 
-IMPORTANT: When user asks for "current" or "now" price, use get_current_price tool.
+IMPORTANT: When user asks about the current time, ALWAYS use CURRENT_LOCAL_TIME (not UTC). The user is in ${userTimezone}.
+When user asks for "current" or "now" price, use get_current_price tool.
 When user asks for historical price (past dates), use get_historical_price with the date in DD-MM-YYYY format.
 For "yesterday", use YESTERDAY_DD_MM_YYYY. For "a week ago", use ONE_WEEK_AGO_DD_MM_YYYY.`;
 

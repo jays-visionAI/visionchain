@@ -1678,8 +1678,8 @@ const Wallet = (): JSX.Element => {
     };
 
     const fetchMarketData = async () => {
-        // CoinGecko API removed as per user request to avoid rate-limiting and CORS issues
-        console.log('Market data fetch skipped - using static/mock prices');
+        // Market prices (ETH, POL) are now fetched via initPriceService() → Cloud Function proxy
+        // No direct browser API calls needed here (eliminates CORS + 429 issues)
         setMarketLoading(false);
     };
 

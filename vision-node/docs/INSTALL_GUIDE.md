@@ -86,13 +86,52 @@ git --version
 
 ## 2. 설치하기
 
-### macOS 설치
+Vision Node는 **데스크탑 앱**과 **CLI(터미널)** 두 가지 방식으로 설치할 수 있습니다.
+
+---
+
+### 데스크탑 앱 (macOS) -- 권장
+
+GUI 기반의 데스크탑 앱입니다. 별도의 Node.js 설치가 필요 없습니다.
+
+**Step 1:** DMG 파일을 다운로드합니다.
+
+- Apple Silicon (M1/M2/M3/M4): `Vision Node-1.0.0-arm64.dmg`
+- Intel Mac: `Vision Node-1.0.0.dmg`
+
+**Step 2:** DMG를 열고 `Vision Node.app`을 `Applications` 폴더로 드래그합니다.
+
+**Step 3:** 앱을 실행합니다.
+
+> **"손상된 파일" 오류가 발생하는 경우:**
+>
+> macOS의 Gatekeeper 보안 기능이 서명되지 않은 앱을 차단합니다.
+> 아래 방법 중 하나로 해결하세요.
+>
+> **방법 1: 시스템 설정에서 허용 (가장 쉬움)**
+> 1. DMG에서 앱을 Applications에 복사한 후 실행을 시도합니다.
+> 2. "손상된 파일" 오류가 나옵니다.
+> 3. **시스템 설정 > 개인 정보 보호 및 보안** 으로 이동합니다.
+> 4. 하단에 "Vision Node" 앱이 차단되었다는 메시지가 표시됩니다.
+> 5. **"확인 없이 열기"** 버튼을 클릭합니다.
+>
+> **방법 2: 터미널 명령어 (확실한 해결)**
+> ```bash
+> xattr -cr /Applications/Vision\ Node.app
+> ```
+> 이 명령어는 macOS가 다운로드 파일에 붙이는 격리(quarantine) 속성을 제거합니다.
+> 실행 후 앱을 다시 열면 정상적으로 실행됩니다.
+
+---
+
+### macOS CLI 설치
 
 터미널을 열고 아래 명령어를 복사-붙여넣기 하세요:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash
 ```
+
 
 **이 명령어가 하는 일:**
 1. Node.js와 git이 설치되어 있는지 확인

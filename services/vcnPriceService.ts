@@ -48,22 +48,33 @@ const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number
     return Math.max(settings.minPrice, Math.min(settings.maxPrice, result));
 };
 
-// Fetch market prices from CoinGecko (free API, no key required)
+// Fetch market prices via Cloud Function proxy (Binance primary, CoinGecko fallback)
+// This eliminates CORS errors and 429 rate limits from direct browser calls.
 const fetchMarketPrices = async () => {
     if (Date.now() - lastPriceFetch() < 60000) return;
 
     try {
-        const response = await fetch(
-            'https://api.coingecko.com/api/v3/simple/price?ids=ethereum,polygon-ecosystem-token&vs_currencies=usd',
-            { headers: { 'Accept': 'application/json' } }
-        );
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        const projectId = hostname.includes('staging') ? 'visionchain-staging' : 'visionchain-d19ed';
+        const url = `https://us-central1-${projectId}.cloudfunctions.net/getMarketPrices`;
+
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/json' }
+        });
 
         if (response.ok) {
-            const data = await response.json();
-            if (data.ethereum?.usd) setEthPrice(data.ethereum.usd);
-            if (data['polygon-ecosystem-token']?.usd) setMaticPrice(data['polygon-ecosystem-token'].usd);
-            setLastPriceFetch(Date.now());
-            console.log('[PriceService] Market prices updated:', { ETH: data.ethereum?.usd, POL: data['polygon-ecosystem-token']?.usd });
+            const result = await response.json();
+            if (result.success && result.prices) {
+                if (result.prices.ETH?.usd) setEthPrice(result.prices.ETH.usd);
+                if (result.prices.POL?.usd) setMaticPrice(result.prices.POL.usd);
+                setLastPriceFetch(Date.now());
+                console.log('[PriceService] Market prices updated:', {
+                    ETH: result.prices.ETH?.usd,
+                    POL: result.prices.POL?.usd,
+                    source: result.source,
+                    cached: result.cached
+                });
+            }
         }
     } catch (err) {
         console.debug('[PriceService] Failed to fetch market prices:', err);

@@ -16554,3 +16554,206 @@ exports.scheduledNodeHealthCheck = onSchedule("every 60 minutes", async () => {
   console.log(`[NodeHealth] Check complete. Online: ${status.summary.online}/${status.summary.total}, Forked: ${status.summary.forked}`);
 });
 
+// =============================================================================
+// MARKET PRICES PROXY - Server-side price fetch (solves CORS + rate limits)
+// =============================================================================
+// Primary: CryptoCompare API (no key needed, no geo-restrictions, batch support)
+// Fallback: CoinGecko Free API
+// Modes:
+//   GET /getMarketPrices              -> ETH + POL (cached 60s, shared by all)
+//   GET /getMarketPrices?coins=BTC,SOL -> Any coin lookup (cached 30s per coin)
+// Future: Add VCN DEX price from on-chain when DEX is deployed.
+// =============================================================================
+
+// CoinGecko ID mapping (fallback only)
+const COINGECKO_ID_MAP = {
+  BTC: "bitcoin", ETH: "ethereum", SOL: "solana", BNB: "binancecoin",
+  XRP: "ripple", ADA: "cardano", DOGE: "dogecoin", DOT: "polkadot",
+  MATIC: "polygon", POL: "polygon-ecosystem-token", LINK: "chainlink",
+  AVAX: "avalanche-2", ATOM: "cosmos", NEAR: "near", APT: "aptos",
+  SUI: "sui", ARB: "arbitrum", OP: "optimism", TRX: "tron", LTC: "litecoin",
+  UNI: "uniswap", AAVE: "aave", PEPE: "pepe", SHIB: "shiba-inu",
+  FIL: "filecoin", ICP: "internet-computer", RENDER: "render-token",
+  INJ: "injective-protocol", SEI: "sei-network", TIA: "celestia",
+  STX: "blockstack", IMX: "immutable-x",
+};
+
+/**
+ * Fetch prices from CryptoCompare (primary).
+ * Single request, no geo-restrictions, no API key for basic use.
+ * @param {string[]} symbols - e.g. ["BTC", "ETH", "SOL"]
+ * @param {object} axios - axios instance
+ * @return {Promise<object>} { BTC: { usd, change24h, ... }, ... }
+ */
+async function fetchCryptoComparePrices(symbols, axios) {
+  if (symbols.length === 0) return {};
+
+  // CryptoCompare uses standard ticker symbols (BTC, ETH, SOL, POL, etc.)
+  const fsyms = symbols.join(",");
+
+  const response = await axios.get(
+    "https://min-api.cryptocompare.com/data/pricemultifull",
+    {
+      params: { fsyms, tsyms: "USD" },
+      timeout: 6000,
+      headers: { Accept: "application/json" },
+    },
+  );
+
+  const raw = response.data?.RAW || {};
+  const result = {};
+
+  for (const sym of symbols) {
+    const data = raw[sym]?.USD;
+    if (data) {
+      result[sym] = {
+        usd: data.PRICE || 0,
+        change24h: data.CHANGEPCT24HOUR || 0,
+        high24h: data.HIGH24HOUR || 0,
+        low24h: data.LOW24HOUR || 0,
+        volume24h: data.TOTALVOLUME24HTO || 0,
+        marketCap: data.MKTCAP || 0,
+      };
+    }
+  }
+  return result;
+}
+
+/**
+ * Fetch prices from CoinGecko for given symbols (fallback).
+ * @param {string[]} symbols - e.g. ["BTC", "ETH"]
+ * @param {object} axios - axios instance
+ * @return {Promise<object>}
+ */
+async function fetchCoinGeckoPrices(symbols, axios) {
+  const validSymbols = symbols.filter((s) => COINGECKO_ID_MAP[s]);
+  if (validSymbols.length === 0) return {};
+
+  const ids = validSymbols.map((s) => COINGECKO_ID_MAP[s]).join(",");
+
+  const response = await axios.get("https://api.coingecko.com/api/v3/simple/price", {
+    params: {
+      ids,
+      vs_currencies: "usd",
+      include_24hr_change: "true",
+      include_24hr_vol: "true",
+    },
+    timeout: 8000,
+    headers: { Accept: "application/json" },
+  });
+
+  const result = {};
+  for (const sym of validSymbols) {
+    const cgId = COINGECKO_ID_MAP[sym];
+    const data = response.data[cgId];
+    if (data) {
+      result[sym] = {
+        usd: data.usd || 0,
+        change24h: data.usd_24h_change || 0,
+        volume24h: data.usd_24h_vol || 0,
+      };
+    }
+  }
+  return result;
+}
+
+exports.getMarketPrices = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  try {
+    const axios = require("axios");
+
+    // Parse requested coins (default: ETH, POL for gas fee calculation)
+    const coinsParam = (req.query.coins || req.body?.coins || "").toString().trim();
+    const requestedCoins = coinsParam ?
+      coinsParam.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean) :
+      ["ETH", "POL"];
+
+    const cacheKey = requestedCoins.sort().join("_");
+    const isDefault = cacheKey === "ETH_POL";
+    const CACHE_TTL_MS = isDefault ? 60000 : 30000; // 60s for default, 30s for custom
+    const cacheDocId = isDefault ? "market_prices" : `market_prices_${cacheKey}`;
+    const cacheRef = db.collection("settings").doc(cacheDocId);
+
+    // 1. Check Firestore cache first
+    const cacheSnap = await cacheRef.get();
+    if (cacheSnap.exists) {
+      const cached = cacheSnap.data();
+      const age = Date.now() - (cached.updatedAt || 0);
+      if (age < CACHE_TTL_MS && cached.prices) {
+        return res.status(200).json({
+          success: true,
+          prices: cached.prices,
+          source: cached.source || "cache",
+          cached: true,
+          age_ms: age,
+        });
+      }
+    }
+
+    let prices = {};
+    let source = "unknown";
+
+    // 2. PRIMARY: CryptoCompare (no geo-restrictions, batch queries)
+    try {
+      prices = await fetchCryptoComparePrices(requestedCoins, axios);
+      if (Object.keys(prices).length > 0) {
+        source = "cryptocompare";
+      }
+    } catch (ccErr) {
+      console.warn("[MarketPrices] CryptoCompare failed:", ccErr.message);
+    }
+
+    // 3. FALLBACK: CoinGecko for any coins CryptoCompare didn't return
+    const missingCoins = requestedCoins.filter((c) => !prices[c]);
+    if (missingCoins.length > 0 || Object.keys(prices).length === 0) {
+      try {
+        const fallbackCoins = Object.keys(prices).length === 0 ? requestedCoins : missingCoins;
+        const cgPrices = await fetchCoinGeckoPrices(fallbackCoins, axios);
+        prices = { ...prices, ...cgPrices };
+        if (Object.keys(prices).length > 0 && source === "unknown") {
+          source = "coingecko";
+        } else if (Object.keys(cgPrices).length > 0) {
+          source = "cryptocompare+coingecko";
+        }
+      } catch (cgErr) {
+        console.warn("[MarketPrices] CoinGecko fallback also failed:", cgErr.message);
+      }
+    }
+
+    // 4. If all sources failed, return stale cache
+    if (Object.keys(prices).length === 0) {
+      if (cacheSnap.exists && cacheSnap.data().prices) {
+        return res.status(200).json({
+          success: true,
+          prices: cacheSnap.data().prices,
+          source: "stale_cache",
+          cached: true,
+          stale: true,
+        });
+      }
+      return res.status(503).json({
+        success: false,
+        error: "All price sources unavailable",
+      });
+    }
+
+    // 5. Save to Firestore cache
+    await cacheRef.set({
+      prices,
+      updatedAt: Date.now(),
+      source,
+    });
+
+    console.log(`[MarketPrices] ${requestedCoins.join(",")} via ${source}`);
+
+    return res.status(200).json({
+      success: true,
+      prices,
+      source,
+      cached: false,
+    });
+  } catch (err) {
+    console.error("[MarketPrices] Unexpected error:", err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+

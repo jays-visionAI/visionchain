@@ -28,10 +28,17 @@ export interface TrendingCoin {
 
 /**
  * Service to fetch historical and current market data for cryptocurrencies.
- * Uses CoinGecko API (Free tier, no API key required).
+ * Primary: Cloud Function proxy (Binance + CoinGecko, server-side, no CORS)
+ * Fallback: Direct CoinGecko for chart data / trending (lower frequency)
  */
 export class MarketDataService {
     private readonly baseUrl = 'https://api.coingecko.com/api/v3';
+
+    private getCloudFunctionUrl(): string {
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        const projectId = hostname.includes('staging') ? 'visionchain-staging' : 'visionchain-d19ed';
+        return `https://us-central1-${projectId}.cloudfunctions.net/getMarketPrices`;
+    }
 
     // Coin ID mapping for common symbols
     private readonly symbolToId: Record<string, string> = {
@@ -79,12 +86,14 @@ export class MarketDataService {
 
     /**
      * Get current price and market stats for a given asset.
+     * Routes through Cloud Function proxy (Binance primary, CoinGecko fallback).
      */
     async getCurrentPrice(symbol: string): Promise<MarketPrice | null> {
         try {
             const normalizedSymbol = symbol.toLowerCase();
 
             // Special handling for VCN (Vision Chain Native)
+            // TODO: Replace with DEX price when available
             if (normalizedSymbol === 'vcn' || normalizedSymbol === 'vision-chain') {
                 return {
                     price: 0.4007,
@@ -97,26 +106,30 @@ export class MarketDataService {
                 };
             }
 
-            const coinId = this.symbolToId[normalizedSymbol] || normalizedSymbol;
-            const url = `${this.baseUrl}/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`;
+            // Use Cloud Function proxy (no CORS, cached, Binance primary)
+            const upperSym = symbol.toUpperCase();
+            const url = `${this.getCloudFunctionUrl()}?coins=${upperSym}`;
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/json' }
+            });
 
-            const response = await axios.get(url, { timeout: 8000 });
-            const data = response.data;
-            const md = data?.market_data;
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const result = await response.json();
 
-            if (!md) return null;
+            if (result.success && result.prices?.[upperSym]) {
+                const data = result.prices[upperSym];
+                return {
+                    price: data.usd,
+                    symbol: upperSym,
+                    change24h: data.change24h,
+                    volume24h: data.volume24h,
+                    high24h: data.high24h,
+                    low24h: data.low24h,
+                    lastUpdated: new Date().toISOString()
+                };
+            }
 
-            return {
-                price: md.current_price?.usd,
-                symbol: symbol.toUpperCase(),
-                change24h: md.price_change_percentage_24h,
-                volume24h: md.total_volume?.usd,
-                high24h: md.high_24h?.usd,
-                low24h: md.low_24h?.usd,
-                marketCap: md.market_cap?.usd,
-                rank: data.market_cap_rank,
-                lastUpdated: md.last_updated
-            };
+            return null;
         } catch (error) {
             console.error(`[MarketDataService] Error fetching current price for ${symbol}:`, error);
             return null;
@@ -125,27 +138,35 @@ export class MarketDataService {
 
     /**
      * Get prices for multiple coins at once (more efficient than individual calls).
+     * Routes through Cloud Function proxy (single request, Binance batch API).
      * @param symbols Array of symbols (e.g., ['btc', 'eth', 'sol'])
      */
     async getMultiplePrices(symbols: string[]): Promise<Record<string, MarketPrice>> {
         try {
-            const coinIds = symbols.map(s => this.symbolToId[s.toLowerCase()] || s.toLowerCase());
-            const url = `${this.baseUrl}/simple/price?ids=${coinIds.join(',')}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`;
+            const upperSymbols = symbols.map(s => s.toUpperCase());
+            const url = `${this.getCloudFunctionUrl()}?coins=${upperSymbols.join(',')}`;
 
-            const response = await axios.get(url, { timeout: 8000 });
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
             const result: Record<string, MarketPrice> = {};
 
-            for (const symbol of symbols) {
-                const coinId = this.symbolToId[symbol.toLowerCase()] || symbol.toLowerCase();
-                const data = response.data[coinId];
-                if (data) {
-                    result[symbol.toUpperCase()] = {
-                        price: data.usd,
-                        symbol: symbol.toUpperCase(),
-                        change24h: data.usd_24h_change,
-                        volume24h: data.usd_24h_vol,
-                        marketCap: data.usd_market_cap
-                    };
+            if (data.success && data.prices) {
+                for (const sym of upperSymbols) {
+                    const coinData = data.prices[sym];
+                    if (coinData) {
+                        result[sym] = {
+                            price: coinData.usd,
+                            symbol: sym,
+                            change24h: coinData.change24h,
+                            volume24h: coinData.volume24h,
+                            high24h: coinData.high24h,
+                            low24h: coinData.low24h
+                        };
+                    }
                 }
             }
 
