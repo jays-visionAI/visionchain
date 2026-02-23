@@ -16,7 +16,8 @@ import {
     Zap,
     Bot,
     Users,
-    Smartphone
+    Smartphone,
+    HardDrive
 } from 'lucide-solid';
 import { DashboardHeader } from './dashboard/DashboardHeader';
 import { MetricCard } from './dashboard/MetricCard';
@@ -76,8 +77,14 @@ export const AdminDashboard: Component = () => {
     const [recentTransactions, setRecentTransactions] = createSignal<any[]>([]);
     const [paymasterBal, setPaymasterBal] = createSignal("0");
     const [gaslessCount, setGaslessCount] = createSignal(0);
-    const [mobileNodesTotal, setMobileNodesTotal] = createSignal(0);
-    const [mobileNodesOnline, setMobileNodesOnline] = createSignal(0);
+    // Vision Nodes (all types)
+    const [totalNodes, setTotalNodes] = createSignal(0);
+    const [desktopNodes, setDesktopNodes] = createSignal(0);
+    const [mobileNodes, setMobileNodes] = createSignal(0);
+    const [onlineNodes, setOnlineNodes] = createSignal(0);
+    const [totalStorageGB, setTotalStorageGB] = createSignal(0);
+    const [activeStorageGB, setActiveStorageGB] = createSignal(0);
+    const [nodeClassBreakdown, setNodeClassBreakdown] = createSignal({ lite: 0, standard: 0, full: 0 });
 
 
     const fetchRecentTransactions = async () => {
@@ -236,20 +243,84 @@ export const AdminDashboard: Component = () => {
         }
     };
 
-    const fetchMobileNodeStats = async () => {
+    const fetchNodeStats = async () => {
         try {
             const db = getFirebaseDb();
-            const nodesRef = collection(db, 'mobile_nodes');
-            const totalSnap = await getCountFromServer(nodesRef);
-            setMobileNodesTotal(totalSnap.data().count);
+            const now = Date.now();
+            const tenMinAgo = new Date(now - 10 * 60 * 1000);
+            let total = 0, desktop = 0, mobile = 0, online = 0;
+            let storageTotal = 0, storageActive = 0;
+            const classCounts = { lite: 0, standard: 0, full: 0 };
 
-            // Count online nodes (last heartbeat within 5 minutes)
-            const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
-            const onlineQuery = query(nodesRef, where('last_heartbeat', '>=', tenMinAgo));
-            const onlineSnap = await getCountFromServer(onlineQuery);
-            setMobileNodesOnline(onlineSnap.data().count);
+            // 1. mobile_nodes (includes mobile + desktop CLI/App nodes)
+            const mobileSnap = await getDocs(collection(db, 'mobile_nodes'));
+            mobileSnap.forEach((doc) => {
+                const d = doc.data();
+                total++;
+                const deviceType = (d.device_type || 'pwa').toLowerCase();
+                if (deviceType === 'desktop' || deviceType === 'desktop_app' || deviceType === 'desktop_cli') {
+                    desktop++;
+                } else {
+                    mobile++;
+                }
+                // Node class
+                const cls = (d.node_class || 'lite').toLowerCase();
+                if (cls === 'standard') classCounts.standard++;
+                else if (cls === 'full') classCounts.full++;
+                else classCounts.lite++;
+                // Storage
+                const maxGB = parseFloat(d.storage_max_gb || '0') || 0;
+                storageTotal += maxGB;
+                // Online check
+                let hbTime = 0;
+                if (d.last_heartbeat) {
+                    if (d.last_heartbeat.toDate) hbTime = d.last_heartbeat.toDate().getTime();
+                    else if (d.last_heartbeat.seconds) hbTime = d.last_heartbeat.seconds * 1000;
+                    else hbTime = new Date(d.last_heartbeat).getTime();
+                }
+                if (hbTime > tenMinAgo.getTime()) {
+                    online++;
+                    storageActive += maxGB;
+                }
+            });
+
+            // 2. vision_nodes (dedicated desktop node collection)
+            try {
+                const visionSnap = await getDocs(collection(db, 'vision_nodes'));
+                visionSnap.forEach((doc) => {
+                    const d = doc.data();
+                    total++;
+                    desktop++;
+                    const cls = (d.node_class || 'standard').toLowerCase();
+                    if (cls === 'standard') classCounts.standard++;
+                    else if (cls === 'full') classCounts.full++;
+                    else classCounts.lite++;
+                    const maxGB = parseFloat(d.storage_max_gb || '0') || 0;
+                    storageTotal += maxGB;
+                    let hbTime = 0;
+                    if (d.last_heartbeat) {
+                        if (d.last_heartbeat.toDate) hbTime = d.last_heartbeat.toDate().getTime();
+                        else if (d.last_heartbeat.seconds) hbTime = d.last_heartbeat.seconds * 1000;
+                        else hbTime = new Date(d.last_heartbeat).getTime();
+                    }
+                    if (hbTime > tenMinAgo.getTime()) {
+                        online++;
+                        storageActive += maxGB;
+                    }
+                });
+            } catch { /* vision_nodes may not exist */ }
+
+            setTotalNodes(total);
+            setDesktopNodes(desktop);
+            setMobileNodes(mobile);
+            setOnlineNodes(online);
+            setTotalStorageGB(storageTotal);
+            setActiveStorageGB(storageActive);
+            setNodeClassBreakdown(classCounts);
+            // Update the Resource Metric storage display (convert GB to TB)
+            setStorageTb(parseFloat((storageTotal / 1024).toFixed(2)));
         } catch (e) {
-            console.error('Failed to fetch mobile node stats:', e);
+            console.error('Failed to fetch node stats:', e);
         }
     };
 
@@ -261,7 +332,7 @@ export const AdminDashboard: Component = () => {
         fetchUserStats();
         fetchTVLData();
         fetchDAUData();
-        fetchMobileNodeStats();
+        fetchNodeStats();
 
         // Refresh only fast-changing data every 30s (was 5s - too aggressive)
         // User stats and TVL change infrequently, no need to poll
@@ -356,31 +427,87 @@ export const AdminDashboard: Component = () => {
                         </div>
                     </MetricCard>
 
-                    {/* Mobile Nodes */}
+                    {/* Vision Nodes (All Types) */}
                     <MetricCard
-                        title="Mobile Nodes"
-                        value={mobileNodesTotal()}
-                        subValue="Registered"
-                        icon={Smartphone}
+                        title="Vision Nodes"
+                        value={totalNodes()}
+                        subValue="Total Registered"
+                        icon={HardDrive}
                         color="cyan"
                     >
                         <div class="mt-4 space-y-3">
+                            {/* Online / Offline */}
                             <div>
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-slate-500">Online Now</span>
-                                    <span class="text-green-400 font-mono">{mobileNodesOnline()}</span>
+                                    <span class="text-slate-500 flex items-center gap-1">
+                                        <svg class="w-2.5 h-2.5 text-green-400" fill="currentColor" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg>
+                                        Online Now
+                                    </span>
+                                    <span class="text-green-400 font-mono">{onlineNodes()}</span>
                                 </div>
                                 <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                                    <div class="bg-green-500 h-full rounded-full transition-all" style={`width: ${mobileNodesTotal() > 0 ? (mobileNodesOnline() / mobileNodesTotal() * 100) : 0}%`} />
+                                    <div class="bg-green-500 h-full rounded-full transition-all" style={`width: ${totalNodes() > 0 ? (onlineNodes() / totalNodes() * 100) : 0}%`} />
                                 </div>
                             </div>
-                            <div>
+                            {/* Desktop vs Mobile */}
+                            <div class="flex gap-4">
+                                <div class="flex-1">
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span class="text-slate-500 flex items-center gap-1">
+                                            <Server class="w-3 h-3" /> Desktop
+                                        </span>
+                                        <span class="text-purple-400 font-mono">{desktopNodes()}</span>
+                                    </div>
+                                    <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-purple-500 h-full rounded-full transition-all" style={`width: ${totalNodes() > 0 ? (desktopNodes() / totalNodes() * 100) : 0}%`} />
+                                    </div>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span class="text-slate-500 flex items-center gap-1">
+                                            <Smartphone class="w-3 h-3" /> Mobile
+                                        </span>
+                                        <span class="text-blue-400 font-mono">{mobileNodes()}</span>
+                                    </div>
+                                    <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                                        <div class="bg-blue-500 h-full rounded-full transition-all" style={`width: ${totalNodes() > 0 ? (mobileNodes() / totalNodes() * 100) : 0}%`} />
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Storage Committed */}
+                            <div class="pt-2 border-t border-white/5">
                                 <div class="flex justify-between text-xs mb-1">
-                                    <span class="text-slate-500">Idle / Offline</span>
-                                    <span class="text-gray-400 font-mono">{mobileNodesTotal() - mobileNodesOnline()}</span>
+                                    <span class="text-slate-500 flex items-center gap-1">
+                                        <Database class="w-3 h-3" /> Storage Committed
+                                    </span>
+                                    <span class="text-cyan-400 font-mono">
+                                        {totalStorageGB() >= 1024 ? `${(totalStorageGB() / 1024).toFixed(2)} TB` : `${totalStorageGB().toFixed(1)} GB`}
+                                    </span>
                                 </div>
                                 <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                                    <div class="bg-gray-500 h-full rounded-full transition-all" style={`width: ${mobileNodesTotal() > 0 ? ((mobileNodesTotal() - mobileNodesOnline()) / mobileNodesTotal() * 100) : 0}%`} />
+                                    <div class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full rounded-full transition-all" style={`width: ${totalStorageGB() > 0 ? Math.min((activeStorageGB() / totalStorageGB() * 100), 100) : 0}%`} />
+                                </div>
+                                <div class="flex justify-between text-[9px] text-slate-600 mt-0.5">
+                                    <span>Active: {activeStorageGB() >= 1024 ? `${(activeStorageGB() / 1024).toFixed(2)} TB` : `${activeStorageGB().toFixed(1)} GB`}</span>
+                                    <span>{totalStorageGB() > 0 ? Math.round(activeStorageGB() / totalStorageGB() * 100) : 0}% utilization</span>
+                                </div>
+                            </div>
+                            {/* Node Class Distribution */}
+                            <div class="pt-2 border-t border-white/5">
+                                <div class="text-[9px] font-bold uppercase tracking-widest text-slate-600 mb-2">Node Classes</div>
+                                <div class="flex gap-2">
+                                    <div class="flex-1 bg-white/[0.03] rounded-lg p-2 text-center">
+                                        <div class="text-sm font-black text-white">{nodeClassBreakdown().lite}</div>
+                                        <div class="text-[8px] font-bold uppercase tracking-wider text-gray-500">Lite</div>
+                                    </div>
+                                    <div class="flex-1 bg-indigo-500/5 border border-indigo-500/10 rounded-lg p-2 text-center">
+                                        <div class="text-sm font-black text-indigo-300">{nodeClassBreakdown().standard}</div>
+                                        <div class="text-[8px] font-bold uppercase tracking-wider text-indigo-500">Standard</div>
+                                    </div>
+                                    <div class="flex-1 bg-white/[0.03] rounded-lg p-2 text-center">
+                                        <div class="text-sm font-black text-white">{nodeClassBreakdown().full}</div>
+                                        <div class="text-[8px] font-bold uppercase tracking-wider text-gray-500">Full</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
