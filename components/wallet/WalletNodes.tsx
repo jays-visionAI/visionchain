@@ -31,9 +31,15 @@ function detectIsIOS(): boolean {
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+function detectIsAndroid(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent || '');
+}
+
 export const WalletNodes = (props: WalletNodesProps) => {
     const { t } = useI18n();
     const [isIOS, setIsIOS] = createSignal(false);
+    const [isAndroid, setIsAndroid] = createSignal(false);
     const [showCLI, setShowCLI] = createSignal(false);
     const [copied, setCopied] = createSignal(false);
     const [activeTab, setActiveTab] = createSignal<'dashboard' | 'leaderboard'>('dashboard');
@@ -43,6 +49,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
 
     onMount(() => {
         setIsIOS(detectIsIOS());
+        setIsAndroid(detectIsAndroid());
     });
 
     function copyCommand() {
@@ -124,7 +131,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                     {/* ═══════════════════════════════════════════════════ */}
                     {/* SECTION 1: Mobile Node (Lite) - iOS only           */}
                     {/* ═══════════════════════════════════════════════════ */}
-                    <Show when={isIOS()}>
+                    <Show when={isIOS() || isAndroid()}>
                         <div>
                             <div class="flex items-center gap-3 mb-4">
                                 <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
@@ -133,11 +140,61 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                     </svg>
                                 </div>
                                 <h3 class="text-lg font-bold text-white">Mobile Node (Lite)</h3>
-                                <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-md">iOS</span>
+                                <Show when={isIOS()}>
+                                    <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-md">iOS</span>
+                                </Show>
+                                <Show when={isAndroid()}>
+                                    <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md">Android</span>
+                                </Show>
                             </div>
 
-                            {/* Mobile Node Dashboard (existing component) */}
-                            <MobileNodeDashboard userEmail={props.userEmail} />
+                            {/* Android: APK Download */}
+                            <Show when={isAndroid()}>
+                                <div class="bg-gradient-to-r from-[#111113] to-[#0f1117] border border-white/[0.06] rounded-[28px] p-6 relative overflow-hidden group hover:border-emerald-500/20 transition-all duration-500 mb-4">
+                                    <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-cyan-500/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                    <div class="relative z-10 flex flex-col sm:flex-row items-center gap-5">
+                                        <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-green-600/20 border border-emerald-500/20 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/10">
+                                            <svg viewBox="0 0 24 24" fill="currentColor" class="w-8 h-8 text-emerald-400">
+                                                <path d="M17.523 2.236a.5.5 0 0 0-.858.514l1.083 1.808A7.456 7.456 0 0 0 12 2.5a7.456 7.456 0 0 0-5.748 2.058l1.083-1.808a.5.5 0 0 0-.858-.514L5.05 4.96A7.97 7.97 0 0 0 4 9h16a7.97 7.97 0 0 0-1.05-4.04l-1.427-2.724zM9 7.5a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zm6 0a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5zM4 10h16v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-8z" />
+                                            </svg>
+                                        </div>
+                                        <div class="flex-1 text-center sm:text-left">
+                                            <h3 class="text-lg font-bold text-white mb-1">Android Mobile Node</h3>
+                                            <p class="text-sm text-gray-400 leading-relaxed">
+                                                Install the dedicated Android app for background mining with higher rewards and better uptime stability.
+                                            </p>
+                                            <div class="flex flex-wrap justify-center sm:justify-start gap-3 mt-3">
+                                                <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>
+                                                    Background Mining
+                                                </div>
+                                                <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>
+                                                    Higher Rewards
+                                                </div>
+                                                <div class="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400/80 uppercase tracking-wider">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-3 h-3"><polyline points="20 6 9 17 4 12" /></svg>
+                                                    Auto Reconnect
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <a
+                                            href="https://github.com/jays-visionAI/visionchain/releases/latest/download/visionchain-node-v1.0.2.apk"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="shrink-0 flex items-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                                        >
+                                            {downloadSvg()}
+                                            Download APK
+                                        </a>
+                                    </div>
+                                </div>
+                            </Show>
+
+                            {/* iOS: Web-based Mobile Node Dashboard */}
+                            <Show when={isIOS()}>
+                                <MobileNodeDashboard userEmail={props.userEmail} />
+                            </Show>
                         </div>
                     </Show>
 
