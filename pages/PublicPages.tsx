@@ -18,6 +18,7 @@ export const Bridge = lazy(() => import('../components/Bridge'));
 export const Paymaster = lazy(() => import('../components/Paymaster'));
 export const AgentGateway = lazy(() => import('../components/AgentGateway'));
 export const ApiHub = lazy(() => import('../components/ApiHub'));
+export const TradingTerminal = lazy(() => import('../dex/TradingTerminal'));
 
 // Page Wrapper Components
 export const ResearchPage = () => {
@@ -110,4 +111,9 @@ export const AgentApiDocsPage = () => {
 export const ApiHubPage = () => {
     document.title = 'API & Developer Platform | Vision Chain';
     return <div id="api-hub"><ApiHub /></div>;
+};
+
+export const TradingTerminalPage = () => {
+    document.title = 'VisionDEX Trading Arena | Vision Chain';
+    return <div id="trading-terminal"><TradingTerminal /></div>;
 };

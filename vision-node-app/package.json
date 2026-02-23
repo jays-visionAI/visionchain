@@ -9,6 +9,7 @@
         "start": "electron .",
         "dev": "electron . --dev",
         "build:mac": "electron-builder --mac",
+        "build:mac:unsigned": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac",
         "build:win": "electron-builder --win",
         "build:all": "electron-builder --mac --win"
     },
@@ -18,6 +19,7 @@
         "ws": "^8.16.0"
     },
     "devDependencies": {
+        "@electron/notarize": "^2.5.0",
         "electron": "^33.4.11",
         "electron-builder": "^25.0.0"
     },
@@ -35,9 +37,10 @@
         "mac": {
             "category": "public.app-category.utilities",
             "icon": "resources/icon.icns",
-            "identity": null,
-            "hardenedRuntime": false,
+            "hardenedRuntime": true,
             "gatekeeperAssess": false,
+            "entitlements": "resources/entitlements.mac.plist",
+            "entitlementsInherit": "resources/entitlements.mac.plist",
             "target": [
                 {
                     "target": "dmg",

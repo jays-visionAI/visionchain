@@ -93,6 +93,7 @@ render(() => (
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
+        <Route path="/dex" component={Public.TradingTerminalPage} />
 
         {/* Admin Routes */}
         <Route path="/adminsystem" component={Admin.AdminDashboardPage} />

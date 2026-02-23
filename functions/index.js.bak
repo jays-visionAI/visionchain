@@ -16757,17 +16757,459 @@ exports.getMarketPrices = onRequest({ cors: true, invoker: "public" }, async (re
   }
 });
 
-
 // =============================================================================
 // ==================== VISIONDEX TRADING ARENA ENGINE ==========================
 // =============================================================================
-// Separated into tradingEngine.js for maintainability
 
-const { runMicroRoundEngine } = require("./tradingEngine");
+/**
+ * Trading Engine Constants
+ */
+const DEX_FEE_RATES = {
+  makerFeeRate: 0.0002,   // 0.02%
+  takerFeeRate: 0.0005,   // 0.05%
+  mmMakerFeeRate: 0.0,    // 0% (MM maker exempt)
+  mmTakerFeeRate: 0.0001, // 0.01%
+};
+const DEX_PAIR = "VCN-USDT";
+const DEX_MIN_ORDER = 100;           // VCN minimum
+const DEX_MAX_PRICE_CHANGE = 0.03;   // 3% per round
+
+/**
+ * Simple in-memory Order Book for the Cloud Function
+ */
+class CloudOrderBook {
+  constructor(lastPrice) {
+    this.bids = [];   // sorted high -> low
+    this.asks = [];   // sorted low -> high
+    this.lastPrice = lastPrice || 0.10;
+  }
+
+  addLimitOrder(order) {
+    if (order.side === "buy") {
+      if (this.asks.length > 0 && order.price >= this.asks[0].price) return "crosses";
+      const idx = this.bids.findIndex((o) => o.price < order.price);
+      if (idx === -1) this.bids.push(order);
+      else this.bids.splice(idx, 0, order);
+      return "added";
+    } else {
+      if (this.bids.length > 0 && order.price <= this.bids[0].price) return "crosses";
+      const idx = this.asks.findIndex((o) => o.price > order.price);
+      if (idx === -1) this.asks.push(order);
+      else this.asks.splice(idx, 0, order);
+      return "added";
+    }
+  }
+
+  executeMarketOrder(takerOrderId, takerAgentId, takerUid, side, amount, limitPrice) {
+    const fills = [];
+    let remaining = amount;
+    const bookSide = side === "buy" ? this.asks : this.bids;
+
+    while (remaining > 0 && bookSide.length > 0) {
+      const top = bookSide[0];
+      if (limitPrice !== undefined && limitPrice !== null) {
+        if (side === "buy" && top.price > limitPrice) break;
+        if (side === "sell" && top.price < limitPrice) break;
+      }
+      if (top.ownerUid === takerUid && !top.isMMOrder) {
+        bookSide.shift();
+        continue;
+      }
+      const fillAmount = Math.min(remaining, top.remainingAmount);
+      const fillTotal = fillAmount * top.price;
+      const isMakerMM = top.isMMOrder;
+      const makerFeeRate = isMakerMM ? DEX_FEE_RATES.mmMakerFeeRate : DEX_FEE_RATES.makerFeeRate;
+      const takerFeeRate = DEX_FEE_RATES.takerFeeRate;
+
+      fills.push({
+        makerOrderId: top.id,
+        makerAgentId: top.agentId,
+        makerUid: top.ownerUid,
+        takerOrderId,
+        takerAgentId,
+        takerUid,
+        takerSide: side,
+        price: top.price,
+        amount: fillAmount,
+        total: fillTotal,
+        makerFee: fillTotal * makerFeeRate,
+        takerFee: fillTotal * takerFeeRate,
+      });
+
+      top.remainingAmount -= fillAmount;
+      remaining -= fillAmount;
+      if (top.remainingAmount <= 0) bookSide.shift();
+    }
+
+    if (fills.length > 0) this.lastPrice = fills[fills.length - 1].price;
+    return fills;
+  }
+
+  cancelAgentOrders(agentId) {
+    this.bids = this.bids.filter((o) => o.agentId !== agentId);
+    this.asks = this.asks.filter((o) => o.agentId !== agentId);
+  }
+
+  getBestBid() { return this.bids.length > 0 ? this.bids[0].price : 0; }
+  getBestAsk() { return this.asks.length > 0 ? this.asks[0].price : this.lastPrice * 1.005; }
+  getSpreadPct() {
+    const bid = this.getBestBid();
+    const ask = this.getBestAsk();
+    return bid > 0 ? ((ask - bid) / this.lastPrice * 100).toFixed(3) : "0";
+  }
+  getBidDepth() { return this.bids.reduce((s, o) => s + o.remainingAmount, 0); }
+  getAskDepth() { return this.asks.reduce((s, o) => s + o.remainingAmount, 0); }
+  getOpenCount() { return this.bids.length + this.asks.length; }
+
+  getSnapshot(levels = 15) {
+    const agg = (orders, max) => {
+      const map = {};
+      for (const o of orders) {
+        const p = Math.round(o.price * 10000) / 10000;
+        if (!map[p]) map[p] = { price: p, amount: 0, orderCount: 0 };
+        map[p].amount += o.remainingAmount;
+        map[p].orderCount++;
+      }
+      const arr = Object.values(map).slice(0, max);
+      let cum = 0;
+      for (const lv of arr) { cum += lv.amount; lv.total = cum; }
+      return arr;
+    };
+    return {
+      bids: agg(this.bids, levels),
+      asks: agg(this.asks, levels),
+      lastPrice: this.lastPrice,
+      spread: this.getSpreadPct(),
+    };
+  }
+}
+
+/**
+ * Generate MM orders deterministically
+ */
+function generateMMOrders(agent, currentPrice) {
+  const cfg = agent.mmConfig;
+  if (!cfg) return [];
+
+  let basePrice = cfg.basePrice * (1 + cfg.trendBias * cfg.trendSpeed);
+  const minP = cfg.basePrice * (1 - cfg.priceRangePercent / 100);
+  const maxP = cfg.basePrice * (1 + cfg.priceRangePercent / 100);
+  basePrice = Math.max(minP, Math.min(maxP, basePrice));
+
+  const halfSpread = (cfg.spreadPercent / 100) / 2;
+  const layerSpacing = cfg.layerSpacing / 100;
+  const totalVal = agent.balances.USDT + agent.balances.VCN * currentPrice;
+  const vcnRatio = (agent.balances.VCN * currentPrice) / totalVal;
+  const rebal = (vcnRatio - cfg.inventoryTarget) * 2;
+
+  const orders = [];
+  for (let i = 0; i < cfg.layerCount; i++) {
+    const buyPrice = basePrice * (1 - halfSpread - i * layerSpacing);
+    const buyPct = (0.02 + i * 0.005) * (1 - rebal * 0.5);
+    const buyAmt = Math.round(agent.balances.USDT * buyPct / buyPrice);
+    if (buyAmt >= DEX_MIN_ORDER) {
+      orders.push({ side: "buy", price: Math.round(buyPrice * 10000) / 10000, amount: buyAmt });
+    }
+    const sellPrice = basePrice * (1 + halfSpread + i * layerSpacing);
+    const sellPct = (0.02 + i * 0.005) * (1 + rebal * 0.5);
+    const sellAmt = Math.round(agent.balances.VCN * sellPct);
+    if (sellAmt >= DEX_MIN_ORDER) {
+      orders.push({ side: "sell", price: Math.round(sellPrice * 10000) / 10000, amount: sellAmt });
+    }
+  }
+  return orders;
+}
+
+/**
+ * Call Gemini for agent trade decision
+ */
+/**
+ * HYBRID DECISION: preset strategies = algorithm, custom = DeepSeek LLM
+ */
+async function getAgentTradeDecision(agent, marketData, deepseekKey) {
+  const preset = agent.strategy?.preset || "custom";
+
+  // Preset strategies -> deterministic algorithm (free, instant)
+  if (preset !== "custom") {
+    return executePresetAlgorithm(preset, agent, marketData);
+  }
+
+  // Custom prompt agents -> DeepSeek LLM
+  if (!agent.strategy?.prompt?.trim()) {
+    return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: "No custom prompt" };
+  }
+
+  return callDeepSeekForDecision(agent, marketData, deepseekKey);
+}
+
+/**
+ * 10 preset strategy algorithms (no LLM, no cost)
+ */
+function executePresetAlgorithm(preset, agent, md) {
+  const maxPct = (agent.strategy?.maxPositionPercent || 30) / 100;
+  const cp = md.currentPrice;
+  const avg = md.avgPrice20 || cp;
+  const priceDiff = avg > 0 ? ((cp - avg) / avg) * 100 : 0;
+  const r4 = (n) => Math.round(n * 10000) / 10000;
+  const h = (r) => ({ action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: r });
+
+  switch (preset) {
+    case "momentum": {
+      if (priceDiff > 3) {
+        const amt = Math.round((md.usdtBalance * maxPct * 0.6) / md.bestAsk);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "market", amount: amt, price: 0, reasoning: `Uptrend +${priceDiff.toFixed(1)}%` }
+          : h("Uptrend, low balance");
+      }
+      if (priceDiff < -3) {
+        const amt = Math.round(md.vcnBalance * maxPct * 0.6);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "sell", orderType: "market", amount: amt, price: 0, reasoning: `Downtrend ${priceDiff.toFixed(1)}%` }
+          : h("Downtrend, no VCN");
+      }
+      if (priceDiff > 1) {
+        const amt = Math.round((md.usdtBalance * maxPct * 0.3) / cp);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "limit", amount: amt, price: r4((md.bestBid + cp) / 2), reasoning: `Mild uptrend +${priceDiff.toFixed(1)}%` }
+          : h("Mild trend, small balance");
+      }
+      return h(`Trend unclear (${priceDiff.toFixed(1)}%)`);
+    }
+    case "value": {
+      const drop = avg > 0 ? ((avg - cp) / avg) * 100 : 0;
+      if (drop > 15) {
+        const amt = Math.round((md.usdtBalance * maxPct * 0.5) / cp);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "limit", amount: amt, price: r4(cp * 0.995), reasoning: `${drop.toFixed(1)}% below avg, value buy` }
+          : h("Undervalued, no USDT");
+      }
+      if (drop < -50) {
+        const amt = Math.round(md.vcnBalance * maxPct * 0.3);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "sell", orderType: "limit", amount: amt, price: r4(cp * 1.005), reasoning: `+${Math.abs(drop).toFixed(1)}% profit, taking profit` }
+          : h("Profit target, no VCN");
+      }
+      return h("Waiting for value opportunity");
+    }
+    case "scalper": {
+      const spread = parseFloat(md.spread) || 0;
+      if (spread > 0.3 && md.usdtBalance > 100) {
+        const amt = Math.round((md.usdtBalance * maxPct) / cp);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "limit", amount: amt, price: r4(md.bestBid + (md.bestAsk - md.bestBid) * 0.3), reasoning: `Scalp buy, spread ${spread.toFixed(2)}%` }
+          : h("Small balance");
+      }
+      if (md.vcnBalance > DEX_MIN_ORDER) {
+        const amt = Math.round(md.vcnBalance * maxPct);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "sell", orderType: "limit", amount: amt, price: r4(cp * 1.005), reasoning: "Scalp sell +0.5%" }
+          : h("Small VCN");
+      }
+      return h("No scalp opportunity");
+    }
+    case "contrarian": {
+      const ch = md.change24h || 0;
+      if (ch > 5) {
+        const amt = Math.round(md.vcnBalance * maxPct * 0.5);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "sell", orderType: "limit", amount: amt, price: r4(cp * 1.002), reasoning: `Overbought +${ch.toFixed(1)}%` }
+          : h("Overbought, no VCN");
+      }
+      if (ch < -5) {
+        const amt = Math.round((md.usdtBalance * maxPct * 0.5) / cp);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "limit", amount: amt, price: r4(cp * 0.998), reasoning: `Oversold ${ch.toFixed(1)}%` }
+          : h("Oversold, no USDT");
+      }
+      return h("Waiting for extreme move");
+    }
+    case "grid": {
+      const gridLevel = Math.floor(cp / (cp * 0.01));
+      if (gridLevel % 2 === 0) {
+        const amt = Math.round((md.usdtBalance * maxPct) / cp);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "limit", amount: amt, price: r4(cp * 0.99), reasoning: `Grid buy level ${gridLevel}` }
+          : h("Grid: no USDT");
+      }
+      const amt = Math.round(md.vcnBalance * maxPct);
+      return amt >= DEX_MIN_ORDER
+        ? { action: "sell", orderType: "limit", amount: amt, price: r4(cp * 1.01), reasoning: `Grid sell level ${gridLevel}` }
+        : h("Grid: no VCN");
+    }
+    case "breakout": {
+      if (priceDiff > 2) {
+        const amt = Math.round((md.usdtBalance * maxPct * 0.8) / md.bestAsk);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "market", amount: amt, price: 0, reasoning: `Breakout +${priceDiff.toFixed(1)}%` }
+          : h("Breakout, no USDT");
+      }
+      if (priceDiff < -2) {
+        const amt = Math.round(md.vcnBalance * maxPct * 0.8);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "sell", orderType: "market", amount: amt, price: 0, reasoning: `Breakdown ${priceDiff.toFixed(1)}%` }
+          : h("Breakdown, no VCN");
+      }
+      return h("No breakout signal");
+    }
+    case "twap": {
+      const amt = Math.round((md.usdtBalance * 0.04) / md.bestAsk);
+      if (amt < DEX_MIN_ORDER) return h("TWAP: insufficient USDT");
+      const spread = parseFloat(md.spread) || 0;
+      return spread > 0.5
+        ? { action: "buy", orderType: "limit", amount: amt, price: r4(md.bestBid + (md.bestAsk - md.bestBid) * 0.4), reasoning: "TWAP slice, wide spread" }
+        : { action: "buy", orderType: "market", amount: amt, price: 0, reasoning: "TWAP slice buy" };
+    }
+    case "sentiment": {
+      const volRatio = md.bidDepth > 0 ? md.askDepth / md.bidDepth : 1;
+      if (volRatio < 0.7) {
+        const amt = Math.round((md.usdtBalance * maxPct * 0.4) / cp);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "buy", orderType: "limit", amount: amt, price: r4(cp * 0.998), reasoning: "Bullish order flow" }
+          : h("Bullish, no USDT");
+      }
+      if (volRatio > 1.5) {
+        const amt = Math.round(md.vcnBalance * maxPct * 0.4);
+        return amt >= DEX_MIN_ORDER
+          ? { action: "sell", orderType: "limit", amount: amt, price: r4(cp * 1.002), reasoning: "Bearish order flow" }
+          : h("Bearish, no VCN");
+      }
+      return h("Neutral sentiment");
+    }
+    case "random": {
+      const rnd = Math.random();
+      const sz = 0.05 + Math.random() * 0.10;
+      if (rnd < 0.33) {
+        const amt = Math.round((md.usdtBalance * Math.min(sz, maxPct)) / cp);
+        if (amt < DEX_MIN_ORDER) return h("Random: no USDT");
+        const lim = Math.random() > 0.5;
+        return { action: "buy", orderType: lim ? "limit" : "market", amount: amt, price: lim ? r4(cp * (0.99 + Math.random() * 0.02)) : 0, reasoning: "Random buy" };
+      }
+      if (rnd < 0.66) {
+        const amt = Math.round(md.vcnBalance * Math.min(sz, maxPct));
+        if (amt < DEX_MIN_ORDER) return h("Random: no VCN");
+        const lim = Math.random() > 0.5;
+        return { action: "sell", orderType: lim ? "limit" : "market", amount: amt, price: lim ? r4(cp * (0.99 + Math.random() * 0.02)) : 0, reasoning: "Random sell" };
+      }
+      return h("Random hold");
+    }
+    case "dca": {
+      const amt = Math.round((md.usdtBalance * 0.015) / md.bestAsk);
+      return amt >= DEX_MIN_ORDER
+        ? { action: "buy", orderType: "market", amount: amt, price: 0, reasoning: "DCA: systematic buy" }
+        : h("DCA: insufficient USDT");
+    }
+    default:
+      return h("Unknown preset: " + preset);
+  }
+}
+
+/**
+ * Call DeepSeek for custom prompt agents
+ */
+async function callDeepSeekForDecision(agent, md, deepseekKey) {
+  if (!axios) axios = require("axios");
+  if (!deepseekKey) return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: "No DeepSeek key" };
+
+  const prompt = buildTradePrompt(agent, md);
+
+  try {
+    const response = await axios.post(
+      "https://api.deepseek.com/chat/completions",
+      {
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: "You are a cryptocurrency trading agent. Respond ONLY with valid JSON." },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.3 + (agent.strategy.riskLevel || 5) * 0.05,
+        max_tokens: 256,
+      },
+      {
+        headers: { Authorization: `Bearer ${deepseekKey}` },
+        timeout: 15000,
+      },
+    );
+
+    const text = response.data?.choices?.[0]?.message?.content || "";
+    return parseTradeDecision(text, agent, md);
+  } catch (err) {
+    console.warn(`[TradingEngine] DeepSeek error for ${agent.name}:`, err.message);
+    return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: "DeepSeek error" };
+  }
+}
+
+function buildTradePrompt(agent, md) {
+  const strat = agent.strategy.prompt || "";
+
+  return `${strat}
+
+주문 유형 선택:
+- "limit" (Maker): 원하는 가격에 호가창에 등록. 수수료 0.02%
+- "market" (Taker): 현재 호가에 즉시 체결. 수수료 0.05%
+
+현재 시장:
+- 현재 가격: ${md.currentPrice.toFixed(4)} USDT
+- 24h 변화: ${md.change24h.toFixed(2)}%
+- Best Bid: ${md.bestBid.toFixed(4)} USDT
+- Best Ask: ${md.bestAsk.toFixed(4)} USDT
+- Spread: ${md.spread}%
+- 매수 물량: ${Math.round(md.bidDepth)} VCN
+- 매도 물량: ${Math.round(md.askDepth)} VCN
+- USDT 잔고: ${md.usdtBalance.toFixed(2)}
+- VCN 잔고: ${Math.round(md.vcnBalance)}
+- 미체결 주문: ${md.openOrders || "None"}
+- 최근 거래: ${md.recentTradesStr || "None"}
+
+반드시 JSON만 응답:
+{"action":"buy"|"sell"|"hold","orderType":"limit"|"market","amount":숫자,"price":숫자,"reasoning":"판단 근거"}`;
+}
+
+function parseTradeDecision(text, agent, md) {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: "Parse fail" };
+
+    const p = JSON.parse(jsonMatch[0]);
+    const action = ["buy", "sell", "hold"].includes(p.action) ? p.action : "hold";
+    const orderType = ["limit", "market"].includes(p.orderType) ? p.orderType : "limit";
+
+    if (action === "hold") return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: p.reasoning || "Hold" };
+
+    const maxPct = (agent.strategy.maxPositionPercent || 30) / 100;
+    let amount = Math.max(0, Number(p.amount) || 0);
+
+    if (action === "buy") {
+      const maxBuy = (md.usdtBalance * maxPct) / (md.bestAsk || md.currentPrice);
+      amount = Math.min(amount, maxBuy);
+    } else {
+      amount = Math.min(amount, md.vcnBalance * maxPct);
+    }
+
+    if (amount < DEX_MIN_ORDER) return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: "Below min" };
+    amount = Math.round(amount);
+
+    let price = Number(p.price) || 0;
+    if (orderType === "limit" && price > 0) {
+      price = Math.max(md.currentPrice * 0.9, Math.min(md.currentPrice * 1.1, price));
+      price = Math.round(price * 10000) / 10000;
+    } else if (orderType === "market") {
+      price = 0;
+    }
+
+    return { action, orderType, amount, price, reasoning: (p.reasoning || "").substring(0, 200) };
+  } catch {
+    return { action: "hold", orderType: "limit", amount: 0, price: 0, reasoning: "Parse error" };
+  }
+}
 
 /**
  * TRADING ENGINE - Micro-Round Architecture
- * Runs every 1 minute, executes ~25 micro-rounds (~2s each)
+ *
+ * Runs every 1 minute. Inside each invocation:
+ * - ~25 micro-rounds (~2sec each) for algorithm agents
+ * - DeepSeek custom agents: first micro-round only
+ * - MM agents: refresh every 5 micro-rounds
+ * - All writes to Firestore at the end (batch)
  */
 exports.tradingEngine = onSchedule({
   schedule: "every 1 minutes",
@@ -16775,142 +17217,619 @@ exports.tradingEngine = onSchedule({
   memory: "512MiB",
 }, async () => {
   const db = admin.firestore();
+  const invocationStart = Date.now();
+  const MAX_MS = 48000;    // stop looping after 48s
+  const MICRO_MS = 2000;   // ~2s per micro-round
+  console.log("[TradingEngine] Micro-round cycle starting...");
+
   try {
-    await runMicroRoundEngine(admin, db, getApiKeyFromFirestore);
+    // DeepSeek key only needed for custom-prompt agents
+    // Preset strategies run without any API key (deterministic)
+    const deepseekKey = await getApiKeyFromFirestore("deepseek") || process.env.DEEPSEEK_API_KEY || "";
+
+    // 1. Check if engine is enabled
+    const settingsSnap = await db.doc("dex/settings/config/main").get();
+    const settings = settingsSnap.exists ? settingsSnap.data() : {};
+    if (settings.paused) {
+      console.log("[TradingEngine] Engine is paused. Skipping.");
+      return;
+    }
+
+    // 2. Get round number
+    const roundRef = db.doc("dex/settings/config/roundCounter");
+    const roundSnap = await roundRef.get();
+    let roundNumber = roundSnap.exists ? roundSnap.data().current || 0 : 0;
+
+    // 3. Load market state
+    const marketSnap = await db.doc(`dex/market/${DEX_PAIR}`).get();
+    const marketData = marketSnap.exists ? marketSnap.data() : { lastPrice: settings.initialPrice || 0.10 };
+    const sessionOpen = marketData.lastPrice || 0.10;
+
+    // 4. Load all active agents
+    const agentsSnap = await db.collection("dex/agents/list")
+      .where("status", "==", "active")
+      .get();
+
+    if (agentsSnap.empty) {
+      console.log("[TradingEngine] No active agents. Skipping.");
+      return;
+    }
+
+    const agents = [];
+    agentsSnap.forEach((doc) => {
+      agents.push({ id: doc.id, ...doc.data() });
+    });
+
+    console.log(`[TradingEngine] Round #${roundNumber}: ${agents.length} active agents`);
+
+    // 5. Build order book
+    const orderBook = new CloudOrderBook(currentPrice);
+
+    // Load existing open orders
+    const openOrdersSnap = await db.collection("dex/orders/list")
+      .where("status", "in", ["open", "partial"])
+      .get();
+    openOrdersSnap.forEach((doc) => {
+      const o = doc.data();
+      if (!o.agentId) return;
+      const isMMAgent = agents.find((a) => a.id === o.agentId && a.role === "market_maker");
+      orderBook.addLimitOrder({
+        id: doc.id,
+        agentId: o.agentId,
+        ownerUid: o.ownerUid,
+        side: o.side,
+        price: o.price,
+        remainingAmount: o.remainingAmount || o.amount,
+        isMMOrder: !!isMMAgent,
+        timestamp: o.createdAt?._seconds ? o.createdAt._seconds * 1000 : Date.now(),
+      });
+    });
+
+    const allFills = [];
+    const batch = db.batch();
+    let mmOrdersPlaced = 0;
+
+    // ── Step 1: MM agents ──────────────────────────────────────────────
+    const mmAgents = agents.filter((a) => a.role === "market_maker");
+    for (const mm of mmAgents) {
+      orderBook.cancelAgentOrders(mm.id);
+
+      // Cancel old orders in Firestore
+      const oldMMOrders = await db.collection("dex/orders/list")
+        .where("agentId", "==", mm.id)
+        .where("status", "in", ["open", "partial"])
+        .get();
+      oldMMOrders.forEach((doc) => batch.update(doc.ref, { status: "cancelled" }));
+
+      const mmOrders = generateMMOrders(mm, currentPrice);
+      for (const mo of mmOrders) {
+        const orderId = `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 6)}`;
+        orderBook.addLimitOrder({
+          id: orderId,
+          agentId: mm.id,
+          ownerUid: mm.ownerUid,
+          side: mo.side,
+          price: mo.price,
+          remainingAmount: mo.amount,
+          isMMOrder: true,
+          timestamp: startTime,
+        });
+
+        // Save to Firestore
+        const orderRef = db.doc(`dex/orders/list/${orderId}`);
+        batch.set(orderRef, {
+          id: orderId,
+          agentId: mm.id,
+          ownerUid: mm.ownerUid,
+          pair: DEX_PAIR,
+          side: mo.side,
+          type: "limit",
+          role: "pending",
+          price: mo.price,
+          amount: mo.amount,
+          filledAmount: 0,
+          remainingAmount: mo.amount,
+          status: "open",
+          fee: 0,
+          feeRate: DEX_FEE_RATES.mmMakerFeeRate,
+          reasoning: "MM layered order",
+          expiresAt: admin.firestore.Timestamp.fromMillis(startTime + 180000),
+          createdAt: admin.firestore.Timestamp.now(),
+        });
+        mmOrdersPlaced++;
+      }
+    }
+
+    // ── Step 2: Regular agents AI decisions ─────────────────────────────
+    const regularAgents = agents.filter((a) => a.role === "trader");
+    const decisions = { buy: 0, sell: 0, hold: 0 };
+    let agentsQueried = 0;
+    let agentsSkipped = 0;
+
+    // Filter by trading frequency
+    const activeRegulars = regularAgents.filter((a) => {
+      const freq = a.strategy?.tradingFrequency || "medium";
+      if (freq === "low" && roundNumber % 3 !== 0) { agentsSkipped++; return false; }
+      if (freq === "medium" && roundNumber % 2 !== 0) { agentsSkipped++; return false; }
+      return true;
+    });
+
+    // AI decisions in batches of 10
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < activeRegulars.length; i += BATCH_SIZE) {
+      const chunk = activeRegulars.slice(i, i + BATCH_SIZE);
+      const promises = chunk.map(async (agent) => {
+        const md = {
+          currentPrice: orderBook.lastPrice,
+          avgPrice20: marketData.lastPrice || orderBook.lastPrice, // 20-trade avg approximation
+          change24h: marketData.changePercent24h || 0,
+          bestBid: orderBook.getBestBid(),
+          bestAsk: orderBook.getBestAsk(),
+          spread: orderBook.getSpreadPct(),
+          bidDepth: orderBook.getBidDepth(),
+          askDepth: orderBook.getAskDepth(),
+          usdtBalance: agent.balances?.USDT || 0,
+          vcnBalance: agent.balances?.VCN || 0,
+          openOrders: "None",
+          recentTradesStr: "None",
+        };
+
+        const decision = await getAgentTradeDecision(agent, md, deepseekKey);
+        return { agent, decision };
+      });
+
+      const results = await Promise.all(promises);
+      for (const { agent, decision } of results) {
+        agentsQueried++;
+        decisions[decision.action]++;
+
+        if (decision.action === "hold") continue;
+
+        const orderId = `ord-${agent.id}-${roundNumber}-${Math.random().toString(36).substr(2, 6)}`;
+        const side = decision.action;
+
+        if (decision.orderType === "market") {
+          const fills = orderBook.executeMarketOrder(orderId, agent.id, agent.ownerUid, side, decision.amount);
+          allFills.push(...fills.map((f) => ({ ...f, reasoning: decision.reasoning })));
+        } else {
+          const result = orderBook.addLimitOrder({
+            id: orderId,
+            agentId: agent.id,
+            ownerUid: agent.ownerUid,
+            side,
+            price: decision.price,
+            remainingAmount: decision.amount,
+            isMMOrder: false,
+            timestamp: startTime,
+          });
+
+          if (result === "crosses") {
+            const fills = orderBook.executeMarketOrder(orderId, agent.id, agent.ownerUid, side, decision.amount, decision.price);
+            allFills.push(...fills.map((f) => ({ ...f, reasoning: decision.reasoning })));
+          } else {
+            // Save pending limit order to Firestore
+            const orderRef = db.doc(`dex/orders/list/${orderId}`);
+            batch.set(orderRef, {
+              id: orderId,
+              agentId: agent.id,
+              ownerUid: agent.ownerUid,
+              pair: DEX_PAIR,
+              side,
+              type: "limit",
+              role: "pending",
+              price: decision.price,
+              amount: decision.amount,
+              filledAmount: 0,
+              remainingAmount: decision.amount,
+              status: "open",
+              fee: 0,
+              feeRate: DEX_FEE_RATES.makerFeeRate,
+              reasoning: decision.reasoning,
+              expiresAt: admin.firestore.Timestamp.fromMillis(startTime + 3600000),
+              createdAt: admin.firestore.Timestamp.now(),
+            });
+          }
+        }
+      }
+    }
+
+    // ── Step 3: Process fills -> update balances ────────────────────────
+    const agentMap = {};
+    agents.forEach((a) => { agentMap[a.id] = a; });
+
+    for (const fill of allFills) {
+      const maker = agentMap[fill.makerAgentId];
+      const taker = agentMap[fill.takerAgentId];
+
+      if (fill.takerSide === "buy") {
+        if (taker) { taker.balances.USDT -= (fill.total + fill.takerFee); taker.balances.VCN += fill.amount; }
+        if (maker) { maker.balances.VCN -= fill.amount; maker.balances.USDT += (fill.total - fill.makerFee); }
+      } else {
+        if (taker) { taker.balances.VCN -= fill.amount; taker.balances.USDT += (fill.total - fill.takerFee); }
+        if (maker) { maker.balances.USDT -= (fill.total + fill.makerFee); maker.balances.VCN += fill.amount; }
+      }
+
+      // Save trade to Firestore
+      const tradeId = `trade-${roundNumber}-${Math.random().toString(36).substr(2, 8)}`;
+      const tradeRef = db.doc(`dex/trades/list/${tradeId}`);
+      batch.set(tradeRef, {
+        id: tradeId,
+        pair: DEX_PAIR,
+        price: fill.price,
+        amount: fill.amount,
+        total: fill.total,
+        takerSide: fill.takerSide,
+        makerAgentId: fill.makerAgentId,
+        makerUid: fill.makerUid,
+        makerOrderId: fill.makerOrderId,
+        makerFee: fill.makerFee,
+        takerAgentId: fill.takerAgentId,
+        takerUid: fill.takerUid,
+        takerOrderId: fill.takerOrderId,
+        takerFee: fill.takerFee,
+        reasoning: fill.reasoning || "",
+        timestamp: admin.firestore.Timestamp.now(),
+      });
+    }
+
+    // ── Step 4: Update agent balances & performance in Firestore ────────
+    const finalPrice = orderBook.lastPrice;
+    for (const agent of agents) {
+      const totalValue = agent.balances.USDT + agent.balances.VCN * finalPrice;
+      const initialValue = agent.performance?.initialValueUSDT || totalValue;
+      const pnl = totalValue - initialValue;
+      const pnlPct = initialValue > 0 ? (pnl / initialValue) * 100 : 0;
+
+      const agentRef = db.doc(`dex/agents/list/${agent.id}`);
+      batch.update(agentRef, {
+        "balances.USDT": agent.balances.USDT,
+        "balances.VCN": agent.balances.VCN,
+        "performance.currentValueUSDT": totalValue,
+        "performance.totalPnL": pnl,
+        "performance.totalPnLPercent": pnlPct,
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
+    }
+
+    // ── Step 5: Update market state ────────────────────────────────────
+    const totalVolume = allFills.reduce((s, f) => s + f.total, 0);
+    const marketRef = db.doc(`dex/market/${DEX_PAIR}`);
+    batch.set(marketRef, {
+      pair: DEX_PAIR,
+      lastPrice: finalPrice,
+      previousPrice: currentPrice,
+      change24h: finalPrice - currentPrice,
+      changePercent24h: currentPrice > 0 ? ((finalPrice - currentPrice) / currentPrice) * 100 : 0,
+      high24h: Math.max(marketData.high24h || 0, finalPrice),
+      low24h: Math.min(marketData.low24h || finalPrice, finalPrice),
+      volume24h: (marketData.volume24h || 0) + allFills.reduce((s, f) => s + f.amount, 0),
+      quoteVolume24h: (marketData.quoteVolume24h || 0) + totalVolume,
+      trades24h: (marketData.trades24h || 0) + allFills.length,
+      bestBid: orderBook.getBestBid(),
+      bestAsk: orderBook.getBestAsk(),
+      spread: orderBook.getBestAsk() - orderBook.getBestBid(),
+      spreadPercent: parseFloat(orderBook.getSpreadPct()),
+      openOrders: orderBook.getOpenCount(),
+      activeAgents: agents.filter((a) => a.status === "active").length,
+      totalAgents: agents.length,
+      updatedAt: admin.firestore.Timestamp.now(),
+    }, { merge: true });
+
+    // ── Step 6: Save OHLCV candle ──────────────────────────────────────
+    const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"];
+    for (const interval of intervals) {
+      const ms = { "1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000 }[interval];
+      const candleStart = Math.floor(startTime / ms) * ms;
+      const candleId = `${interval}-${candleStart}`;
+      const candleRef = db.doc(`dex/candles/${interval}/${candleId}`);
+      const candleSnap = await candleRef.get();
+
+      if (candleSnap.exists) {
+        const prev = candleSnap.data();
+        batch.update(candleRef, {
+          h: Math.max(prev.h, finalPrice),
+          l: Math.min(prev.l, finalPrice),
+          c: finalPrice,
+          v: prev.v + allFills.reduce((s, f) => s + f.amount, 0),
+          qv: prev.qv + totalVolume,
+          n: prev.n + allFills.length,
+        });
+      } else {
+        batch.set(candleRef, {
+          t: candleStart,
+          o: currentPrice,
+          h: Math.max(currentPrice, finalPrice),
+          l: Math.min(currentPrice, finalPrice),
+          c: finalPrice,
+          v: allFills.reduce((s, f) => s + f.amount, 0),
+          qv: totalVolume,
+          n: allFills.length,
+        });
+      }
+    }
+
+    // ── Step 7: Save round log ─────────────────────────────────────────
+    const roundLogRef = db.doc(`dex/rounds/log/${roundNumber}`);
+    batch.set(roundLogRef, {
+      roundNumber,
+      timestamp: startTime,
+      durationMs: Date.now() - startTime,
+      mmOrdersPlaced,
+      agentsQueried,
+      agentsSkipped,
+      decisions,
+      tradesExecuted: allFills.length,
+      totalVolume,
+      priceOpen: currentPrice,
+      priceClose: finalPrice,
+      priceChange: finalPrice - currentPrice,
+      priceChangePercent: currentPrice > 0 ? ((finalPrice - currentPrice) / currentPrice) * 100 : 0,
+    });
+
+    // Update round counter
+    batch.set(roundRef, { current: roundNumber }, { merge: true });
+
+    // ── Commit all writes ──────────────────────────────────────────────
+    await batch.commit();
+
+    const elapsed = Date.now() - startTime;
+    console.log(
+      `[TradingEngine] Round #${roundNumber} completed: ` +
+      `${allFills.length} trades, $${totalVolume.toFixed(2)} volume, ` +
+      `${currentPrice.toFixed(4)} -> ${finalPrice.toFixed(4)} ` +
+      `(${((finalPrice - currentPrice) / currentPrice * 100).toFixed(2)}%) [${elapsed}ms]`,
+    );
   } catch (err) {
-    console.error("[TradingEngine] Fatal:", err);
+    console.error("[TradingEngine] Fatal error:", err);
     throw err;
   }
 });
 
 /**
  * TRADING ARENA API - HTTP endpoint for frontend interactions
+ * Handles: create agent, get market data, get leaderboard, etc.
  */
 exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
   const db = admin.firestore();
-  const DEX_PAIR = "VCN-USDT";
   const { action } = req.body || req.query || {};
 
   try {
     switch (action) {
+      // ── Get market state ──────────────────────────────────────────
       case "getMarket": {
         const snap = await db.doc(`dex/market/${DEX_PAIR}`).get();
         return res.json({ success: true, market: snap.exists ? snap.data() : null });
       }
+
+      // ── Get order book snapshot ───────────────────────────────────
       case "getOrderBook": {
         const ordersSnap = await db.collection("dex/orders/list")
           .where("status", "in", ["open", "partial"])
-          .orderBy("price").limit(100).get();
-        const bids = [], asks = [];
+          .orderBy("price")
+          .limit(100)
+          .get();
+
+        const bids = [];
+        const asks = [];
         ordersSnap.forEach((doc) => {
           const o = doc.data();
           const entry = { price: o.price, amount: o.remainingAmount || o.amount, agentId: o.agentId };
-          if (o.side === "buy") bids.push(entry); else asks.push(entry);
+          if (o.side === "buy") bids.push(entry);
+          else asks.push(entry);
         });
+
         bids.sort((a, b) => b.price - a.price);
         asks.sort((a, b) => a.price - b.price);
+
         return res.json({ success: true, bids: bids.slice(0, 15), asks: asks.slice(0, 15) });
       }
+
+      // ── Get recent trades ─────────────────────────────────────────
       case "getRecentTrades": {
         const limit = Math.min(parseInt(req.body?.limit || "50"), 100);
-        const snap = await db.collection("dex/trades/list").orderBy("timestamp", "desc").limit(limit).get();
+        const tradesSnap = await db.collection("dex/trades/list")
+          .orderBy("timestamp", "desc")
+          .limit(limit)
+          .get();
+
         const trades = [];
-        snap.forEach((doc) => trades.push(doc.data()));
+        tradesSnap.forEach((doc) => trades.push(doc.data()));
         return res.json({ success: true, trades });
       }
+
+      // ── Get candles ───────────────────────────────────────────────
       case "getCandles": {
         const interval = req.body?.interval || "1h";
         const limit = Math.min(parseInt(req.body?.limit || "100"), 500);
-        const snap = await db.collection(`dex/candles/${interval}`).orderBy("t", "desc").limit(limit).get();
+
+        const candlesSnap = await db.collection(`dex/candles/${interval}`)
+          .orderBy("t", "desc")
+          .limit(limit)
+          .get();
+
         const candles = [];
-        snap.forEach((doc) => candles.push(doc.data()));
+        candlesSnap.forEach((doc) => candles.push(doc.data()));
         candles.reverse();
         return res.json({ success: true, candles, interval });
       }
+
+      // ── Create agent ──────────────────────────────────────────────
       case "createAgent": {
         const { uid, name, preset, prompt, riskLevel } = req.body;
         if (!uid || !name) return res.status(400).json({ success: false, error: "Missing uid or name" });
-        const existingSnap = await db.collection("dex/agents/list").where("ownerUid", "==", uid).where("role", "==", "trader").get();
-        if (existingSnap.size >= 3) return res.status(400).json({ success: false, error: "Maximum 3 agents per user" });
+
+        // Check agent limit
+        const existingSnap = await db.collection("dex/agents/list")
+          .where("ownerUid", "==", uid)
+          .where("role", "==", "trader")
+          .get();
+
+        if (existingSnap.size >= 3) {
+          return res.status(400).json({ success: false, error: "Maximum 3 agents per user" });
+        }
+
         const marketSnap = await db.doc(`dex/market/${DEX_PAIR}`).get();
         const currentPrice = marketSnap.exists ? marketSnap.data().lastPrice || 0.10 : 0.10;
         const initialValue = 10000 + 100000 * currentPrice;
+
         const agentId = `agent-${uid.substr(0, 8)}-${Date.now().toString(36)}`;
-        await db.doc(`dex/agents/list/${agentId}`).set({
-          id: agentId, ownerUid: uid, name, role: "trader",
-          strategy: { preset: preset || "custom", prompt: (prompt || "").substring(0, 2000), riskLevel: Math.max(1, Math.min(10, parseInt(riskLevel) || 5)), tradingFrequency: "medium", maxPositionPercent: 30 },
+        const agentRef = db.doc(`dex/agents/list/${agentId}`);
+        await agentRef.set({
+          id: agentId,
+          ownerUid: uid,
+          name,
+          role: "trader",
+          strategy: {
+            preset: preset || "custom",
+            prompt: (prompt || "").substring(0, 2000),
+            riskLevel: Math.max(1, Math.min(10, parseInt(riskLevel) || 5)),
+            tradingFrequency: "medium",
+            maxPositionPercent: 30,
+          },
           balances: { USDT: 10000, VCN: 100000 },
-          performance: { initialValueUSDT: initialValue, currentValueUSDT: initialValue, totalPnL: 0, totalPnLPercent: 0, winCount: 0, lossCount: 0, totalTrades: 0, bestTrade: 0, worstTrade: 0, maxDrawdown: 0 },
-          recentTrades: [], status: "active", lastTradeAt: null,
-          createdAt: admin.firestore.Timestamp.now(), updatedAt: admin.firestore.Timestamp.now(),
+          performance: {
+            initialValueUSDT: initialValue,
+            currentValueUSDT: initialValue,
+            totalPnL: 0, totalPnLPercent: 0,
+            winCount: 0, lossCount: 0, totalTrades: 0,
+            bestTrade: 0, worstTrade: 0, maxDrawdown: 0,
+          },
+          recentTrades: [],
+          status: "active",
+          lastTradeAt: null,
+          createdAt: admin.firestore.Timestamp.now(),
+          updatedAt: admin.firestore.Timestamp.now(),
         });
+
         return res.json({ success: true, agentId });
       }
+
+      // ── Get my agents ─────────────────────────────────────────────
       case "getMyAgents": {
         const { uid } = req.body;
         if (!uid) return res.status(400).json({ success: false, error: "Missing uid" });
-        const snap = await db.collection("dex/agents/list").where("ownerUid", "==", uid).get();
+
+        const snap = await db.collection("dex/agents/list")
+          .where("ownerUid", "==", uid)
+          .get();
+
         const myAgents = [];
         snap.forEach((doc) => myAgents.push(doc.data()));
         return res.json({ success: true, agents: myAgents });
       }
+
+      // ── Get leaderboard ───────────────────────────────────────────
       case "getLeaderboard": {
         const limit = Math.min(parseInt(req.body?.limit || "50"), 100);
-        const snap = await db.collection("dex/agents/list").where("role", "==", "trader").get();
+        const snap = await db.collection("dex/agents/list")
+          .where("role", "==", "trader")
+          .get();
+
         const agents = [];
         snap.forEach((doc) => {
           const a = doc.data();
-          agents.push({ agentId: a.id, agentName: a.name, ownerUid: a.ownerUid, strategyPreset: a.strategy?.preset, pnlPercent: a.performance?.totalPnLPercent || 0, pnlAbsolute: a.performance?.totalPnL || 0, winRate: a.performance?.totalTrades > 0 ? (a.performance.winCount / a.performance.totalTrades) * 100 : 0, totalTrades: a.performance?.totalTrades || 0 });
+          agents.push({
+            agentId: a.id,
+            agentName: a.name,
+            ownerUid: a.ownerUid,
+            strategyPreset: a.strategy?.preset,
+            pnlPercent: a.performance?.totalPnLPercent || 0,
+            pnlAbsolute: a.performance?.totalPnL || 0,
+            winRate: a.performance?.totalTrades > 0
+              ? (a.performance.winCount / a.performance.totalTrades) * 100
+              : 0,
+            totalTrades: a.performance?.totalTrades || 0,
+          });
         });
+
         agents.sort((a, b) => b.pnlPercent - a.pnlPercent);
         agents.forEach((a, i) => { a.rank = i + 1; });
+
         return res.json({ success: true, leaderboard: agents.slice(0, limit) });
       }
+
+      // ── Update agent strategy ─────────────────────────────────────
       case "updateAgent": {
         const { uid, agentId, prompt: newPrompt, riskLevel: newRisk, status: newStatus } = req.body;
         if (!uid || !agentId) return res.status(400).json({ success: false, error: "Missing params" });
+
         const agentRef = db.doc(`dex/agents/list/${agentId}`);
         const agentSnap = await agentRef.get();
         if (!agentSnap.exists) return res.status(404).json({ success: false, error: "Agent not found" });
         if (agentSnap.data().ownerUid !== uid) return res.status(403).json({ success: false, error: "Not owner" });
+
         const updates = { updatedAt: admin.firestore.Timestamp.now() };
         if (newPrompt !== undefined) updates["strategy.prompt"] = newPrompt.substring(0, 2000);
         if (newRisk !== undefined) updates["strategy.riskLevel"] = Math.max(1, Math.min(10, parseInt(newRisk)));
         if (newStatus && ["active", "paused", "stopped"].includes(newStatus)) updates.status = newStatus;
+
         await agentRef.update(updates);
         return res.json({ success: true });
       }
+
+      // ── Delete agent ──────────────────────────────────────────────
       case "deleteAgent": {
         const { uid, agentId: delId } = req.body;
         if (!uid || !delId) return res.status(400).json({ success: false, error: "Missing params" });
+
         const ref = db.doc(`dex/agents/list/${delId}`);
         const snap = await ref.get();
         if (!snap.exists) return res.status(404).json({ success: false, error: "Not found" });
         if (snap.data().ownerUid !== uid) return res.status(403).json({ success: false, error: "Not owner" });
-        if (snap.data().role === "market_maker") return res.status(403).json({ success: false, error: "Cannot delete MM" });
+        if (snap.data().role === "market_maker") return res.status(403).json({ success: false, error: "Cannot delete MM agent" });
+
         await ref.delete();
         return res.json({ success: true });
       }
+
+      // ── Get agent trade history (balance changes) ─────────────────
       case "getAgentHistory": {
         const { agentId: histId } = req.body;
         if (!histId) return res.status(400).json({ success: false, error: "Missing agentId" });
+
         const limit = Math.min(parseInt(req.body?.limit || "50"), 200);
-        const makerSnap = await db.collection("dex/trades/list").where("makerAgentId", "==", histId).orderBy("timestamp", "desc").limit(limit).get();
-        const takerSnap = await db.collection("dex/trades/list").where("takerAgentId", "==", histId).orderBy("timestamp", "desc").limit(limit).get();
+        const tradesSnap = await db.collection("dex/trades/list")
+          .where("makerAgentId", "==", histId)
+          .orderBy("timestamp", "desc")
+          .limit(limit)
+          .get();
+
+        const takerTradesSnap = await db.collection("dex/trades/list")
+          .where("takerAgentId", "==", histId)
+          .orderBy("timestamp", "desc")
+          .limit(limit)
+          .get();
+
         const history = [];
-        makerSnap.forEach((doc) => history.push({ ...doc.data(), myRole: "maker" }));
-        takerSnap.forEach((doc) => history.push({ ...doc.data(), myRole: "taker" }));
+        tradesSnap.forEach((doc) => history.push({ ...doc.data(), myRole: "maker" }));
+        takerTradesSnap.forEach((doc) => history.push({ ...doc.data(), myRole: "taker" }));
+
         history.sort((a, b) => (b.timestamp?._seconds || 0) - (a.timestamp?._seconds || 0));
         return res.json({ success: true, history: history.slice(0, limit) });
       }
+
+      // ── Engine status (admin) ─────────────────────────────────────
       case "getEngineStatus": {
         const roundSnap = await db.doc("dex/settings/config/roundCounter").get();
         const current = roundSnap.exists ? roundSnap.data().current || 0 : 0;
+
         let lastRound = null;
-        if (current > 0) { const logSnap = await db.doc(`dex/rounds/log/${current}`).get(); lastRound = logSnap.exists ? logSnap.data() : null; }
-        const settingsSnap = await db.doc("dex/settings/config/main").get();
-        return res.json({ success: true, roundNumber: current, lastRound, settings: settingsSnap.exists ? settingsSnap.data() : {} });
+        if (current > 0) {
+          const logSnap = await db.doc(`dex/rounds/log/${current}`).get();
+          lastRound = logSnap.exists ? logSnap.data() : null;
+        }
+
+        const settingsSnap2 = await db.doc("dex/settings/config/main").get();
+        const engineSettings = settingsSnap2.exists ? settingsSnap2.data() : {};
+
+        return res.json({
+          success: true,
+          roundNumber: current,
+          lastRound,
+          settings: engineSettings,
+        });
       }
+
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
