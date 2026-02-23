@@ -223,24 +223,48 @@ export const WalletNodes = (props: WalletNodesProps) => {
 
                                 {/* Download Buttons Row */}
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                                    {/* macOS */}
-                                    <a
-                                        href={DOWNLOAD_URLS.mac_arm64}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="flex items-center gap-3 px-5 py-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-indigo-500/30 rounded-2xl transition-all group"
-                                    >
-                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center shrink-0">
-                                            {appleSvg()}
+                                    {/* macOS - Split: Apple Silicon / Intel */}
+                                    <div class="flex flex-col gap-2 bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 hover:border-indigo-500/30 transition-all">
+                                        <div class="flex items-center gap-3 mb-1">
+                                            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center shrink-0">
+                                                {appleSvg()}
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <div class="text-sm font-bold text-white">macOS</div>
+                                                <div class="text-[10px] text-gray-500">Select your chip type</div>
+                                            </div>
                                         </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="text-sm font-bold text-white">macOS</div>
-                                            <div class="text-[10px] text-gray-500">Apple Silicon / Intel</div>
+                                        <div class="flex gap-2">
+                                            <a
+                                                href={DOWNLOAD_URLS.mac_arm64}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl transition-all text-center group"
+                                            >
+                                                <div class="text-indigo-400 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                    {downloadSvg()}
+                                                </div>
+                                                <div>
+                                                    <div class="text-xs font-bold text-white">Apple Silicon</div>
+                                                    <div class="text-[9px] text-gray-500">M1 / M2 / M3 / M4</div>
+                                                </div>
+                                            </a>
+                                            <a
+                                                href={DOWNLOAD_URLS.mac_x64}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-indigo-500/30 rounded-xl transition-all text-center group"
+                                            >
+                                                <div class="text-gray-400 opacity-60 group-hover:opacity-100 transition-opacity">
+                                                    {downloadSvg()}
+                                                </div>
+                                                <div>
+                                                    <div class="text-xs font-bold text-white">Intel</div>
+                                                    <div class="text-[9px] text-gray-500">x64 (2020 or earlier)</div>
+                                                </div>
+                                            </a>
                                         </div>
-                                        <div class="text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {downloadSvg()}
-                                        </div>
-                                    </a>
+                                    </div>
 
                                     {/* Windows */}
                                     <a
