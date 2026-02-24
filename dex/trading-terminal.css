@@ -1022,3 +1022,45 @@
         display: none;
     }
 }
+
+/* ─── Mode Toggle Bar ─── */
+.rs-mode-toggle-bar {
+    display: flex;
+    gap: 2px;
+    padding: 6px 8px;
+    background: var(--dx-bg);
+    border-bottom: 1px solid var(--dx-border);
+}
+
+.rs-mode-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--dx-text3);
+    font-size: 11px;
+    font-family: var(--dx-font);
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.rs-mode-btn:hover {
+    color: var(--dx-text2);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.rs-mode-btn.active {
+    color: #fff;
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.rs-mode-btn.active svg {
+    color: var(--dx-accent2);
+}

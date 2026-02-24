@@ -18,6 +18,10 @@ import { createSignal, createEffect, onMount, onCleanup, For, Show, createMemo }
 import { createChart, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, CandlestickData, HistogramData, Time } from 'lightweight-charts';
 import './trading-terminal.css';
+import './my-agent-panel.css';
+import './user-trade-panel.css';
+import MyAgentPanel from './MyAgentPanel';
+import UserTradePanel from './UserTradePanel';
 
 // ─── API Config ────────────────────────────────────────────────────────────
 
@@ -398,14 +402,43 @@ function BottomTabs(props: { trades: Trade[]; leaderboard: LeaderboardEntry[]; m
     );
 }
 
-// ─── Right Sidebar ─────────────────────────────────────────────────────────
-
 function RightSidebar(props: { market: MarketData | null; leaderboard: LeaderboardEntry[] }) {
-    const [orderTab, setOrderTab] = createSignal<'buy' | 'sell'>('buy');
+    const [panelMode, setPanelMode] = createSignal<'agent' | 'trade'>('agent');
+
+    const TradeIcon = () => (
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 10l4-6 3 3 3-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M10 2h2v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+    );
+    const AgentIcon = () => (
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="3" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="1.2" />
+            <circle cx="5.5" cy="7.5" r="0.8" fill="currentColor" />
+            <circle cx="8.5" cy="7.5" r="0.8" fill="currentColor" />
+            <path d="M7 1.5v2.5M5 4V3M9 4V3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+        </svg>
+    );
 
     return (
         <div class="rs-container">
-            {/* Buy/Sell Volume Summary */}
+            {/* Mode Toggle */}
+            <div class="rs-mode-toggle-bar">
+                <button
+                    class={`rs-mode-btn ${panelMode() === 'agent' ? 'active' : ''}`}
+                    onClick={() => setPanelMode('agent')}
+                >
+                    <AgentIcon /> AI Agent
+                </button>
+                <button
+                    class={`rs-mode-btn ${panelMode() === 'trade' ? 'active' : ''}`}
+                    onClick={() => setPanelMode('trade')}
+                >
+                    <TradeIcon /> Trade
+                </button>
+            </div>
+
+            {/* Buy/Sell Volume Summary (always visible) */}
             <Show when={props.market}>
                 {(m) => (
                     <div class="rs-vol-bar">
@@ -417,69 +450,17 @@ function RightSidebar(props: { market: MarketData | null; leaderboard: Leaderboa
                 )}
             </Show>
 
-            {/* Buy / Sell Toggle */}
-            <div class="rs-order-tabs">
-                <button
-                    class={`rs-order-tab ${orderTab() === 'buy' ? 'active buy' : ''}`}
-                    onClick={() => setOrderTab('buy')}
-                >Buy</button>
-                <button
-                    class={`rs-order-tab ${orderTab() === 'sell' ? 'active sell' : ''}`}
-                    onClick={() => setOrderTab('sell')}
-                >Sell</button>
-            </div>
+            {/* ── Agent Mode ── */}
+            <Show when={panelMode() === 'agent'}>
+                <MyAgentPanel currentPrice={props.market?.lastPrice || 0.10} />
+            </Show>
 
-            {/* Order Type Sub-tabs */}
-            <div class="rs-type-tabs">
-                <button class="rs-type-tab active">Market</button>
-                <button class="rs-type-tab">Limit</button>
-                <button class="rs-type-tab">Adv.</button>
-            </div>
+            {/* ── Trade Mode ── */}
+            <Show when={panelMode() === 'trade'}>
+                <UserTradePanel market={props.market} />
+            </Show>
 
-            {/* Order Form */}
-            <div class="rs-order-form">
-                <div class="rs-input-group">
-                    <label>Amount</label>
-                    <div class="rs-input-wrapper">
-                        <input type="text" placeholder="0.0" class="rs-input" />
-                        <span class="rs-input-suffix">VCN</span>
-                    </div>
-                </div>
-                <div class="rs-presets">
-                    <button class="rs-preset">25%</button>
-                    <button class="rs-preset">50%</button>
-                    <button class="rs-preset">75%</button>
-                    <button class="rs-preset">100%</button>
-                </div>
-                <button class={`rs-submit-btn ${orderTab()}`}>
-                    {orderTab() === 'buy' ? 'Buy' : 'Sell'} VCN
-                </button>
-            </div>
-
-            {/* Agent Stats Mini */}
-            <div class="rs-agent-stats">
-                <div class="rs-stat-row">
-                    <span>Bought</span><span class="rs-stat-val">0</span>
-                </div>
-                <div class="rs-stat-row">
-                    <span>Sold</span><span class="rs-stat-val">0</span>
-                </div>
-                <div class="rs-stat-row">
-                    <span>Holding</span><span class="rs-stat-val">0</span>
-                </div>
-                <div class="rs-stat-row">
-                    <span>PnL</span><span class="rs-stat-val">+0 (+0%)</span>
-                </div>
-            </div>
-
-            {/* Strategy Presets */}
-            <div class="rs-presets-bar">
-                <button class="rs-preset-btn active">PRESET 1</button>
-                <button class="rs-preset-btn">PRESET 2</button>
-                <button class="rs-preset-btn">PRESET 3</button>
-            </div>
-
-            {/* Token Info */}
+            {/* Token Info (always visible) */}
             <div class="rs-token-info">
                 <div class="rs-ti-header">
                     <span>Token Info</span>

@@ -1,0 +1,669 @@
+/* ─── My Agent Panel ──────────────────────────────────────────────────── */
+
+.my-agent-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+/* Loading */
+.map-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    gap: 12px;
+    color: #71717a;
+    font-size: 12px;
+}
+
+.map-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(99, 102, 241, 0.2);
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: mapspin 0.8s linear infinite;
+}
+
+@keyframes mapspin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Empty state */
+.map-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    gap: 8px;
+    text-align: center;
+    color: #71717a;
+}
+
+.map-empty svg {
+    opacity: 0.4;
+    width: 32px;
+    height: 32px;
+}
+
+.map-empty-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #a1a1aa;
+    margin: 4px 0 0;
+}
+
+.map-empty-desc {
+    font-size: 11px;
+    line-height: 1.5;
+    max-width: 200px;
+}
+
+.map-login-btn {
+    margin-top: 8px;
+    padding: 6px 16px;
+    background: #6366f1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.map-login-btn:hover {
+    background: #4f46e5;
+}
+
+/* Header */
+.map-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.map-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4e4e7;
+}
+
+.map-header-title svg {
+    opacity: 0.7;
+}
+
+.map-create-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.map-create-btn:hover {
+    background: rgba(99, 102, 241, 0.25);
+}
+
+/* Agent Card */
+.map-agent-card {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.map-agent-card:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.map-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.map-card-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #e4e4e7;
+}
+
+.map-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.map-card-pnl {
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-card-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 10px;
+    color: #71717a;
+    margin-bottom: 6px;
+}
+
+.map-card-preset {
+    padding: 1px 6px;
+    background: rgba(99, 102, 241, 0.12);
+    color: #818cf8;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.map-card-balances {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #a1a1aa;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-card-total {
+    font-size: 11px;
+    color: #71717a;
+    margin-top: 3px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-add-more {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    color: #71717a;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 4px;
+}
+
+.map-add-more:hover {
+    color: #a1a1aa;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Sub Header */
+.map-sub-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4e4e7;
+}
+
+.map-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 4px;
+    color: #a1a1aa;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.map-back-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.map-detail-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.map-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 4px;
+    color: #a1a1aa;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.map-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e4e4e7;
+}
+
+.map-icon-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+/* Form */
+.map-form {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.map-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.map-field label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #a1a1aa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.map-optional {
+    font-weight: 400;
+    text-transform: none;
+    color: #52525b;
+    letter-spacing: 0;
+}
+
+.map-input,
+.map-textarea {
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: #e4e4e7;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: vertical;
+}
+
+.map-input:focus,
+.map-textarea:focus {
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+.map-char-count {
+    font-size: 10px;
+    color: #52525b;
+    text-align: right;
+}
+
+/* Preset Grid */
+.map-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+}
+
+.map-preset-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    color: #71717a;
+    font-size: 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.map-preset-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #a1a1aa;
+}
+
+.map-preset-item.active {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #818cf8;
+}
+
+.map-preset-name {
+    font-weight: 500;
+    line-height: 1;
+}
+
+.map-preset-desc {
+    font-size: 10px;
+    color: #71717a;
+    font-style: italic;
+}
+
+/* Risk Slider */
+.map-risk-slider {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, #22c55e 0%, #f59e0b 50%, #ef4444 100%);
+    border-radius: 4px;
+    outline: none;
+}
+
+.map-risk-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.map-risk-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #52525b;
+}
+
+/* Initial Info */
+.map-initial-info {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: rgba(99, 102, 241, 0.06);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 6px;
+    font-size: 11px;
+    color: #a1a1aa;
+}
+
+/* Error */
+.map-error {
+    padding: 6px 10px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 6px;
+    font-size: 11px;
+    color: #ef4444;
+}
+
+/* Action Button */
+.map-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.map-action-btn.primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+}
+
+.map-action-btn.primary:hover {
+    filter: brightness(1.1);
+}
+
+.map-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Detail View */
+.map-detail {
+    padding: 0;
+}
+
+.map-detail-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+}
+
+.map-status-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.map-detail-preset {
+    color: #818cf8;
+    font-weight: 500;
+}
+
+.map-detail-risk {
+    color: #71717a;
+    margin-left: auto;
+}
+
+.map-detail-pnl-card {
+    margin: 4px 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+
+.map-pnl-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.map-pnl-label {
+    font-size: 10px;
+    color: #71717a;
+    text-transform: uppercase;
+}
+
+.map-pnl-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #e4e4e7;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-pnl-change {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-balances-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 8px 12px;
+}
+
+.map-bal-item {
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+}
+
+.map-bal-label {
+    font-size: 10px;
+    color: #71717a;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.map-bal-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4e4e7;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 4px 12px;
+}
+
+.map-stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 11px;
+}
+
+.map-stat-label {
+    color: #71717a;
+}
+
+.map-stat-val {
+    color: #e4e4e7;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Prompt Preview */
+.map-prompt-preview {
+    margin: 8px 12px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.map-prompt-label {
+    font-size: 10px;
+    color: #71717a;
+    display: block;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+
+.map-prompt-text {
+    font-size: 11px;
+    color: #a1a1aa;
+    line-height: 1.5;
+    margin: 0;
+    word-break: break-word;
+}
+
+/* Trades Section */
+.map-trades-section {
+    padding: 8px 12px 12px;
+}
+
+.map-trades-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #a1a1aa;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.map-no-trades {
+    font-size: 11px;
+    color: #52525b;
+    text-align: center;
+    padding: 16px 0;
+    margin: 0;
+}
+
+.map-trade-item {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.map-trade-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+}
+
+.map-trade-side {
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.map-trade-side.buy {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.map-trade-side.sell {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.map-trade-amount {
+    color: #e4e4e7;
+    font-weight: 500;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-trade-price {
+    color: #71717a;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.map-trade-reasoning {
+    font-size: 10px;
+    color: #52525b;
+    font-style: italic;
+    margin: 2px 0 0;
+    line-height: 1.4;
+}

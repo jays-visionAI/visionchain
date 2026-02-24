@@ -17053,6 +17053,202 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
           message: "Engine initialized: 2 MM + 10 preset agents",
         });
       }
+      case "getUserDexBalance": {
+        const { uid } = req.body;
+        if (!uid) return res.status(400).json({ success: false, error: "Missing uid" });
+        const balRef = db.doc(`dex/userBalances/list/${uid}`);
+        const balSnap = await balRef.get();
+        if (balSnap.exists) {
+          return res.json({ success: true, ...balSnap.data() });
+        }
+        // Initialize new user balance
+        const initBal = { uid, USDT: 10000, VCN: 100000, createdAt: admin.firestore.Timestamp.now() };
+        await balRef.set(initBal);
+        return res.json({ success: true, ...initBal });
+      }
+      case "placeUserOrder": {
+        const { uid, side, orderType, amount, price: limitPrice } = req.body;
+        if (!uid) return res.status(400).json({ success: false, error: "Missing uid" });
+        if (!["buy", "sell"].includes(side)) return res.status(400).json({ success: false, error: "Invalid side" });
+        if (!["market", "limit"].includes(orderType)) return res.status(400).json({ success: false, error: "Invalid orderType" });
+        const amt = parseFloat(amount);
+        if (!amt || amt < 100) return res.status(400).json({ success: false, error: "Min order 100 VCN" });
+
+        // Check if direct trading is enabled
+        const cfgSnap = await db.doc("dex/settings/config/main").get();
+        const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+        if (cfg.directTradingEnabled === false) {
+          return res.status(403).json({ success: false, error: "Direct trading is currently disabled" });
+        }
+
+        // Get user balance
+        const balRef = db.doc(`dex/userBalances/list/${uid}`);
+        const balSnap = await balRef.get();
+        if (!balSnap.exists) return res.status(400).json({ success: false, error: "No balance found. Visit DEX first." });
+        const bal = balSnap.data();
+
+        // Get market data
+        const mktSnap = await db.doc(`dex/market/data/${DEX_PAIR}`).get();
+        const mkt = mktSnap.exists ? mktSnap.data() : {};
+        const currentPrice = mkt.lastPrice || 0.10;
+
+        // Get order book snapshot
+        const obSnap = await db.doc(`dex/orderbook/data/${DEX_PAIR}`).get();
+        const ob = obSnap.exists ? obSnap.data() : { bids: [], asks: [] };
+
+        let execPrice = 0;
+        let execAmount = amt;
+        const takerFeeRate = 0.0005; // 0.05%
+        const makerFeeRate = 0.0002; // 0.02%
+
+        if (orderType === "market") {
+          // Market order: execute against best price
+          if (side === "buy") {
+            execPrice = ob.asks && ob.asks.length > 0 ? ob.asks[0].price : currentPrice;
+            const totalCost = execAmount * execPrice;
+            const fee = totalCost * takerFeeRate;
+            if (bal.USDT < totalCost + fee) {
+              // Adjust amount to what user can afford
+              execAmount = Math.floor((bal.USDT * 0.999) / (execPrice * (1 + takerFeeRate)));
+              if (execAmount < 100) return res.status(400).json({ success: false, error: `Insufficient USDT. Need ${(amt * execPrice).toFixed(2)}, have ${bal.USDT.toFixed(2)}` });
+            }
+            const finalCost = execAmount * execPrice;
+            const finalFee = finalCost * takerFeeRate;
+            await balRef.update({ USDT: bal.USDT - finalCost - finalFee, VCN: bal.VCN + execAmount });
+          } else {
+            execPrice = ob.bids && ob.bids.length > 0 ? ob.bids[0].price : currentPrice;
+            if (bal.VCN < execAmount) {
+              execAmount = Math.floor(bal.VCN);
+              if (execAmount < 100) return res.status(400).json({ success: false, error: `Insufficient VCN. Need ${amt}, have ${Math.floor(bal.VCN)}` });
+            }
+            const totalProceeds = execAmount * execPrice;
+            const fee = totalProceeds * takerFeeRate;
+            await balRef.update({ VCN: bal.VCN - execAmount, USDT: bal.USDT + totalProceeds - fee });
+          }
+        } else {
+          // Limit order: check if crosses, otherwise save as pending
+          const lp = parseFloat(limitPrice);
+          if (!lp || lp <= 0) return res.status(400).json({ success: false, error: "Invalid limit price" });
+          const bestAsk = ob.asks && ob.asks.length > 0 ? ob.asks[0].price : Infinity;
+          const bestBid = ob.bids && ob.bids.length > 0 ? ob.bids[0].price : 0;
+
+          if (side === "buy" && lp >= bestAsk) {
+            // Crosses: execute like market at best ask
+            execPrice = bestAsk;
+            const totalCost = execAmount * execPrice;
+            const fee = totalCost * takerFeeRate;
+            if (bal.USDT < totalCost + fee) return res.status(400).json({ success: false, error: "Insufficient USDT" });
+            await balRef.update({ USDT: bal.USDT - totalCost - fee, VCN: bal.VCN + execAmount });
+          } else if (side === "sell" && lp <= bestBid) {
+            // Crosses: execute like market at best bid
+            execPrice = bestBid;
+            if (bal.VCN < execAmount) return res.status(400).json({ success: false, error: "Insufficient VCN" });
+            const totalProceeds = execAmount * execPrice;
+            const fee = totalProceeds * takerFeeRate;
+            await balRef.update({ VCN: bal.VCN - execAmount, USDT: bal.USDT + totalProceeds - fee });
+          } else {
+            // Does not cross: place as pending limit order
+            if (side === "buy") {
+              const totalCost = execAmount * lp;
+              if (bal.USDT < totalCost) return res.status(400).json({ success: false, error: "Insufficient USDT for limit order" });
+              // Lock funds
+              await balRef.update({ USDT: bal.USDT - totalCost });
+            } else {
+              if (bal.VCN < execAmount) return res.status(400).json({ success: false, error: "Insufficient VCN for limit order" });
+              await balRef.update({ VCN: bal.VCN - execAmount });
+            }
+
+            const orderId = `user-${uid.substr(0, 8)}-${Date.now().toString(36)}`;
+            await db.doc(`dex/orders/list/${orderId}`).set({
+              id: orderId, ownerUid: uid, agentId: `user-${uid}`, pair: DEX_PAIR,
+              side, type: "limit", role: "pending",
+              price: lp, amount: execAmount, filledAmount: 0, remainingAmount: execAmount,
+              status: "open", fee: 0, feeRate: makerFeeRate, reasoning: "User limit order",
+              expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 3600000),
+              createdAt: admin.firestore.Timestamp.now(),
+            });
+
+            // Get updated balance
+            const updBal = (await balRef.get()).data();
+            return res.json({
+              success: true, status: "pending", orderId,
+              message: `Limit ${side} order placed: ${execAmount} VCN @ ${lp}`,
+              balance: { USDT: updBal.USDT, VCN: updBal.VCN },
+            });
+          }
+        }
+
+        // Record trade for market/crossing limit
+        const tradeId = `user-t-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`;
+        const fee = execAmount * execPrice * takerFeeRate;
+        await db.doc(`dex/trades/list/${tradeId}`).set({
+          id: tradeId, pair: DEX_PAIR, price: execPrice, amount: execAmount,
+          total: execAmount * execPrice, takerSide: side,
+          makerAgentId: "orderbook", makerUid: "system",
+          makerOrderId: "ob-match", makerFee: 0,
+          takerAgentId: `user-${uid}`, takerUid: uid,
+          takerOrderId: tradeId, takerFee: fee,
+          reasoning: `User ${orderType} ${side}`,
+          timestamp: admin.firestore.Timestamp.now(),
+        });
+
+        // Get updated balance
+        const updatedBal = (await balRef.get()).data();
+        return res.json({
+          success: true, status: "filled",
+          price: execPrice, amount: execAmount,
+          total: execAmount * execPrice, fee,
+          balance: { USDT: updatedBal.USDT, VCN: updatedBal.VCN },
+        });
+      }
+      case "getUserOrders": {
+        const { uid } = req.body;
+        if (!uid) return res.status(400).json({ success: false, error: "Missing uid" });
+        const limit = Math.min(parseInt(req.body?.limit || "20"), 50);
+
+        // Open orders
+        const openSnap = await db.collection("dex/orders/list")
+          .where("ownerUid", "==", uid)
+          .where("status", "in", ["open", "partial"])
+          .limit(limit).get();
+        const openOrders = [];
+        openSnap.forEach((d) => openOrders.push(d.data()));
+
+        // Recent trades
+        const tradesSnap = await db.collection("dex/trades/list")
+          .where("takerUid", "==", uid)
+          .orderBy("timestamp", "desc").limit(limit).get();
+        const recentTrades = [];
+        tradesSnap.forEach((d) => recentTrades.push(d.data()));
+
+        return res.json({ success: true, openOrders, recentTrades });
+      }
+      case "cancelUserOrder": {
+        const { uid, orderId } = req.body;
+        if (!uid || !orderId) return res.status(400).json({ success: false, error: "Missing params" });
+        const orderRef = db.doc(`dex/orders/list/${orderId}`);
+        const orderSnap = await orderRef.get();
+        if (!orderSnap.exists) return res.status(404).json({ success: false, error: "Order not found" });
+        const order = orderSnap.data();
+        if (order.ownerUid !== uid) return res.status(403).json({ success: false, error: "Not owner" });
+        if (order.status !== "open" && order.status !== "partial") return res.status(400).json({ success: false, error: "Order not open" });
+
+        // Refund locked balance
+        const balRef = db.doc(`dex/userBalances/list/${uid}`);
+        const balSnap = await balRef.get();
+        if (balSnap.exists) {
+          const bal = balSnap.data();
+          const remaining = order.remainingAmount || order.amount;
+          if (order.side === "buy") {
+            await balRef.update({ USDT: (bal.USDT || 0) + remaining * order.price });
+          } else {
+            await balRef.update({ VCN: (bal.VCN || 0) + remaining });
+          }
+        }
+        await orderRef.update({ status: "cancelled" });
+        const updBal = (await balRef.get()).data();
+        return res.json({ success: true, balance: { USDT: updBal.USDT, VCN: updBal.VCN } });
+      }
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
