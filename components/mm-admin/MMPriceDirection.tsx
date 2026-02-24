@@ -321,7 +321,7 @@ export default function MMPriceDirection() {
                         <Show when={config().phaseAutoRotate}>
                             <div class="mmp-inline-input">
                                 <span>Interval:</span>
-                                <input type="number" min="1" max="168" value={config().phaseRotateInterval} onInput={(e) => update('phaseRotateInterval', parseInt(e.currentTarget.value) || 24)} class="mmp-input-sm" />
+                                <input type="number" step="0.01" min="1" max="168" value={config().phaseRotateInterval} onInput={(e) => update('phaseRotateInterval', parseFloat(e.currentTarget.value) || 24)} class="mmp-input-sm" />
                                 <span>hours</span>
                             </div>
                         </Show>

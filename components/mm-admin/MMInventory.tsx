@@ -148,7 +148,7 @@ export default function MMInventory() {
                     <Show when={config().autoRebalance}>
                         <div class="mmi-inline">
                             <span>Trigger when imbalance exceeds</span>
-                            <input type="number" min="5" max="50" value={config().rebalanceTrigger} onInput={(e) => update('rebalanceTrigger', parseInt(e.currentTarget.value) || 15)} class="mmi-input-sm" />
+                            <input type="number" step="0.01" min="0.01" max="50" value={config().rebalanceTrigger} onInput={(e) => update('rebalanceTrigger', parseFloat(e.currentTarget.value) || 15)} class="mmi-input-sm" />
                             <span>%</span>
                         </div>
                     </Show>
@@ -160,12 +160,12 @@ export default function MMInventory() {
                     <div class="mmi-limits">
                         <div class="mmi-limit-row">
                             <span class="mmi-limit-label">Max VCN</span>
-                            <input type="number" min="50" max="100" value={config().maxVCNPercent} onInput={(e) => update('maxVCNPercent', parseInt(e.currentTarget.value) || 80)} class="mmi-input-sm" />
+                            <input type="number" step="0.01" min="0.01" max="100" value={config().maxVCNPercent} onInput={(e) => update('maxVCNPercent', parseFloat(e.currentTarget.value) || 80)} class="mmi-input-sm" />
                             <span class="mmi-unit">%</span>
                         </div>
                         <div class="mmi-limit-row">
                             <span class="mmi-limit-label">Max USDT</span>
-                            <input type="number" min="50" max="100" value={config().maxUSDTPercent} onInput={(e) => update('maxUSDTPercent', parseInt(e.currentTarget.value) || 80)} class="mmi-input-sm" />
+                            <input type="number" step="0.01" min="0.01" max="100" value={config().maxUSDTPercent} onInput={(e) => update('maxUSDTPercent', parseFloat(e.currentTarget.value) || 80)} class="mmi-input-sm" />
                             <span class="mmi-unit">%</span>
                         </div>
                     </div>
