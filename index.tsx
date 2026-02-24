@@ -13,6 +13,7 @@ import EnvironmentBadge from './components/EnvironmentBadge';
 import HomePage from './pages/HomePage';
 import * as Public from './pages/PublicPages';
 import * as Admin from './pages/AdminPages';
+import * as MMAdmin from './pages/MMAdminPages';
 import * as Auth from './pages/AuthPages';
 import ValidatorStaking from './components/ValidatorStaking';
 
@@ -30,7 +31,7 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/mm-login') || location.pathname.startsWith('/mm-admin');
   const isDexRoute = () => location.pathname.startsWith('/dex');
 
   return (
@@ -123,6 +124,16 @@ render(() => (
         <Route path="/adminsystem/api-pricing" component={Admin.AdminApiPricingPage} />
         <Route path="/adminsystem/vision-nodes" component={Admin.AdminVisionNodesPage} />
         <Route path="/adminsystem/node-health" component={Admin.AdminNodeHealthPage} />
+
+        {/* MM Admin Routes (Separate system) */}
+        <Route path="/mm-login" component={MMAdmin.MMAdminLoginPage} />
+        <Route path="/mm-admin" component={MMAdmin.MMAdminDashboardPage} />
+        <Route path="/mm-admin/price" component={MMAdmin.MMAdminPricePage} />
+        <Route path="/mm-admin/spread" component={MMAdmin.MMAdminSpreadPage} />
+        <Route path="/mm-admin/inventory" component={MMAdmin.MMAdminInventoryPage} />
+        <Route path="/mm-admin/risk" component={MMAdmin.MMAdminRiskPage} />
+        <Route path="/mm-admin/agents" component={MMAdmin.MMAdminAgentsPage} />
+        <Route path="/mm-admin/log" component={MMAdmin.MMAdminLogPage} />
 
       </Router>
     </I18nProvider>
