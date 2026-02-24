@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onMount, onCleanup, Show, For, createMemo } from 'solid-js';
 import { getAdminFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
 import { doc, getDoc, setDoc, collection, getDocs, query, where, limit, onSnapshot } from 'firebase/firestore';
+import { SolidApexCharts } from 'solid-apexcharts';
 
 function getApiUrl() {
     if (window.location.hostname.includes('staging') || window.location.hostname === 'localhost') {
@@ -364,6 +365,71 @@ export default function MMAdminDashboard() {
                             <button onClick={triggerCapitulation} disabled={saving()} style="width: 100%; padding: 10px; background: #e11d48; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);">
                                 {saving() ? 'EXECUTING...' : 'EXECUTE FLASH CRASH'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Market & Extraction Analytics Charts */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        Market & Extraction Analytics
+                    </h2>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
+                        {/* Token Extraction Area Chart */}
+                        <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 20px;">
+                            <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;">VCN Extraction Timeline (7D)</h3>
+                            <SolidApexCharts
+                                type="area"
+                                height={250}
+                                options={{
+                                    chart: { background: 'transparent', toolbar: { show: false } },
+                                    theme: { mode: 'dark' },
+                                    colors: ['#34d399', '#7dd3fc'],
+                                    dataLabels: { enabled: false },
+                                    stroke: { curve: 'smooth', width: 2 },
+                                    xaxis: {
+                                        categories: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'],
+                                        axisBorder: { show: false },
+                                        axisTicks: { show: false }
+                                    },
+                                    yaxis: { show: false },
+                                    grid: { borderColor: 'rgba(255,255,255,0.05)', strokeDashArray: 4 },
+                                    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.0, stops: [0, 90, 100] } },
+                                    legend: { position: 'top', horizontalAlign: 'right' }
+                                }}
+                                series={[
+                                    { name: 'VCN Vacuumed', data: [120000, 250000, 410000, 680000, 950000, 1400000, 2100000] },
+                                    { name: 'USDT Profit ($)', data: [1500, 3200, 4800, 7500, 11000, 16000, 22500] }
+                                ]}
+                            />
+                        </div>
+
+                        {/* Order Book Imbalance Donut */}
+                        <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center;">
+                            <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; width: 100%; text-align: left;">Order Book Imbalance</h3>
+                            <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+                                <SolidApexCharts
+                                    type="donut"
+                                    width={250}
+                                    options={{
+                                        chart: { background: 'transparent' },
+                                        theme: { mode: 'dark' },
+                                        labels: ['Buy Walls (Bids)', 'Sell Walls (Asks)'],
+                                        colors: ['#34d399', '#f43f5e'],
+                                        stroke: { show: true, colors: ['#0f172a'], width: 2 },
+                                        dataLabels: { enabled: false },
+                                        legend: { position: 'bottom' },
+                                        plotOptions: {
+                                            pie: { donut: { size: '75%', labels: { show: true, name: { show: false }, value: { show: true, fontSize: '24px', fontWeight: 800, color: '#f8fafc' } } } }
+                                        }
+                                    }}
+                                    series={[75, 25]} // heavily skewed toward bids representing the MM buy walls padding
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
