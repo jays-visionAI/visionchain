@@ -6,6 +6,7 @@
  */
 import { createSignal, onMount, onCleanup, For, Show, createMemo } from 'solid-js';
 import { A } from '@solidjs/router';
+import DexLoginButton from './DexLoginButton';
 import './dex-markets.css';
 
 // ─── API ───────────────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ export default function DEXMarkets() {
                             onInput={(e) => setSearch(e.currentTarget.value)}
                         />
                     </div>
+                    <DexLoginButton />
                 </div>
             </div>
 

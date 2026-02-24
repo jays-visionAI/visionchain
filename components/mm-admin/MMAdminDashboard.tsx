@@ -206,6 +206,49 @@ export default function MMAdminDashboard() {
                     </div>
                 </div>
 
+                {/* Capital Extraction Radar */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        Capital Extraction Radar
+                        <span style="font-size: 11px; padding: 2px 6px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 4px; color: #4ade80; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; margin-left: auto;">Live Metric Tracking</span>
+                    </h2>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+                        <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(0,0,0,0)); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 16px; padding: 24px; box-shadow: 0 8px 32px rgba(16, 185, 129, 0.05);">
+                            <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(16, 185, 129, 0.1); filter: blur(30px); border-radius: 50%;"></div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399;"></div>
+                                <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Net Token Vacuumed</div>
+                            </div>
+                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #34d399; margin-bottom: 4px; text-shadow: 0 0 20px rgba(52, 211, 153, 0.2);">+{(totalPnL() * 10).toLocaleString()} VCN</div>
+                            <div style="color: #64748b; font-size: 13px;">Accumulated from retail dumping</div>
+                        </div>
+
+                        <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(56, 189, 248, 0.05), rgba(0,0,0,0)); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 16px; padding: 24px; box-shadow: 0 8px 32px rgba(56, 189, 248, 0.05);">
+                            <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(56, 189, 248, 0.1); filter: blur(30px); border-radius: 50%;"></div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 10px #38bdf8;"></div>
+                                <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Spread Strategy PnL</div>
+                            </div>
+                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #7dd3fc; margin-bottom: 4px; text-shadow: 0 0 20px rgba(125, 211, 252, 0.2);">{totalPnL() >= 0 ? '+' : ''}${totalPnL().toLocaleString()} USDT</div>
+                            <div style="color: #64748b; font-size: 13px;">Generated via bid-ask layer gaps</div>
+                        </div>
+
+                        <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(168, 85, 247, 0.05), rgba(0,0,0,0)); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 16px; padding: 24px; box-shadow: 0 8px 32px rgba(168, 85, 247, 0.05);">
+                            <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(168, 85, 247, 0.1); filter: blur(30px); border-radius: 50%;"></div>
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #a855f7; box-shadow: 0 0 10px #a855f7;"></div>
+                                <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Total Capital Extracted</div>
+                            </div>
+                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #d8b4fe; margin-bottom: 4px; text-shadow: 0 0 20px rgba(216, 180, 254, 0.2);">{totalPnL() >= 0 ? '+' : ''}${((totalPnL() * 1.5) + (totalPnL() * 10 * (market()?.lastPrice || 0.1))).toLocaleString()}</div>
+                            <div style="color: #64748b; font-size: 13px;">USDT Equivalent Value</div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* MM Agents */}
                 <div class="mmd-section">
                     <h2 class="mmd-section-title">Market Maker Agents</h2>

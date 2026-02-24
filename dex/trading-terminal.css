@@ -1064,3 +1064,8 @@
 .rs-mode-btn.active svg {
     color: var(--dx-accent2);
 }
+.dex-h-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}

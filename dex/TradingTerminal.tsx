@@ -22,6 +22,7 @@ import './my-agent-panel.css';
 import './user-trade-panel.css';
 import MyAgentPanel from './MyAgentPanel';
 import UserTradePanel from './UserTradePanel';
+import DexLoginButton from './DexLoginButton';
 
 // ─── API Config ────────────────────────────────────────────────────────────
 
@@ -583,6 +584,9 @@ export default function TradingTerminal() {
                             </div>
                         )}
                     </Show>
+                </div>
+                <div class="dex-h-right">
+                    <DexLoginButton />
                 </div>
             </header>
 
