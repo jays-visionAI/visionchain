@@ -16926,6 +16926,16 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         history.sort((a, b) => (b.timestamp?._seconds || 0) - (a.timestamp?._seconds || 0));
         return res.json({ success: true, history: history.slice(0, limit) });
       }
+      case "getMMAgents": {
+        const mmSnap = await db.collection("dex/agents/list").where("role", "==", "market_maker").get();
+        const mmAgents = [];
+        mmSnap.forEach((d) => mmAgents.push(d.data()));
+        const mktSnap = await db.doc(`dex/market/data/${DEX_PAIR}`).get();
+        const mktData = mktSnap.exists ? mktSnap.data() : {};
+        const settSnap = await db.doc("dex/config/mm-settings/current").get();
+        const settData = settSnap.exists ? settSnap.data() : {};
+        return res.json({ success: true, agents: mmAgents, market: mktData, settings: settData });
+      }
       case "getEngineStatus": {
         const roundSnap = await db.doc("dex/settings/config/roundCounter").get();
         const current = roundSnap.exists ? roundSnap.data().current || 0 : 0;

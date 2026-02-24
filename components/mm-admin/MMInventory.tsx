@@ -1,6 +1,13 @@
 import { createSignal, onMount, Show, For, createMemo } from 'solid-js';
 import { getAdminFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
-import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+
+function getApiUrl() {
+    if (window.location.hostname.includes('staging') || window.location.hostname === 'localhost') {
+        return 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI';
+    }
+    return 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
+}
 
 interface InventoryConfig {
     targetRatio: number;
@@ -26,16 +33,28 @@ export default function MMInventory() {
 
     onMount(async () => {
         try {
-            const [settingsSnap, marketSnap, agentsSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/mm-settings/current')),
-                getDoc(doc(db, 'dex/market/data/VCN-USDT')),
-                getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker'))),
-            ]);
-            if (settingsSnap.exists() && settingsSnap.data().inventoryConfig) setConfig(prev => ({ ...prev, ...settingsSnap.data().inventoryConfig }));
-            if (marketSnap.exists()) setPrice(marketSnap.data().lastPrice || 0.10);
-            const a: AgentBalance[] = [];
-            agentsSnap.forEach(d => { const data = d.data(); a.push({ id: d.id, name: data.name || d.id, usdt: data.balances?.USDT || 0, vcn: data.balances?.VCN || 0 }); });
-            setAgents(a);
+            const res = await fetch(getApiUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'getMMAgents' }),
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                if (data.settings?.inventoryConfig) setConfig(prev => ({ ...prev, ...data.settings.inventoryConfig }));
+                if (data.market?.lastPrice) setPrice(data.market.lastPrice);
+
+                const a: AgentBalance[] = [];
+                (data.agents || []).forEach((agent: any) => {
+                    a.push({
+                        id: agent.id,
+                        name: agent.name || agent.id,
+                        usdt: agent.balances?.USDT || 0,
+                        vcn: agent.balances?.VCN || 0
+                    });
+                });
+                setAgents(a);
+            }
         } catch (e) { console.error('[MMInv] Load:', e); }
         finally { setLoading(false); }
     });

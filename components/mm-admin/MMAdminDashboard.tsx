@@ -2,6 +2,13 @@ import { createSignal, createEffect, onMount, onCleanup, Show, For, createMemo }
 import { getAdminFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
 import { doc, getDoc, setDoc, collection, getDocs, query, where, limit, onSnapshot } from 'firebase/firestore';
 
+function getApiUrl() {
+    if (window.location.hostname.includes('staging') || window.location.hostname === 'localhost') {
+        return 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI';
+    }
+    return 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
+}
+
 interface MMAgent {
     id: string;
     name: string;
@@ -72,22 +79,21 @@ export default function MMAdminDashboard() {
 
     async function loadData() {
         try {
-            const [marketSnap, settingsSnap, agentsSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/market/data/VCN-USDT')),
-                getDoc(doc(db, 'dex/config/mm-settings/current')),
-                getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker'))),
-            ]);
+            const res = await fetch(getApiUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'getMMAgents' }),
+            });
+            const data = await res.json();
 
-            if (marketSnap.exists()) setMarket(marketSnap.data() as MarketData);
-            if (settingsSnap.exists()) {
-                const s = settingsSnap.data() as MMSettings;
-                setMMSettings(s);
-                setKillSwitch(s.riskConfig?.killSwitchEnabled || false);
+            if (data.success) {
+                setMMAgents(data.agents || []);
+                if (data.market) setMarket(data.market as MarketData);
+                if (data.settings) {
+                    setMMSettings(data.settings as MMSettings);
+                    setKillSwitch(data.settings.riskConfig?.killSwitchEnabled || false);
+                }
             }
-
-            const agents: MMAgent[] = [];
-            agentsSnap.forEach((d) => agents.push(d.data() as MMAgent));
-            setMMAgents(agents);
         } catch (e) {
             console.error('[MMAdmin] Load error:', e);
         } finally {
@@ -217,15 +223,24 @@ export default function MMAdminDashboard() {
                                     onClick={async () => {
                                         setLoading(true);
                                         try {
-                                            const apiUrl = window.location.hostname.includes('staging') || window.location.hostname === 'localhost'
-                                                ? 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI'
-                                                : 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
-                                            await fetch(apiUrl, {
+                                            const res = await fetch(getApiUrl(), {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({ action: 'initEngine' }),
                                             });
-                                            await loadData();
+                                            const data = await res.json();
+                                            if (data.success) {
+                                                await loadData();
+                                            } else if (data.error === 'Already initialized') {
+                                                await fetch(getApiUrl(), {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ action: 'initEngine', force: true }),
+                                                });
+                                                await loadData();
+                                            } else {
+                                                alert('Init failed: ' + data.error);
+                                            }
                                         } catch (e: any) {
                                             alert('Error: ' + e.message);
                                         }

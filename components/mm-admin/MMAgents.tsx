@@ -2,6 +2,13 @@ import { createSignal, onMount, Show, For, createMemo } from 'solid-js';
 import { getAdminFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
 import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 
+function getApiUrl() {
+    if (window.location.hostname.includes('staging') || window.location.hostname === 'localhost') {
+        return 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI';
+    }
+    return 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
+}
+
 interface MMAgent {
     id: string;
     name: string;
@@ -43,21 +50,24 @@ export default function MMAgents() {
     const [selectedAgent, setSelectedAgent] = createSignal<string | null>(null);
     const db = getAdminFirebaseDb();
 
-    onMount(async () => {
+    async function loadAgents() {
         try {
-            const [settingsSnap, marketSnap, agentsSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/mm-settings/current')),
-                getDoc(doc(db, 'dex/market/data/VCN-USDT')),
-                getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker'))),
-            ]);
-            if (settingsSnap.exists() && settingsSnap.data().agentOverrides) setOverrides(settingsSnap.data().agentOverrides);
-            if (marketSnap.exists()) setPrice(marketSnap.data().lastPrice || 0.10);
-            const a: MMAgent[] = [];
-            agentsSnap.forEach(d => a.push({ id: d.id, ...d.data() } as any));
-            setAgents(a);
+            const res = await fetch(getApiUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'getMMAgents' }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setAgents(data.agents || []);
+                if (data.market?.lastPrice) setPrice(data.market.lastPrice);
+                if (data.settings?.agentOverrides) setOverrides(data.settings.agentOverrides);
+            }
         } catch (e) { console.error('[MMAgents] Load:', e); }
         finally { setLoading(false); }
-    });
+    }
+
+    onMount(() => loadAgents());
 
     const updateOverride = (agentId: string, key: keyof AgentOverride, value: any) => {
         setOverrides(prev => ({
@@ -117,33 +127,30 @@ export default function MMAgents() {
                             onClick={async () => {
                                 setLoading(true);
                                 try {
-                                    const apiUrl = window.location.hostname.includes('staging') || window.location.hostname === 'localhost'
-                                        ? 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI'
-                                        : 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
-                                    const res = await fetch(apiUrl, {
+                                    const res = await fetch(getApiUrl(), {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({ action: 'initEngine' }),
                                     });
                                     const data = await res.json();
-                                    if (data.success || data.error === 'Already initialized') {
-                                        // Reload agents
-                                        const agentsSnap = await getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker')));
-                                        const a: MMAgent[] = [];
-                                        agentsSnap.forEach(d => a.push({ id: d.id, ...d.data() } as any));
-                                        setAgents(a);
-                                        if (a.length === 0) {
-                                            alert(data.error === 'Already initialized'
-                                                ? 'Engine was initialized but MM agents not found. Check Firestore dex/agents/list for role: market_maker.'
-                                                : 'Initialization completed. Refresh to see agents.');
-                                        }
+                                    if (data.success) {
+                                        await loadAgents();
+                                    } else if (data.error === 'Already initialized') {
+                                        // Force re-init
+                                        await fetch(getApiUrl(), {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ action: 'initEngine', force: true }),
+                                        });
+                                        await loadAgents();
                                     } else {
-                                        alert('Init failed: ' + (data.error || 'Unknown error'));
+                                        alert('Init failed: ' + data.error);
+                                        setLoading(false);
                                     }
                                 } catch (e: any) {
                                     alert('Error: ' + e.message);
+                                    setLoading(false);
                                 }
-                                setLoading(false);
                             }}
                         >
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
