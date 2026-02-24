@@ -136,6 +136,11 @@ export default function MMAdminDashboard() {
     const totalPnL = createMemo(() => mmAgents().reduce((s, a) => s + (a.performance?.totalPnL || 0), 0));
     const totalTrades = createMemo(() => mmAgents().reduce((s, a) => s + (a.performance?.totalTrades || 0), 0));
 
+    // True accounting for Capital Extraction Radar (100% real based on 5M VCN, 500k USDT initial)
+    const netTokenVacuumed = createMemo(() => mmAgents().reduce((s, a) => s + ((a.balances?.VCN || 5000000) - 5000000), 0));
+    const spreadProfitUSDT = createMemo(() => mmAgents().reduce((s, a) => s + ((a.balances?.USDT || 500000) - 500000), 0));
+    const totalExtractedUSDT = createMemo(() => spreadProfitUSDT() + (netTokenVacuumed() * (market()?.lastPrice || 0.1)));
+
     return (
         <div class="mmd-root">
             {/* Page Header */}
@@ -223,7 +228,7 @@ export default function MMAdminDashboard() {
                                 <div style="width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399;"></div>
                                 <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Net Token Vacuumed</div>
                             </div>
-                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #34d399; margin-bottom: 4px; text-shadow: 0 0 20px rgba(52, 211, 153, 0.2);">+{(totalPnL() * 10).toLocaleString()} VCN</div>
+                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #34d399; margin-bottom: 4px; text-shadow: 0 0 20px rgba(52, 211, 153, 0.2);">{netTokenVacuumed() >= 0 ? '+' : ''}{netTokenVacuumed().toLocaleString(undefined, { maximumFractionDigits: 0 })} VCN</div>
                             <div style="color: #64748b; font-size: 13px;">Accumulated from retail dumping</div>
                         </div>
 
@@ -233,7 +238,7 @@ export default function MMAdminDashboard() {
                                 <div style="width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 10px #38bdf8;"></div>
                                 <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Spread Strategy PnL</div>
                             </div>
-                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #7dd3fc; margin-bottom: 4px; text-shadow: 0 0 20px rgba(125, 211, 252, 0.2);">{totalPnL() >= 0 ? '+' : ''}${totalPnL().toLocaleString()} USDT</div>
+                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #7dd3fc; margin-bottom: 4px; text-shadow: 0 0 20px rgba(125, 211, 252, 0.2);">{spreadProfitUSDT() >= 0 ? '+' : ''}${spreadProfitUSDT().toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT</div>
                             <div style="color: #64748b; font-size: 13px;">Generated via bid-ask layer gaps</div>
                         </div>
 
@@ -243,7 +248,7 @@ export default function MMAdminDashboard() {
                                 <div style="width: 8px; height: 8px; border-radius: 50%; background: #a855f7; box-shadow: 0 0 10px #a855f7;"></div>
                                 <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Total Capital Extracted</div>
                             </div>
-                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #d8b4fe; margin-bottom: 4px; text-shadow: 0 0 20px rgba(216, 180, 254, 0.2);">{totalPnL() >= 0 ? '+' : ''}${((totalPnL() * 1.5) + (totalPnL() * 10 * (market()?.lastPrice || 0.1))).toLocaleString()}</div>
+                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #d8b4fe; margin-bottom: 4px; text-shadow: 0 0 20px rgba(216, 180, 254, 0.2);">{totalExtractedUSDT() >= 0 ? '+' : ''}${totalExtractedUSDT().toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                             <div style="color: #64748b; font-size: 13px;">USDT Equivalent Value</div>
                         </div>
                     </div>
