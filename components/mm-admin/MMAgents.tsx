@@ -191,11 +191,11 @@ export default function MMAgents() {
                                                     <div class="mma-override-grid">
                                                         <div class="mma-override-item">
                                                             <label>Bias Override</label>
-                                                            <input type="number" step="0.05" min="-1" max="1" value={override().trendBiasOverride ?? ''} onInput={(e) => updateOverride(agent.id, 'trendBiasOverride', e.currentTarget.value ? parseFloat(e.currentTarget.value) : undefined)} placeholder="Default" class="mma-ovr-input" />
+                                                            <input type="number" step="0.01" min="-1" max="1" value={override().trendBiasOverride ?? ''} onInput={(e) => updateOverride(agent.id, 'trendBiasOverride', e.currentTarget.value ? parseFloat(e.currentTarget.value) : undefined)} placeholder="Default" class="mma-ovr-input" />
                                                         </div>
                                                         <div class="mma-override-item">
                                                             <label>Spread Override (%)</label>
-                                                            <input type="number" step="0.1" min="0.1" max="5" value={override().spreadOverride ?? ''} onInput={(e) => updateOverride(agent.id, 'spreadOverride', e.currentTarget.value ? parseFloat(e.currentTarget.value) : undefined)} placeholder="Default" class="mma-ovr-input" />
+                                                            <input type="number" step="0.01" min="0.01" max="5" value={override().spreadOverride ?? ''} onInput={(e) => updateOverride(agent.id, 'spreadOverride', e.currentTarget.value ? parseFloat(e.currentTarget.value) : undefined)} placeholder="Default" class="mma-ovr-input" />
                                                         </div>
                                                     </div>
                                                     <div class="mma-note-group">

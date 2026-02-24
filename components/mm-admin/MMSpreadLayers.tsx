@@ -130,7 +130,7 @@ export default function MMSpreadLayers() {
                         <div class="mms-section">
                             <h2 class="mms-section-title">Base Spread</h2>
                             <div class="mms-input-row">
-                                <input type="number" step="0.1" min="0.1" max="5" value={config().baseSpread} onInput={(e) => update('baseSpread', parseFloat(e.currentTarget.value) || 0.5)} class="mms-input" />
+                                <input type="number" step="0.01" min="0.01" max="5" value={config().baseSpread} onInput={(e) => update('baseSpread', parseFloat(e.currentTarget.value) || 0.5)} class="mms-input" />
                                 <span class="mms-unit">%</span>
                             </div>
                             <div class="mms-actual-spread">
@@ -143,13 +143,13 @@ export default function MMSpreadLayers() {
                             <h2 class="mms-section-title">Asymmetric Spread</h2>
                             <div class="mms-slider-row">
                                 <label class="mms-label">Bid Multiplier</label>
-                                <input type="range" min="0.5" max="2.0" step="0.1" value={config().bidSpreadMultiplier} onInput={(e) => update('bidSpreadMultiplier', parseFloat(e.currentTarget.value))} class="mms-slider" />
-                                <span class="mms-slider-val">{config().bidSpreadMultiplier.toFixed(1)}x</span>
+                                <input type="range" min="0.5" max="2.0" step="0.01" value={config().bidSpreadMultiplier} onInput={(e) => update('bidSpreadMultiplier', parseFloat(e.currentTarget.value))} class="mms-slider" />
+                                <span class="mms-slider-val">{config().bidSpreadMultiplier.toFixed(2)}x</span>
                             </div>
                             <div class="mms-slider-row">
                                 <label class="mms-label">Ask Multiplier</label>
-                                <input type="range" min="0.5" max="2.0" step="0.1" value={config().askSpreadMultiplier} onInput={(e) => update('askSpreadMultiplier', parseFloat(e.currentTarget.value))} class="mms-slider" />
-                                <span class="mms-slider-val">{config().askSpreadMultiplier.toFixed(1)}x</span>
+                                <input type="range" min="0.5" max="2.0" step="0.01" value={config().askSpreadMultiplier} onInput={(e) => update('askSpreadMultiplier', parseFloat(e.currentTarget.value))} class="mms-slider" />
+                                <span class="mms-slider-val">{config().askSpreadMultiplier.toFixed(2)}x</span>
                             </div>
                             <div class={`mms-bias-indicator ${spreadBias()}`}>
                                 {spreadBias() === 'bullish' && 'Bullish bias: Easier to buy, harder to sell'}
@@ -169,12 +169,12 @@ export default function MMSpreadLayers() {
                                 <div class="mms-range-inputs">
                                     <div class="mms-input-group">
                                         <label class="mms-label">Min %</label>
-                                        <input type="number" step="0.1" value={config().dynamicSpreadRange.min} onInput={(e) => update('dynamicSpreadRange', { ...config().dynamicSpreadRange, min: parseFloat(e.currentTarget.value) || 0.2 })} class="mms-input-sm" />
+                                        <input type="number" step="0.01" value={config().dynamicSpreadRange.min} onInput={(e) => update('dynamicSpreadRange', { ...config().dynamicSpreadRange, min: parseFloat(e.currentTarget.value) || 0.2 })} class="mms-input-sm" />
                                     </div>
                                     <span class="mms-range-sep">~</span>
                                     <div class="mms-input-group">
                                         <label class="mms-label">Max %</label>
-                                        <input type="number" step="0.1" value={config().dynamicSpreadRange.max} onInput={(e) => update('dynamicSpreadRange', { ...config().dynamicSpreadRange, max: parseFloat(e.currentTarget.value) || 2.0 })} class="mms-input-sm" />
+                                        <input type="number" step="0.01" value={config().dynamicSpreadRange.max} onInput={(e) => update('dynamicSpreadRange', { ...config().dynamicSpreadRange, max: parseFloat(e.currentTarget.value) || 2.0 })} class="mms-input-sm" />
                                     </div>
                                 </div>
                             </Show>
@@ -190,12 +190,12 @@ export default function MMSpreadLayers() {
                             </div>
                             <div class="mms-slider-row">
                                 <label class="mms-label">Spacing</label>
-                                <input type="number" step="0.1" min="0.1" max="2" value={config().layerSpacing} onInput={(e) => update('layerSpacing', parseFloat(e.currentTarget.value) || 0.3)} class="mms-input-sm" />
+                                <input type="number" step="0.01" min="0.01" max="2" value={config().layerSpacing} onInput={(e) => update('layerSpacing', parseFloat(e.currentTarget.value) || 0.3)} class="mms-input-sm" />
                                 <span class="mms-unit">%</span>
                             </div>
                             <div class="mms-slider-row">
                                 <label class="mms-label">Amount/Layer</label>
-                                <input type="number" step="0.5" min="0.5" max="10" value={config().layerAmountPercent} onInput={(e) => update('layerAmountPercent', parseFloat(e.currentTarget.value) || 3)} class="mms-input-sm" />
+                                <input type="number" step="0.01" min="0.01" max="10" value={config().layerAmountPercent} onInput={(e) => update('layerAmountPercent', parseFloat(e.currentTarget.value) || 3)} class="mms-input-sm" />
                                 <span class="mms-unit">% of balance</span>
                             </div>
                             <div class="mms-pattern-grid">

@@ -117,7 +117,7 @@ export default function MMInventory() {
                     <h2 class="mmi-section-title">Target Ratio</h2>
                     <div class="mmi-slider-row">
                         <span class="mmi-slider-end">VCN 0%</span>
-                        <input type="range" min="0.1" max="0.9" step="0.05" value={config().targetRatio} onInput={(e) => update('targetRatio', parseFloat(e.currentTarget.value))} class="mmi-slider" />
+                        <input type="range" min="0.1" max="0.9" step="0.01" value={config().targetRatio} onInput={(e) => update('targetRatio', parseFloat(e.currentTarget.value))} class="mmi-slider" />
                         <span class="mmi-slider-end">VCN 90%</span>
                     </div>
                     <div class="mmi-slider-val-row">
@@ -132,7 +132,7 @@ export default function MMInventory() {
                     <p class="mmi-desc">How aggressively to adjust order sizes when inventory is imbalanced</p>
                     <div class="mmi-slider-row">
                         <span class="mmi-slider-end">Off</span>
-                        <input type="range" min="0" max="1" step="0.1" value={config().skewIntensity} onInput={(e) => update('skewIntensity', parseFloat(e.currentTarget.value))} class="mmi-slider" />
+                        <input type="range" min="0" max="1" step="0.01" value={config().skewIntensity} onInput={(e) => update('skewIntensity', parseFloat(e.currentTarget.value))} class="mmi-slider" />
                         <span class="mmi-slider-end">Aggressive</span>
                     </div>
                     <div class="mmi-slider-center-val">{config().skewIntensity.toFixed(1)}</div>

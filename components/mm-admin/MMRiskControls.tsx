@@ -168,14 +168,14 @@ export default function MMRiskControls() {
                             <div class="mmr-input-group">
                                 <label class="mmr-label">Price Change Threshold</label>
                                 <div class="mmr-input-row">
-                                    <input type="number" step="1" min="1" max="20" value={config().circuitBreaker.priceChangeThreshold} onInput={(e) => update('circuitBreaker.priceChangeThreshold', parseInt(e.currentTarget.value) || 5)} class="mmr-input" />
+                                    <input type="number" step="0.01" min="0.01" max="20" value={config().circuitBreaker.priceChangeThreshold} onInput={(e) => update('circuitBreaker.priceChangeThreshold', parseFloat(e.currentTarget.value) || 5)} class="mmr-input" />
                                     <span class="mmr-unit">% in 5min</span>
                                 </div>
                             </div>
                             <div class="mmr-input-group">
                                 <label class="mmr-label">Pause Duration</label>
                                 <div class="mmr-input-row">
-                                    <input type="number" step="5" min="5" max="60" value={config().circuitBreaker.pauseDurationMinutes} onInput={(e) => update('circuitBreaker.pauseDurationMinutes', parseInt(e.currentTarget.value) || 10)} class="mmr-input" />
+                                    <input type="number" step="0.01" min="1" max="60" value={config().circuitBreaker.pauseDurationMinutes} onInput={(e) => update('circuitBreaker.pauseDurationMinutes', parseFloat(e.currentTarget.value) || 10)} class="mmr-input" />
                                     <span class="mmr-unit">minutes</span>
                                 </div>
                             </div>
@@ -189,7 +189,7 @@ export default function MMRiskControls() {
                     <div class="mmr-pnl-grid">
                         <div class="mmr-input-group">
                             <label class="mmr-label">Daily Loss Limit (USDT)</label>
-                            <input type="number" step="500" min="100" value={config().dailyLossLimit} onInput={(e) => update('dailyLossLimit', parseInt(e.currentTarget.value) || 5000)} class="mmr-input" />
+                            <input type="number" step="0.01" min="0.01" value={config().dailyLossLimit} onInput={(e) => update('dailyLossLimit', parseFloat(e.currentTarget.value) || 5000)} class="mmr-input" />
                             <div class="mmr-pnl-bar-wrap">
                                 <div class="mmr-pnl-bar loss">
                                     <div class="mmr-pnl-bar-fill" style={{ width: `${Math.min(Math.abs(Math.min(dailyPnL(), 0)) / config().dailyLossLimit * 100, 100)}%` }} />
@@ -203,7 +203,7 @@ export default function MMRiskControls() {
                                 <span class="mmr-label" style={{ margin: "0" }}>Daily Profit Target</span>
                             </label>
                             <Show when={config().dailyProfitTakeEnabled}>
-                                <input type="number" step="500" min="100" value={config().dailyProfitTarget} onInput={(e) => update('dailyProfitTarget', parseInt(e.currentTarget.value) || 10000)} class="mmr-input" />
+                                <input type="number" step="0.01" min="0.01" value={config().dailyProfitTarget} onInput={(e) => update('dailyProfitTarget', parseFloat(e.currentTarget.value) || 10000)} class="mmr-input" />
                                 <span class="mmr-hint">Reduce speed when target is reached</span>
                             </Show>
                         </div>
@@ -216,7 +216,7 @@ export default function MMRiskControls() {
                     <div class="mmr-dd-grid">
                         <div class="mmr-input-group">
                             <label class="mmr-label">Threshold (%)</label>
-                            <input type="number" step="1" min="1" max="50" value={config().maxDrawdownPercent} onInput={(e) => update('maxDrawdownPercent', parseInt(e.currentTarget.value) || 10)} class="mmr-input" />
+                            <input type="number" step="0.01" min="0.01" max="50" value={config().maxDrawdownPercent} onInput={(e) => update('maxDrawdownPercent', parseFloat(e.currentTarget.value) || 10)} class="mmr-input" />
                             <div class="mmr-dd-current">
                                 Current: <span class={drawdown() > config().maxDrawdownPercent * 0.7 ? 'danger' : ''}>{drawdown().toFixed(1)}%</span>
                             </div>
