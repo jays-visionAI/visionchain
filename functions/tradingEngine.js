@@ -105,30 +105,93 @@ class CloudOrderBook {
 
 // ─── MM Order Generation ───────────────────────────────────────────────────
 
-function generateMMOrders(agent, currentPrice) {
-    const cfg = agent.mmConfig;
-    if (!cfg) return [];
+function generateMMOrders(agent, currentPrice, mmAdmin) {
+    const agentCfg = agent.mmConfig || {};
 
-    let basePrice = cfg.basePrice * (1 + cfg.trendBias * cfg.trendSpeed);
-    const minP = cfg.basePrice * (1 - cfg.priceRangePercent / 100);
-    const maxP = cfg.basePrice * (1 + cfg.priceRangePercent / 100);
-    basePrice = Math.max(minP, Math.min(maxP, basePrice));
+    // Merge: MM Admin settings override agent-level config
+    const pd = mmAdmin?.priceDirection || {};
+    const sc = mmAdmin?.spreadConfig || {};
+    const ic = mmAdmin?.inventoryConfig || {};
+    const ao = mmAdmin?.agentOverrides?.[agent.id] || {};
 
-    const halfSpread = (cfg.spreadPercent / 100) / 2;
-    const layerSpacing = cfg.layerSpacing / 100;
+    // If agent is disabled via admin override, skip
+    if (ao.enabled === false) return [];
+
+    // ── Price Direction ──
+    const trendBias = ao.trendBiasOverride ?? pd.trendBias ?? agentCfg.trendBias ?? 0;
+    const trendSpeedVal = (typeof pd.trendSpeed === "number") ? pd.trendSpeed
+        : { slow: 0.00005, medium: 0.0002, fast: 0.0005 }[pd.trendSpeed] || agentCfg.trendSpeed || 0.0002;
+    const targetPrice = pd.targetPrice || agentCfg.basePrice || currentPrice;
+    const priceFloor = pd.priceFloor ?? agentCfg.basePrice * 0.5 ?? currentPrice * 0.5;
+    const priceCeiling = pd.priceCeiling ?? agentCfg.basePrice * 2 ?? currentPrice * 2;
+    const priceRangePct = pd.priceRangePercent ?? agentCfg.priceRangePercent ?? 20;
+
+    // Calculate base price: drift from current toward target
+    let basePrice = currentPrice + (targetPrice - currentPrice) * Math.abs(trendBias) * trendSpeedVal * 100;
+    const minP = targetPrice * (1 - priceRangePct / 100);
+    const maxP = targetPrice * (1 + priceRangePct / 100);
+    basePrice = Math.max(Math.max(minP, priceFloor), Math.min(Math.min(maxP, priceCeiling), basePrice));
+
+    // ── Spread & Layers ──
+    const baseSpreadPct = ao.spreadOverride ?? sc.baseSpread ?? agentCfg.spreadPercent ?? 1.0;
+    const bidMult = sc.bidSpreadMultiplier ?? 1.0;
+    const askMult = sc.askSpreadMultiplier ?? 1.0;
+    const layerCount = sc.layerCount ?? agentCfg.layerCount ?? 5;
+    const layerSpacingPct = sc.layerSpacing ?? agentCfg.layerSpacing ?? 0.3;
+    const layerAmountPct = (sc.layerAmountPercent ?? 3.0) / 100;
+    const layerPattern = sc.layerAmountPattern || "flat";
+
+    // Dynamic spread: widen when volatile
+    let effectiveSpread = baseSpreadPct;
+    if (sc.dynamicSpreadEnabled && sc.dynamicSpreadRange) {
+        // Spread scales with distance from target (rough volatility proxy)
+        const dist = Math.abs(currentPrice - targetPrice) / currentPrice;
+        const dynMin = sc.dynamicSpreadRange.min || 0.2;
+        const dynMax = sc.dynamicSpreadRange.max || 2.0;
+        effectiveSpread = Math.max(dynMin, Math.min(dynMax, baseSpreadPct * (1 + dist * 5)));
+    }
+
+    const halfBidSpread = (effectiveSpread / 100 * bidMult) / 2;
+    const halfAskSpread = (effectiveSpread / 100 * askMult) / 2;
+    const layerSpacing = layerSpacingPct / 100;
+
+    // ── Inventory Management ──
     const totalVal = agent.balances.USDT + agent.balances.VCN * currentPrice;
+    if (totalVal <= 0) return [];
     const vcnRatio = (agent.balances.VCN * currentPrice) / totalVal;
-    const rebal = (vcnRatio - cfg.inventoryTarget) * 2;
+    const inventoryTarget = ic.targetRatio ?? agentCfg.inventoryTarget ?? 0.5;
+    const skewIntensity = ic.skewIntensity ?? 0.3;
+    const rebal = (vcnRatio - inventoryTarget) * 2 * skewIntensity;
 
+    // ── Layer Pattern Multipliers ──
+    function getPatternMult(i, total) {
+        switch (layerPattern) {
+            case "increasing": return 0.5 + (i / Math.max(total - 1, 1)) * 1.0;
+            case "decreasing": return 1.5 - (i / Math.max(total - 1, 1)) * 1.0;
+            case "bell": { const mid = (total - 1) / 2; return 1.0 + 0.5 * (1 - Math.abs(i - mid) / Math.max(mid, 1)); }
+            default: return 1.0; // flat
+        }
+    }
+
+    // ── Generate Orders ──
     const orders = [];
-    for (let i = 0; i < cfg.layerCount; i++) {
-        const bp = basePrice * (1 - halfSpread - i * layerSpacing);
-        const ba = Math.round(agent.balances.USDT * ((0.02 + i * 0.005) * (1 - rebal * 0.5)) / bp);
-        if (ba >= DEX_MIN_ORDER) orders.push({ side: "buy", price: Math.round(bp * 10000) / 10000, amount: ba });
+    for (let i = 0; i < layerCount; i++) {
+        const pMult = getPatternMult(i, layerCount);
+        const pctPerLayer = layerAmountPct * pMult;
 
-        const sp = basePrice * (1 + halfSpread + i * layerSpacing);
-        const sa = Math.round(agent.balances.VCN * ((0.02 + i * 0.005) * (1 + rebal * 0.5)));
-        if (sa >= DEX_MIN_ORDER) orders.push({ side: "sell", price: Math.round(sp * 10000) / 10000, amount: sa });
+        // Buy order (bid side)
+        const bp = basePrice * (1 - halfBidSpread - i * layerSpacing);
+        const ba = Math.round(agent.balances.USDT * (pctPerLayer * (1 - rebal * 0.5)) / bp);
+        if (ba >= DEX_MIN_ORDER && bp > 0) {
+            orders.push({ side: "buy", price: Math.round(bp * 10000) / 10000, amount: ba });
+        }
+
+        // Sell order (ask side)
+        const sp = basePrice * (1 + halfAskSpread + i * layerSpacing);
+        const sa = Math.round(agent.balances.VCN * (pctPerLayer * (1 + rebal * 0.5)));
+        if (sa >= DEX_MIN_ORDER && sp > 0) {
+            orders.push({ side: "sell", price: Math.round(sp * 10000) / 10000, amount: sa });
+        }
     }
     return orders;
 }
@@ -311,6 +374,24 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         console.log("[TradingEngine] Paused."); return;
     }
 
+    // ── Load MM Admin Settings from Firestore ──
+    let mmAdmin = null;
+    let mmKillSwitch = false;
+    try {
+        const mmSnap = await db.doc("dex/config/mm-settings/current").get();
+        if (mmSnap.exists) {
+            mmAdmin = mmSnap.data();
+            mmKillSwitch = mmAdmin?.riskConfig?.killSwitchEnabled === true;
+            console.log(`[TradingEngine] MM Admin loaded - Kill Switch: ${mmKillSwitch}, Mode: ${mmAdmin?.priceDirection?.mode || "default"}, Spread: ${mmAdmin?.spreadConfig?.baseSpread || "default"}%`);
+        }
+    } catch (e) {
+        console.warn("[TradingEngine] MM Admin settings load failed:", e.message);
+    }
+
+    if (mmKillSwitch) {
+        console.log("[TradingEngine] MM KILL SWITCH is ON - MM agents will not place orders.");
+    }
+
     const roundRef = db.doc("dex/settings/config/roundCounter");
     const roundSnap = await roundRef.get();
     let roundNumber = roundSnap.exists ? roundSnap.data().current || 0 : 0;
@@ -372,6 +453,10 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     let totalMicro = 0;
     const totalDec = { buy: 0, sell: 0, hold: 0 };
 
+    // ── Circuit Breaker State ──
+    let mmPaused = mmKillSwitch; // start paused if kill switch is on
+    const cbThreshold = mmAdmin?.riskConfig?.circuitBreaker?.priceChangeThreshold || 5; // percent
+
     // ── Micro-Round Loop ──
     while (Date.now() - invocationStart < MAX_MS) {
         const ms = Date.now();
@@ -379,11 +464,20 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         totalMicro++;
         const mf = [];
 
-        // MM refresh every 5 rounds
-        if (totalMicro % 5 === 1) {
+        // Circuit breaker check: pause MM if price moved too far from session open
+        if (!mmPaused && sessionOpen > 0) {
+            const pctChange = Math.abs(orderBook.lastPrice - sessionOpen) / sessionOpen * 100;
+            if (pctChange > cbThreshold) {
+                mmPaused = true;
+                console.log(`[TradingEngine] Circuit breaker triggered: ${pctChange.toFixed(2)}% change exceeds ${cbThreshold}% threshold`);
+            }
+        }
+
+        // MM refresh every 5 rounds (skip if kill switch or circuit breaker active)
+        if (totalMicro % 5 === 1 && !mmPaused) {
             for (const mm of mmAgents) {
                 orderBook.cancelAgentOrders(mm.id);
-                for (const mo of generateMMOrders(mm, orderBook.lastPrice)) {
+                for (const mo of generateMMOrders(mm, orderBook.lastPrice, mmAdmin)) {
                     orderBook.addLimitOrder({
                         id: `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
                         agentId: mm.id, ownerUid: mm.ownerUid,
@@ -467,20 +561,22 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         bc++;
     }
 
-    // MM final orders
-    for (const mm of mmAgents) {
-        for (const mo of generateMMOrders(mm, fp)) {
-            if (bc >= 380) break;
-            const oid = `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`;
-            wb.set(db.doc(`dex/orders/list/${oid}`), {
-                id: oid, agentId: mm.id, ownerUid: mm.ownerUid, pair: DEX_PAIR,
-                side: mo.side, type: "limit", role: "pending",
-                price: mo.price, amount: mo.amount, filledAmount: 0, remainingAmount: mo.amount,
-                status: "open", fee: 0, feeRate: 0, reasoning: "MM",
-                expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 120000),
-                createdAt: admin.firestore.Timestamp.now(),
-            });
-            bc++;
+    // MM final orders (skip if kill switch or circuit breaker paused)
+    if (!mmPaused) {
+        for (const mm of mmAgents) {
+            for (const mo of generateMMOrders(mm, fp, mmAdmin)) {
+                if (bc >= 380) break;
+                const oid = `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`;
+                wb.set(db.doc(`dex/orders/list/${oid}`), {
+                    id: oid, agentId: mm.id, ownerUid: mm.ownerUid, pair: DEX_PAIR,
+                    side: mo.side, type: "limit", role: "pending",
+                    price: mo.price, amount: mo.amount, filledAmount: 0, remainingAmount: mo.amount,
+                    status: "open", fee: 0, feeRate: 0, reasoning: "MM",
+                    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 120000),
+                    createdAt: admin.firestore.Timestamp.now(),
+                });
+                bc++;
+            }
         }
     }
 
