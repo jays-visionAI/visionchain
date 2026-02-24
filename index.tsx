@@ -129,25 +129,29 @@ render(() => (
         <Route path="/adminsystem/vision-nodes" component={Admin.AdminVisionNodesPage} />
         <Route path="/adminsystem/node-health" component={Admin.AdminNodeHealthPage} />
 
-        {/* Trading Admin Routes (Separate system) */}
-        <Route path="/trading-login" component={TradingAdmin.TradingAdminLoginPage} />
-        <Route path="/trading-admin" component={TradingAdmin.TradingAdminDashboardPage} />
-        <Route path="/trading-admin/price" component={TradingAdmin.TradingAdminPricePage} />
-        <Route path="/trading-admin/spread" component={TradingAdmin.TradingAdminSpreadPage} />
-        <Route path="/trading-admin/inventory" component={TradingAdmin.TradingAdminInventoryPage} />
-        <Route path="/trading-admin/risk" component={TradingAdmin.TradingAdminRiskPage} />
-        <Route path="/trading-admin/agents" component={TradingAdmin.TradingAdminAgentsPage} />
-        <Route path="/trading-admin/log" component={TradingAdmin.TradingAdminLogPage} />
+        {import.meta.env.VITE_CHAIN_ENV !== 'production' && (
+          <>
+            {/* Trading Admin Routes (Separate system) */}
+            <Route path="/trading-login" component={TradingAdmin.TradingAdminLoginPage} />
+            <Route path="/trading-admin" component={TradingAdmin.TradingAdminDashboardPage} />
+            <Route path="/trading-admin/price" component={TradingAdmin.TradingAdminPricePage} />
+            <Route path="/trading-admin/spread" component={TradingAdmin.TradingAdminSpreadPage} />
+            <Route path="/trading-admin/inventory" component={TradingAdmin.TradingAdminInventoryPage} />
+            <Route path="/trading-admin/risk" component={TradingAdmin.TradingAdminRiskPage} />
+            <Route path="/trading-admin/agents" component={TradingAdmin.TradingAdminAgentsPage} />
+            <Route path="/trading-admin/log" component={TradingAdmin.TradingAdminLogPage} />
 
-        {/* Legacy redirects: /mm-admin -> /trading-admin */}
-        <Route path="/mm-login" component={() => <Navigate href="/trading-login" />} />
-        <Route path="/mm-admin" component={() => <Navigate href="/trading-admin" />} />
-        <Route path="/mm-admin/price" component={() => <Navigate href="/trading-admin/price" />} />
-        <Route path="/mm-admin/spread" component={() => <Navigate href="/trading-admin/spread" />} />
-        <Route path="/mm-admin/inventory" component={() => <Navigate href="/trading-admin/inventory" />} />
-        <Route path="/mm-admin/risk" component={() => <Navigate href="/trading-admin/risk" />} />
-        <Route path="/mm-admin/agents" component={() => <Navigate href="/trading-admin/agents" />} />
-        <Route path="/mm-admin/log" component={() => <Navigate href="/trading-admin/log" />} />
+            {/* Legacy redirects: /mm-admin -> /trading-admin */}
+            <Route path="/mm-login" component={() => <Navigate href="/trading-login" />} />
+            <Route path="/mm-admin" component={() => <Navigate href="/trading-admin" />} />
+            <Route path="/mm-admin/price" component={() => <Navigate href="/trading-admin/price" />} />
+            <Route path="/mm-admin/spread" component={() => <Navigate href="/trading-admin/spread" />} />
+            <Route path="/mm-admin/inventory" component={() => <Navigate href="/trading-admin/inventory" />} />
+            <Route path="/mm-admin/risk" component={() => <Navigate href="/trading-admin/risk" />} />
+            <Route path="/mm-admin/agents" component={() => <Navigate href="/trading-admin/agents" />} />
+            <Route path="/mm-admin/log" component={() => <Navigate href="/trading-admin/log" />} />
+          </>
+        )}
 
       </Router>
     </I18nProvider>
