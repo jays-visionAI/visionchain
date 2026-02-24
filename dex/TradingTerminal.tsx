@@ -1,12 +1,22 @@
 /**
- * VisionDEX Trading Terminal - Main Component
+ * VisionDEX Trading Terminal - Axiom Trade Inspired
  *
- * Axiom Trade inspired 3-column layout:
- * - Left: Candlestick chart + recent trades
- * - Center: Order book with depth visualization
- * - Right: Agent watch panel + leaderboard
+ * Layout:
+ * ┌─────────────────────────── Top Bar (Token Info) ──────────────────────────────┐
+ * ├──── Chart Toolbar ────┬──────────────────────────┬── Buy/Sell Volume ─────────┤
+ * │                       │                          │                            │
+ * │   TradingView         │   Order Book             │   Buy / Sell Panel         │
+ * │   Lightweight Charts  │                          │   (Market/Limit/Adv)       │
+ * │   (Candlestick)       │                          │                            │
+ * │                       │                          ├── Agent Performance ────────┤
+ * │                       │                          │                            │
+ * ├──── Bottom Tabs ──────┴──────────────────────────┤   Leaderboard              │
+ * │ Trades | Orders | Leaderboard | Engine Status    │   Engine Status            │
+ * └──────────────────────────────────────────────────┴────────────────────────────┘
  */
 import { createSignal, createEffect, onMount, onCleanup, For, Show, createMemo } from 'solid-js';
+import { createChart, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, CandlestickData, HistogramData, Time } from 'lightweight-charts';
 import './trading-terminal.css';
 
 // ─── API Config ────────────────────────────────────────────────────────────
@@ -33,6 +43,7 @@ interface MarketData {
     lastPrice: number;
     previousPrice: number;
     changePercent24h: number;
+    change24h: number;
     high24h: number;
     low24h: number;
     volume24h: number;
@@ -46,99 +57,52 @@ interface MarketData {
     openOrders: number;
 }
 
-interface OrderBookEntry {
-    price: number;
-    amount: number;
-    agentId?: string;
-}
-
+interface OrderBookEntry { price: number; amount: number; total?: number; }
 interface Trade {
-    price: number;
-    amount: number;
-    total: number;
-    takerSide: string;
-    reasoning?: string;
-    makerAgentId?: string;
-    takerAgentId?: string;
+    price: number; amount: number; total: number;
+    takerSide: string; reasoning?: string;
+    makerAgentId?: string; takerAgentId?: string;
     timestamp?: any;
 }
-
-interface Candle {
-    t: number;
-    o: number;
-    h: number;
-    l: number;
-    c: number;
-    v: number;
-}
-
+interface Candle { t: number; o: number; h: number; l: number; c: number; v: number; }
 interface LeaderboardEntry {
-    rank: number;
-    agentName: string;
-    strategyPreset: string;
-    pnlPercent: number;
-    pnlAbsolute: number;
-    totalTrades: number;
-    winRate: number;
+    rank: number; agentName: string; strategyPreset: string;
+    pnlPercent: number; pnlAbsolute: number; totalTrades: number; winRate: number;
 }
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
 
 const ChartIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2 14V5l3 4 3-7 3 5 3-4v11H2z" stroke="currentColor" stroke-width="1.5" fill="none" />
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 12V5l2.5 3.5L7 3l2.5 4.5L12 4v8H2z" stroke="currentColor" stroke-width="1.3" fill="none" />
     </svg>
 );
-
-const BookIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="2" width="5" height="12" rx="1" stroke="currentColor" stroke-width="1.2" />
-        <rect x="9" y="2" width="5" height="12" rx="1" stroke="currentColor" stroke-width="1.2" />
-        <line x1="4" y1="5" x2="5.5" y2="5" stroke="currentColor" stroke-width="1" />
-        <line x1="4" y1="7" x2="6" y2="7" stroke="currentColor" stroke-width="1" />
-        <line x1="11" y1="5" x2="12.5" y2="5" stroke="currentColor" stroke-width="1" />
-        <line x1="11" y1="7" x2="13" y2="7" stroke="currentColor" stroke-width="1" />
+const SettingsIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.2" />
+        <path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M11.2 2.8l-1.4 1.4M4.2 9.8l-1.4 1.4" stroke="currentColor" stroke-width="1" />
     </svg>
 );
-
-const AgentIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.2" />
-        <path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.2" fill="none" />
-    </svg>
-);
-
 const RefreshIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
         <path d="M12 7A5 5 0 1 1 7 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
         <path d="M7 2l3 0 0 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
 );
 
-const TrophyIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 2h6v4c0 1.7-1.3 3-3 3S4 7.7 4 6V2z" stroke="currentColor" stroke-width="1.2" />
-        <path d="M4 3H2.5C2.2 3 2 3.2 2 3.5v1C2 5.3 2.7 6 3.5 6H4" stroke="currentColor" stroke-width="1" />
-        <path d="M10 3h1.5c.3 0 .5.2.5.5v1c0 .8-.7 1.5-1.5 1.5H10" stroke="currentColor" stroke-width="1" />
-        <line x1="7" y1="9" x2="7" y2="11" stroke="currentColor" stroke-width="1.2" />
-        <line x1="5" y1="11.5" x2="9" y2="11.5" stroke="currentColor" stroke-width="1.2" />
-    </svg>
-);
-
-const ArrowUpIcon = () => (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2.5 4.5L5 2l2.5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
-);
-
-const ArrowDownIcon = () => (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 8V2M2.5 5.5L5 8l2.5-2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>
-);
-
 // ─── Utility ───────────────────────────────────────────────────────────────
 
-function formatNum(n: number, dec = 4) { return n?.toFixed(dec) ?? '0'; }
-function formatK(n: number) {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+function fmt(n: number, d = 4) { return n?.toFixed(d) ?? '0'; }
+function fmtK(n: number) {
+    if (!n && n !== 0) return '0';
+    if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return '$' + (n / 1_000).toFixed(1) + 'K';
+    return '$' + Math.round(n).toLocaleString();
+}
+function fmtVol(n: number) {
+    if (!n && n !== 0) return '0';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
     return Math.round(n).toLocaleString();
 }
 function timeAgo(ts: any) {
@@ -150,153 +114,169 @@ function timeAgo(ts: any) {
     return `${Math.floor(diff / 3600)}h`;
 }
 
-// ─── SVG Candlestick Chart ─────────────────────────────────────────────────
+// ─── TradingView Chart Component ───────────────────────────────────────────
 
-function CandlestickChart(props: { candles: Candle[] }) {
-    const W = 720;
-    const H = 300;
-    const PAD = { top: 20, right: 60, bottom: 30, left: 10 };
+function TVChart(props: {
+    candles: Candle[];
+    interval: string;
+    onIntervalChange: (iv: string) => void;
+}) {
+    let chartContainerRef: HTMLDivElement | undefined;
+    let chart: IChartApi | undefined;
+    let candleSeries: ISeriesApi<'Candlestick'> | undefined;
+    let volumeSeries: ISeriesApi<'Histogram'> | undefined;
 
-    const chartData = createMemo(() => {
+    const intervals = ['1m', '5m', '15m', '1h', '4h', '1d'];
+
+    onMount(() => {
+        if (!chartContainerRef) return;
+
+        chart = createChart(chartContainerRef, {
+            layout: {
+                background: { type: ColorType.Solid, color: '#0b0b10' },
+                textColor: '#71717a',
+                fontSize: 11,
+            },
+            grid: {
+                vertLines: { color: 'rgba(255,255,255,0.03)' },
+                horzLines: { color: 'rgba(255,255,255,0.03)' },
+            },
+            crosshair: {
+                mode: 0,
+                vertLine: { color: 'rgba(99,102,241,0.3)', width: 1, style: 2, labelBackgroundColor: '#6366f1' },
+                horzLine: { color: 'rgba(99,102,241,0.3)', width: 1, style: 2, labelBackgroundColor: '#6366f1' },
+            },
+            rightPriceScale: {
+                borderColor: 'rgba(255,255,255,0.06)',
+                scaleMargins: { top: 0.1, bottom: 0.25 },
+            },
+            timeScale: {
+                borderColor: 'rgba(255,255,255,0.06)',
+                timeVisible: true,
+                secondsVisible: false,
+            },
+            handleScroll: { vertTouchDrag: false },
+        });
+
+        candleSeries = chart.addSeries(CandlestickSeries, {
+            upColor: '#22c55e',
+            downColor: '#ef4444',
+            borderUpColor: '#22c55e',
+            borderDownColor: '#ef4444',
+            wickUpColor: '#22c55e',
+            wickDownColor: '#ef4444',
+        });
+
+        volumeSeries = chart.addSeries(HistogramSeries, {
+            priceFormat: { type: 'volume' },
+            priceScaleId: '',
+        });
+
+        volumeSeries.priceScale().applyOptions({
+            scaleMargins: { top: 0.8, bottom: 0 },
+        });
+
+        const ro = new ResizeObserver(entries => {
+            if (entries.length && chart) {
+                const { width, height } = entries[0].contentRect;
+                chart.applyOptions({ width, height });
+            }
+        });
+        ro.observe(chartContainerRef);
+
+        onCleanup(() => {
+            ro.disconnect();
+            chart?.remove();
+        });
+    });
+
+    createEffect(() => {
         const c = props.candles;
-        if (!c || c.length === 0) return null;
+        if (!c || c.length === 0 || !candleSeries || !volumeSeries) return;
 
-        const allPrices = c.flatMap(k => [k.h, k.l]);
-        const minP = Math.min(...allPrices);
-        const maxP = Math.max(...allPrices);
-        const range = maxP - minP || 0.001;
+        const candleData: CandlestickData<Time>[] = c.map(k => ({
+            time: (k.t / 1000) as Time,
+            open: k.o,
+            high: k.h,
+            low: k.l,
+            close: k.c,
+        }));
 
-        const chartW = W - PAD.left - PAD.right;
-        const chartH = H - PAD.top - PAD.bottom;
-        const barW = Math.max(2, Math.min(12, chartW / c.length - 2));
+        const volData: HistogramData<Time>[] = c.map(k => ({
+            time: (k.t / 1000) as Time,
+            value: k.v,
+            color: k.c >= k.o ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)',
+        }));
 
-        const scaleY = (p: number) => PAD.top + chartH - ((p - minP) / range) * chartH;
-
-        const bars = c.map((k, i) => {
-            const x = PAD.left + (i / c.length) * chartW + barW / 2;
-            const isGreen = k.c >= k.o;
-            const bodyTop = scaleY(Math.max(k.o, k.c));
-            const bodyBot = scaleY(Math.min(k.o, k.c));
-
-            return {
-                x, isGreen,
-                wickTop: scaleY(k.h),
-                wickBot: scaleY(k.l),
-                bodyTop,
-                bodyHeight: Math.max(1, bodyBot - bodyTop),
-                barW,
-            };
-        });
-
-        // Y-axis labels
-        const steps = 5;
-        const labels = Array.from({ length: steps + 1 }, (_, i) => {
-            const p = minP + (range * i) / steps;
-            return { y: scaleY(p), label: p.toFixed(4) };
-        });
-
-        return { bars, labels, minP, maxP };
+        candleSeries.setData(candleData);
+        volumeSeries.setData(volData);
+        chart?.timeScale().fitContent();
     });
 
     return (
-        <div class="dex-chart-container">
-            <Show when={chartData()} fallback={
-                <div class="dex-chart-empty">Loading chart data...</div>
-            }>
-                {(data) => (
-                    <svg viewBox={`0 0 ${W} ${H}`} class="dex-chart-svg">
-                        {/* Grid lines */}
-                        <For each={data().labels}>
-                            {(label) => (
-                                <>
-                                    <line x1={PAD.left} y1={label.y} x2={W - PAD.right} y2={label.y} stroke="rgba(255,255,255,0.06)" stroke-width="0.5" />
-                                    <text x={W - PAD.right + 5} y={label.y + 3} fill="rgba(255,255,255,0.4)" font-size="9" font-family="monospace">{label.label}</text>
-                                </>
-                            )}
-                        </For>
-                        {/* Candles */}
-                        <For each={data().bars}>
-                            {(bar) => (
-                                <>
-                                    <line x1={bar.x} y1={bar.wickTop} x2={bar.x} y2={bar.wickBot}
-                                        stroke={bar.isGreen ? '#22c55e' : '#ef4444'} stroke-width="1" />
-                                    <rect x={bar.x - bar.barW / 2} y={bar.bodyTop}
-                                        width={bar.barW} height={bar.bodyHeight}
-                                        fill={bar.isGreen ? '#22c55e' : '#ef4444'}
-                                        rx="0.5" />
-                                </>
-                            )}
-                        </For>
-                    </svg>
-                )}
-            </Show>
+        <div class="tv-chart-wrapper">
+            <div class="tv-chart-toolbar">
+                <div class="tv-intervals">
+                    <For each={intervals}>
+                        {(iv) => (
+                            <button
+                                class={`tv-interval-btn ${props.interval === iv ? 'active' : ''}`}
+                                onClick={() => props.onIntervalChange(iv)}
+                            >{iv}</button>
+                        )}
+                    </For>
+                </div>
+                <div class="tv-chart-info">
+                    <span class="tv-powered">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1" /><path d="M4 10V6l2 2 2-4 2 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />"</svg>
+                        Lightweight Charts
+                    </span>
+                </div>
+            </div>
+            <div class="tv-chart-container" ref={chartContainerRef} />
         </div>
     );
 }
 
-// ─── Order Book Component ──────────────────────────────────────────────────
+// ─── Order Book ────────────────────────────────────────────────────────────
 
-function OrderBook(props: { bids: OrderBookEntry[], asks: OrderBookEntry[], lastPrice: number }) {
-    const maxBidAmt = createMemo(() => Math.max(...(props.bids.map(b => b.amount) || [1]), 1));
-    const maxAskAmt = createMemo(() => Math.max(...(props.asks.map(a => a.amount) || [1]), 1));
+function OrderBook(props: { bids: OrderBookEntry[]; asks: OrderBookEntry[]; lastPrice: number; spread: number }) {
+    const maxBid = createMemo(() => Math.max(...(props.bids.map(b => b.amount) || [1]), 1));
+    const maxAsk = createMemo(() => Math.max(...(props.asks.map(a => a.amount) || [1]), 1));
 
     return (
-        <div class="dex-orderbook">
-            <div class="dex-ob-header">
-                <span>Price (USDT)</span>
-                <span>Amount (VCN)</span>
-            </div>
-            {/* Asks (sells) - reversed so lowest ask is at bottom */}
-            <div class="dex-ob-asks">
-                <For each={[...(props.asks || [])].reverse().slice(0, 10)}>
-                    {(ask) => (
-                        <div class="dex-ob-row dex-ob-ask">
-                            <div class="dex-ob-depth" style={{ width: `${(ask.amount / maxAskAmt()) * 100}%` }} />
-                            <span class="dex-ob-price">{formatNum(ask.price)}</span>
-                            <span class="dex-ob-amount">{formatK(ask.amount)}</span>
-                        </div>
-                    )}
-                </For>
-            </div>
-            {/* Spread / Last Price */}
-            <div class="dex-ob-spread">
-                <span class="dex-ob-last-price">{formatNum(props.lastPrice)}</span>
-                <span class="dex-ob-spread-label">Last Price</span>
-            </div>
-            {/* Bids (buys) */}
-            <div class="dex-ob-bids">
-                <For each={(props.bids || []).slice(0, 10)}>
-                    {(bid) => (
-                        <div class="dex-ob-row dex-ob-bid">
-                            <div class="dex-ob-depth" style={{ width: `${(bid.amount / maxBidAmt()) * 100}%` }} />
-                            <span class="dex-ob-price">{formatNum(bid.price)}</span>
-                            <span class="dex-ob-amount">{formatK(bid.amount)}</span>
-                        </div>
-                    )}
-                </For>
-            </div>
-        </div>
-    );
-}
-
-// ─── Trade Log Component ───────────────────────────────────────────────────
-
-function TradeLog(props: { trades: Trade[] }) {
-    return (
-        <div class="dex-tradelog">
-            <div class="dex-tradelog-header">
+        <div class="ob-container">
+            <div class="ob-header">
                 <span>Price</span>
                 <span>Amount</span>
-                <span>Time</span>
+                <span>Total</span>
             </div>
-            <div class="dex-tradelog-body">
-                <For each={(props.trades || []).slice(0, 20)}>
-                    {(trade) => (
-                        <div class={`dex-tradelog-row ${trade.takerSide === 'buy' ? 'dex-trade-buy' : 'dex-trade-sell'}`}
-                            title={trade.reasoning || ''}>
-                            <span class="dex-tl-price">{formatNum(trade.price)}</span>
-                            <span class="dex-tl-amount">{formatK(trade.amount)}</span>
-                            <span class="dex-tl-time">{timeAgo(trade.timestamp)}</span>
+            <div class="ob-asks">
+                <For each={[...(props.asks || [])].reverse().slice(0, 12)}>
+                    {(ask) => (
+                        <div class="ob-row ob-ask">
+                            <div class="ob-depth-bar" style={{ width: `${Math.min((ask.amount / maxAsk()) * 100, 100)}%` }} />
+                            <span class="ob-price">{fmt(ask.price)}</span>
+                            <span class="ob-amt">{fmtVol(ask.amount)}</span>
+                            <span class="ob-total">{fmtVol(ask.amount * ask.price)}</span>
+                        </div>
+                    )}
+                </For>
+            </div>
+            <div class="ob-mid">
+                <span class={`ob-mid-price ${props.lastPrice >= (props.bids[0]?.price || 0) ? 'up' : 'dn'}`}>
+                    {fmt(props.lastPrice)}
+                </span>
+                <span class="ob-spread-val">Spread: {props.spread?.toFixed(3)}%</span>
+            </div>
+            <div class="ob-bids">
+                <For each={(props.bids || []).slice(0, 12)}>
+                    {(bid) => (
+                        <div class="ob-row ob-bid">
+                            <div class="ob-depth-bar" style={{ width: `${Math.min((bid.amount / maxBid()) * 100, 100)}%` }} />
+                            <span class="ob-price">{fmt(bid.price)}</span>
+                            <span class="ob-amt">{fmtVol(bid.amount)}</span>
+                            <span class="ob-total">{fmtVol(bid.amount * bid.price)}</span>
                         </div>
                     )}
                 </For>
@@ -305,31 +285,245 @@ function TradeLog(props: { trades: Trade[] }) {
     );
 }
 
-// ─── Leaderboard Component ─────────────────────────────────────────────────
+// ─── Bottom Tabs ───────────────────────────────────────────────────────────
 
-function Leaderboard(props: { entries: LeaderboardEntry[] }) {
+function BottomTabs(props: { trades: Trade[]; leaderboard: LeaderboardEntry[]; market: MarketData | null }) {
+    const [tab, setTab] = createSignal<'trades' | 'orders' | 'leaderboard' | 'engine'>('trades');
+
     return (
-        <div class="dex-leaderboard">
-            <For each={(props.entries || []).slice(0, 10)}>
-                {(entry) => (
-                    <div class="dex-lb-row">
-                        <div class="dex-lb-rank">
-                            <Show when={entry.rank <= 3} fallback={<span class="dex-lb-rank-num">{entry.rank}</span>}>
-                                <span class={`dex-lb-medal dex-lb-medal-${entry.rank}`}>
-                                    {entry.rank === 1 ? 'I' : entry.rank === 2 ? 'II' : 'III'}
-                                </span>
-                            </Show>
+        <div class="bt-container">
+            <div class="bt-tabs">
+                <button class={`bt-tab ${tab() === 'trades' ? 'active' : ''}`} onClick={() => setTab('trades')}>
+                    Trades
+                </button>
+                <button class={`bt-tab ${tab() === 'orders' ? 'active' : ''}`} onClick={() => setTab('orders')}>
+                    Orders
+                </button>
+                <button class={`bt-tab ${tab() === 'leaderboard' ? 'active' : ''}`} onClick={() => setTab('leaderboard')}>
+                    Top Agents
+                </button>
+                <button class={`bt-tab ${tab() === 'engine' ? 'active' : ''}`} onClick={() => setTab('engine')}>
+                    Engine
+                </button>
+            </div>
+            <div class="bt-content">
+                <Show when={tab() === 'trades'}>
+                    <div class="bt-table">
+                        <div class="bt-thead">
+                            <span>Side</span><span>Price</span><span>Amount</span><span>Total USD</span><span>Agent</span><span>Time</span>
                         </div>
-                        <div class="dex-lb-info">
-                            <span class="dex-lb-name">{entry.agentName}</span>
-                            <span class="dex-lb-strat">{entry.strategyPreset}</span>
+                        <div class="bt-tbody">
+                            <For each={(props.trades || []).slice(0, 25)}>
+                                {(t) => (
+                                    <div class={`bt-row ${t.takerSide === 'buy' ? 'row-buy' : 'row-sell'}`} title={t.reasoning || ''}>
+                                        <span class={`bt-side ${t.takerSide}`}>{t.takerSide === 'buy' ? 'Buy' : 'Sell'}</span>
+                                        <span class="bt-price">{fmt(t.price)}</span>
+                                        <span>{fmtVol(t.amount)}</span>
+                                        <span>{fmtK(t.total)}</span>
+                                        <span class="bt-agent">{t.takerAgentId?.replace('default-', '') || '-'}</span>
+                                        <span class="bt-time">{timeAgo(t.timestamp)}</span>
+                                    </div>
+                                )}
+                            </For>
                         </div>
-                        <div class={`dex-lb-pnl ${entry.pnlPercent >= 0 ? 'dex-pnl-pos' : 'dex-pnl-neg'}`}>
-                            {entry.pnlPercent >= 0 ? '+' : ''}{entry.pnlPercent.toFixed(2)}%
+                    </div>
+                </Show>
+                <Show when={tab() === 'orders'}>
+                    <div class="bt-empty">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" rx="4" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" /><path d="M10 13h12M10 17h8M10 21h10" stroke="rgba(255,255,255,0.15)" stroke-width="1.5" stroke-linecap="round" /></svg>
+                        <span>Open orders will appear here</span>
+                    </div>
+                </Show>
+                <Show when={tab() === 'leaderboard'}>
+                    <div class="bt-table">
+                        <div class="bt-thead">
+                            <span>#</span><span>Agent</span><span>Strategy</span><span>PnL %</span><span>Win Rate</span><span>Trades</span>
+                        </div>
+                        <div class="bt-tbody">
+                            <For each={(props.leaderboard || []).slice(0, 10)}>
+                                {(e) => (
+                                    <div class="bt-row">
+                                        <span class="bt-rank">{e.rank}</span>
+                                        <span class="bt-agent-name">{e.agentName}</span>
+                                        <span class="bt-strat">{e.strategyPreset}</span>
+                                        <span class={e.pnlPercent >= 0 ? 'clr-green' : 'clr-red'}>
+                                            {e.pnlPercent >= 0 ? '+' : ''}{e.pnlPercent.toFixed(2)}%
+                                        </span>
+                                        <span>{e.winRate?.toFixed(1) || '0'}%</span>
+                                        <span>{e.totalTrades}</span>
+                                    </div>
+                                )}
+                            </For>
+                        </div>
+                    </div>
+                </Show>
+                <Show when={tab() === 'engine'}>
+                    <div class="bt-engine">
+                        <Show when={props.market}>
+                            {(m) => (
+                                <div class="engine-grid">
+                                    <div class="engine-card">
+                                        <span class="engine-label">Active Agents</span>
+                                        <span class="engine-val">{m().activeAgents} / {m().totalAgents}</span>
+                                    </div>
+                                    <div class="engine-card">
+                                        <span class="engine-label">Open Orders</span>
+                                        <span class="engine-val">{m().openOrders}</span>
+                                    </div>
+                                    <div class="engine-card">
+                                        <span class="engine-label">Bid/Ask Spread</span>
+                                        <span class="engine-val">{m().spreadPercent?.toFixed(3)}%</span>
+                                    </div>
+                                    <div class="engine-card">
+                                        <span class="engine-label">24h Volume</span>
+                                        <span class="engine-val">{fmtK(m().quoteVolume24h)}</span>
+                                    </div>
+                                    <div class="engine-card">
+                                        <span class="engine-label">24h Trades</span>
+                                        <span class="engine-val">{fmtVol(m().trades24h)}</span>
+                                    </div>
+                                    <div class="engine-card">
+                                        <span class="engine-label">Status</span>
+                                        <span class="engine-val engine-running">
+                                            <span class="status-dot" /> Running
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </Show>
+                    </div>
+                </Show>
+            </div>
+        </div>
+    );
+}
+
+// ─── Right Sidebar ─────────────────────────────────────────────────────────
+
+function RightSidebar(props: { market: MarketData | null; leaderboard: LeaderboardEntry[] }) {
+    const [orderTab, setOrderTab] = createSignal<'buy' | 'sell'>('buy');
+
+    return (
+        <div class="rs-container">
+            {/* Buy/Sell Volume Summary */}
+            <Show when={props.market}>
+                {(m) => (
+                    <div class="rs-vol-bar">
+                        <div class="rs-vol-item">
+                            <span class="rs-vol-label">Volume</span>
+                            <span class="rs-vol-val">{fmtK(m().quoteVolume24h)}</span>
                         </div>
                     </div>
                 )}
-            </For>
+            </Show>
+
+            {/* Buy / Sell Toggle */}
+            <div class="rs-order-tabs">
+                <button
+                    class={`rs-order-tab ${orderTab() === 'buy' ? 'active buy' : ''}`}
+                    onClick={() => setOrderTab('buy')}
+                >Buy</button>
+                <button
+                    class={`rs-order-tab ${orderTab() === 'sell' ? 'active sell' : ''}`}
+                    onClick={() => setOrderTab('sell')}
+                >Sell</button>
+            </div>
+
+            {/* Order Type Sub-tabs */}
+            <div class="rs-type-tabs">
+                <button class="rs-type-tab active">Market</button>
+                <button class="rs-type-tab">Limit</button>
+                <button class="rs-type-tab">Adv.</button>
+            </div>
+
+            {/* Order Form */}
+            <div class="rs-order-form">
+                <div class="rs-input-group">
+                    <label>Amount</label>
+                    <div class="rs-input-wrapper">
+                        <input type="text" placeholder="0.0" class="rs-input" />
+                        <span class="rs-input-suffix">VCN</span>
+                    </div>
+                </div>
+                <div class="rs-presets">
+                    <button class="rs-preset">25%</button>
+                    <button class="rs-preset">50%</button>
+                    <button class="rs-preset">75%</button>
+                    <button class="rs-preset">100%</button>
+                </div>
+                <button class={`rs-submit-btn ${orderTab()}`}>
+                    {orderTab() === 'buy' ? 'Buy' : 'Sell'} VCN
+                </button>
+            </div>
+
+            {/* Agent Stats Mini */}
+            <div class="rs-agent-stats">
+                <div class="rs-stat-row">
+                    <span>Bought</span><span class="rs-stat-val">0</span>
+                </div>
+                <div class="rs-stat-row">
+                    <span>Sold</span><span class="rs-stat-val">0</span>
+                </div>
+                <div class="rs-stat-row">
+                    <span>Holding</span><span class="rs-stat-val">0</span>
+                </div>
+                <div class="rs-stat-row">
+                    <span>PnL</span><span class="rs-stat-val">+0 (+0%)</span>
+                </div>
+            </div>
+
+            {/* Strategy Presets */}
+            <div class="rs-presets-bar">
+                <button class="rs-preset-btn active">PRESET 1</button>
+                <button class="rs-preset-btn">PRESET 2</button>
+                <button class="rs-preset-btn">PRESET 3</button>
+            </div>
+
+            {/* Token Info */}
+            <div class="rs-token-info">
+                <div class="rs-ti-header">
+                    <span>Token Info</span>
+                    <button class="rs-ti-refresh"><RefreshIcon /></button>
+                </div>
+                <div class="rs-ti-grid">
+                    <Show when={props.market}>
+                        {(m) => (<>
+                            <div class="rs-ti-item">
+                                <span class="rs-ti-label">Agents</span>
+                                <span class="rs-ti-val">{m().activeAgents}</span>
+                            </div>
+                            <div class="rs-ti-item">
+                                <span class="rs-ti-label">Open Orders</span>
+                                <span class="rs-ti-val">{m().openOrders}</span>
+                            </div>
+                            <div class="rs-ti-item">
+                                <span class="rs-ti-label">24h Trades</span>
+                                <span class="rs-ti-val">{fmtVol(m().trades24h)}</span>
+                            </div>
+                            <div class="rs-ti-item">
+                                <span class="rs-ti-label">Spread</span>
+                                <span class="rs-ti-val">{m().spreadPercent?.toFixed(3)}%</span>
+                            </div>
+                        </>)}
+                    </Show>
+                </div>
+            </div>
+
+            {/* Top 3 Leaderboard */}
+            <div class="rs-top3">
+                <div class="rs-top3-header">Top Agents</div>
+                <For each={(props.leaderboard || []).slice(0, 5)}>
+                    {(e) => (
+                        <div class="rs-top3-row">
+                            <span class="rs-top3-rank">#{e.rank}</span>
+                            <span class="rs-top3-name">{e.agentName}</span>
+                            <span class={`rs-top3-pnl ${e.pnlPercent >= 0 ? 'clr-green' : 'clr-red'}`}>
+                                {e.pnlPercent >= 0 ? '+' : ''}{e.pnlPercent.toFixed(2)}%
+                            </span>
+                        </div>
+                    )}
+                </For>
+            </div>
         </div>
     );
 }
@@ -343,9 +537,8 @@ export default function TradingTerminal() {
     const [trades, setTrades] = createSignal<Trade[]>([]);
     const [candles, setCandles] = createSignal<Candle[]>([]);
     const [leaderboard, setLeaderboard] = createSignal<LeaderboardEntry[]>([]);
-    const [selectedInterval, setSelectedInterval] = createSignal('1h');
+    const [interval, setInterval_] = createSignal('1h');
     const [loading, setLoading] = createSignal(true);
-    const [lastUpdate, setLastUpdate] = createSignal(Date.now());
 
     let pollTimer: any;
 
@@ -355,168 +548,97 @@ export default function TradingTerminal() {
                 apiCall('getMarket'),
                 apiCall('getOrderBook'),
                 apiCall('getRecentTrades', { limit: 30 }),
-                apiCall('getCandles', { interval: selectedInterval(), limit: 100 }),
+                apiCall('getCandles', { interval: interval(), limit: 200 }),
                 apiCall('getLeaderboard', { limit: 10 }),
             ]);
-
             if (mkt.success && mkt.market) setMarket(mkt.market);
             if (ob.success) { setBids(ob.bids || []); setAsks(ob.asks || []); }
             if (trd.success) setTrades(trd.trades || []);
             if (cnd.success) setCandles(cnd.candles || []);
             if (lb.success) setLeaderboard(lb.leaderboard || []);
-
-            setLastUpdate(Date.now());
             setLoading(false);
-        } catch (e) {
-            console.error('[TradingTerminal] Fetch error:', e);
-        }
+        } catch (e) { console.error('[DEX] fetch error:', e); }
     }
 
-    onMount(() => {
-        fetchAll();
-        pollTimer = setInterval(fetchAll, 10000); // refresh every 10s
-    });
+    function changeInterval(iv: string) {
+        setInterval_(iv);
+        apiCall('getCandles', { interval: iv, limit: 200 }).then(r => r.success && setCandles(r.candles || []));
+    }
 
-    onCleanup(() => {
-        if (pollTimer) clearInterval(pollTimer);
-    });
+    onMount(() => { fetchAll(); pollTimer = window.setInterval(fetchAll, 10000); });
+    onCleanup(() => { if (pollTimer) clearInterval(pollTimer); });
 
     const priceUp = createMemo(() => {
-        const m = market();
-        return m ? m.lastPrice >= m.previousPrice : true;
+        const m = market(); return m ? m.lastPrice >= m.previousPrice : true;
     });
 
-    const intervals = ['1m', '5m', '15m', '1h', '4h', '1d'];
-
     return (
-        <div class="dex-terminal">
-            {/* Top Bar */}
-            <header class="dex-topbar">
-                <div class="dex-topbar-left">
-                    <h1 class="dex-pair-title">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <circle cx="10" cy="10" r="8" stroke="url(#vcnGrad)" stroke-width="2" />
-                            <text x="10" y="13" text-anchor="middle" fill="url(#vcnGrad)" font-size="8" font-weight="bold">V</text>
-                            <defs><linearGradient id="vcnGrad" x1="0" y1="0" x2="20" y2="20"><stop stop-color="#818cf8" /><stop offset="1" stop-color="#6366f1" /></linearGradient></defs>
+        <div class="dex-root">
+            {/* ── Top Bar ──────────────────────────────────────────────── */}
+            <header class="dex-header">
+                <div class="dex-h-left">
+                    <div class="dex-h-pair">
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                            <circle cx="11" cy="11" r="9" fill="url(#g1)" />
+                            <text x="11" y="15" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">V</text>
+                            <defs><linearGradient id="g1" x1="0" y1="0" x2="22" y2="22"><stop stop-color="#818cf8" /><stop offset="1" stop-color="#6366f1" /></linearGradient></defs>
                         </svg>
-                        VCN/USDT
-                    </h1>
+                        <span class="dex-h-symbol">VCN/USDT</span>
+                    </div>
                     <Show when={market()}>
                         {(m) => (
-                            <div class="dex-topbar-stats">
-                                <span class={`dex-price-main ${priceUp() ? 'dex-green' : 'dex-red'}`}>
-                                    {formatNum(m().lastPrice)}
+                            <div class="dex-h-stats">
+                                <span class={`dex-h-price ${priceUp() ? 'up' : 'dn'}`}>
+                                    ${fmt(m().lastPrice)}
                                 </span>
-                                <span class={`dex-change ${m().changePercent24h >= 0 ? 'dex-green' : 'dex-red'}`}>
-                                    {m().changePercent24h >= 0 ? '+' : ''}{m().changePercent24h?.toFixed(2)}%
-                                </span>
-                                <div class="dex-stat-group">
-                                    <div class="dex-stat"><span class="dex-stat-label">24h High</span><span>{formatNum(m().high24h)}</span></div>
-                                    <div class="dex-stat"><span class="dex-stat-label">24h Low</span><span>{formatNum(m().low24h)}</span></div>
-                                    <div class="dex-stat"><span class="dex-stat-label">Volume</span><span>{formatK(m().volume24h)}</span></div>
-                                    <div class="dex-stat"><span class="dex-stat-label">Trades</span><span>{formatK(m().trades24h)}</span></div>
-                                    <div class="dex-stat"><span class="dex-stat-label">Agents</span><span>{m().activeAgents}/{m().totalAgents}</span></div>
+                                <div class="dex-h-meta">
+                                    <div class="dex-h-kv"><span class="k">Price</span><span>${fmt(m().lastPrice)}</span></div>
+                                    <div class="dex-h-kv"><span class="k">24h</span><span class={m().changePercent24h >= 0 ? 'clr-green' : 'clr-red'}>{m().changePercent24h >= 0 ? '+' : ''}{m().changePercent24h?.toFixed(2)}%</span></div>
+                                    <div class="dex-h-kv"><span class="k">High</span><span>{fmt(m().high24h)}</span></div>
+                                    <div class="dex-h-kv"><span class="k">Low</span><span>{fmt(m().low24h)}</span></div>
+                                    <div class="dex-h-kv"><span class="k">Volume</span><span>{fmtK(m().quoteVolume24h)}</span></div>
+                                    <div class="dex-h-kv"><span class="k">Agents</span><span>{m().activeAgents}</span></div>
                                 </div>
                             </div>
                         )}
                     </Show>
                 </div>
-                <div class="dex-topbar-right">
-                    <button class="dex-btn-refresh" onClick={fetchAll} title="Refresh">
-                        <RefreshIcon />
-                    </button>
-                </div>
             </header>
 
-            {/* Main Grid */}
-            <div class="dex-grid">
-                {/* Left: Chart + Trades */}
-                <div class="dex-col-chart">
-                    <div class="dex-panel">
-                        <div class="dex-panel-header">
-                            <div class="dex-panel-title"><ChartIcon /> Chart</div>
-                            <div class="dex-interval-tabs">
-                                <For each={intervals}>
-                                    {(iv) => (
-                                        <button
-                                            class={`dex-interval-btn ${selectedInterval() === iv ? 'active' : ''}`}
-                                            onClick={() => { setSelectedInterval(iv); apiCall('getCandles', { interval: iv, limit: 100 }).then(r => r.success && setCandles(r.candles || [])); }}
-                                        >{iv}</button>
-                                    )}
-                                </For>
-                            </div>
+            {/* ── Main Layout ──────────────────────────────────────────── */}
+            <div class="dex-main">
+                {/* Left + Center: Chart, OrderBook, BottomTabs */}
+                <div class="dex-left">
+                    <div class="dex-chart-area">
+                        {/* Chart */}
+                        <div class="dex-chart-panel">
+                            <TVChart candles={candles()} interval={interval()} onIntervalChange={changeInterval} />
                         </div>
-                        <CandlestickChart candles={candles()} />
-                    </div>
-                    <div class="dex-panel dex-panel-trades">
-                        <div class="dex-panel-header">
-                            <div class="dex-panel-title">
-                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 12l3-4 2 2 3-5 2 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
-                                Recent Trades
+                        {/* Order Book */}
+                        <div class="dex-ob-panel">
+                            <div class="dex-ob-title">
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                    <rect x="1" y="1" width="5" height="12" rx="1" stroke="currentColor" stroke-width="1" />
+                                    <rect x="8" y="1" width="5" height="12" rx="1" stroke="currentColor" stroke-width="1" />
+                                </svg>
+                                Order Book
                             </div>
+                            <OrderBook bids={bids()} asks={asks()} lastPrice={market()?.lastPrice || 0} spread={market()?.spreadPercent || 0} />
                         </div>
-                        <TradeLog trades={trades()} />
                     </div>
+                    {/* Bottom Tabs */}
+                    <BottomTabs trades={trades()} leaderboard={leaderboard()} market={market()} />
                 </div>
 
-                {/* Center: Order Book */}
-                <div class="dex-col-book">
-                    <div class="dex-panel dex-panel-full">
-                        <div class="dex-panel-header">
-                            <div class="dex-panel-title"><BookIcon /> Order Book</div>
-                            <Show when={market()}>
-                                {(m) => <span class="dex-spread-badge">Spread: {m().spreadPercent?.toFixed(3)}%</span>}
-                            </Show>
-                        </div>
-                        <OrderBook bids={bids()} asks={asks()} lastPrice={market()?.lastPrice || 0} />
-                    </div>
-                </div>
-
-                {/* Right: Leaderboard + Agent Info */}
-                <div class="dex-col-agents">
-                    <div class="dex-panel">
-                        <div class="dex-panel-header">
-                            <div class="dex-panel-title"><TrophyIcon /> Leaderboard</div>
-                        </div>
-                        <Leaderboard entries={leaderboard()} />
-                    </div>
-                    <div class="dex-panel dex-panel-engine">
-                        <div class="dex-panel-header">
-                            <div class="dex-panel-title"><AgentIcon /> Engine Status</div>
-                        </div>
-                        <Show when={market()}>
-                            {(m) => (
-                                <div class="dex-engine-info">
-                                    <div class="dex-engine-row">
-                                        <span>Active Agents</span>
-                                        <span class="dex-engine-val">{m().activeAgents}</span>
-                                    </div>
-                                    <div class="dex-engine-row">
-                                        <span>Open Orders</span>
-                                        <span class="dex-engine-val">{m().openOrders}</span>
-                                    </div>
-                                    <div class="dex-engine-row">
-                                        <span>Bid/Ask Spread</span>
-                                        <span class="dex-engine-val">{m().spreadPercent?.toFixed(3)}%</span>
-                                    </div>
-                                    <div class="dex-engine-row">
-                                        <span>24h Volume</span>
-                                        <span class="dex-engine-val">${formatK(m().quoteVolume24h)}</span>
-                                    </div>
-                                    <div class="dex-engine-status">
-                                        <div class="dex-status-dot" />
-                                        <span>Engine Running</span>
-                                    </div>
-                                </div>
-                            )}
-                        </Show>
-                    </div>
+                {/* Right Sidebar */}
+                <div class="dex-right">
+                    <RightSidebar market={market()} leaderboard={leaderboard()} />
                 </div>
             </div>
 
             {/* Loading overlay */}
             <Show when={loading()}>
-                <div class="dex-loading">
+                <div class="dex-loading-overlay">
                     <div class="dex-spinner" />
                     <span>Connecting to VisionDEX...</span>
                 </div>

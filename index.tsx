@@ -31,11 +31,12 @@ function Layout(props: { children?: any }) {
 
   // Hide Navbar, Footer, and AI button for Admin pages
   const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs');
+  const isDexRoute = () => location.pathname.startsWith('/dex');
 
   return (
     <div class="bg-[#050505] min-h-screen text-white selection:bg-blue-500/30 selection:text-blue-200 relative overflow-hidden">
       <div class="relative z-10">
-        <Show when={!isAdminRoute() && !location.pathname.startsWith('/wallet')}>
+        <Show when={!isAdminRoute() && !isDexRoute() && !location.pathname.startsWith('/wallet')}>
           <Navbar />
         </Show>
         <main>
@@ -43,7 +44,7 @@ function Layout(props: { children?: any }) {
             {props.children}
           </Suspense>
         </main>
-        <Show when={!isAdminRoute() && !location.pathname.startsWith('/wallet')}>
+        <Show when={!isAdminRoute() && !isDexRoute() && !location.pathname.startsWith('/wallet')}>
           <Footer />
         </Show>
       </div>
@@ -93,7 +94,8 @@ render(() => (
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
-        <Route path="/dex" component={Public.TradingTerminalPage} />
+        <Route path="/dex" component={Public.DEXMarketsPage} />
+        <Route path="/dex/:pair" component={Public.TradingTerminalPage} />
 
         {/* Admin Routes */}
         <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
