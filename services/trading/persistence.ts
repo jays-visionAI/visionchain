@@ -49,7 +49,7 @@ export function agentToFirestore(agent: TradingAgent): Record<string, any> {
             tradingFrequency: agent.strategy.tradingFrequency,
             maxPositionPercent: agent.strategy.maxPositionPercent,
         },
-        ...(agent.mmConfig ? { mmConfig: agent.mmConfig } : {}),
+        ...(agent.tradingConfig ? { tradingConfig: agent.tradingConfig } : {}),
         balances: { USDT: agent.balances.USDT, VCN: agent.balances.VCN },
         performance: { ...agent.performance },
         recentTrades: agent.recentTrades.slice(0, 10),
@@ -76,7 +76,7 @@ export function agentFromFirestore(data: Record<string, any>): TradingAgent {
             tradingFrequency: data.strategy?.tradingFrequency || 'medium',
             maxPositionPercent: data.strategy?.maxPositionPercent || 30,
         },
-        mmConfig: data.mmConfig || undefined,
+        tradingConfig: data.tradingConfig || undefined,
         balances: {
             USDT: data.balances?.USDT || 0,
             VCN: data.balances?.VCN || 0,

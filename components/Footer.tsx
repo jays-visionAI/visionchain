@@ -79,7 +79,9 @@ const Footer = (): JSX.Element => {
               </a>
               <A href="/testnet" class="text-[#86868b] hover:text-white transition-colors">Testnet</A>
               <A href="/visionscan" class="text-[#86868b] hover:text-white transition-colors">Vision Scan</A>
-              <A href="/dex" class="text-[#86868b] hover:text-white transition-colors">VisionDEX</A>
+              {import.meta.env.VITE_CHAIN_ENV !== 'production' && (
+                <A href="/dex" class="text-[#86868b] hover:text-white transition-colors">VisionDEX</A>
+              )}
             </div>
           </div>
 

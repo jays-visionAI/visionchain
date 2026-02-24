@@ -2,7 +2,7 @@ import { createSignal, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { getUserRole, adminLogin } from '../../services/firebaseService';
 
-export default function MMAdminLogin() {
+export default function TradingAdminLogin() {
     const [email, setEmail] = createSignal('');
     const [password, setPassword] = createSignal('');
     const [showPassword, setShowPassword] = createSignal(false);
@@ -22,12 +22,12 @@ export default function MMAdminLogin() {
             await adminLogin(emailVal, pwdVal);
             const role = await getUserRole(emailVal);
             if (role === 'admin') {
-                navigate('/mm-admin', { replace: true });
+                navigate('/trading-admin', { replace: true });
             } else {
-                setError('Access denied. Only admin accounts can access MM Control.');
+                setError('Access denied. Only admin accounts can access Trading Control.');
             }
         } catch (err: any) {
-            console.error('MM Admin Login error:', err);
+            console.error('Trading Admin Login error:', err);
             setError('Authentication failed. Please check your credentials.');
         } finally {
             setIsLoading(false);
@@ -35,56 +35,56 @@ export default function MMAdminLogin() {
     };
 
     return (
-        <div class="mm-login-root">
+        <div class="trading-login-root">
             {/* Background effects */}
-            <div class="mm-login-bg-glow" />
-            <div class="mm-login-bg-grid" />
-            <div class="mm-login-bg-line-top" />
-            <div class="mm-login-bg-line-bottom" />
+            <div class="trading-login-bg-glow" />
+            <div class="trading-login-bg-grid" />
+            <div class="trading-login-bg-line-top" />
+            <div class="trading-login-bg-line-bottom" />
 
-            <div class="mm-login-container">
+            <div class="trading-login-container">
                 {/* Outer glow */}
-                <div class="mm-login-glow-ring" />
+                <div class="trading-login-glow-ring" />
 
-                <div class="mm-login-card">
+                <div class="trading-login-card">
                     {/* Accent bar */}
-                    <div class="mm-login-accent-bar" />
+                    <div class="trading-login-accent-bar" />
 
                     {/* Header */}
-                    <div class="mm-login-header">
-                        <div class="mm-login-icon-wrap">
-                            <div class="mm-login-icon">
+                    <div class="trading-login-header">
+                        <div class="trading-login-icon-wrap">
+                            <div class="trading-login-icon">
                                 <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
                                     <rect x="4" y="8" width="32" height="24" rx="4" stroke="white" stroke-width="2" fill="none" />
                                     <path d="M10 20h3l2-6 3 12 3-8 2 4h3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
                                     <circle cx="32" cy="12" r="4" fill="#f59e0b" stroke="white" stroke-width="1.5" />
                                 </svg>
                             </div>
-                            <div class="mm-login-icon-badge">
+                            <div class="trading-login-icon-badge">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <path d="M8 2l1.5 3 3.5.5-2.5 2.5.5 3.5L8 10l-3 1.5.5-3.5L3 5.5l3.5-.5L8 2z" fill="#f59e0b" />
                                 </svg>
                             </div>
                         </div>
 
-                        <h1 class="mm-login-title">
-                            MM<span class="mm-login-title-accent">Control</span>
+                        <h1 class="trading-login-title">
+                            Trading<span class="trading-login-title-accent">Control</span>
                         </h1>
-                        <div class="mm-login-subtitle-wrap">
-                            <div class="mm-login-hr" />
-                            <span class="mm-login-subtitle">Market Maker Operations</span>
-                            <div class="mm-login-hr" />
+                        <div class="trading-login-subtitle-wrap">
+                            <div class="trading-login-hr" />
+                            <span class="trading-login-subtitle">Market Maker Operations</span>
+                            <div class="trading-login-hr" />
                         </div>
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} class="mm-login-form">
-                        <div class="mm-login-fields">
+                    <form onSubmit={handleSubmit} class="trading-login-form">
+                        <div class="trading-login-fields">
                             {/* Email */}
-                            <div class="mm-login-field-group">
-                                <label class="mm-login-label">Operator ID</label>
-                                <div class="mm-login-input-wrap">
-                                    <div class="mm-login-input-icon">
+                            <div class="trading-login-field-group">
+                                <label class="trading-login-label">Operator ID</label>
+                                <div class="trading-login-input-wrap">
+                                    <div class="trading-login-input-icon">
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                             <rect x="2" y="3" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5" />
                                             <path d="M2 5l6 4 6-4" stroke="currentColor" stroke-width="1.5" />
@@ -95,17 +95,17 @@ export default function MMAdminLogin() {
                                         value={email()}
                                         onInput={(e) => setEmail(e.currentTarget.value)}
                                         placeholder="operator@visiondex.io"
-                                        class="mm-login-input"
+                                        class="trading-login-input"
                                         required
                                     />
                                 </div>
                             </div>
 
                             {/* Password */}
-                            <div class="mm-login-field-group">
-                                <label class="mm-login-label">Access Key</label>
-                                <div class="mm-login-input-wrap">
-                                    <div class="mm-login-input-icon">
+                            <div class="trading-login-field-group">
+                                <label class="trading-login-label">Access Key</label>
+                                <div class="trading-login-input-wrap">
+                                    <div class="trading-login-input-icon">
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                             <rect x="4" y="7" width="8" height="7" rx="2" stroke="currentColor" stroke-width="1.5" />
                                             <path d="M6 7V5a2 2 0 114 0v2" stroke="currentColor" stroke-width="1.5" />
@@ -116,13 +116,13 @@ export default function MMAdminLogin() {
                                         value={password()}
                                         onInput={(e) => setPassword(e.currentTarget.value)}
                                         placeholder="••••••••"
-                                        class="mm-login-input"
+                                        class="trading-login-input"
                                         required
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword())}
-                                        class="mm-login-eye-btn"
+                                        class="trading-login-eye-btn"
                                     >
                                         <Show when={showPassword()} fallback={
                                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -142,7 +142,7 @@ export default function MMAdminLogin() {
 
                         {/* Error */}
                         <Show when={error()}>
-                            <div class="mm-login-error">
+                            <div class="trading-login-error">
                                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                     <circle cx="8" cy="8" r="7" stroke="#ef4444" stroke-width="1.5" />
                                     <path d="M8 5v4M8 11h.01" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" />
@@ -152,18 +152,18 @@ export default function MMAdminLogin() {
                         </Show>
 
                         {/* Submit */}
-                        <button type="submit" disabled={isLoading()} class="mm-login-submit">
-                            <div class="mm-login-submit-shine" />
-                            <div class="mm-login-submit-content">
+                        <button type="submit" disabled={isLoading()} class="trading-login-submit">
+                            <div class="trading-login-submit-shine" />
+                            <div class="trading-login-submit-content">
                                 <Show when={isLoading()} fallback={
                                     <>
-                                        <span>Connect to MM Ops</span>
+                                        <span>Connect to Trading Ops</span>
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                             <path d="M3 8h10M10 5l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                         </svg>
                                     </>
                                 }>
-                                    <div class="mm-login-spinner" />
+                                    <div class="trading-login-spinner" />
                                     <span>Authenticating...</span>
                                 </Show>
                             </div>
@@ -171,29 +171,29 @@ export default function MMAdminLogin() {
                     </form>
 
                     {/* Footer */}
-                    <div class="mm-login-footer">
-                        <a href="/" class="mm-login-back">
+                    <div class="trading-login-footer">
+                        <a href="/" class="trading-login-back">
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                                 <path d="M9 6H3M5 3L2 6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                             Back to Main
                         </a>
-                        <span class="mm-login-version">VisionDEX MM v1.0</span>
+                        <span class="trading-login-version">VisionDEX Trading v1.0</span>
                     </div>
                 </div>
 
                 {/* Status */}
-                <div class="mm-login-status">
-                    <div class="mm-login-status-left">
-                        <div class="mm-login-status-dot" />
+                <div class="trading-login-status">
+                    <div class="trading-login-status-left">
+                        <div class="trading-login-status-dot" />
                         <span>Trading Engine: Active</span>
                     </div>
-                    <span class="mm-login-status-enc">Session: Encrypted</span>
+                    <span class="trading-login-status-enc">Session: Encrypted</span>
                 </div>
             </div>
 
             <style>{`
-                .mm-login-root {
+                .trading-login-root {
                     min-height: 100vh;
                     background: #0a0808;
                     display: flex;
@@ -203,19 +203,19 @@ export default function MMAdminLogin() {
                     position: relative;
                     overflow: hidden;
                 }
-                .mm-login-bg-glow {
+                .trading-login-bg-glow {
                     position: absolute;
                     inset: 0;
                     background: radial-gradient(circle at center, rgba(245,158,11,0.04) 0%, transparent 70%);
                 }
-                .mm-login-bg-grid {
+                .trading-login-bg-grid {
                     position: absolute;
                     inset: 0;
                     opacity: 0.015;
                     background-image: radial-gradient(#fff 1px, transparent 1px);
                     background-size: 30px 30px;
                 }
-                .mm-login-bg-line-top {
+                .trading-login-bg-line-top {
                     position: absolute;
                     top: 0;
                     left: 0;
@@ -223,7 +223,7 @@ export default function MMAdminLogin() {
                     height: 1px;
                     background: linear-gradient(to right, transparent, rgba(245,158,11,0.25), transparent);
                 }
-                .mm-login-bg-line-bottom {
+                .trading-login-bg-line-bottom {
                     position: absolute;
                     bottom: 0;
                     left: 0;
@@ -231,12 +231,12 @@ export default function MMAdminLogin() {
                     height: 1px;
                     background: linear-gradient(to right, transparent, rgba(217,119,6,0.2), transparent);
                 }
-                .mm-login-container {
+                .trading-login-container {
                     width: 100%;
                     max-width: 440px;
                     position: relative;
                 }
-                .mm-login-glow-ring {
+                .trading-login-glow-ring {
                     position: absolute;
                     inset: -4px;
                     background: linear-gradient(to bottom right, rgba(245,158,11,0.15), rgba(255,255,255,0.03), rgba(217,119,6,0.15));
@@ -244,7 +244,7 @@ export default function MMAdminLogin() {
                     filter: blur(20px);
                     opacity: 0.5;
                 }
-                .mm-login-card {
+                .trading-login-card {
                     position: relative;
                     background: rgba(15,12,10,0.85);
                     backdrop-filter: blur(40px);
@@ -254,7 +254,7 @@ export default function MMAdminLogin() {
                     box-shadow: 0 25px 50px rgba(0,0,0,0.5);
                     overflow: hidden;
                 }
-                .mm-login-accent-bar {
+                .trading-login-accent-bar {
                     position: absolute;
                     top: 0;
                     left: 50%;
@@ -265,16 +265,16 @@ export default function MMAdminLogin() {
                     border-radius: 0 0 4px 4px;
                     box-shadow: 0 0 15px rgba(245,158,11,0.6);
                 }
-                .mm-login-header {
+                .trading-login-header {
                     text-align: center;
                     margin-bottom: 36px;
                 }
-                .mm-login-icon-wrap {
+                .trading-login-icon-wrap {
                     display: inline-block;
                     position: relative;
                     margin-bottom: 20px;
                 }
-                .mm-login-icon {
+                .trading-login-icon {
                     width: 72px;
                     height: 72px;
                     border-radius: 16px;
@@ -285,7 +285,7 @@ export default function MMAdminLogin() {
                     box-shadow: 0 0 30px rgba(245,158,11,0.3);
                     animation: mmFloat 3s ease-in-out infinite;
                 }
-                .mm-login-icon-badge {
+                .trading-login-icon-badge {
                     position: absolute;
                     bottom: -6px;
                     right: -6px;
@@ -298,7 +298,7 @@ export default function MMAdminLogin() {
                     align-items: center;
                     justify-content: center;
                 }
-                .mm-login-title {
+                .trading-login-title {
                     font-size: 36px;
                     font-weight: 900;
                     font-style: italic;
@@ -307,44 +307,44 @@ export default function MMAdminLogin() {
                     color: white;
                     margin-bottom: 6px;
                 }
-                .mm-login-title-accent {
+                .trading-login-title-accent {
                     color: #f59e0b;
                 }
-                .mm-login-subtitle-wrap {
+                .trading-login-subtitle-wrap {
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     gap: 8px;
                 }
-                .mm-login-hr {
+                .trading-login-hr {
                     width: 24px;
                     height: 1px;
                     background: rgba(245,158,11,0.3);
                 }
-                .mm-login-subtitle {
+                .trading-login-subtitle {
                     font-size: 9px;
                     font-weight: 900;
                     color: #f59e0b;
                     text-transform: uppercase;
                     letter-spacing: 0.3em;
                 }
-                .mm-login-form {
+                .trading-login-form {
                     display: flex;
                     flex-direction: column;
                     gap: 20px;
                     padding: 0 16px;
                 }
-                .mm-login-fields {
+                .trading-login-fields {
                     display: flex;
                     flex-direction: column;
                     gap: 14px;
                 }
-                .mm-login-field-group {
+                .trading-login-field-group {
                     display: flex;
                     flex-direction: column;
                     gap: 6px;
                 }
-                .mm-login-label {
+                .trading-login-label {
                     font-size: 9px;
                     font-weight: 900;
                     color: rgba(255,255,255,0.35);
@@ -352,10 +352,10 @@ export default function MMAdminLogin() {
                     letter-spacing: 0.2em;
                     margin-left: 4px;
                 }
-                .mm-login-input-wrap {
+                .trading-login-input-wrap {
                     position: relative;
                 }
-                .mm-login-input-icon {
+                .trading-login-input-icon {
                     position: absolute;
                     left: 16px;
                     top: 50%;
@@ -364,10 +364,10 @@ export default function MMAdminLogin() {
                     pointer-events: none;
                     transition: color 0.2s;
                 }
-                .mm-login-input-wrap:focus-within .mm-login-input-icon {
+                .trading-login-input-wrap:focus-within .trading-login-input-icon {
                     color: #f59e0b;
                 }
-                .mm-login-input {
+                .trading-login-input {
                     width: 100%;
                     background: rgba(0,0,0,0.4);
                     border: 1px solid rgba(245,158,11,0.1);
@@ -380,14 +380,14 @@ export default function MMAdminLogin() {
                     transition: border-color 0.2s, box-shadow 0.2s;
                     box-sizing: border-box;
                 }
-                .mm-login-input::placeholder {
+                .trading-login-input::placeholder {
                     color: rgba(255,255,255,0.15);
                 }
-                .mm-login-input:focus {
+                .trading-login-input:focus {
                     border-color: rgba(245,158,11,0.4);
                     box-shadow: 0 0 0 3px rgba(245,158,11,0.08);
                 }
-                .mm-login-eye-btn {
+                .trading-login-eye-btn {
                     position: absolute;
                     right: 14px;
                     top: 50%;
@@ -399,10 +399,10 @@ export default function MMAdminLogin() {
                     padding: 4px;
                     transition: color 0.2s;
                 }
-                .mm-login-eye-btn:hover {
+                .trading-login-eye-btn:hover {
                     color: white;
                 }
-                .mm-login-error {
+                .trading-login-error {
                     display: flex;
                     align-items: center;
                     gap: 10px;
@@ -412,13 +412,13 @@ export default function MMAdminLogin() {
                     padding: 10px 14px;
                     animation: mmShake 0.2s ease-in-out 2;
                 }
-                .mm-login-error span {
+                .trading-login-error span {
                     font-size: 11px;
                     font-weight: 700;
                     color: #ef4444;
                     text-transform: uppercase;
                 }
-                .mm-login-submit {
+                .trading-login-submit {
                     width: 100%;
                     padding: 14px;
                     border-radius: 16px;
@@ -435,35 +435,35 @@ export default function MMAdminLogin() {
                     position: relative;
                     overflow: hidden;
                 }
-                .mm-login-submit:hover {
+                .trading-login-submit:hover {
                     box-shadow: 0 4px 30px rgba(245,158,11,0.4);
                     transform: scale(1.02);
                 }
-                .mm-login-submit:active {
+                .trading-login-submit:active {
                     transform: scale(0.97);
                 }
-                .mm-login-submit:disabled {
+                .trading-login-submit:disabled {
                     opacity: 0.5;
                     cursor: not-allowed;
                 }
-                .mm-login-submit-shine {
+                .trading-login-submit-shine {
                     position: absolute;
                     inset: 0;
                     background: rgba(255,255,255,0.1);
                     transform: translateY(100%);
                     transition: transform 0.3s;
                 }
-                .mm-login-submit:hover .mm-login-submit-shine {
+                .trading-login-submit:hover .trading-login-submit-shine {
                     transform: translateY(0);
                 }
-                .mm-login-submit-content {
+                .trading-login-submit-content {
                     position: relative;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     gap: 10px;
                 }
-                .mm-login-spinner {
+                .trading-login-spinner {
                     width: 18px;
                     height: 18px;
                     border: 2px solid rgba(255,255,255,0.3);
@@ -471,7 +471,7 @@ export default function MMAdminLogin() {
                     border-radius: 50%;
                     animation: spin 0.8s linear infinite;
                 }
-                .mm-login-footer {
+                .trading-login-footer {
                     margin-top: 32px;
                     padding-top: 24px;
                     border-top: 1px solid rgba(245,158,11,0.08);
@@ -479,7 +479,7 @@ export default function MMAdminLogin() {
                     align-items: center;
                     justify-content: space-between;
                 }
-                .mm-login-back {
+                .trading-login-back {
                     display: flex;
                     align-items: center;
                     gap: 6px;
@@ -491,37 +491,37 @@ export default function MMAdminLogin() {
                     text-decoration: none;
                     transition: color 0.2s;
                 }
-                .mm-login-back:hover {
+                .trading-login-back:hover {
                     color: white;
                 }
-                .mm-login-version {
+                .trading-login-version {
                     font-size: 9px;
                     font-weight: 900;
                     color: rgba(255,255,255,0.2);
                     text-transform: uppercase;
                     letter-spacing: 0.15em;
                 }
-                .mm-login-status {
+                .trading-login-status {
                     margin-top: 20px;
                     padding: 0 24px;
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                 }
-                .mm-login-status-left {
+                .trading-login-status-left {
                     display: flex;
                     align-items: center;
                     gap: 6px;
                 }
-                .mm-login-status-dot {
+                .trading-login-status-dot {
                     width: 6px;
                     height: 6px;
                     border-radius: 50%;
                     background: #22c55e;
                     animation: pulse 2s ease-in-out infinite;
                 }
-                .mm-login-status-left span,
-                .mm-login-status-enc {
+                .trading-login-status-left span,
+                .trading-login-status-enc {
                     font-size: 9px;
                     font-weight: 900;
                     color: rgba(255,255,255,0.25);

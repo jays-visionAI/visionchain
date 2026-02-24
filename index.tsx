@@ -13,7 +13,7 @@ import EnvironmentBadge from './components/EnvironmentBadge';
 import HomePage from './pages/HomePage';
 import * as Public from './pages/PublicPages';
 import * as Admin from './pages/AdminPages';
-import * as MMAdmin from './pages/MMAdminPages';
+import * as TradingAdmin from './pages/TradingAdminPages';
 import * as Auth from './pages/AuthPages';
 import ValidatorStaking from './components/ValidatorStaking';
 
@@ -31,7 +31,7 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/mm-login') || location.pathname.startsWith('/mm-admin');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/trading-login') || location.pathname.startsWith('/trading-admin');
   const isDexRoute = () => location.pathname.startsWith('/dex');
 
   return (
@@ -95,8 +95,12 @@ render(() => (
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
-        <Route path="/dex" component={Public.DEXMarketsPage} />
-        <Route path="/dex/:pair" component={Public.TradingTerminalPage} />
+        {import.meta.env.VITE_CHAIN_ENV !== 'production' && (
+          <>
+            <Route path="/dex" component={Public.DEXMarketsPage} />
+            <Route path="/dex/:pair" component={Public.TradingTerminalPage} />
+          </>
+        )}
 
         {/* Admin Routes */}
         <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
@@ -125,15 +129,15 @@ render(() => (
         <Route path="/adminsystem/vision-nodes" component={Admin.AdminVisionNodesPage} />
         <Route path="/adminsystem/node-health" component={Admin.AdminNodeHealthPage} />
 
-        {/* MM Admin Routes (Separate system) */}
-        <Route path="/mm-login" component={MMAdmin.MMAdminLoginPage} />
-        <Route path="/mm-admin" component={MMAdmin.MMAdminDashboardPage} />
-        <Route path="/mm-admin/price" component={MMAdmin.MMAdminPricePage} />
-        <Route path="/mm-admin/spread" component={MMAdmin.MMAdminSpreadPage} />
-        <Route path="/mm-admin/inventory" component={MMAdmin.MMAdminInventoryPage} />
-        <Route path="/mm-admin/risk" component={MMAdmin.MMAdminRiskPage} />
-        <Route path="/mm-admin/agents" component={MMAdmin.MMAdminAgentsPage} />
-        <Route path="/mm-admin/log" component={MMAdmin.MMAdminLogPage} />
+        {/* Trading Admin Routes (Separate system) */}
+        <Route path="/trading-login" component={TradingAdmin.TradingAdminLoginPage} />
+        <Route path="/trading-admin" component={TradingAdmin.TradingAdminDashboardPage} />
+        <Route path="/trading-admin/price" component={TradingAdmin.TradingAdminPricePage} />
+        <Route path="/trading-admin/spread" component={TradingAdmin.TradingAdminSpreadPage} />
+        <Route path="/trading-admin/inventory" component={TradingAdmin.TradingAdminInventoryPage} />
+        <Route path="/trading-admin/risk" component={TradingAdmin.TradingAdminRiskPage} />
+        <Route path="/trading-admin/agents" component={TradingAdmin.TradingAdminAgentsPage} />
+        <Route path="/trading-admin/log" component={TradingAdmin.TradingAdminLogPage} />
 
       </Router>
     </I18nProvider>

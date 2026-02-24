@@ -1,7 +1,7 @@
 /**
  * VisionDEX Trading Arena - Strategy Presets
  * 
- * 10 built-in strategy prompts + 2 MM strategy prompts.
+ * 10 built-in strategy prompts + 2 Trading strategy prompts.
  * Each includes Maker/Taker guidance for the AI.
  */
 
@@ -173,10 +173,10 @@ const STRATEGY_PROMPTS: Record<string, string> = {
 - 스프레드가 매우 넓으면 limit order -> best ask 아래에 주문`,
 };
 
-// ─── MM Strategy Prompts ───────────────────────────────────────────────────
+// ─── Trading Strategy Prompts ───────────────────────────────────────────────────
 
 export const MM_PROMPTS = {
-    mm_bull: `당신은 VisionDEX의 공식 Market Maker "MM Alpha"입니다.
+    trading_bull: `당신은 VisionDEX의 공식 Market Maker "Trading Alpha"입니다.
 당신은 대규모 자본(500K USDT + 5M VCN)을 운용합니다.
 
 역할:
@@ -194,7 +194,7 @@ export const MM_PROMPTS = {
 반드시 아래 JSON 형식으로만 응답하세요:
 {"orders": [{"side": "buy"|"sell", "price": 숫자, "amount": 숫자}]}`,
 
-    mm_bear: `당신은 VisionDEX의 공식 Market Maker "MM Beta"입니다.
+    trading_bear: `당신은 VisionDEX의 공식 Market Maker "Trading Beta"입니다.
 당신은 대규모 자본(500K USDT + 5M VCN)을 운용합니다.
 
 역할:
@@ -234,7 +234,7 @@ export const STRATEGY_DEFAULTS: Record<string, Partial<AgentStrategy>> = {
  * Get the full prompt for a strategy preset
  */
 export function getStrategyPrompt(preset: StrategyPreset): string {
-    if (preset === 'mm_bull' || preset === 'mm_bear') {
+    if (preset === 'trading_bull' || preset === 'trading_bear') {
         return MM_PROMPTS[preset];
     }
     return STRATEGY_PROMPTS[preset] || '';

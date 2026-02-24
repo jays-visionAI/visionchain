@@ -5,14 +5,14 @@
  * Runs ~25 micro-rounds per 1-minute invocation (~2s each).
  * - Preset strategies: deterministic algorithm (free, instant)
  * - Custom prompt agents: DeepSeek LLM (first micro-round only)
- * - MM agents: deterministic refresh every 5 micro-rounds
+ * - Trading agents: deterministic refresh every 5 micro-rounds
  */
 
 const DEX_FEE_RATES = {
     makerFeeRate: 0.0002,
     takerFeeRate: 0.0005,
-    mmMakerFeeRate: 0.0,
-    mmTakerFeeRate: 0.0001,
+    tradingMakerFeeRate: 0.0,
+    tradingTakerFeeRate: 0.0001,
 };
 const DEX_PAIR = "VCN-USDT";
 const DEX_MIN_ORDER = 100;
@@ -53,13 +53,13 @@ class CloudOrderBook {
                 if (side === "buy" && top.price > limitPrice) break;
                 if (side === "sell" && top.price < limitPrice) break;
             }
-            if (top.ownerUid === takerUid && !top.isMMOrder) {
+            if (top.ownerUid === takerUid && !top.isTradingOrder) {
                 bookSide.shift(); continue;
             }
 
             const fillAmount = Math.min(remaining, top.remainingAmount);
             const fillTotal = fillAmount * top.price;
-            const makerFeeRate = top.isMMOrder ? DEX_FEE_RATES.mmMakerFeeRate : DEX_FEE_RATES.makerFeeRate;
+            const makerFeeRate = top.isTradingOrder ? DEX_FEE_RATES.tradingMakerFeeRate : DEX_FEE_RATES.makerFeeRate;
 
             fills.push({
                 makerOrderId: top.id, makerAgentId: top.agentId, makerUid: top.ownerUid,
@@ -103,16 +103,16 @@ class CloudOrderBook {
     }
 }
 
-// ─── MM Order Generation ───────────────────────────────────────────────────
+// ─── Trading Order Generation ───────────────────────────────────────────────────
 
-function generateMMOrders(agent, currentPrice, mmAdmin, engineBasePrice) {
-    const agentCfg = agent.mmConfig || {};
+function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePrice) {
+    const agentCfg = agent.tradingConfig || {};
 
-    // Merge: MM Admin settings override agent-level config
-    const pd = mmAdmin?.priceDirection || {};
-    const sc = mmAdmin?.spreadConfig || {};
-    const ic = mmAdmin?.inventoryConfig || {};
-    const ao = mmAdmin?.agentOverrides?.[agent.id] || {};
+    // Merge: Trading Admin settings override agent-level config
+    const pd = tradingAdmin?.priceDirection || {};
+    const sc = tradingAdmin?.spreadConfig || {};
+    const ic = tradingAdmin?.inventoryConfig || {};
+    const ao = tradingAdmin?.agentOverrides?.[agent.id] || {};
 
     // If agent is disabled via admin override, skip
     if (ao.enabled === false) return [];
@@ -374,22 +374,22 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         console.log("[TradingEngine] Paused."); return;
     }
 
-    // ── Load MM Admin Settings from Firestore ──
-    let mmAdmin = null;
+    // ── Load Trading Admin Settings from Firestore ──
+    let tradingAdmin = null;
     let mmKillSwitch = false;
     try {
-        const mmSnap = await db.doc("dex/config/mm-settings/current").get();
+        const mmSnap = await db.doc("dex/config/trading-settings/current").get();
         if (mmSnap.exists) {
-            mmAdmin = mmSnap.data();
-            mmKillSwitch = mmAdmin?.riskConfig?.killSwitchEnabled === true;
-            console.log(`[TradingEngine] MM Admin loaded - Kill Switch: ${mmKillSwitch}, Mode: ${mmAdmin?.priceDirection?.mode || "default"}, Spread: ${mmAdmin?.spreadConfig?.baseSpread || "default"}%`);
+            tradingAdmin = mmSnap.data();
+            mmKillSwitch = tradingAdmin?.riskConfig?.killSwitchEnabled === true;
+            console.log(`[TradingEngine] Trading Admin loaded - Kill Switch: ${mmKillSwitch}, Mode: ${tradingAdmin?.priceDirection?.mode || "default"}, Spread: ${tradingAdmin?.spreadConfig?.baseSpread || "default"}%`);
         }
     } catch (e) {
-        console.warn("[TradingEngine] MM Admin settings load failed:", e.message);
+        console.warn("[TradingEngine] Trading Admin settings load failed:", e.message);
     }
 
     if (mmKillSwitch) {
-        console.log("[TradingEngine] MM KILL SWITCH is ON - MM agents will not place orders.");
+        console.log("[TradingEngine] Trading KILL SWITCH is ON - Trading agents will not place orders.");
     }
 
     const roundRef = db.doc("dex/settings/config/roundCounter");
@@ -412,7 +412,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         agentMap[a.id] = a;
     });
 
-    const mmAgents = agents.filter((a) => a.role === "market_maker");
+    const tradingAgents = agents.filter((a) => a.role === "market_maker");
     const presetAgents = agents.filter((a) => a.role === "trader" && a.strategy?.preset !== "custom");
     const customAgents = agents.filter((a) => a.role === "trader" && a.strategy?.preset === "custom" && a.strategy?.prompt?.trim());
 
@@ -425,14 +425,14 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         orderBook.addLimitOrder({
             id: doc.id, agentId: o.agentId, ownerUid: o.ownerUid,
             side: o.side, price: o.price, remainingAmount: o.remainingAmount || o.amount,
-            isMMOrder: !!mmAgents.find((mm) => mm.id === o.agentId), timestamp: Date.now(),
+            isTradingOrder: !!tradingAgents.find((trading) => trading.id === o.agentId), timestamp: Date.now(),
         });
     });
 
-    // Cancel old MM orders
+    // Cancel old Trading orders
     const cb = db.batch();
-    for (const mm of mmAgents) {
-        const old = await db.collection("dex/orders/list").where("agentId", "==", mm.id).where("status", "in", ["open", "partial"]).get();
+    for (const trading of tradingAgents) {
+        const old = await db.collection("dex/orders/list").where("agentId", "==", trading.id).where("status", "in", ["open", "partial"]).get();
         old.forEach((d) => cb.update(d.ref, { status: "cancelled" }));
     }
     await cb.commit();
@@ -454,12 +454,12 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     const totalDec = { buy: 0, sell: 0, hold: 0 };
 
     // ── Circuit Breaker State ──
-    let mmPaused = mmKillSwitch; // start paused if kill switch is on
-    const cbThreshold = mmAdmin?.riskConfig?.circuitBreaker?.priceChangeThreshold || 5; // percent
+    let tradingPaused = mmKillSwitch; // start paused if kill switch is on
+    const cbThreshold = tradingAdmin?.riskConfig?.circuitBreaker?.priceChangeThreshold || 5; // percent
 
     // ── Persistent Base Price Tracking (Fixing Zeno's Paradox) ──
-    let engineBasePrice = mmAdmin?.priceDirection?.currentBasePrice || sessionOpen || 0.1000;
-    const pd = mmAdmin?.priceDirection || {};
+    let engineBasePrice = tradingAdmin?.priceDirection?.currentBasePrice || sessionOpen || 0.1000;
+    const pd = tradingAdmin?.priceDirection || {};
     const trendBias = pd.trendBias || 0;
     // Speed: per micro-round (we calculate drift on 5 micro-rounds, but let's just make it per 5 rounds)
     // 0.0005 * 100 = 0.05% per update if target was widely different, but let's use a flat drift for stability
@@ -468,15 +468,15 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     const trendSpeedVal = (typeof pd.trendSpeed === "number") ? pd.trendSpeed : speedMap[pd.trendSpeed || "medium"];
 
     // ── Capitulation Engine (Flash Crash / Liquidate targets) ──
-    const cap = mmAdmin?.capitulation;
+    const cap = tradingAdmin?.capitulation;
     let capitulationTriggered = false;
     const capFills = [];
-    if (cap?.active === true && mmAgents.length > 0 && !mmPaused) {
+    if (cap?.active === true && tradingAgents.length > 0 && !tradingPaused) {
         console.log(`[TradingEngine] Executing Capitulation flash-crash! Target UID: ${cap.targetUid || "any"}, Drop: ${cap.dropPercent}%`);
         const dropRatio = (parseFloat(cap.dropPercent) || 10) / 100;
         const targetPrice = engineBasePrice * (1 - dropRatio);
         const dumpAmount = parseFloat(cap.dumpAmount) || 500000;
-        const mmAlpha = mmAgents[0];
+        const mmAlpha = tradingAgents[0];
 
         // Massive market sell command directly into the orderbook bypassing standard checks
         // We simulate this by continuously taking active bids until amount is depleted or basePrice is hit.
@@ -484,7 +484,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         const mf = execDec(orderBook, mmAlpha, { action: "sell", amount: dumpAmount, orderType: "market", reasoning: "CAPITULATION_DUMP" }, roundNumber, Date.now());
         capFills.push(...mf);
 
-        // Ensure price is forced down to target level so subsequent MM ticks recreate walls at the absolute bottom
+        // Ensure price is forced down to target level so subsequent Trading ticks recreate walls at the absolute bottom
         engineBasePrice = Math.max(0.0001, targetPrice);
         orderBook.lastPrice = Math.max(0.0001, targetPrice);
 
@@ -498,31 +498,31 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         totalMicro++;
         const mf = [];
 
-        // Circuit breaker check: pause MM if price moved too far from session open
-        if (!mmPaused && sessionOpen > 0) {
+        // Circuit breaker check: pause Trading if price moved too far from session open
+        if (!tradingPaused && sessionOpen > 0) {
             const pctChange = Math.abs(orderBook.lastPrice - sessionOpen) / sessionOpen * 100;
             if (pctChange > cbThreshold) {
-                mmPaused = true;
+                tradingPaused = true;
                 console.log(`[TradingEngine] Circuit breaker triggered: ${pctChange.toFixed(2)}% change exceeds ${cbThreshold}% threshold`);
             }
         }
 
-        // MM refresh every 5 rounds (skip if kill switch or circuit breaker active)
-        if (totalMicro % 5 === 1 && !mmPaused) {
+        // Trading refresh every 5 rounds (skip if kill switch or circuit breaker active)
+        if (totalMicro % 5 === 1 && !tradingPaused) {
             // Apply drift to engineBasePrice: drift towards target price
             const targetPrice = pd.targetPrice || sessionOpen;
             const diff = targetPrice - engineBasePrice;
             const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * 5; // * 5 because we update every 5 micro-rounds
             engineBasePrice += driftDelta;
 
-            for (const mm of mmAgents) {
-                orderBook.cancelAgentOrders(mm.id);
-                for (const mo of generateMMOrders(mm, orderBook.lastPrice, mmAdmin, engineBasePrice)) {
+            for (const trading of tradingAgents) {
+                orderBook.cancelAgentOrders(trading.id);
+                for (const mo of generateTradingOrders(trading, orderBook.lastPrice, tradingAdmin, engineBasePrice)) {
                     orderBook.addLimitOrder({
-                        id: `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
-                        agentId: mm.id, ownerUid: mm.ownerUid,
+                        id: `trading-${trading.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
+                        agentId: trading.id, ownerUid: trading.ownerUid,
                         side: mo.side, price: mo.price, remainingAmount: mo.amount,
-                        isMMOrder: true, timestamp: ms,
+                        isTradingOrder: true, timestamp: ms,
                     });
                 }
             }
@@ -601,17 +601,17 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         bc++;
     }
 
-    // MM final orders (skip if kill switch or circuit breaker paused)
-    if (!mmPaused) {
-        for (const mm of mmAgents) {
-            for (const mo of generateMMOrders(mm, fp, mmAdmin, engineBasePrice)) {
+    // Trading final orders (skip if kill switch or circuit breaker paused)
+    if (!tradingPaused) {
+        for (const trading of tradingAgents) {
+            for (const mo of generateTradingOrders(trading, fp, tradingAdmin, engineBasePrice)) {
                 if (bc >= 380) break;
-                const oid = `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`;
+                const oid = `trading-${trading.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`;
                 wb.set(db.doc(`dex/orders/list/${oid}`), {
-                    id: oid, agentId: mm.id, ownerUid: mm.ownerUid, pair: DEX_PAIR,
+                    id: oid, agentId: trading.id, ownerUid: trading.ownerUid, pair: DEX_PAIR,
                     side: mo.side, type: "limit", role: "pending",
                     price: mo.price, amount: mo.amount, filledAmount: 0, remainingAmount: mo.amount,
-                    status: "open", fee: 0, feeRate: 0, reasoning: "MM",
+                    status: "open", fee: 0, feeRate: 0, reasoning: "Trading",
                     expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 120000),
                     createdAt: admin.firestore.Timestamp.now(),
                 });
@@ -621,14 +621,14 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     }
 
     // Save persist engineBasePrice back to config
-    if (mmAdmin?.priceDirection || capitulationTriggered) {
+    if (tradingAdmin?.priceDirection || capitulationTriggered) {
         const updates = {};
-        if (mmAdmin?.priceDirection) updates["priceDirection.currentBasePrice"] = engineBasePrice;
+        if (tradingAdmin?.priceDirection) updates["priceDirection.currentBasePrice"] = engineBasePrice;
         if (capitulationTriggered) {
             updates["capitulation.active"] = false;
             updates["capitulation.lastExecutedAt"] = admin.firestore.Timestamp.now();
         }
-        wb.update(db.doc("dex/config/mm-settings/current"), updates);
+        wb.update(db.doc("dex/config/trading-settings/current"), updates);
         bc++;
     }
 
@@ -734,7 +734,7 @@ function execDec(ob, ag, dec, rn, ts) {
         const r = ob.addLimitOrder({
             id: oid, agentId: ag.id, ownerUid: ag.ownerUid,
             side: dec.action, price: dec.price, remainingAmount: dec.amount,
-            isMMOrder: false, timestamp: ts,
+            isTradingOrder: false, timestamp: ts,
         });
         if (r === "crosses") fills = ob.executeMarketOrder(oid, ag.id, ag.ownerUid, dec.action, dec.amount, dec.price);
     }

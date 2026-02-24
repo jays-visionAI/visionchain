@@ -903,7 +903,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
         { code: 'vi-VN', label: 'Vietnamese', native: 'Tiếng Việt', group: 'priority' },
         { code: 'km-KH', label: 'Khmer', native: 'ខ្មែរ', group: 'priority' },
         { code: 'lo-LA', label: 'Lao', native: 'ລາວ', group: 'priority' },
-        { code: 'my-MM', label: 'Myanmar', native: 'မြန်မာ', group: 'priority' },
+        { code: 'my-Trading', label: 'Myanmar', native: 'မြန်မာ', group: 'priority' },
         { code: 'id-ID', label: 'Indonesian', native: 'Bahasa Indonesia', group: 'priority' },
         { code: 'fil-PH', label: 'Filipino', native: 'Filipino', group: 'priority' },
         // === Priority: Europe & Global ===

@@ -516,7 +516,7 @@ interface GravityTrade {
 
 // gravity_stats - 일일 통계
 interface GravityDailyStats {
-    date: string;  // YYYY-MM-DD
+    date: string;  // YYYY-Trading-DD
     
     openPrice: number;
     closePrice: number;

@@ -97,9 +97,9 @@ export default function MMActivityLog() {
             const lastDoc = append && existing.length > 0 ? existing[existing.length - 1].timestamp : null;
             let q;
             if (lastDoc) {
-                q = query(collection(db, 'dex/config/mm-audit-log'), orderBy('timestamp', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
+                q = query(collection(db, 'dex/config/trading-audit-log'), orderBy('timestamp', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
             } else {
-                q = query(collection(db, 'dex/config/mm-audit-log'), orderBy('timestamp', 'desc'), limit(PAGE_SIZE));
+                q = query(collection(db, 'dex/config/trading-audit-log'), orderBy('timestamp', 'desc'), limit(PAGE_SIZE));
             }
             const snap = await getDocs(q);
             const newEntries: AuditEntry[] = [];

@@ -2,7 +2,7 @@
  * VisionDEX Trading Arena - Order Book & Matching Engine
  * 
  * Price-Time Priority matching with Maker/Taker distinction.
- * MM agents place orders first, then regular agents interact.
+ * Trading agents place orders first, then regular agents interact.
  */
 
 import {
@@ -20,7 +20,7 @@ interface InternalOrder {
     side: OrderSide;
     price: number;
     remainingAmount: number;
-    isMMOrder: boolean;
+    isTradingOrder: boolean;
     timestamp: number;
 }
 
@@ -71,7 +71,7 @@ export class OrderBook {
     }
 
     /**
-     * Cancel all orders for a specific agent (used by MM agents each round)
+     * Cancel all orders for a specific agent (used by Trading agents each round)
      */
     cancelAgentOrders(agentId: string): string[] {
         const cancelledIds: string[] = [];
@@ -105,7 +105,7 @@ export class OrderBook {
         const expired: string[] = [];
 
         this.bids = this.bids.filter(o => {
-            if (o.timestamp < expiryThreshold && !o.isMMOrder) {
+            if (o.timestamp < expiryThreshold && !o.isTradingOrder) {
                 expired.push(o.id);
                 return false;
             }
@@ -113,7 +113,7 @@ export class OrderBook {
         });
 
         this.asks = this.asks.filter(o => {
-            if (o.timestamp < expiryThreshold && !o.isMMOrder) {
+            if (o.timestamp < expiryThreshold && !o.isTradingOrder) {
                 expired.push(o.id);
                 return false;
             }
@@ -186,7 +186,7 @@ export class OrderBook {
             }
 
             // Same owner wash trading check
-            if (topOrder.ownerUid === takerUid && !topOrder.isMMOrder) {
+            if (topOrder.ownerUid === takerUid && !topOrder.isTradingOrder) {
                 bookSide.shift();
                 continue;
             }
@@ -196,8 +196,8 @@ export class OrderBook {
 
             // Calculate fees
             const fillTotal = fillAmount * fillPrice;
-            const isMakerMM = topOrder.isMMOrder;
-            const makerFeeRate = isMakerMM ? FEE_RATES.mmMakerFeeRate : FEE_RATES.makerFeeRate;
+            const isMakerMM = topOrder.isTradingOrder;
+            const makerFeeRate = isMakerMM ? FEE_RATES.tradingMakerFeeRate : FEE_RATES.makerFeeRate;
             const takerFeeRate = isMakerMM ? FEE_RATES.takerFeeRate : FEE_RATES.takerFeeRate;
 
             fills.push({
@@ -250,7 +250,7 @@ export class OrderBook {
                         orderId: order.id,
                         agentId: order.agentId,
                         amount: order.remainingAmount,
-                        isMMOrder: order.isMMOrder,
+                        isTradingOrder: order.isTradingOrder,
                     });
                 } else {
                     levelMap.set(roundedPrice, {
@@ -262,7 +262,7 @@ export class OrderBook {
                             orderId: order.id,
                             agentId: order.agentId,
                             amount: order.remainingAmount,
-                            isMMOrder: order.isMMOrder,
+                            isTradingOrder: order.isTradingOrder,
                         }],
                     });
                 }
@@ -314,7 +314,7 @@ export class OrderBook {
     /**
      * Load orders from Firestore on startup
      */
-    loadOrders(orders: Array<{ id: string; agentId: string; ownerUid: string; side: OrderSide; price: number; remainingAmount: number; isMMOrder: boolean; createdAt: number }>) {
+    loadOrders(orders: Array<{ id: string; agentId: string; ownerUid: string; side: OrderSide; price: number; remainingAmount: number; isTradingOrder: boolean; createdAt: number }>) {
         for (const o of orders) {
             const internal: InternalOrder = {
                 id: o.id,
@@ -323,7 +323,7 @@ export class OrderBook {
                 side: o.side,
                 price: o.price,
                 remainingAmount: o.remainingAmount,
-                isMMOrder: o.isMMOrder,
+                isTradingOrder: o.isTradingOrder,
                 timestamp: o.createdAt,
             };
 

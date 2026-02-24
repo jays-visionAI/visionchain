@@ -37,7 +37,7 @@ export default function MMRiskControls() {
     onMount(async () => {
         try {
             const [settingsSnap, marketSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/mm-settings/current')),
+                getDoc(doc(db, 'dex/config/trading-settings/current')),
                 getDoc(doc(db, 'dex/market/data/VCN-USDT')),
             ]);
             if (settingsSnap.exists() && settingsSnap.data().riskConfig) setConfig(prev => ({ ...prev, ...settingsSnap.data().riskConfig }));
@@ -48,7 +48,7 @@ export default function MMRiskControls() {
             }
             // Load recent risk events
             try {
-                const evSnap = await getDocs(query(collection(db, 'dex/config/mm-audit-log'), orderBy('timestamp', 'desc'), limit(5)));
+                const evSnap = await getDocs(query(collection(db, 'dex/config/trading-audit-log'), orderBy('timestamp', 'desc'), limit(5)));
                 const ev: any[] = [];
                 evSnap.forEach(d => ev.push({ id: d.id, ...d.data() }));
                 setRecentEvents(ev);
@@ -73,8 +73,8 @@ export default function MMRiskControls() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), { riskConfig: config(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
-            await addDoc(collection(db, 'dex/config/mm-audit-log'), { type: 'risk_config', config: config(), operator, timestamp: new Date() });
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), { riskConfig: config(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
+            await addDoc(collection(db, 'dex/config/trading-audit-log'), { type: 'risk_config', config: config(), operator, timestamp: new Date() });
             setSaved(true); setTimeout(() => setSaved(false), 3000);
         } catch (e) { console.error('[MMRisk] Save:', e); }
         finally { setSaving(false); }
@@ -87,8 +87,8 @@ export default function MMRiskControls() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), { riskConfig: { ...config(), killSwitchEnabled: newState }, updatedAt: new Date(), updatedBy: operator }, { merge: true });
-            await addDoc(collection(db, 'dex/config/mm-audit-log'), { type: newState ? 'kill_switch_on' : 'kill_switch_off', operator, timestamp: new Date() });
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), { riskConfig: { ...config(), killSwitchEnabled: newState }, updatedAt: new Date(), updatedBy: operator }, { merge: true });
+            await addDoc(collection(db, 'dex/config/trading-audit-log'), { type: newState ? 'kill_switch_on' : 'kill_switch_off', operator, timestamp: new Date() });
         } catch (e) { console.error('[MMRisk] Kill switch:', e); }
         finally { setSaving(false); }
     };

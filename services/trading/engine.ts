@@ -2,7 +2,7 @@
  * VisionDEX Trading Arena - Main Trading Engine
  *
  * Orchestrates each trading round:
- * 1. MM agents place layered orders (Maker)
+ * 1. Trading agents place layered orders (Maker)
  * 2. Regular agents get AI decisions
  * 3. Orders matched via order book
  * 4. Balances updated, candles generated
@@ -17,7 +17,7 @@ import {
 } from './types';
 import { OrderBook, MatchResult } from './orderbook';
 import { CandleManager, ALL_INTERVALS } from './candles';
-import { getAgentDecision, generateMMOrders } from './aiDecision';
+import { getAgentDecision, generateTradingOrders } from './aiDecision';
 import { Timestamp } from 'firebase/firestore';
 
 // ─── Trading Engine ────────────────────────────────────────────────────────
@@ -145,21 +145,21 @@ export class TradingEngine {
             // Step 0: Clean expired orders
             this.orderBook.removeExpiredOrders(startTime);
 
-            // Step 1: MM agents place layered orders (Maker)
-            const mmAgents = Array.from(this.agents.values()).filter(a => a.role === 'market_maker' && a.status === 'active');
-            for (const mmAgent of mmAgents) {
+            // Step 1: Trading agents place layered orders (Maker)
+            const tradingAgents = Array.from(this.agents.values()).filter(a => a.role === 'market_maker' && a.status === 'active');
+            for (const mmAgent of tradingAgents) {
                 try {
-                    // Cancel previous MM orders
+                    // Cancel previous Trading orders
                     this.orderBook.cancelAgentOrders(mmAgent.id);
 
                     // Generate new orders deterministically
-                    const mmDecision = generateMMOrders(mmAgent, this.orderBook.getLastPrice());
+                    const mmDecision = generateTradingOrders(mmAgent, this.orderBook.getLastPrice());
 
                     // Place each order as a maker
                     for (const order of mmDecision.orders) {
                         if (order.amount < TRADING_LIMITS.minOrderAmount) continue;
 
-                        const orderId = `mm-${mmAgent.id}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+                        const orderId = `trading-${mmAgent.id}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
                         this.orderBook.addLimitOrder({
                             id: orderId,
                             agentId: mmAgent.id,
@@ -167,13 +167,13 @@ export class TradingEngine {
                             side: order.side,
                             price: order.price,
                             remainingAmount: order.amount,
-                            isMMOrder: true,
+                            isTradingOrder: true,
                             timestamp: startTime,
                         });
                         result.mmOrdersPlaced++;
                     }
                 } catch (e: any) {
-                    result.errors.push(`MM ${mmAgent.name}: ${e.message}`);
+                    result.errors.push(`Trading ${mmAgent.name}: ${e.message}`);
                 }
             }
 
@@ -241,7 +241,7 @@ export class TradingEngine {
                         side: decision.action as OrderSide,
                         price: decision.price,
                         remainingAmount: decision.amount,
-                        isMMOrder: false,
+                        isTradingOrder: false,
                         timestamp: startTime,
                     });
 

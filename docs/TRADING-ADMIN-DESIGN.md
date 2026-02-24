@@ -1,6 +1,6 @@
 # VisionDEX Market Maker Admin Control Panel -- 기획설계서
 
-## 1. 리서치 요약: 업계 표준 MM 소프트웨어 핵심 기능
+## 1. 리서치 요약: 업계 표준 Trading 소프트웨어 핵심 기능
 
 ### 1.1 가격 방향 제어 (Price Direction Control)
 
@@ -57,12 +57,12 @@
 
 ---
 
-## 2. VisionDEX MM Admin Panel 설계
+## 2. VisionDEX Trading Admin Panel 설계
 
 ### 2.1 기능 구조
 
 ```
-Admin > VisionDEX > MM Control Panel
+Admin > VisionDEX > Trading Control Panel
 │
 ├── [1] Dashboard (전체 현황)
 │   ├── MM1, MM2 실시간 상태
@@ -104,9 +104,9 @@ Admin > VisionDEX > MM Control Panel
 ### 2.2 Firestore 데이터 모델
 
 ```typescript
-// ─── MM Admin Config ───────────────────────────────────────────────────
-// Location: dex/config/mm-settings
-interface MMAdminSettings {
+// ─── Trading Admin Config ───────────────────────────────────────────────────
+// Location: dex/config/trading-settings
+interface TradingAdminSettings {
     updatedAt: Timestamp;
     updatedBy: string; // admin UID
 
@@ -202,7 +202,7 @@ interface MMAdminSettings {
     // ─── 리스크 관리 (Risk Controls) ─────────────────────────────
     riskConfig: {
         // Kill Switch: 긴급 전체 정지
-        killSwitchEnabled: boolean;        // 활성화 시 MM 즉시 정지
+        killSwitchEnabled: boolean;        // 활성화 시 Trading 즉시 정지
 
         // 서킷 브레이커: 급변동 시 자동 정지
         circuitBreaker: {
@@ -237,7 +237,7 @@ interface MMAdminSettings {
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  Admin > VisionDEX > MM Control Panel                     [Kill Switch] │
+│  Admin > VisionDEX > Trading Control Panel                     [Kill Switch] │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │  ┌── Dashboard ─────────────────────────────────────────────────────────┐│
@@ -340,7 +340,7 @@ interface MMAdminSettings {
 │                                                                          │
 │  ┌── Risk Controls ────────────────────────────────────────── [SAVE] ───┐│
 │  │                                                                      ││
-│  │  [!] Kill Switch:        [ OFF ]  ← Click to STOP all MM activity   ││
+│  │  [!] Kill Switch:        [ OFF ]  ← Click to STOP all Trading activity   ││
 │  │                                                                      ││
 │  │  Circuit Breaker:    [x] ON                                          ││
 │  │    Price Threshold:  [____5____] % change in 5 min → auto-pause     ││
@@ -377,7 +377,7 @@ interface MMAdminSettings {
 - 재고 목표: VCN 비중 증가 방향
 
 효과:
-- MM이 매수호가를 더 공격적으로 제시
+- Trading이 매수호가를 더 공격적으로 제시
 - 일반 에이전트들이 더 높은 가격에 매수
 - 매도 시 더 넓은 스프레드로 이익 확보
 - 결과: 점진적 가격 상승
@@ -392,7 +392,7 @@ interface MMAdminSettings {
 - 재고 목표: USDT 비중 증가 방향
 
 효과:
-- MM이 매도호가를 더 공격적으로 제시
+- Trading이 매도호가를 더 공격적으로 제시
 - 일반 에이전트들이 더 낮은 가격에 매도
 - 결과: 점진적 가격 하락
 ```
@@ -501,9 +501,9 @@ Bearish Spread Setup (약세):
 ## 3. 구현 순서
 
 ### Phase 1: Core Settings (우선)
-1. Firestore에 `dex/config/mm-settings` 문서 생성
+1. Firestore에 `dex/config/trading-settings` 문서 생성
 2. Admin UI: Price Direction 패널 (모드 선택, Trend Bias 슬라이더, 목표 가격)
-3. `tradingEngine.js`의 `generateMMOrders()` 함수에서 `mm-settings` 읽기
+3. `tradingEngine.js`의 `generateTradingOrders()` 함수에서 `trading-settings` 읽기
 4. Kill Switch 구현
 
 ### Phase 2: Spread & Layers
@@ -528,31 +528,31 @@ Bearish Spread Setup (약세):
 
 ## 4. tradingEngine.js 수정 사항
 
-### 4.1 MM Settings 읽기
+### 4.1 Trading Settings 읽기
 
 ```javascript
-// runMicroRoundEngine() 시작 시 MM 설정 로드
-const mmSettingsDoc = await db.doc('dex/config/mm-settings').get();
-const mmSettings = mmSettingsDoc.exists ? mmSettingsDoc.data() : null;
+// runMicroRoundEngine() 시작 시 Trading 설정 로드
+const mmSettingsDoc = await db.doc('dex/config/trading-settings').get();
+const tradingSettings = mmSettingsDoc.exists ? mmSettingsDoc.data() : null;
 
 // Kill Switch 체크
-if (mmSettings?.riskConfig?.killSwitchEnabled) {
-    console.log('[Engine] Kill Switch ACTIVE - skipping MM orders');
-    // MM 주문 생성 건너뜀, 일반 에이전트만 실행
+if (tradingSettings?.riskConfig?.killSwitchEnabled) {
+    console.log('[Engine] Kill Switch ACTIVE - skipping Trading orders');
+    // Trading 주문 생성 건너뜀, 일반 에이전트만 실행
 }
 ```
 
-### 4.2 generateMMOrders 개선
+### 4.2 generateTradingOrders 개선
 
 ```javascript
-function generateMMOrders(agent, currentPrice, mmSettings) {
-    const cfg = agent.mmConfig;
+function generateTradingOrders(agent, currentPrice, tradingSettings) {
+    const cfg = agent.tradingConfig;
     if (!cfg) return [];
 
     // Admin 설정으로 오버라이드
-    const direction = mmSettings?.priceDirection || {};
-    const spreadCfg = mmSettings?.spreadConfig || {};
-    const invCfg = mmSettings?.inventoryConfig || {};
+    const direction = tradingSettings?.priceDirection || {};
+    const spreadCfg = tradingSettings?.spreadConfig || {};
+    const invCfg = tradingSettings?.inventoryConfig || {};
 
     // 1. 기준가 계산
     let basePrice = direction.currentBasePrice || cfg.basePrice;
@@ -640,7 +640,7 @@ function getLayerMultiplier(index, total, pattern) {
 | 항목 | 조치 |
 |------|------|
 | Admin 전용 | Firestore Security Rules에서 `admin` role만 `dex/config/*` 쓰기 허용 |
-| 변경 이력 | 모든 설정 변경을 `dex/config/mm-audit-log`에 기록 |
+| 변경 이력 | 모든 설정 변경을 `dex/config/trading-audit-log`에 기록 |
 | 값 범위 검증 | trendBias는 -1.0~+1.0, spread는 0.1~5.0% 등 서버 측 검증 |
 | Kill Switch | 최우선 순위, 다른 설정 무시하고 즉시 정지 |
 | Rate Limit | 설정 변경은 5초에 1회로 제한 (오작동 방지) |

@@ -80,7 +80,7 @@ export const countries: Country[] = [
     { name: "Mongolia", code: "MN", dialCode: "+976", flag: "https://flagcdn.com/mn.svg" },
     { name: "Montenegro", code: "ME", dialCode: "+382", flag: "https://flagcdn.com/me.svg" },
     { name: "Morocco", code: "MA", dialCode: "+212", flag: "https://flagcdn.com/ma.svg" },
-    { name: "Myanmar", code: "MM", dialCode: "+95", flag: "https://flagcdn.com/mm.svg" },
+    { name: "Myanmar", code: "Trading", dialCode: "+95", flag: "https://flagcdn.com/trading.svg" },
     { name: "Nepal", code: "NP", dialCode: "+977", flag: "https://flagcdn.com/np.svg" },
     { name: "Netherlands", code: "NL", dialCode: "+31", flag: "https://flagcdn.com/nl.svg" },
     { name: "New Zealand", code: "NZ", dialCode: "+64", flag: "https://flagcdn.com/nz.svg" },

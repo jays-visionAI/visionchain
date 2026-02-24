@@ -15,7 +15,7 @@ interface MMAgent {
     role: string;
     status: string;
     balances: { USDT: number; VCN: number };
-    mmConfig?: {
+    tradingConfig?: {
         basePrice: number;
         spreadPercent: number;
         trendBias: number;
@@ -40,7 +40,7 @@ interface AgentOverride {
     note?: string;
 }
 
-export default function MMAgents() {
+export default function TradingAgents() {
     const [agents, setAgents] = createSignal<MMAgent[]>([]);
     const [overrides, setOverrides] = createSignal<Record<string, AgentOverride>>({});
     const [price, setPrice] = createSignal(0.10);
@@ -63,7 +63,7 @@ export default function MMAgents() {
                 if (data.market?.lastPrice) setPrice(data.market.lastPrice);
                 if (data.settings?.agentOverrides) setOverrides(data.settings.agentOverrides);
             }
-        } catch (e) { console.error('[MMAgents] Load:', e); }
+        } catch (e) { console.error('[TradingAgents] Load:', e); }
         finally { setLoading(false); }
     }
 
@@ -81,10 +81,10 @@ export default function MMAgents() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), { agentOverrides: overrides(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
-            await addDoc(collection(db, 'dex/config/mm-audit-log'), { type: 'agent_overrides', overrides: overrides(), operator, timestamp: new Date() });
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), { agentOverrides: overrides(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
+            await addDoc(collection(db, 'dex/config/trading-audit-log'), { type: 'agent_overrides', overrides: overrides(), operator, timestamp: new Date() });
             setSaved(true); setTimeout(() => setSaved(false), 3000);
-        } catch (e) { console.error('[MMAgents] Save:', e); }
+        } catch (e) { console.error('[TradingAgents] Save:', e); }
         finally { setSaving(false); }
     };
 
@@ -96,7 +96,7 @@ export default function MMAgents() {
     return (
         <div class="mma-root">
             <div class="mma-header">
-                <div><h1 class="mma-title">MM Agents</h1><p class="mma-subtitle">Configure and monitor market maker agents</p></div>
+                <div><h1 class="mma-title">Trading Agents</h1><p class="mma-subtitle">Configure and monitor market maker agents</p></div>
                 <button onClick={handleSave} disabled={saving()} class={`mma-save ${saved() ? 'saved' : ''}`}>
                     <Show when={saving()} fallback={<span>{saved() ? 'Saved' : 'Save Overrides'}</span>}><div class="mma-spin" /><span>Saving...</span></Show>
                 </button>
@@ -120,8 +120,8 @@ export default function MMAgents() {
                             <path d="M24 6v6" stroke="rgba(245,158,11,0.3)" stroke-width="2.5" stroke-linecap="round" />
                             <circle cx="24" cy="6" r="2" fill="rgba(245,158,11,0.3)" />
                         </svg>
-                        <h3>No MM Agents Found</h3>
-                        <p>Initialize the trading engine to create MM Alpha and MM Beta agents with 500K USDT + 5M VCN each.</p>
+                        <h3>No Trading Agents Found</h3>
+                        <p>Initialize the trading engine to create Trading Alpha and Trading Beta agents with 500K USDT + 5M VCN each.</p>
                         <button
                             class="mma-init-btn"
                             onClick={async () => {
@@ -215,15 +215,15 @@ export default function MMAgents() {
                                                 </div>
                                                 <div class="mma-inv-labels"><span>VCN {vcnPct().toFixed(0)}%</span><span>USDT {(100 - vcnPct()).toFixed(0)}%</span></div>
 
-                                                {/* MM Config */}
-                                                <Show when={agent.mmConfig}>
+                                                {/* Trading Config */}
+                                                <Show when={agent.tradingConfig}>
                                                     <div class="mma-config-section">
                                                         <h3 class="mma-config-title">Engine Config</h3>
                                                         <div class="mma-config-grid">
-                                                            <div><span>Base Price</span><span>${agent.mmConfig!.basePrice?.toFixed(4)}</span></div>
-                                                            <div><span>Spread</span><span>{agent.mmConfig!.spreadPercent}%</span></div>
-                                                            <div><span>Bias</span><span class={agent.mmConfig!.trendBias > 0 ? 'up' : agent.mmConfig!.trendBias < 0 ? 'dn' : ''}>{agent.mmConfig!.trendBias > 0 ? '+' : ''}{agent.mmConfig!.trendBias}</span></div>
-                                                            <div><span>Layers</span><span>{agent.mmConfig!.layerCount} x {agent.mmConfig!.layerSpacing}%</span></div>
+                                                            <div><span>Base Price</span><span>${agent.tradingConfig!.basePrice?.toFixed(4)}</span></div>
+                                                            <div><span>Spread</span><span>{agent.tradingConfig!.spreadPercent}%</span></div>
+                                                            <div><span>Bias</span><span class={agent.tradingConfig!.trendBias > 0 ? 'up' : agent.tradingConfig!.trendBias < 0 ? 'dn' : ''}>{agent.tradingConfig!.trendBias > 0 ? '+' : ''}{agent.tradingConfig!.trendBias}</span></div>
+                                                            <div><span>Layers</span><span>{agent.tradingConfig!.layerCount} x {agent.tradingConfig!.layerSpacing}%</span></div>
                                                         </div>
                                                     </div>
                                                 </Show>

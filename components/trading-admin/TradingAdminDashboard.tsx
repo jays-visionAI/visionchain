@@ -15,7 +15,7 @@ interface MMAgent {
     name: string;
     role: string;
     balances: { USDT: number; VCN: number };
-    mmConfig?: {
+    tradingConfig?: {
         basePrice: number;
         spreadPercent: number;
         trendBias: number;
@@ -50,7 +50,7 @@ interface MarketData {
     activeAgents: number;
 }
 
-interface MMSettings {
+interface TradingSettings {
     priceDirection?: {
         mode: string;
         targetPrice: number;
@@ -75,10 +75,10 @@ const MOCK_WHALES = [
     { id: 'uid_whale4', label: 'Team Vesting (Advisor)', holding: 3_000_000, avgEntry: 0.01, unlocked: 1_200_000, locked: 1_800_000, threatLevel: 'HIGH' }
 ];
 
-export default function MMAdminDashboard() {
-    const [mmAgents, setMMAgents] = createSignal<MMAgent[]>([]);
+export default function TradingAdminDashboard() {
+    const [tradingAgents, setMMAgents] = createSignal<MMAgent[]>([]);
     const [market, setMarket] = createSignal<MarketData | null>(null);
-    const [mmSettings, setMMSettings] = createSignal<MMSettings | null>(null);
+    const [tradingSettings, setMMSettings] = createSignal<TradingSettings | null>(null);
     const [loading, setLoading] = createSignal(true);
     const [killSwitch, setKillSwitch] = createSignal(false);
     const [saving, setSaving] = createSignal(false);
@@ -103,12 +103,12 @@ export default function MMAdminDashboard() {
                 setMMAgents(data.agents || []);
                 if (data.market) setMarket(data.market as MarketData);
                 if (data.settings) {
-                    setMMSettings(data.settings as MMSettings);
+                    setMMSettings(data.settings as TradingSettings);
                     setKillSwitch(data.settings.riskConfig?.killSwitchEnabled || false);
                 }
             }
         } catch (e) {
-            console.error('[MMAdmin] Load error:', e);
+            console.error('[TradingAdmin] Load error:', e);
         } finally {
             setLoading(false);
         }
@@ -124,14 +124,14 @@ export default function MMAdminDashboard() {
         setSaving(true);
         const newState = !killSwitch();
         try {
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
                 riskConfig: { killSwitchEnabled: newState },
                 updatedAt: new Date(),
                 updatedBy: getAdminFirebaseAuth().currentUser?.email || 'unknown',
             }, { merge: true });
             setKillSwitch(newState);
         } catch (e) {
-            console.error('[MMAdmin] Kill switch error:', e);
+            console.error('[TradingAdmin] Kill switch error:', e);
         } finally {
             setSaving(false);
         }
@@ -141,7 +141,7 @@ export default function MMAdminDashboard() {
         if (!confirm('WARNING: Executing a Flash-Crash Capitulation will dump market prices instantly to wipe target orders and trigger stop-losses. Proceed?')) return;
         setSaving(true);
         try {
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
                 capitulation: {
                     active: true,
                     targetUid: targetWhale(),
@@ -152,18 +152,18 @@ export default function MMAdminDashboard() {
                 updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin@visionchain.co'
             }, { merge: true });
         } catch (e) {
-            console.error('[MMAdmin] Error triggering capitulation', e);
+            console.error('[TradingAdmin] Error triggering capitulation', e);
         } finally {
             setSaving(false);
         }
     };
 
     const setMacroPhase = async (phaseName: string, mode: string, bias: number, speed: string, targetMultiplier: number) => {
-        if (!confirm(`Are you sure you want to change the MM Engine phase to "${phaseName.toUpperCase()}"?`)) return;
+        if (!confirm(`Are you sure you want to change the Trading Engine phase to "${phaseName.toUpperCase()}"?`)) return;
         setSaving(true);
         try {
             const currentPrice = market()?.lastPrice || 0.1;
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
                 priceDirection: {
                     phase: phaseName,
                     mode: mode,
@@ -176,7 +176,7 @@ export default function MMAdminDashboard() {
                 updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin@visionchain.co'
             }, { merge: true });
         } catch (e) {
-            console.error('[MMAdmin] Error setting phase', e);
+            console.error('[TradingAdmin] Error setting phase', e);
         } finally {
             setSaving(false);
         }
@@ -191,12 +191,12 @@ export default function MMAdminDashboard() {
     };
     const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n?.toFixed(2) || '0'}%`;
 
-    const totalPnL = createMemo(() => mmAgents().reduce((s, a) => s + (a.performance?.totalPnL || 0), 0));
-    const totalTrades = createMemo(() => mmAgents().reduce((s, a) => s + (a.performance?.totalTrades || 0), 0));
+    const totalPnL = createMemo(() => tradingAgents().reduce((s, a) => s + (a.performance?.totalPnL || 0), 0));
+    const totalTrades = createMemo(() => tradingAgents().reduce((s, a) => s + (a.performance?.totalTrades || 0), 0));
 
     // True accounting for Capital Extraction Radar (100% real based on 5M VCN, 500k USDT initial)
-    const netTokenVacuumed = createMemo(() => mmAgents().reduce((s, a) => s + ((a.balances?.VCN || 5000000) - 5000000), 0));
-    const spreadProfitUSDT = createMemo(() => mmAgents().reduce((s, a) => s + ((a.balances?.USDT || 500000) - 500000), 0));
+    const netTokenVacuumed = createMemo(() => tradingAgents().reduce((s, a) => s + ((a.balances?.VCN || 5000000) - 5000000), 0));
+    const spreadProfitUSDT = createMemo(() => tradingAgents().reduce((s, a) => s + ((a.balances?.USDT || 500000) - 500000), 0));
     const totalExtractedUSDT = createMemo(() => spreadProfitUSDT() + (netTokenVacuumed() * (market()?.lastPrice || 0.1)));
 
     return (
@@ -204,7 +204,7 @@ export default function MMAdminDashboard() {
             {/* Page Header */}
             <div class="mmd-page-header">
                 <div>
-                    <h1 class="mmd-title">MM Dashboard</h1>
+                    <h1 class="mmd-title">Trading Dashboard</h1>
                     <p class="mmd-subtitle">Market Maker Operations Overview</p>
                 </div>
                 <div class="mmd-header-right">
@@ -238,9 +238,9 @@ export default function MMAdminDashboard() {
                     </div>
                     <div class="mmd-stat-card">
                         <div class="mmd-stat-label">Target Price</div>
-                        <div class="mmd-stat-value">${fmt(mmSettings()?.priceDirection?.targetPrice || market()?.lastPrice || 0.10)}</div>
+                        <div class="mmd-stat-value">${fmt(tradingSettings()?.priceDirection?.targetPrice || market()?.lastPrice || 0.10)}</div>
                         <div class="mmd-stat-meta">
-                            {mmSettings()?.priceDirection?.mode || 'Not Set'}
+                            {tradingSettings()?.priceDirection?.mode || 'Not Set'}
                         </div>
                     </div>
                     <div class="mmd-stat-card">
@@ -252,9 +252,9 @@ export default function MMAdminDashboard() {
                     </div>
                     <div class="mmd-stat-card">
                         <div class="mmd-stat-label">Phase</div>
-                        <div class="mmd-stat-value mmd-stat-phase">{mmSettings()?.priceDirection?.phase || 'Ranging'}</div>
+                        <div class="mmd-stat-value mmd-stat-phase">{tradingSettings()?.priceDirection?.phase || 'Ranging'}</div>
                         <div class="mmd-stat-meta">
-                            Bias: {mmSettings()?.priceDirection?.trendBias?.toFixed(2) || '0.00'}
+                            Bias: {tradingSettings()?.priceDirection?.trendBias?.toFixed(2) || '0.00'}
                         </div>
                     </div>
                     <div class="mmd-stat-card">
@@ -284,8 +284,8 @@ export default function MMAdminDashboard() {
                             disabled={saving()}
                             onClick={() => setMacroPhase('accumulation', 'bullish', 0.2, 'slow', 1.5)}
                             style={{
-                                'background': mmSettings()?.priceDirection?.phase === 'accumulation' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': mmSettings()?.priceDirection?.phase === 'accumulation' ? '1px solid #34d399' : '1px solid rgba(255,255,255,0.1)',
+                                'background': tradingSettings()?.priceDirection?.phase === 'accumulation' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'accumulation' ? '1px solid #34d399' : '1px solid rgba(255,255,255,0.1)',
                                 'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
                                 'opacity': saving() ? '0.5' : '1'
                             }}>
@@ -298,8 +298,8 @@ export default function MMAdminDashboard() {
                             disabled={saving()}
                             onClick={() => setMacroPhase('markup', 'bullish', 0.8, 'fast', 3.0)}
                             style={{
-                                'background': mmSettings()?.priceDirection?.phase === 'markup' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': mmSettings()?.priceDirection?.phase === 'markup' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                                'background': tradingSettings()?.priceDirection?.phase === 'markup' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'markup' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
                                 'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
                                 'opacity': saving() ? '0.5' : '1'
                             }}>
@@ -312,8 +312,8 @@ export default function MMAdminDashboard() {
                             disabled={saving()}
                             onClick={() => setMacroPhase('distribution', 'bearish', -0.1, 'medium', 0.8)}
                             style={{
-                                'background': mmSettings()?.priceDirection?.phase === 'distribution' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': mmSettings()?.priceDirection?.phase === 'distribution' ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
+                                'background': tradingSettings()?.priceDirection?.phase === 'distribution' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'distribution' ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
                                 'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
                                 'opacity': saving() ? '0.5' : '1'
                             }}>
@@ -326,8 +326,8 @@ export default function MMAdminDashboard() {
                             disabled={saving()}
                             onClick={() => setMacroPhase('markdown', 'bearish', -0.8, 'fast', 0.5)}
                             style={{
-                                'background': mmSettings()?.priceDirection?.phase === 'markdown' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': mmSettings()?.priceDirection?.phase === 'markdown' ? '1px solid #f43f5e' : '1px solid rgba(255,255,255,0.1)',
+                                'background': tradingSettings()?.priceDirection?.phase === 'markdown' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'markdown' ? '1px solid #f43f5e' : '1px solid rgba(255,255,255,0.1)',
                                 'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
                                 'opacity': saving() ? '0.5' : '1'
                             }}>
@@ -340,8 +340,8 @@ export default function MMAdminDashboard() {
                             disabled={saving()}
                             onClick={() => setMacroPhase('ranging', 'neutral', 0.0, 'slow', 1.0)}
                             style={{
-                                'background': mmSettings()?.priceDirection?.phase === 'ranging' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': mmSettings()?.priceDirection?.phase === 'ranging' ? '1px solid #94a3b8' : '1px solid rgba(255,255,255,0.1)',
+                                'background': tradingSettings()?.priceDirection?.phase === 'ranging' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'ranging' ? '1px solid #94a3b8' : '1px solid rgba(255,255,255,0.1)',
                                 'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
                                 'opacity': saving() ? '0.5' : '1'
                             }}>
@@ -534,25 +534,25 @@ export default function MMAdminDashboard() {
                                             pie: { donut: { size: '75%', labels: { show: true, name: { show: false }, value: { show: true, fontSize: '24px', fontWeight: 800, color: '#f8fafc' } } } }
                                         }
                                     }}
-                                    series={[75, 25]} // heavily skewed toward bids representing the MM buy walls padding
+                                    series={[75, 25]} // heavily skewed toward bids representing the Trading buy walls padding
                                 />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* MM Agents */}
+                {/* Trading Agents */}
                 <div class="mmd-section">
                     <h2 class="mmd-section-title">Market Maker Agents</h2>
                     <div class="mmd-agents-grid">
-                        <For each={mmAgents()} fallback={
+                        <For each={tradingAgents()} fallback={
                             <div class="mmd-empty">
                                 <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
                                     <rect x="4" y="8" width="32" height="24" rx="4" stroke="rgba(245,158,11,0.3)" stroke-width="2" />
                                     <path d="M12 20h16" stroke="rgba(245,158,11,0.2)" stroke-width="2" stroke-linecap="round" />
                                 </svg>
                                 <p>No Market Maker agents found</p>
-                                <span>Click Initialize to create MM Alpha and MM Beta agents</span>
+                                <span>Click Initialize to create Trading Alpha and Trading Beta agents</span>
                                 <button
                                     class="mmd-init-btn"
                                     onClick={async () => {
@@ -618,18 +618,18 @@ export default function MMAdminDashboard() {
                                         <div class="mmd-agent-config">
                                             <div class="mmd-agent-row">
                                                 <span>Trend Bias</span>
-                                                <span class={agent.mmConfig?.trendBias && agent.mmConfig.trendBias > 0 ? 'up' : agent.mmConfig?.trendBias && agent.mmConfig.trendBias < 0 ? 'dn' : ''}>
-                                                    {agent.mmConfig?.trendBias?.toFixed(2) || '0.00'}
-                                                    {agent.mmConfig?.trendBias && agent.mmConfig.trendBias > 0 ? ' (Bullish)' : agent.mmConfig?.trendBias && agent.mmConfig.trendBias < 0 ? ' (Bearish)' : ' (Neutral)'}
+                                                <span class={agent.tradingConfig?.trendBias && agent.tradingConfig.trendBias > 0 ? 'up' : agent.tradingConfig?.trendBias && agent.tradingConfig.trendBias < 0 ? 'dn' : ''}>
+                                                    {agent.tradingConfig?.trendBias?.toFixed(2) || '0.00'}
+                                                    {agent.tradingConfig?.trendBias && agent.tradingConfig.trendBias > 0 ? ' (Bullish)' : agent.tradingConfig?.trendBias && agent.tradingConfig.trendBias < 0 ? ' (Bearish)' : ' (Neutral)'}
                                                 </span>
                                             </div>
                                             <div class="mmd-agent-row">
                                                 <span>Spread</span>
-                                                <span>{agent.mmConfig?.spreadPercent?.toFixed(2) || '0.50'}%</span>
+                                                <span>{agent.tradingConfig?.spreadPercent?.toFixed(2) || '0.50'}%</span>
                                             </div>
                                             <div class="mmd-agent-row">
                                                 <span>Layers</span>
-                                                <span>{agent.mmConfig?.layerCount || 5} x {agent.mmConfig?.layerSpacing?.toFixed(1) || '0.3'}%</span>
+                                                <span>{agent.tradingConfig?.layerCount || 5} x {agent.tradingConfig?.layerSpacing?.toFixed(1) || '0.3'}%</span>
                                             </div>
                                         </div>
 
@@ -692,11 +692,11 @@ export default function MMAdminDashboard() {
                         </div>
                         <div class="mmd-market-item">
                             <span class="mmd-market-label">Price Floor</span>
-                            <span class="mmd-market-val">${fmt(mmSettings()?.priceDirection?.priceFloor || 0.05)}</span>
+                            <span class="mmd-market-val">${fmt(tradingSettings()?.priceDirection?.priceFloor || 0.05)}</span>
                         </div>
                         <div class="mmd-market-item">
                             <span class="mmd-market-label">Price Ceiling</span>
-                            <span class="mmd-market-val">${fmt(mmSettings()?.priceDirection?.priceCeiling || 0.50)}</span>
+                            <span class="mmd-market-val">${fmt(tradingSettings()?.priceDirection?.priceCeiling || 0.50)}</span>
                         </div>
                     </div>
                 </div>

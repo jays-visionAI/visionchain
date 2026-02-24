@@ -68,7 +68,7 @@ export default function MMPriceDirection() {
     onMount(async () => {
         try {
             const [settingsSnap, marketSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/mm-settings/current')),
+                getDoc(doc(db, 'dex/config/trading-settings/current')),
                 getDoc(doc(db, 'dex/market/data/VCN-USDT')),
             ]);
             if (settingsSnap.exists()) {
@@ -108,14 +108,14 @@ export default function MMPriceDirection() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
                 priceDirection: config(),
                 updatedAt: new Date(),
                 updatedBy: operator,
             }, { merge: true });
 
             // Audit log
-            await addDoc(collection(db, 'dex/config/mm-audit-log'), {
+            await addDoc(collection(db, 'dex/config/trading-audit-log'), {
                 type: 'price_direction',
                 config: config(),
                 operator,

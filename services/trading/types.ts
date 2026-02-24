@@ -15,9 +15,9 @@ export type TradingFrequency = 'high' | 'medium' | 'low';
 export type StrategyPreset =
     | 'momentum' | 'value' | 'scalper' | 'contrarian' | 'grid'
     | 'breakout' | 'twap' | 'sentiment' | 'random' | 'dca'
-    | 'mm_bull' | 'mm_bear' | 'custom';
+    | 'trading_bull' | 'trading_bear' | 'custom';
 
-export interface MMConfig {
+export interface TradingConfig {
     basePrice: number;
     spreadPercent: number;
     priceRangePercent: number;
@@ -68,7 +68,7 @@ export interface TradingAgent {
     name: string;
     role: AgentRole;
     strategy: AgentStrategy;
-    mmConfig?: MMConfig;
+    tradingConfig?: TradingConfig;
     balances: AgentBalances;
     performance: AgentPerformance;
     recentTrades: RecentTradeEntry[];
@@ -214,8 +214,8 @@ export interface MarketDataForAgent {
 export const FEE_RATES = {
     makerFeeRate: 0.0002,     // 0.02%
     takerFeeRate: 0.0005,     // 0.05%
-    mmMakerFeeRate: 0.0000,   // 0% (MM maker exempt)
-    mmTakerFeeRate: 0.0001,   // 0.01%
+    tradingMakerFeeRate: 0.0000,   // 0% (Trading maker exempt)
+    tradingTakerFeeRate: 0.0001,   // 0.01%
 } as const;
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ export interface OrderBookLevel {
         orderId: string;
         agentId: string;
         amount: number;
-        isMMOrder: boolean;
+        isTradingOrder: boolean;
     }>;
 }
 

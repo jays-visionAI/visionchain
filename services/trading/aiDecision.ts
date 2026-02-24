@@ -4,12 +4,12 @@
  * Hybrid approach:
  * - Preset strategies (10 types): Deterministic algorithms (no LLM, no cost, instant)
  * - Custom prompt agents: DeepSeek LLM (user writes their own strategy prompt)
- * - MM agents: Always deterministic (mathematical order placement)
+ * - Trading agents: Always deterministic (mathematical order placement)
  */
 
 import {
     TradingAgent, AITradeDecision, AIMMDecision,
-    MarketDataForAgent, MMConfig, TRADING_LIMITS,
+    MarketDataForAgent, TradingConfig, TRADING_LIMITS,
 } from './types';
 import { buildAgentPrompt, getStrategyPrompt, COMMON_PROMPT_SUFFIX } from './strategies';
 
@@ -383,16 +383,16 @@ function parseAIResponse(
     }
 }
 
-// ─── MM Agent Deterministic Orders ─────────────────────────────────────────
+// ─── Trading Agent Deterministic Orders ─────────────────────────────────────────
 
 /**
- * Generate MM orders deterministically (never uses LLM).
+ * Generate Trading orders deterministically (never uses LLM).
  */
-export function generateMMOrders(
+export function generateTradingOrders(
     agent: TradingAgent,
     currentPrice: number
 ): AIMMDecision {
-    const config = agent.mmConfig;
+    const config = agent.tradingConfig;
     if (!config) return { orders: [] };
 
     const orders: AIMMDecision['orders'] = [];

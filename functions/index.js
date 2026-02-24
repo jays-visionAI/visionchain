@@ -16910,7 +16910,7 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const snap = await ref.get();
         if (!snap.exists) return res.status(404).json({ success: false, error: "Not found" });
         if (snap.data().ownerUid !== uid) return res.status(403).json({ success: false, error: "Not owner" });
-        if (snap.data().role === "market_maker") return res.status(403).json({ success: false, error: "Cannot delete MM" });
+        if (snap.data().role === "market_maker") return res.status(403).json({ success: false, error: "Cannot delete Trading" });
         await ref.delete();
         return res.json({ success: true });
       }
@@ -16928,13 +16928,13 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
       }
       case "getMMAgents": {
         const mmSnap = await db.collection("dex/agents/list").where("role", "==", "market_maker").get();
-        const mmAgents = [];
-        mmSnap.forEach((d) => mmAgents.push(d.data()));
+        const tradingAgents = [];
+        mmSnap.forEach((d) => tradingAgents.push(d.data()));
         const mktSnap = await db.doc(`dex/market/data/${DEX_PAIR}`).get();
         const mktData = mktSnap.exists ? mktSnap.data() : {};
-        const settSnap = await db.doc("dex/config/mm-settings/current").get();
+        const settSnap = await db.doc("dex/config/trading-settings/current").get();
         const settData = settSnap.exists ? settSnap.data() : {};
-        return res.json({ success: true, agents: mmAgents, market: mktData, settings: settData });
+        return res.json({ success: true, agents: tradingAgents, market: mktData, settings: settData });
       }
       case "getEngineStatus": {
         const roundSnap = await db.doc("dex/settings/config/roundCounter").get();
@@ -16947,8 +16947,8 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         return res.json({ success: true, roundNumber: current, lastRound, settings: settingsSnap.exists ? settingsSnap.data() : {} });
       }
       case "initEngine": {
-        // Check if MM agents exist specifically
-        const mmCheck = await db.doc("dex/agents/list/mm-alpha").get();
+        // Check if Trading agents exist specifically
+        const mmCheck = await db.doc("dex/agents/list/trading-alpha").get();
         const tradersExist = !(await db.collection("dex/agents/list").limit(1).get()).empty;
         if (mmCheck.exists && !req.body.force) {
           return res.json({ success: false, error: "Already initialized" });
@@ -16957,15 +16957,15 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const SYS = "SYSTEM_ADMIN";
         const now = admin.firestore.Timestamp.now();
         const wb = db.batch();
-        // MM Alpha (bullish)
-        wb.set(db.doc("dex/agents/list/mm-alpha"), {
-          id: "mm-alpha", ownerUid: SYS, name: "MM Alpha",
+        // Trading Alpha (bullish)
+        wb.set(db.doc("dex/agents/list/trading-alpha"), {
+          id: "trading-alpha", ownerUid: SYS, name: "Trading Alpha",
           role: "market_maker",
           strategy: {
-            preset: "mm_bull", riskLevel: 3,
+            preset: "trading_bull", riskLevel: 3,
             tradingFrequency: "high", maxPositionPercent: 5,
           },
-          mmConfig: {
+          tradingConfig: {
             basePrice: IP, spreadPercent: 0.5,
             priceRangePercent: 20, trendBias: 0.3, trendSpeed: 0.03,
             layerCount: 5, layerSpacing: 0.3, inventoryTarget: 0.5,
@@ -16981,15 +16981,15 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
           recentTrades: [], status: "active", lastTradeAt: null,
           createdAt: now, updatedAt: now,
         });
-        // MM Beta (bearish)
-        wb.set(db.doc("dex/agents/list/mm-beta"), {
-          id: "mm-beta", ownerUid: SYS, name: "MM Beta",
+        // Trading Beta (bearish)
+        wb.set(db.doc("dex/agents/list/trading-beta"), {
+          id: "trading-beta", ownerUid: SYS, name: "Trading Beta",
           role: "market_maker",
           strategy: {
-            preset: "mm_bear", riskLevel: 3,
+            preset: "trading_bear", riskLevel: 3,
             tradingFrequency: "high", maxPositionPercent: 5,
           },
-          mmConfig: {
+          tradingConfig: {
             basePrice: IP, spreadPercent: 0.5,
             priceRangePercent: 20, trendBias: -0.2, trendSpeed: 0.03,
             layerCount: 5, layerSpacing: 0.3, inventoryTarget: 0.5,
@@ -17061,7 +17061,7 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         await wb.commit();
         return res.json({
           success: true,
-          message: "Engine initialized: 2 MM + 10 preset agents",
+          message: "Engine initialized: 2 Trading + 10 preset agents",
         });
       }
       case "getUserDexBalance": {
