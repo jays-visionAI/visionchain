@@ -315,7 +315,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     const roundSnap = await roundRef.get();
     let roundNumber = roundSnap.exists ? roundSnap.data().current || 0 : 0;
 
-    const marketSnap = await db.doc(`dex/market/${DEX_PAIR}`).get();
+    const marketSnap = await db.doc(`dex/market/data/${DEX_PAIR}`).get();
     const marketData = marketSnap.exists ? marketSnap.data() : { lastPrice: settings.initialPrice || 0.10 };
     const sessionOpen = marketData.lastPrice || 0.10;
 
@@ -499,7 +499,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     }
 
     // Market state
-    wb.set(db.doc(`dex/market/${DEX_PAIR}`), {
+    wb.set(db.doc(`dex/market/data/${DEX_PAIR}`), {
         pair: DEX_PAIR, lastPrice: fp, previousPrice: sessionOpen,
         change24h: fp - sessionOpen,
         changePercent24h: sessionOpen > 0 ? ((fp - sessionOpen) / sessionOpen) * 100 : 0,

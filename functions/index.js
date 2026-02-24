@@ -16794,7 +16794,7 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
   try {
     switch (action) {
       case "getMarket": {
-        const snap = await db.doc(`dex/market/${DEX_PAIR}`).get();
+        const snap = await db.doc(`dex/market/data/${DEX_PAIR}`).get();
         return res.json({ success: true, market: snap.exists ? snap.data() : null });
       }
       case "getOrderBook": {
@@ -16832,7 +16832,7 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         if (!uid || !name) return res.status(400).json({ success: false, error: "Missing uid or name" });
         const existingSnap = await db.collection("dex/agents/list").where("ownerUid", "==", uid).where("role", "==", "trader").get();
         if (existingSnap.size >= 3) return res.status(400).json({ success: false, error: "Maximum 3 agents per user" });
-        const marketSnap = await db.doc(`dex/market/${DEX_PAIR}`).get();
+        const marketSnap = await db.doc(`dex/market/data/${DEX_PAIR}`).get();
         const currentPrice = marketSnap.exists ? marketSnap.data().lastPrice || 0.10 : 0.10;
         const initialValue = 10000 + 100000 * currentPrice;
         const agentId = `agent-${uid.substr(0, 8)}-${Date.now().toString(36)}`;
@@ -16922,6 +16922,123 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         }
         const settingsSnap = await db.doc("dex/settings/config/main").get();
         return res.json({ success: true, roundNumber: current, lastRound, settings: settingsSnap.exists ? settingsSnap.data() : {} });
+      }
+      case "initEngine": {
+        // Check if already initialized
+        const existCheck = await db.collection("dex/agents/list").limit(1).get();
+        if (!existCheck.empty) {
+          return res.json({ success: false, error: "Already initialized" });
+        }
+        const IP = 0.10;
+        const SYS = "SYSTEM_ADMIN";
+        const now = admin.firestore.Timestamp.now();
+        const wb = db.batch();
+        // MM Alpha (bullish)
+        wb.set(db.doc("dex/agents/list/mm-alpha"), {
+          id: "mm-alpha", ownerUid: SYS, name: "MM Alpha",
+          role: "market_maker",
+          strategy: {
+            preset: "mm_bull", riskLevel: 3,
+            tradingFrequency: "high", maxPositionPercent: 5,
+          },
+          mmConfig: {
+            basePrice: IP, spreadPercent: 0.5,
+            priceRangePercent: 20, trendBias: 0.3, trendSpeed: 0.03,
+            layerCount: 5, layerSpacing: 0.3, inventoryTarget: 0.5,
+          },
+          balances: { USDT: 500000, VCN: 5000000 },
+          performance: {
+            initialValueUSDT: 500000 + 5000000 * IP,
+            currentValueUSDT: 500000 + 5000000 * IP,
+            totalPnL: 0, totalPnLPercent: 0,
+            winCount: 0, lossCount: 0, totalTrades: 0,
+            bestTrade: 0, worstTrade: 0, maxDrawdown: 0,
+          },
+          recentTrades: [], status: "active", lastTradeAt: null,
+          createdAt: now, updatedAt: now,
+        });
+        // MM Beta (bearish)
+        wb.set(db.doc("dex/agents/list/mm-beta"), {
+          id: "mm-beta", ownerUid: SYS, name: "MM Beta",
+          role: "market_maker",
+          strategy: {
+            preset: "mm_bear", riskLevel: 3,
+            tradingFrequency: "high", maxPositionPercent: 5,
+          },
+          mmConfig: {
+            basePrice: IP, spreadPercent: 0.5,
+            priceRangePercent: 20, trendBias: -0.2, trendSpeed: 0.03,
+            layerCount: 5, layerSpacing: 0.3, inventoryTarget: 0.5,
+          },
+          balances: { USDT: 500000, VCN: 5000000 },
+          performance: {
+            initialValueUSDT: 500000 + 5000000 * IP,
+            currentValueUSDT: 500000 + 5000000 * IP,
+            totalPnL: 0, totalPnLPercent: 0,
+            winCount: 0, lossCount: 0, totalTrades: 0,
+            bestTrade: 0, worstTrade: 0, maxDrawdown: 0,
+          },
+          recentTrades: [], status: "active", lastTradeAt: null,
+          createdAt: now, updatedAt: now,
+        });
+        // 10 preset agents
+        const presets = [
+          { id: "momentum", name: "TrendFollower", risk: 7, maxPos: 50 },
+          { id: "value", name: "ValueHunter", risk: 3, maxPos: 30 },
+          { id: "scalper", name: "QuickScalper", risk: 5, maxPos: 10 },
+          { id: "contrarian", name: "ContrarianBot", risk: 6, maxPos: 40 },
+          { id: "grid", name: "GridMaster", risk: 3, maxPos: 10 },
+          { id: "breakout", name: "BreakoutKing", risk: 8, maxPos: 60 },
+          { id: "twap", name: "SteadyTWAP", risk: 2, maxPos: 5 },
+          { id: "sentiment", name: "NewsSentinel", risk: 5, maxPos: 30 },
+          { id: "random", name: "RandomWalker", risk: 5, maxPos: 15 },
+          { id: "dca", name: "DCABuilder", risk: 2, maxPos: 2 },
+        ];
+        const iv = 10000 + 100000 * IP;
+        for (const p of presets) {
+          wb.set(db.doc(`dex/agents/list/default-${p.id}`), {
+            id: `default-${p.id}`, ownerUid: SYS, name: p.name,
+            role: "trader",
+            strategy: {
+              preset: p.id, riskLevel: p.risk,
+              tradingFrequency: "medium",
+              maxPositionPercent: p.maxPos,
+            },
+            balances: { USDT: 10000, VCN: 100000 },
+            performance: {
+              initialValueUSDT: iv, currentValueUSDT: iv,
+              totalPnL: 0, totalPnLPercent: 0,
+              winCount: 0, lossCount: 0, totalTrades: 0,
+              bestTrade: 0, worstTrade: 0, maxDrawdown: 0,
+            },
+            recentTrades: [], status: "active", lastTradeAt: null,
+            createdAt: now, updatedAt: now,
+          });
+        }
+        // Market state
+        wb.set(db.doc(`dex/market/data/${DEX_PAIR}`), {
+          pair: DEX_PAIR, lastPrice: IP, previousPrice: IP,
+          change24h: 0, changePercent24h: 0,
+          high24h: IP, low24h: IP,
+          volume24h: 0, quoteVolume24h: 0, trades24h: 0,
+          bestBid: 0, bestAsk: 0, spread: 0, spreadPercent: 0,
+          openOrders: 0, activeAgents: 12, totalAgents: 12,
+          updatedAt: now,
+        });
+        // Engine settings
+        wb.set(db.doc("dex/settings/config/main"), {
+          paused: false, initialPrice: IP,
+          maxPriceChangePerRound: 0.03,
+          createdAt: now,
+        });
+        wb.set(db.doc("dex/settings/config/roundCounter"), {
+          current: 0,
+        });
+        await wb.commit();
+        return res.json({
+          success: true,
+          message: "Engine initialized: 2 MM + 10 preset agents",
+        });
       }
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });

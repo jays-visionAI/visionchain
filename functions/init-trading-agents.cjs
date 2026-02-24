@@ -14,12 +14,11 @@ const admin = require("firebase-admin");
 
 // Choose environment
 const env = process.argv[2] || "staging";
-const serviceAccount = env === "production"
-    ? require("../firebase-service-account.json")
-    : require("../firebase-service-account-staging.json");
+const projectId = env === "production" ? "visionchain-d19ed" : "visionchain-staging";
 
 admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    projectId,
+    credential: admin.credential.applicationDefault(),
 });
 const db = admin.firestore();
 

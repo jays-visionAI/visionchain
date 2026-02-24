@@ -17,10 +17,11 @@ const [currentPrice, setCurrentPrice] = createSignal(0);
 const [priceHistory, setPriceHistory] = createSignal<number[]>([]);
 const [priceSettings, setPriceSettings] = createSignal<VcnPriceSettings | null>(null);
 
-// Multi-chain price signals
-const [ethPrice, setEthPrice] = createSignal(0);
-const [maticPrice, setMaticPrice] = createSignal(0);
-const [lastPriceFetch, setLastPriceFetch] = createSignal(0);
+// Multi-chain price cache (lazy, on-demand only)
+let cachedEthPrice = 0;
+let cachedMaticPrice = 0;
+let lastMarketFetchTime = 0;
+let marketFetchPromise: Promise<void> | null = null;
 
 // Fibonacci-inspired Price Volatility Engine
 // Uses harmonics based on the Golden Ratio (PHI) to simulate natural market cycles
@@ -48,46 +49,58 @@ const calculateFibonacciPrice = (settings: VcnPriceSettings, targetTime?: number
     return Math.max(settings.minPrice, Math.min(settings.maxPrice, result));
 };
 
-// Fetch market prices via Cloud Function proxy (Binance primary, CoinGecko fallback)
-// This eliminates CORS errors and 429 rate limits from direct browser calls.
-const fetchMarketPrices = async () => {
-    if (Date.now() - lastPriceFetch() < 60000) return;
+// Lazy market price fetcher -- only called when getEthPrice()/getMaticPrice() is used.
+// Cached for 5 minutes. No background polling.
+const MARKET_PRICE_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+const fetchMarketPricesIfNeeded = async () => {
+    if (Date.now() - lastMarketFetchTime < MARKET_PRICE_COOLDOWN) return;
+    // Deduplicate concurrent calls
+    if (marketFetchPromise) return marketFetchPromise;
 
-    try {
-        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-        const projectId = hostname.includes('staging') ? 'visionchain-staging' : 'visionchain-d19ed';
-        const url = `https://us-central1-${projectId}.cloudfunctions.net/getMarketPrices`;
+    marketFetchPromise = (async () => {
+        try {
+            const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+            const projectId = hostname.includes('staging') ? 'visionchain-staging' : 'visionchain-d19ed';
+            const url = `https://us-central1-${projectId}.cloudfunctions.net/getMarketPrices`;
 
-        const response = await fetch(url, {
-            headers: { 'Accept': 'application/json' }
-        });
+            const response = await fetch(url, {
+                headers: { 'Accept': 'application/json' }
+            });
 
-        if (response.ok) {
-            const result = await response.json();
-            if (result.success && result.prices) {
-                if (result.prices.ETH?.usd) setEthPrice(result.prices.ETH.usd);
-                if (result.prices.POL?.usd) setMaticPrice(result.prices.POL.usd);
-                setLastPriceFetch(Date.now());
-                console.log('[PriceService] Market prices updated:', {
-                    ETH: result.prices.ETH?.usd,
-                    POL: result.prices.POL?.usd,
-                    source: result.source,
-                    cached: result.cached
-                });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.prices) {
+                    if (result.prices.ETH?.usd) cachedEthPrice = result.prices.ETH.usd;
+                    if (result.prices.POL?.usd) cachedMaticPrice = result.prices.POL.usd;
+                    lastMarketFetchTime = Date.now();
+                    console.debug('[PriceService] Market prices fetched on-demand:', {
+                        ETH: cachedEthPrice, POL: cachedMaticPrice,
+                        source: result.source, cached: result.cached
+                    });
+                }
             }
+        } catch (err) {
+            console.debug('[PriceService] Failed to fetch market prices:', err);
+        } finally {
+            marketFetchPromise = null;
         }
-    } catch (err) {
-        console.debug('[PriceService] Failed to fetch market prices:', err);
-        if (ethPrice() === 0) setEthPrice(3200);
-        if (maticPrice() === 0) setMaticPrice(0.45);
-    }
+    })();
+
+    return marketFetchPromise;
 };
 
 // Initial Fetch and Subscription
-let isInitialized = false;
+// Use globalThis to survive HMR (Vite hot module replacement)
+const INIT_KEY = '__vcn_price_service_initialized__';
+const TICKER_KEY = '__vcn_price_service_ticker__';
+
 export const initPriceService = () => {
-    if (isInitialized) return;
-    isInitialized = true;
+    if ((globalThis as any)[INIT_KEY]) return;
+    (globalThis as any)[INIT_KEY] = true;
+
+    // Clear previously registered ticker (safety net for HMR)
+    const oldTicker = (globalThis as any)[TICKER_KEY] as number | undefined;
+    if (oldTicker) clearInterval(oldTicker);
 
     const db = getFirebaseDb();
     const docRef = doc(db, 'settings', 'vcn_price');
@@ -98,15 +111,14 @@ export const initPriceService = () => {
         if (snapshot.exists()) {
             const data = snapshot.data() as VcnPriceSettings;
             setPriceSettings(data);
-            console.log('[PriceService] Loaded settings from Firestore:', data);
+            console.debug('[PriceService] Loaded settings from Firestore:', data);
         }
         // If no document exists, settings remain null and price engine won't run.
     });
 
-    fetchMarketPrices();
-
-    // Price ticker -- only runs when Firestore settings have been loaded
-    setInterval(() => {
+    // VCN price ticker -- only runs when Firestore settings have been loaded
+    // NOTE: No market price polling here. ETH/POL prices are fetched lazily on-demand.
+    const tickerId = setInterval(() => {
         const settings = priceSettings();
         if (settings && settings.enabled) {
             const newPrice = calculateFibonacciPrice(settings);
@@ -120,7 +132,7 @@ export const initPriceService = () => {
         }
     }, 1000);
 
-    setInterval(fetchMarketPrices, 60000);
+    (globalThis as any)[TICKER_KEY] = tickerId;
 };
 
 export const getVcnPrice = () => currentPrice();
@@ -128,9 +140,15 @@ export const getVcnPriceHistory = () => priceHistory();
 // Provide a safe accessor that returns zeroed fields if Firestore hasn't loaded yet
 export const getVcnPriceSettings = () => priceSettings() || { minPrice: 0, maxPrice: 0, volatilityPeriod: 60, volatilityRange: 5, enabled: true, lastUpdate: 0 };
 
-// Multi-chain price getters
-export const getEthPrice = () => ethPrice() || 3200;
-export const getMaticPrice = () => maticPrice() || 0.45;
+// Multi-chain price getters (lazy fetch -- only calls API when actually used)
+export const getEthPrice = () => {
+    fetchMarketPricesIfNeeded(); // fire-and-forget, returns cached value immediately
+    return cachedEthPrice || 3200;
+};
+export const getMaticPrice = () => {
+    fetchMarketPricesIfNeeded(); // fire-and-forget, returns cached value immediately
+    return cachedMaticPrice || 0.45;
+};
 
 // Get the price at midnight today (local time)
 export const getDailyOpeningPrice = () => {
