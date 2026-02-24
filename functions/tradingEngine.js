@@ -179,16 +179,20 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
         const pMult = getPatternMult(i, layerCount);
         const pctPerLayer = layerAmountPct * pMult;
 
+        // Add organic jitter to make the orderbook look less "bot-like"
+        const jitterP = 1 + (Math.random() - 0.5) * 0.001; // ±0.05% price variation
+        const jitterA = 1 + (Math.random() - 0.5) * 0.15; // ±7.5% amount variation
+
         // Buy order (bid side)
-        const bp = basePrice * (1 - halfBidSpread - i * layerSpacing);
-        const ba = Math.round(agent.balances.USDT * (pctPerLayer * (1 - rebal * 0.5)) / bp);
+        const bp = basePrice * (1 - halfBidSpread - i * layerSpacing) * jitterP;
+        const ba = Math.round((agent.balances.USDT * (pctPerLayer * (1 - rebal * 0.5)) / bp) * jitterA);
         if (ba >= DEX_MIN_ORDER && bp > 0) {
             orders.push({ side: "buy", price: Math.round(bp * 10000) / 10000, amount: ba });
         }
 
         // Sell order (ask side)
-        const sp = basePrice * (1 + halfAskSpread + i * layerSpacing);
-        const sa = Math.round(agent.balances.VCN * (pctPerLayer * (1 + rebal * 0.5)));
+        const sp = basePrice * (1 + halfAskSpread + i * layerSpacing) * jitterP;
+        const sa = Math.round((agent.balances.VCN * (pctPerLayer * (1 + rebal * 0.5))) * jitterA);
         if (sa >= DEX_MIN_ORDER && sp > 0) {
             orders.push({ side: "sell", price: Math.round(sp * 10000) / 10000, amount: sa });
         }
@@ -686,14 +690,44 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     });
 
     // Candles
-    const iMs = { "1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000 };
-    for (const iv of ["1m", "5m", "15m", "1h", "4h", "1d"]) {
-        if (bc >= 495) break;
-        const cs = Math.floor(invocationStart / iMs[iv]) * iMs[iv];
-        wb.set(db.doc(`dex/candles/${iv}/${iv}-${cs}`), {
-            t: cs, o: sessionOpen, h: pH, l: pL, c: fp, v: vcnV, qv: tv, n: allFills.length,
-        }, { merge: true });
-        bc++;
+    try {
+        const iMs = { "1m": 60000, "5m": 300000, "15m": 900000, "1h": 3600000, "4h": 14400000, "1d": 86400000 };
+        const intervals = ["1m", "5m", "15m", "1h", "4h", "1d"];
+        const candleRefs = intervals.map((iv) => {
+            const cs = Math.floor(invocationStart / iMs[iv]) * iMs[iv];
+            return db.doc(`dex/candles/${iv}/${iv}-${cs}`);
+        });
+
+        // Fetch existing candles in one call to preserve 'Open' prices and accumulate volume correctly
+        const candleSnaps = await db.getAll(...candleRefs);
+
+        for (let i = 0; i < intervals.length; i++) {
+            if (bc >= 495) break;
+            const iv = intervals[i];
+            const snap = candleSnaps[i];
+            const cs = Math.floor(invocationStart / iMs[iv]) * iMs[iv];
+
+            if (snap.exists) {
+                const ex = snap.data();
+                wb.set(candleRefs[i], {
+                    t: cs,
+                    o: ex.o, // Ensure Open price is locked to the original start-of-candle opening price
+                    h: Math.max(ex.h || sessionOpen, pH),
+                    l: Math.min(ex.l || sessionOpen, pL),
+                    c: fp,
+                    v: (ex.v || 0) + vcnV,
+                    qv: (ex.qv || 0) + tv,
+                    n: (ex.n || 0) + allFills.length,
+                }, { merge: true });
+            } else {
+                wb.set(candleRefs[i], {
+                    t: cs, o: sessionOpen, h: Math.max(sessionOpen, pH), l: Math.min(sessionOpen, pL), c: fp, v: vcnV, qv: tv, n: allFills.length,
+                });
+            }
+            bc++;
+        }
+    } catch (err) {
+        console.error("[TradingEngine] Error writing candles:", err);
     }
 
     // Round log

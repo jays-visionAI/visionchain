@@ -15,8 +15,7 @@
  * └──────────────────────────────────────────────────┴────────────────────────────┘
  */
 import { createSignal, createEffect, onMount, onCleanup, For, Show, createMemo } from 'solid-js';
-import { createChart, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
-import type { IChartApi, ISeriesApi, CandlestickData, HistogramData, Time } from 'lightweight-charts';
+import { init, dispose } from 'klinecharts';
 import './trading-terminal.css';
 import './my-agent-panel.css';
 import './user-trade-panel.css';
@@ -127,95 +126,92 @@ function TVChart(props: {
     onIntervalChange: (iv: string) => void;
 }) {
     let chartContainerRef: HTMLDivElement | undefined;
-    let chart: IChartApi | undefined;
-    let candleSeries: ISeriesApi<'Candlestick'> | undefined;
-    let volumeSeries: ISeriesApi<'Histogram'> | undefined;
+    let chart: any = null;
 
     const intervals = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
     onMount(() => {
         if (!chartContainerRef) return;
 
-        chart = createChart(chartContainerRef, {
-            layout: {
-                background: { type: ColorType.Solid, color: '#0b0b10' },
-                textColor: '#71717a',
-                fontSize: 11,
-            },
+        chart = init(chartContainerRef);
+        chart.setStyles({
             grid: {
-                vertLines: { color: 'rgba(255,255,255,0.03)' },
-                horzLines: { color: 'rgba(255,255,255,0.03)' },
+                horizontal: { show: true, size: 1, color: 'rgba(255, 255, 255, 0.03)', style: 'dashed' },
+                vertical: { show: false }
+            },
+            candle: {
+                type: 'candle_solid',
+                bar: {
+                    upColor: '#22c55e',
+                    downColor: '#ef4444',
+                    noChangeColor: '#888888',
+                    upBorderColor: '#22c55e',
+                    downBorderColor: '#ef4444',
+                    noChangeBorderColor: '#888888',
+                    upWickColor: '#22c55e',
+                    downWickColor: '#ef4444',
+                    noChangeWickColor: '#888888'
+                },
+                tooltip: {
+                    showRule: 'always',
+                    showType: 'standard',
+                    text: { size: 11, color: '#a1a1aa' }
+                }
+            },
+            xAxis: {
+                axisLine: { color: 'rgba(255,255,255,0.06)' },
+                tickText: { color: '#71717a', size: 10 },
+                tickLine: { color: 'transparent' }
+            },
+            yAxis: {
+                axisLine: { color: 'rgba(255,255,255,0.06)' },
+                tickText: { color: '#71717a', size: 10 },
+                tickLine: { color: 'transparent' }
             },
             crosshair: {
-                mode: 0,
-                vertLine: { color: 'rgba(99,102,241,0.3)', width: 1, style: 2, labelBackgroundColor: '#6366f1' },
-                horzLine: { color: 'rgba(99,102,241,0.3)', width: 1, style: 2, labelBackgroundColor: '#6366f1' },
+                horizontal: { line: { color: 'rgba(99,102,241,0.5)', style: 'dashed' } },
+                vertical: { line: { color: 'rgba(99,102,241,0.5)', style: 'dashed' } }
             },
-            rightPriceScale: {
-                borderColor: 'rgba(255,255,255,0.06)',
-                scaleMargins: { top: 0.1, bottom: 0.25 },
-            },
-            timeScale: {
-                borderColor: 'rgba(255,255,255,0.06)',
-                timeVisible: true,
-                secondsVisible: false,
-            },
-            handleScroll: { vertTouchDrag: false },
+            indicator: {
+                bars: [{
+                    upColor: 'rgba(34,197,94,0.3)',
+                    downColor: 'rgba(239,68,68,0.3)',
+                    noChangeColor: 'rgba(136,136,136,0.3)'
+                }]
+            }
         });
 
-        candleSeries = chart.addSeries(CandlestickSeries, {
-            upColor: '#22c55e',
-            downColor: '#ef4444',
-            borderUpColor: '#22c55e',
-            borderDownColor: '#ef4444',
-            wickUpColor: '#22c55e',
-            wickDownColor: '#ef4444',
-        });
-
-        volumeSeries = chart.addSeries(HistogramSeries, {
-            priceFormat: { type: 'volume' },
-            priceScaleId: '',
-        });
-
-        volumeSeries.priceScale().applyOptions({
-            scaleMargins: { top: 0.8, bottom: 0 },
-        });
+        // Add Volume indicator in a separate pane below
+        chart.createIndicator('VOL', false, { height: 80 });
 
         const ro = new ResizeObserver(entries => {
             if (entries.length && chart) {
-                const { width, height } = entries[0].contentRect;
-                chart.applyOptions({ width, height });
+                chart.resize();
             }
         });
         ro.observe(chartContainerRef);
 
         onCleanup(() => {
             ro.disconnect();
-            chart?.remove();
+            if (chartContainerRef) dispose(chartContainerRef);
         });
     });
 
     createEffect(() => {
         const c = props.candles;
-        if (!c || c.length === 0 || !candleSeries || !volumeSeries) return;
+        if (!c || c.length === 0 || !chart) return;
 
-        const candleData: CandlestickData<Time>[] = c.map(k => ({
-            time: (k.t / 1000) as Time,
+        // map to klinecharts format
+        const klineData = c.map(k => ({
+            timestamp: k.t,
             open: k.o,
             high: k.h,
             low: k.l,
             close: k.c,
+            volume: k.v,
         }));
 
-        const volData: HistogramData<Time>[] = c.map(k => ({
-            time: (k.t / 1000) as Time,
-            value: k.v,
-            color: k.c >= k.o ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)',
-        }));
-
-        candleSeries.setData(candleData);
-        volumeSeries.setData(volData);
-        chart?.timeScale().fitContent();
+        chart.applyNewData(klineData);
     });
 
     return (
@@ -233,12 +229,12 @@ function TVChart(props: {
                 </div>
                 <div class="tv-chart-info">
                     <span class="tv-powered">
-                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1" /><path d="M4 10V6l2 2 2-4 2 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />"</svg>
-                        Lightweight Charts
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1" /><path d="M4 10V6l2 2 2-4 2 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
+                        Advanced Charts
                     </span>
                 </div>
             </div>
-            <div class="tv-chart-container" ref={chartContainerRef} />
+            <div class="tv-chart-container" ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
         </div>
     );
 }
