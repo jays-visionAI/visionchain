@@ -37,7 +37,7 @@ export default function MMRiskControls() {
     onMount(async () => {
         try {
             const [settingsSnap, marketSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/mm-settings')),
+                getDoc(doc(db, 'dex/config/mm-settings/current')),
                 getDoc(doc(db, 'dex/market/data/VCN-USDT')),
             ]);
             if (settingsSnap.exists() && settingsSnap.data().riskConfig) setConfig(prev => ({ ...prev, ...settingsSnap.data().riskConfig }));
@@ -73,7 +73,7 @@ export default function MMRiskControls() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings'), { riskConfig: config(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
+            await setDoc(doc(db, 'dex/config/mm-settings/current'), { riskConfig: config(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
             await addDoc(collection(db, 'dex/config/mm-audit-log'), { type: 'risk_config', config: config(), operator, timestamp: new Date() });
             setSaved(true); setTimeout(() => setSaved(false), 3000);
         } catch (e) { console.error('[MMRisk] Save:', e); }
@@ -87,7 +87,7 @@ export default function MMRiskControls() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings'), { riskConfig: { ...config(), killSwitchEnabled: newState }, updatedAt: new Date(), updatedBy: operator }, { merge: true });
+            await setDoc(doc(db, 'dex/config/mm-settings/current'), { riskConfig: { ...config(), killSwitchEnabled: newState }, updatedAt: new Date(), updatedBy: operator }, { merge: true });
             await addDoc(collection(db, 'dex/config/mm-audit-log'), { type: newState ? 'kill_switch_on' : 'kill_switch_off', operator, timestamp: new Date() });
         } catch (e) { console.error('[MMRisk] Kill switch:', e); }
         finally { setSaving(false); }

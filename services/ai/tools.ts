@@ -166,5 +166,39 @@ export const AI_TOOLS = [
             },
             required: ["api_key"]
         }
+    },
+    {
+        name: "search_market_news",
+        description: "Search through accumulated Vision Insight market news articles. Use this when the user asks about past market events, reasons for price movements, or market trends over time. Returns relevant articles with sentiment, impact scores, and summaries. Supports date ranges like 'last week', 'last month', specific dates, etc.",
+        parameters: {
+            type: "object",
+            properties: {
+                keywords: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Keywords to search for (e.g., ['bitcoin', 'etf'], ['ethereum', 'merge']). Use English keywords."
+                },
+                category: {
+                    type: "string",
+                    description: "Filter by category: 'bitcoin', 'ethereum', 'defi', 'regulation', 'ai_web3', 'nft_gaming', 'altcoin', 'korea', or 'all'."
+                },
+                sentiment: {
+                    type: "string",
+                    description: "Filter by sentiment: 'bullish', 'bearish', or 'neutral'."
+                },
+                fromDate: {
+                    type: "string",
+                    description: "Start date in ISO format (e.g., '2026-01-01T00:00:00.000Z'). Use this for historical queries."
+                },
+                toDate: {
+                    type: "string",
+                    description: "End date in ISO format. Defaults to now."
+                },
+                maxResults: {
+                    type: "number",
+                    description: "Maximum number of articles to return (default: 10, max: 20)."
+                }
+            }
+        }
     }
 ];

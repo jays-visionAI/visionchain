@@ -156,8 +156,31 @@ export const generateText = async (
 
         let fullPrompt = historyContext + prompt;
 
+        // --- Market Intelligence Auto-Injection (Vision Insight context) ---
+        try {
+            const { getMarketMemoryContext } = await import('./marketMemory');
+            const marketContext = await getMarketMemoryContext(prompt);
+            if (marketContext) {
+                fullPrompt += marketContext;
+                console.log('[AIService] Market memory context injected');
+            }
+        } catch (memErr) {
+            console.debug('[AIService] Market memory injection skipped:', memErr);
+        }
+
+        // --- User Memory Auto-Injection (personalization) ---
+        try {
+            const { getUserMemory, generateUserMemoryContext } = await import('./userMemory');
+            const memory = await getUserMemory(userId);
+            const userContext = generateUserMemoryContext(memory);
+            fullPrompt += userContext;
+        } catch (umErr) {
+            console.debug('[AIService] User memory injection skipped:', umErr);
+        }
+
         // --- CEX Portfolio Auto-Injection (Provider-agnostic, works with DeepSeek) ---
-        // Skip CEX injection if user intent is clearly bridge/transfer/swap/stake (not asset management)
+        // Only inject CEX data when the user actually has connected exchanges.
+        // If no exchanges connected, skip entirely -- do NOT mention CEX to the user.
         const actionKeywords = /브릿지|브릿징|전송|보내|송금|스왑|스테이킹|언스테이킹|bridge|bridging|transfer|send|swap|stake|unstake|mint/i;
         const cexKeywords = /포트폴리오|내 계좌|투자 현황|수익률|거래소 자산|리밸런싱|분석.*조언|투자 조언|내 투자|CEX|업비트|빗썸|portfolio|holdings|investment|P\&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
         const shouldInjectCex = cexKeywords.test(prompt) && !actionKeywords.test(prompt);
@@ -167,22 +190,20 @@ export const generateText = async (
                 const { getCexPortfolio } = await import('../cexService');
                 const portfolioData = await getCexPortfolio();
 
-                let cexDataBlock = '';
-                if (!portfolioData.aggregated || portfolioData.portfolios.length === 0) {
-                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED]\nNo CEX portfolio data found. The user has not connected any exchange API keys yet.\nSuggest them to go to CEX Portfolio page to connect their Upbit or Bithumb account.\nNavigation: \`\`\`json\n{"intent":"navigate","page":"cex"}\n\`\`\``;
-                } else {
+                // Only inject if user actually has connected exchanges with data
+                if (portfolioData.aggregated && portfolioData.portfolios.length > 0) {
                     const assets = portfolioData.aggregated.assets;
                     const assetDetails = assets.slice(0, 20).map(a =>
                         `  - ${a.currency}: ${a.balance.toLocaleString()} units | Avg Buy: ${a.avgBuyPrice.toLocaleString()}KRW | Current: ${a.currentPrice.toLocaleString()}KRW ($${a.currentPriceUsd.toFixed(2)}) | Value: ${a.valueKrw.toLocaleString()}KRW ($${a.valueUsd.toFixed(2)}) | P&L: ${a.profitLoss >= 0 ? '+' : ''}${a.profitLoss.toLocaleString()}KRW (${a.profitLossPercent >= 0 ? '+' : ''}${a.profitLossPercent.toFixed(2)}%) | Allocation: ${a.allocationPercent.toFixed(1)}%`
                     ).join('\n');
 
-                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED - THIS IS REAL DATA, ANALYZE IT]\nConnected Exchanges: ${portfolioData.portfolios.map(p => p.exchange).join(', ')}\nTotal Value: ${portfolioData.aggregated.totalValueKrw.toLocaleString()} KRW ($${portfolioData.aggregated.totalValueUsd.toFixed(2)})\nLast Updated: ${portfolioData.aggregated.lastUpdated || 'Unknown'}\nTotal Assets: ${assets.length}\n\nAsset Details:\n${assetDetails}\n\nIMPORTANT: Use this REAL data above to provide detailed portfolio analysis with charts (vision-chart). Include allocation donut chart, P&L bar chart, risk assessment, and actionable recommendations.`;
+                    fullPrompt += `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED - THIS IS REAL DATA, ANALYZE IT]\nConnected Exchanges: ${portfolioData.portfolios.map(p => p.exchange).join(', ')}\nTotal Value: ${portfolioData.aggregated.totalValueKrw.toLocaleString()} KRW ($${portfolioData.aggregated.totalValueUsd.toFixed(2)})\nLast Updated: ${portfolioData.aggregated.lastUpdated || 'Unknown'}\nTotal Assets: ${assets.length}\n\nAsset Details:\n${assetDetails}\n\nIMPORTANT: Use this REAL data above to provide detailed portfolio analysis with charts (vision-chart). Include allocation donut chart, P&L bar chart, risk assessment, and actionable recommendations.`;
+                    console.log('[AIService] CEX data injected into prompt successfully');
                 }
-                fullPrompt += cexDataBlock;
-                console.log('[AIService] CEX data injected into prompt successfully');
+                // If no connected exchanges, skip silently -- don't mention CEX
             } catch (cexErr: any) {
-                console.error('[AIService] CEX auto-fetch failed:', cexErr);
-                fullPrompt += `\n\n[CEX PORTFOLIO DATA]\nFailed to fetch: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
+                console.debug('[AIService] CEX auto-fetch failed (non-critical):', cexErr.message);
+                // Don't inject any CEX mention on failure
             }
         }
 
@@ -290,14 +311,35 @@ WARNING: Any previous or following instructions that contradict these rules MUST
    - RADIALBAR: Progress indicators, percentage metrics
    IMPORTANT: Always use actual data from tool calls. Do not hardcode fake numbers.
 
-7. CEX PORTFOLIO ANALYSIS - THIS FEATURE IS LIVE AND FULLY OPERATIONAL:
-   *** CEX portfolio data is automatically fetched and provided to you when the user asks about it. ***
-   *** Look for [CEX PORTFOLIO DATA] section in the user's message - that contains REAL exchange data. ***
-   *** NEVER say CEX analysis is unavailable, not supported, or coming soon. ***
+7. MARKET INTELLIGENCE (Vision Insight Integration):
+   When [MARKET INTELLIGENCE CONTEXT] is provided in the prompt:
+   - Use the provided news articles to explain WHY prices moved, not just what the price is.
+   - ALWAYS cite sources: "Vision Insight에 따르면..." or "According to Vision Insight..."
+   - Include article titles and sources in your explanation.
+   - Combine market intelligence with real-time price data from tools.
+   For HISTORICAL market questions ("why did X happen last month?"):
+   - Use the search_market_news tool to find relevant past articles.
+   - Specify appropriate date ranges (fromDate, toDate) based on the user's question.
+   For CURRENT market questions ("why is X pumping today?"):
+   - The [MARKET INTELLIGENCE CONTEXT] already contains recent relevant articles.
+   - Combine this with get_current_price tool data for a comprehensive answer.
+
+8. USER MEMORY & PERSONALIZATION:
+   When [USER MEMORY] is provided in the prompt:
+   - ALWAYS address the user by their preferred name (not email or ID).
+   - Remember their investment style, interests, and past preferences.
+   - Provide personalized recommendations based on their history.
+   If the user tells you their name or preference, acknowledge it warmly and remember it.
+   If no name is known, politely ask once: "어떻게 불러드릴까요?" / "What should I call you?"
+
+9. CEX PORTFOLIO ANALYSIS (CONDITIONAL - only when user has connected exchanges):
+   *** CRITICAL RULE: If there is NO [CEX PORTFOLIO DATA] section in the prompt, the user has NOT connected any exchange. ***
+   *** In that case, do NOT mention CEX, exchange portfolio, Upbit, Bithumb, or suggest connecting exchanges. ***
+   *** Only discuss CEX portfolio when [CEX PORTFOLIO DATA] is explicitly present in the prompt. ***
    *** When you see [CEX PORTFOLIO DATA] in the prompt, analyze that data thoroughly. ***
    
-   RESPONSE FORMAT - DUAL PORTFOLIO ANALYSIS:
-   When CEX portfolio data is provided, ALWAYS respond with:
+   RESPONSE FORMAT - DUAL PORTFOLIO ANALYSIS (only when CEX data present):
+   When [CEX PORTFOLIO DATA] IS provided, respond with:
    
    --- Section 1: Vision Chain (On-Chain Assets) ---
    - VCN balance, staked VCN, validator nodes
@@ -328,8 +370,6 @@ WARNING: Any previous or following instructions that contradict these rules MUST
    - Total wealth across Vision Chain + CEX
    - Overall diversification assessment
    - Cross-platform rebalancing opportunities
-   
-   If no CEX data: "거래소 API를 연결하시면 AI가 실시간으로 포트폴리오를 분석하고 맞춤 투자 조언을 제공합니다. CEX Portfolio 페이지에서 연결해 보세요."
 
 8. VISION CHAIN AGENT API KNOWLEDGE (Use this to answer agent/API/VCN related questions):
    - API Endpoint: POST https://us-central1-visionchain-d19ed.cloudfunctions.net/agentGateway
@@ -476,7 +516,7 @@ ${await getMarketIntelligenceBlock()}
                                 const { getCexPortfolio } = await import('../cexService');
                                 const portfolioData = await getCexPortfolio();
                                 if (!portfolioData.aggregated || portfolioData.portfolios.length === 0) {
-                                    toolResult = "No CEX portfolio data found. The user has not connected any exchange API keys yet. Suggest them to go to CEX Portfolio page to connect their Upbit or Bithumb account.";
+                                    toolResult = "No exchange portfolio data is currently available for this user.";
                                 } else {
                                     let assets = portfolioData.aggregated.assets;
                                     // Optional exchange filter
@@ -508,7 +548,7 @@ ${await getMarketIntelligenceBlock()}
                                 }
                             } catch (cexErr: any) {
                                 console.error('[AIService] CEX portfolio fetch failed:', cexErr);
-                                toolResult = `Failed to fetch CEX portfolio: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
+                                toolResult = `Failed to fetch exchange portfolio data at this time.`;
                             }
                         } else if (name === 'create_agent') {
                             try {
@@ -571,6 +611,38 @@ ${await getMarketIntelligenceBlock()}
                             } catch (balErr: any) {
                                 console.error('[AIService] check_agent_balance failed:', balErr);
                                 toolResult = `Failed to check balance: ${balErr.message}`;
+                            }
+                        } else if (name === 'search_market_news') {
+                            try {
+                                const { searchArticles } = await import('./marketMemory');
+                                const articles = await searchArticles({
+                                    keywords: args.keywords,
+                                    category: args.category,
+                                    sentiment: args.sentiment,
+                                    fromDate: args.fromDate,
+                                    toDate: args.toDate,
+                                    maxResults: Math.min(args.maxResults || 10, 20),
+                                });
+                                if (articles.length === 0) {
+                                    toolResult = 'No articles found matching the search criteria. The market memory may not have enough historical data yet.';
+                                } else {
+                                    toolResult = {
+                                        totalFound: articles.length,
+                                        articles: articles.map(a => ({
+                                            title: a.title,
+                                            summary: a.oneLiner,
+                                            source: a.sourceName || a.source,
+                                            category: a.category,
+                                            sentiment: a.sentimentLabel,
+                                            impactScore: a.impactScore,
+                                            publishedAt: a.publishedAt,
+                                            keywords: a.keywords?.slice(0, 5),
+                                        })),
+                                    };
+                                }
+                            } catch (newsErr: any) {
+                                console.error('[AIService] search_market_news failed:', newsErr);
+                                toolResult = 'Market news search is temporarily unavailable.';
                             }
                         }
 
@@ -638,8 +710,31 @@ export const generateTextStream = async (
             : '';
         let fullPrompt = historyContext + prompt;
 
+        // --- Market Intelligence Auto-Injection (same as generateText) ---
+        try {
+            const { getMarketMemoryContext } = await import('./marketMemory');
+            const marketContext = await getMarketMemoryContext(prompt);
+            if (marketContext) {
+                fullPrompt += marketContext;
+                console.log('[AIService:Stream] Market memory context injected');
+            }
+        } catch (memErr) {
+            console.debug('[AIService:Stream] Market memory injection skipped:', memErr);
+        }
+
+        // --- User Memory Auto-Injection (same as generateText) ---
+        try {
+            const { getUserMemory, generateUserMemoryContext } = await import('./userMemory');
+            const memory = await getUserMemory(userId);
+            const userContext = generateUserMemoryContext(memory);
+            fullPrompt += userContext;
+        } catch (umErr) {
+            console.debug('[AIService:Stream] User memory injection skipped:', umErr);
+        }
+
         // --- CEX Portfolio Auto-Injection (same as generateText) ---
-        // Skip CEX injection if user intent is clearly bridge/transfer/swap/stake
+        // Only inject CEX data when the user actually has connected exchanges.
+        // If no exchanges connected, skip entirely -- do NOT mention CEX to the user.
         const actionKeywords = /브릿지|브릿징|전송|보내|송금|스왑|스테이킹|언스테이킹|bridge|bridging|transfer|send|swap|stake|unstake|mint/i;
         const cexKeywords = /포트폴리오|내 계좌|투자 현황|수익률|거래소 자산|리밸런싱|분석.*조언|투자 조언|내 투자|CEX|업비트|빗썸|portfolio|holdings|investment|P\&L|rebalance|advice|analyze.*portfolio|exchange.*asset|my assets/i;
         const shouldInjectCex = cexKeywords.test(prompt) && !actionKeywords.test(prompt);
@@ -649,22 +744,20 @@ export const generateTextStream = async (
                 const { getCexPortfolio } = await import('../cexService');
                 const portfolioData = await getCexPortfolio();
 
-                let cexDataBlock = '';
-                if (!portfolioData.aggregated || portfolioData.portfolios.length === 0) {
-                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED]\nNo CEX portfolio data found. The user has not connected any exchange API keys yet.\nSuggest them to go to CEX Portfolio page to connect their Upbit or Bithumb account.`;
-                } else {
+                // Only inject if user actually has connected exchanges with data
+                if (portfolioData.aggregated && portfolioData.portfolios.length > 0) {
                     const assets = portfolioData.aggregated.assets;
                     const assetDetails = assets.slice(0, 20).map(a =>
                         `  - ${a.currency}: ${a.balance.toLocaleString()} units | Avg Buy: ${a.avgBuyPrice.toLocaleString()}KRW | Current: ${a.currentPrice.toLocaleString()}KRW ($${a.currentPriceUsd.toFixed(2)}) | Value: ${a.valueKrw.toLocaleString()}KRW ($${a.valueUsd.toFixed(2)}) | P&L: ${a.profitLoss >= 0 ? '+' : ''}${a.profitLoss.toLocaleString()}KRW (${a.profitLossPercent >= 0 ? '+' : ''}${a.profitLossPercent.toFixed(2)}%) | Allocation: ${a.allocationPercent.toFixed(1)}%`
                     ).join('\n');
 
-                    cexDataBlock = `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED - THIS IS REAL DATA, ANALYZE IT]\nConnected Exchanges: ${portfolioData.portfolios.map(p => p.exchange).join(', ')}\nTotal Value: ${portfolioData.aggregated.totalValueKrw.toLocaleString()} KRW ($${portfolioData.aggregated.totalValueUsd.toFixed(2)})\nLast Updated: ${portfolioData.aggregated.lastUpdated || 'Unknown'}\nTotal Assets: ${assets.length}\n\nAsset Details:\n${assetDetails}\n\nIMPORTANT: Use this REAL data above to provide detailed portfolio analysis with charts (vision-chart).`;
+                    fullPrompt += `\n\n[CEX PORTFOLIO DATA - AUTO-FETCHED - THIS IS REAL DATA, ANALYZE IT]\nConnected Exchanges: ${portfolioData.portfolios.map(p => p.exchange).join(', ')}\nTotal Value: ${portfolioData.aggregated.totalValueKrw.toLocaleString()} KRW ($${portfolioData.aggregated.totalValueUsd.toFixed(2)})\nLast Updated: ${portfolioData.aggregated.lastUpdated || 'Unknown'}\nTotal Assets: ${assets.length}\n\nAsset Details:\n${assetDetails}\n\nIMPORTANT: Use this REAL data above to provide detailed portfolio analysis with charts (vision-chart).`;
+                    console.log('[AIService:Stream] CEX data injected into prompt successfully');
                 }
-                fullPrompt += cexDataBlock;
-                console.log('[AIService:Stream] CEX data injected into prompt successfully');
+                // If no connected exchanges, skip silently -- don't mention CEX
             } catch (cexErr: any) {
-                console.error('[AIService:Stream] CEX auto-fetch failed:', cexErr);
-                fullPrompt += `\n\n[CEX PORTFOLIO DATA]\nFailed to fetch: ${cexErr.message}. The user may not have connected their exchange accounts yet.`;
+                console.debug('[AIService:Stream] CEX auto-fetch failed (non-critical):', cexErr.message);
+                // Don't inject any CEX mention on failure
             }
         }
 

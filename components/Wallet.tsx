@@ -3654,6 +3654,11 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     setCurrentSessionId(savedId);
                     fetchHistory();
                 }
+
+                // Extract and store user memory (fire-and-forget, non-blocking)
+                import('../services/ai/userMemory').then(({ extractAndStoreMemory }) => {
+                    extractAndStoreMemory(userProfile().email, userMessage, cleanResponse).catch(() => { });
+                }).catch(() => { });
             }
         } catch (error) {
             console.error('AI Chat Error:', error);

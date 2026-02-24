@@ -27,7 +27,7 @@ export default function MMInventory() {
     onMount(async () => {
         try {
             const [settingsSnap, marketSnap, agentsSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/mm-settings')),
+                getDoc(doc(db, 'dex/config/mm-settings/current')),
                 getDoc(doc(db, 'dex/market/data/VCN-USDT')),
                 getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker'))),
             ]);
@@ -46,7 +46,7 @@ export default function MMInventory() {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
-            await setDoc(doc(db, 'dex/config/mm-settings'), { inventoryConfig: config(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
+            await setDoc(doc(db, 'dex/config/mm-settings/current'), { inventoryConfig: config(), updatedAt: new Date(), updatedBy: operator }, { merge: true });
             await addDoc(collection(db, 'dex/config/mm-audit-log'), { type: 'inventory_config', config: config(), operator, timestamp: new Date() });
             setSaved(true); setTimeout(() => setSaved(false), 3000);
         } catch (e) { console.error('[MMInv] Save:', e); }

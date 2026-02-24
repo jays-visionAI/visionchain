@@ -74,7 +74,7 @@ export default function MMAdminDashboard() {
         try {
             const [marketSnap, settingsSnap, agentsSnap] = await Promise.all([
                 getDoc(doc(db, 'dex/market/data/VCN-USDT')),
-                getDoc(doc(db, 'dex/config/mm-settings')),
+                getDoc(doc(db, 'dex/config/mm-settings/current')),
                 getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker'))),
             ]);
 
@@ -105,7 +105,7 @@ export default function MMAdminDashboard() {
         setSaving(true);
         const newState = !killSwitch();
         try {
-            await setDoc(doc(db, 'dex/config/mm-settings'), {
+            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
                 riskConfig: { killSwitchEnabled: newState },
                 updatedAt: new Date(),
                 updatedBy: getAdminFirebaseAuth().currentUser?.email || 'unknown',

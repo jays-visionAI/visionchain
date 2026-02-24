@@ -1182,11 +1182,21 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                 {/* Mobile Chat History Floating Button - Top Right */}
                 <Show when={isMobile() && !isMobileHistoryOpen()}>
                     <button
-                        onClick={() => setIsMobileHistoryOpen(true)}
-                        class="fixed top-20 right-4 z-40 w-10 h-10 bg-[#1a1a1c] border border-white/10 rounded-full flex items-center justify-center shadow-lg hover:bg-white/10 transition-all"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsMobileHistoryOpen(true);
+                        }}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsMobileHistoryOpen(true);
+                        }}
+                        class="fixed top-20 right-4 z-[52] w-12 h-12 bg-[#1a1a1c]/95 backdrop-blur-lg border border-white/15 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-90 transition-all"
+                        style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
                         title="Chat History"
                     >
-                        <History class="w-4 h-4 text-purple-400" />
+                        <History class="w-5 h-5 text-purple-400" />
                     </button>
                 </Show>
 
