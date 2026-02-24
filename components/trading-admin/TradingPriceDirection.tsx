@@ -204,7 +204,7 @@ export default function MMPriceDirection() {
                             <label class="mmp-label">Target (USDT)</label>
                             <input
                                 type="number"
-                                step="0.01"
+                                step="0.0001"
                                 value={config().targetPrice}
                                 onInput={(e) => update('targetPrice', parseFloat(e.currentTarget.value) || 0)}
                                 class="mmp-input"
@@ -226,7 +226,7 @@ export default function MMPriceDirection() {
                                 type="range"
                                 min="-1"
                                 max="1"
-                                step="0.01"
+                                step="0.0001"
                                 value={config().trendBias}
                                 onInput={(e) => update('trendBias', parseFloat(e.currentTarget.value))}
                                 class="mmp-slider"
@@ -266,7 +266,7 @@ export default function MMPriceDirection() {
                             <Show when={customSpeed()}>
                                 <input
                                     type="number"
-                                    step="0.01"
+                                    step="0.0001"
                                     value={typeof config().trendSpeed === 'number' ? config().trendSpeed : 0.0003}
                                     onInput={(e) => update('trendSpeed', parseFloat(e.currentTarget.value) || 0.0003)}
                                     class="mmp-speed-input"
@@ -283,15 +283,15 @@ export default function MMPriceDirection() {
                     <div class="mmp-range-grid">
                         <div class="mmp-input-group">
                             <label class="mmp-label">Floor (USDT)</label>
-                            <input type="number" step="0.01" value={config().priceFloor} onInput={(e) => update('priceFloor', parseFloat(e.currentTarget.value) || 0)} class="mmp-input" />
+                            <input type="number" step="0.0001" value={config().priceFloor} onInput={(e) => update('priceFloor', parseFloat(e.currentTarget.value) || 0)} class="mmp-input" />
                         </div>
                         <div class="mmp-input-group">
                             <label class="mmp-label">Ceiling (USDT)</label>
-                            <input type="number" step="0.01" value={config().priceCeiling} onInput={(e) => update('priceCeiling', parseFloat(e.currentTarget.value) || 0)} class="mmp-input" />
+                            <input type="number" step="0.0001" value={config().priceCeiling} onInput={(e) => update('priceCeiling', parseFloat(e.currentTarget.value) || 0)} class="mmp-input" />
                         </div>
                         <div class="mmp-input-group">
                             <label class="mmp-label">Band Width (%)</label>
-                            <input type="number" step="0.01" value={config().priceRangePercent} onInput={(e) => update('priceRangePercent', parseFloat(e.currentTarget.value) || 20)} class="mmp-input" />
+                            <input type="number" step="0.0001" value={config().priceRangePercent} onInput={(e) => update('priceRangePercent', parseFloat(e.currentTarget.value) || 20)} class="mmp-input" />
                             <span class="mmp-input-hint">+-{config().priceRangePercent}% from base</span>
                         </div>
                     </div>
@@ -321,7 +321,7 @@ export default function MMPriceDirection() {
                         <Show when={config().phaseAutoRotate}>
                             <div class="mmp-inline-input">
                                 <span>Interval:</span>
-                                <input type="number" step="0.01" min="1" max="168" value={config().phaseRotateInterval} onInput={(e) => update('phaseRotateInterval', parseFloat(e.currentTarget.value) || 24)} class="mmp-input-sm" />
+                                <input type="number" step="0.0001" min="1" max="168" value={config().phaseRotateInterval} onInput={(e) => update('phaseRotateInterval', parseFloat(e.currentTarget.value) || 24)} class="mmp-input-sm" />
                                 <span>hours</span>
                             </div>
                         </Show>

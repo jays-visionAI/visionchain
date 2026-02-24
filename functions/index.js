@@ -16802,10 +16802,11 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const obSnap = await db.doc(`dex/orderbook/data/${DEX_PAIR}`).get();
         if (obSnap.exists) {
           const ob = obSnap.data();
+          const isFull = req.body?.full === true;
           return res.json({
             success: true,
-            bids: (ob.bids || []).slice(0, 15),
-            asks: (ob.asks || []).slice(0, 15),
+            bids: isFull ? (ob.bids || []) : (ob.bids || []).slice(0, 15),
+            asks: isFull ? (ob.asks || []) : (ob.asks || []).slice(0, 15),
             lastPrice: ob.lastPrice,
             spreadPercent: ob.spreadPercent,
           });
@@ -16934,7 +16935,31 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         const mktData = mktSnap.exists ? mktSnap.data() : {};
         const settSnap = await db.doc("dex/config/trading-settings/current").get();
         const settData = settSnap.exists ? settSnap.data() : {};
-        return res.json({ success: true, agents: tradingAgents, market: mktData, settings: settData });
+
+        // --- Fetch Actual Orderbook Stats ---
+        const obSnap = await db.doc(`dex/orderbook/data/${DEX_PAIR}`).get();
+        const obStats = { bidsCount: 0, asksCount: 0, bidsVol: 0, asksVol: 0 };
+        if (obSnap.exists) {
+          const ob = obSnap.data();
+          obStats.bidsCount = (ob.bids || []).length;
+          obStats.asksCount = (ob.asks || []).length;
+          obStats.bidsVol = (ob.bids || []).reduce((sum, o) => sum + (o.amount || 0), 0);
+          obStats.asksVol = (ob.asks || []).reduce((sum, o) => sum + (o.amount || 0), 0);
+        }
+
+        // --- Fetch Top Retail Agents as "Whales" ---
+        const retailSnap = await db.collection("dex/agents/list").where("role", "==", "trader").orderBy("balances.VCN", "desc").limit(10).get();
+        const topWhales = [];
+        retailSnap.forEach((d) => topWhales.push(d.data()));
+
+        return res.json({
+          success: true,
+          agents: tradingAgents,
+          market: mktData,
+          settings: settData,
+          orderbookStats: obStats,
+          whales: topWhales,
+        });
       }
       case "getEngineStatus": {
         const roundSnap = await db.doc("dex/settings/config/roundCounter").get();
@@ -17259,6 +17284,17 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         await orderRef.update({ status: "cancelled" });
         const updBal = (await balRef.get()).data();
         return res.json({ success: true, balance: { USDT: updBal.USDT, VCN: updBal.VCN } });
+      }
+      case "executeMarketAction": {
+        const { side, type, amount, targetPrice } = req.body;
+        if (!side) return res.status(400).json({ success: false, error: "Missing side" });
+        const id = `action-${Date.now().toString(36)}`;
+        await db.doc(`dex/config/trading-actions/${id}`).set({
+          id, executedAt: admin.firestore.Timestamp.now(),
+          side, type: type || side, amount: parseFloat(amount || 0), targetPrice: parseFloat(targetPrice || 0),
+          status: "pending", createdBy: "TradingAdmin",
+        });
+        return res.json({ success: true, actionId: id, message: "Action request registered for execution." });
       }
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });

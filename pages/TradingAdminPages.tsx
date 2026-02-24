@@ -10,6 +10,7 @@ const TradingInventory = lazy(() => import('../components/trading-admin/TradingI
 const TradingRiskControls = lazy(() => import('../components/trading-admin/TradingRiskControls'));
 const TradingAgents = lazy(() => import('../components/trading-admin/TradingAgents'));
 const TradingActivityLog = lazy(() => import('../components/trading-admin/TradingActivityLog'));
+const TradingMarketAction = lazy(() => import('../components/trading-admin/TradingMarketAction'));
 
 function PageLoader() {
     return (
@@ -101,6 +102,17 @@ export function TradingAdminLogPage() {
         <Suspense fallback={<PageLoader />}>
             <TradingAdminLayout>
                 <TradingActivityLog />
+            </TradingAdminLayout>
+        </Suspense>
+    );
+}
+
+export function TradingAdminActionPage() {
+    document.title = 'Market Operations | Trading Control';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <TradingAdminLayout>
+                <TradingMarketAction />
             </TradingAdminLayout>
         </Suspense>
     );

@@ -51,6 +51,7 @@ export default function TradingAdminLayout(props: TradingAdminLayoutProps) {
         { id: 'spread', label: 'Spread & Layers', path: '/trading-admin/spread', icon: 'layers' },
         { id: 'inventory', label: 'Inventory', path: '/trading-admin/inventory', icon: 'inventory' },
         { id: 'risk', label: 'Risk Controls', path: '/trading-admin/risk', icon: 'shield' },
+        { id: 'action', label: 'Market Operations', path: '/trading-admin/action', icon: 'zap' },
         { id: 'agents', label: 'Trading Agents', path: '/trading-admin/agents', icon: 'bot' },
         { id: 'log', label: 'Activity Log', path: '/trading-admin/log', icon: 'log' },
     ];
@@ -67,6 +68,8 @@ export default function TradingAdminLayout(props: TradingAdminLayoutProps) {
                 return <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5" /><path d="M9 5v4l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg>;
             case 'shield':
                 return <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2L3 5v4c0 3.5 2.5 6.5 6 7.5 3.5-1 6-4 6-7.5V5L9 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="M6.5 9l2 2 3.5-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>;
+            case 'zap':
+                return <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M10 2L3 10h5l-1 6 7-8H9l1-6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>;
             case 'bot':
                 return <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="3" y="5" width="12" height="10" rx="2" stroke="currentColor" stroke-width="1.5" /><circle cx="7" cy="10" r="1.5" fill="currentColor" /><circle cx="11" cy="10" r="1.5" fill="currentColor" /><path d="M9 2v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /><circle cx="9" cy="2" r="1" fill="currentColor" /></svg>;
             case 'log':
