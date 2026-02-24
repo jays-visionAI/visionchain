@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules')) {
               if (id.includes('ethers')) return 'vendor-ethers';
               if (id.includes('firebase')) return 'vendor-firebase';
-              if (id.includes('solid')) return 'vendor-solid';
+              if (id.includes('firebase')) return 'vendor-firebase';
               if (id.includes('lucide')) return 'vendor-icons';
               if (id.includes('@google/generative-ai') || id.includes('@google/genai')) return 'vendor-gemini';
               if (id.includes('axios')) return 'vendor-axios';
@@ -100,10 +100,7 @@ export default defineConfig(({ mode }) => {
               return 'chat';
             }
 
-            // All services bundled together to avoid circular deps
-            if (id.includes('/services/')) {
-              return 'services';
-            }
+
           }
         }
       }
