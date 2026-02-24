@@ -158,6 +158,30 @@ export default function MMAdminDashboard() {
         }
     };
 
+    const setMacroPhase = async (phaseName: string, mode: string, bias: number, speed: string, targetMultiplier: number) => {
+        if (!confirm(`Are you sure you want to change the MM Engine phase to "${phaseName.toUpperCase()}"?`)) return;
+        setSaving(true);
+        try {
+            const currentPrice = market()?.lastPrice || 0.1;
+            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
+                priceDirection: {
+                    phase: phaseName,
+                    mode: mode,
+                    trendBias: bias,
+                    trendSpeed: speed,
+                    targetPrice: currentPrice * targetMultiplier,
+                    currentBasePrice: currentPrice // Reset base to current
+                },
+                updatedAt: new Date(),
+                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin@visionchain.co'
+            }, { merge: true });
+        } catch (e) {
+            console.error('[MMAdmin] Error setting phase', e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const fmt = (n: number, d = 4) => n?.toFixed(d) || '0';
     const fmtK = (n: number) => {
         if (!n) return '$0';
@@ -242,6 +266,89 @@ export default function MMAdminDashboard() {
                         <div class="mmd-stat-label">Combined PnL</div>
                         <div class={`mmd-stat-value ${totalPnL() >= 0 ? 'up' : 'dn'}`}>{fmtK(totalPnL())}</div>
                         <div class="mmd-stat-meta">{totalTrades().toLocaleString()} total trades</div>
+                    </div>
+                </div>
+
+                {/* Macro Strategy Control Board */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-400">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        Macro Strategy Phase Control
+                        <span style="font-size: 11px; padding: 2px 6px; background: rgba(249, 115, 22, 0.15); border: 1px solid rgba(249, 115, 22, 0.3); border-radius: 4px; color: #f97316; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; margin-left: auto;">Engine Override</span>
+                    </h2>
+
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('accumulation', 'bullish', 0.2, 'slow', 1.5)}
+                            style={{
+                                'background': mmSettings()?.priceDirection?.phase === 'accumulation' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': mmSettings()?.priceDirection?.phase === 'accumulation' ? '1px solid #34d399' : '1px solid rgba(255,255,255,0.1)',
+                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.5' : '1'
+                            }}>
+                            <div style="color: #34d399; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
+                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Accumulation</h3>
+                            <p style="color: #94a3b8; font-size: 11px;">Stealth Buy (Slow)</p>
+                        </button>
+
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('markup', 'bullish', 0.8, 'fast', 3.0)}
+                            style={{
+                                'background': mmSettings()?.priceDirection?.phase === 'markup' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': mmSettings()?.priceDirection?.phase === 'markup' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.5' : '1'
+                            }}>
+                            <div style="color: #38bdf8; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
+                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Markup</h3>
+                            <p style="color: #94a3b8; font-size: 11px;">FOMO Pump (Fast)</p>
+                        </button>
+
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('distribution', 'bearish', -0.1, 'medium', 0.8)}
+                            style={{
+                                'background': mmSettings()?.priceDirection?.phase === 'distribution' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': mmSettings()?.priceDirection?.phase === 'distribution' ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
+                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.5' : '1'
+                            }}>
+                            <div style="color: #a855f7; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
+                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Distribution</h3>
+                            <p style="color: #94a3b8; font-size: 11px;">Sell Top (Medium)</p>
+                        </button>
+
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('markdown', 'bearish', -0.8, 'fast', 0.5)}
+                            style={{
+                                'background': mmSettings()?.priceDirection?.phase === 'markdown' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': mmSettings()?.priceDirection?.phase === 'markdown' ? '1px solid #f43f5e' : '1px solid rgba(255,255,255,0.1)',
+                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.5' : '1'
+                            }}>
+                            <div style="color: #f43f5e; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg></div>
+                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Markdown</h3>
+                            <p style="color: #94a3b8; font-size: 11px;">Panic Dump (Fast)</p>
+                        </button>
+
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('ranging', 'neutral', 0.0, 'slow', 1.0)}
+                            style={{
+                                'background': mmSettings()?.priceDirection?.phase === 'ranging' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': mmSettings()?.priceDirection?.phase === 'ranging' ? '1px solid #94a3b8' : '1px solid rgba(255,255,255,0.1)',
+                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.5' : '1'
+                            }}>
+                            <div style="color: #94a3b8; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line></svg></div>
+                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Ranging</h3>
+                            <p style="color: #94a3b8; font-size: 11px;">Sideways (Stable)</p>
+                        </button>
                     </div>
                 </div>
 
