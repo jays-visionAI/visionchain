@@ -67,6 +67,13 @@ interface MMSettings {
     updatedAt?: any;
 }
 
+const MOCK_WHALES = [
+    { id: 'uid_whale1', label: 'Seed Investor (VC #1)', holding: 15_000_000, avgEntry: 0.05, unlocked: 5_000_000, locked: 10_000_000, threatLevel: 'HIGH' },
+    { id: 'uid_whale2', label: 'KOL / Influencer (A)', holding: 2_500_000, avgEntry: 0.08, unlocked: 2_500_000, locked: 0, threatLevel: 'MEDIUM' },
+    { id: 'uid_whale3', label: 'Early Adopter (Bot)', holding: 800_000, avgEntry: 0.12, unlocked: 800_000, locked: 0, threatLevel: 'LOW' },
+    { id: 'uid_whale4', label: 'Team Vesting (Advisor)', holding: 3_000_000, avgEntry: 0.01, unlocked: 1_200_000, locked: 1_800_000, threatLevel: 'HIGH' }
+];
+
 export default function MMAdminDashboard() {
     const [mmAgents, setMMAgents] = createSignal<MMAgent[]>([]);
     const [market, setMarket] = createSignal<MarketData | null>(null);
@@ -74,6 +81,11 @@ export default function MMAdminDashboard() {
     const [loading, setLoading] = createSignal(true);
     const [killSwitch, setKillSwitch] = createSignal(false);
     const [saving, setSaving] = createSignal(false);
+
+    // Capitulation state
+    const [targetWhale, setTargetWhale] = createSignal('all');
+    const [dropPercent, setDropPercent] = createSignal(15);
+    const [dumpAmount, setDumpAmount] = createSignal(500000);
 
     const db = getAdminFirebaseDb();
 
@@ -119,6 +131,27 @@ export default function MMAdminDashboard() {
             setKillSwitch(newState);
         } catch (e) {
             console.error('[MMAdmin] Kill switch error:', e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const triggerCapitulation = async () => {
+        if (!confirm('WARNING: Executing a Flash-Crash Capitulation will dump market prices instantly to wipe target orders and trigger stop-losses. Proceed?')) return;
+        setSaving(true);
+        try {
+            await setDoc(doc(db, 'dex/config/mm-settings/current'), {
+                capitulation: {
+                    active: true,
+                    targetUid: targetWhale(),
+                    dropPercent: dropPercent(),
+                    dumpAmount: dumpAmount()
+                },
+                updatedAt: new Date(),
+                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin@visionchain.co'
+            }, { merge: true });
+        } catch (e) {
+            console.error('[MMAdmin] Error triggering capitulation', e);
         } finally {
             setSaving(false);
         }
@@ -250,6 +283,87 @@ export default function MMAdminDashboard() {
                             </div>
                             <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #d8b4fe; margin-bottom: 4px; text-shadow: 0 0 20px rgba(216, 180, 254, 0.2);">{totalExtractedUSDT() >= 0 ? '+' : ''}${totalExtractedUSDT().toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                             <div style="color: #64748b; font-size: 13px;">USDT Equivalent Value</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Whale Intelligence & Capitulation Engine */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: #f43f5e;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        Whale Intelligence & Target Capitulation
+                    </h2>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
+                        {/* Whale List */}
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; overflow: hidden;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                                <thead>
+                                    <tr style="background: rgba(255, 255, 255, 0.05); color: #94a3b8; text-transform: uppercase;">
+                                        <th style="padding: 12px 16px;">Target Label</th>
+                                        <th style="padding: 12px 16px;">Avg Entry</th>
+                                        <th style="padding: 12px 16px;">Unlocked / Total</th>
+                                        <th style="padding: 12px 16px;">Threat</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <For each={MOCK_WHALES}>
+                                        {(w) => (
+                                            <tr style="border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                                                <td style="padding: 12px 16px; color: #f8fafc; font-weight: 500;">{w.label}</td>
+                                                <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">${w.avgEntry.toFixed(3)}</td>
+                                                <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">
+                                                    <span style="color: #cbd5e1;">{(w.unlocked / 1000000).toFixed(1)}M</span>
+                                                    <span style="color: #64748b;"> / {(w.holding / 1000000).toFixed(1)}M VCN</span>
+                                                </td>
+                                                <td style="padding: 12px 16px;">
+                                                    <span style={{
+                                                        'padding': '4px 8px', 'border-radius': '4px', 'font-size': '11px', 'font-weight': 'bold',
+                                                        'background': w.threatLevel === 'HIGH' ? 'rgba(244, 63, 94, 0.15)' : w.threatLevel === 'MEDIUM' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                                        'color': w.threatLevel === 'HIGH' ? '#f43f5e' : w.threatLevel === 'MEDIUM' ? '#fbbf24' : '#34d399'
+                                                    }}>
+                                                        {w.threatLevel}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </For>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Capitulation Panel */}
+                        <div style="background: linear-gradient(180deg, rgba(244, 63, 94, 0.05) 0%, rgba(15, 23, 42, 0.8) 100%); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 12px; padding: 20px;">
+                            <h3 style="color: #fca5a5; font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                Capitulation Engine
+                            </h3>
+                            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Target User Setup</label>
+                                    <select value={targetWhale()} onInput={(e) => setTargetWhale(e.currentTarget.value)} style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; padding: 8px; font-size: 13px;">
+                                        <option value="all">Any Vulnerable Wallets</option>
+                                        <For each={MOCK_WHALES}>{(w) => <option value={w.id}>{w.label}</option>}</For>
+                                    </select>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div>
+                                        <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Drop Target (%)</label>
+                                        <input type="number" value={dropPercent()} onInput={(e) => setDropPercent(Number(e.currentTarget.value) || 15)} style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; padding: 8px; font-size: 13px;" />
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Dump Amount</label>
+                                        <input type="number" value={dumpAmount()} onInput={(e) => setDumpAmount(Number(e.currentTarget.value) || 500000)} style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; padding: 8px; font-size: 13px;" />
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={triggerCapitulation} disabled={saving()} style="width: 100%; padding: 10px; background: #e11d48; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);">
+                                {saving() ? 'EXECUTING...' : 'EXECUTE FLASH CRASH'}
+                            </button>
                         </div>
                     </div>
                 </div>

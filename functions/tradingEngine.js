@@ -105,7 +105,7 @@ class CloudOrderBook {
 
 // ─── MM Order Generation ───────────────────────────────────────────────────
 
-function generateMMOrders(agent, currentPrice, mmAdmin) {
+function generateMMOrders(agent, currentPrice, mmAdmin, engineBasePrice) {
     const agentCfg = agent.mmConfig || {};
 
     // Merge: MM Admin settings override agent-level config
@@ -118,17 +118,13 @@ function generateMMOrders(agent, currentPrice, mmAdmin) {
     if (ao.enabled === false) return [];
 
     // ── Price Direction ──
-    const trendBias = ao.trendBiasOverride ?? pd.trendBias ?? agentCfg.trendBias ?? 0;
-    const trendSpeedVal = (typeof pd.trendSpeed === "number") ?
-        pd.trendSpeed :
-        { slow: 0.00005, medium: 0.0002, fast: 0.0005 }[pd.trendSpeed] || agentCfg.trendSpeed || 0.0002;
     const targetPrice = pd.targetPrice || agentCfg.basePrice || currentPrice;
     const priceFloor = pd.priceFloor ?? agentCfg.basePrice * 0.5 ?? currentPrice * 0.5;
     const priceCeiling = pd.priceCeiling ?? agentCfg.basePrice * 2 ?? currentPrice * 2;
     const priceRangePct = pd.priceRangePercent ?? agentCfg.priceRangePercent ?? 20;
 
-    // Calculate base price: drift from current toward target
-    let basePrice = currentPrice + (targetPrice - currentPrice) * Math.abs(trendBias) * trendSpeedVal * 100;
+    // Use engineBasePrice (which accumulates floating point changes) instead of currentPrice
+    let basePrice = engineBasePrice || currentPrice;
     const minP = targetPrice * (1 - priceRangePct / 100);
     const maxP = targetPrice * (1 + priceRangePct / 100);
     basePrice = Math.max(Math.max(minP, priceFloor), Math.min(Math.min(maxP, priceCeiling), basePrice));
@@ -461,6 +457,40 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     let mmPaused = mmKillSwitch; // start paused if kill switch is on
     const cbThreshold = mmAdmin?.riskConfig?.circuitBreaker?.priceChangeThreshold || 5; // percent
 
+    // ── Persistent Base Price Tracking (Fixing Zeno's Paradox) ──
+    let engineBasePrice = mmAdmin?.priceDirection?.currentBasePrice || sessionOpen || 0.1000;
+    const pd = mmAdmin?.priceDirection || {};
+    const trendBias = pd.trendBias || 0;
+    // Speed: per micro-round (we calculate drift on 5 micro-rounds, but let's just make it per 5 rounds)
+    // 0.0005 * 100 = 0.05% per update if target was widely different, but let's use a flat drift for stability
+    // Or we stick to the original logic but update engineBasePrice continuously
+    const speedMap = { slow: 0.00005, medium: 0.0002, fast: 0.0005 };
+    const trendSpeedVal = (typeof pd.trendSpeed === "number") ? pd.trendSpeed : speedMap[pd.trendSpeed || "medium"];
+
+    // ── Capitulation Engine (Flash Crash / Liquidate targets) ──
+    const cap = mmAdmin?.capitulation;
+    let capitulationTriggered = false;
+    let capFills = [];
+    if (cap?.active === true && mmAgents.length > 0 && !mmPaused) {
+        console.log(`[TradingEngine] Executing Capitulation flash-crash! Target UID: ${cap.targetUid || 'any'}, Drop: ${cap.dropPercent}%`);
+        const dropRatio = (parseFloat(cap.dropPercent) || 10) / 100;
+        const targetPrice = engineBasePrice * (1 - dropRatio);
+        const dumpAmount = parseFloat(cap.dumpAmount) || 500000;
+        const mmAlpha = mmAgents[0];
+
+        // Massive market sell command directly into the orderbook bypassing standard checks
+        // We simulate this by continuously taking active bids until amount is depleted or basePrice is hit.
+        // For simplicity, we fire an execDec as a massive market sell.
+        const mf = execDec(orderBook, mmAlpha, { action: "sell", amount: dumpAmount, orderType: "market", reasoning: "CAPITULATION_DUMP" }, roundNumber, Date.now());
+        capFills.push(...mf);
+
+        // Ensure price is forced down to target level so subsequent MM ticks recreate walls at the absolute bottom
+        engineBasePrice = Math.max(0.0001, targetPrice);
+        orderBook.lastPrice = Math.max(0.0001, targetPrice);
+
+        capitulationTriggered = true;
+    }
+
     // ── Micro-Round Loop ──
     while (Date.now() - invocationStart < MAX_MS) {
         const ms = Date.now();
@@ -479,9 +509,15 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
 
         // MM refresh every 5 rounds (skip if kill switch or circuit breaker active)
         if (totalMicro % 5 === 1 && !mmPaused) {
+            // Apply drift to engineBasePrice: drift towards target price
+            const targetPrice = pd.targetPrice || sessionOpen;
+            const diff = targetPrice - engineBasePrice;
+            const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * 5; // * 5 because we update every 5 micro-rounds
+            engineBasePrice += driftDelta;
+
             for (const mm of mmAgents) {
                 orderBook.cancelAgentOrders(mm.id);
-                for (const mo of generateMMOrders(mm, orderBook.lastPrice, mmAdmin)) {
+                for (const mo of generateMMOrders(mm, orderBook.lastPrice, mmAdmin, engineBasePrice)) {
                     orderBook.addLimitOrder({
                         id: `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
                         agentId: mm.id, ownerUid: mm.ownerUid,
@@ -568,7 +604,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     // MM final orders (skip if kill switch or circuit breaker paused)
     if (!mmPaused) {
         for (const mm of mmAgents) {
-            for (const mo of generateMMOrders(mm, fp, mmAdmin)) {
+            for (const mo of generateMMOrders(mm, fp, mmAdmin, engineBasePrice)) {
                 if (bc >= 380) break;
                 const oid = `mm-${mm.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`;
                 wb.set(db.doc(`dex/orders/list/${oid}`), {
@@ -582,6 +618,18 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
                 bc++;
             }
         }
+    }
+
+    // Save persist engineBasePrice back to config
+    if (mmAdmin?.priceDirection || capitulationTriggered) {
+        const updates = {};
+        if (mmAdmin?.priceDirection) updates["priceDirection.currentBasePrice"] = engineBasePrice;
+        if (capitulationTriggered) {
+            updates["capitulation.active"] = false;
+            updates["capitulation.lastExecutedAt"] = admin.firestore.Timestamp.now();
+        }
+        wb.update(db.doc("dex/config/mm-settings/current"), updates);
+        bc++;
     }
 
     // Agent balances
