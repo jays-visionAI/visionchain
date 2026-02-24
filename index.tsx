@@ -1,5 +1,5 @@
 import { render } from 'solid-js/web';
-import { Router, Route, useLocation } from '@solidjs/router';
+import { Router, Route, Navigate, useLocation } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import { AuthProvider, useAuth } from './components/auth/authContext';
 import { I18nProvider } from './i18n/i18nContext';
@@ -31,7 +31,7 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/trading-login') || location.pathname.startsWith('/trading-admin');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/trading-login') || location.pathname.startsWith('/trading-admin') || location.pathname.startsWith('/mm-admin') || location.pathname.startsWith('/mm-login');
   const isDexRoute = () => location.pathname.startsWith('/dex');
 
   return (
@@ -138,6 +138,16 @@ render(() => (
         <Route path="/trading-admin/risk" component={TradingAdmin.TradingAdminRiskPage} />
         <Route path="/trading-admin/agents" component={TradingAdmin.TradingAdminAgentsPage} />
         <Route path="/trading-admin/log" component={TradingAdmin.TradingAdminLogPage} />
+
+        {/* Legacy redirects: /mm-admin -> /trading-admin */}
+        <Route path="/mm-login" component={() => <Navigate href="/trading-login" />} />
+        <Route path="/mm-admin" component={() => <Navigate href="/trading-admin" />} />
+        <Route path="/mm-admin/price" component={() => <Navigate href="/trading-admin/price" />} />
+        <Route path="/mm-admin/spread" component={() => <Navigate href="/trading-admin/spread" />} />
+        <Route path="/mm-admin/inventory" component={() => <Navigate href="/trading-admin/inventory" />} />
+        <Route path="/mm-admin/risk" component={() => <Navigate href="/trading-admin/risk" />} />
+        <Route path="/mm-admin/agents" component={() => <Navigate href="/trading-admin/agents" />} />
+        <Route path="/mm-admin/log" component={() => <Navigate href="/trading-admin/log" />} />
 
       </Router>
     </I18nProvider>
