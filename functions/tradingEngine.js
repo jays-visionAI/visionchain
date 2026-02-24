@@ -470,9 +470,9 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     // ── Capitulation Engine (Flash Crash / Liquidate targets) ──
     const cap = mmAdmin?.capitulation;
     let capitulationTriggered = false;
-    let capFills = [];
+    const capFills = [];
     if (cap?.active === true && mmAgents.length > 0 && !mmPaused) {
-        console.log(`[TradingEngine] Executing Capitulation flash-crash! Target UID: ${cap.targetUid || 'any'}, Drop: ${cap.dropPercent}%`);
+        console.log(`[TradingEngine] Executing Capitulation flash-crash! Target UID: ${cap.targetUid || "any"}, Drop: ${cap.dropPercent}%`);
         const dropRatio = (parseFloat(cap.dropPercent) || 10) / 100;
         const targetPrice = engineBasePrice * (1 - dropRatio);
         const dumpAmount = parseFloat(cap.dumpAmount) || 500000;
