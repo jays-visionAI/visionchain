@@ -16798,9 +16798,22 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         return res.json({ success: true, market: snap.exists ? snap.data() : null });
       }
       case "getOrderBook": {
+        // Primary: read pre-computed snapshot (fast, no index needed)
+        const obSnap = await db.doc(`dex/orderbook/data/${DEX_PAIR}`).get();
+        if (obSnap.exists) {
+          const ob = obSnap.data();
+          return res.json({
+            success: true,
+            bids: (ob.bids || []).slice(0, 15),
+            asks: (ob.asks || []).slice(0, 15),
+            lastPrice: ob.lastPrice,
+            spreadPercent: ob.spreadPercent,
+          });
+        }
+        // Fallback: query orders collection (no orderBy to avoid composite index)
         const ordersSnap = await db.collection("dex/orders/list")
           .where("status", "in", ["open", "partial"])
-          .orderBy("price").limit(100).get();
+          .limit(200).get();
         const bids = []; const asks = [];
         ordersSnap.forEach((doc) => {
           const o = doc.data();
