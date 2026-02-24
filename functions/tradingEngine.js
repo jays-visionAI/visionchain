@@ -119,8 +119,9 @@ function generateMMOrders(agent, currentPrice, mmAdmin) {
 
     // ── Price Direction ──
     const trendBias = ao.trendBiasOverride ?? pd.trendBias ?? agentCfg.trendBias ?? 0;
-    const trendSpeedVal = (typeof pd.trendSpeed === "number") ? pd.trendSpeed
-        : { slow: 0.00005, medium: 0.0002, fast: 0.0005 }[pd.trendSpeed] || agentCfg.trendSpeed || 0.0002;
+    const trendSpeedVal = (typeof pd.trendSpeed === "number") ?
+        pd.trendSpeed :
+        { slow: 0.00005, medium: 0.0002, fast: 0.0005 }[pd.trendSpeed] || agentCfg.trendSpeed || 0.0002;
     const targetPrice = pd.targetPrice || agentCfg.basePrice || currentPrice;
     const priceFloor = pd.priceFloor ?? agentCfg.basePrice * 0.5 ?? currentPrice * 0.5;
     const priceCeiling = pd.priceCeiling ?? agentCfg.basePrice * 2 ?? currentPrice * 2;
@@ -168,7 +169,10 @@ function generateMMOrders(agent, currentPrice, mmAdmin) {
         switch (layerPattern) {
             case "increasing": return 0.5 + (i / Math.max(total - 1, 1)) * 1.0;
             case "decreasing": return 1.5 - (i / Math.max(total - 1, 1)) * 1.0;
-            case "bell": { const mid = (total - 1) / 2; return 1.0 + 0.5 * (1 - Math.abs(i - mid) / Math.max(mid, 1)); }
+            case "bell": {
+                const mid = (total - 1) / 2;
+                return 1.0 + 0.5 * (1 - Math.abs(i - mid) / Math.max(mid, 1));
+            }
             default: return 1.0; // flat
         }
     }
