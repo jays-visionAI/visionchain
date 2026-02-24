@@ -211,7 +211,33 @@ export default function MMAdminDashboard() {
                                     <path d="M12 20h16" stroke="rgba(245,158,11,0.2)" stroke-width="2" stroke-linecap="round" />
                                 </svg>
                                 <p>No Market Maker agents found</p>
-                                <span>MM agents need to be created with role: "market_maker" in Firestore</span>
+                                <span>Click Initialize to create MM Alpha and MM Beta agents</span>
+                                <button
+                                    class="mmd-init-btn"
+                                    onClick={async () => {
+                                        setLoading(true);
+                                        try {
+                                            const apiUrl = window.location.hostname.includes('staging') || window.location.hostname === 'localhost'
+                                                ? 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI'
+                                                : 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
+                                            await fetch(apiUrl, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ action: 'initEngine' }),
+                                            });
+                                            await loadData();
+                                        } catch (e: any) {
+                                            alert('Error: ' + e.message);
+                                        }
+                                        setLoading(false);
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                                        <path d="M8 2v4l3-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
+                                    </svg>
+                                    Initialize Engine
+                                </button>
                             </div>
                         }>
                             {(agent) => {
@@ -403,9 +429,11 @@ export default function MMAdminDashboard() {
                 .mmd-pnl-val.up { color: #22c55e; font-weight: 700; }
                 .mmd-pnl-val.dn { color: #ef4444; font-weight: 700; }
 
-                .mmd-empty { text-align: center; padding: 40px 0; color: rgba(255,255,255,0.3); }
+                .mmd-empty { text-align: center; padding: 40px 0; color: rgba(255,255,255,0.3); display: flex; flex-direction: column; align-items: center; }
                 .mmd-empty p { margin: 12px 0 6px; font-weight: 700; }
                 .mmd-empty span { font-size: 12px; color: rgba(255,255,255,0.2); }
+                .mmd-init-btn { display: flex; align-items: center; gap: 6px; margin-top: 14px; padding: 10px 20px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+                .mmd-init-btn:hover { transform: scale(1.03); filter: brightness(1.1); }
 
                 .mmd-market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
                 .mmd-market-item { display: flex; justify-content: space-between; padding: 12px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; }

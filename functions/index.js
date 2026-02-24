@@ -16937,9 +16937,10 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         return res.json({ success: true, roundNumber: current, lastRound, settings: settingsSnap.exists ? settingsSnap.data() : {} });
       }
       case "initEngine": {
-        // Check if already initialized
-        const existCheck = await db.collection("dex/agents/list").limit(1).get();
-        if (!existCheck.empty) {
+        // Check if MM agents exist specifically
+        const mmCheck = await db.doc("dex/agents/list/mm-alpha").get();
+        const tradersExist = !(await db.collection("dex/agents/list").limit(1).get()).empty;
+        if (mmCheck.exists && !req.body.force) {
           return res.json({ success: false, error: "Already initialized" });
         }
         const IP = 0.10;

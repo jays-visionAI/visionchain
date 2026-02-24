@@ -111,7 +111,47 @@ export default function MMAgents() {
                             <circle cx="24" cy="6" r="2" fill="rgba(245,158,11,0.3)" />
                         </svg>
                         <h3>No MM Agents Found</h3>
-                        <p>Market maker agents need to be created with role: "market_maker" in the trading engine.</p>
+                        <p>Initialize the trading engine to create MM Alpha and MM Beta agents with 500K USDT + 5M VCN each.</p>
+                        <button
+                            class="mma-init-btn"
+                            onClick={async () => {
+                                setLoading(true);
+                                try {
+                                    const apiUrl = window.location.hostname.includes('staging') || window.location.hostname === 'localhost'
+                                        ? 'https://us-central1-visionchain-staging.cloudfunctions.net/tradingArenaAPI'
+                                        : 'https://us-central1-visionchain-d19ed.cloudfunctions.net/tradingArenaAPI';
+                                    const res = await fetch(apiUrl, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ action: 'initEngine' }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.success || data.error === 'Already initialized') {
+                                        // Reload agents
+                                        const agentsSnap = await getDocs(query(collection(db, 'dex/agents/list'), where('role', '==', 'market_maker')));
+                                        const a: MMAgent[] = [];
+                                        agentsSnap.forEach(d => a.push({ id: d.id, ...d.data() } as any));
+                                        setAgents(a);
+                                        if (a.length === 0) {
+                                            alert(data.error === 'Already initialized'
+                                                ? 'Engine was initialized but MM agents not found. Check Firestore dex/agents/list for role: market_maker.'
+                                                : 'Initialization completed. Refresh to see agents.');
+                                        }
+                                    } else {
+                                        alert('Init failed: ' + (data.error || 'Unknown error'));
+                                    }
+                                } catch (e: any) {
+                                    alert('Error: ' + e.message);
+                                }
+                                setLoading(false);
+                            }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <path d="M8 2v4l3-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
+                            </svg>
+                            Initialize Engine
+                        </button>
                     </div>
                 }>
                     <div class="mma-agents">
@@ -234,7 +274,10 @@ export default function MMAgents() {
 
                 .mma-empty { text-align: center; padding: 50px 20px; color: rgba(255,255,255,0.3); }
                 .mma-empty h3 { font-size: 18px; font-weight: 800; margin: 16px 0 8px; color: rgba(255,255,255,0.5); }
-                .mma-empty p { font-size: 12px; }
+                .mma-empty p { font-size: 12px; max-width: 320px; line-height: 1.6; }
+                .mma-init-btn { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 24px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+                .mma-init-btn:hover { transform: scale(1.04); filter: brightness(1.1); }
+                .mma-init-btn:active { transform: scale(0.98); }
 
                 .mma-agents { display: flex; flex-direction: column; gap: 10px; }
                 .mma-agent { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; transition: all 0.2s; overflow: hidden; }
