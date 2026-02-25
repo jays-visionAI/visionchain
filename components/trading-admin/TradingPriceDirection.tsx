@@ -20,6 +20,9 @@ interface PriceDirectionConfig {
     phase: Phase;
     phaseAutoRotate: boolean;
     phaseRotateInterval: number;
+    volumeCycleEnabled: boolean;
+    volumeCyclePeakHour: number;
+    volumeSchedule: Record<number, number>;
 }
 
 const DEFAULT_CONFIG: PriceDirectionConfig = {
@@ -36,6 +39,9 @@ const DEFAULT_CONFIG: PriceDirectionConfig = {
     phase: 'ranging',
     phaseAutoRotate: false,
     phaseRotateInterval: 24,
+    volumeCycleEnabled: false,
+    volumeCyclePeakHour: 12,
+    volumeSchedule: Object.fromEntries(Array.from({ length: 24 }, (_, i) => [i, 1]))
 };
 
 const MODE_PRESETS: Record<TrendMode, { bias: number; style: 'gradual' | 'aggressive'; vol: number; desc: string }> = {
@@ -118,11 +124,15 @@ export default function MMPriceDirection() {
             movementStyle: info.defaultStyle as any
         }));
     };
-
     const handleSave = async () => {
         setSaving(true);
         try {
             const operator = getAdminFirebaseAuth().currentUser?.email || 'unknown';
+            console.log('[MMPrice] Attempting to save config:', {
+                priceDirection: config(),
+                operator
+            });
+
             await setDoc(doc(db, 'dex/config/trading-settings/current'), {
                 priceDirection: config(),
                 updatedAt: new Date(),
@@ -139,7 +149,11 @@ export default function MMPriceDirection() {
 
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
-        } catch (e) { console.error('[MMPrice] Save error:', e); }
+            console.log('[MMPrice] Save successful');
+        } catch (e: any) {
+            console.error('[MMPrice] Save error details:', e);
+            alert(`Failed to save changes: ${e.message}`);
+        }
         finally { setSaving(false); }
     };
 
@@ -285,7 +299,20 @@ export default function MMPriceDirection() {
                     </div>
 
                     <div class="mmp-section">
-                        <h2 class="mmp-section-title">Organic Volume Intensity</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h2 class="mmp-section-title" style="margin: 0;">Organic Volume Intensity</h2>
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <div class="mmp-toggle-group">
+                                    <span class="mmp-label-sm">24h Cycle</span>
+                                    <button
+                                        class={`mmp-toggle-btn ${config().volumeCycleEnabled ? 'active' : ''}`}
+                                        onClick={() => update('volumeCycleEnabled', !config().volumeCycleEnabled)}
+                                    >
+                                        <div class="mmp-toggle-slider" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                         <div class="mmp-slider-group">
                             <input
                                 type="range"
@@ -304,6 +331,43 @@ export default function MMPriceDirection() {
                                 <span>High Liquidity</span>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Volume Scheduler Grid */}
+                <div class="mmp-section">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <h2 class="mmp-section-title" style="margin-bottom: 4px;">Volume Scheduler (Multiplier)</h2>
+                            <p style="font-size: 10px; color: rgba(255,255,255,0.3);">
+                                Set hourly multipliers. System adds ±10% random jitter for organic feel. (UTC Time)
+                            </p>
+                        </div>
+                        <button class="mmp-choice-btn" style="flex: none; padding: 4px 12px;" onClick={() => {
+                            const reset = Object.fromEntries(Array.from({ length: 24 }, (_, i) => [i, 1]));
+                            update('volumeSchedule', reset);
+                        }}>Reset All to 1x</button>
+                    </div>
+                    <div class="mmp-hour-grid">
+                        <For each={Array.from({ length: 24 }, (_, i) => i)}>
+                            {(hour) => (
+                                <div class="mmp-hour-cell">
+                                    <span class="mmp-hour-label">{hour.toString().padStart(2, '0')}:00</span>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        value={config().volumeSchedule?.[hour] ?? 1}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.currentTarget.value);
+                                            const newSched = { ...config().volumeSchedule, [hour]: isNaN(val) ? 1 : val };
+                                            update('volumeSchedule', newSched);
+                                        }}
+                                        class="mmp-hour-input"
+                                    />
+                                </div>
+                            )}
+                        </For>
                     </div>
                 </div>
 
@@ -496,6 +560,21 @@ export default function MMPriceDirection() {
                 .mmp-phase-label { display: block; font-weight: 800; font-size: 12px; margin-bottom: 3px; }
                 .mmp-phase-desc { display: block; font-size: 9px; opacity: 0.6; line-height: 1.3; }
                 .mmp-phase-options { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+                .mmp-toggle-group { display: flex; align-items: center; gap: 8px; }
+                .mmp-toggle-btn { width: 36px; height: 20px; border-radius: 10px; background: rgba(255,255,255,0.1); border: none; cursor: pointer; position: relative; transition: all 0.2s; }
+                .mmp-toggle-btn.active { background: #38bdf8; }
+                .mmp-toggle-slider { width: 14px; height: 14px; border-radius: 7px; background: white; position: absolute; top: 3px; left: 3px; transition: all 0.2s; }
+                .mmp-toggle-btn.active .mmp-toggle-slider { left: 19px; }
+                .mmp-label-sm { font-size: 10px; color: rgba(255,255,255,0.4); font-weight: 700; text-transform: uppercase; }
+
+                .mmp-hour-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; margin-top: 4px; }
+                @media (max-width: 1200px) { .mmp-hour-grid { grid-template-columns: repeat(6, 1fr); } }
+                @media (max-width: 600px) { .mmp-hour-grid { grid-template-columns: repeat(4, 1fr); } }
+                .mmp-hour-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; }
+                .mmp-hour-label { font-size: 9px; color: rgba(255,255,255,0.3); font-family: monospace; }
+                .mmp-hour-input { width: 100%; background: transparent; border: none; color: #38bdf8; font-size: 13px; font-weight: 800; text-align: center; outline: none; -moz-appearance: textfield; }
+                .mmp-hour-input::-webkit-outer-spin-button, .mmp-hour-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+                .mmp-hour-input:focus { color: white; }
                 .mmp-checkbox { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.5); cursor: pointer; }
                 .mmp-checkbox input { accent-color: #f59e0b; }
                 .mmp-inline-input { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(255,255,255,0.4); }

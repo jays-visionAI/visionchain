@@ -130,8 +130,29 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     basePrice = Math.max(Math.max(minP, priceFloor), Math.min(Math.min(maxP, priceCeiling), basePrice));
 
     // ── Movement & Volume Strategy ──
-    const movementStyle = pd.movementStyle || "gradual"; // "gradual", "aggressive", "natural"
-    const volumeIntensity = pd.volumeIntensity || 0.5; // 0.0 to 1.0
+    const movementStyle = pd.movementStyle || "gradual";
+    let volumeIntensity = pd.volumeIntensity || 0.5; // 0.0 to 1.0
+
+    // Apply Natural Volume Cycle or Schedule if enabled
+    if (pd.volumeCycleEnabled) {
+        const currentHour = new Date().getUTCHours();
+        let multiplier = 1.0;
+
+        if (pd.volumeSchedule && typeof pd.volumeSchedule[currentHour] === "number") {
+            // 1. Precise Schedule Lookup
+            multiplier = pd.volumeSchedule[currentHour];
+        } else {
+            // 2. Fallback to Sine-wave Cycle if Schedule is not set
+            const peakHour = pd.volumeCyclePeakHour || 12; // UTC Peak
+            const diff = Math.abs(currentHour - peakHour);
+            const cyclicDist = Math.min(diff, 24 - diff);
+            multiplier = 0.3 + 0.7 * (1 - cyclicDist / 12);
+        }
+
+        // Apply +/- 10% random jitter as requested
+        const jitter = 0.9 + Math.random() * 0.2;
+        volumeIntensity *= (multiplier * jitter);
+    }
 
     // ── Spread & Layers ──
     const baseSpreadPct = ao.spreadOverride ?? sc.baseSpread ?? agentCfg.spreadPercent ?? 1.0;
@@ -159,9 +180,22 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     const totalVal = agent.balances.USDT + agent.balances.VCN * currentPrice;
     if (totalVal <= 0) return { orders: [], marketAction: null };
     const vcnRatio = (agent.balances.VCN * currentPrice) / totalVal;
-    const inventoryTarget = ic.targetRatio ?? agentCfg.inventoryTarget ?? 0.5;
+
+    // Default targets based on agent role if admin hasn't overridden
+    let defaultInventoryTarget = 0.5;
+    if (agent.strategy?.preset === "trading_bull") defaultInventoryTarget = 0.6; // Wants more VCN
+    if (agent.strategy?.preset === "trading_bear") defaultInventoryTarget = 0.4; // Wants more USDT
+
+    const inventoryTarget = ic.targetRatio ?? agentCfg.inventoryTarget ?? defaultInventoryTarget;
     const skewIntensity = ic.skewIntensity ?? 0.3;
     const rebal = (vcnRatio - inventoryTarget) * 2 * skewIntensity;
+
+    // ── Role-based Bias ──
+    // This allows one agent to be bullish and another bearish even with a global bias
+    let localBias = pd.trendBias || 0;
+    if (agent.strategy?.preset === "trading_bull") localBias += 0.15; // Inherent bullishness
+    if (agent.strategy?.preset === "trading_bear") localBias -= 0.15; // Inherent bearishness
+    localBias = Math.max(-1, Math.min(1, localBias));
 
     // ── Layer Pattern Multipliers ──
     function getPatternMult(i, total) {
@@ -499,15 +533,35 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     let tradingPaused = mmKillSwitch; // start paused if kill switch is on
     const cbThreshold = tradingAdmin?.riskConfig?.circuitBreaker?.priceChangeThreshold || 5; // percent
 
-    // ── Persistent Base Price Tracking (Fixing Zeno's Paradox) ──
+    // ── Persistent Base Price Tracking ──
     let engineBasePrice = tradingAdmin?.priceDirection?.currentBasePrice || sessionOpen || 0.1000;
+
+    // Auto-sync base price if it drifts more than 5% from actual market price (prevents sticking to old values)
+    if (Math.abs(engineBasePrice - sessionOpen) / sessionOpen > 0.05) {
+        console.log(`[TradingEngine] Base price was out of sync (${engineBasePrice.toFixed(4)} vs ${sessionOpen.toFixed(4)}). Resetting to market.`);
+        engineBasePrice = sessionOpen;
+    }
+
     const pd = tradingAdmin?.priceDirection || {};
     const trendBias = pd.trendBias || 0;
-    // Speed: per micro-round (we calculate drift on 5 micro-rounds, but let's just make it per 5 rounds)
-    // 0.0005 * 100 = 0.05% per update if target was widely different, but let's use a flat drift for stability
-    // Or we stick to the original logic but update engineBasePrice continuously
     const speedMap = { slow: 0.00005, medium: 0.0002, fast: 0.0005 };
     const trendSpeedVal = (typeof pd.trendSpeed === "number") ? pd.trendSpeed : speedMap[pd.trendSpeed || "medium"];
+
+    let volumeIntensity = pd.volumeIntensity || 0.5;
+    if (pd.volumeCycleEnabled) {
+        const currentHour = new Date().getUTCHours();
+        let multiplier = 1.0;
+        if (pd.volumeSchedule && typeof pd.volumeSchedule[currentHour] === "number") {
+            multiplier = pd.volumeSchedule[currentHour];
+        } else {
+            const peakHour = pd.volumeCyclePeakHour || 12;
+            const diff = Math.abs(currentHour - peakHour);
+            const cyclicDist = Math.min(diff, 24 - diff);
+            multiplier = 0.3 + 0.7 * (1 - cyclicDist / 12);
+        }
+        const jitter = 0.9 + Math.random() * 0.2;
+        volumeIntensity *= (multiplier * jitter);
+    }
 
     // ── Capitulation Engine (Flash Crash / Liquidate targets) ──
     const cap = tradingAdmin?.capitulation;
@@ -593,11 +647,24 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
                     mf.push(...execDec(orderBook, trading, marketAction, roundNumber, ms));
                 }
 
-                // 3. Bias-driven market pressure: periodically execute market orders in bias direction
-                if (Math.abs(trendBias) > 0.05 && Math.random() < Math.abs(trendBias) * 0.4) {
-                    const biasSide = trendBias > 0 ? "buy" : "sell";
-                    const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias)));
-                    const biasAction = { side: biasSide, amount: biasAmount, type: "market", reasoning: "BIAS_PRESSURE" };
+                // 3. Dual-Pressure logic:
+                // Bullish agents (Alpha) mainly buy, Bearish agents (Beta) mainly sell.
+                // Power balance is dictated by global trendBias.
+                const isBullAgent = trading.strategy?.preset === "trading_bull";
+                const isBearAgent = trading.strategy?.preset === "trading_bear";
+
+                let actionSide = null;
+                if (isBullAgent && (trendBias > -0.2 || Math.random() < 0.3)) actionSide = "buy";
+                if (isBearAgent && (trendBias < 0.2 || Math.random() < 0.3)) actionSide = "sell";
+
+                // If global bias is extreme, everyone follows it
+                if (trendBias > 0.6) actionSide = "buy";
+                if (trendBias < -0.6) actionSide = "sell";
+
+                if (actionSide && Math.random() < (0.1 + Math.abs(trendBias) * 0.4)) {
+                    // Also scale pressure amount by volumeIntensity (which is now cycle-aware)
+                    const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias || 0.3)) * (0.5 + volumeIntensity * 0.5));
+                    const biasAction = { action: actionSide, amount: biasAmount, orderType: "market", reasoning: "ROLE_BASED_PRESSURE" };
                     mf.push(...execDec(orderBook, trading, biasAction, roundNumber, ms));
                 }
             }
@@ -834,15 +901,18 @@ function mkSnap(ob, md, ag) {
 function execDec(ob, ag, dec, rn, ts) {
     const oid = `ord-${ag.id}-${rn}-${Math.random().toString(36).substr(2, 4)}`;
     let fills = [];
-    if (dec.orderType === "market") {
-        fills = ob.executeMarketOrder(oid, ag.id, ag.ownerUid, dec.action, dec.amount);
+    const side = dec.action || dec.side;
+    const orderType = dec.orderType || dec.type;
+
+    if (orderType === "market") {
+        fills = ob.executeMarketOrder(oid, ag.id, ag.ownerUid, side, dec.amount);
     } else {
         const r = ob.addLimitOrder({
             id: oid, agentId: ag.id, ownerUid: ag.ownerUid,
-            side: dec.action, price: dec.price, remainingAmount: dec.amount,
+            side: side, price: dec.price, remainingAmount: dec.amount,
             isTradingOrder: false, timestamp: ts,
         });
-        if (r === "crosses") fills = ob.executeMarketOrder(oid, ag.id, ag.ownerUid, dec.action, dec.amount, dec.price);
+        if (r === "crosses") fills = ob.executeMarketOrder(oid, ag.id, ag.ownerUid, side, dec.amount, dec.price);
     }
     return fills.map((f) => ({ ...f, reasoning: dec.reasoning, time: ts }));
 }
