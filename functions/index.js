@@ -17411,7 +17411,7 @@ exports.diskSubscribe = onCall({ cors: true }, async (request) => {
         deadline,
         sig.v,
         sig.r,
-        sig.s
+        sig.s,
       );
       await permitTx.wait();
       console.log(`[Disk] Permit confirmed: ${permitTx.hash}`);
