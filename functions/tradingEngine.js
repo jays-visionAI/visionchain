@@ -820,10 +820,11 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     });
 
     // ─── Historical Analytics Snapshot ───
-    const initialVCN = agents.length * 5000000;
-    const initialUSDT = agents.length * 500000;
-    const currentVCN = agents.reduce((s, a) => s + (a.balances?.VCN || 0), 0);
-    const currentUSDT = agents.reduce((s, a) => s + (a.balances?.USDT || 0), 0);
+    const mmOnly = agents.filter(a => a.role === "market_maker");
+    const initialVCN = mmOnly.length * 5000000;
+    const initialUSDT = mmOnly.length * 500000;
+    const currentVCN = mmOnly.reduce((s, a) => s + (a.balances?.VCN || 0), 0);
+    const currentUSDT = mmOnly.reduce((s, a) => s + (a.balances?.USDT || 0), 0);
 
     const vacuumed = currentVCN - initialVCN;
     const profit = currentUSDT - initialUSDT;
