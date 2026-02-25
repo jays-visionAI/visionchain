@@ -193,9 +193,26 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     // ── Role-based Bias ──
     // This allows one agent to be bullish and another bearish even with a global bias
     let localBias = pd.trendBias || 0;
-    if (agent.strategy?.preset === "trading_bull") localBias += 0.15; // Inherent bullishness
-    if (agent.strategy?.preset === "trading_bear") localBias -= 0.15; // Inherent bearishness
+    if (agent.strategy?.preset === "trading_bull") localBias += 0.10;
+    if (agent.strategy?.preset === "trading_bear") localBias -= 0.10;
     localBias = Math.max(-1, Math.min(1, localBias));
+
+    // ── Price Drift Calculation (CRITICAL: This moves the engineBasePrice) ──
+    const trendSpeedVal = (typeof pd.trendSpeed === "number") ? pd.trendSpeed : 0.0002;
+    const diff = targetPrice - basePrice;
+
+    // Factor 1: Gravity towards targetPrice
+    const driftDelta = diff * trendSpeedVal * (0.5 + 0.5 * Math.abs(localBias));
+    // Factor 2: Direct push from bias
+    const biasDrift = localBias * trendSpeedVal * basePrice * 0.4;
+
+    const finalDrift = driftDelta + biasDrift;
+    basePrice += finalDrift;
+
+    // Consistency check: ensure price doesn't teleport
+    if (Math.abs(finalDrift) / basePrice > 0.01) {
+        basePrice = basePrice * (1 + (finalDrift > 0 ? 0.01 : -0.01));
+    }
 
     // ── Layer Pattern Multipliers ──
     function getPatternMult(i, total) {
@@ -212,17 +229,15 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
 
     // ── Organic Market Action Generation (Pushing Price & Volume) ──
     let marketAction = null;
-    const distanceToTarget = targetPrice > 0 ? (targetPrice - currentPrice) / currentPrice : 0;
-    const adminBias = pd.trendBias || 0;
 
     // 1. Price Pushing Action (when aggressive mode AND there is a target or bias)
-    if (movementStyle === "aggressive" && (Math.abs(distanceToTarget) > 0.01 || Math.abs(adminBias) > 0.05)) {
+    if (movementStyle === "aggressive" && (Math.abs(targetPrice - currentPrice) / currentPrice > 0.01 || Math.abs(pd.trendBias || 0) > 0.05)) {
         const pushChance = 0.4;
         if (Math.random() < pushChance) {
             // Prefer target direction if set, otherwise use bias direction
-            const side = Math.abs(distanceToTarget) > 0.01 ?
-                (distanceToTarget > 0 ? "buy" : "sell") :
-                (adminBias > 0 ? "buy" : "sell");
+            const side = Math.abs(targetPrice - currentPrice) / currentPrice > 0.01 ?
+                (targetPrice - currentPrice > 0 ? "buy" : "sell") :
+                ((pd.trendBias || 0) > 0 ? "buy" : "sell");
             const amount = Math.round(agent.balances[side === "buy" ? "USDT" : "VCN"] * 0.05 * (0.5 + Math.random()));
             if (amount >= DEX_MIN_ORDER) {
                 marketAction = { side, amount, type: "market", reasoning: "PUSH_TO_TARGET" };
@@ -236,38 +251,38 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
         const volumeChance = volumeIntensity * 0.8;
         if (Math.random() < volumeChance) {
             // Bias the organic volume direction toward the trend
-            const biasedRoll = Math.random() + adminBias * 0.3;
+            const biasedRoll = Math.random() + (pd.trendBias || 0) * 0.3;
             const side = biasedRoll > 0.5 ? "buy" : "sell";
             const amount = Math.round(DEX_MIN_ORDER * (1 + Math.random() * 5 * volumeIntensity));
             marketAction = { side, amount, type: "market", reasoning: "ORGANIC_VOLUME" };
         }
     }
 
-    // ── Generate Limit Orders ──
-    const orders = [];
-    for (let i = 0; i < layerCount; i++) {
-        const pMult = getPatternMult(i, layerCount);
-        const pctPerLayer = layerAmountPct * pMult;
-
-        const jitterP = 1 + (Math.random() - 0.5) * 0.001;
-        const jitterA = 1 + (Math.random() - 0.5) * 0.15;
-
-        // Buy order
-        const bp = basePrice * (1 - halfBidSpread - i * layerSpacing) * jitterP;
-        const ba = Math.round((agent.balances.USDT * (pctPerLayer * (1 - rebal * 0.5)) / bp) * jitterA);
-        if (ba >= DEX_MIN_ORDER && bp > 0) {
-            orders.push({ side: "buy", price: Math.round(bp * 10000) / 10000, amount: ba });
-        }
-
-        // Sell order
-        const sp = basePrice * (1 + halfAskSpread + i * layerSpacing) * jitterP;
-        const sa = Math.round((agent.balances.VCN * (pctPerLayer * (1 + rebal * 0.5))) * jitterA);
-        if (sa >= DEX_MIN_ORDER && sp > 0) {
-            orders.push({ side: "sell", price: Math.round(sp * 10000) / 10000, amount: sa });
-        }
+    // Update the parent's engineBasePrice tracking
+    if (engineBasePrice !== undefined) {
+        // We accumulate the price change so it persists across agent iterations in this round
+        return { orders: generateLayers(), marketAction: null, updatedBasePrice: basePrice };
     }
 
-    return { orders, marketAction };
+    function generateLayers() {
+        const orders = [];
+        const steps = layerCount;
+        for (let i = 1; i <= steps; i++) {
+            const patternMult = getPatternMult(i, steps);
+
+            // Bid (Buy) Side
+            const bidPrice = basePrice * (1 - (baseSpreadPct * i * bidMult) / 100);
+            const bidAmount = Math.round(DEX_MIN_ORDER * (1 + Math.random()) * patternMult * volumeIntensity);
+            if (bidPrice > 0 && bidAmount > 0) orders.push({ side: "buy", price: bidPrice, amount: bidAmount });
+
+            // Ask (Sell) Side
+            const askPrice = basePrice * (1 + (baseSpreadPct * i * askMult) / 100);
+            const askAmount = Math.round(DEX_MIN_ORDER * (1 + Math.random()) * patternMult * volumeIntensity);
+            if (askPrice > 0 && askAmount > 0) orders.push({ side: "sell", price: askPrice, amount: askAmount });
+        }
+        return orders;
+    }
+    return { orders: generateLayers(), marketAction: null };
 }
 
 // ─── Preset Strategy Algorithms ────────────────────────────────────────────
@@ -603,25 +618,13 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             }
         }
 
-        // Trading refresh every 5 rounds (skip if kill switch or circuit breaker active)
-        if (totalMicro % 5 === 1 && !tradingPaused) {
-            // Apply drift to engineBasePrice
-            const movementStyle = pd.movementStyle || "gradual";
-            const driftMult = movementStyle === "gradual" ? 0.3 : movementStyle === "aggressive" ? 0.8 : 0.5;
+        for (const trading of tradingAgents) {
+            // 1. Generate & Update Orderbook Walls
+            orderBook.cancelAgentOrders(trading.id);
+            const { orders, marketAction, updatedBasePrice } = generateTradingOrders(trading, orderBook.lastPrice, tradingAdmin, engineBasePrice, roundNumber);
 
-            const hasTarget = pd.targetPrice && pd.targetPrice > 0;
-            if (hasTarget) {
-                // Mode A: Target-based drift (move toward specific target)
-                const targetPrice = pd.targetPrice;
-                const diff = targetPrice - engineBasePrice;
-                const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * driftMult * 5;
-                engineBasePrice += driftDelta;
-            } else if (Math.abs(trendBias) > 0.01) {
-                // Mode B: Continuous bias drift (no target, just push in bias direction)
-                // trendBias: +0.30 bullish => price goes up, -0.30 bearish => price goes down
-                const continuousDrift = engineBasePrice * trendBias * trendSpeedVal * driftMult * 5;
-                engineBasePrice += continuousDrift;
-            }
+            // Update the shared engineBasePrice for the next agent/round
+            if (updatedBasePrice) engineBasePrice = updatedBasePrice;
 
             // Clamp to floor/ceiling if set
             const priceFloor = pd.priceFloor || 0.0001;
@@ -662,8 +665,12 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
                 if (trendBias < -0.6) actionSide = "sell";
 
                 if (actionSide && Math.random() < (0.1 + Math.abs(trendBias) * 0.4)) {
-                    // Also scale pressure amount by volumeIntensity (which is now cycle-aware)
-                    const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias || 0.3)) * (0.5 + volumeIntensity * 0.5));
+                    // Use local volume intensity (scaled by cycle/schedule)
+                    const currentHour = new Date().getUTCHours();
+                    const multiplier = (pd.volumeSchedule && pd.volumeSchedule[currentHour]) || 1.0;
+                    const vIntensity = (pd.volumeIntensity || 0.5) * multiplier;
+
+                    const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias || 0.3)) * (0.5 + vIntensity * 0.5));
                     const biasAction = { action: actionSide, amount: biasAmount, orderType: "market", reasoning: "ROLE_BASED_PRESSURE" };
                     mf.push(...execDec(orderBook, trading, biasAction, roundNumber, ms));
                 }
@@ -728,8 +735,10 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     const wb = db.batch();
     let bc = 0;
 
-    // Trades (last 50)
-    for (const f of allFills.slice(-50)) {
+    // Trades (limited to satisfy Batch 500 limit: trades + candles + market + admin + agents)
+    // We prioritize the most recent 100 trades to stay well within limits
+    const tradeLimit = Math.min(allFills.length, 100);
+    for (const f of allFills.slice(-tradeLimit)) {
         const tid = `t-${roundNumber}-${Math.random().toString(36).substr(2, 8)}`;
         wb.set(db.doc(`dex/trades/list/${tid}`), {
             id: tid, pair: DEX_PAIR, price: f.price, amount: f.amount, total: f.total,
@@ -841,7 +850,6 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         const candleSnaps = await db.getAll(...candleRefs);
 
         for (let i = 0; i < intervals.length; i++) {
-            if (bc >= 495) break;
             const iv = intervals[i];
             const snap = candleSnaps[i];
             const cs = Math.floor(invocationStart / iMs[iv]) * iMs[iv];
@@ -850,21 +858,24 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
                 const ex = snap.data();
                 wb.set(candleRefs[i], {
                     t: cs,
-                    o: ex.o, // Ensure Open price is locked to the original start-of-candle opening price
+                    o: ex.o || sessionOpen,
                     h: Math.max(ex.h || sessionOpen, pH),
                     l: Math.min(ex.l || sessionOpen, pL),
                     c: fp,
                     v: (ex.v || 0) + vcnV,
                     qv: (ex.qv || 0) + tv,
                     n: (ex.n || 0) + allFills.length,
+                    updatedAt: admin.firestore.Timestamp.now(),
                 }, { merge: true });
             } else {
                 wb.set(candleRefs[i], {
                     t: cs, o: sessionOpen, h: Math.max(sessionOpen, pH), l: Math.min(sessionOpen, pL), c: fp, v: vcnV, qv: tv, n: allFills.length,
+                    updatedAt: admin.firestore.Timestamp.now(),
                 });
             }
             bc++;
         }
+        console.log(`[TradingEngine] Incremental candles (${intervals.join(",")}) added to batch. Total Ops: ${bc}`);
     } catch (err) {
         console.error("[TradingEngine] Error writing candles:", err);
     }

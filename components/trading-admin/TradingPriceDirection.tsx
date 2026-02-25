@@ -1,6 +1,6 @@
 import { createSignal, onMount, Show, For, createMemo } from 'solid-js';
 import { getAdminFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
 
 type TrendMode = 'bullish' | 'neutral' | 'bearish' | 'custom';
 type TrendSpeed = 'slow' | 'medium' | 'fast';
@@ -77,10 +77,7 @@ export default function MMPriceDirection() {
 
     onMount(async () => {
         try {
-            const [settingsSnap, marketSnap] = await Promise.all([
-                getDoc(doc(db, 'dex/config/trading-settings/current')),
-                getDoc(doc(db, 'dex/market/data/VCN-USDT')),
-            ]);
+            const settingsSnap = await getDoc(doc(db, 'dex/config/trading-settings/current'));
             if (settingsSnap.exists()) {
                 const data = settingsSnap.data();
                 if (data.priceDirection) {
@@ -88,11 +85,22 @@ export default function MMPriceDirection() {
                     if (typeof data.priceDirection.trendSpeed === 'number') setCustomSpeed(true);
                 }
             }
-            if (marketSnap.exists()) {
-                setCurrentPrice(marketSnap.data().lastPrice || 0.10);
-            }
-        } catch (e) { console.error('[MMPrice] Load error:', e); }
-        finally { setLoading(false); }
+
+            // Real-time market price listener
+            const unsubscribe = onSnapshot(doc(db, 'dex/market/data/VCN-USDT'), (snap) => {
+                if (snap.exists()) {
+                    const price = snap.data().lastPrice || 0.10;
+                    setCurrentPrice(price);
+                    console.log('[MMPrice] Live price sync:', price);
+                }
+            });
+
+            return () => unsubscribe();
+        } catch (e) {
+            console.error('[MMPrice] Load error:', e);
+        } finally {
+            setLoading(false);
+        }
     });
 
     const update = (key: keyof PriceDirectionConfig, value: any) => {
