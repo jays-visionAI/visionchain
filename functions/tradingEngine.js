@@ -163,13 +163,18 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     // ── Layer Pattern Multipliers ──
     function getPatternMult(i, total) {
         switch (layerPattern) {
-            case "increasing": return 0.5 + (i / Math.max(total - 1, 1)) * 1.0;
-            case "decreasing": return 1.5 - (i / Math.max(total - 1, 1)) * 1.0;
+            case "increasing":
+                // More realistic: exponential growth for deeper layers
+                return Math.pow(1.5, i);
+            case "decreasing":
+                return Math.max(0.1, 2.0 - i * 0.3);
             case "bell": {
                 const mid = (total - 1) / 2;
-                return 1.0 + 0.5 * (1 - Math.abs(i - mid) / Math.max(mid, 1));
+                return 1.0 + 1.0 * (1 - Math.pow(Math.abs(i - mid) / Math.max(mid, 1), 2));
             }
-            default: return 1.0; // flat
+            default:
+                // Default to a slight increasing pattern for realism even if 'flat' is selected
+                return 1.0 + i * 0.2;
         }
     }
 

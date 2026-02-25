@@ -126,14 +126,17 @@ function TVChart(props: {
     onIntervalChange: (iv: string) => void;
 }) {
     let chartContainerRef: HTMLDivElement | undefined;
-    let chart: any = null;
+    const [chartInstance, setChartInstance] = createSignal<any>(null);
+    const [activeTool, setActiveTool] = createSignal<string>('crosshair');
+    const [candleType, setCandleType] = createSignal<string>('candle_solid');
+    const [mainIndicators, setMainIndicators] = createSignal<string[]>([]);
 
     const intervals = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
     onMount(() => {
         if (!chartContainerRef) return;
 
-        chart = init(chartContainerRef);
+        const chart = init(chartContainerRef);
         chart.setStyles({
             grid: {
                 horizontal: { show: true, size: 1, color: 'rgba(255, 255, 255, 0.03)', style: 'dashed' },
@@ -183,6 +186,7 @@ function TVChart(props: {
 
         // Add Volume indicator in a separate pane below
         chart.createIndicator('VOL', false, { height: 80 });
+        setChartInstance(chart);
 
         const ro = new ResizeObserver(entries => {
             if (entries.length && chart) {
@@ -197,9 +201,73 @@ function TVChart(props: {
         });
     });
 
+    // ─── Chart Actions ───
+
+    const changeCandleType = (type: string) => {
+        const chart = chartInstance();
+        if (!chart) return;
+        setCandleType(type);
+        chart.setStyles({ candle: { type: type as any } });
+    };
+
+    const toggleIndicator = (name: string) => {
+        const chart = chartInstance();
+        if (!chart) return;
+        const current = mainIndicators();
+        if (current.includes(name)) {
+            chart.removeIndicator('candle_pane', name);
+            setMainIndicators(current.filter(i => i !== name));
+        } else {
+            chart.createIndicator(name, true, { id: 'candle_pane' });
+            setMainIndicators([...current, name]);
+        }
+    };
+
+    const activateDrawing = (name: string) => {
+        const chart = chartInstance();
+        if (!chart) return;
+        setActiveTool(name);
+        if (name === 'crosshair') {
+            // klinecharts technically always has crosshair, but we can reset overlay mode
+            return;
+        }
+
+        // Map UI names to klinecharts overlay types
+        const overlayMap: Record<string, string> = {
+            'trendline': 'trendLine',
+            'fibonacci': 'fibonacciRetracement',
+            'brush': 'segmentLine', // Klinecharts uses segmentLine for line-like brush
+            'text': 'text',
+            'measure': 'priceLine',
+            'arrow': 'arrow',
+            'rect': 'rect'
+        };
+
+        if (overlayMap[name]) {
+            chart.createOverlay({ name: overlayMap[name] });
+        }
+    };
+
+    const clearDrawings = () => {
+        const chart = chartInstance();
+        if (!chart) return;
+        chart.removeOverlay();
+    };
+
+    const takeSnapshot = () => {
+        const chart = chartInstance();
+        if (!chart) return;
+        const url = chart.getConvertPictureUrl('png', 'dark');
+        const link = document.createElement('a');
+        link.download = `visiondex-chart-${Date.now()}.png`;
+        link.href = url;
+        link.click();
+    };
+
     createEffect(() => {
         const c = props.candles;
-        if (!c || c.length === 0 || !chart) return;
+        const chart = chartInstance();
+        if (!c || c.length === 0 || !chart || typeof chart.applyNewData !== 'function') return;
 
         // map to klinecharts format
         const klineData = c.map(k => ({
@@ -216,25 +284,72 @@ function TVChart(props: {
 
     return (
         <div class="tv-chart-wrapper">
+            {/* Top Toolbar */}
             <div class="tv-chart-toolbar">
-                <div class="tv-intervals">
-                    <For each={intervals}>
-                        {(iv) => (
-                            <button
-                                class={`tv-interval-btn ${props.interval === iv ? 'active' : ''}`}
-                                onClick={() => props.onIntervalChange(iv)}
-                            >{iv}</button>
-                        )}
-                    </For>
+                <div class="tv-t-left">
+                    <div class="tv-intervals">
+                        <For each={intervals}>
+                            {(iv) => (
+                                <button
+                                    class={`tv-interval-btn ${props.interval === iv ? 'active' : ''}`}
+                                    onClick={() => props.onIntervalChange(iv)}
+                                >{iv}</button>
+                            )}
+                        </For>
+                    </div>
+                    <div class="tv-divider" />
+                    <div class="tv-dropdown-group">
+                        <button class="tv-tool-btn" onClick={() => changeCandleType(candleType() === 'candle_solid' ? 'area' : 'candle_solid')} title="Toggle Candle Type">
+                            <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h3v6H4V6zM11 4h3v10h-3V4zM5.5 3v3M5.5 12v3M12.5 1v3M12.5 14v3" stroke-linecap="round" /></svg>
+                        </button>
+                    </div>
+                    <div class="tv-divider" />
+                    <button class={`tv-tool-btn ${mainIndicators().includes('MA') ? 'active' : ''}`} onClick={() => toggleIndicator('MA')} title="Moving Average">
+                        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l4-4 3 3 7-7" stroke-linecap="round" stroke-linejoin="round" /><circle cx="2" cy="12" r="1" /><circle cx="6" cy="8" r="1" /><circle cx="9" cy="11" r="1" /><circle cx="16" cy="4" r="1" /></svg>
+                        <span class="btn-lbl">MA</span>
+                    </button>
+                    <button class={`tv-tool-btn ${mainIndicators().includes('EMA') ? 'active' : ''}`} onClick={() => toggleIndicator('EMA')} title="EMA">
+                        <span class="btn-lbl">EMA</span>
+                    </button>
+                    <div class="tv-divider" />
+                    <button class="tv-tool-btn" title="Display Options">
+                        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="12" height="12" rx="2" /><path d="M3 8h12M8 3v12" /></svg>
+                    </button>
                 </div>
-                <div class="tv-chart-info">
-                    <span class="tv-powered">
-                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1" /><path d="M4 10V6l2 2 2-4 2 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" /></svg>
-                        Advanced Charts
-                    </span>
+
+                <div class="tv-t-right">
+                    <button class="tv-tool-btn" title="Undo"><svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 8l-3 3 3 3M2 11h10a4 4 0 000-8H9" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+                    <button class="tv-tool-btn" title="Redo"><svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 8l3 3-3 3M16 11H6a4 4 0 010-8h3" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+                    <div class="tv-divider" />
+                    <button class="tv-tool-btn" title="Settings"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="9" r="2" /><path d="M9 1v2M9 15v2M1 9h2M15 9h2M3.5 3.5l1.5 1.5M13 13l2 2M3.5 14.5l1.5-1.5M13 5l2-2" stroke-linecap="round" /></svg></button>
+                    <button class="tv-tool-btn" title="Fullscreen" onClick={() => chartContainerRef?.requestFullscreen()}><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6V2h4M12 2h4v4M16 12v4h-4M6 16H2v-4" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+                    <button class="tv-tool-btn" title="Snapshot" onClick={takeSnapshot}><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 5H3a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2z" /><path d="M6 5l1-2h4l1 2" /><circle cx="9" cy="10" r="2" /></svg></button>
                 </div>
             </div>
-            <div class="tv-chart-container" ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
+
+            <div class="tv-chart-main">
+                {/* Left Sidebar Tools */}
+                <div class="tv-sidebar">
+                    <div class="tv-side-top">
+                        <button class={`tv-side-btn ${activeTool() === 'crosshair' ? 'active' : ''}`} onClick={() => activateDrawing('crosshair')} title="Crosshair"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M9 2v14M2 9h14" stroke-linecap="round" /><circle cx="9" cy="9" r="1" /></svg></button>
+                        <button class={`tv-side-btn ${activeTool() === 'trendline' ? 'active' : ''}`} onClick={() => activateDrawing('trendline')} title="Trendline"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 15l12-12" stroke-linecap="round" /><circle cx="3" cy="15" r="1.5" /><circle cx="15" cy="3" r="1.5" /></svg></button>
+                        <button class={`tv-side-btn ${activeTool() === 'fibonacci' ? 'active' : ''}`} onClick={() => activateDrawing('fibonacci')} title="Fibonacci"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4h14M2 8h14M2 12h14M2 16h14" /><path d="M4 2v14" stroke-dasharray="2 2" /></svg></button>
+                        <button class={`tv-side-btn ${activeTool() === 'brush' ? 'active' : ''}`} onClick={() => activateDrawing('brush')} title="Brush"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 13c3-5 5-5 12-10M3 13l2 2" stroke-linecap="round" /></svg></button>
+                        <button class={`tv-side-btn ${activeTool() === 'text' ? 'active' : ''}`} onClick={() => activateDrawing('text')} title="Text"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M4 5h10M9 5v10" stroke-linecap="round" /></svg></button>
+                        <button class={`tv-side-btn ${activeTool() === 'arrow' ? 'active' : ''}`} onClick={() => activateDrawing('arrow')} title="Arrow"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 15l12-12M15 3h-4M15 3v4" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+                        <button class={`tv-side-btn ${activeTool() === 'rect' ? 'active' : ''}`} onClick={() => activateDrawing('rect')} title="Rectangle"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="4" width="12" height="10" rx="1" /></svg></button>
+                        <div class="tv-side-divider" />
+                        <button class={`tv-side-btn ${activeTool() === 'measure' ? 'active' : ''}`} onClick={() => activateDrawing('measure')} title="Measure"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="5" width="12" height="8" rx="1" /><path d="M6 5v2M9 5v2M12 5v2" /></svg></button>
+                    </div>
+                    <div class="tv-side-bottom">
+                        <button class="tv-side-btn" title="Magnet"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M5 5v5a4 4 0 008 0V5M5 5h3M10 5h3" stroke-linecap="round" /></svg></button>
+                        <button class="tv-side-btn" title="Remove Drawing" onClick={clearDrawings}><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 6h12M5 6v10h8V6M7 6V4a2 2 0 014 0v2" stroke-linecap="round" /></svg></button>
+                    </div>
+                </div>
+
+                {/* Chart Container */}
+                <div class="tv-chart-container" ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
+            </div>
         </div>
     );
 }
@@ -534,8 +649,11 @@ export default function TradingTerminal() {
             if (trd.success) setTrades(trd.trades || []);
             if (cnd.success) setCandles(cnd.candles || []);
             if (lb.success) setLeaderboard(lb.leaderboard || []);
+        } catch (e) {
+            console.error('[DEX] fetch error:', e);
+        } finally {
             setLoading(false);
-        } catch (e) { console.error('[DEX] fetch error:', e); }
+        }
     }
 
     function changeInterval(iv: string) {

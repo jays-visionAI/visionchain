@@ -24,7 +24,7 @@
     "bip39": "^3.1.0",
     "firebase": "^12.6.0",
     "highlight.js": "^11.11.1",
-    "klinecharts": "^10.0.0-beta1",
+    "klinecharts": "^9.8.3",
     "lightweight-charts": "^5.1.0",
     "lucide-solid": "^0.454.0",
     "marked": "^17.0.1",

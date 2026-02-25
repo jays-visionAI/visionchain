@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 /* ─── VisionDEX Trading Terminal - Axiom-Trade Inspired ─── */
 
 /* Design Tokens */
@@ -20,8 +22,6 @@
     --dx-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
     --dx-radius: 6px;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ─── Reset ─── */
 .dex-root *,
@@ -193,25 +193,34 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 10px;
+    padding: 0 4px;
     border-bottom: 1px solid var(--dx-border);
     background: var(--dx-bg2);
-    min-height: 32px;
+    height: 38px;
+    min-height: 38px;
+}
+
+.tv-t-left,
+.tv-t-right {
+    display: flex;
+    align-items: center;
+    gap: 2px;
 }
 
 .tv-intervals {
     display: flex;
-    gap: 2px;
+    gap: 1px;
+    margin-right: 4px;
 }
 
 .tv-interval-btn {
-    padding: 3px 8px;
+    padding: 4px 8px;
     border: none;
     background: transparent;
     color: var(--dx-text3);
     font-size: 11px;
     font-family: var(--dx-font);
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     border-radius: 4px;
     transition: all 0.15s;
@@ -227,24 +236,97 @@
     background: var(--dx-accent);
 }
 
-.tv-chart-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.tv-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--dx-border);
+    margin: 0 4px;
 }
 
-.tv-powered {
+.tv-tool-btn {
     display: flex;
     align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    color: var(--dx-text2);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.tv-tool-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.btn-lbl {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.tv-chart-main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    position: relative;
+}
+
+.tv-sidebar {
+    width: 42px;
+    min-width: 42px;
+    border-right: 1px solid var(--dx-border);
+    background: var(--dx-bg2);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+.tv-side-top,
+.tv-side-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 4px;
-    font-size: 10px;
-    color: var(--dx-text3);
-    opacity: 0.6;
+}
+
+.tv-side-btn {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--dx-text2);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.tv-side-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.tv-side-btn.active {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--dx-accent2);
+}
+
+.tv-side-divider {
+    width: 20px;
+    height: 1px;
+    background: var(--dx-border);
+    margin: 4px 0;
 }
 
 .tv-chart-container {
     flex: 1;
-    min-height: 300px;
+    min-width: 0;
+    background: var(--dx-bg);
 }
 
 /* ─── Order Book ─── */
@@ -1064,6 +1146,7 @@
 .rs-mode-btn.active svg {
     color: var(--dx-accent2);
 }
+
 .dex-h-right {
     display: flex;
     align-items: center;
