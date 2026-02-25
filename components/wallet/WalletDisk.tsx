@@ -8,7 +8,7 @@ import {
 } from 'lucide-solid';
 import { useAuth } from '../auth/authContext';
 import {
-    uploadDiskFile, listDiskFiles, deleteDiskFile, renameDiskFile,
+    uploadDiskFile, downloadDiskFile, downloadDiskFileGranular, listDiskFiles, deleteDiskFile, renameDiskFile,
     createDiskFolder, listDiskFolders, deleteDiskFolder, renameDiskFolder,
     listAllDiskFolders, getDiskUsage, formatFileSize, getFileExtension,
     subscribeToDisk, cancelDiskSubscription,
@@ -126,6 +126,9 @@ export const WalletDisk = (props: {
     const [uploadQueue, setUploadQueue] = createSignal<UploadProgress[]>([]);
     const [showUploadPanel, setShowUploadPanel] = createSignal(false);
     const [previewFile, setPreviewFile] = createSignal<DiskFile | null>(null);
+    const [previewURL, setPreviewURL] = createSignal<string>('');
+    const [previewLoading, setPreviewLoading] = createSignal(false);
+    const [previewProgress, setPreviewProgress] = createSignal<{ current: number; total: number } | null>(null);
     const [contextMenu, setContextMenu] = createSignal<{ item: DiskFile | DiskFolder; type: 'file' | 'folder'; x: number; y: number } | null>(null);
     const [showNewFolder, setShowNewFolder] = createSignal(false);
     const [newFolderName, setNewFolderName] = createSignal('');
@@ -149,11 +152,15 @@ export const WalletDisk = (props: {
     const [isSelectMode, setIsSelectMode] = createSignal(false);
 
     // Encryption State
-    const [useEncryption, setUseEncryption] = createSignal(false);
+    const [useEncryption, setUseEncryption] = createSignal(true);
     const [encryptionPassword, setEncryptionPassword] = createSignal('');
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
     const [decryptingFileId, setDecryptingFileId] = createSignal('');
-    const [useDistributed, setUseDistributed] = createSignal(false);
+    const [useDistributed, setUseDistributed] = createSignal(true);
+
+    // Tooltip State
+    const [showVNetTooltip, setShowVNetTooltip] = createSignal(false);
+    const [showPrivateTooltip, setShowPrivateTooltip] = createSignal(false);
 
     // Move Modal State
     const [showMoveModal, setShowMoveModal] = createSignal(false);
@@ -441,32 +448,80 @@ export const WalletDisk = (props: {
     };
 
     const handleDownload = async (file: DiskFile) => {
-        if (file.isEncrypted) {
-            if (!encryptionPassword()) {
-                setShowPasswordModal(true);
-                alert('Please enter your encryption password first.');
-                return;
-            }
+        try {
+            // Distributed storage files (new architecture)
+            if (file.storageType === 'distributed' || file.cid) {
+                const { user } = useAuth();
+                const email = user()?.email;
+                if (!email) { alert('Login required'); return; }
 
-            setDecryptingFileId(file.id);
-            try {
-                const response = await fetch(file.downloadURL);
-                const buffer = await response.arrayBuffer();
-                const blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
-                const url = window.URL.createObjectURL(blob);
+                const result = await downloadDiskFile(email, file.id);
+
+                // If encrypted, decrypt the blob
+                if (file.isEncrypted) {
+                    if (!encryptionPassword()) {
+                        setShowPasswordModal(true);
+                        alert('Please enter your encryption password first.');
+                        return;
+                    }
+                    setDecryptingFileId(file.id);
+                    try {
+                        const buffer = await result.blob.arrayBuffer();
+                        const decBlob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                        const url = window.URL.createObjectURL(decBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.name;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    } finally {
+                        setDecryptingFileId('');
+                    }
+                    return;
+                }
+
+                // Normal distributed file download
+                const url = window.URL.createObjectURL(result.blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = file.name;
+                a.download = result.fileName;
                 document.body.appendChild(a);
                 a.click();
                 window.URL.revokeObjectURL(url);
-            } catch (err: any) {
-                alert('Decryption failed. Wrong password?');
-            } finally {
-                setDecryptingFileId('');
+                return;
             }
-        } else {
-            window.open(file.downloadURL, '_blank');
+
+            // Legacy: Firebase Storage direct download
+            if (file.isEncrypted) {
+                if (!encryptionPassword()) {
+                    setShowPasswordModal(true);
+                    alert('Please enter your encryption password first.');
+                    return;
+                }
+                setDecryptingFileId(file.id);
+                try {
+                    const response = await fetch(file.downloadURL);
+                    const buffer = await response.arrayBuffer();
+                    const blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                } catch (err: any) {
+                    alert('Decryption failed. Wrong password?');
+                } finally {
+                    setDecryptingFileId('');
+                }
+            } else {
+                window.open(file.downloadURL, '_blank');
+            }
+        } catch (err: any) {
+            console.error('[Disk] Download error:', err);
+            alert('Download failed: ' + (err.message || 'Unknown error'));
         }
     };
 
@@ -590,6 +645,52 @@ export const WalletDisk = (props: {
     // ─── Active uploads count ───
     const activeUploads = createMemo(() => uploadQueue().filter(u => u.status === 'uploading').length);
 
+    // ─── Preview Handler ───
+    createEffect(async () => {
+        const file = previewFile();
+        if (previewURL()) {
+            URL.revokeObjectURL(previewURL());
+            setPreviewURL('');
+        }
+        if (!file) return;
+
+        if (file.storageType === 'distributed' || file.isEncrypted) {
+            setPreviewLoading(true);
+            setPreviewProgress(null);
+            try {
+                let blob: Blob;
+                if (file.storageType === 'distributed') {
+                    // Use granular download for better UX and progress tracking
+                    blob = await downloadDiskFileGranular(file, (current, total) => {
+                        setPreviewProgress({ current, total });
+                    });
+                } else {
+                    const resp = await fetch(file.downloadURL);
+                    blob = await resp.blob();
+                }
+
+                if (file.isEncrypted) {
+                    if (!encryptionPassword()) {
+                        setShowPasswordModal(true);
+                        setPreviewFile(null);
+                        alert('Please enter your encryption password to preview this file.');
+                        return;
+                    }
+                    const buffer = await blob.arrayBuffer();
+                    blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                }
+                setPreviewURL(URL.createObjectURL(blob));
+            } catch (err) {
+                console.error('[Disk] Preview load failed:', err);
+            } finally {
+                setPreviewLoading(false);
+                setPreviewProgress(null);
+            }
+        } else {
+            setPreviewURL(file.downloadURL);
+        }
+    });
+
     // Close context menu on outside click
     const handleGlobalClick = () => setContextMenu(null);
     onMount(() => document.addEventListener('click', handleGlobalClick));
@@ -599,7 +700,7 @@ export const WalletDisk = (props: {
 
     return (
         <div
-            class={`h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-4 lg:px-8 pb-32 lg:pb-8 max-w-6xl mx-auto w-full overflow-y-auto custom-scrollbar relative transition-all ${isDragOver() ? 'ring-2 ring-cyan-400/40 ring-inset' : ''}`}
+            class={`h-full flex flex-col pt-[max(env(safe-area-inset-top,20px),24px)] lg:pt-8 px-3 sm:px-4 lg:px-8 pb-32 lg:pb-8 max-w-6xl mx-auto w-full overflow-x-hidden overflow-y-auto custom-scrollbar relative transition-all ${isDragOver() ? 'ring-2 ring-cyan-400/40 ring-inset' : ''}`}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
             onDrop={onDrop}
@@ -643,7 +744,7 @@ export const WalletDisk = (props: {
                     <p class="text-sm text-gray-400 font-medium">Decentralized storage powered by Vision Nodes</p>
                 </div>
 
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                     {/* Search */}
                     <div class="relative">
                         <Search class="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -652,7 +753,7 @@ export const WalletDisk = (props: {
                             placeholder="Search files..."
                             value={searchQuery()}
                             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                            class="h-10 w-48 pl-9 pr-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all"
+                            class="h-10 w-32 sm:w-48 pl-9 pr-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/40 transition-all"
                         />
                     </div>
 
@@ -673,30 +774,88 @@ export const WalletDisk = (props: {
                     </div>
 
                     {/* Distributed Toggle */}
-                    <button
-                        onClick={() => setUseDistributed(!useDistributed())}
-                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useDistributed()
-                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
-                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
-                            }`}
-                        title={useDistributed() ? 'Network Storage ON' : 'Network Storage OFF'}
-                    >
-                        <Globe class={`w-4 h-4 ${useDistributed() ? 'text-amber-500' : 'text-gray-600'}`} />
-                        <span class="hidden md:inline">VNet</span>
-                    </button>
+                    <div class="relative">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setUseDistributed(!useDistributed());
+                            }}
+                            onMouseEnter={() => { if (window.innerWidth > 768) setShowVNetTooltip(true); }}
+                            onMouseLeave={() => setShowVNetTooltip(false)}
+                            onTouchEnd={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowVNetTooltip(!showVNetTooltip());
+                                setShowPrivateTooltip(false);
+                                if (!showVNetTooltip()) setTimeout(() => setShowVNetTooltip(false), 3000);
+                            }}
+                            class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useDistributed()
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                                : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                                }`}
+                        >
+                            <Globe class={`w-4 h-4 ${useDistributed() ? 'text-amber-500' : 'text-gray-600'}`} />
+                            <span class="hidden md:inline">VNet</span>
+                        </button>
+                        <Show when={showVNetTooltip()}>
+                            <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
+                                <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
+                                <p class="font-bold text-amber-400 mb-1.5">Vision Network Storage</p>
+                                <p class="text-gray-300 mb-1.5">
+                                    Files are split into 256KB chunks and distributed across Vision Nodes worldwide. Each chunk is replicated to 3+ nodes for maximum durability.
+                                </p>
+                                <div class="flex items-center gap-1.5 text-gray-500">
+                                    <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                                    <span>Merkle tree verification ensures data integrity</span>
+                                </div>
+                                <button onClick={() => setShowVNetTooltip(false)} class="md:hidden absolute top-2 right-2 text-gray-500 hover:text-white">
+                                    <X class="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </Show>
+                    </div>
 
                     {/* Encryption Toggle */}
-                    <button
-                        onClick={() => setUseEncryption(!useEncryption())}
-                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
-                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
-                            }`}
-                        title={useEncryption() ? 'Client-side Encryption ON' : 'Client-side Encryption OFF'}
-                    >
-                        {useEncryption() ? <ShieldCheck class="w-4 h-4" /> : <ShieldAlert class="w-4 h-4 text-gray-600" />}
-                        <span class="hidden md:inline">Private</span>
-                    </button>
+                    <div class="relative">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setUseEncryption(!useEncryption());
+                            }}
+                            onMouseEnter={() => { if (window.innerWidth > 768) setShowPrivateTooltip(true); }}
+                            onMouseLeave={() => setShowPrivateTooltip(false)}
+                            onTouchEnd={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowPrivateTooltip(!showPrivateTooltip());
+                                setShowVNetTooltip(false);
+                                if (!showPrivateTooltip()) setTimeout(() => setShowPrivateTooltip(false), 3000);
+                            }}
+                            class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
+                                ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                                }`}
+                        >
+                            {useEncryption() ? <ShieldCheck class="w-4 h-4" /> : <ShieldAlert class="w-4 h-4 text-gray-600" />}
+                            <span class="hidden md:inline">Private</span>
+                        </button>
+                        <Show when={showPrivateTooltip()}>
+                            <div class="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 text-xs leading-relaxed">
+                                <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1a2e] border-l border-t border-white/10 rotate-45" />
+                                <p class="font-bold text-blue-400 mb-1.5">End-to-End Encryption</p>
+                                <p class="text-gray-300 mb-1.5">
+                                    Files are encrypted in your browser before uploading. No one — not even Vision Chain — can view your data without your password.
+                                </p>
+                                <div class="flex items-center gap-1.5 text-red-400/70">
+                                    <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                    <span>If you lose your password, files cannot be recovered</span>
+                                </div>
+                                <button onClick={() => setShowPrivateTooltip(false)} class="md:hidden absolute top-2 right-2 text-gray-500 hover:text-white">
+                                    <X class="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </Show>
+                    </div>
 
                     {/* New Folder */}
                     <button
@@ -916,7 +1075,7 @@ export const WalletDisk = (props: {
                                             class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(folder.id)
                                                 ? 'bg-cyan-500 border-cyan-500 text-black'
                                                 : 'bg-black/40 border-white/20 text-transparent'
-                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setIsSelectMode(true);
@@ -938,7 +1097,7 @@ export const WalletDisk = (props: {
                                                 e.stopPropagation();
                                                 setContextMenu({ item: folder, type: 'folder', x: e.clientX, y: e.clientY });
                                             }}
-                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all"
                                         >
                                             <MoreVertical class="w-3.5 h-3.5" />
                                         </button>
@@ -962,7 +1121,7 @@ export const WalletDisk = (props: {
                                             class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(file.id)
                                                 ? 'bg-cyan-500 border-cyan-500 text-black'
                                                 : 'bg-black/40 border-white/20 text-transparent'
-                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'lg:opacity-0 lg:group-hover:opacity-100'}`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setIsSelectMode(true);
@@ -975,19 +1134,38 @@ export const WalletDisk = (props: {
                                         {/* Thumbnail or Icon */}
                                         <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
                                             <Show
-                                                when={file.type.startsWith('image/')}
+                                                when={file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
                                                 fallback={
-                                                    <div class={fileTypeColor(file.type)}>
-                                                        <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
-                                                    </div>
+                                                    <Show
+                                                        when={file.type.startsWith('video/')}
+                                                        fallback={
+                                                            <div class={fileTypeColor(file.type)}>
+                                                                <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
+                                                            </div>
+                                                        }
+                                                    >
+                                                        <div class={`${fileTypeColor(file.type)} relative`}>
+                                                            <FileTypeIcon type={file.type} name={file.name} class="w-10 h-10" />
+                                                            <div class="absolute bottom-1 right-1 bg-black/60 rounded px-1 py-0.5">
+                                                                <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                            </div>
+                                                        </div>
+                                                    </Show>
                                                 }
                                             >
                                                 <img
-                                                    src={file.downloadURL}
+                                                    src={file.thumbnail || file.downloadURL}
                                                     alt={file.name}
                                                     class="w-full h-full object-cover"
                                                     loading="lazy"
                                                 />
+                                                <Show when={file.type.startsWith('video/')}>
+                                                    <div class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                        <div class="w-8 h-8 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+                                                            <svg class="w-3.5 h-3.5 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                        </div>
+                                                    </div>
+                                                </Show>
                                             </Show>
 
                                             {/* Security & Storage Badges Overlay */}
@@ -1014,7 +1192,12 @@ export const WalletDisk = (props: {
                                                     </div>
                                                 </Show>
                                             </div>
-                                            <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{formatFileSize(file.size)} • {file.storageType === 'distributed' ? 'Distributed' : 'Cloud'}</div>
+                                            <Show when={file.abstract}>
+                                                <div class="text-[9px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{file.abstract}</div>
+                                            </Show>
+                                            <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                                {formatFileSize(file.size)} &bull; {new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            </div>
                                         </div>
 
                                         {/* Context button */}
@@ -1029,7 +1212,7 @@ export const WalletDisk = (props: {
                                                     e.stopPropagation();
                                                     setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
                                                 }}
-                                                class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                                                class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all"
                                             >
                                                 <MoreVertical class="w-3.5 h-3.5" />
                                             </button>
@@ -1068,7 +1251,7 @@ export const WalletDisk = (props: {
                                                 e.stopPropagation();
                                                 setContextMenu({ item: folder, type: 'folder', x: e.clientX, y: e.clientY });
                                             }}
-                                            class="p-1 rounded-md text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                                            class="p-1 rounded-md text-gray-500 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all"
                                         >
                                             <MoreVertical class="w-4 h-4" />
                                         </button>
@@ -1079,7 +1262,7 @@ export const WalletDisk = (props: {
                             <For each={filteredFiles()}>
                                 {(file) => (
                                     <div
-                                        class={`group grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
+                                        class={`group grid grid-cols-[1fr_40px] sm:grid-cols-[1fr_100px_120px_40px] gap-2 px-3 sm:px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
                                             } ${deletingId() === file.id ? 'opacity-40' : ''}`}
                                         onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
                                     >
@@ -1114,14 +1297,14 @@ export const WalletDisk = (props: {
                                                 </Show>
                                             </div>
                                         </div>
-                                        <span class="text-xs text-gray-500">{formatFileSize(file.size)}</span>
-                                        <span class="text-xs text-gray-500">{new Date(file.createdAt).toLocaleDateString()}</span>
+                                        <span class="text-xs text-gray-500 hidden sm:block">{formatFileSize(file.size)}</span>
+                                        <span class="text-xs text-gray-500 hidden sm:block">{new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
                                             }}
-                                            class="p-1 rounded-md text-gray-500 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                                            class="p-1 rounded-md text-gray-500 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all active:bg-white/10"
                                         >
                                             <MoreVertical class="w-4 h-4" />
                                         </button>
@@ -1306,38 +1489,77 @@ export const WalletDisk = (props: {
                                     </div>
                                 </div>
                                 {/* Preview Body */}
-                                <div class="flex-1 overflow-auto flex items-center justify-center p-6 min-h-[200px] max-h-[70vh]">
-                                    <Show when={file().type.startsWith('image/')}>
-                                        <img src={file().downloadURL} alt={file().name} class="max-w-full max-h-full object-contain rounded-lg" />
-                                    </Show>
-                                    <Show when={file().type.startsWith('video/')}>
-                                        <video src={file().downloadURL} controls class="max-w-full max-h-full rounded-lg" />
-                                    </Show>
-                                    <Show when={file().type.startsWith('audio/')}>
-                                        <div class="w-full max-w-md">
-                                            <div class="w-20 h-20 rounded-2xl bg-white/[0.05] flex items-center justify-center mx-auto mb-4 border border-white/10">
-                                                <FileAudio class="w-10 h-10 text-amber-400" />
+                                <div class="flex-1 overflow-auto flex flex-col p-6 min-h-[300px]">
+                                    <div class="flex-1 flex items-center justify-center min-h-0">
+                                        <Show when={previewLoading()}>
+                                            <div class="text-center w-full max-w-xs">
+                                                <div class="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto mb-4" />
+                                                <div class="text-sm text-gray-400 font-medium mb-2">
+                                                    {previewProgress() ? `Gathering Chunks (${previewProgress()?.current}/${previewProgress()?.total})` : 'Fetching & Decrypting...'}
+                                                </div>
+                                                <Show when={previewProgress()}>
+                                                    <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                        <div
+                                                            class="h-full bg-cyan-500 transition-all duration-300"
+                                                            style={{ width: `${(previewProgress()!.current / previewProgress()!.total) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                </Show>
                                             </div>
-                                            <audio src={file().downloadURL} controls class="w-full" />
-                                        </div>
-                                    </Show>
-                                    <Show when={file().type.includes('pdf')}>
-                                        <iframe src={file().downloadURL} class="w-full h-full min-h-[400px] rounded-lg border border-white/10" />
-                                    </Show>
-                                    <Show when={!file().type.startsWith('image/') && !file().type.startsWith('video/') && !file().type.startsWith('audio/') && !file().type.includes('pdf')}>
-                                        <div class="text-center">
-                                            <div class={`${fileTypeColor(file().type)} mx-auto mb-3`}>
-                                                <FileTypeIcon type={file().type} name={file().name} class="w-16 h-16" />
+                                        </Show>
+                                        <Show when={!previewLoading()}>
+                                            <Show when={file().type.startsWith('image/')}>
+                                                <img src={previewURL()} alt={file().name} class="max-w-full max-h-full object-contain rounded-lg" />
+                                            </Show>
+                                            <Show when={file().type.startsWith('video/')}>
+                                                <video
+                                                    src={previewURL()}
+                                                    controls
+                                                    playsinline
+                                                    webkit-playsinline
+                                                    class="max-w-full max-h-full rounded-lg"
+                                                />
+                                            </Show>
+                                            <Show when={file().type.startsWith('audio/')}>
+                                                <div class="w-full max-w-md">
+                                                    <div class="w-20 h-20 rounded-2xl bg-white/[0.05] flex items-center justify-center mx-auto mb-4 border border-white/10">
+                                                        <FileAudio class="w-10 h-10 text-amber-400" />
+                                                    </div>
+                                                    <audio src={previewURL()} controls class="w-full" />
+                                                </div>
+                                            </Show>
+                                            <Show when={file().type.includes('pdf')}>
+                                                <iframe src={previewURL()} class="w-full h-full min-h-[400px] rounded-lg border border-white/10" />
+                                            </Show>
+                                            <Show when={!file().type.startsWith('image/') && !file().type.startsWith('video/') && !file().type.startsWith('audio/') && !file().type.includes('pdf')}>
+                                                <div class="text-center">
+                                                    <div class={`${fileTypeColor(file().type)} mx-auto mb-3`}>
+                                                        <FileTypeIcon type={file().type} name={file().name} class="w-16 h-16" />
+                                                    </div>
+                                                    <div class="text-sm text-gray-400 mb-4">Preview not available for this file type</div>
+                                                    <button
+                                                        onClick={() => handleDownload(file())}
+                                                        class="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all"
+                                                    >
+                                                        <Download class="w-4 h-4" /> Download File
+                                                    </button>
+                                                </div>
+                                            </Show>
+                                        </Show>
+                                    </div>
+
+                                    {/* AI Abstract Section */}
+                                    <Show when={file().abstract}>
+                                        <div class="mt-6 pt-6 border-t border-white/[0.06]">
+                                            <div class="flex items-center gap-2 mb-3">
+                                                <div class="w-6 h-6 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                                    <svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
+                                                </div>
+                                                <span class="text-[11px] font-black text-purple-400 uppercase tracking-widest italic">AI Abstract</span>
                                             </div>
-                                            <div class="text-sm text-gray-400 mb-4">Preview not available for this file type</div>
-                                            <a
-                                                href={file().downloadURL}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                class="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-xl text-sm transition-all"
-                                            >
-                                                <Download class="w-4 h-4" /> Download File
-                                            </a>
+                                            <div class="bg-purple-500/[0.03] border border-purple-500/10 rounded-xl p-4">
+                                                <p class="text-sm text-gray-300 leading-relaxed font-serif">"{file().abstract}"</p>
+                                            </div>
                                         </div>
                                     </Show>
                                 </div>

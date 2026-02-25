@@ -13267,6 +13267,38 @@ exports.agentGateway = onRequest({
       }
     }
 
+    // --- storage_node.fetch_chunk ---
+    // Node requests the actual chunk data from staging (for replication)
+    if (action === "storage_node.fetch_chunk" || action === "chunk.fetch") {
+      try {
+        const nodeId = body.node_id;
+        const hash = body.hash;
+        if (!nodeId || !hash) {
+          return res.status(400).json({ error: "node_id and hash required" });
+        }
+
+        // Fetch from staging_chunks
+        const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
+        if (!stagingDoc.exists || !stagingDoc.data().data) {
+          return res.status(404).json({ error: "Chunk not found in staging" });
+        }
+
+        const chunkData = stagingDoc.data();
+
+        return res.json({
+          success: true,
+          hash,
+          data: chunkData.data, // base64 encoded
+          size: chunkData.size,
+          file_key: chunkData.file_key,
+          index: chunkData.index,
+        });
+      } catch (e) {
+        console.error("[Chunk Registry] fetch_chunk error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
     // =====================================================
 
     return res.status(400).json({
@@ -17653,7 +17685,6 @@ exports.diskDailyBilling = onSchedule({ schedule: "every 24 hours", secrets: ["V
             });
             // Overdue email
             const body = `
-               ${emailComponents.sectionTitle("Payment Failed", "#f59e0b")}
                ${emailComponents.subtitle("We couldn't process the VCN payment for your Vision Disk subscription. Uploads are now blocked.")}
                ${emailComponents.alertBox("Please ensure you have sufficient VCN balance and allowance within 3 days to avoid cancellation.", "warning")}
              `;
@@ -17690,5 +17721,492 @@ exports.diskDailyBilling = onSchedule({ schedule: "every 24 hours", secrets: ["V
     } catch (docErr) {
       console.error(`[DiskBilling] Error processing ${email}: `, docErr);
     }
+  }
+});
+
+// =====================================================
+// DISTRIBUTED STORAGE - Upload / Download via Vision Nodes
+// =====================================================
+
+const CHUNK_SIZE = 256 * 1024; // 256KB - matches vision-node chunkManager
+
+function sha256Hex(buffer) {
+  const crypto = require("crypto");
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function computeMerkleRoot(hashes) {
+  const crypto = require("crypto");
+  if (hashes.length === 0) return sha256Hex(Buffer.alloc(0));
+  if (hashes.length === 1) return hashes[0];
+  let level = [...hashes];
+  while (level.length > 1) {
+    const next = [];
+    for (let i = 0; i < level.length; i += 2) {
+      if (i + 1 < level.length) {
+        const combined = level[i] + level[i + 1];
+        next.push(crypto.createHash("sha256").update(Buffer.from(combined, "hex")).digest("hex"));
+      } else {
+        next.push(level[i]);
+      }
+    }
+    level = next;
+  }
+  return level[0];
+}
+
+function chunkBuffer(data) {
+  const chunks = [];
+  const infos = [];
+  let offset = 0;
+  while (offset < data.length) {
+    const end = Math.min(offset + CHUNK_SIZE, data.length);
+    const chunk = data.subarray(offset, end);
+    const hash = sha256Hex(chunk);
+    chunks.push(Buffer.from(chunk));
+    infos.push({ index: chunks.length - 1, hash, size: chunk.length, offset });
+    offset = end;
+  }
+  const merkleRoot = computeMerkleRoot(infos.map((c) => c.hash));
+  return { chunks, infos, merkleRoot, totalSize: data.length };
+}
+
+/**
+ * diskUpload - Upload file to distributed storage
+ * Receives file as base64, chunks it, stages chunks in Firestore,
+ * registers in chunk_registry for Vision Nodes to pull.
+ */
+exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120, memory: "512MiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileData, fileName, fileType, folder, fileSize, thumbnail } = request.data;
+
+  if (!fileData || !fileName) {
+    throw new HttpsError("invalid-argument", "fileData (base64) and fileName are required.");
+  }
+
+  // Check subscription
+  const subDoc = await db.collection("disk_subscriptions").doc(email).get();
+  if (!subDoc.exists || !["active", "grace_period"].includes(subDoc.data().status)) {
+    throw new HttpsError("failed-precondition", "Active disk subscription required.");
+  }
+
+  const buffer = Buffer.from(fileData, "base64");
+  const maxFileSize = 100 * 1024 * 1024; // 100MB per file via Cloud Function
+  if (buffer.length > maxFileSize) {
+    throw new HttpsError("invalid-argument", `File exceeds ${maxFileSize / (1024 * 1024)}MB limit.`);
+  }
+
+  // Check usage vs limit
+  const sub = subDoc.data();
+  const limitBytes = sub.subscribedGb * 1024 * 1024 * 1024;
+  const usageSnap = await db.collection("users").doc(email).collection("disk_files").get();
+  const currentUsage = usageSnap.docs.reduce((sum, d) => sum + (d.data().size || 0), 0);
+  if (currentUsage + buffer.length > limitBytes) {
+    throw new HttpsError("resource-exhausted", "Storage limit exceeded.");
+  }
+
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const category = getFileCategoryServer(fileType || "application/octet-stream");
+  const fileId = `${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._\-() ]/g, "_")}`;
+  const now = new Date().toISOString();
+  const targetFolder = folder || "/";
+
+  // AI Abstract for document files
+  let fileAbstract = "";
+  const docTypes = ["pdf", "document", "word", "text/", "sheet", "excel", "csv", "presentation"];
+  const isDocument = docTypes.some((t) => (fileType || "").includes(t)) || ["pdf", "doc", "docx", "txt", "md", "csv", "xlsx", "pptx"].includes(ext);
+
+  if (isDocument && buffer.length < 5 * 1024 * 1024) { // Only for docs < 5MB
+    try {
+      const textPreview = buffer.toString("utf8").substring(0, 3000).replace(/[^\x20-\x7E\n\rㄱ-힣가-힣]/g, "");
+      if (textPreview.trim().length > 50) {
+        const deepseekKey = process.env.DEEPSEEK_API_KEY || "";
+        if (deepseekKey) {
+          const axios = require("axios");
+          const resp = await axios.post("https://api.deepseek.com/chat/completions", {
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: "You are a concise document summarizer. Generate a 100-200 character abstract/summary of the document. Respond with ONLY the abstract text, nothing else." },
+              { role: "user", content: `Summarize this document (filename: ${fileName}):\n\n${textPreview}` },
+            ],
+            temperature: 0.3,
+            max_tokens: 100,
+          }, { headers: { Authorization: `Bearer ${deepseekKey}` }, timeout: 10000 });
+
+          fileAbstract = resp.data?.choices?.[0]?.message?.content?.trim() || "";
+          if (fileAbstract.length > 300) fileAbstract = fileAbstract.substring(0, 297) + "...";
+        }
+      }
+    } catch (aiErr) {
+      console.warn("[Disk] AI abstract generation failed (non-blocking):", aiErr.message);
+    }
+  }
+
+  // ── Try Distributed Storage (Primary) ──
+  try {
+    const result = chunkBuffer(buffer);
+    const cid = `vcn://${result.merkleRoot}`;
+    const fileKey = `file_${Date.now()}_${require("crypto").randomBytes(4).toString("hex")}`;
+
+    // Stage chunks in Firestore + register in chunk_registry
+    const BATCH_LIMIT = 400;
+    let batchOps = db.batch();
+    let opCount = 0;
+
+    for (let i = 0; i < result.chunks.length; i++) {
+      const chunkInfo = result.infos[i];
+      const chunkData64 = result.chunks[i].toString("base64");
+
+      const stagingRef = db.collection("staging_chunks").doc(chunkInfo.hash);
+      batchOps.set(stagingRef, {
+        hash: chunkInfo.hash,
+        data: chunkData64,
+        file_key: fileKey,
+        index: chunkInfo.index,
+        size: chunkInfo.size,
+        owner_email: email,
+        created_at: Date.now(),
+        replicas: 0,
+        status: "pending",
+      });
+      opCount++;
+
+      const registryRef = db.collection("chunk_registry").doc(chunkInfo.hash);
+      batchOps.set(registryRef, {
+        hash: chunkInfo.hash,
+        file_key: fileKey,
+        size: chunkInfo.size,
+        index: chunkInfo.index,
+        updated_at: Date.now(),
+      }, { merge: true });
+      opCount++;
+
+      if (opCount >= BATCH_LIMIT) {
+        await batchOps.commit();
+        batchOps = db.batch();
+        opCount = 0;
+      }
+    }
+
+    // Save file metadata
+    const fileMetadata = {
+      id: fileId,
+      name: fileName,
+      size: buffer.length,
+      type: fileType || "application/octet-stream",
+      folder: targetFolder,
+      storagePath: `distributed://${cid}`,
+      storageType: "distributed",
+      downloadURL: "",
+      cid,
+      fileKey,
+      merkleRoot: result.merkleRoot,
+      chunkCount: result.chunks.length,
+      chunkHashes: result.infos.map((c) => c.hash),
+      createdAt: now,
+      updatedAt: now,
+      category,
+      extension: ext,
+      replicationStatus: "staging",
+      targetReplicas: 3,
+      currentReplicas: 0,
+      thumbnail: thumbnail || "",
+      abstract: fileAbstract,
+    };
+
+    const fileRef = db.collection("users").doc(email).collection("disk_files").doc(fileId);
+    batchOps.set(fileRef, fileMetadata);
+    opCount++;
+
+    if (opCount > 0) {
+      await batchOps.commit();
+    }
+
+    console.log(`[Disk] Uploaded ${fileName} -> ${fileKey} (${result.chunks.length} chunks, ${buffer.length} bytes, CID: ${cid})`);
+
+    return {
+      success: true,
+      fileId,
+      fileKey,
+      cid,
+      merkleRoot: result.merkleRoot,
+      chunkCount: result.chunks.length,
+      totalSize: buffer.length,
+      storageType: "distributed",
+      abstract: fileAbstract,
+    };
+  } catch (distributedErr) {
+    // ── Fallback: Firebase Storage ──
+    console.error("[Disk] Distributed storage FAILED, using Firebase Storage fallback:", distributedErr.message);
+
+    try {
+      const storagePath = `disk/${email}${targetFolder === "/" ? "" : targetFolder}/${fileId}`;
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(storagePath);
+      await file.save(buffer, { contentType: fileType || "application/octet-stream" });
+
+      // Get signed URL (valid 7 days)
+      const [signedUrl] = await file.getSignedUrl({ action: "read", expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+
+      const fileMetadata = {
+        id: fileId,
+        name: fileName,
+        size: buffer.length,
+        type: fileType || "application/octet-stream",
+        folder: targetFolder,
+        storagePath,
+        storageType: "cloud",
+        downloadURL: signedUrl,
+        createdAt: now,
+        updatedAt: now,
+        category,
+        extension: ext,
+        thumbnail: thumbnail || "",
+        abstract: fileAbstract,
+        fallbackReason: distributedErr.message,
+      };
+
+      await db.collection("users").doc(email).collection("disk_files").doc(fileId).set(fileMetadata);
+
+      // ── ALERT: Send admin notification about fallback ──
+      try {
+        const adminEmails = ["sangky94@gmail.com"];
+        for (const adminEmail of adminEmails) {
+          const body = `
+            <div style="font-family: monospace; padding: 20px; background: #1a1a2e; color: #e0e0e0; border-radius: 12px;">
+              <h2 style="color: #ff6b6b; margin-bottom: 16px;">Disk Storage Fallback Alert</h2>
+              <p>Distributed storage failed and Firebase Storage was used as fallback.</p>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+                <tr><td style="padding: 8px; border-bottom: 1px solid #333; color: #888;">User</td><td style="padding: 8px; border-bottom: 1px solid #333;">${email}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #333; color: #888;">File</td><td style="padding: 8px; border-bottom: 1px solid #333;">${fileName}</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #333; color: #888;">Size</td><td style="padding: 8px; border-bottom: 1px solid #333;">${(buffer.length / 1024 / 1024).toFixed(2)} MB</td></tr>
+                <tr><td style="padding: 8px; border-bottom: 1px solid #333; color: #888;">Error</td><td style="padding: 8px; border-bottom: 1px solid #333; color: #ff6b6b;">${distributedErr.message}</td></tr>
+                <tr><td style="padding: 8px; color: #888;">Time</td><td style="padding: 8px;">${now}</td></tr>
+              </table>
+            </div>
+          `;
+          await sendSecurityEmail(adminEmail, "[ALERT] Disk Storage Fallback Triggered", body);
+        }
+      } catch (emailErr) {
+        console.error("[Disk] Failed to send admin fallback alert:", emailErr.message);
+      }
+
+      console.log(`[Disk] FALLBACK: ${fileName} saved to Firebase Storage for ${email}`);
+
+      return {
+        success: true,
+        fileId,
+        fileKey: "",
+        cid: "",
+        merkleRoot: "",
+        chunkCount: 0,
+        totalSize: buffer.length,
+        storageType: "cloud",
+        abstract: fileAbstract,
+      };
+    } catch (fallbackErr) {
+      console.error("[Disk] Even fallback storage failed:", fallbackErr.message);
+      throw new HttpsError("internal", "Upload failed: " + distributedErr.message);
+    }
+  }
+});
+
+function getFileCategoryServer(mimeType) {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.includes("pdf")) return "pdf";
+  if (mimeType.includes("document") || mimeType.includes("word")) return "document";
+  if (mimeType.includes("sheet") || mimeType.includes("excel") || mimeType.includes("csv")) return "spreadsheet";
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "presentation";
+  if (mimeType.includes("zip") || mimeType.includes("rar") || mimeType.includes("tar") || mimeType.includes("compress")) return "archive";
+  if (mimeType.includes("text/")) return "text";
+  return "other";
+}
+
+/**
+ * diskDownload - Download file from distributed storage
+ * Retrieves chunks from staging or from Vision Nodes, reassembles.
+ */
+exports.diskDownload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120, memory: "512MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId } = request.data;
+
+  if (!fileId) {
+    throw new HttpsError("invalid-argument", "fileId is required.");
+  }
+
+  // Get file metadata
+  const fileDoc = await db.collection("users").doc(email).collection("disk_files").doc(fileId).get();
+  if (!fileDoc.exists) {
+    throw new HttpsError("not-found", "File not found.");
+  }
+
+  const fileMeta = fileDoc.data();
+
+  // ── Handle Cloud Storage (Fallback) ──
+  if (fileMeta.storageType === "cloud") {
+    try {
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(fileMeta.storagePath);
+      const [buffer] = await file.download();
+      return {
+        success: true,
+        fileData: buffer.toString("base64"),
+        fileName: fileMeta.name,
+        fileType: fileMeta.type,
+        size: buffer.length,
+        storageType: "cloud",
+      };
+    } catch (err) {
+      console.error("[DiskDownload] Fallback file fetch failed:", err);
+      throw new HttpsError("internal", "Failed to retrieve fallback file: " + err.message);
+    }
+  }
+
+  // ── Handle Distributed Storage ──
+  const chunkHashes = fileMeta.chunkHashes || [];
+  if (chunkHashes.length === 0) {
+    throw new HttpsError("internal", "File has no chunks.");
+  }
+
+  // Retrieve chunks in parallel for maximum speed
+  const chunkPromises = chunkHashes.map(async (hash) => {
+    const stagingDoc = await db.collection("staging_chunks").doc(hash).get();
+    if (stagingDoc.exists && stagingDoc.data().data) {
+      return Buffer.from(stagingDoc.data().data, "base64");
+    }
+    throw new HttpsError("unavailable", `Chunk ${hash.slice(0, 16)}... not yet available on network.`);
+  });
+
+  const orderedChunks = await Promise.all(chunkPromises);
+
+  // Reassemble
+  const assembled = Buffer.concat(orderedChunks);
+
+  // Verify merkle root
+  const computedRoot = computeMerkleRoot(chunkHashes);
+  if (fileMeta.merkleRoot && computedRoot !== fileMeta.merkleRoot) {
+    throw new HttpsError("data-loss", "Data integrity check failed: Merkle root mismatch.");
+  }
+
+  return {
+    success: true,
+    fileData: assembled.toString("base64"),
+    fileName: fileMeta.name,
+    fileType: fileMeta.type,
+    size: assembled.length,
+    cid: fileMeta.cid,
+    storageType: fileMeta.storageType || "distributed",
+  };
+});
+
+/**
+ * diskDelete - Delete file from distributed storage
+ */
+exports.diskDelete = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { fileId } = request.data;
+
+  if (!fileId) {
+    throw new HttpsError("invalid-argument", "fileId is required.");
+  }
+
+  const fileDoc = await db.collection("users").doc(email).collection("disk_files").doc(fileId).get();
+  if (!fileDoc.exists) {
+    throw new HttpsError("not-found", "File not found.");
+  }
+
+  const fileMeta = fileDoc.data();
+
+  if (fileMeta.storageType === "cloud") {
+    try {
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(fileMeta.storagePath);
+      await file.delete().catch((e) => console.warn("[DiskDelete] Storage file delete failed (maybe already gone):", e.message));
+    } catch (err) {
+      console.error("[DiskDelete] Cloud delete failed:", err);
+    }
+    await fileDoc.ref.delete();
+    return { success: true, mode: "cloud" };
+  }
+
+  const chunkHashes = fileMeta.chunkHashes || [];
+
+  // Delete staging chunks
+  const batch = db.batch();
+  for (const hash of chunkHashes) {
+    batch.delete(db.collection("staging_chunks").doc(hash));
+    batch.delete(db.collection("chunk_registry").doc(hash));
+  }
+  // Delete file metadata
+  batch.delete(fileDoc.ref);
+  await batch.commit();
+
+  console.log(`[Disk] Deleted ${fileMeta.name} (${chunkHashes.length} chunks)`);
+
+  return { success: true, deletedChunks: chunkHashes.length };
+});
+
+/**
+ * diskGetChunk - Retrieve a single chunk by hash.
+ * This is used for granular/prioritized fetching.
+ */
+exports.diskGetChunk = onCall({ cors: true, maxInstances: 30, timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const { chunkHash } = request.data;
+  if (!chunkHash) throw new HttpsError("invalid-argument", "chunkHash is required.");
+
+  // For now, chunks are in staging_chunks
+  const stagingDoc = await db.collection("staging_chunks").doc(chunkHash).get();
+  if (stagingDoc.exists && stagingDoc.data().data) {
+    return { success: true, chunkHash, data: stagingDoc.data().data }; // base64
+  }
+
+  // Fallback check in global registry (if exists)
+  const regDoc = await db.collection("chunk_registry").doc(chunkHash).get();
+  if (!regDoc.exists) {
+    throw new HttpsError("not-found", "Chunk not found on network.");
+  }
+
+  // If we had P2P node fetch logic, it would go here.
+  throw new HttpsError("unavailable", "Chunk is currently being replicated to nodes.");
+});
+
+exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, async (req, res) => {
+  try {
+    const bucketNames = [
+      "visionchain-d19ed.firebasestorage.app",
+      "visionchain-d19ed.appspot.com",
+      "visionchain-staging.firebasestorage.app",
+      "visionchain-staging.appspot.com",
+    ];
+
+    const results = [];
+    const corsConfig = [
+      {
+        origin: ["*"],
+        method: ["GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD"],
+        maxAgeSeconds: 3600,
+        responseHeader: ["*"],
+      },
+    ];
+
+    for (const name of bucketNames) {
+      try {
+        const bucket = admin.storage().bucket(name);
+        await bucket.setCorsConfiguration(corsConfig);
+        results.push(`Success: ${name}`);
+      } catch (err) {
+        results.push(`Failed: ${name} (${err.message})`);
+      }
+    }
+
+    res.send(`CORS update results: ${results.join(" | ")}`);
+  } catch (e) {
+    res.status(500).send("Error: " + e.message);
   }
 });

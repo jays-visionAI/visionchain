@@ -1,9 +1,17 @@
 /**
  * Vision Disk - Decentralized Storage Service
- * Handles file upload, metadata management, and storage tracking via Firebase Storage + Firestore.
+ * Handles file upload, metadata management, and storage tracking
+ * via Vision Node distributed network (Cloud Function gateway + Firestore metadata).
+ *
+ * Upload flow:
+ *   Browser -> diskUpload Cloud Function -> chunks file -> stages in Firestore
+ *   -> Vision Nodes pull chunks during heartbeat -> chunks replicated across network
+ *
+ * Download flow:
+ *   Browser -> diskDownload Cloud Function -> retrieves chunks (staging or nodes)
+ *   -> reassembles -> returns to browser
  */
-import { getFirebaseStorage, getFirebaseDb, getFirebaseApp } from './firebaseService';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject, UploadTask } from 'firebase/storage';
+import { getFirebaseDb, getFirebaseApp } from './firebaseService';
 import { collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -32,6 +40,17 @@ export interface DiskFile {
     iv?: string;
     // Storage Provider
     storageType?: 'cloud' | 'distributed';
+    // Distributed storage fields
+    cid?: string;
+    fileKey?: string;
+    merkleRoot?: string;
+    chunkCount?: number;
+    chunkHashes?: string[];
+    replicationStatus?: 'staging' | 'partial' | 'replicated';
+    targetReplicas?: number;
+    currentReplicas?: number;
+    // AI-generated abstract for documents
+    abstract?: string;
 }
 
 export interface DiskFolder {
@@ -115,107 +134,284 @@ export const getFileExtension = (name: string): string => {
     return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
 };
 
-// ─── Upload ───
+// ─── Thumbnail Generation (Browser-side) ───
 
 /**
- * Upload a single file to Vision Disk.
- * Returns an UploadTask handle so caller can track progress.
+ * Generate a thumbnail from an image file using canvas.
+ * Returns a base64 data URL or empty string on failure.
  */
-export const uploadDiskFile = (
+export const generateImageThumbnail = async (file: File, maxSize: number = 200): Promise<string> => {
+    return new Promise((resolve) => {
+        try {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                else { w = Math.round(w * maxSize / h); h = maxSize; }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/webp', 0.7));
+                } else {
+                    resolve('');
+                }
+                URL.revokeObjectURL(url);
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve(''); };
+            img.src = url;
+        } catch { resolve(''); }
+    });
+};
+
+/**
+ * Generate a thumbnail from a video file by capturing a frame.
+ * Returns a base64 data URL or empty string on failure.
+ */
+export const generateVideoThumbnail = async (file: File, maxSize: number = 200): Promise<string> => {
+    return new Promise((resolve) => {
+        try {
+            const video = document.createElement('video');
+            const url = URL.createObjectURL(file);
+            video.preload = 'metadata';
+            video.muted = true;
+            video.playsInline = true;
+            video.onloadeddata = () => {
+                // Seek to 1 second or 10% of video, whichever is less
+                video.currentTime = Math.min(1, video.duration * 0.1);
+            };
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                let w = video.videoWidth, h = video.videoHeight;
+                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                else { w = Math.round(w * maxSize / h); h = maxSize; }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(video, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/webp', 0.7));
+                } else {
+                    resolve('');
+                }
+                URL.revokeObjectURL(url);
+            };
+            video.onerror = () => { URL.revokeObjectURL(url); resolve(''); };
+            // Timeout fallback
+            setTimeout(() => { URL.revokeObjectURL(url); resolve(''); }, 10000);
+            video.src = url;
+        } catch { resolve(''); }
+    });
+};
+
+// ─── Upload (Distributed Storage via Cloud Function) ───
+
+/**
+ * Upload a single file to Vision Disk via distributed storage.
+ * File is sent to Cloud Function which chunks it and stages for Vision Node replication.
+ */
+export const uploadDiskFile = async (
     email: string,
     file: File,
     folder: string = '/',
     onProgress?: (p: UploadProgress) => void,
     extraMetadata?: any
 ): Promise<DiskFile> => {
-    return new Promise((resolve, reject) => {
-        if (!email) { reject(new Error('Email required')); return; }
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-            reject(new Error(`File "${file.name}" exceeds the 500 MB limit`));
-            return;
+    if (!email) throw new Error('Email required');
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error(`File "${file.name}" exceeds the 500 MB limit`);
+    }
+
+    // Report initial progress
+    onProgress?.({
+        fileName: file.name,
+        progress: 5,
+        bytesTransferred: 0,
+        totalBytes: file.size,
+        status: 'uploading',
+    });
+
+    // Generate thumbnail for images and videos
+    let thumbnailDataUrl = '';
+    if (file.type.startsWith('image/')) {
+        thumbnailDataUrl = await generateImageThumbnail(file);
+    } else if (file.type.startsWith('video/')) {
+        thumbnailDataUrl = await generateVideoThumbnail(file);
+    }
+
+    onProgress?.({
+        fileName: file.name,
+        progress: 15,
+        bytesTransferred: 0,
+        totalBytes: file.size,
+        status: 'uploading',
+    });
+
+    // Read file as base64
+    const arrayBuffer = await file.arrayBuffer();
+    const base64 = arrayBufferToBase64(arrayBuffer);
+
+    onProgress?.({
+        fileName: file.name,
+        progress: 30,
+        bytesTransferred: file.size * 0.3,
+        totalBytes: file.size,
+        status: 'uploading',
+    });
+
+    // Call Cloud Function for distributed upload
+    const functions = getFunctions(getFirebaseApp());
+    const diskUploadCall = httpsCallable<
+        { fileData: string; fileName: string; fileType: string; folder: string; fileSize: number; thumbnail?: string },
+        {
+            success: boolean; fileId: string; fileKey: string; cid: string;
+            merkleRoot: string; chunkCount: number; totalSize: number; storageType: string;
+            abstract?: string;
+        }
+    >(functions, 'diskUpload');
+
+    onProgress?.({
+        fileName: file.name,
+        progress: 50,
+        bytesTransferred: file.size * 0.5,
+        totalBytes: file.size,
+        status: 'uploading',
+    });
+
+    const result = await diskUploadCall({
+        fileData: base64,
+        fileName: file.name,
+        fileType: file.type,
+        folder,
+        fileSize: file.size,
+        thumbnail: thumbnailDataUrl || undefined,
+    });
+
+    const data = result.data;
+    const now = new Date().toISOString();
+
+    const diskFile: DiskFile = {
+        id: data.fileId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        folder,
+        downloadURL: (data as any).downloadURL || '',
+        storagePath: (data as any).storagePath || `distributed://${data.cid}`,
+        createdAt: now,
+        updatedAt: now,
+        storageType: (data.storageType as any) || 'distributed',
+        cid: data.cid,
+        fileKey: data.fileKey,
+        merkleRoot: data.merkleRoot,
+        chunkCount: data.chunkCount,
+        replicationStatus: 'staging',
+        thumbnail: thumbnailDataUrl || undefined,
+        abstract: data.abstract || undefined,
+    };
+
+    onProgress?.({
+        fileName: file.name,
+        progress: 100,
+        bytesTransferred: file.size,
+        totalBytes: file.size,
+        status: 'success',
+    });
+
+    return diskFile;
+};
+
+/** Convert ArrayBuffer to base64 string */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+        binary += String.fromCharCode(...Array.from(chunk));
+    }
+    return btoa(binary);
+}
+
+// ─── Download (Distributed Storage via Cloud Function) ───
+
+/**
+ * Download a file from distributed storage.
+ * Retrieves chunks via Cloud Function, reassembles, and returns as Blob.
+ */
+export const downloadDiskFile = async (email: string, fileId: string): Promise<{ blob: Blob; fileName: string; fileType: string }> => {
+    const functions = getFunctions(getFirebaseApp());
+    const diskDownloadCall = httpsCallable<
+        { fileId: string },
+        { success: boolean; fileData: string; fileName: string; fileType: string; size: number; cid: string; storageType: string }
+    >(functions, 'diskDownload');
+
+    const result = await diskDownloadCall({ fileId });
+    const data = result.data;
+
+    // Convert base64 back to Blob
+    const binaryStr = atob(data.fileData);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: data.fileType });
+
+    return {
+        blob,
+        fileName: data.fileName,
+        fileType: data.fileType,
+    };
+};
+
+/**
+ * Download a file from distributed storage chunk by chunk.
+ * Allows for progress tracking and prioritization of front chunks.
+ */
+export const downloadDiskFileGranular = async (
+    file: DiskFile,
+    onProgress: (chunkIndex: number, totalChunks: number) => void
+): Promise<Blob> => {
+    const chunkHashes = file.chunkHashes || [];
+    if (chunkHashes.length === 0) {
+        // Fallback if no hashes (maybe it's a legacy or cloud-only file)
+        const resp = await fetch(file.downloadURL);
+        return await resp.blob();
+    }
+
+    const functions = getFunctions(getFirebaseApp());
+    const getChunkCall = httpsCallable<
+        { chunkHash: string },
+        { success: boolean; data: string }
+    >(functions, 'diskGetChunk');
+
+    const chunks: Uint8Array[] = [];
+
+    // Fetch in batches of 5 for a balance of speed and progress visibility
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < chunkHashes.length; i += BATCH_SIZE) {
+        const batch = chunkHashes.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+            batch.map(hash => getChunkCall({ chunkHash: hash }))
+        );
+
+        for (const res of results) {
+            const binaryStr = atob(res.data.data);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let j = 0; j < binaryStr.length; j++) {
+                bytes[j] = binaryStr.charCodeAt(j);
+            }
+            chunks.push(bytes);
         }
 
-        const storage = getFirebaseStorage();
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9._\-() ]/g, '_');
-        const timestamp = Date.now();
-        const storagePath = `disk/${email.toLowerCase()}${folder === '/' ? '' : folder}/${timestamp}_${sanitizedName}`;
-        const storageRef = ref(storage, storagePath);
+        const currentCount = Math.min(i + BATCH_SIZE, chunkHashes.length);
+        onProgress(currentCount, chunkHashes.length);
+    }
 
-        const uploadTask = uploadBytesResumable(storageRef, file, {
-            contentType: file.type,
-            customMetadata: {
-                originalName: file.name,
-                folder,
-                uploadedBy: email.toLowerCase(),
-                ...(extraMetadata || {})
-            },
-        });
-
-        uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-                const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                onProgress?.({
-                    fileName: file.name,
-                    progress,
-                    bytesTransferred: snapshot.bytesTransferred,
-                    totalBytes: snapshot.totalBytes,
-                    status: 'uploading',
-                });
-            },
-            (error) => {
-                onProgress?.({
-                    fileName: file.name,
-                    progress: 0,
-                    bytesTransferred: 0,
-                    totalBytes: file.size,
-                    status: 'error',
-                    error: error.message,
-                });
-                reject(error);
-            },
-            async () => {
-                try {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    const fileId = `${timestamp}_${sanitizedName}`;
-                    const now = new Date().toISOString();
-
-                    const diskFile: DiskFile = {
-                        id: fileId,
-                        name: file.name,
-                        size: file.size,
-                        type: file.type,
-                        folder,
-                        downloadURL,
-                        storagePath,
-                        createdAt: now,
-                        updatedAt: now,
-                    };
-
-                    // Save metadata to Firestore
-                    const col = getUserDiskCollection(email);
-                    await setDoc(doc(col, fileId), {
-                        ...diskFile,
-                        category: getFileCategory(file.type),
-                        extension: getFileExtension(file.name),
-                    });
-
-                    onProgress?.({
-                        fileName: file.name,
-                        progress: 100,
-                        bytesTransferred: file.size,
-                        totalBytes: file.size,
-                        status: 'success',
-                        downloadURL,
-                    });
-
-                    resolve(diskFile);
-                } catch (err) {
-                    reject(err);
-                }
-            },
-        );
-    });
+    return new Blob(chunks, { type: file.type });
 };
 
 // ─── List / Read ───
@@ -238,7 +434,7 @@ export const listDiskFiles = async (email: string, folder?: string): Promise<Dis
     return snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as DiskFile));
 };
 
-// ─── Delete ───
+// ─── Delete (via Cloud Function for distributed cleanup) ───
 
 export const deleteDiskFile = async (email: string, fileId: string): Promise<void> => {
     const col = getUserDiskCollection(email);
@@ -249,16 +445,15 @@ export const deleteDiskFile = async (email: string, fileId: string): Promise<voi
 
     const fileData = fileSnap.data() as DiskFile;
 
-    // Delete from Firebase Storage
-    const storage = getFirebaseStorage();
-    const storageRef = ref(storage, fileData.storagePath);
-    try {
-        await deleteObject(storageRef);
-    } catch (e) {
-        console.warn('[Disk] Storage deletion failed (file may already be removed):', e);
+    // For distributed files, use Cloud Function to clean up chunks
+    if (fileData.storageType === 'distributed' || fileData.cid) {
+        const functions = getFunctions(getFirebaseApp());
+        const diskDeleteCall = httpsCallable<{ fileId: string }, { success: boolean }>(functions, 'diskDelete');
+        await diskDeleteCall({ fileId });
+        return;
     }
 
-    // Delete Firestore metadata
+    // Legacy: direct Firestore delete for old files without distributed storage
     await deleteDoc(fileDocRef);
 };
 

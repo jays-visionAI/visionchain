@@ -450,7 +450,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     const axios = require("axios");
     const invocationStart = Date.now();
     const MAX_MS = 48000;
-    const MICRO_MS = 2000;
+    const MICRO_MS = 800; // Reduced from 2000ms for faster, more realistic DEX feel
 
     console.log("[TradingEngine] Micro-round cycle starting...");
 
@@ -631,49 +631,42 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             const priceCeiling = pd.priceCeiling || engineBasePrice * 10;
             engineBasePrice = Math.max(priceFloor, Math.min(priceCeiling, engineBasePrice));
 
-            for (const trading of tradingAgents) {
-                // 1. Generate & Update Orderbook Walls
-                orderBook.cancelAgentOrders(trading.id);
-                const { orders, marketAction } = generateTradingOrders(trading, orderBook.lastPrice, tradingAdmin, engineBasePrice, roundNumber);
+            for (const mo of orders) {
+                orderBook.addLimitOrder({
+                    id: `trading-${trading.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
+                    agentId: trading.id, ownerUid: trading.ownerUid,
+                    side: mo.side, price: mo.price, remainingAmount: mo.amount,
+                    isTradingOrder: true, timestamp: ms,
+                });
+            }
 
-                for (const mo of orders) {
-                    orderBook.addLimitOrder({
-                        id: `trading-${trading.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
-                        agentId: trading.id, ownerUid: trading.ownerUid,
-                        side: mo.side, price: mo.price, remainingAmount: mo.amount,
-                        isTradingOrder: true, timestamp: ms,
-                    });
-                }
+            // 2. Execute Coordinated Market Action (Price Pushing or Organic Volume)
+            if (marketAction) {
+                mf.push(...execDec(orderBook, trading, marketAction, roundNumber, ms));
+            }
 
-                // 2. Execute Coordinated Market Action (Price Pushing or Organic Volume)
-                if (marketAction) {
-                    mf.push(...execDec(orderBook, trading, marketAction, roundNumber, ms));
-                }
+            // 3. Dual-Pressure logic:
+            // Bullish agents (Alpha) mainly buy, Bearish agents (Beta) mainly sell.
+            const isBullAgent = trading.strategy?.preset === "trading_bull";
+            const isBearAgent = trading.strategy?.preset === "trading_bear";
 
-                // 3. Dual-Pressure logic:
-                // Bullish agents (Alpha) mainly buy, Bearish agents (Beta) mainly sell.
-                // Power balance is dictated by global trendBias.
-                const isBullAgent = trading.strategy?.preset === "trading_bull";
-                const isBearAgent = trading.strategy?.preset === "trading_bear";
+            let actionSide = null;
+            if (isBullAgent && (trendBias > -0.2 || Math.random() < 0.3)) actionSide = "buy";
+            if (isBearAgent && (trendBias < 0.2 || Math.random() < 0.3)) actionSide = "sell";
 
-                let actionSide = null;
-                if (isBullAgent && (trendBias > -0.2 || Math.random() < 0.3)) actionSide = "buy";
-                if (isBearAgent && (trendBias < 0.2 || Math.random() < 0.3)) actionSide = "sell";
+            // If global bias is extreme, everyone follows it
+            if (trendBias > 0.6) actionSide = "buy";
+            if (trendBias < -0.6) actionSide = "sell";
 
-                // If global bias is extreme, everyone follows it
-                if (trendBias > 0.6) actionSide = "buy";
-                if (trendBias < -0.6) actionSide = "sell";
+            if (actionSide && Math.random() < (0.1 + Math.abs(trendBias) * 0.4)) {
+                // Use local volume intensity (scaled by cycle/schedule)
+                const currentHour = new Date().getUTCHours();
+                const multiplier = (pd.volumeSchedule && pd.volumeSchedule[currentHour]) || 1.0;
+                const vIntensity = (pd.volumeIntensity || 0.5) * multiplier;
 
-                if (actionSide && Math.random() < (0.1 + Math.abs(trendBias) * 0.4)) {
-                    // Use local volume intensity (scaled by cycle/schedule)
-                    const currentHour = new Date().getUTCHours();
-                    const multiplier = (pd.volumeSchedule && pd.volumeSchedule[currentHour]) || 1.0;
-                    const vIntensity = (pd.volumeIntensity || 0.5) * multiplier;
-
-                    const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias || 0.3)) * (0.5 + vIntensity * 0.5));
-                    const biasAction = { action: actionSide, amount: biasAmount, orderType: "market", reasoning: "ROLE_BASED_PRESSURE" };
-                    mf.push(...execDec(orderBook, trading, biasAction, roundNumber, ms));
-                }
+                const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias || 0.3)) * (0.5 + vIntensity * 0.5));
+                const biasAction = { action: actionSide, amount: biasAmount, orderType: "market", reasoning: "ROLE_BASED_PRESSURE" };
+                mf.push(...execDec(orderBook, trading, biasAction, roundNumber, ms));
             }
         }
 

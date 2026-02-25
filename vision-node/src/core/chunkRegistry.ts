@@ -168,6 +168,7 @@ class ChunkRegistryClient {
 
     /**
      * Check for under-replicated chunks we should store
+     * and actually fetch + store them from the staging area.
      */
     private async checkAssignments(): Promise<void> {
         const config = configManager.get();
@@ -183,12 +184,55 @@ class ChunkRegistryClient {
                 const assignments = resp.assignments as ChunkAssignment[];
                 this.stats.pendingAssignments = assignments.length;
 
-                if (assignments.length > 0) {
-                    console.log(`[ChunkRegistry] ${assignments.length} chunks need replication`);
+                if (assignments.length === 0) return;
+
+                console.log(`[ChunkRegistry] ${assignments.length} chunks need replication, fetching...`);
+
+                let stored = 0;
+                for (const assignment of assignments) {
+                    // Skip if we already have this chunk locally
+                    if (storageService.hasChunk(assignment.hash)) {
+                        stored++;
+                        continue;
+                    }
+
+                    try {
+                        // Fetch chunk data from backend staging
+                        const fetchResp = await this.callBackend('storage_node.fetch_chunk', {
+                            node_id: config.nodeId,
+                            hash: assignment.hash,
+                        });
+
+                        if (!fetchResp.success || !fetchResp.data) {
+                            continue;
+                        }
+
+                        // Store the chunk locally
+                        const chunkData = Buffer.from(fetchResp.data as string, 'base64');
+                        const result = storageEngine.putChunk(
+                            assignment.hash,
+                            chunkData,
+                            assignment.file_key,
+                            (fetchResp.index as number) || 0
+                        );
+
+                        if (result) {
+                            // Confirm storage to backend
+                            await this.callBackend('storage_node.chunk_stored', {
+                                node_id: config.nodeId,
+                                hash: assignment.hash,
+                                size: chunkData.length,
+                            });
+                            stored++;
+                        }
+                    } catch (fetchErr) {
+                        console.warn(`[ChunkRegistry] Failed to fetch chunk ${assignment.hash.slice(0, 12)}...:`, fetchErr);
+                    }
                 }
 
-                // In future: fetch these chunks from peers via P2P
-                // For now, just log them
+                if (stored > 0) {
+                    console.log(`[ChunkRegistry] Successfully replicated ${stored}/${assignments.length} chunks`);
+                }
             }
         } catch (err) {
             console.error('[ChunkRegistry] Check assignments error:', err);
