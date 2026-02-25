@@ -567,6 +567,8 @@ const Wallet = (): JSX.Element => {
     const [cloudRestorePassword, setCloudRestorePassword] = createSignal('');
     const [cloudRestoreLoading, setCloudRestoreLoading] = createSignal(false);
     const [cloudRestoreError, setCloudRestoreError] = createSignal('');
+    const [cloudRestoreNeedsVerification, setCloudRestoreNeedsVerification] = createSignal(false);
+    const [cloudRestoreVerificationCode, setCloudRestoreVerificationCode] = createSignal('');
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
     const [editPhone, setEditPhone] = createSignal('');
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
@@ -2369,6 +2371,14 @@ const Wallet = (): JSX.Element => {
                 userProfile().email
             );
 
+            // Handle device verification requirement
+            if (result.requiresVerification) {
+                setCloudRestoreNeedsVerification(true);
+                setCloudRestoreError('');
+                setCloudRestoreLoading(false);
+                return;
+            }
+
             if (result.success && result.mnemonic) {
                 console.log('[CloudRestore] Wallet restored successfully from cloud');
 
@@ -2381,6 +2391,8 @@ const Wallet = (): JSX.Element => {
                 setCloudWalletAvailable(false);
                 setShowCloudRestoreModal(false);
                 setCloudRestorePassword('');
+                setCloudRestoreNeedsVerification(false);
+                setCloudRestoreVerificationCode('');
 
                 // Update user profile
                 setUserProfile(prev => ({
@@ -2398,6 +2410,35 @@ const Wallet = (): JSX.Element => {
             console.error('[CloudRestore] Error:', err);
             setCloudRestoreError(err.message || 'An error occurred');
         } finally {
+            setCloudRestoreLoading(false);
+        }
+    };
+
+    const handleDeviceVerificationAndRestore = async () => {
+        const code = cloudRestoreVerificationCode();
+        if (!code || code.length < 4) {
+            setCloudRestoreError('Please enter the verification code from your email.');
+            return;
+        }
+
+        try {
+            setCloudRestoreLoading(true);
+            setCloudRestoreError('');
+
+            // Step 1: Verify device
+            const verifyResult = await CloudWalletService.verifyDevice(code);
+            if (!verifyResult.success) {
+                setCloudRestoreError(verifyResult.error || 'Invalid verification code.');
+                setCloudRestoreLoading(false);
+                return;
+            }
+
+            // Step 2: Retry loading from cloud (device is now verified)
+            setCloudRestoreNeedsVerification(false);
+            await handleCloudRestore();
+        } catch (err: any) {
+            console.error('[CloudRestore] Verification error:', err);
+            setCloudRestoreError(err.message || 'Verification failed');
             setCloudRestoreLoading(false);
         }
     };
@@ -5252,7 +5293,11 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             >
                                 <div
                                     class="absolute inset-0 bg-black/80 backdrop-blur-md"
-                                    onClick={() => setShowCloudRestoreModal(false)}
+                                    onClick={() => {
+                                        setShowCloudRestoreModal(false);
+                                        setCloudRestoreNeedsVerification(false);
+                                        setCloudRestoreVerificationCode('');
+                                    }}
                                 />
 
                                 <Motion.div
@@ -5268,27 +5313,57 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
                                             </svg>
                                         </div>
-                                        <h2 class="text-2xl font-black text-white mb-2">Restore from Cloud</h2>
+                                        <h2 class="text-2xl font-black text-white mb-2">
+                                            {cloudRestoreNeedsVerification() ? 'Verify Device' : 'Restore from Cloud'}
+                                        </h2>
                                         <p class="text-sm text-gray-400">
-                                            Enter your wallet password to restore your wallet from the cloud.
+                                            {cloudRestoreNeedsVerification()
+                                                ? 'Enter the verification code sent to your email.'
+                                                : 'Enter your wallet password to restore your wallet from the cloud.'
+                                            }
                                         </p>
                                     </div>
 
                                     {/* Form */}
                                     <div class="px-6 pb-6 space-y-4">
-                                        <div>
-                                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                                                Wallet Password
-                                            </label>
-                                            <input
-                                                type="password"
-                                                value={cloudRestorePassword()}
-                                                onInput={(e) => setCloudRestorePassword(e.currentTarget.value)}
-                                                onKeyPress={(e) => e.key === 'Enter' && handleCloudRestore()}
-                                                placeholder="Enter your password"
-                                                class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
-                                            />
-                                        </div>
+                                        <Show when={!cloudRestoreNeedsVerification()}>
+                                            <div>
+                                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                                    Wallet Password
+                                                </label>
+                                                <input
+                                                    type="password"
+                                                    value={cloudRestorePassword()}
+                                                    onInput={(e) => setCloudRestorePassword(e.currentTarget.value)}
+                                                    onKeyPress={(e) => e.key === 'Enter' && handleCloudRestore()}
+                                                    placeholder="Enter your password"
+                                                    class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                                                />
+                                            </div>
+                                        </Show>
+
+                                        <Show when={cloudRestoreNeedsVerification()}>
+                                            <div>
+                                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                                    Verification Code
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={cloudRestoreVerificationCode()}
+                                                    onInput={(e) => setCloudRestoreVerificationCode(e.currentTarget.value)}
+                                                    onKeyPress={(e) => e.key === 'Enter' && handleDeviceVerificationAndRestore()}
+                                                    placeholder="Enter code from email"
+                                                    class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all text-center text-xl tracking-[0.3em] font-mono"
+                                                    maxLength={8}
+                                                    autofocus
+                                                />
+                                            </div>
+                                            <div class="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                                <p class="text-xs text-amber-300/80">
+                                                    A verification code has been sent to your registered email address. Please check your inbox (and spam folder).
+                                                </p>
+                                            </div>
+                                        </Show>
 
                                         {/* Error Message */}
                                         <Show when={cloudRestoreError()}>
@@ -5298,11 +5373,13 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         </Show>
 
                                         {/* Info */}
-                                        <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-                                            <p class="text-xs text-blue-300/80">
-                                                Your wallet is protected by double encryption. Only you can decrypt it with your password.
-                                            </p>
-                                        </div>
+                                        <Show when={!cloudRestoreNeedsVerification()}>
+                                            <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                                                <p class="text-xs text-blue-300/80">
+                                                    Your wallet is protected by double encryption. Only you can decrypt it with your password.
+                                                </p>
+                                            </div>
+                                        </Show>
 
                                         {/* Buttons */}
                                         <div class="flex gap-3 pt-2">
@@ -5311,21 +5388,38 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                     setShowCloudRestoreModal(false);
                                                     setCloudRestorePassword('');
                                                     setCloudRestoreError('');
+                                                    setCloudRestoreNeedsVerification(false);
+                                                    setCloudRestoreVerificationCode('');
                                                 }}
                                                 class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
                                             >
                                                 Cancel
                                             </button>
-                                            <button
-                                                onClick={handleCloudRestore}
-                                                disabled={!cloudRestorePassword() || cloudRestoreLoading()}
-                                                class="flex-[2] py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                            <Show when={cloudRestoreNeedsVerification()}
+                                                fallback={
+                                                    <button
+                                                        onClick={handleCloudRestore}
+                                                        disabled={!cloudRestorePassword() || cloudRestoreLoading()}
+                                                        class="flex-[2] py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                                    >
+                                                        <Show when={cloudRestoreLoading()} fallback="Restore Wallet">
+                                                            <RefreshCw class="w-4 h-4 animate-spin" />
+                                                            Restoring...
+                                                        </Show>
+                                                    </button>
+                                                }
                                             >
-                                                <Show when={cloudRestoreLoading()} fallback="Restore Wallet">
-                                                    <RefreshCw class="w-4 h-4 animate-spin" />
-                                                    Restoring...
-                                                </Show>
-                                            </button>
+                                                <button
+                                                    onClick={handleDeviceVerificationAndRestore}
+                                                    disabled={!cloudRestoreVerificationCode() || cloudRestoreLoading()}
+                                                    class="flex-[2] py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-2xl shadow-xl shadow-amber-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <Show when={cloudRestoreLoading()} fallback="Verify & Restore">
+                                                        <RefreshCw class="w-4 h-4 animate-spin" />
+                                                        Verifying...
+                                                    </Show>
+                                                </button>
+                                            </Show>
                                         </div>
                                     </div>
                                 </Motion.div>
