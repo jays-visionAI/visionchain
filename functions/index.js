@@ -17366,8 +17366,8 @@ async function deleteUserDiskData(email) {
   const foldersSnapshot = await userRef.collection("disk_folders").get();
 
   const batch = db.batch();
-  filesSnapshot.docs.forEach(d => batch.delete(d.ref));
-  foldersSnapshot.docs.forEach(d => batch.delete(d.ref));
+  filesSnapshot.docs.forEach((d) => batch.delete(d.ref));
+  foldersSnapshot.docs.forEach((d) => batch.delete(d.ref));
   await batch.commit();
 
   console.log(`[Disk] Deleted ${filesSnapshot.size} files and ${foldersSnapshot.size} folders for ${email}`);
@@ -17471,7 +17471,7 @@ exports.diskCancelSubscription = onCall({ cors: true }, async (request) => {
 });
 
 // Daily Cron Job for Disk Subscriptions
-exports.diskDailyBilling = onSchedule("every 24 hours", async (event) => {
+exports.diskDailyBilling = onSchedule("every 24 hours", async (_event) => {
   console.log("[DiskBilling] Starting daily cron job");
   const nowMs = Date.now();
   const provider = new ethers.JsonRpcProvider(RPC_URL);
