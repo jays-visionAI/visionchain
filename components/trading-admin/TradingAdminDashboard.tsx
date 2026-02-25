@@ -609,20 +609,6 @@ export default function TradingAdminDashboard() {
                                     Sold at Avg ${avgSellPrice().toFixed(4)}
                                 </Show>
                             </div>
-                            <div class="mmd-radar-chart">
-                                <SolidApexCharts
-                                    type="area"
-                                    height={80}
-                                    options={{
-                                        chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                                        stroke: { curve: 'smooth', width: 2 },
-                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1 } },
-                                        colors: ['#34d399'],
-                                        tooltip: { enabled: false }
-                                    }}
-                                    series={[{ name: 'VCN', data: pnlHistory().map(h => h.netTokenVacuumed) }]}
-                                />
-                            </div>
                         </div>
 
                         {/* Spread Profit Card */}
@@ -636,20 +622,6 @@ export default function TradingAdminDashboard() {
                                 <span class="mmd-radar-unit">USDT</span>
                             </div>
                             <div class="mmd-radar-sub">Generated via bid-ask layer gaps</div>
-                            <div class="mmd-radar-chart">
-                                <SolidApexCharts
-                                    type="area"
-                                    height={80}
-                                    options={{
-                                        chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                                        stroke: { curve: 'smooth', width: 2 },
-                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1 } },
-                                        colors: ['#38bdf8'],
-                                        tooltip: { enabled: false }
-                                    }}
-                                    series={[{ name: 'USDT', data: pnlHistory().map(h => h.spreadProfitUSDT) }]}
-                                />
-                            </div>
                         </div>
 
                         {/* Total Capital Card */}
@@ -663,219 +635,266 @@ export default function TradingAdminDashboard() {
                                 <span class="mmd-radar-unit">USD-EQ</span>
                             </div>
                             <div class="mmd-radar-sub">Realized + Unrealized Value</div>
-                            <div class="mmd-radar-chart">
-                                <SolidApexCharts
-                                    type="area"
-                                    height={80}
-                                    options={{
-                                        chart: { sparkline: { enabled: true }, animations: { enabled: false } },
-                                        stroke: { curve: 'smooth', width: 2 },
-                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1 } },
-                                        colors: ['#a855f7'],
-                                        tooltip: { enabled: false }
-                                    }}
-                                    series={[{ name: 'Total', data: pnlHistory().map(h => h.totalExtractedUSDT) }]}
-                                />
-                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Statistical Analysis & Health */}
+                {/* ── Historical Trend Charts (실제 pnlHistory 기반) ── */}
                 <div class="mmd-section">
-                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400">
-                            <line x1="18" y1="20" x2="18" y2="10"></line>
-                            <line x1="12" y1="20" x2="12" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="14"></line>
-                        </svg>
-                        Statistical Analysis & System Health
-                    </h2>
-
-                    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 24px;">
-                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px;">
-                            <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px;">Extraction Efficiency vs. Market Price</h3>
-                            <SolidApexCharts
-                                type="line"
-                                height={280}
-                                options={{
-                                    chart: { background: 'transparent', toolbar: { show: false } },
-                                    theme: { mode: 'dark' },
-                                    colors: ['#38bdf8', '#fbbf24'],
-                                    stroke: { width: [3, 2], dashArray: [0, 5] },
-                                    xaxis: { categories: pnlHistory().map(h => new Date(h.timestamp?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })), axisBorder: { show: false } },
-                                    yaxis: [
-                                        { title: { text: 'Extracted ($)' }, labels: { style: { colors: '#38bdf8' } } },
-                                        { opposite: true, title: { text: 'Price (VCN)' }, labels: { style: { colors: '#fbbf24' } } }
-                                    ],
-                                    grid: { borderColor: 'rgba(255,255,255,0.05)' },
-                                    legend: { position: 'top' }
-                                }}
-                                series={[
-                                    { name: 'Total Extracted', type: 'area', data: pnlHistory().map(h => h.totalExtractedUSDT) },
-                                    { name: 'VCN Price', type: 'line', data: pnlHistory().map(h => h.marketPrice) }
-                                ]}
-                            />
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; flex: 1;">
-                                <div style="color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 12px;">Extraction Efficiency</div>
-                                <div style="font-size: 24px; font-weight: 800; color: #f8fafc; margin-bottom: 4px;">
-                                    {Math.abs(spreadProfitUSDT() / (netTokenVacuumed() || 1)).toFixed(4)}
-                                </div>
-                                <div style="color: #64748b; font-size: 11px;">USDT profit per 1 VCN volume delta. High value indicates efficient market captures.</div>
-                            </div>
-                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; flex: 1;">
-                                <div style="color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 12px;">Inventory Drift / Skew</div>
-                                <div style="font-size: 24px; font-weight: 800; color: #f43f5e; margin-bottom: 4px;">
-                                    {((netTokenVacuumed() / initialVCN()) * 100).toFixed(2)}%
-                                </div>
-                                <div style="color: #64748b; font-size: 11px;">Deviation from initial VCN supply. Negative means the engine is "short" vs start.</div>
-                            </div>
-                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; flex: 1;">
-                                <div style="color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 12px;">VCN + USDT Correlation</div>
-                                <div style="font-size: 24px; font-weight: 800; color: #22c55e; margin-bottom: 4px;">Strong +</div>
-                                <div style="color: #64748b; font-size: 11px;">Both asset classes growing. Targeted "Extraction Alpha" state active.</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Whale Intelligence & Inventory Risk */}
-                <div class="mmd-section">
-                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: #f43f5e;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                        </svg>
-                        Whale Intelligence & Target Monitoring
-                        <span style="font-size: 11px; padding: 2px 6px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 4px; color: #f43f5e; text-transform: uppercase; font-weight: bold; margin-left: auto;">View Only</span>
-                    </h2>
-
-                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
-                            <thead style="background: rgba(255, 255, 255, 0.05); color: #94a3b8; text-transform: uppercase;">
-                                <tr>
-                                    <th style="padding: 12px 16px;">Target Label</th>
-                                    <th style="padding: 12px 16px;">Avg Entry</th>
-                                    <th style="padding: 12px 16px;">Unlocked / Total</th>
-                                    <th style="padding: 12px 16px;">Threat Level</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <For each={whales()}>
-                                    {(w) => {
-                                        const entryPrice = w.performance?.initialValueUSDT / (w.balances?.VCN || 1) || 0.10;
-                                        const currentPrice = market()?.lastPrice || 0.10;
-                                        const profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
-                                        const threat = profitPct > 50 ? 'HIGH' : profitPct > 10 ? 'MEDIUM' : 'LOW';
-                                        return (
-                                            <tr style="border-top: 1px solid rgba(255, 255, 255, 0.05);">
-                                                <td style="padding: 12px 16px; color: #f8fafc; font-weight: 500;">{w.name} ({w.id.substring(0, 6)})</td>
-                                                <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">${entryPrice < 0.001 ? '0.100' : entryPrice.toFixed(3)}</td>
-                                                <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">
-                                                    <span style="color: #cbd5e1;">{(w.balances?.VCN / 1000000).toFixed(1)}M</span>
-                                                    <span style="color: #64748b;"> VCN</span>
-                                                </td>
-                                                <td style="padding: 12px 16px;">
-                                                    <span style={{
-                                                        'padding': '4px 8px', 'border-radius': '4px', 'font-size': '11px', 'font-weight': 'bold',
-                                                        'background': threat === 'HIGH' ? 'rgba(244, 63, 94, 0.15)' : threat === 'MEDIUM' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                                                        'color': threat === 'HIGH' ? '#f43f5e' : threat === 'MEDIUM' ? '#fbbf24' : '#34d399'
-                                                    }}>
-                                                        {threat}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        );
-                                    }}
-                                </For>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                {/* Market & Extraction Analytics Charts */}
-                <div class="mmd-section">
-                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #818cf8;">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
                         </svg>
-                        Market & Extraction Analytics
+                        Historical Trends
+                        <span style="font-size: 11px; padding: 2px 6px; background: rgba(129,140,248,0.12); border: 1px solid rgba(129,140,248,0.25); border-radius: 4px; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; margin-left: auto;">
+                            {pnlHistory().length > 0 ? `${pnlHistory().length} snapshots` : 'Waiting for data...'}
+                        </span>
                     </h2>
+                    <p style="color: #475569; font-size: 12px; margin: 0 0 24px;">Trading Engine이 1분마다 스냅샷을 저장합니다. 데이터가 쌓일수록 차트가 표시됩니다.</p>
 
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
-                        {/* Token Extraction Area Chart */}
-                        <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 20px;">
-                            <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;">VCN Extraction Timeline (7D)</h3>
-                            <SolidApexCharts
-                                type="area"
-                                height={250}
-                                options={{
-                                    chart: { background: 'transparent', toolbar: { show: false } },
-                                    theme: { mode: 'dark' },
-                                    colors: ['#34d399', '#7dd3fc'],
-                                    dataLabels: { enabled: false },
-                                    stroke: { curve: 'smooth', width: 2 },
-                                    xaxis: {
-                                        categories: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Today'],
-                                        axisBorder: { show: false },
-                                        axisTicks: { show: false }
-                                    },
-                                    yaxis: { show: false },
-                                    grid: { borderColor: 'rgba(255,255,255,0.05)', strokeDashArray: 4 },
-                                    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.0, stops: [0, 90, 100] } },
-                                    legend: { position: 'top', horizontalAlign: 'right' }
-                                }}
-                                series={[
-                                    {
-                                        name: 'VCN Vacuumed', data: [
-                                            netTokenVacuumed() * 0.1, netTokenVacuumed() * 0.25, netTokenVacuumed() * 0.4,
-                                            netTokenVacuumed() * 0.6, netTokenVacuumed() * 0.75, netTokenVacuumed() * 0.9,
-                                            netTokenVacuumed()
-                                        ].map(n => Math.max(0, n))
-                                    },
-                                    {
-                                        name: 'USDT Profit ($)', data: [
-                                            spreadProfitUSDT() * 0.1, spreadProfitUSDT() * 0.25, spreadProfitUSDT() * 0.4,
-                                            spreadProfitUSDT() * 0.6, spreadProfitUSDT() * 0.75, spreadProfitUSDT() * 0.9,
-                                            spreadProfitUSDT()
-                                        ].map(n => Math.max(0, n))
-                                    }
-                                ]}
-                            />
+                    <Show when={pnlHistory().length >= 2} fallback={
+                        <div style="background: rgba(15, 23, 42, 0.4); border: 1px dashed rgba(255,255,255,0.08); border-radius: 12px; padding: 48px; text-align: center; color: #475569;">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto 16px; display: block; opacity: 0.4;"><path d="M3 3v18h18"></path><path d="m7 16 4-4 4 4 5-5"></path></svg>
+                            <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">아직 기록된 히스토리가 없습니다</div>
+                            <div style="font-size: 12px;">Trading Engine이 실행되면 1분마다 스냅샷이 저장되어 여기에 표시됩니다.</div>
                         </div>
+                    }>
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
 
-                        {/* Order Book Imbalance Donut */}
-                        <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center;">
-                            <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; width: 100%; text-align: left;">Order Book Imbalance</h3>
-                            <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+                            {/* Chart 1: Net Token Vacuumed (VCN) */}
+                            <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(52, 211, 153, 0.12); border-radius: 16px; padding: 24px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="width: 10px; height: 10px; border-radius: 50%; background: #34d399;"></div>
+                                        <span style="color: #e2e8f0; font-size: 14px; font-weight: 700;">Net Token Vacuumed</span>
+                                    </div>
+                                    <span style="color: #34d399; font-size: 18px; font-weight: 900; font-family: monospace;">
+                                        {netTokenVacuumed() >= 0 ? '+' : ''}{netTokenVacuumed().toLocaleString(undefined, { maximumFractionDigits: 0 })} VCN
+                                    </span>
+                                </div>
+                                <p style="color: #475569; font-size: 11px; margin: 0 0 16px; padding-left: 18px;">MM 에이전트가 초기 보유량 대비 순매집/순매도한 VCN 수량 추이</p>
                                 <SolidApexCharts
-                                    type="donut"
-                                    width={250}
+                                    type="area"
+                                    height={200}
                                     options={{
-                                        chart: { background: 'transparent' },
+                                        chart: { background: 'transparent', toolbar: { show: false }, animations: { enabled: true, speed: 400 } },
                                         theme: { mode: 'dark' },
-                                        labels: ['Buy Walls (Bids)', 'Sell Walls (Asks)'],
-                                        colors: ['#34d399', '#f43f5e'],
-                                        stroke: { show: true, colors: ['#0f172a'], width: 2 },
+                                        colors: ['#34d399'],
                                         dataLabels: { enabled: false },
-                                        legend: { position: 'bottom' },
-                                        plotOptions: {
-                                            pie: { donut: { size: '75%', labels: { show: true, name: { show: false }, value: { show: true, fontSize: '24px', fontWeight: 800, color: '#f8fafc' } } } }
+                                        stroke: { curve: 'smooth', width: 2 },
+                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.0, stops: [0, 100] } },
+                                        xaxis: {
+                                            categories: pnlHistory().map(h => {
+                                                const d = new Date((h.timestamp?.seconds || 0) * 1000);
+                                                return d.toLocaleTimeString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                            }),
+                                            tickAmount: Math.min(8, pnlHistory().length),
+                                            axisBorder: { show: false },
+                                            axisTicks: { show: false },
+                                            labels: { style: { colors: '#475569', fontSize: '10px' }, rotate: -30 }
+                                        },
+                                        yaxis: {
+                                            labels: {
+                                                style: { colors: '#64748b', fontSize: '11px' },
+                                                formatter: (v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v.toFixed(0)
+                                            }
+                                        },
+                                        grid: { borderColor: 'rgba(255,255,255,0.04)', strokeDashArray: 4 },
+                                        tooltip: {
+                                            theme: 'dark',
+                                            y: { formatter: (v: number) => `${v >= 0 ? '+' : ''}${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} VCN` }
                                         }
                                     }}
+                                    series={[{ name: 'Net VCN Vacuumed', data: pnlHistory().map(h => +(h.netTokenVacuumed || 0).toFixed(0)) }]}
+                                />
+                            </div>
+
+                            {/* Chart 2: Spread Strategy PnL (USDT) */}
+                            <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(56, 189, 248, 0.12); border-radius: 16px; padding: 24px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="width: 10px; height: 10px; border-radius: 50%; background: #38bdf8;"></div>
+                                        <span style="color: #e2e8f0; font-size: 14px; font-weight: 700;">Spread Strategy PnL</span>
+                                    </div>
+                                    <span style="color: #38bdf8; font-size: 18px; font-weight: 900; font-family: monospace;">
+                                        {spreadProfitUSDT() >= 0 ? '+' : ''}${spreadProfitUSDT().toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                                    </span>
+                                </div>
+                                <p style="color: #475569; font-size: 11px; margin: 0 0 16px; padding-left: 18px;">Bid-Ask 스프레드 전략을 통해 누적된 USDT 수익 추이</p>
+                                <SolidApexCharts
+                                    type="area"
+                                    height={200}
+                                    options={{
+                                        chart: { background: 'transparent', toolbar: { show: false }, animations: { enabled: true, speed: 400 } },
+                                        theme: { mode: 'dark' },
+                                        colors: ['#38bdf8'],
+                                        dataLabels: { enabled: false },
+                                        stroke: { curve: 'smooth', width: 2 },
+                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.0, stops: [0, 100] } },
+                                        xaxis: {
+                                            categories: pnlHistory().map(h => {
+                                                const d = new Date((h.timestamp?.seconds || 0) * 1000);
+                                                return d.toLocaleTimeString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                            }),
+                                            tickAmount: Math.min(8, pnlHistory().length),
+                                            axisBorder: { show: false },
+                                            axisTicks: { show: false },
+                                            labels: { style: { colors: '#475569', fontSize: '10px' }, rotate: -30 }
+                                        },
+                                        yaxis: {
+                                            labels: {
+                                                style: { colors: '#64748b', fontSize: '11px' },
+                                                formatter: (v: number) => `$${v >= 1000000 ? `${(v / 1000000).toFixed(2)}M` : v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toFixed(0)}`
+                                            }
+                                        },
+                                        grid: { borderColor: 'rgba(255,255,255,0.04)', strokeDashArray: 4 },
+                                        tooltip: {
+                                            theme: 'dark',
+                                            y: { formatter: (v: number) => `${v >= 0 ? '+' : ''}$${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT` }
+                                        }
+                                    }}
+                                    series={[{ name: 'Spread PnL (USDT)', data: pnlHistory().map(h => +(h.spreadProfitUSDT || 0).toFixed(2)) }]}
+                                />
+                            </div>
+
+                            {/* Chart 3: Total Extracted + VCN Price (dual axis) */}
+                            <div style="background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(168, 85, 247, 0.12); border-radius: 16px; padding: 24px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <div style="width: 10px; height: 10px; border-radius: 50%; background: #a855f7;"></div>
+                                        <span style="color: #e2e8f0; font-size: 14px; font-weight: 700;">Total Capital Extracted vs. VCN Price</span>
+                                    </div>
+                                    <span style="color: #a855f7; font-size: 18px; font-weight: 900; font-family: monospace;">
+                                        {totalExtractedUSDT() >= 0 ? '+' : ''}${totalExtractedUSDT().toLocaleString(undefined, { maximumFractionDigits: 0 })} USD-EQ
+                                    </span>
+                                </div>
+                                <p style="color: #475569; font-size: 11px; margin: 0 0 16px; padding-left: 18px;">실현+미실현 총 추출 자산(보라)과 VCN 시세(노랑) 비교 — 가격 상승 시 추출 효율 변화 확인</p>
+                                <SolidApexCharts
+                                    type="line"
+                                    height={220}
+                                    options={{
+                                        chart: { background: 'transparent', toolbar: { show: false }, animations: { enabled: true, speed: 400 } },
+                                        theme: { mode: 'dark' },
+                                        colors: ['#a855f7', '#fbbf24'],
+                                        dataLabels: { enabled: false },
+                                        stroke: { width: [2, 2], dashArray: [0, 4], curve: 'smooth' },
+                                        fill: { type: ['gradient', 'solid'], gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.0, stops: [0, 100] } },
+                                        xaxis: {
+                                            categories: pnlHistory().map(h => {
+                                                const d = new Date((h.timestamp?.seconds || 0) * 1000);
+                                                return d.toLocaleTimeString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                            }),
+                                            tickAmount: Math.min(8, pnlHistory().length),
+                                            axisBorder: { show: false },
+                                            axisTicks: { show: false },
+                                            labels: { style: { colors: '#475569', fontSize: '10px' }, rotate: -30 }
+                                        },
+                                        yaxis: [
+                                            {
+                                                title: { text: 'Total Extracted ($)', style: { color: '#a855f7' } },
+                                                labels: {
+                                                    style: { colors: '#a855f7', fontSize: '11px' },
+                                                    formatter: (v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toFixed(0)}`
+                                                }
+                                            },
+                                            {
+                                                opposite: true,
+                                                title: { text: 'VCN Price', style: { color: '#fbbf24' } },
+                                                labels: {
+                                                    style: { colors: '#fbbf24', fontSize: '11px' },
+                                                    formatter: (v: number) => `$${v.toFixed(4)}`
+                                                }
+                                            }
+                                        ],
+                                        grid: { borderColor: 'rgba(255,255,255,0.04)', strokeDashArray: 4 },
+                                        legend: { position: 'top', labels: { colors: '#94a3b8' } },
+                                        tooltip: { theme: 'dark', shared: true }
+                                    }}
                                     series={[
-                                        obStats().bidsVol || 75,
-                                        obStats().asksVol || 25
+                                        { name: 'Total Extracted (USD-EQ)', type: 'area', data: pnlHistory().map(h => +(h.totalExtractedUSDT || 0).toFixed(2)) },
+                                        { name: 'VCN Price', type: 'line', data: pnlHistory().map(h => +(h.marketPrice || 0).toFixed(6)) }
                                     ]}
                                 />
                             </div>
+
+                            {/* Order Book Imbalance Row */}
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center;">
+                                    <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; width: 100%; text-align: left;">Order Book Imbalance</h3>
+                                    <Show when={(obStats().bidsVol || 0) + (obStats().asksVol || 0) > 0}
+                                        fallback={
+                                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; gap: 10px;">
+                                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><path d="M8 12h8M12 8v8"></path></svg>
+                                                <span style="font-size: 12px; color: #334155; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Coming Soon</span>
+                                                <span style="font-size: 11px; color: #1e293b; text-align: center;">오더북 데이터가 쌓이면 자동으로 표시됩니다</span>
+                                            </div>
+                                        }
+                                    >
+                                        <SolidApexCharts
+                                            type="donut"
+                                            width={250}
+                                            options={{
+                                                chart: { background: 'transparent' },
+                                                theme: { mode: 'dark' },
+                                                labels: ['Buy Walls (Bids)', 'Sell Walls (Asks)'],
+                                                colors: ['#34d399', '#f43f5e'],
+                                                stroke: { show: true, colors: ['#0f172a'], width: 2 },
+                                                dataLabels: { enabled: false },
+                                                legend: { position: 'bottom' },
+                                                plotOptions: {
+                                                    pie: { donut: { size: '75%', labels: { show: true, name: { show: false }, value: { show: true, fontSize: '24px', fontWeight: 800, color: '#f8fafc' } } } }
+                                                }
+                                            }}
+                                            series={[obStats().bidsVol, obStats().asksVol]}
+                                        />
+                                    </Show>
+
+                                </div>
+                                <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; justify-content: center; gap: 16px;">
+                                    <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0;">System KPIs</h3>
+                                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: #64748b; font-size: 12px;">Extraction Efficiency</span>
+                                            <span style="color: #f8fafc; font-family: monospace; font-size: 14px; font-weight: 700;">
+                                                {Math.abs(spreadProfitUSDT() / (netTokenVacuumed() || 1)).toFixed(4)} USDT/VCN
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: #64748b; font-size: 12px;">Inventory Drift</span>
+                                            <span style={{
+                                                'font-family': 'monospace', 'font-size': '14px', 'font-weight': '700',
+                                                'color': (netTokenVacuumed() / (initialVCN() || 1)) > 0.05 ? '#fbbf24' : (netTokenVacuumed() / (initialVCN() || 1)) < -0.05 ? '#f43f5e' : '#34d399'
+                                            }}>
+                                                {((netTokenVacuumed() / (initialVCN() || 1)) * 100).toFixed(2)}%
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: #64748b; font-size: 12px;">Avg Sell Price</span>
+                                            <span style="color: #f8fafc; font-family: monospace; font-size: 14px; font-weight: 700;">
+                                                ${avgSellPrice() > 0 ? avgSellPrice().toFixed(4) : '-'}
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: #64748b; font-size: 12px;">Bid Wall Volume</span>
+                                            <span style="color: #34d399; font-family: monospace; font-size: 14px; font-weight: 700;">
+                                                {obStats().bidsVol.toLocaleString(undefined, { maximumFractionDigits: 0 })} VCN
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="color: #64748b; font-size: 12px;">Ask Wall Volume</span>
+                                            <span style="color: #f43f5e; font-family: monospace; font-size: 14px; font-weight: 700;">
+                                                {obStats().asksVol.toLocaleString(undefined, { maximumFractionDigits: 0 })} VCN
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    </Show>
                 </div>
+
+
+
 
                 {/* Trading Agents */}
                 <div class="mmd-section">
@@ -1036,7 +1055,7 @@ export default function TradingAdminDashboard() {
                         </div>
                     </div>
                 </div>
-            </Show>
+            </Show >
 
             <style>{`
                 .mmd-root { max-width: 1200px; }
@@ -1158,6 +1177,6 @@ export default function TradingAdminDashboard() {
                 @keyframes killBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
                 @keyframes spin { to { transform: rotate(360deg); } }
             `}</style>
-        </div>
+        </div >
     );
 }
