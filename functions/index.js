@@ -17377,7 +17377,7 @@ async function deleteUserDiskData(email) {
 exports.diskSubscribe = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
-  const { gb } = request.data;
+  const { gb, signature, deadline, owner } = request.data;
 
   const pricing = await getDiskPricing();
 
@@ -17388,19 +17388,43 @@ exports.diskSubscribe = onCall({ cors: true }, async (request) => {
   const price = calcDiskPrice(gb, pricing);
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const executorWallet = new ethers.Wallet(VCN_EXECUTOR_PK, provider);
-  const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, executorWallet);
+  const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, executorWallet);
 
   // Get user's wallet address from their profile
   const userDoc = await db.collection("users").doc(email).get();
   if (!userDoc.exists || !userDoc.data().walletAddress) {
     throw new HttpsError("failed-precondition", "Wallet address not found for user.");
   }
-  const userAddress = userDoc.data().walletAddress;
+  const userAddress = owner || userDoc.data().walletAddress;
+  const priceWei = ethers.parseEther(price.toString());
 
-  // Check allowance (did user approve Executor to spend their VCN?)
-  const allowance = await tokenContract.allowance(userAddress, executorWallet.address);
-  if (allowance < ethers.parseEther(price.toString())) {
-    throw new HttpsError("failed-precondition", "insufficient_allowance");
+  // === Gasless Payment via Permit (EIP-2612) ===
+  if (signature && deadline) {
+    // Execute Permit: Executor pays gas, user signs off-chain
+    try {
+      const sig = ethers.Signature.from(signature);
+      console.log(`[Disk] Executing permit for ${price} VCN from ${userAddress}...`);
+      const permitTx = await tokenContract.permit(
+        userAddress,
+        executorWallet.address,
+        priceWei,
+        deadline,
+        sig.v,
+        sig.r,
+        sig.s
+      );
+      await permitTx.wait();
+      console.log(`[Disk] Permit confirmed: ${permitTx.hash}`);
+    } catch (permitErr) {
+      console.error("[Disk] Permit failed:", permitErr.message);
+      throw new HttpsError("failed-precondition", `Permit failed: ${permitErr.reason || permitErr.message}`);
+    }
+  } else {
+    // Fallback: check existing allowance (legacy)
+    const allowance = await tokenContract.allowance(userAddress, executorWallet.address);
+    if (allowance < priceWei) {
+      throw new HttpsError("failed-precondition", "insufficient_allowance");
+    }
   }
 
   // Deduct the first month price right now if it's a new subscription or upgrade
@@ -17408,7 +17432,7 @@ exports.diskSubscribe = onCall({ cors: true }, async (request) => {
   const currentSub = currentSubDoc.exists ? currentSubDoc.data() : null;
 
   try {
-    const tx = await tokenContract.transferFrom(userAddress, executorWallet.address, ethers.parseEther(price.toString()));
+    const tx = await tokenContract.transferFrom(userAddress, executorWallet.address, priceWei);
     await tx.wait(); // Wait for confirmation
   } catch (err) {
     console.error("[Disk] Initial payment failed:", err.message);

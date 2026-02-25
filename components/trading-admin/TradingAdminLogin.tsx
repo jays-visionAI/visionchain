@@ -21,10 +21,10 @@ export default function TradingAdminLogin() {
         try {
             await adminLogin(emailVal, pwdVal);
             const role = await getUserRole(emailVal);
-            if (role === 'admin') {
+            if (role === 'admin' || role === 'partner') {
                 navigate('/trading-admin', { replace: true });
             } else {
-                setError('Access denied. Only admin accounts can access Trading Control.');
+                setError('Access denied. This account does not have sufficient privileges.');
             }
         } catch (err: any) {
             console.error('Trading Admin Login error:', err);

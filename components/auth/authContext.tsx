@@ -2,10 +2,12 @@ import { createContext, useContext, createSignal, onMount, onCleanup, JSX } from
 import { User } from 'firebase/auth';
 import {
     getFirebaseAuth,
+    getAdminFirebaseAuth,
     userLogin,
     userRegister,
     userLogout,
-    onUserAuthStateChanged
+    onUserAuthStateChanged,
+    onAdminAuthStateChanged
 } from '../../services/firebaseService';
 
 interface AuthContextType {
@@ -23,12 +25,37 @@ export function AuthProvider(props: { children: JSX.Element }) {
     const [loading, setLoading] = createSignal(true);
 
     onMount(() => {
-        const unsubscribe = onUserAuthStateChanged((firebaseUser) => {
-            setUser(firebaseUser);
-            setLoading(false);
+        // Listen to standard user auth
+        const unsubUser = onUserAuthStateChanged((firebaseUser) => {
+            if (firebaseUser) {
+                setUser(firebaseUser);
+                setLoading(false);
+            } else {
+                // If not logged in as user, check if logged in as admin
+                const aAuth = getAdminFirebaseAuth();
+                if (aAuth.currentUser) {
+                    setUser(aAuth.currentUser);
+                } else {
+                    setUser(null);
+                }
+                setLoading(false);
+            }
         });
 
-        onCleanup(() => unsubscribe());
+        // Also listen to admin auth changes to keep state in sync
+        const unsubAdmin = onAdminAuthStateChanged((adminFirebaseUser) => {
+            if (adminFirebaseUser && !user()) {
+                setUser(adminFirebaseUser);
+            } else if (!adminFirebaseUser && user()?.providerId === 'AdminConsole') {
+                // If admin logged out and we were using that session
+                setUser(null);
+            }
+        });
+
+        onCleanup(() => {
+            unsubUser();
+            unsubAdmin();
+        });
     });
 
     const login = async (email: string, password: string) => {

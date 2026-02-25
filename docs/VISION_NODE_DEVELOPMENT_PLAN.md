@@ -417,7 +417,7 @@ sudo systemctl enable vision-node
 ### 8.5 Android APK (Lite Node)
 
 ```
-다운로드: https://github.com/jays-visionAI/visionchain/releases/latest
+다운로드: https://github.com/jays-visionAI/visionchain/releases/download/v1.0.2/visionchain-node-v1.0.2.apk
 설치 후 이메일 등록 -> 자동 운영
 ```
 

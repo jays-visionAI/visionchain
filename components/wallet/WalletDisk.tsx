@@ -4,18 +4,76 @@ import {
     HardDrive, UploadCloud, Folder, FolderPlus,
     File as FileIcon, FileText, FileImage, FileVideo, FileAudio,
     MoreVertical, Search, Grid, List, ChevronRight,
-    Download, Trash2, Eye, X, ArrowLeft, Plus, Check, AlertTriangle
+    Download, Trash2, Eye, X, ArrowLeft, Plus, Check, AlertTriangle, Copy
 } from 'lucide-solid';
 import { useAuth } from '../auth/authContext';
 import {
     uploadDiskFile, listDiskFiles, deleteDiskFile, renameDiskFile,
     createDiskFolder, listDiskFolders, deleteDiskFolder, renameDiskFolder,
-    getDiskUsage, formatFileSize, getFileExtension, subscribeToDisk, cancelDiskSubscription,
+    listAllDiskFolders, getDiskUsage, formatFileSize, getFileExtension,
+    subscribeToDisk, cancelDiskSubscription,
     publishDiskFile, unpublishDiskFile, encryptFile, decryptFile,
+    moveDiskFile, moveDiskFolder,
     type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
 } from '../../services/diskService';
 import { ethers } from 'ethers';
+import VCNTokenABI from '../../services/abi/VCNToken.json';
 import { Globe, Share2, ShieldCheck, ShieldAlert, Lock, Unlock, RotateCw } from 'lucide-solid';
+
+// ─── Gasless Permit Constants (must match transferService / contractService) ───
+const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+const PAYMASTER_ADMIN = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
+const CHAIN_ID = 3151909;
+const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
+
+/**
+ * Sign an EIP-2612 Permit off-chain (gasless).
+ * The Executor (Cloud Function) will execute permit() + transferFrom() on-chain.
+ */
+async function signDiskPermit(
+    privateKey: string,
+    totalVcn: string
+): Promise<{ signature: string; deadline: number; owner: string }> {
+    const rpcProvider = new ethers.JsonRpcProvider(RPC_URL);
+    const wallet = new ethers.Wallet(privateKey, rpcProvider);
+    const vcnContract = new ethers.Contract(VCN_TOKEN, VCNTokenABI.abi, rpcProvider);
+
+    const totalAmount = ethers.parseUnits(totalVcn, 18);
+    const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+    const [tokenName, nonce] = await Promise.all([
+        vcnContract.name(),
+        vcnContract.nonces(wallet.address),
+    ]);
+
+    const domain = {
+        name: tokenName,
+        version: '1',
+        chainId: CHAIN_ID,
+        verifyingContract: VCN_TOKEN,
+    };
+
+    const types = {
+        Permit: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'deadline', type: 'uint256' },
+        ],
+    };
+
+    const values = {
+        owner: wallet.address,
+        spender: PAYMASTER_ADMIN,
+        value: totalAmount,
+        nonce: nonce,
+        deadline: deadline,
+    };
+
+    const signature = await wallet.signTypedData(domain, types, values);
+    return { signature, deadline, owner: wallet.address };
+}
 
 // ─── File Type Icon Picker ───
 
@@ -43,7 +101,13 @@ const fileTypeColor = (type: string): string => {
 
 // ─── Main Component ───
 
-export const WalletDisk = (props: { privateKey?: string; walletAddress?: string; networkMode?: string }) => {
+export const WalletDisk = (props: {
+    privateKey?: string;
+    walletAddress?: string;
+    networkMode?: string;
+    onRequestUnlock?: () => void;
+    isWalletMissing?: boolean;
+}) => {
     const auth = useAuth();
     const email = () => auth.user()?.email || '';
 
@@ -86,6 +150,12 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
     const [encryptionPassword, setEncryptionPassword] = createSignal('');
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
     const [decryptingFileId, setDecryptingFileId] = createSignal('');
+    const [useDistributed, setUseDistributed] = createSignal(false);
+
+    // Move Modal State
+    const [showMoveModal, setShowMoveModal] = createSignal(false);
+    const [moveTargetFolder, setMoveTargetFolder] = createSignal<string | null>(null);
+    const [allFolders, setAllFolders] = createSignal<DiskFolder[]>([]);
 
     let fileInputRef: HTMLInputElement | undefined;
 
@@ -118,10 +188,11 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
         if (email()) loadData();
     });
 
-    // Reload on path change
-    createEffect(() => {
-        currentPath(); // dependency
-        if (email()) loadData();
+    createEffect(async () => {
+        if (showMoveModal() && email()) {
+            const folders = await listAllDiskFolders(email());
+            setAllFolders(folders);
+        }
     });
 
     // ─── Breadcrumbs ───
@@ -181,7 +252,6 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
             try {
                 let fileToUpload: File | Blob = file;
                 let encryptionMeta = {};
-
                 if (useEncryption()) {
                     const encrypted = await encryptFile(file, encryptionPassword());
                     fileToUpload = new File([encrypted.encryptedData], file.name, { type: file.type });
@@ -192,13 +262,18 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                     };
                 }
 
+                const extraMeta = {
+                    ...encryptionMeta,
+                    storageType: useDistributed() ? 'distributed' : 'cloud'
+                };
+
                 await uploadDiskFile(email(), fileToUpload as File, currentPath(), (p) => {
                     setUploadQueue(prev =>
                         prev.map(item =>
                             item.fileName === p.fileName ? { ...item, ...p } : item
                         )
                     );
-                }, encryptionMeta);
+                }, extraMeta);
             } catch (err: any) {
                 setUploadQueue(prev =>
                     prev.map(item =>
@@ -310,34 +385,32 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
 
     const handleSubscribe = async () => {
         if (!props.privateKey) {
-            setSubsError('Wallet not unlocked or missing.');
+            if (props.isWalletMissing) {
+                setSubsError('Local wallet not found. Please restore your wallet in Profile settings.');
+            } else {
+                setSubsError('');
+                if (props.onRequestUnlock) props.onRequestUnlock();
+            }
             return;
         }
         setIsSubscribing(true);
         setSubsError('');
         try {
-            const rpc = props.networkMode === 'mainnet' ? 'https://rpc.visionchain.co' : 'http://46.224.221.201:8545';
-            const provider = new ethers.JsonRpcProvider(rpc);
-            const wallet = new ethers.Wallet(props.privateKey, provider);
-            const token = new ethers.Contract('0x5FbDB2315678afecb367f032d93F642f64180aa3', [
-                "function allowance(address,address) external view returns (uint256)",
-                "function approve(address spender, uint256 amount) external returns (bool)"
-            ], wallet);
+            // Calculate price to sign permit for
+            const gb = selectedGb();
+            const price = gb <= 10 ? 5 : 5 + Math.ceil((gb - 10) / 10) * 3;
 
-            const executor = '0xE020035a1395132D0EFA2c4BA40098eF99882C3a';
-            const currentAllowance = await token.allowance(wallet.address, executor);
+            // Sign EIP-2612 Permit off-chain (gasless - no gas needed from user)
+            console.log(`[Disk] Signing permit for ${price} VCN (${gb}GB plan)...`);
+            const permit = await signDiskPermit(props.privateKey, price.toString());
+            console.log(`[Disk] Permit signed. Calling diskSubscribe Cloud Function...`);
 
-            // If allowance is small, approve Infinity
-            if (currentAllowance < ethers.parseEther('1000')) {
-                const tx = await token.approve(executor, ethers.MaxUint256);
-                await tx.wait();
-            }
-
-            await subscribeToDisk(selectedGb());
+            // Call Cloud Function with permit data
+            await subscribeToDisk(gb, permit.signature, permit.deadline, permit.owner);
             await loadData();
         } catch (e: any) {
             console.error('[Disk] Subscription failed:', e);
-            setSubsError(e.message || 'Payment or approval failed. Check VCN balance.');
+            setSubsError(e.message || 'Payment failed. Check VCN balance.');
         } finally {
             setIsSubscribing(false);
         }
@@ -438,6 +511,38 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
     const clearSelection = () => {
         setSelectedItems(new Set<string>());
         setIsSelectMode(false);
+    };
+
+    const handleShare = (file: DiskFile) => {
+        navigator.clipboard.writeText(file.downloadURL);
+        alert('Download link copied to clipboard!');
+        setContextMenu(null);
+    };
+
+    const handleBatchMove = () => {
+        setShowMoveModal(true);
+    };
+
+    const handleMoveConfirm = async (targetPath: string) => {
+        if (!email()) return;
+        const ids = Array.from(selectedItems());
+        try {
+            for (const id of ids) {
+                // Check if it's a file or folder in our current signals
+                const isFile = files().find(f => f.id === id);
+                if (isFile) {
+                    await moveDiskFile(email(), id, targetPath);
+                } else {
+                    await moveDiskFolder(email(), id, targetPath);
+                }
+            }
+            setShowMoveModal(false);
+            clearSelection();
+            await loadData();
+            alert('Items moved successfully!');
+        } catch (err: any) {
+            alert('Move failed: ' + err.message);
+        }
     };
 
     const handleBatchDelete = async () => {
@@ -556,11 +661,24 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                         </button>
                     </div>
 
+                    {/* Distributed Toggle */}
+                    <button
+                        onClick={() => setUseDistributed(!useDistributed())}
+                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useDistributed()
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                            }`}
+                        title={useDistributed() ? 'Network Storage ON' : 'Network Storage OFF'}
+                    >
+                        <Globe class={`w-4 h-4 ${useDistributed() ? 'text-amber-500' : 'text-gray-600'}`} />
+                        <span class="hidden md:inline">VNet</span>
+                    </button>
+
                     {/* Encryption Toggle */}
                     <button
                         onClick={() => setUseEncryption(!useEncryption())}
                         class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
-                            ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                            ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
                             : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
                             }`}
                         title={useEncryption() ? 'Client-side Encryption ON' : 'Client-side Encryption OFF'}
@@ -860,18 +978,32 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                                     loading="lazy"
                                                 />
                                             </Show>
+
+                                            {/* Security & Storage Badges Overlay */}
+                                            <div class="absolute bottom-1.5 right-1.5 flex gap-1">
+                                                <Show when={file.isEncrypted}>
+                                                    <div class="p-1 rounded bg-black/60 backdrop-blur-md border border-white/10" title="Client-side Encrypted">
+                                                        <ShieldCheck class="w-3 h-3 text-cyan-400" />
+                                                    </div>
+                                                </Show>
+                                                <Show when={file.storageType === 'distributed'}>
+                                                    <div class="px-1 py-0.5 rounded bg-amber-500 text-[8px] font-black text-black uppercase tracking-tighter" title="Stored on Distributed Node Network">
+                                                        VNet
+                                                    </div>
+                                                </Show>
+                                            </div>
                                         </div>
 
                                         <div class="w-full text-left">
                                             <div class="flex items-center gap-1.5 min-w-0">
                                                 <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
                                                 <Show when={file.isPublished}>
-                                                    <div class="shrink-0 w-3 h-3 bg-cyan-500 rounded-full flex items-center justify-center" title="Published to Market">
+                                                    <div class="shrink-0 w-3.5 h-3.5 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/20" title="Published to Market">
                                                         <Globe class="w-2 h-2 text-black" />
                                                     </div>
                                                 </Show>
                                             </div>
-                                            <div class="text-[10px] text-gray-500 mt-0.5">{formatFileSize(file.size)}</div>
+                                            <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{formatFileSize(file.size)} • {file.storageType === 'distributed' ? 'Distributed' : 'Cloud'}</div>
                                         </div>
 
                                         {/* Context button */}
@@ -959,9 +1091,17 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                                 <FileTypeIcon type={file.type} name={file.name} />
                                             </div>
                                             <span class="text-sm text-gray-200 truncate">{file.name}</span>
-                                            <Show when={file.isPublished}>
-                                                <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Published</span>
-                                            </Show>
+                                            <div class="flex gap-1 shrink-0">
+                                                <Show when={file.isPublished}>
+                                                    <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Market</span>
+                                                </Show>
+                                                <Show when={file.isEncrypted}>
+                                                    <span class="px-1.5 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[9px] font-black text-purple-400 uppercase tracking-tighter">Private</span>
+                                                </Show>
+                                                <Show when={file.storageType === 'distributed'}>
+                                                    <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[9px] font-black text-amber-500 uppercase tracking-tighter">VNet</span>
+                                                </Show>
+                                            </div>
                                         </div>
                                         <span class="text-xs text-gray-500">{formatFileSize(file.size)}</span>
                                         <span class="text-xs text-gray-500">{new Date(file.createdAt).toLocaleDateString()}</span>
@@ -1003,15 +1143,18 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                         >
                                             <Eye class="w-4 h-4" /> Preview
                                         </button>
-                                        <a
-                                            href={(ctx().item as DiskFile).downloadURL}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        <button
+                                            onClick={() => { handleDownload(ctx().item as DiskFile); setContextMenu(null); }}
                                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
-                                            onClick={() => setContextMenu(null)}
                                         >
                                             <Download class="w-4 h-4" /> Download
-                                        </a>
+                                        </button>
+                                        <button
+                                            onClick={() => handleShare(ctx().item as DiskFile)}
+                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all"
+                                        >
+                                            <Copy class="w-4 h-4" /> Copy Link
+                                        </button>
                                     </Show>
                                     <Show when={ctx().type === 'folder'}>
                                         <button
@@ -1395,6 +1538,64 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                 </Show>
             </Presence>
 
+            {/* ── Move Modal ── */}
+            <Presence>
+                <Show when={showMoveModal()}>
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        class="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowMoveModal(false)}
+                    >
+                        <Motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            class="bg-[#1a1a24] border border-white/10 rounded-[32px] p-8 max-w-sm w-full shadow-2xl overflow-hidden flex flex-col"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div class="flex flex-col items-center text-center mb-8">
+                                <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 border border-cyan-500/20">
+                                    <FolderPlus class="w-8 h-8 text-cyan-400" />
+                                </div>
+                                <h1 class="text-2xl font-black text-white mb-2 uppercase tracking-tight text-gradient bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">Move to...</h1>
+                                <p class="text-xs text-gray-500 font-bold tracking-widest uppercase">Select destination folder</p>
+                            </div>
+
+                            <div class="space-y-2 mb-8 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar flex-1">
+                                <button
+                                    onClick={() => handleMoveConfirm('/')}
+                                    class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl bg-white/[0.03] hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/30 transition-all text-left group"
+                                >
+                                    <HardDrive class="w-5 h-5 text-cyan-500" />
+                                    <span class="text-sm font-black text-white group-hover:text-cyan-400 transition-colors italic uppercase">My Disk (Root)</span>
+                                </button>
+
+                                <For each={allFolders().filter(f => !selectedItems().has(f.id))}>
+                                    {(folder) => (
+                                        <button
+                                            onClick={() => handleMoveConfirm(folder.path)}
+                                            class="w-full flex items-center gap-3 px-4 py-4 rounded-2xl bg-white/[0.03] hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/30 transition-all text-left group"
+                                        >
+                                            <Folder class="w-5 h-5 text-gray-500 group-hover:text-cyan-400" />
+                                            <span class="text-sm font-bold text-gray-300 group-hover:text-white transition-colors truncate">{folder.path}</span>
+                                        </button>
+                                    )}
+                                </For>
+                            </div>
+
+                            <button
+                                onClick={() => setShowMoveModal(false)}
+                                class="w-full h-14 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-[10px] font-black uppercase tracking-[0.2em] transition-all border border-white/5"
+                            >
+                                Cancel Move
+                            </button>
+                        </Motion.div>
+                    </Motion.div>
+                </Show>
+            </Presence>
+
             {/* ── Batch Action Bar ── */}
             <Presence>
                 <Show when={selectedItems().size > 0}>
@@ -1419,7 +1620,7 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                 <Trash2 class="w-4 h-4" /> Delete
                             </button>
                             <button
-                                onClick={() => alert('Batch move coming soon!')}
+                                onClick={handleBatchMove}
                                 class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-white/5 rounded-xl transition-all text-sm font-bold"
                             >
                                 <FolderPlus class="w-4 h-4" /> Move

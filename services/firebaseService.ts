@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User, updateProfile } from 'firebase/auth';
+import { getAuth, Auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User, updateProfile, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import {
     getFirestore,
     Firestore,
@@ -1377,6 +1377,16 @@ export const initializeFirebase = (useLongPolling = false) => {
             db = getFirestore(app);
             console.log('[Firebase] Infrastructure initialized successfully.');
         }
+
+        // Set Auth persistence to ensure sessions survive across browser reloads
+        try {
+            const currentAuth = getAuth(app);
+            setPersistence(currentAuth, browserLocalPersistence).catch(err => {
+                console.warn('[Firebase] Failed to set auth persistence:', err);
+            });
+        } catch (authErr) {
+            console.warn('[Firebase] Auth initialization warning:', authErr);
+        }
     }
 
     if (!storage) {
@@ -1423,6 +1433,16 @@ export const getAdminFirebaseDb = () => {
 };
 
 export const getFirebaseDb = () => {
+    // Priority 1: Admin session (ensures admin permissions are passed to Firestore)
+    try {
+        const aAuth = getAdminFirebaseAuth();
+        if (aAuth.currentUser) {
+            if (!adminDb) adminDb = getFirestore(adminApp);
+            return adminDb;
+        }
+    } catch (e) { /* ignore admin app errors */ }
+
+    // Priority 2: Standard session
     if (!db) initializeFirebase();
     return db;
 };
@@ -2146,14 +2166,18 @@ export const deleteAgent = async (agentName: string): Promise<void> => {
 
 export const getUserRole = async (email: string): Promise<'admin' | 'user' | 'partner'> => {
     try {
-        // Use admin DB if admin session is active
-        let currentDb: Firestore;
-        try {
-            const adminAuth = getAdminFirebaseAuth();
-            currentDb = adminAuth.currentUser ? getAdminFirebaseDb() : getFirebaseDb();
-        } catch { currentDb = getFirebaseDb(); }
-        const userRef = doc(currentDb, 'users', email.toLowerCase());
-        const userSnap = await getDoc(userRef);
+        const db = getFirebaseDb();
+        const emailLower = email.toLowerCase().trim();
+
+        // 1. Standard lookup
+        let userSnap = await getDoc(doc(db, 'users', emailLower));
+
+        // 2. Legacy fallback
+        if (!userSnap.exists() && email !== emailLower) {
+            const legacySnap = await getDoc(doc(db, 'users', email));
+            if (legacySnap.exists()) userSnap = legacySnap;
+        }
+
         if (userSnap.exists()) {
             return userSnap.data().role || 'user';
         }

@@ -30,6 +30,8 @@ export interface DiskFile {
     isEncrypted?: boolean;
     salt?: string;
     iv?: string;
+    // Storage Provider
+    storageType?: 'cloud' | 'distributed';
 }
 
 export interface DiskFolder {
@@ -233,7 +235,7 @@ export const listDiskFiles = async (email: string, folder?: string): Promise<Dis
     }
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DiskFile));
+    return snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as DiskFile));
 };
 
 // ─── Delete ───
@@ -302,7 +304,13 @@ export const listDiskFolders = async (email: string, parentPath: string = '/'): 
     const col = getUserFolderCollection(email);
     const q = query(col, where('parentPath', '==', parentPath), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DiskFolder));
+    return snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as DiskFolder));
+};
+
+export const listAllDiskFolders = async (email: string): Promise<DiskFolder[]> => {
+    const col = getUserFolderCollection(email);
+    const snapshot = await getDocs(col);
+    return snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as DiskFolder));
 };
 
 export const deleteDiskFolder = async (email: string, folderId: string): Promise<void> => {
@@ -354,6 +362,48 @@ export const renameDiskFolder = async (email: string, folderId: string, newName:
     await batch.commit();
 };
 
+export const moveDiskFolder = async (email: string, folderId: string, newParentPath: string): Promise<void> => {
+    const col = getUserFolderCollection(email);
+    const folderDocRef = doc(col, folderId);
+    const folderSnap = await getDoc(folderDocRef);
+
+    if (!folderSnap.exists()) throw new Error('Folder not found');
+    const folderData = folderSnap.data() as DiskFolder;
+    const oldPath = folderData.path;
+
+    const newPath = newParentPath === '/' ? `/${folderData.name}` : `${newParentPath}/${folderData.name}`;
+    if (newPath === oldPath) return;
+
+    const batch = writeBatch(getFirebaseDb());
+
+    // 1. Update folder itself
+    batch.update(folderDocRef, {
+        parentPath: newParentPath,
+        path: newPath
+    });
+
+    // 2. Update child files
+    const filesCol = getUserDiskCollection(email);
+    const filesQ = query(filesCol, where('folder', '==', oldPath));
+    const filesSnap = await getDocs(filesQ);
+    filesSnap.docs.forEach(d => {
+        batch.update(d.ref, { folder: newPath });
+    });
+
+    // 3. Update direct subfolders
+    const foldersQ = query(col, where('parentPath', '==', oldPath));
+    const foldersSnap = await getDocs(foldersQ);
+    foldersSnap.docs.forEach(d => {
+        const subData = d.data() as DiskFolder;
+        batch.update(d.ref, {
+            parentPath: newPath,
+            path: `${newPath}/${subData.name}`
+        });
+    });
+
+    await batch.commit();
+};
+
 // ─── Usage ───
 
 export const getDiskSubscription = async (email: string): Promise<DiskSubscription | null> => {
@@ -365,10 +415,18 @@ export const getDiskSubscription = async (email: string): Promise<DiskSubscripti
     return null;
 };
 
-export const subscribeToDisk = async (gb: number): Promise<{ success: boolean; gb: number; price: number; cycleEnd: number }> => {
+export const subscribeToDisk = async (
+    gb: number,
+    signature?: string,
+    deadline?: number,
+    owner?: string
+): Promise<{ success: boolean; gb: number; price: number; cycleEnd: number }> => {
     const functions = getFunctions(getFirebaseApp());
-    const diskSubscribeCall = httpsCallable<{ gb: number }, { success: boolean; gb: number; price: number; cycleEnd: number }>(functions, 'diskSubscribe');
-    const result = await diskSubscribeCall({ gb });
+    const diskSubscribeCall = httpsCallable<
+        { gb: number; signature?: string; deadline?: number; owner?: string },
+        { success: boolean; gb: number; price: number; cycleEnd: number }
+    >(functions, 'diskSubscribe');
+    const result = await diskSubscribeCall({ gb, signature, deadline, owner });
     return result.data;
 };
 
@@ -468,7 +526,7 @@ export const listPublishedMaterials = async (category?: string): Promise<DiskFil
     }
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DiskFile));
+    return snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) } as DiskFile));
 };
 
 /**
@@ -539,8 +597,8 @@ export const encryptFile = async (file: File, password: string): Promise<{ encry
 
     return {
         encryptedData,
-        salt: btoa(String.fromCharCode(...salt)),
-        iv: btoa(String.fromCharCode(...iv))
+        salt: btoa(String.fromCharCode(...Array.from(salt))),
+        iv: btoa(String.fromCharCode(...Array.from(iv)))
     };
 };
 

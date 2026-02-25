@@ -117,7 +117,13 @@ const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
 const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
 import type { Component } from 'solid-js';
 const VisionMarket = lazy(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
-const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{ privateKey?: string; walletAddress?: string; networkMode?: string }>;
+const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{
+    privateKey?: string;
+    walletAddress?: string;
+    networkMode?: string;
+    onRequestUnlock?: () => void;
+    isWalletMissing?: boolean;
+}>;
 
 import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
@@ -1114,6 +1120,18 @@ const Wallet = (): JSX.Element => {
         setShowPasswordModal(true);
     };
 
+    const requestDiskUnlock = () => {
+        if (!WalletService.hasWallet(userProfile().email)) {
+            alert('Please create or import a wallet first.');
+            navigate('/wallet/profile');
+            return;
+        }
+        setPasswordMode('verify');
+        setPendingAction({ type: 'disk_unlock' });
+        setWalletPassword('');
+        setShowPasswordModal(true);
+    };
+
     const executePendingAction = async () => {
         // CRITICAL: Prevent duplicate execution
         if (isLoading()) {
@@ -1182,6 +1200,14 @@ const Wallet = (): JSX.Element => {
                 import('../services/firebaseService').then(m => {
                     m.processReferralRewards('token_sale', userProfile().email, vcnAmount, 'VCN', receipt.hash);
                 });
+            } else if (action.type === 'disk_unlock') {
+                const encrypted = WalletService.getEncryptedWallet(userProfile().email);
+                if (!encrypted) throw new Error("Local wallet key not found.");
+                const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
+                const { privateKey } = WalletService.deriveEOA(mnemonic);
+                setCurrentPrivateKey(privateKey);
+                setIsLoading(false);
+                return; // Everything updated, no alerting needed
             } else if (action.type === 'send_tokens') {
                 const { amount, recipient, symbol } = action.data;
                 setFlowLoading(true);
@@ -3989,7 +4015,13 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         </Show>
 
                         <Show when={activeView() === 'disk'}>
-                            <WalletDisk privateKey={currentPrivateKey()} walletAddress={walletAddressSignal()} networkMode={networkMode()} />
+                            <WalletDisk
+                                privateKey={currentPrivateKey()}
+                                walletAddress={walletAddressSignal()}
+                                networkMode={networkMode()}
+                                onRequestUnlock={requestDiskUnlock}
+                                isWalletMissing={isLocalWalletMissing()}
+                            />
                         </Show>
 
                         <Show when={activeView() === 'market'}>
