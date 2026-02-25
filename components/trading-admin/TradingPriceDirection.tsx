@@ -74,6 +74,7 @@ export default function MMPriceDirection() {
     const [customSpeed, setCustomSpeed] = createSignal(false);
 
     const db = getAdminFirebaseDb();
+    const publicDb = getFirebaseDb();
 
     onMount(async () => {
         try {
@@ -87,12 +88,22 @@ export default function MMPriceDirection() {
             }
 
             // Real-time market price listener
-            const unsubscribe = onSnapshot(doc(db, 'dex/market/data/VCN-USDT'), (snap) => {
+            console.log('[MMPrice] Initializing market sync on: dex/market/data/VCN-USDT');
+            const unsubscribe = onSnapshot(doc(publicDb, 'dex/market/data/VCN-USDT'), (snap) => {
                 if (snap.exists()) {
-                    const price = snap.data().lastPrice || 0.10;
-                    setCurrentPrice(price);
-                    console.log('[MMPrice] Live price sync:', price);
+                    const data = snap.data();
+                    const price = data.lastPrice;
+                    if (price !== undefined) {
+                        setCurrentPrice(price);
+                        console.log('[MMPrice] Live market price synchronized:', price);
+                    } else {
+                        console.warn('[MMPrice] Document exists but lastPrice is missing:', data);
+                    }
+                } else {
+                    console.warn('[MMPrice] Market data document DOES NOT EXIST at: dex/market/data/VCN-USDT');
                 }
+            }, (err) => {
+                console.error('[MMPrice] Snapshot listener error:', err);
             });
 
             return () => unsubscribe();
