@@ -1,5 +1,5 @@
 import { createSignal, onMount, Show, For, createMemo } from 'solid-js';
-import { getAdminFirebaseDb, getAdminFirebaseAuth } from '../../services/firebaseService';
+import { getAdminFirebaseDb, getAdminFirebaseAuth, getFirebaseDb } from '../../services/firebaseService';
 import { doc, getDoc, setDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
 
 type TrendMode = 'bullish' | 'neutral' | 'bearish' | 'custom';
