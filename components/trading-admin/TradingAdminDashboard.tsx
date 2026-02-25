@@ -80,6 +80,8 @@ export default function TradingAdminDashboard() {
     const [loading, setLoading] = createSignal(true);
     const [killSwitch, setKillSwitch] = createSignal(false);
     const [saving, setSaving] = createSignal(false);
+    const [phaseSuccess, setPhaseSuccess] = createSignal('');
+    const [capMsg, setCapMsg] = createSignal<{ text: string; type: 'success' | 'error' | null }>({ text: '', type: null });
 
     // Capitulation state
     const [targetWhale, setTargetWhale] = createSignal('all');
@@ -150,7 +152,57 @@ export default function TradingAdminDashboard() {
         }
     };
 
+    const triggerCapitulation = async () => {
+        if (!confirm(`경고: Flash-Crash를 실행하면 시장 가격이 즉시 -${dropPercent()}% 급락합니다.\n\n타겟: ${targetWhale() === 'all' ? '전체 취약 지갑' : targetWhale()}\n덤프: ${dumpAmount().toLocaleString()} VCN\n\n계속하시겠습니까?`)) return;
+        setSaving(true);
+        setCapMsg({ text: '', type: null });
+        try {
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
+                capitulation: {
+                    active: true,
+                    targetUid: targetWhale(),
+                    dropPercent: dropPercent(),
+                    dumpAmount: dumpAmount()
+                },
+                updatedAt: new Date(),
+                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin'
+            }, { merge: true });
+            setCapMsg({ text: `Flash-Crash 실행 완료! 다음 라운드(-${dropPercent()}%)가 트리거됩니다.`, type: 'success' });
+            setTimeout(() => setCapMsg({ text: '', type: null }), 6000);
+        } catch (e: any) {
+            setCapMsg({ text: `오류: ${e.message}`, type: 'error' });
+        } finally {
+            setSaving(false);
+        }
+    };
 
+    const setMacroPhase = async (phaseName: string, mode: string, bias: number, speed: string, targetMultiplier: number, label: string) => {
+        if (!confirm(`페이즈를 "${label}"으로 변경하시겠습니까?\n\n모드: ${mode} | 바이어스: ${bias > 0 ? '+' : ''}${bias} | 스피드: ${speed}\n타겟가: 현재시세 x ${targetMultiplier}`)) return;
+        setSaving(true);
+        setPhaseSuccess('');
+        try {
+            const currentMktPrice = market()?.lastPrice || 0.1;
+            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
+                priceDirection: {
+                    phase: phaseName,
+                    mode,
+                    trendBias: bias,
+                    trendSpeed: speed,
+                    movementStyle: (phaseName === 'markup' || phaseName === 'markdown') ? 'aggressive' : 'gradual',
+                    targetPrice: parseFloat((currentMktPrice * targetMultiplier).toFixed(4)),
+                    currentBasePrice: currentMktPrice
+                },
+                updatedAt: new Date(),
+                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin'
+            }, { merge: true });
+            setPhaseSuccess(phaseName);
+            setTimeout(() => { setPhaseSuccess(''); loadData(); }, 2500);
+        } catch (e: any) {
+            alert(`오류: ${e.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const fmt = (n: number, d = 4) => n?.toFixed(d) || '0';
     const fmtK = (n: number) => {
@@ -255,6 +307,279 @@ export default function TradingAdminDashboard() {
                         <div class="mmd-stat-label">Combined PnL</div>
                         <div class={`mmd-stat-value ${totalPnL() >= 0 ? 'up' : 'dn'}`}>{fmtK(totalPnL())}</div>
                         <div class="mmd-stat-meta">{totalTrades().toLocaleString()} total trades</div>
+                    </div>
+                </div>
+
+                {/* ── Macro Strategy Phase Control ── */}
+                <div class="mmd-section">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                        <div>
+                            <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #f97316;">
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                </svg>
+                                Macro Strategy Phase Control
+                            </h2>
+                            <p style="color: #64748b; font-size: 12px; margin: 6px 0 0;">현재 페이즈: <span style={{
+                                'font-weight': '800',
+                                'color': tradingSettings()?.priceDirection?.phase === 'markup' ? '#38bdf8' :
+                                    tradingSettings()?.priceDirection?.phase === 'markdown' ? '#f43f5e' :
+                                        tradingSettings()?.priceDirection?.phase === 'accumulation' ? '#34d399' :
+                                            tradingSettings()?.priceDirection?.phase === 'distribution' ? '#a855f7' : '#94a3b8'
+                            }}>{(tradingSettings()?.priceDirection?.phase || 'ranging').toUpperCase()}</span>
+                                &nbsp;&nbsp;|&nbsp;&nbsp;타겟: <span style="color: #fbbf24; font-weight: 800;">${fmt(tradingSettings()?.priceDirection?.targetPrice || 0)}</span>
+                                &nbsp;&nbsp;|&nbsp;&nbsp;바이어스: <span style={{
+                                    'font-weight': '800',
+                                    'color': (tradingSettings()?.priceDirection?.trendBias || 0) > 0 ? '#34d399' :
+                                        (tradingSettings()?.priceDirection?.trendBias || 0) < 0 ? '#f43f5e' : '#94a3b8'
+                                }}>{(tradingSettings()?.priceDirection?.trendBias || 0) > 0 ? '+' : ''}{(tradingSettings()?.priceDirection?.trendBias || 0).toFixed(2)}</span></p>
+                        </div>
+                        <Show when={saving()}>
+                            <div style="width: 20px; height: 20px; border: 2px solid rgba(249,115,22,0.3); border-top-color: #f97316; border-radius: 50%; animation: spin 0.7s linear infinite;"></div>
+                        </Show>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 8px;">
+                        {/* Accumulation */}
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('accumulation', 'bullish', 0.15, 'slow', 1.5, '매집 (Accumulation)')}
+                            style={{
+                                'position': 'relative',
+                                'background': tradingSettings()?.priceDirection?.phase === 'accumulation' ? 'rgba(52, 211, 153, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'accumulation' ? '2px solid #34d399' : '1px solid rgba(255,255,255,0.08)',
+                                'border-radius': '14px', 'padding': '18px 12px', 'text-align': 'center',
+                                'cursor': saving() ? 'not-allowed' : 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.6' : '1',
+                                'box-shadow': tradingSettings()?.priceDirection?.phase === 'accumulation' ? '0 0 20px rgba(52, 211, 153, 0.15)' : 'none'
+                            }}>
+                            <Show when={phaseSuccess() === 'accumulation'}>
+                                <div style="position: absolute; inset: 0; background: rgba(52, 211, 153, 0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </div>
+                            </Show>
+                            <div style="color: #34d399; margin-bottom: 10px; display: flex; justify-content: center;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="m7 16 4-4 4 4 5-5"></path></svg>
+                            </div>
+                            <div style="color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">매집</div>
+                            <div style="color: #34d399; font-size: 11px; font-weight: 700;">Accumulation</div>
+                            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">Bias +0.15 | Slow</div>
+                            <div style="color: #475569; font-size: 10px;">Target x1.5</div>
+                        </button>
+
+                        {/* Markup / Pump */}
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('markup', 'bullish', 0.8, 'fast', 3.0, '급등 (Markup/Pump)')}
+                            style={{
+                                'position': 'relative',
+                                'background': tradingSettings()?.priceDirection?.phase === 'markup' ? 'rgba(56, 189, 248, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'markup' ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.08)',
+                                'border-radius': '14px', 'padding': '18px 12px', 'text-align': 'center',
+                                'cursor': saving() ? 'not-allowed' : 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.6' : '1',
+                                'box-shadow': tradingSettings()?.priceDirection?.phase === 'markup' ? '0 0 20px rgba(56, 189, 248, 0.15)' : 'none'
+                            }}>
+                            <Show when={phaseSuccess() === 'markup'}>
+                                <div style="position: absolute; inset: 0; background: rgba(56, 189, 248, 0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </div>
+                            </Show>
+                            <div style="color: #38bdf8; margin-bottom: 10px; display: flex; justify-content: center;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                            </div>
+                            <div style="color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">급등</div>
+                            <div style="color: #38bdf8; font-size: 11px; font-weight: 700;">Markup / Pump</div>
+                            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">Bias +0.80 | Fast</div>
+                            <div style="color: #475569; font-size: 10px;">Target x3.0</div>
+                        </button>
+
+                        {/* Ranging */}
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('ranging', 'neutral', 0.0, 'slow', 1.0, '횡보 (Ranging)')}
+                            style={{
+                                'position': 'relative',
+                                'background': tradingSettings()?.priceDirection?.phase === 'ranging' ? 'rgba(148, 163, 184, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'ranging' ? '2px solid #94a3b8' : '1px solid rgba(255,255,255,0.08)',
+                                'border-radius': '14px', 'padding': '18px 12px', 'text-align': 'center',
+                                'cursor': saving() ? 'not-allowed' : 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.6' : '1',
+                                'box-shadow': tradingSettings()?.priceDirection?.phase === 'ranging' ? '0 0 20px rgba(148, 163, 184, 0.1)' : 'none'
+                            }}>
+                            <Show when={phaseSuccess() === 'ranging'}>
+                                <div style="position: absolute; inset: 0; background: rgba(148, 163, 184, 0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </div>
+                            </Show>
+                            <div style="color: #94a3b8; margin-bottom: 10px; display: flex; justify-content: center;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                            </div>
+                            <div style="color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">횡보</div>
+                            <div style="color: #94a3b8; font-size: 11px; font-weight: 700;">Ranging</div>
+                            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">Bias 0.00 | Slow</div>
+                            <div style="color: #475569; font-size: 10px;">Target x1.0</div>
+                        </button>
+
+                        {/* Distribution */}
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('distribution', 'bearish', -0.1, 'medium', 0.8, '분배 (Distribution)')}
+                            style={{
+                                'position': 'relative',
+                                'background': tradingSettings()?.priceDirection?.phase === 'distribution' ? 'rgba(168, 85, 247, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'distribution' ? '2px solid #a855f7' : '1px solid rgba(255,255,255,0.08)',
+                                'border-radius': '14px', 'padding': '18px 12px', 'text-align': 'center',
+                                'cursor': saving() ? 'not-allowed' : 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.6' : '1',
+                                'box-shadow': tradingSettings()?.priceDirection?.phase === 'distribution' ? '0 0 20px rgba(168, 85, 247, 0.15)' : 'none'
+                            }}>
+                            <Show when={phaseSuccess() === 'distribution'}>
+                                <div style="position: absolute; inset: 0; background: rgba(168, 85, 247, 0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </div>
+                            </Show>
+                            <div style="color: #a855f7; margin-bottom: 10px; display: flex; justify-content: center;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                            </div>
+                            <div style="color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">분배</div>
+                            <div style="color: #a855f7; font-size: 11px; font-weight: 700;">Distribution</div>
+                            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">Bias -0.10 | Medium</div>
+                            <div style="color: #475569; font-size: 10px;">Target x0.8</div>
+                        </button>
+
+                        {/* Markdown / Dump */}
+                        <button
+                            disabled={saving()}
+                            onClick={() => setMacroPhase('markdown', 'bearish', -0.8, 'fast', 0.5, '급락 (Markdown/Dump)')}
+                            style={{
+                                'position': 'relative',
+                                'background': tradingSettings()?.priceDirection?.phase === 'markdown' ? 'rgba(244, 63, 94, 0.12)' : 'rgba(15, 23, 42, 0.6)',
+                                'border': tradingSettings()?.priceDirection?.phase === 'markdown' ? '2px solid #f43f5e' : '1px solid rgba(255,255,255,0.08)',
+                                'border-radius': '14px', 'padding': '18px 12px', 'text-align': 'center',
+                                'cursor': saving() ? 'not-allowed' : 'pointer', 'transition': 'all 0.2s',
+                                'opacity': saving() ? '0.6' : '1',
+                                'box-shadow': tradingSettings()?.priceDirection?.phase === 'markdown' ? '0 0 20px rgba(244, 63, 94, 0.15)' : 'none'
+                            }}>
+                            <Show when={phaseSuccess() === 'markdown'}>
+                                <div style="position: absolute; inset: 0; background: rgba(244, 63, 94, 0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                </div>
+                            </Show>
+                            <div style="color: #f43f5e; margin-bottom: 10px; display: flex; justify-content: center;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>
+                            </div>
+                            <div style="color: #e2e8f0; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">급락</div>
+                            <div style="color: #f43f5e; font-size: 11px; font-weight: 700;">Markdown / Dump</div>
+                            <div style="color: #64748b; font-size: 10px; margin-top: 6px;">Bias -0.80 | Fast</div>
+                            <div style="color: #475569; font-size: 10px;">Target x0.5</div>
+                        </button>
+                    </div>
+                    <p style="color: #334155; font-size: 11px; text-align: center;">페이즈 변경 시 현재 시세 기준으로 타겟가가 자동 계산되어 엔진에 반영됩니다.</p>
+                </div>
+
+                {/* ── Capitulation Engine ── */}
+                <div class="mmd-section" style="background: linear-gradient(135deg, rgba(244,63,94,0.04) 0%, rgba(15,23,42,0) 60%); border: 1px solid rgba(244,63,94,0.15); border-radius: 20px; padding: 24px;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 260px;">
+                            <h2 style="display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 18px; font-weight: 900; color: #f43f5e;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                Flash-Crash Capitulation Engine
+                            </h2>
+                            <p style="color: #64748b; font-size: 12px; margin: 0 0 20px;">시장 급락을 즉시 시뮬레이션합니다. 손절 주문 트리거 및 타겟 지갑 청산에 사용합니다.</p>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                                <div>
+                                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">타겟 지갑</label>
+                                    <select
+                                        value={targetWhale()}
+                                        onInput={(e) => setTargetWhale(e.currentTarget.value)}
+                                        style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(244,63,94,0.2); border-radius: 8px; color: white; padding: 10px 12px; font-size: 13px; outline: none;"
+                                    >
+                                        <option value="all">모든 취약 지갑</option>
+                                        <For each={whales()}>{(w) => <option value={w.id}>{w.name} ({w.id.substring(0, 8)})</option>}</For>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">덤프 VCN 수량</label>
+                                    <input
+                                        type="number"
+                                        value={dumpAmount()}
+                                        onInput={(e) => setDumpAmount(Number(e.currentTarget.value) || 500000)}
+                                        style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(244,63,94,0.2); border-radius: 8px; color: white; padding: 10px 12px; font-size: 13px; outline: none; box-sizing: border-box;"
+                                    />
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 20px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <label style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">목표 하락률</label>
+                                    <span style="font-size: 16px; font-weight: 900; color: #f43f5e; font-family: monospace;">-{dropPercent()}%</span>
+                                </div>
+                                <input
+                                    type="range" min="5" max="80" step="1"
+                                    value={dropPercent()}
+                                    onInput={(e) => setDropPercent(Number(e.currentTarget.value))}
+                                    style="width: 100%; accent-color: #f43f5e; cursor: pointer;"
+                                />
+                                <div style="display: flex; justify-content: space-between; font-size: 10px; color: #475569; margin-top: 4px;">
+                                    <span>-5% (경미)</span><span>-40% (중간)</span><span>-80% (초강력)</span>
+                                </div>
+                            </div>
+
+                            <Show when={capMsg().type}>
+                                <div style={{
+                                    'padding': '10px 14px', 'border-radius': '8px', 'font-size': '12px', 'font-weight': '600', 'margin-bottom': '16px',
+                                    'background': capMsg().type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+                                    'border': capMsg().type === 'success' ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(244, 63, 94, 0.3)',
+                                    'color': capMsg().type === 'success' ? '#4ade80' : '#fca5a5'
+                                }}>
+                                    {capMsg().text}
+                                </div>
+                            </Show>
+
+                            <button
+                                onClick={triggerCapitulation}
+                                disabled={saving()}
+                                style={{
+                                    'width': '100%', 'padding': '14px', 'background': saving() ? 'rgba(244,63,94,0.4)' : 'linear-gradient(135deg, #e11d48, #be123c)',
+                                    'color': 'white', 'border': 'none', 'border-radius': '10px', 'font-weight': '900',
+                                    'font-size': '14px', 'letter-spacing': '0.05em', 'cursor': saving() ? 'not-allowed' : 'pointer',
+                                    'box-shadow': '0 4px 20px rgba(225, 29, 72, 0.4)', 'transition': 'all 0.2s', 'text-transform': 'uppercase'
+                                }}
+                            >
+                                <Show when={!saving()} fallback="실행 중...">
+                                    Flash-Crash 실행
+                                </Show>
+                            </button>
+                        </div>
+
+                        {/* Live preview panel */}
+                        <div style="min-width: 200px; background: rgba(0,0,0,0.3); border: 1px solid rgba(244,63,94,0.1); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+                            <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">예상 결과 미리보기</div>
+                            <div>
+                                <div style="color: #64748b; font-size: 11px; margin-bottom: 4px;">현재 시세</div>
+                                <div style="font-size: 22px; font-weight: 900; color: #fbbf24; font-family: monospace;">${fmt(market()?.lastPrice || 0)}</div>
+                            </div>
+                            <div style="border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 16px;">
+                                <div style="color: #f43f5e; font-size: 11px; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                                    예상 급락 후 시세
+                                </div>
+                                <div style="font-size: 28px; font-weight: 900; color: #f43f5e; font-family: monospace;">
+                                    ${((market()?.lastPrice || 0.1) * (1 - dropPercent() / 100)).toFixed(4)}
+                                </div>
+                            </div>
+                            <div style="border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 16px;">
+                                <div style="color: #64748b; font-size: 11px; margin-bottom: 4px;">덤프 USDT 가치</div>
+                                <div style="font-size: 16px; font-weight: 700; color: #fca5a5; font-family: monospace;">
+                                    ~${((dumpAmount() * (market()?.lastPrice || 0.1) * (1 - dropPercent() / 100))).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                                </div>
+                            </div>
+                            <div style="background: rgba(244,63,94,0.08); border-radius: 8px; padding: 10px; font-size: 11px; color: #f87171; line-height: 1.6;">
+                                이 작업은 되돌릴 수 없습니다. 다음 Engine 라운드에서 즉시 실행됩니다.
+                            </div>
+                        </div>
                     </div>
                 </div>
 
