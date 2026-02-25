@@ -811,17 +811,6 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     }, { merge: true });
     bc++;
 
-    // ─── Order Book Snapshot (for fast API reads) ───
-    const obBids = orderBook.bids.slice(0, 20).map((o) => ({
-        price: o.price,
-        amount: o.remainingAmount || o.amount,
-        agentId: o.agentId || "",
-    }));
-    const obAsks = orderBook.asks.slice(0, 20).map((o) => ({
-        price: o.price,
-        amount: o.remainingAmount || o.amount,
-        agentId: o.agentId || "",
-    }));
     wb.set(db.doc(`dex/orderbook/data/${DEX_PAIR}`), {
         bids: obBids,
         asks: obAsks,
@@ -829,6 +818,27 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         spreadPercent: parseFloat(orderBook.getSpreadPct()),
         updatedAt: admin.firestore.Timestamp.now(),
     });
+
+    // ─── Historical Analytics Snapshot ───
+    const initialVCN = agents.length * 5000000;
+    const initialUSDT = agents.length * 500000;
+    const currentVCN = agents.reduce((s, a) => s + (a.balances?.VCN || 0), 0);
+    const currentUSDT = agents.reduce((s, a) => s + (a.balances?.USDT || 0), 0);
+
+    const vacuumed = currentVCN - initialVCN;
+    const profit = currentUSDT - initialUSDT;
+    const totalExtracted = profit + (vacuumed * fp);
+
+    // Save snapshot every minute (or whenever engine runs)
+    const snapshotId = `pnl-${Math.floor(invocationStart / 60000) * 60000}`;
+    wb.set(db.doc(`dex/analytics/pnl_history/${snapshotId}`), {
+        timestamp: admin.firestore.Timestamp.fromMillis(invocationStart),
+        netTokenVacuumed: vacuumed,
+        spreadProfitUSDT: profit,
+        totalExtractedUSDT: totalExtracted,
+        marketPrice: fp,
+    });
+    bc++;
 
     // Candles
     try {

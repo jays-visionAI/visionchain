@@ -88,6 +88,8 @@ export default function TradingAdminDashboard() {
 
     const db = getAdminFirebaseDb();
 
+    const [pnlHistory, setPnlHistory] = createSignal<any[]>([]);
+
     async function loadData() {
         try {
             const res = await fetch(getApiUrl(), {
@@ -106,6 +108,17 @@ export default function TradingAdminDashboard() {
                 }
                 if (data.obStats) setObStats(data.obStats);
                 if (data.whales) setWhales(data.whales);
+            }
+
+            // Load analytics history
+            const analyticsRes = await fetch(getApiUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'getAnalyticsHistory', limit: 30 })
+            });
+            const analyticsData = await analyticsRes.json();
+            if (analyticsData.success) {
+                setPnlHistory(analyticsData.history || []);
             }
         } catch (e) {
             console.error('[TradingAdmin] Load error:', e);
@@ -137,51 +150,7 @@ export default function TradingAdminDashboard() {
         }
     };
 
-    const triggerCapitulation = async () => {
-        if (!confirm('WARNING: Executing a Flash-Crash Capitulation will dump market prices instantly to wipe target orders and trigger stop-losses. Proceed?')) return;
-        setSaving(true);
-        try {
-            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
-                capitulation: {
-                    active: true,
-                    targetUid: targetWhale(),
-                    dropPercent: dropPercent(),
-                    dumpAmount: dumpAmount()
-                },
-                updatedAt: new Date(),
-                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin@visionchain.co'
-            }, { merge: true });
-        } catch (e) {
-            console.error('[TradingAdmin] Error triggering capitulation', e);
-        } finally {
-            setSaving(false);
-        }
-    };
 
-    const setMacroPhase = async (phaseName: string, mode: string, bias: number, speed: string, targetMultiplier: number) => {
-        if (!confirm(`Are you sure you want to change the Trading Engine phase to "${phaseName.toUpperCase()}"?`)) return;
-        setSaving(true);
-        try {
-            const currentPrice = market()?.lastPrice || 0.1;
-            await setDoc(doc(db, 'dex/config/trading-settings/current'), {
-                priceDirection: {
-                    phase: phaseName,
-                    mode: mode,
-                    trendBias: bias,
-                    trendSpeed: speed,
-                    movementStyle: phaseName === 'markup' || phaseName === 'markdown' ? 'aggressive' : 'gradual',
-                    targetPrice: currentPrice * targetMultiplier,
-                    currentBasePrice: currentPrice // Reset base to current
-                },
-                updatedAt: new Date(),
-                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin@visionchain.co'
-            }, { merge: true });
-        } catch (e) {
-            console.error('[TradingAdmin] Error setting phase', e);
-        } finally {
-            setSaving(false);
-        }
-    };
 
     const fmt = (n: number, d = 4) => n?.toFixed(d) || '0';
     const fmtK = (n: number) => {
@@ -289,92 +258,9 @@ export default function TradingAdminDashboard() {
                     </div>
                 </div>
 
-                {/* Macro Strategy Control Board */}
-                <div class="mmd-section">
-                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-400">
-                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                        </svg>
-                        Macro Strategy Phase Control
-                        <span style="font-size: 11px; padding: 2px 6px; background: rgba(249, 115, 22, 0.15); border: 1px solid rgba(249, 115, 22, 0.3); border-radius: 4px; color: #f97316; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; margin-left: auto;">Engine Override</span>
-                    </h2>
-
-                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px;">
-                        <button
-                            disabled={saving()}
-                            onClick={() => setMacroPhase('accumulation', 'bullish', 0.2, 'slow', 1.5)}
-                            style={{
-                                'background': tradingSettings()?.priceDirection?.phase === 'accumulation' ? 'rgba(52, 211, 153, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': tradingSettings()?.priceDirection?.phase === 'accumulation' ? '1px solid #34d399' : '1px solid rgba(255,255,255,0.1)',
-                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
-                                'opacity': saving() ? '0.5' : '1'
-                            }}>
-                            <div style="color: #34d399; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
-                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Accumulation</h3>
-                            <p style="color: #94a3b8; font-size: 11px;">Stealth Buy (Slow)</p>
-                        </button>
-
-                        <button
-                            disabled={saving()}
-                            onClick={() => setMacroPhase('markup', 'bullish', 0.8, 'fast', 3.0)}
-                            style={{
-                                'background': tradingSettings()?.priceDirection?.phase === 'markup' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': tradingSettings()?.priceDirection?.phase === 'markup' ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
-                                'opacity': saving() ? '0.5' : '1'
-                            }}>
-                            <div style="color: #38bdf8; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg></div>
-                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Markup</h3>
-                            <p style="color: #94a3b8; font-size: 11px;">FOMO Pump (Fast)</p>
-                        </button>
-
-                        <button
-                            disabled={saving()}
-                            onClick={() => setMacroPhase('distribution', 'bearish', -0.1, 'medium', 0.8)}
-                            style={{
-                                'background': tradingSettings()?.priceDirection?.phase === 'distribution' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': tradingSettings()?.priceDirection?.phase === 'distribution' ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.1)',
-                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
-                                'opacity': saving() ? '0.5' : '1'
-                            }}>
-                            <div style="color: #a855f7; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
-                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Distribution</h3>
-                            <p style="color: #94a3b8; font-size: 11px;">Sell Top (Medium)</p>
-                        </button>
-
-                        <button
-                            disabled={saving()}
-                            onClick={() => setMacroPhase('markdown', 'bearish', -0.8, 'fast', 0.5)}
-                            style={{
-                                'background': tradingSettings()?.priceDirection?.phase === 'markdown' ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': tradingSettings()?.priceDirection?.phase === 'markdown' ? '1px solid #f43f5e' : '1px solid rgba(255,255,255,0.1)',
-                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
-                                'opacity': saving() ? '0.5' : '1'
-                            }}>
-                            <div style="color: #f43f5e; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg></div>
-                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Markdown</h3>
-                            <p style="color: #94a3b8; font-size: 11px;">Panic Dump (Fast)</p>
-                        </button>
-
-                        <button
-                            disabled={saving()}
-                            onClick={() => setMacroPhase('ranging', 'neutral', 0.0, 'slow', 1.0)}
-                            style={{
-                                'background': tradingSettings()?.priceDirection?.phase === 'ranging' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(15, 23, 42, 0.6)',
-                                'border': tradingSettings()?.priceDirection?.phase === 'ranging' ? '1px solid #94a3b8' : '1px solid rgba(255,255,255,0.1)',
-                                'border-radius': '12px', 'padding': '16px', 'text-align': 'center', 'cursor': 'pointer', 'transition': 'all 0.2s',
-                                'opacity': saving() ? '0.5' : '1'
-                            }}>
-                            <div style="color: #94a3b8; margin-bottom: 8px;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line></svg></div>
-                            <h3 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Ranging</h3>
-                            <p style="color: #94a3b8; font-size: 11px;">Sideways (Stable)</p>
-                        </button>
-                    </div>
-                </div>
-
                 {/* Capital Extraction Radar */}
                 <div class="mmd-section">
-                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400">
                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                         </svg>
@@ -382,48 +268,156 @@ export default function TradingAdminDashboard() {
                         <span style="font-size: 11px; padding: 2px 6px; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 4px; color: #4ade80; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; margin-left: auto;">Live Metric Tracking</span>
                     </h2>
 
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
-                        <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(0,0,0,0)); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 16px; padding: 24px; box-shadow: 0 8px 32px rgba(16, 185, 129, 0.05);">
-                            <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(16, 185, 129, 0.1); filter: blur(30px); border-radius: 50%;"></div>
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 10px #34d399;"></div>
-                                <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Net Token Vacuumed</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px;">
+                        {/* Net Token Vacuumed Card */}
+                        <div class="mmd-radar-card vcn">
+                            <div class="mmd-radar-header">
+                                <div class="mmd-radar-dot vcn"></div>
+                                <div class="mmd-radar-label">Net Token Vacuumed</div>
                             </div>
-                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #34d399; margin-bottom: 4px; text-shadow: 0 0 20px rgba(52, 211, 153, 0.2);">
-                                {netTokenVacuumed() >= 0 ? '+' : '-'}{tokenDisplay()} VCN
+                            <div class="mmd-radar-main">
+                                <span class="mmd-radar-val vcn">{netTokenVacuumed() >= 0 ? '+' : ''}{tokenDisplay()}</span>
+                                <span class="mmd-radar-unit">VCN</span>
                             </div>
-                            <div style="color: #64748b; font-size: 13px;">
-                                <Show when={netTokenVacuumed() < 0 && avgSellPrice() > 0} fallback={
-                                    netTokenVacuumed() >= 0 ? 'Accumulated from retail dumping' : 'Distributed to retail via layered asks'
-                                }>
+                            <div class="mmd-radar-sub">
+                                <Show when={netTokenVacuumed() < 0 && avgSellPrice() > 0} fallback={'Accumulated from retail'}>
                                     Sold at Avg ${avgSellPrice().toFixed(4)}
                                 </Show>
                             </div>
+                            <div class="mmd-radar-chart">
+                                <SolidApexCharts
+                                    type="area"
+                                    height={80}
+                                    options={{
+                                        chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                                        stroke: { curve: 'smooth', width: 2 },
+                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1 } },
+                                        colors: ['#34d399'],
+                                        tooltip: { enabled: false }
+                                    }}
+                                    series={[{ name: 'VCN', data: pnlHistory().map(h => h.netTokenVacuumed) }]}
+                                />
+                            </div>
                         </div>
 
-                        <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(56, 189, 248, 0.05), rgba(0,0,0,0)); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 16px; padding: 24px; box-shadow: 0 8px 32px rgba(56, 189, 248, 0.05);">
-                            <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(56, 189, 248, 0.1); filter: blur(30px); border-radius: 50%;"></div>
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 10px #38bdf8;"></div>
-                                <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Spread Strategy PnL</div>
+                        {/* Spread Profit Card */}
+                        <div class="mmd-radar-card usdt">
+                            <div class="mmd-radar-header">
+                                <div class="mmd-radar-dot usdt"></div>
+                                <div class="mmd-radar-label">Spread Strategy PnL</div>
                             </div>
-                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #7dd3fc; margin-bottom: 4px; text-shadow: 0 0 20px rgba(125, 211, 252, 0.2);">{spreadProfitUSDT() >= 0 ? '+' : ''}${spreadProfitUSDT().toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT</div>
-                            <div style="color: #64748b; font-size: 13px;">Generated via bid-ask layer gaps</div>
+                            <div class="mmd-radar-main">
+                                <span class="mmd-radar-val usdt">{spreadProfitUSDT() >= 0 ? '+' : ''}${spreadProfitUSDT().toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                <span class="mmd-radar-unit">USDT</span>
+                            </div>
+                            <div class="mmd-radar-sub">Generated via bid-ask layer gaps</div>
+                            <div class="mmd-radar-chart">
+                                <SolidApexCharts
+                                    type="area"
+                                    height={80}
+                                    options={{
+                                        chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                                        stroke: { curve: 'smooth', width: 2 },
+                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1 } },
+                                        colors: ['#38bdf8'],
+                                        tooltip: { enabled: false }
+                                    }}
+                                    series={[{ name: 'USDT', data: pnlHistory().map(h => h.spreadProfitUSDT) }]}
+                                />
+                            </div>
                         </div>
 
-                        <div style="position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(168, 85, 247, 0.05), rgba(0,0,0,0)); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 16px; padding: 24px; box-shadow: 0 8px 32px rgba(168, 85, 247, 0.05);">
-                            <div style="position: absolute; top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(168, 85, 247, 0.1); filter: blur(30px); border-radius: 50%;"></div>
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #a855f7; box-shadow: 0 0 10px #a855f7;"></div>
-                                <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Total Capital Extracted</div>
+                        {/* Total Capital Card */}
+                        <div class="mmd-radar-card total">
+                            <div class="mmd-radar-header">
+                                <div class="mmd-radar-dot total"></div>
+                                <div class="mmd-radar-label">Total Capital Extracted</div>
                             </div>
-                            <div style="font-family: var(--dx-mono, monospace); font-size: 32px; font-weight: 800; color: #d8b4fe; margin-bottom: 4px; text-shadow: 0 0 20px rgba(216, 180, 254, 0.2);">{totalExtractedUSDT() >= 0 ? '+' : ''}${totalExtractedUSDT().toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                            <div style="color: #64748b; font-size: 13px;">USDT Equivalent Value</div>
+                            <div class="mmd-radar-main">
+                                <span class="mmd-radar-val total">{totalExtractedUSDT() >= 0 ? '+' : ''}${totalExtractedUSDT().toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                <span class="mmd-radar-unit">USD-EQ</span>
+                            </div>
+                            <div class="mmd-radar-sub">Realized + Unrealized Value</div>
+                            <div class="mmd-radar-chart">
+                                <SolidApexCharts
+                                    type="area"
+                                    height={80}
+                                    options={{
+                                        chart: { sparkline: { enabled: true }, animations: { enabled: false } },
+                                        stroke: { curve: 'smooth', width: 2 },
+                                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.1 } },
+                                        colors: ['#a855f7'],
+                                        tooltip: { enabled: false }
+                                    }}
+                                    series={[{ name: 'Total', data: pnlHistory().map(h => h.totalExtractedUSDT) }]}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Whale Intelligence & Capitulation Engine */}
+                {/* Statistical Analysis & Health */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                        Statistical Analysis & System Health
+                    </h2>
+
+                    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 24px;">
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 24px;">
+                            <h3 style="color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px;">Extraction Efficiency vs. Market Price</h3>
+                            <SolidApexCharts
+                                type="line"
+                                height={280}
+                                options={{
+                                    chart: { background: 'transparent', toolbar: { show: false } },
+                                    theme: { mode: 'dark' },
+                                    colors: ['#38bdf8', '#fbbf24'],
+                                    stroke: { width: [3, 2], dashArray: [0, 5] },
+                                    xaxis: { categories: pnlHistory().map(h => new Date(h.timestamp?.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })), axisBorder: { show: false } },
+                                    yaxis: [
+                                        { title: { text: 'Extracted ($)' }, labels: { style: { colors: '#38bdf8' } } },
+                                        { opposite: true, title: { text: 'Price (VCN)' }, labels: { style: { colors: '#fbbf24' } } }
+                                    ],
+                                    grid: { borderColor: 'rgba(255,255,255,0.05)' },
+                                    legend: { position: 'top' }
+                                }}
+                                series={[
+                                    { name: 'Total Extracted', type: 'area', data: pnlHistory().map(h => h.totalExtractedUSDT) },
+                                    { name: 'VCN Price', type: 'line', data: pnlHistory().map(h => h.marketPrice) }
+                                ]}
+                            />
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; flex: 1;">
+                                <div style="color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 12px;">Extraction Efficiency</div>
+                                <div style="font-size: 24px; font-weight: 800; color: #f8fafc; margin-bottom: 4px;">
+                                    {Math.abs(spreadProfitUSDT() / (netTokenVacuumed() || 1)).toFixed(4)}
+                                </div>
+                                <div style="color: #64748b; font-size: 11px;">USDT profit per 1 VCN volume delta. High value indicates efficient market captures.</div>
+                            </div>
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; flex: 1;">
+                                <div style="color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 12px;">Inventory Drift / Skew</div>
+                                <div style="font-size: 24px; font-weight: 800; color: #f43f5e; margin-bottom: 4px;">
+                                    {((netTokenVacuumed() / initialVCN()) * 100).toFixed(2)}%
+                                </div>
+                                <div style="color: #64748b; font-size: 11px;">Deviation from initial VCN supply. Negative means the engine is "short" vs start.</div>
+                            </div>
+                            <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 16px; flex: 1;">
+                                <div style="color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 12px;">VCN + USDT Correlation</div>
+                                <div style="font-size: 24px; font-weight: 800; color: #22c55e; margin-bottom: 4px;">Strong +</div>
+                                <div style="color: #64748b; font-size: 11px;">Both asset classes growing. Targeted "Extraction Alpha" state active.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Whale Intelligence & Inventory Risk */}
                 <div class="mmd-section">
                     <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; color: #f43f5e;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -431,86 +425,50 @@ export default function TradingAdminDashboard() {
                             <line x1="12" y1="8" x2="12" y2="12"></line>
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
-                        Whale Intelligence & Target Capitulation
+                        Whale Intelligence & Target Monitoring
+                        <span style="font-size: 11px; padding: 2px 6px; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 4px; color: #f43f5e; text-transform: uppercase; font-weight: bold; margin-left: auto;">View Only</span>
                     </h2>
 
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
-                        {/* Whale List */}
-                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; overflow: hidden;">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
-                                <thead>
-                                    <tr style="background: rgba(255, 255, 255, 0.05); color: #94a3b8; text-transform: uppercase;">
-                                        <th style="padding: 12px 16px;">Target Label</th>
-                                        <th style="padding: 12px 16px;">Avg Entry</th>
-                                        <th style="padding: 12px 16px;">Unlocked / Total</th>
-                                        <th style="padding: 12px 16px;">Threat</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <For each={whales()}>
-                                        {(w) => {
-                                            const entryPrice = w.performance?.initialValueUSDT / (w.balances?.VCN || 1) || 0.10;
-                                            const currentPrice = market()?.lastPrice || 0.10;
-                                            const profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
-                                            const threat = profitPct > 50 ? 'HIGH' : profitPct > 10 ? 'MEDIUM' : 'LOW';
-
-                                            // Handle cases where agent doesn't have initialValue set cleanly yet
-                                            const displayEntry = entryPrice < 0.001 ? 0.10 : entryPrice;
-
-                                            return (
-                                                <tr style="border-top: 1px solid rgba(255, 255, 255, 0.05);">
-                                                    <td style="padding: 12px 16px; color: #f8fafc; font-weight: 500;">{w.name} ({w.id.substring(0, 6)})</td>
-                                                    <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">${displayEntry.toFixed(3)}</td>
-                                                    <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">
-                                                        <span style="color: #cbd5e1;">{(w.balances?.VCN / 1000000).toFixed(1)}M</span>
-                                                        <span style="color: #64748b;"> / {(w.balances?.VCN / 1000000).toFixed(1)}M VCN</span>
-                                                    </td>
-                                                    <td style="padding: 12px 16px;">
-                                                        <span style={{
-                                                            'padding': '4px 8px', 'border-radius': '4px', 'font-size': '11px', 'font-weight': 'bold',
-                                                            'background': threat === 'HIGH' ? 'rgba(244, 63, 94, 0.15)' : threat === 'MEDIUM' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                                                            'color': threat === 'HIGH' ? '#f43f5e' : threat === 'MEDIUM' ? '#fbbf24' : '#34d399'
-                                                        }}>
-                                                            {threat}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        }}
-                                    </For>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Capitulation Panel */}
-                        <div style="background: linear-gradient(180deg, rgba(244, 63, 94, 0.05) 0%, rgba(15, 23, 42, 0.8) 100%); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 12px; padding: 20px;">
-                            <h3 style="color: #fca5a5; font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 6px;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                                Capitulation Engine
-                            </h3>
-                            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-                                <div>
-                                    <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Target User Setup</label>
-                                    <select value={targetWhale()} onInput={(e) => setTargetWhale(e.currentTarget.value)} style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; padding: 8px; font-size: 13px;">
-                                        <option value="all">Any Vulnerable Wallets</option>
-                                        <For each={whales()}>{(w) => <option value={w.id}>{w.name}</option>}</For>
-                                    </select>
-                                </div>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                    <div>
-                                        <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Drop Target (%)</label>
-                                        <input type="number" value={dropPercent()} onInput={(e) => setDropPercent(Number(e.currentTarget.value) || 15)} style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; padding: 8px; font-size: 13px;" />
-                                    </div>
-                                    <div>
-                                        <label style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Dump Amount</label>
-                                        <input type="number" value={dumpAmount()} onInput={(e) => setDumpAmount(Number(e.currentTarget.value) || 500000)} style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; padding: 8px; font-size: 13px;" />
-                                    </div>
-                                </div>
-                            </div>
-                            <button onClick={triggerCapitulation} disabled={saving()} style="width: 100%; padding: 10px; background: #e11d48; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);">
-                                {saving() ? 'EXECUTING...' : 'EXECUTE FLASH CRASH'}
-                            </button>
-                        </div>
+                    <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; overflow: hidden; margin-bottom: 24px;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                            <thead style="background: rgba(255, 255, 255, 0.05); color: #94a3b8; text-transform: uppercase;">
+                                <tr>
+                                    <th style="padding: 12px 16px;">Target Label</th>
+                                    <th style="padding: 12px 16px;">Avg Entry</th>
+                                    <th style="padding: 12px 16px;">Unlocked / Total</th>
+                                    <th style="padding: 12px 16px;">Threat Level</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <For each={whales()}>
+                                    {(w) => {
+                                        const entryPrice = w.performance?.initialValueUSDT / (w.balances?.VCN || 1) || 0.10;
+                                        const currentPrice = market()?.lastPrice || 0.10;
+                                        const profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
+                                        const threat = profitPct > 50 ? 'HIGH' : profitPct > 10 ? 'MEDIUM' : 'LOW';
+                                        return (
+                                            <tr style="border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                                                <td style="padding: 12px 16px; color: #f8fafc; font-weight: 500;">{w.name} ({w.id.substring(0, 6)})</td>
+                                                <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">${entryPrice < 0.001 ? '0.100' : entryPrice.toFixed(3)}</td>
+                                                <td style="padding: 12px 16px; font-family: var(--dx-mono, monospace);">
+                                                    <span style="color: #cbd5e1;">{(w.balances?.VCN / 1000000).toFixed(1)}M</span>
+                                                    <span style="color: #64748b;"> VCN</span>
+                                                </td>
+                                                <td style="padding: 12px 16px;">
+                                                    <span style={{
+                                                        'padding': '4px 8px', 'border-radius': '4px', 'font-size': '11px', 'font-weight': 'bold',
+                                                        'background': threat === 'HIGH' ? 'rgba(244, 63, 94, 0.15)' : threat === 'MEDIUM' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                                        'color': threat === 'HIGH' ? '#f43f5e' : threat === 'MEDIUM' ? '#fbbf24' : '#34d399'
+                                                    }}>
+                                                        {threat}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    }}
+                                </For>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -844,6 +802,33 @@ export default function TradingAdminDashboard() {
                 .mmd-market-val { font-size: 13px; font-weight: 800; font-family: monospace; }
                 .mmd-market-val.up { color: #22c55e; }
                 .mmd-market-val.dn { color: #ef4444; }
+                .mmd-market-item { display: flex; flex-direction: column; gap: 4px; }
+                
+                .mmd-radar-card {
+                    position: relative; overflow: hidden;
+                    background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 16px; padding: 20px;
+                    display: flex; flex-direction: column;
+                }
+                .mmd-radar-card.vcn { border-color: rgba(16, 185, 129, 0.2); }
+                .mmd-radar-card.usdt { border-color: rgba(56, 189, 248, 0.2); }
+                .mmd-radar-card.total { border-color: rgba(168, 85, 247, 0.2); }
+
+                .mmd-radar-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+                .mmd-radar-dot { width: 8px; height: 8px; border-radius: 50%; }
+                .mmd-radar-dot.vcn { background: #34d399; box-shadow: 0 0 10px #34d399; }
+                .mmd-radar-dot.usdt { background: #38bdf8; box-shadow: 0 0 10px #38bdf8; }
+                .mmd-radar-dot.total { background: #a855f7; box-shadow: 0 0 10px #a855f7; }
+                
+                .mmd-radar-label { color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+                .mmd-radar-main { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+                .mmd-radar-val { font-family: var(--dx-mono, monospace); font-size: 26px; font-weight: 800; }
+                .mmd-radar-val.vcn { color: #34d399; }
+                .mmd-radar-val.usdt { color: #7dd3fc; }
+                .mmd-radar-val.total { color: #d8b4fe; }
+                .mmd-radar-unit { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.4); }
+                .mmd-radar-sub { color: #64748b; font-size: 11px; margin-bottom: 16px; }
+                .mmd-radar-chart { height: 80px; margin: 0 -10px -10px -10px; }
 
                 @keyframes killBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
                 @keyframes spin { to { transform: rotate(360deg); } }

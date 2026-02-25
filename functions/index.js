@@ -17328,6 +17328,16 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
         });
         return res.json({ success: true, actionId: id, message: "Action request registered for execution." });
       }
+      case "getAnalyticsHistory": {
+        const limit = Math.min(parseInt(req.body?.limit || "30"), 100);
+        const snap = await db.collection("dex/analytics/pnl_history")
+          .orderBy("timestamp", "desc")
+          .limit(limit)
+          .get();
+        const history = [];
+        snap.forEach((doc) => history.push(doc.data()));
+        return res.json({ success: true, history: history.reverse() });
+      }
       default:
         return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
     }
