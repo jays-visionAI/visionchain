@@ -812,15 +812,15 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     bc++;
 
     wb.set(db.doc(`dex/orderbook/data/${DEX_PAIR}`), {
-        bids: obBids,
-        asks: obAsks,
+        bids: orderBook.bids.slice(0, 20),
+        asks: orderBook.asks.slice(0, 20),
         lastPrice: fp,
         spreadPercent: parseFloat(orderBook.getSpreadPct()),
         updatedAt: admin.firestore.Timestamp.now(),
     });
 
     // ─── Historical Analytics Snapshot ───
-    const mmOnly = agents.filter(a => a.role === "market_maker");
+    const mmOnly = agents.filter((a) => a.role === "market_maker");
     const initialVCN = mmOnly.length * 5000000;
     const initialUSDT = mmOnly.length * 500000;
     const currentVCN = mmOnly.reduce((s, a) => s + (a.balances?.VCN || 0), 0);
@@ -924,8 +924,6 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     } catch (constraintErr) {
         console.warn("[TradingEngine] Constraint check skipped:", constraintErr.message);
     }
-
-
 
     // Candles
     try {
