@@ -843,7 +843,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
 
     // ─── Strategy Constraint Check ───
     try {
-        const constraintSnap = await db.doc('dex/config/strategy-constraints/current').get();
+        const constraintSnap = await db.doc("dex/config/strategy-constraints/current").get();
         if (constraintSnap.exists) {
             const constraints = constraintSnap.data();
             const minVCN = constraints.minVCN || 0;
@@ -856,11 +856,10 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
 
             const vcnBreached = totalVCN < minVCN;
             const usdtBreached = totalUSDT < minUSDT;
-            const currentPhase = tradingAdmin?.priceDirection?.phase || 'ranging';
+            const currentPhase = tradingAdmin?.priceDirection?.phase || "ranging";
 
             // Check vesting: if a vesting event is within 3 days, treat as conservative signal
-            const today = new Date().toISOString().slice(0, 10);
-            const upcomingUnlock = vestingSchedule.find(entry => {
+            const upcomingUnlock = vestingSchedule.find((entry) => {
                 const daysUntil = Math.ceil((new Date(entry.date).getTime() - Date.now()) / 86400000);
                 return daysUntil >= 0 && daysUntil <= 3;
             });
@@ -871,7 +870,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             if (vcnBreached) {
                 const alertId = `alert-vcn-${Math.floor(invocationStart / 60000) * 60000}`;
                 alertBatch.set(db.doc(`dex/analytics/alerts/${alertId}`), {
-                    type: 'vcn_below_threshold',
+                    type: "vcn_below_threshold",
                     message: `VCN 재고 부족: ${totalVCN.toLocaleString()} VCN < 최소 ${minVCN.toLocaleString()} VCN`,
                     currentVCN: totalVCN,
                     threshold: minVCN,
@@ -884,7 +883,7 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             if (usdtBreached) {
                 const alertId = `alert-usdt-${Math.floor(invocationStart / 60000) * 60000}`;
                 alertBatch.set(db.doc(`dex/analytics/alerts/${alertId}`), {
-                    type: 'usdt_below_threshold',
+                    type: "usdt_below_threshold",
                     message: `USDT 잔고 부족: $${totalUSDT.toLocaleString()} < 최소 $${minUSDT.toLocaleString()}`,
                     currentUSDT: totalUSDT,
                     threshold: minUSDT,
@@ -898,24 +897,24 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
                 const daysUntil = Math.ceil((new Date(upcomingUnlock.date).getTime() - Date.now()) / 86400000);
                 const alertId = `alert-vesting-${upcomingUnlock.date}`;
                 alertBatch.set(db.doc(`dex/analytics/alerts/${alertId}`), {
-                    type: 'vesting_unlock_imminent',
+                    type: "vesting_unlock_imminent",
                     message: `${upcomingUnlock.label}: ${(upcomingUnlock.amount / 1000000).toFixed(1)}M VCN 언락 D-${daysUntil}. 유동성 보수 조정 권장.`,
                     vestingDate: upcomingUnlock.date,
                     amount: upcomingUnlock.amount,
                     timestamp: admin.firestore.Timestamp.fromMillis(invocationStart),
                 }, { merge: true });
-                if (['markup', 'distribution'].includes(currentPhase)) needsDowngrade = true;
+                if (["markup", "distribution"].includes(currentPhase)) needsDowngrade = true;
                 console.log(`[TradingEngine] ALERT: Vesting unlock imminent (${upcomingUnlock.label}, D-${daysUntil})`);
             }
 
             // Auto phase downgrade
-            if (autoDowngrade && needsDowngrade && ['markup', 'distribution', 'markdown'].includes(currentPhase)) {
-                const downgradeTarget = vcnBreached ? 'accumulation' : 'ranging';
-                alertBatch.update(db.doc('dex/config/trading-settings/current'), {
-                    'priceDirection.phase': downgradeTarget,
-                    'priceDirection.trendBias': downgradeTarget === 'accumulation' ? 0.15 : 0,
-                    'priceDirection.autoDowngradedAt': admin.firestore.Timestamp.fromMillis(invocationStart),
-                    'priceDirection.autoDowngradedFrom': currentPhase,
+            if (autoDowngrade && needsDowngrade && ["markup", "distribution", "markdown"].includes(currentPhase)) {
+                const downgradeTarget = vcnBreached ? "accumulation" : "ranging";
+                alertBatch.update(db.doc("dex/config/trading-settings/current"), {
+                    "priceDirection.phase": downgradeTarget,
+                    "priceDirection.trendBias": downgradeTarget === "accumulation" ? 0.15 : 0,
+                    "priceDirection.autoDowngradedAt": admin.firestore.Timestamp.fromMillis(invocationStart),
+                    "priceDirection.autoDowngradedFrom": currentPhase,
                 });
                 console.log(`[TradingEngine] AUTO DOWNGRADE: ${currentPhase} → ${downgradeTarget}`);
             }
@@ -923,8 +922,9 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             await alertBatch.commit();
         }
     } catch (constraintErr) {
-        console.warn('[TradingEngine] Constraint check skipped:', constraintErr.message);
+        console.warn("[TradingEngine] Constraint check skipped:", constraintErr.message);
     }
+
 
 
     // Candles
