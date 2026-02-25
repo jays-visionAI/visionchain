@@ -88,6 +88,20 @@ export default function TradingAdminDashboard() {
     const [dropPercent, setDropPercent] = createSignal(15);
     const [dumpAmount, setDumpAmount] = createSignal(500000);
 
+    // Strategy Constraints
+    const [minVCN, setMinVCN] = createSignal(500000);
+    const [minUSDT, setMinUSDT] = createSignal(50000);
+    const [autoDowngrade, setAutoDowngrade] = createSignal(true);
+    const [constraintSaveMsg, setConstraintSaveMsg] = createSignal('');
+    const [alerts, setAlerts] = createSignal<any[]>([]);
+
+    // Vesting Schedule
+    const [vestingEntries, setVestingEntries] = createSignal<{ date: string; amount: number; label: string }[]>([]);
+    const [newVestDate, setNewVestDate] = createSignal('');
+    const [newVestAmount, setNewVestAmount] = createSignal(0);
+    const [newVestLabel, setNewVestLabel] = createSignal('');
+    const [vestSaveMsg, setVestSaveMsg] = createSignal('');
+
     const db = getAdminFirebaseDb();
 
     const [pnlHistory, setPnlHistory] = createSignal<any[]>([]);
@@ -116,12 +130,30 @@ export default function TradingAdminDashboard() {
             const analyticsRes = await fetch(getApiUrl(), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'getAnalyticsHistory', limit: 30 })
+                body: JSON.stringify({ action: 'getAnalyticsHistory', limit: 60 })
             });
             const analyticsData = await analyticsRes.json();
             if (analyticsData.success) {
                 setPnlHistory(analyticsData.history || []);
             }
+
+            // Load strategy constraints
+            try {
+                const cSnap = await getDoc(doc(db, 'dex/config/strategy-constraints/current'));
+                if (cSnap.exists()) {
+                    const c = cSnap.data();
+                    setMinVCN(c.minVCN ?? 500000);
+                    setMinUSDT(c.minUSDT ?? 50000);
+                    setAutoDowngrade(c.autoDowngrade ?? true);
+                    setVestingEntries(c.vestingSchedule || []);
+                }
+                // Load recent alerts
+                const alertSnap = await getDocs(query(collection(db, 'dex/analytics/alerts'), limit(5)));
+                const al: any[] = [];
+                alertSnap.forEach(d => al.push(d.data()));
+                setAlerts(al.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)));
+            } catch (e) { /* constraints not yet saved */ }
+
         } catch (e) {
             console.error('[TradingAdmin] Load error:', e);
         } finally {
@@ -203,6 +235,41 @@ export default function TradingAdminDashboard() {
             setSaving(false);
         }
     };
+
+    const saveConstraints = async () => {
+        setSaving(true);
+        setConstraintSaveMsg('');
+        try {
+            await setDoc(doc(db, 'dex/config/strategy-constraints/current'), {
+                minVCN: minVCN(),
+                minUSDT: minUSDT(),
+                autoDowngrade: autoDowngrade(),
+                vestingSchedule: vestingEntries(),
+                updatedAt: new Date(),
+                updatedBy: getAdminFirebaseAuth().currentUser?.email || 'admin'
+            }, { merge: true });
+            setConstraintSaveMsg('저장 완료');
+            setTimeout(() => setConstraintSaveMsg(''), 3000);
+        } catch (e: any) {
+            setConstraintSaveMsg(`오류: ${e.message}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const addVestingEntry = () => {
+        if (!newVestDate() || !newVestAmount()) return;
+        setVestingEntries(prev => [
+            ...prev,
+            { date: newVestDate(), amount: newVestAmount(), label: newVestLabel() || '언락 이벤트' }
+        ].sort((a, b) => a.date.localeCompare(b.date)));
+        setNewVestDate(''); setNewVestAmount(0); setNewVestLabel('');
+    };
+
+    const removeVestingEntry = (idx: number) => {
+        setVestingEntries(prev => prev.filter((_, i) => i !== idx));
+    };
+
 
     const fmt = (n: number, d = 4) => n?.toFixed(d) || '0';
     const fmtK = (n: number) => {
@@ -583,8 +650,323 @@ export default function TradingAdminDashboard() {
                     </div>
                 </div>
 
+
+                {/* ── 1. Strategy Constraints & Alert Panel ── */}
+                <div class="mmd-section" style="border: 1px solid rgba(251,191,36,0.15); border-radius: 20px; padding: 24px; background: linear-gradient(135deg, rgba(251,191,36,0.03) 0%, rgba(15,23,42,0) 60%);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+                        <h2 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; font-weight: 900; color: #fbbf24;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            Strategy Constraints & Alerts
+                        </h2>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <Show when={constraintSaveMsg()}>
+                                <span style="font-size: 12px; color: #4ade80; font-weight: 600;">{constraintSaveMsg()}</span>
+                            </Show>
+                            <button
+                                onClick={saveConstraints}
+                                disabled={saving()}
+                                style={{ 'padding': '8px 20px', 'background': saving() ? 'rgba(251,191,36,0.3)' : 'rgba(251,191,36,0.15)', 'border': '1px solid rgba(251,191,36,0.4)', 'border-radius': '8px', 'color': '#fbbf24', 'font-size': '13px', 'font-weight': '700', 'cursor': 'pointer' }}
+                            >저장</button>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        {/* Min VCN */}
+                        <div style="background: rgba(15,23,42,0.5); border: 1px solid rgba(52,211,153,0.15); border-radius: 12px; padding: 16px;">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #34d399;"></div>
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">VCN 최소 재고 하한선</span>
+                            </div>
+                            <input
+                                type="number"
+                                value={minVCN()}
+                                onInput={(e) => setMinVCN(Number(e.currentTarget.value))}
+                                style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(52,211,153,0.2); border-radius: 6px; color: #34d399; padding: 8px 10px; font-size: 14px; font-family: monospace; font-weight: 700; outline: none; box-sizing: border-box;"
+                            />
+                            <div style="font-size: 10px; color: #475569; margin-top: 6px;">이 수량 이하 → 경보 발생, 자동 다운그레이드</div>
+                            <div style={{
+                                'margin-top': '8px', 'padding': '6px 10px', 'border-radius': '6px', 'font-size': '12px', 'font-weight': '700',
+                                'background': (tradingAgents().reduce((s, a) => s + (a.balances?.VCN || 0), 0)) < minVCN() ? 'rgba(244,63,94,0.15)' : 'rgba(52,211,153,0.1)',
+                                'color': (tradingAgents().reduce((s, a) => s + (a.balances?.VCN || 0), 0)) < minVCN() ? '#f43f5e' : '#34d399'
+                            }}>
+                                현재: {tradingAgents().reduce((s, a) => s + (a.balances?.VCN || 0), 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} VCN
+                                {(tradingAgents().reduce((s, a) => s + (a.balances?.VCN || 0), 0)) < minVCN() ? ' — 경보!' : ' — 정상'}
+                            </div>
+                        </div>
+
+                        {/* Min USDT */}
+                        <div style="background: rgba(15,23,42,0.5); border: 1px solid rgba(56,189,248,0.15); border-radius: 12px; padding: 16px;">
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #38bdf8;"></div>
+                                <span style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">USDT 최소 유지선</span>
+                            </div>
+                            <input
+                                type="number"
+                                value={minUSDT()}
+                                onInput={(e) => setMinUSDT(Number(e.currentTarget.value))}
+                                style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 6px; color: #38bdf8; padding: 8px 10px; font-size: 14px; font-family: monospace; font-weight: 700; outline: none; box-sizing: border-box;"
+                            />
+                            <div style="font-size: 10px; color: #475569; margin-top: 6px;">이 금액 이하 → Markup 중단, Spread Capture로 전환</div>
+                            <div style={{
+                                'margin-top': '8px', 'padding': '6px 10px', 'border-radius': '6px', 'font-size': '12px', 'font-weight': '700',
+                                'background': (tradingAgents().reduce((s, a) => s + (a.balances?.USDT || 0), 0)) < minUSDT() ? 'rgba(244,63,94,0.15)' : 'rgba(56,189,248,0.1)',
+                                'color': (tradingAgents().reduce((s, a) => s + (a.balances?.USDT || 0), 0)) < minUSDT() ? '#f43f5e' : '#38bdf8'
+                            }}>
+                                현재: ${tradingAgents().reduce((s, a) => s + (a.balances?.USDT || 0), 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                                {(tradingAgents().reduce((s, a) => s + (a.balances?.USDT || 0), 0)) < minUSDT() ? ' — 경보!' : ' — 정상'}
+                            </div>
+                        </div>
+
+                        {/* Auto Downgrade */}
+                        <div style="background: rgba(15,23,42,0.5); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between;">
+                            <div>
+                                <div style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">자동 페이즈 다운그레이드</div>
+                                <div style="font-size: 11px; color: #475569; line-height: 1.6;">임계값 위반 시 Engine이 자동으로 보수적 페이즈(Ranging 또는 Accumulation)로 전환합니다.</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-top: 16px;">
+                                <button
+                                    onClick={() => setAutoDowngrade(!autoDowngrade())}
+                                    style={{
+                                        'width': '44px', 'height': '24px', 'border-radius': '12px', 'border': 'none', 'cursor': 'pointer', 'transition': 'all 0.2s', 'position': 'relative',
+                                        'background': autoDowngrade() ? '#a855f7' : 'rgba(255,255,255,0.1)'
+                                    }}
+                                >
+                                    <div style={{
+                                        'width': '18px', 'height': '18px', 'border-radius': '50%', 'background': 'white', 'position': 'absolute', 'top': '3px', 'transition': 'all 0.2s',
+                                        'left': autoDowngrade() ? '23px' : '3px'
+                                    }}></div>
+                                </button>
+                                <span style={{ 'font-size': '13px', 'font-weight': '700', 'color': autoDowngrade() ? '#a855f7' : '#475569' }}>
+                                    {autoDowngrade() ? 'ON' : 'OFF'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recent Alerts */}
+                    <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">최근 Engine 경보 로그</div>
+                        <Show when={alerts().length > 0} fallback={
+                            <div style="font-size: 12px; color: #1e293b; padding: 10px 0;">Engine이 실행되면 임계값 위반 시 자동 기록됩니다.</div>
+                        }>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <For each={alerts()}>{(al) =>
+                                    <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(244,63,94,0.06); border: 1px solid rgba(244,63,94,0.15); border-radius: 6px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                        <span style="font-size: 11px; color: #fca5a5; flex: 1;">{al.message}</span>
+                                        <span style="font-size: 10px; color: #475569;">{al.timestamp ? new Date(al.timestamp.seconds * 1000).toLocaleString('ko-KR') : ''}</span>
+                                    </div>
+                                }</For>
+                            </div>
+                        </Show>
+                    </div>
+                </div>
+
+                {/* ── 2. Phase Transition Rules ── */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #818cf8;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                        Phase Transition Rules
+                    </h2>
+                    <p style="color: #475569; font-size: 12px; margin: 0 0 20px;">각 페이즈에 진입하기 위한 조건입니다. Engine이 매 라운드 체크합니다.</p>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        {([
+                            { phase: 'accumulation', color: '#34d399', label: '매집 (Accumulation)', condition: 'VCN 재고가 최소 유지선의 120% 이하일 때 가능', icon: 'M3 3v18h18M7 16l4-4 4 4 5-5' },
+                            { phase: 'ranging', color: '#94a3b8', label: '횡보 (Ranging)', condition: '항상 전환 가능. VCN·USDT 모두 최소선 이상일 때 자동 유지', icon: 'M3 12h18M3 6h18M3 18h18' },
+                            { phase: 'markup', color: '#38bdf8', label: '급등 (Markup)', condition: 'VCN 재고 > 최소선 × 2 AND USDT > 최소선 × 1.5 일 때 가능', icon: 'M23 6l-13.5 15.5-5-5-5 7.5M17 6h6v6' },
+                            { phase: 'distribution', color: '#a855f7', label: '분배 (Distribution)', condition: 'VCN 재고 > 최소선 × 1.2 이상. USDT 충분히 확보된 상태', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM8 12h8' },
+                            { phase: 'markdown', color: '#f43f5e', label: '급락 (Markdown)', condition: '수동 설정만 가능. 단, USDT > 최소선 × 3 이상 확보 시', icon: 'M23 18l-13.5-15.5-5 5-5-7.5M17 18h6v-6' },
+                        ] as any[]).map((r) => {
+                            const isActive = tradingSettings()?.priceDirection?.phase === r.phase;
+                            const isCurrent = tradingSettings()?.priceDirection?.phase === r.phase;
+                            return (
+                                <div style={{
+                                    'display': 'flex', 'align-items': 'center', 'gap': '14px', 'padding': '14px 16px',
+                                    'background': isActive ? `rgba(${r.color === '#34d399' ? '52,211,153' : r.color === '#38bdf8' ? '56,189,248' : r.color === '#94a3b8' ? '148,163,184' : r.color === '#a855f7' ? '168,85,247' : '244,63,94'},0.08)` : 'rgba(15,23,42,0.4)',
+                                    'border': `1px solid ${isActive ? r.color : 'rgba(255,255,255,0.06)'}`,
+                                    'border-radius': '10px', 'transition': 'all 0.2s'
+                                }}>
+                                    <div style={{ 'width': '10px', 'height': '10px', 'border-radius': '50%', 'background': r.color, 'flex-shrink': '0' }}></div>
+                                    <div style="flex: 1;">
+                                        <div style={{ 'font-size': '13px', 'font-weight': '700', 'color': isActive ? r.color : '#e2e8f0', 'margin-bottom': '3px' }}>
+                                            {r.label}
+                                            {isCurrent && <span style={{ 'margin-left': '8px', 'font-size': '10px', 'padding': '2px 6px', 'background': `rgba(${r.color === '#34d399' ? '52,211,153' : r.color === '#38bdf8' ? '56,189,248' : r.color === '#94a3b8' ? '148,163,184' : r.color === '#a855f7' ? '168,85,247' : '244,63,94'},0.2)`, 'border-radius': '4px', 'color': r.color }}>현재 페이즈</span>}
+                                        </div>
+                                        <div style="font-size: 11px; color: #475569;">{r.condition}</div>
+                                    </div>
+                                    <div style={{
+                                        'font-size': '11px', 'padding': '4px 8px', 'border-radius': '4px', 'font-weight': '600',
+                                        'background': 'rgba(255,255,255,0.04)', 'color': '#475569', 'white-space': 'nowrap'
+                                    }}>
+                                        {r.phase === 'markup'
+                                            ? (tradingAgents().reduce((s, a) => s + (a.balances?.VCN || 0), 0) >= minVCN() * 2 && tradingAgents().reduce((s, a) => s + (a.balances?.USDT || 0), 0) >= minUSDT() * 1.5 ? '진입 가능' : '조건 미충족')
+                                            : r.phase === 'markdown'
+                                                ? (tradingAgents().reduce((s, a) => s + (a.balances?.USDT || 0), 0) >= minUSDT() * 3 ? '수동 가능' : '조건 미충족')
+                                                : '진입 가능'
+                                        }
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* ── 3. Dual Balance Tracker ── */}
+                <div class="mmd-section">
+                    <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #34d399;"><path d="M3 3v18h18"></path><path d="m7 12 4-4 4 4 5-5"></path></svg>
+                        Dual Balance Tracker
+                    </h2>
+                    <p style="color: #475569; font-size: 12px; margin: 0 0 20px;">VCN 재고(초록)와 USDT 잔고(파랑)의 시계열 추이 — 모두 초기값 이상을 유지해야 합니다.</p>
+                    <Show when={pnlHistory().length >= 2} fallback={
+                        <div style="background: rgba(15,23,42,0.4); border: 1px dashed rgba(255,255,255,0.06); border-radius: 12px; padding: 40px; text-align: center; color: #334155; font-size: 12px;">
+                            Trading Engine이 실행되면 자동으로 데이터가 채워집니다.
+                        </div>
+                    }>
+                        <div style="background: rgba(15,23,42,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 24px;">
+                            <SolidApexCharts
+                                type="line"
+                                height={280}
+                                options={{
+                                    chart: { background: 'transparent', toolbar: { show: false }, animations: { enabled: true, speed: 400 } },
+                                    theme: { mode: 'dark' },
+                                    colors: ['#34d399', '#38bdf8'],
+                                    dataLabels: { enabled: false },
+                                    stroke: { width: [2, 2], curve: 'smooth' },
+                                    fill: { type: ['gradient', 'gradient'], gradient: { shadeIntensity: 1, opacityFrom: 0.25, opacityTo: 0.0 } },
+                                    xaxis: {
+                                        categories: pnlHistory().map(h => {
+                                            const d = new Date((h.timestamp?.seconds || 0) * 1000);
+                                            return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                                        }),
+                                        tickAmount: Math.min(8, pnlHistory().length),
+                                        axisBorder: { show: false }, axisTicks: { show: false },
+                                        labels: { style: { colors: '#475569', fontSize: '10px' } }
+                                    },
+                                    yaxis: [
+                                        {
+                                            title: { text: 'VCN 재고', style: { color: '#34d399' } },
+                                            labels: {
+                                                style: { colors: '#34d399', fontSize: '11px' },
+                                                formatter: (v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v.toFixed(0)
+                                            }
+                                        },
+                                        {
+                                            opposite: true,
+                                            title: { text: 'USDT 잔고', style: { color: '#38bdf8' } },
+                                            labels: {
+                                                style: { colors: '#38bdf8', fontSize: '11px' },
+                                                formatter: (v: number) => `$${v >= 1000 ? `${(v / 1000).toFixed(1)}K` : v.toFixed(0)}`
+                                            }
+                                        }
+                                    ],
+                                    grid: { borderColor: 'rgba(255,255,255,0.04)', strokeDashArray: 4 },
+                                    legend: { position: 'top', labels: { colors: '#94a3b8' } },
+                                    annotations: {
+                                        yaxis: [
+                                            { y: minVCN(), borderColor: '#34d399', borderWidth: 1, strokeDashArray: 4, label: { text: `VCN 하한 ${(minVCN() / 1000000).toFixed(1)}M`, style: { color: '#34d399', background: 'transparent', fontSize: '10px' } } },
+                                        ]
+                                    },
+                                    tooltip: { theme: 'dark', shared: true }
+                                }}
+                                series={[
+                                    {
+                                        name: 'VCN 재고',
+                                        type: 'area',
+                                        data: pnlHistory().map(h => {
+                                            // netTokenVacuumed = current - initial. We want current VCN = initial + vacuumed
+                                            const initial = tradingAgents().length * 5000000;
+                                            return +((h.netTokenVacuumed || 0) + initial).toFixed(0);
+                                        })
+                                    },
+                                    {
+                                        name: 'USDT 잔고',
+                                        type: 'area',
+                                        data: pnlHistory().map(h => {
+                                            const initialU = tradingAgents().length * 500000;
+                                            return +((h.spreadProfitUSDT || 0) + initialU).toFixed(0);
+                                        })
+                                    }
+                                ]}
+                            />
+                        </div>
+                    </Show>
+                </div>
+
+                {/* ── 4. Vesting Unlock Schedule ── */}
+                <div class="mmd-section">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 12px;">
+                        <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #f97316;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            Vesting Unlock Schedule
+                        </h2>
+                        <button
+                            onClick={saveConstraints}
+                            disabled={saving()}
+                            style={{ 'padding': '7px 16px', 'background': 'rgba(249,115,22,0.12)', 'border': '1px solid rgba(249,115,22,0.3)', 'border-radius': '7px', 'color': '#f97316', 'font-size': '12px', 'font-weight': '700', 'cursor': 'pointer' }}
+                        >저장</button>
+                    </div>
+                    <p style="color: #475569; font-size: 12px; margin: 0 0 20px;">예정된 토큰 언락 일정을 등록하면, Engine이 해당 날짜 전 자동으로 유동성을 보수적으로 조정합니다.</p>
+
+                    {/* Add entry */}
+                    <div style="display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 10px; margin-bottom: 16px; align-items: end;">
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px; font-weight: 600;">날짜</div>
+                            <input type="date" value={newVestDate()} onInput={(e) => setNewVestDate(e.currentTarget.value)}
+                                style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: white; padding: 8px 10px; font-size: 13px; outline: none; width: 140px;" />
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px; font-weight: 600;">언락 수량 (VCN)</div>
+                            <input type="number" value={newVestAmount() || ''} onInput={(e) => setNewVestAmount(Number(e.currentTarget.value))}
+                                placeholder="예: 5000000"
+                                style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: white; padding: 8px 10px; font-size: 13px; outline: none; box-sizing: border-box;" />
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: #64748b; margin-bottom: 4px; font-weight: 600;">라벨</div>
+                            <input type="text" value={newVestLabel()} onInput={(e) => setNewVestLabel(e.currentTarget.value)}
+                                placeholder="예: Round 1 언락"
+                                style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; color: white; padding: 8px 10px; font-size: 13px; outline: none; box-sizing: border-box;" />
+                        </div>
+                        <button onClick={addVestingEntry}
+                            style="padding: 8px 14px; background: rgba(249,115,22,0.15); border: 1px solid rgba(249,115,22,0.3); border-radius: 7px; color: #f97316; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap;">
+                            + 추가
+                        </button>
+                    </div>
+
+                    {/* Schedule list */}
+                    <Show when={vestingEntries().length > 0} fallback={
+                        <div style="text-align: center; padding: 24px; color: #1e293b; font-size: 12px; border: 1px dashed rgba(255,255,255,0.06); border-radius: 10px;">
+                            등록된 언락 일정이 없습니다. 위에서 항목을 추가해주세요.
+                        </div>
+                    }>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <For each={vestingEntries()}>{(entry, idx) => {
+                                const daysLeft = Math.ceil((new Date(entry.date).getTime() - Date.now()) / 86400000);
+                                const urgency = daysLeft <= 3 ? '#f43f5e' : daysLeft <= 7 ? '#fbbf24' : '#34d399';
+                                return (
+                                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(15,23,42,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;">
+                                        <div style={{ 'width': '8px', 'height': '8px', 'border-radius': '50%', 'background': urgency, 'flex-shrink': '0' }}></div>
+                                        <div style="flex: 1;">
+                                            <div style="font-size: 13px; font-weight: 700; color: #e2e8f0;">{entry.label}</div>
+                                            <div style="font-size: 11px; color: #64748b;">{entry.date} — {(entry.amount / 1000000).toFixed(1)}M VCN</div>
+                                        </div>
+                                        <div style={{ 'font-size': '12px', 'font-weight': '700', 'color': urgency, 'padding': '4px 8px', 'border-radius': '4px', 'background': `${urgency}18`, 'white-space': 'nowrap' }}>
+                                            {daysLeft > 0 ? `D-${daysLeft}` : daysLeft === 0 ? 'TODAY' : `D+${Math.abs(daysLeft)} 지남`}
+                                        </div>
+                                        <button onClick={() => removeVestingEntry(idx())}
+                                            style="background: none; border: none; cursor: pointer; color: #334155; padding: 4px;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                    </div>
+                                );
+                            }}</For>
+                        </div>
+                    </Show>
+                </div>
+
                 {/* Capital Extraction Radar */}
                 <div class="mmd-section">
+
                     <h2 class="mmd-section-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-cyan-400">
                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
