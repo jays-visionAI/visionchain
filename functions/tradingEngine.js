@@ -105,7 +105,7 @@ class CloudOrderBook {
 
 // ─── Trading Order Generation ───────────────────────────────────────────────────
 
-function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePrice) {
+function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePrice, roundNumber) {
     const agentCfg = agent.tradingConfig || {};
 
     // Merge: Trading Admin settings override agent-level config
@@ -115,7 +115,7 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     const ao = tradingAdmin?.agentOverrides?.[agent.id] || {};
 
     // If agent is disabled via admin override, skip
-    if (ao.enabled === false) return [];
+    if (ao.enabled === false) return { orders: [], marketAction: null };
 
     // ── Price Direction ──
     const targetPrice = pd.targetPrice || agentCfg.basePrice || currentPrice;
@@ -129,6 +129,10 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     const maxP = targetPrice * (1 + priceRangePct / 100);
     basePrice = Math.max(Math.max(minP, priceFloor), Math.min(Math.min(maxP, priceCeiling), basePrice));
 
+    // ── Movement & Volume Strategy ──
+    const movementStyle = pd.movementStyle || "gradual"; // "gradual", "aggressive", "natural"
+    const volumeIntensity = pd.volumeIntensity || 0.5; // 0.0 to 1.0
+
     // ── Spread & Layers ──
     const baseSpreadPct = ao.spreadOverride ?? sc.baseSpread ?? agentCfg.spreadPercent ?? 1.0;
     const bidMult = sc.bidSpreadMultiplier ?? 1.0;
@@ -141,7 +145,6 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     // Dynamic spread: widen when volatile
     let effectiveSpread = baseSpreadPct;
     if (sc.dynamicSpreadEnabled && sc.dynamicSpreadRange) {
-        // Spread scales with distance from target (rough volatility proxy)
         const dist = Math.abs(currentPrice - targetPrice) / currentPrice;
         const dynMin = sc.dynamicSpreadRange.min || 0.2;
         const dynMax = sc.dynamicSpreadRange.max || 2.0;
@@ -154,7 +157,7 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
 
     // ── Inventory Management ──
     const totalVal = agent.balances.USDT + agent.balances.VCN * currentPrice;
-    if (totalVal <= 0) return [];
+    if (totalVal <= 0) return { orders: [], marketAction: null };
     const vcnRatio = (agent.balances.VCN * currentPrice) / totalVal;
     const inventoryTarget = ic.targetRatio ?? agentCfg.inventoryTarget ?? 0.5;
     const skewIntensity = ic.skewIntensity ?? 0.3;
@@ -163,46 +166,69 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     // ── Layer Pattern Multipliers ──
     function getPatternMult(i, total) {
         switch (layerPattern) {
-            case "increasing":
-                // More realistic: exponential growth for deeper layers
-                return Math.pow(1.5, i);
-            case "decreasing":
-                return Math.max(0.1, 2.0 - i * 0.3);
+            case "increasing": return Math.pow(1.5, i);
+            case "decreasing": return Math.max(0.1, 2.0 - i * 0.3);
             case "bell": {
                 const mid = (total - 1) / 2;
                 return 1.0 + 1.0 * (1 - Math.pow(Math.abs(i - mid) / Math.max(mid, 1), 2));
             }
-            default:
-                // Default to a slight increasing pattern for realism even if 'flat' is selected
-                return 1.0 + i * 0.2;
+            default: return 1.0 + i * 0.2;
         }
     }
 
-    // ── Generate Orders ──
+    // ── Organic Market Action Generation (Pushing Price & Volume) ──
+    let marketAction = null;
+    const distanceToTarget = (targetPrice - currentPrice) / currentPrice;
+
+    // 1. Price Pushing Action
+    if (movementStyle === "aggressive" && Math.abs(distanceToTarget) > 0.01) {
+        // Coordinated Market Buy/Sell to push price towards target
+        const pushChance = 0.4;
+        if (Math.random() < pushChance) {
+            const side = distanceToTarget > 0 ? "buy" : "sell";
+            const amount = Math.round(agent.balances[side === "buy" ? "USDT" : "VCN"] * 0.05 * (0.5 + Math.random()));
+            if (amount >= DEX_MIN_ORDER) {
+                marketAction = { side, amount, type: "market", reasoning: "PUSH_TO_TARGET" };
+            }
+        }
+    }
+
+    // 2. Organic Volume (Self-Trading / Wash) 
+    // This creates "ticks" in the chart without moving the price much
+    if (!marketAction && volumeIntensity > 0) {
+        const volumeChance = volumeIntensity * 0.8;
+        if (Math.random() < volumeChance) {
+            const side = Math.random() > 0.5 ? "buy" : "sell";
+            const amount = Math.round(DEX_MIN_ORDER * (1 + Math.random() * 5 * volumeIntensity));
+            marketAction = { side, amount, type: "market", reasoning: "ORGANIC_VOLUME" };
+        }
+    }
+
+    // ── Generate Limit Orders ──
     const orders = [];
     for (let i = 0; i < layerCount; i++) {
         const pMult = getPatternMult(i, layerCount);
         const pctPerLayer = layerAmountPct * pMult;
 
-        // Add organic jitter to make the orderbook look less "bot-like"
-        const jitterP = 1 + (Math.random() - 0.5) * 0.001; // ±0.05% price variation
-        const jitterA = 1 + (Math.random() - 0.5) * 0.15; // ±7.5% amount variation
+        const jitterP = 1 + (Math.random() - 0.5) * 0.001;
+        const jitterA = 1 + (Math.random() - 0.5) * 0.15;
 
-        // Buy order (bid side)
+        // Buy order
         const bp = basePrice * (1 - halfBidSpread - i * layerSpacing) * jitterP;
         const ba = Math.round((agent.balances.USDT * (pctPerLayer * (1 - rebal * 0.5)) / bp) * jitterA);
         if (ba >= DEX_MIN_ORDER && bp > 0) {
             orders.push({ side: "buy", price: Math.round(bp * 10000) / 10000, amount: ba });
         }
 
-        // Sell order (ask side)
+        // Sell order
         const sp = basePrice * (1 + halfAskSpread + i * layerSpacing) * jitterP;
         const sa = Math.round((agent.balances.VCN * (pctPerLayer * (1 + rebal * 0.5))) * jitterA);
         if (sa >= DEX_MIN_ORDER && sp > 0) {
             orders.push({ side: "sell", price: Math.round(sp * 10000) / 10000, amount: sa });
         }
     }
-    return orders;
+
+    return { orders, marketAction };
 }
 
 // ─── Preset Strategy Algorithms ────────────────────────────────────────────
@@ -444,6 +470,8 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
         const old = await db.collection("dex/orders/list").where("agentId", "==", trading.id).where("status", "in", ["open", "partial"]).get();
         old.forEach((d) => cb.update(d.ref, { status: "cancelled" }));
     }
+    // Increment round counter here once instead of inside loop for performance
+    roundNumber++;
     await cb.commit();
 
     // Custom agents: DeepSeek once
@@ -521,18 +549,30 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
             // Apply drift to engineBasePrice: drift towards target price
             const targetPrice = pd.targetPrice || sessionOpen;
             const diff = targetPrice - engineBasePrice;
-            const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * 5; // * 5 because we update every 5 micro-rounds
+
+            // Refined Drift: Smaller steps, but combined with market actions below
+            const movementStyle = pd.movementStyle || "gradual";
+            const driftMult = movementStyle === "gradual" ? 0.3 : 0.8;
+            const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * driftMult * 5;
             engineBasePrice += driftDelta;
 
             for (const trading of tradingAgents) {
+                // 1. Generate & Update Orderbook Walls
                 orderBook.cancelAgentOrders(trading.id);
-                for (const mo of generateTradingOrders(trading, orderBook.lastPrice, tradingAdmin, engineBasePrice)) {
+                const { orders, marketAction } = generateTradingOrders(trading, orderBook.lastPrice, tradingAdmin, engineBasePrice, roundNumber);
+
+                for (const mo of orders) {
                     orderBook.addLimitOrder({
                         id: `trading-${trading.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`,
                         agentId: trading.id, ownerUid: trading.ownerUid,
                         side: mo.side, price: mo.price, remainingAmount: mo.amount,
                         isTradingOrder: true, timestamp: ms,
                     });
+                }
+
+                // 2. Execute Coordinated Market Action (Price Pushing or Organic Volume)
+                if (marketAction) {
+                    mf.push(...execDec(orderBook, trading, marketAction, roundNumber, ms));
                 }
             }
         }
@@ -613,7 +653,8 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
     // Trading final orders (skip if kill switch or circuit breaker paused)
     if (!tradingPaused) {
         for (const trading of tradingAgents) {
-            for (const mo of generateTradingOrders(trading, fp, tradingAdmin, engineBasePrice)) {
+            const { orders } = generateTradingOrders(trading, fp, tradingAdmin, engineBasePrice, roundNumber);
+            for (const mo of orders) {
                 if (bc >= 380) break;
                 const oid = `trading-${trading.id}-${roundNumber}-${Math.random().toString(36).substr(2, 4)}`;
                 wb.set(db.doc(`dex/orders/list/${oid}`), {

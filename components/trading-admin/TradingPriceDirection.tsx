@@ -12,6 +12,8 @@ interface PriceDirectionConfig {
     currentBasePrice: number;
     trendBias: number;
     trendSpeed: TrendSpeed | number;
+    movementStyle: 'gradual' | 'aggressive' | 'natural';
+    volumeIntensity: number;
     priceFloor: number;
     priceCeiling: number;
     priceRangePercent: number;
@@ -26,6 +28,8 @@ const DEFAULT_CONFIG: PriceDirectionConfig = {
     currentBasePrice: 0.10,
     trendBias: 0,
     trendSpeed: 'medium' as TrendSpeed,
+    movementStyle: 'gradual',
+    volumeIntensity: 0.5,
     priceFloor: 0.05,
     priceCeiling: 0.50,
     priceRangePercent: 20,
@@ -34,19 +38,19 @@ const DEFAULT_CONFIG: PriceDirectionConfig = {
     phaseRotateInterval: 24,
 };
 
-const MODE_PRESETS: Record<TrendMode, { bias: number; desc: string }> = {
-    bullish: { bias: 0.3, desc: 'Gradual price increase, buy-side favored' },
-    neutral: { bias: 0, desc: 'Stable price, symmetric liquidity' },
-    bearish: { bias: -0.3, desc: 'Gradual price decrease, sell-side favored' },
-    custom: { bias: 0, desc: 'Manual control of all parameters' },
+const MODE_PRESETS: Record<TrendMode, { bias: number; style: 'gradual' | 'aggressive'; vol: number; desc: string }> = {
+    bullish: { bias: 0.3, style: 'gradual', vol: 0.6, desc: 'Gradual price increase with organic volume' },
+    neutral: { bias: 0, style: 'gradual', vol: 0.3, desc: 'Stable price, symmetric liquidity' },
+    bearish: { bias: -0.3, style: 'gradual', vol: 0.6, desc: 'Gradual price decrease, sell-side favored' },
+    custom: { bias: 0, style: 'gradual', vol: 0.5, desc: 'Manual control of all parameters' },
 };
 
-const PHASE_INFO: Record<Phase, { label: string; desc: string; defaultBias: number }> = {
-    accumulation: { label: 'Accumulation', desc: 'Quiet buying at support, narrow range', defaultBias: 0.05 },
-    markup: { label: 'Markup', desc: 'Trending up, bullish spread bias', defaultBias: 0.4 },
-    distribution: { label: 'Distribution', desc: 'Selling at resistance, wide range', defaultBias: -0.05 },
-    markdown: { label: 'Markdown', desc: 'Trending down, bearish spread bias', defaultBias: -0.4 },
-    ranging: { label: 'Ranging', desc: 'Sideways, grid-style liquidity', defaultBias: 0 },
+const PHASE_INFO: Record<Phase, { label: string; desc: string; defaultBias: number; defaultStyle: 'gradual' | 'aggressive' }> = {
+    accumulation: { label: 'Accumulation', desc: 'Quiet buying at support, narrow range', defaultBias: 0.05, defaultStyle: 'gradual' },
+    markup: { label: 'Markup', desc: 'Trending up, bullish spread bias', defaultBias: 0.4, defaultStyle: 'aggressive' },
+    distribution: { label: 'Distribution', desc: 'Selling at resistance, wide range', defaultBias: -0.05, defaultStyle: 'gradual' },
+    markdown: { label: 'Markdown', desc: 'Trending down, bearish spread bias', defaultBias: -0.4, defaultStyle: 'aggressive' },
+    ranging: { label: 'Ranging', desc: 'Sideways, grid-style liquidity', defaultBias: 0, defaultStyle: 'gradual' },
 };
 
 const SPEED_MAP: Record<TrendSpeed, { label: string; rate: string }> = {
@@ -93,15 +97,26 @@ export default function MMPriceDirection() {
     const selectMode = (mode: TrendMode) => {
         const preset = MODE_PRESETS[mode];
         if (mode !== 'custom') {
-            update('mode', mode);
-            update('trendBias', preset.bias);
+            setConfig(prev => ({
+                ...prev,
+                mode,
+                trendBias: preset.bias,
+                movementStyle: preset.style as any,
+                volumeIntensity: preset.vol
+            }));
         } else {
             update('mode', mode);
         }
     };
 
     const selectPhase = (phase: Phase) => {
-        update('phase', phase);
+        const info = PHASE_INFO[phase];
+        setConfig(prev => ({
+            ...prev,
+            phase,
+            trendBias: info.defaultBias,
+            movementStyle: info.defaultStyle as any
+        }));
     };
 
     const handleSave = async () => {
@@ -238,6 +253,52 @@ export default function MMPriceDirection() {
                                     {config().trendBias > 0 ? '+' : ''}{config().trendBias.toFixed(2)}
                                 </span>
                                 <span>Bullish +1.0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Movement & Volume Intensity */}
+                <div class="mmp-two-col">
+                    <div class="mmp-section">
+                        <h2 class="mmp-section-title">Movement Style</h2>
+                        <div style="display: flex; gap: 8px;">
+                            <For each={['gradual', 'aggressive', 'natural']}>
+                                {(style) => (
+                                    <button
+                                        onClick={() => update('movementStyle', style)}
+                                        class={`mmp-choice-btn ${config().movementStyle === style ? 'active' : ''}`}
+                                    >
+                                        {style.charAt(0).toUpperCase() + style.slice(1)}
+                                    </button>
+                                )}
+                            </For>
+                        </div>
+                        <p style="font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 8px;">
+                            {config().movementStyle === 'gradual' ? 'Slow, steady climb with wall movements.' :
+                                config().movementStyle === 'aggressive' ? 'Push price with coordinated market orders.' :
+                                    'Mimic organic market participants.'}
+                        </p>
+                    </div>
+
+                    <div class="mmp-section">
+                        <h2 class="mmp-section-title">Organic Volume Intensity</h2>
+                        <div class="mmp-slider-group">
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={config().volumeIntensity}
+                                onInput={(e) => update('volumeIntensity', parseFloat(e.currentTarget.value))}
+                                class="mmp-slider vol"
+                            />
+                            <div class="mmp-slider-labels">
+                                <span>None</span>
+                                <span class="mmp-bias-val" style="color: #38bdf8;">
+                                    {(config().volumeIntensity * 100).toFixed(0)}%
+                                </span>
+                                <span>High Liquidity</span>
                             </div>
                         </div>
                     </div>
@@ -413,6 +474,12 @@ export default function MMPriceDirection() {
                 .mmp-speed-label { font-weight: 800; font-size: 13px; }
                 .mmp-speed-rate { font-size: 10px; opacity: 0.6; }
                 .mmp-speed-input { width: 80px; background: rgba(0,0,0,0.4); border: 1px solid rgba(245,158,11,0.2); border-radius: 6px; padding: 4px 8px; color: #f59e0b; font-size: 11px; font-family: monospace; outline: none; text-align: center; margin-top: 4px; }
+
+                .mmp-choice-btn { flex: 1; padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+                .mmp-choice-btn:hover { border-color: rgba(255,255,255,0.12); color: white; }
+                .mmp-choice-btn.active { background: rgba(56, 189, 248, 0.1); border-color: #38bdf8; color: #38bdf8; }
+                .mmp-slider.vol { background: linear-gradient(to right, rgba(255,255,255,0.05), #38bdf8); }
+                .mmp-slider.vol::-webkit-slider-thumb { background: #38bdf8; box-shadow: 0 0 8px rgba(56, 189, 248, 0.4); }
 
                 .mmp-range-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
 

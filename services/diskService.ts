@@ -20,6 +20,16 @@ export interface DiskFile {
     createdAt: string;
     updatedAt: string;
     thumbnail?: string;
+    // Publishing metadata
+    isPublished?: boolean;
+    priceVcn?: number;
+    publishedAt?: string;
+    publisherEmail?: string;
+    purchaseCount?: number;
+    // Security
+    isEncrypted?: boolean;
+    salt?: string;
+    iv?: string;
 }
 
 export interface DiskFolder {
@@ -114,6 +124,7 @@ export const uploadDiskFile = (
     file: File,
     folder: string = '/',
     onProgress?: (p: UploadProgress) => void,
+    extraMetadata?: any
 ): Promise<DiskFile> => {
     return new Promise((resolve, reject) => {
         if (!email) { reject(new Error('Email required')); return; }
@@ -134,6 +145,7 @@ export const uploadDiskFile = (
                 originalName: file.name,
                 folder,
                 uploadedBy: email.toLowerCase(),
+                ...(extraMetadata || {})
             },
         });
 
@@ -390,4 +402,161 @@ export const getDiskUsage = async (email: string): Promise<DiskUsage> => {
         limitBytes,
         status,
     };
+};
+
+// ─── Publishing & Marketplace ───
+
+/**
+ * Publish a file to the global market.
+ */
+export const publishDiskFile = async (email: string, fileId: string, priceVcn: number): Promise<void> => {
+    const db = getFirebaseDb();
+    const userFileRef = doc(getUserDiskCollection(email), fileId);
+    const fileSnap = await getDoc(userFileRef);
+
+    if (!fileSnap.exists()) throw new Error('File not found');
+    const fileData = fileSnap.data() as DiskFile;
+
+    const now = new Date().toISOString();
+    const updateData = {
+        isPublished: true,
+        priceVcn,
+        publishedAt: now,
+        publisherEmail: email.toLowerCase()
+    };
+
+    // 1. Update user's file metadata
+    await updateDoc(userFileRef, updateData);
+
+    // 2. Add to global market collection
+    const marketRef = doc(db, 'published_materials', fileId);
+    await setDoc(marketRef, {
+        ...(fileData as any),
+        ...updateData,
+        purchaseCount: 0
+    });
+};
+
+/**
+ * Remove a file from the global market.
+ */
+export const unpublishDiskFile = async (email: string, fileId: string): Promise<void> => {
+    const db = getFirebaseDb();
+    const userFileRef = doc(getUserDiskCollection(email), fileId);
+
+    // 1. Update user's file metadata
+    await updateDoc(userFileRef, {
+        isPublished: false,
+        priceVcn: 0
+    });
+
+    // 2. Remove from global market collection
+    await deleteDoc(doc(db, 'published_materials', fileId));
+};
+
+/**
+ * List all published materials in the market.
+ */
+export const listPublishedMaterials = async (category?: string): Promise<DiskFile[]> => {
+    const db = getFirebaseDb();
+    const col = collection(db, 'published_materials');
+    let q;
+    if (category) {
+        q = query(col, where('category', '==', category), orderBy('publishedAt', 'desc'));
+    } else {
+        q = query(col, orderBy('publishedAt', 'desc'));
+    }
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DiskFile));
+};
+
+/**
+ * Check if user has already purchased a file.
+ */
+export const checkPurchaseStatus = async (email: string, fileId: string): Promise<boolean> => {
+    const db = getFirebaseDb();
+    const purchaseRef = doc(db, 'users', email.toLowerCase(), 'purchased_files', fileId);
+    const snap = await getDoc(purchaseRef);
+    return snap.exists();
+};
+
+/**
+ * Purchase a published material. Calls a Cloud Function to handle VCN split.
+ */
+export const purchaseMaterial = async (fileId: string): Promise<{ success: boolean; downloadURL: string }> => {
+    const functions = getFunctions(getFirebaseApp());
+    const purchaseCall = httpsCallable<{ fileId: string }, { success: boolean; downloadURL: string }>(functions, 'purchasePublishedFile');
+    const result = await purchaseCall({ fileId });
+    return result.data;
+};
+
+// ─── Client-side Encryption (AES-GCM) ───
+
+const ENCRYPTION_ALGO = 'AES-GCM';
+const KEY_ALGO = 'PBKDF2';
+
+/**
+ * Derives a key from a password and salt.
+ */
+async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+    const encoder = new TextEncoder();
+    const baseKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        "PBKDF2",
+        false,
+        ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+        {
+            name: "PBKDF2",
+            salt: salt as any,
+            iterations: 100000,
+            hash: 'SHA-256'
+        } as any,
+        baseKey,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    ) as any;
+}
+
+/**
+ * Encrypts a File and returns an ArrayBuffer.
+ */
+export const encryptFile = async (file: File, password: string): Promise<{ encryptedData: ArrayBuffer; salt: string; iv: string }> => {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt);
+
+    const fileBuffer = await file.arrayBuffer();
+    const encryptedData = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        fileBuffer
+    );
+
+    return {
+        encryptedData,
+        salt: btoa(String.fromCharCode(...salt)),
+        iv: btoa(String.fromCharCode(...iv))
+    };
+};
+
+/**
+ * Decrypts an ArrayBuffer and returns a Blob.
+ */
+export const decryptFile = async (data: ArrayBuffer, password: string, saltBase64: string, ivBase64: string, type: string): Promise<Blob> => {
+    const salt = new Uint8Array(atob(saltBase64).split('').map(c => c.charCodeAt(0)));
+    const iv = new Uint8Array(atob(ivBase64).split('').map(c => c.charCodeAt(0)));
+    const key = await deriveKey(password, salt);
+
+    const decryptedData = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        key,
+        data
+    );
+
+    return new Blob([decryptedData], { type });
 };

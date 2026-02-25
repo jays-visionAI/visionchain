@@ -11,9 +11,11 @@ import {
     uploadDiskFile, listDiskFiles, deleteDiskFile, renameDiskFile,
     createDiskFolder, listDiskFolders, deleteDiskFolder, renameDiskFolder,
     getDiskUsage, formatFileSize, getFileExtension, subscribeToDisk, cancelDiskSubscription,
+    publishDiskFile, unpublishDiskFile, encryptFile, decryptFile,
     type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
 } from '../../services/diskService';
 import { ethers } from 'ethers';
+import { Globe, Share2, ShieldCheck, ShieldAlert, Lock, Unlock, RotateCw } from 'lucide-solid';
 
 // ─── File Type Icon Picker ───
 
@@ -69,6 +71,21 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
     const [subsError, setSubsError] = createSignal('');
     const [selectedGb, setSelectedGb] = createSignal(10);
     const [isCanceling, setIsCanceling] = createSignal(false);
+
+    // Publishing State
+    const [showPublishModal, setShowPublishModal] = createSignal(false);
+    const [publishPrice, setPublishPrice] = createSignal('5');
+    const [publishLoading, setPublishLoading] = createSignal(false);
+
+    // Batch Actions State
+    const [selectedItems, setSelectedItems] = createSignal<Set<string>>(new Set());
+    const [isSelectMode, setIsSelectMode] = createSignal(false);
+
+    // Encryption State
+    const [useEncryption, setUseEncryption] = createSignal(false);
+    const [encryptionPassword, setEncryptionPassword] = createSignal('');
+    const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+    const [decryptingFileId, setDecryptingFileId] = createSignal('');
 
     let fileInputRef: HTMLInputElement | undefined;
 
@@ -140,8 +157,15 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
 
     const handleFiles = async (fileList: FileList | File[]) => {
         if (!email() || usage().status === 'overdue' || usage().status === 'none') return;
-        setShowUploadPanel(true);
 
+        if (useEncryption() && !encryptionPassword()) {
+            setShowPasswordModal(true);
+            // We'll resume after password is set? Actually let's just ask for password first.
+            alert('Please set an encryption password in the settings first.');
+            return;
+        }
+
+        setShowUploadPanel(true);
         const filesToUpload = Array.from(fileList);
 
         for (const file of filesToUpload) {
@@ -155,13 +179,26 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
             setUploadQueue(prev => [...prev, progressEntry]);
 
             try {
-                await uploadDiskFile(email(), file, currentPath(), (p) => {
+                let fileToUpload: File | Blob = file;
+                let encryptionMeta = {};
+
+                if (useEncryption()) {
+                    const encrypted = await encryptFile(file, encryptionPassword());
+                    fileToUpload = new File([encrypted.encryptedData], file.name, { type: file.type });
+                    encryptionMeta = {
+                        isEncrypted: true,
+                        salt: encrypted.salt,
+                        iv: encrypted.iv
+                    };
+                }
+
+                await uploadDiskFile(email(), fileToUpload as File, currentPath(), (p) => {
                     setUploadQueue(prev =>
                         prev.map(item =>
                             item.fileName === p.fileName ? { ...item, ...p } : item
                         )
                     );
-                });
+                }, encryptionMeta);
             } catch (err: any) {
                 setUploadQueue(prev =>
                     prev.map(item =>
@@ -173,7 +210,6 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
             }
         }
 
-        // Reload after all uploads
         await loadData();
     };
 
@@ -320,6 +356,110 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
         }
     };
 
+    const handleDownload = async (file: DiskFile) => {
+        if (file.isEncrypted) {
+            if (!encryptionPassword()) {
+                setShowPasswordModal(true);
+                alert('Please enter your encryption password first.');
+                return;
+            }
+
+            setDecryptingFileId(file.id);
+            try {
+                const response = await fetch(file.downloadURL);
+                const buffer = await response.arrayBuffer();
+                const blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } catch (err: any) {
+                alert('Decryption failed. Wrong password?');
+            } finally {
+                setDecryptingFileId('');
+            }
+        } else {
+            window.open(file.downloadURL, '_blank');
+        }
+    };
+
+    const handlePublish = async () => {
+        const ctx = contextMenu();
+        if (!ctx || ctx.type !== 'file' || !props.walletAddress) return;
+        const item = ctx.item as DiskFile;
+
+        setPublishLoading(true);
+        try {
+            const price = parseFloat(publishPrice());
+            if (isNaN(price) || price < 0) throw new Error('Invalid price');
+
+            await publishDiskFile(props.walletAddress, item.id, price);
+            setShowPublishModal(false);
+            setContextMenu(null);
+            await loadData();
+            alert('File published successfully to Vision Market!');
+        } catch (err: any) {
+            console.error('Publish error:', err);
+            alert('Failed to publish: ' + err.message);
+        } finally {
+            setPublishLoading(false);
+        }
+    };
+
+    const handleUnpublish = async () => {
+        const ctx = contextMenu();
+        if (!ctx || ctx.type !== 'file' || !props.walletAddress) return;
+        const item = ctx.item as DiskFile;
+
+        if (!confirm('Are you sure you want to remove this file from Vision Market?')) return;
+
+        try {
+            await unpublishDiskFile(props.walletAddress, item.id);
+            await loadData();
+            setContextMenu(null);
+        } catch (err: any) {
+            alert('Failed to unpublish: ' + err.message);
+        }
+    };
+
+    const toggleSelection = (id: string) => {
+        setSelectedItems(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            if (next.size === 0) setIsSelectMode(false);
+            return next;
+        });
+    };
+
+    const clearSelection = () => {
+        setSelectedItems(new Set<string>());
+        setIsSelectMode(false);
+    };
+
+    const handleBatchDelete = async () => {
+        const ids = Array.from(selectedItems());
+        if (!ids.length) return;
+        if (!confirm(`Delete ${ids.length} items?`)) return;
+
+        setIsLoading(true);
+        try {
+            await Promise.all(ids.map(id => {
+                const isFile = files().some(f => f.id === id);
+                return isFile ? deleteDiskFile(email(), id) : deleteDiskFolder(email(), id);
+            }));
+            clearSelection();
+            await loadData();
+        } catch (e) {
+            alert('Failed to delete some items.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // ─── Usage Computed ───
 
     const usagePercent = createMemo(() => {
@@ -415,6 +555,19 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                             <List class="w-4 h-4" />
                         </button>
                     </div>
+
+                    {/* Encryption Toggle */}
+                    <button
+                        onClick={() => setUseEncryption(!useEncryption())}
+                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${useEncryption()
+                            ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                            }`}
+                        title={useEncryption() ? 'Client-side Encryption ON' : 'Client-side Encryption OFF'}
+                    >
+                        {useEncryption() ? <ShieldCheck class="w-4 h-4" /> : <ShieldAlert class="w-4 h-4 text-gray-600" />}
+                        <span class="hidden md:inline">Private</span>
+                    </button>
 
                     {/* New Folder */}
                     <button
@@ -625,10 +778,28 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                             {/* Folders */}
                             <For each={filteredFolders()}>
                                 {(folder) => (
-                                    <div class="relative group">
+                                    <div
+                                        class={`relative group bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 transition-all ${selectedItems().has(folder.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
+                                            }`}
+                                    >
+                                        {/* Selection Checkbox */}
+                                        <div
+                                            class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(folder.id)
+                                                ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                : 'bg-black/40 border-white/20 text-transparent'
+                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setIsSelectMode(true);
+                                                toggleSelection(folder.id);
+                                            }}
+                                        >
+                                            <Check class="w-3.5 h-3.5" />
+                                        </div>
+
                                         <button
-                                            onClick={() => navigateToFolder(folder.path)}
-                                            class="group w-full bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-2 transition-all text-center"
+                                            onClick={() => isSelectMode() ? toggleSelection(folder.id) : navigateToFolder(folder.path)}
+                                            class="w-full flex flex-col items-center gap-2 text-center"
                                         >
                                             <Folder class="w-10 h-10 text-cyan-400/80 group-hover:text-cyan-400 transition-colors" />
                                             <span class="text-xs font-semibold text-gray-300 truncate w-full">{folder.name}</span>
@@ -649,11 +820,31 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                             <For each={filteredFiles()}>
                                 {(file) => (
                                     <div
-                                        class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12] rounded-xl p-4 flex flex-col items-center gap-2 transition-all cursor-pointer ${deletingId() === file.id ? 'opacity-40' : ''}`}
-                                        onClick={() => setPreviewFile(file)}
+                                        class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
+                                            } ${deletingId() === file.id ? 'opacity-40' : ''}`}
+                                        onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
+                                        onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
+                                        }}
                                     >
+                                        {/* Selection Checkbox */}
+                                        <div
+                                            class={`absolute top-2 left-2 z-10 w-5 h-5 rounded-md border transition-all flex items-center justify-center ${selectedItems().has(file.id)
+                                                ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                : 'bg-black/40 border-white/20 text-transparent'
+                                                } ${isSelectMode() || selectedItems().size > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setIsSelectMode(true);
+                                                toggleSelection(file.id);
+                                            }}
+                                        >
+                                            <Check class="w-3.5 h-3.5" />
+                                        </div>
+
                                         {/* Thumbnail or Icon */}
-                                        <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5">
+                                        <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
                                             <Show
                                                 when={file.type.startsWith('image/')}
                                                 fallback={
@@ -670,20 +861,36 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                                 />
                                             </Show>
                                         </div>
+
                                         <div class="w-full text-left">
-                                            <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
+                                            <div class="flex items-center gap-1.5 min-w-0">
+                                                <div class="text-xs font-semibold text-gray-200 truncate">{file.name}</div>
+                                                <Show when={file.isPublished}>
+                                                    <div class="shrink-0 w-3 h-3 bg-cyan-500 rounded-full flex items-center justify-center" title="Published to Market">
+                                                        <Globe class="w-2 h-2 text-black" />
+                                                    </div>
+                                                </Show>
+                                            </div>
                                             <div class="text-[10px] text-gray-500 mt-0.5">{formatFileSize(file.size)}</div>
                                         </div>
+
                                         {/* Context button */}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
-                                            }}
-                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
-                                        >
-                                            <MoreVertical class="w-3.5 h-3.5" />
-                                        </button>
+                                        <div class="absolute top-2 right-2 flex gap-1">
+                                            <Show when={decryptingFileId() === file.id}>
+                                                <div class="p-1.5 rounded-lg bg-cyan-500/20 text-cyan-400 animate-spin">
+                                                    <RotateCw class="w-3.5 h-3.5" />
+                                                </div>
+                                            </Show>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
+                                                }}
+                                                class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                                            >
+                                                <MoreVertical class="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </For>
@@ -729,14 +936,32 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                             <For each={filteredFiles()}>
                                 {(file) => (
                                     <div
-                                        class={`group grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${deletingId() === file.id ? 'opacity-40' : ''}`}
-                                        onClick={() => setPreviewFile(file)}
+                                        class={`group grid grid-cols-[1fr_100px_120px_40px] gap-2 px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.04] transition-all items-center cursor-pointer ${selectedItems().has(file.id) ? 'bg-cyan-500/10' : ''
+                                            } ${deletingId() === file.id ? 'opacity-40' : ''}`}
+                                        onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
                                     >
                                         <div class="flex items-center gap-3 min-w-0">
+                                            {/* List Selection Check */}
+                                            <div
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsSelectMode(true);
+                                                    toggleSelection(file.id);
+                                                }}
+                                                class={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${selectedItems().has(file.id)
+                                                    ? 'bg-cyan-500 border-cyan-500 text-black'
+                                                    : 'bg-white/5 border-white/10 text-transparent group-hover:border-white/30'
+                                                    }`}
+                                            >
+                                                <Check class="w-3.5 h-3.5" />
+                                            </div>
                                             <div class={`shrink-0 ${fileTypeColor(file.type)}`}>
                                                 <FileTypeIcon type={file.type} name={file.name} />
                                             </div>
                                             <span class="text-sm text-gray-200 truncate">{file.name}</span>
+                                            <Show when={file.isPublished}>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-black text-cyan-400 uppercase tracking-tighter">Published</span>
+                                            </Show>
                                         </div>
                                         <span class="text-xs text-gray-500">{formatFileSize(file.size)}</span>
                                         <span class="text-xs text-gray-500">{new Date(file.createdAt).toLocaleDateString()}</span>
@@ -806,6 +1031,24 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                     >
                                         <FileText class="w-4 h-4" /> Rename
                                     </button>
+
+                                    <Show when={ctx().type === 'file'}>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const file = ctx().item as DiskFile;
+                                                if (file.isPublished) {
+                                                    handleUnpublish();
+                                                } else {
+                                                    setShowPublishModal(true);
+                                                    setContextMenu({ ...ctx(), y: -2000 }); // visually hide menu but keep state
+                                                }
+                                            }}
+                                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cyan-400 hover:bg-cyan-500/10 transition-all font-bold"
+                                        >
+                                            <Globe class="w-4 h-4" /> {(ctx().item as DiskFile).isPublished ? 'Unpublish' : 'Publish to Market'}
+                                        </button>
+                                    </Show>
 
                                     <div class="h-px bg-white/[0.06] my-1" />
                                     <button
@@ -1007,6 +1250,186 @@ export const WalletDisk = (props: { privateKey?: string; walletAddress?: string;
                                     </div>
                                 )}
                             </For>
+                        </div>
+                    </Motion.div>
+                </Show>
+            </Presence>
+
+            {/* ── Publish Modal ── */}
+            <Presence>
+                <Show when={showPublishModal()}>
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+                        onClick={() => setShowPublishModal(false)}
+                    >
+                        <Motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            class="bg-[#12121a] border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl relative"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-24 h-24 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" />
+
+                            <div class="text-center mb-6">
+                                <div class="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-cyan-500/20">
+                                    <Globe class="w-8 h-8 text-cyan-400" />
+                                </div>
+                                <h3 class="text-xl font-black text-white italic uppercase tracking-tight">Publish to Market</h3>
+                                <p class="text-xs text-gray-500 mt-1">Set a price in VCN for others to purchase access.</p>
+                            </div>
+
+                            <div class="space-y-4 mb-8">
+                                <div class="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase mb-2">Sale Price (VCN)</div>
+                                    <div class="flex items-center gap-3">
+                                        <input
+                                            type="number"
+                                            value={publishPrice()}
+                                            onInput={(e) => setPublishPrice(e.currentTarget.value)}
+                                            class="flex-1 bg-transparent text-2xl font-black text-white outline-none"
+                                            placeholder="0.00"
+                                            min="0"
+                                        />
+                                        <span class="text-sm font-bold text-cyan-400">VCN</span>
+                                    </div>
+                                </div>
+
+                                <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                                    <div class="flex gap-3">
+                                        <Share2 class="w-5 h-5 text-amber-400 shrink-0" />
+                                        <div class="text-[11px] text-amber-200/70 leading-relaxed">
+                                            Vision Chain takes a <span class="text-amber-400 font-bold">30% commission</span> on all sales. You will receive <span class="text-cyan-400 font-bold">{(parseFloat(publishPrice() || '0') * 0.7).toFixed(2)} VCN</span> per sale.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    onClick={() => setShowPublishModal(false)}
+                                    class="flex-1 py-3 bg-white/[0.05] hover:bg-white/[0.1] text-white font-bold rounded-xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handlePublish}
+                                    disabled={publishLoading()}
+                                    class="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-tighter rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {publishLoading() ? (
+                                        <div class="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                                    ) : 'Publish Now'}
+                                </button>
+                            </div>
+                        </Motion.div>
+                    </Motion.div>
+                </Show>
+            </Presence>
+
+            {/* ── Encryption Password Modal ── */}
+            <Presence>
+                <Show when={showPasswordModal()}>
+                    <Motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        class="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    >
+                        <Motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            class="bg-[#1a1a24] border border-white/10 rounded-[32px] p-8 max-w-sm w-full shadow-2xl"
+                        >
+                            <div class="flex flex-col items-center text-center mb-8">
+                                <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 border border-cyan-500/20">
+                                    <Lock class="w-8 h-8 text-cyan-400" />
+                                </div>
+                                <h1 class="text-2xl font-black text-white mb-2 uppercase tracking-tight">Encryption Key</h1>
+                                <p class="text-sm text-gray-500 leading-relaxed font-medium">This password is required to encrypt your private files. <b>Vision Chain does not store this key.</b></p>
+                            </div>
+
+                            <div class="space-y-4 mb-8">
+                                <div class="bg-white/[0.03] border border-white/[0.08] rounded-2xl px-4 py-3 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all">
+                                    <div class="text-[10px] font-bold text-gray-500 uppercase mb-1">Passphrase</div>
+                                    <input
+                                        type="password"
+                                        value={encryptionPassword()}
+                                        onInput={(e) => setEncryptionPassword(e.currentTarget.value)}
+                                        placeholder="Min. 4 characters"
+                                        class="bg-transparent border-none text-white text-lg font-black placeholder-gray-700 focus:outline-none w-full"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowPasswordModal(false);
+                                        setUseEncryption(false);
+                                    }}
+                                    class="flex-1 h-14 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-black uppercase tracking-tight transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (encryptionPassword().length < 4) {
+                                            alert('Password must be at least 4 characters.');
+                                            return;
+                                        }
+                                        setShowPasswordModal(false);
+                                        setUseEncryption(true);
+                                    }}
+                                    class="flex-1 h-14 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-black uppercase tracking-tight shadow-lg shadow-cyan-500/20 transition-all"
+                                >
+                                    Enable Encryption
+                                </button>
+                            </div>
+                        </Motion.div>
+                    </Motion.div>
+                </Show>
+            </Presence>
+
+            {/* ── Batch Action Bar ── */}
+            <Presence>
+                <Show when={selectedItems().size > 0}>
+                    <Motion.div
+                        initial={{ y: 100, x: '-50%', opacity: 0 }}
+                        animate={{ y: 0, x: '-50%', opacity: 1 }}
+                        exit={{ y: 100, x: '-50%', opacity: 0 }}
+                        class="fixed bottom-24 lg:bottom-10 left-1/2 -translate-x-1/2 z-[100] bg-[#1a1a24] border border-white/10 rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-6 backdrop-blur-xl"
+                    >
+                        <div class="flex items-center gap-3 pr-6 border-r border-white/10">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500 text-black flex items-center justify-center font-black text-sm">
+                                {selectedItems().size}
+                            </div>
+                            <div class="text-xs font-bold text-white uppercase tracking-wider">Selected</div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button
+                                onClick={handleBatchDelete}
+                                class="flex items-center gap-2 px-4 py-2 text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-sm font-bold"
+                            >
+                                <Trash2 class="w-4 h-4" /> Delete
+                            </button>
+                            <button
+                                onClick={() => alert('Batch move coming soon!')}
+                                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-white/5 rounded-xl transition-all text-sm font-bold"
+                            >
+                                <FolderPlus class="w-4 h-4" /> Move
+                            </button>
+                            <button
+                                onClick={clearSelection}
+                                class="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-white rounded-xl transition-all text-sm font-bold"
+                            >
+                                <X class="w-4 h-4" /> Cancel
+                            </button>
                         </div>
                     </Motion.div>
                 </Show>

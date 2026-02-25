@@ -2,24 +2,14 @@
 // Uses environment variables set by Vite (from .env.staging or .env.production)
 // Fallback to production values for backward compatibility
 
-// Helper to safely get env variable
-const getEnv = (key: string, defaultValue: string): string => {
-    try {
-        // @ts-ignore - Vite injects import.meta.env at build time
-        return import.meta.env?.[key] || defaultValue;
-    } catch {
-        return defaultValue;
-    }
-};
-
 export const firebaseConfig = {
-    apiKey: getEnv("VITE_FIREBASE_API_KEY", "AIzaSyBOhaRLa86vxEp0vCqS5adp54RqBt1RtHc"),
-    authDomain: getEnv("VITE_FIREBASE_AUTH_DOMAIN", "visionchain-d19ed.firebaseapp.com"),
-    projectId: getEnv("VITE_FIREBASE_PROJECT_ID", "visionchain-d19ed"),
-    storageBucket: getEnv("VITE_FIREBASE_STORAGE_BUCKET", "visionchain-d19ed.firebasestorage.app"),
-    messagingSenderId: getEnv("VITE_FIREBASE_MESSAGING_SENDER_ID", "451188892027"),
-    appId: getEnv("VITE_FIREBASE_APP_ID", "1:451188892027:web:1c5232d790dc32cfee1dde"),
-    resendApiKey: getEnv("VITE_RESEND_API_KEY", "re_EY5c8G5T_9cKh8egXdvZTCe5ASeyH1e86")
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBOhaRLa86vxEp0vCqS5adp54RqBt1RtHc",
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "visionchain-d19ed.firebaseapp.com",
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "visionchain-d19ed",
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "visionchain-d19ed.firebasestorage.app",
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "451188892027",
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:451188892027:web:1c5232d790dc32cfee1dde",
+    resendApiKey: import.meta.env.VITE_RESEND_API_KEY || "re_EY5c8G5T_9cKh8egXdvZTCe5ASeyH1e86"
 };
 
 // Secondary Firebase config for server Firestore (visionchain-5bd81)

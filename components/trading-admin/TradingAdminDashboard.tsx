@@ -169,6 +169,7 @@ export default function TradingAdminDashboard() {
                     mode: mode,
                     trendBias: bias,
                     trendSpeed: speed,
+                    movementStyle: phaseName === 'markup' || phaseName === 'markdown' ? 'aggressive' : 'gradual',
                     targetPrice: currentPrice * targetMultiplier,
                     currentBasePrice: currentPrice // Reset base to current
                 },

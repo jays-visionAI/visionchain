@@ -116,6 +116,7 @@ const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
 const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
 const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
 import type { Component } from 'solid-js';
+const VisionMarket = lazy(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
 const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{ privateKey?: string; walletAddress?: string; networkMode?: string }>;
 
 import { VisionLogo } from './wallet/VisionLogo';
@@ -123,7 +124,7 @@ import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight' | 'disk';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight' | 'disk' | 'market';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -3989,6 +3990,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                         <Show when={activeView() === 'disk'}>
                             <WalletDisk privateKey={currentPrivateKey()} walletAddress={walletAddressSignal()} networkMode={networkMode()} />
+                        </Show>
+
+                        <Show when={activeView() === 'market'}>
+                            <VisionMarket walletAddress={walletAddressSignal()} />
                         </Show>
 
                         <Show when={activeView() === 'assets'}>
