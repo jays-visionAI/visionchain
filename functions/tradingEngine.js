@@ -178,14 +178,17 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
 
     // ── Organic Market Action Generation (Pushing Price & Volume) ──
     let marketAction = null;
-    const distanceToTarget = (targetPrice - currentPrice) / currentPrice;
+    const distanceToTarget = targetPrice > 0 ? (targetPrice - currentPrice) / currentPrice : 0;
+    const adminBias = pd.trendBias || 0;
 
-    // 1. Price Pushing Action
-    if (movementStyle === "aggressive" && Math.abs(distanceToTarget) > 0.01) {
-        // Coordinated Market Buy/Sell to push price towards target
+    // 1. Price Pushing Action (when aggressive mode AND there is a target or bias)
+    if (movementStyle === "aggressive" && (Math.abs(distanceToTarget) > 0.01 || Math.abs(adminBias) > 0.05)) {
         const pushChance = 0.4;
         if (Math.random() < pushChance) {
-            const side = distanceToTarget > 0 ? "buy" : "sell";
+            // Prefer target direction if set, otherwise use bias direction
+            const side = Math.abs(distanceToTarget) > 0.01 ?
+                (distanceToTarget > 0 ? "buy" : "sell") :
+                (adminBias > 0 ? "buy" : "sell");
             const amount = Math.round(agent.balances[side === "buy" ? "USDT" : "VCN"] * 0.05 * (0.5 + Math.random()));
             if (amount >= DEX_MIN_ORDER) {
                 marketAction = { side, amount, type: "market", reasoning: "PUSH_TO_TARGET" };
@@ -198,7 +201,9 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
     if (!marketAction && volumeIntensity > 0) {
         const volumeChance = volumeIntensity * 0.8;
         if (Math.random() < volumeChance) {
-            const side = Math.random() > 0.5 ? "buy" : "sell";
+            // Bias the organic volume direction toward the trend
+            const biasedRoll = Math.random() + adminBias * 0.3;
+            const side = biasedRoll > 0.5 ? "buy" : "sell";
             const amount = Math.round(DEX_MIN_ORDER * (1 + Math.random() * 5 * volumeIntensity));
             marketAction = { side, amount, type: "market", reasoning: "ORGANIC_VOLUME" };
         }
@@ -546,15 +551,28 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
 
         // Trading refresh every 5 rounds (skip if kill switch or circuit breaker active)
         if (totalMicro % 5 === 1 && !tradingPaused) {
-            // Apply drift to engineBasePrice: drift towards target price
-            const targetPrice = pd.targetPrice || sessionOpen;
-            const diff = targetPrice - engineBasePrice;
-
-            // Refined Drift: Smaller steps, but combined with market actions below
+            // Apply drift to engineBasePrice
             const movementStyle = pd.movementStyle || "gradual";
-            const driftMult = movementStyle === "gradual" ? 0.3 : 0.8;
-            const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * driftMult * 5;
-            engineBasePrice += driftDelta;
+            const driftMult = movementStyle === "gradual" ? 0.3 : movementStyle === "aggressive" ? 0.8 : 0.5;
+
+            const hasTarget = pd.targetPrice && pd.targetPrice > 0;
+            if (hasTarget) {
+                // Mode A: Target-based drift (move toward specific target)
+                const targetPrice = pd.targetPrice;
+                const diff = targetPrice - engineBasePrice;
+                const driftDelta = diff * Math.abs(trendBias) * trendSpeedVal * 100 * driftMult * 5;
+                engineBasePrice += driftDelta;
+            } else if (Math.abs(trendBias) > 0.01) {
+                // Mode B: Continuous bias drift (no target, just push in bias direction)
+                // trendBias: +0.30 bullish => price goes up, -0.30 bearish => price goes down
+                const continuousDrift = engineBasePrice * trendBias * trendSpeedVal * driftMult * 5;
+                engineBasePrice += continuousDrift;
+            }
+
+            // Clamp to floor/ceiling if set
+            const priceFloor = pd.priceFloor || 0.0001;
+            const priceCeiling = pd.priceCeiling || engineBasePrice * 10;
+            engineBasePrice = Math.max(priceFloor, Math.min(priceCeiling, engineBasePrice));
 
             for (const trading of tradingAgents) {
                 // 1. Generate & Update Orderbook Walls
@@ -573,6 +591,14 @@ async function runMicroRoundEngine(admin, db, getApiKey) {
                 // 2. Execute Coordinated Market Action (Price Pushing or Organic Volume)
                 if (marketAction) {
                     mf.push(...execDec(orderBook, trading, marketAction, roundNumber, ms));
+                }
+
+                // 3. Bias-driven market pressure: periodically execute market orders in bias direction
+                if (Math.abs(trendBias) > 0.05 && Math.random() < Math.abs(trendBias) * 0.4) {
+                    const biasSide = trendBias > 0 ? "buy" : "sell";
+                    const biasAmount = Math.round(DEX_MIN_ORDER * (2 + Math.random() * 8 * Math.abs(trendBias)));
+                    const biasAction = { side: biasSide, amount: biasAmount, type: "market", reasoning: "BIAS_PRESSURE" };
+                    mf.push(...execDec(orderBook, trading, biasAction, roundNumber, ms));
                 }
             }
         }

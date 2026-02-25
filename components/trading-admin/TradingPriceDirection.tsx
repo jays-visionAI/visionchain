@@ -221,7 +221,10 @@ export default function MMPriceDirection() {
                                 type="number"
                                 step="0.0001"
                                 value={config().targetPrice}
-                                onInput={(e) => update('targetPrice', parseFloat(e.currentTarget.value) || 0)}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.currentTarget.value);
+                                    update('targetPrice', isNaN(val) ? 0 : val);
+                                }}
                                 class="mmp-input"
                             />
                         </div>
@@ -329,7 +332,10 @@ export default function MMPriceDirection() {
                                     type="number"
                                     step="0.0001"
                                     value={typeof config().trendSpeed === 'number' ? config().trendSpeed : 0.0003}
-                                    onInput={(e) => update('trendSpeed', parseFloat(e.currentTarget.value) || 0.0003)}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.currentTarget.value);
+                                        update('trendSpeed', isNaN(val) ? 0.0003 : val);
+                                    }}
                                     class="mmp-speed-input"
                                     onClick={(e) => e.stopPropagation()}
                                 />
@@ -344,15 +350,15 @@ export default function MMPriceDirection() {
                     <div class="mmp-range-grid">
                         <div class="mmp-input-group">
                             <label class="mmp-label">Floor (USDT)</label>
-                            <input type="number" step="0.0001" value={config().priceFloor} onInput={(e) => update('priceFloor', parseFloat(e.currentTarget.value) || 0)} class="mmp-input" />
+                            <input type="number" step="0.0001" value={config().priceFloor} onChange={(e) => { const v = parseFloat(e.currentTarget.value); update('priceFloor', isNaN(v) ? 0 : v); }} class="mmp-input" />
                         </div>
                         <div class="mmp-input-group">
                             <label class="mmp-label">Ceiling (USDT)</label>
-                            <input type="number" step="0.0001" value={config().priceCeiling} onInput={(e) => update('priceCeiling', parseFloat(e.currentTarget.value) || 0)} class="mmp-input" />
+                            <input type="number" step="0.0001" value={config().priceCeiling} onChange={(e) => { const v = parseFloat(e.currentTarget.value); update('priceCeiling', isNaN(v) ? 0 : v); }} class="mmp-input" />
                         </div>
                         <div class="mmp-input-group">
                             <label class="mmp-label">Band Width (%)</label>
-                            <input type="number" step="0.0001" value={config().priceRangePercent} onInput={(e) => update('priceRangePercent', parseFloat(e.currentTarget.value) || 20)} class="mmp-input" />
+                            <input type="number" step="0.0001" value={config().priceRangePercent} onChange={(e) => { const v = parseFloat(e.currentTarget.value); update('priceRangePercent', isNaN(v) ? 20 : v); }} class="mmp-input" />
                             <span class="mmp-input-hint">+-{config().priceRangePercent}% from base</span>
                         </div>
                     </div>
@@ -382,7 +388,7 @@ export default function MMPriceDirection() {
                         <Show when={config().phaseAutoRotate}>
                             <div class="mmp-inline-input">
                                 <span>Interval:</span>
-                                <input type="number" step="0.0001" min="1" max="168" value={config().phaseRotateInterval} onInput={(e) => update('phaseRotateInterval', parseFloat(e.currentTarget.value) || 24)} class="mmp-input-sm" />
+                                <input type="number" step="0.0001" min="1" max="168" value={config().phaseRotateInterval} onChange={(e) => { const v = parseFloat(e.currentTarget.value); update('phaseRotateInterval', isNaN(v) ? 24 : v); }} class="mmp-input-sm" />
                                 <span>hours</span>
                             </div>
                         </Show>
