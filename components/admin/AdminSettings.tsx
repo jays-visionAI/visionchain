@@ -12,11 +12,14 @@ import {
     TrendingUp,
     Activity,
     Users,
+    HardDrive,
 } from 'lucide-solid';
 import { getVcnPrice, getVcnPriceSettings, updateVcnPriceSettings, getVcnPriceHistory, initPriceService } from '../../services/vcnPriceService';
 import AdminAIManagement from './AdminAIManagement';
 import { contractService } from '../../services/contractService';
 import { getToggleableMenuItems, getPartnerMenuAccess, savePartnerMenuAccess, loadPartnerMenuAccess, getIconComponent } from './adminMenuConfig';
+import { getFirebaseDb } from '../../services/firebaseService';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export default function AdminSettings() {
     const [settingsSubView, setSettingsSubView] = createSignal<'main' | 'ai' | 'infra' | 'gov'>('main');
@@ -41,6 +44,17 @@ export default function AdminSettings() {
     });
     const [isSavingPrice, setIsSavingPrice] = createSignal(false);
     const [priceSaveStatus, setPriceSaveStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
+
+    // Disk Pricing
+    const [diskPriceInput, setDiskPriceInput] = createSignal({
+        baseGb: '10',
+        basePrice: '5',
+        addGb: '10',
+        addPrice: '3',
+        maxGb: '50'
+    });
+    const [isSavingDiskPrice, setIsSavingDiskPrice] = createSignal(false);
+    const [diskPriceSaveStatus, setDiskPriceSaveStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
 
     // Partner menu access state
     const [localMenuAccess, setLocalMenuAccess] = createSignal<Record<string, boolean>>({});
@@ -102,19 +116,28 @@ export default function AdminSettings() {
         // Load partner menu settings
         loadPartnerMenuAccess().then(() => {
             const current = getPartnerMenuAccess();
-            // Initialize local state with current Firestore values;
-            // for items not in Firestore, default based on requiredRole
             const toggleable = getToggleableMenuItems();
             const init: Record<string, boolean> = {};
             toggleable.forEach(item => {
-                if (current[item.id] !== undefined) {
-                    init[item.id] = current[item.id];
-                } else {
-                    // Default: admin-only items are OFF for partners, others are ON
-                    init[item.id] = !item.requiredRole;
-                }
+                if (current[item.id] !== undefined) init[item.id] = current[item.id];
+                else init[item.id] = !item.requiredRole;
             });
             setLocalMenuAccess(init);
+        });
+
+        // Fetch Disk Pricing
+        const db = getFirebaseDb();
+        getDoc(doc(db, 'settings', 'diskPricing')).then(d => {
+            if (d.exists()) {
+                const data = d.data() as any;
+                setDiskPriceInput({
+                    baseGb: data.baseGb?.toString() || '10',
+                    basePrice: data.basePrice?.toString() || '5',
+                    addGb: data.addGb?.toString() || '10',
+                    addPrice: data.addPrice?.toString() || '3',
+                    maxGb: data.maxGb?.toString() || '50'
+                });
+            }
         });
 
         // Polling nodes every 30s
@@ -164,6 +187,29 @@ export default function AdminSettings() {
             setTimeout(() => setPriceSaveStatus('idle'), 3000);
         } finally {
             setIsSavingPrice(false);
+        }
+    };
+
+    const handleUpdateDiskPrice = async () => {
+        setIsSavingDiskPrice(true);
+        setDiskPriceSaveStatus('idle');
+        try {
+            const db = getFirebaseDb();
+            await setDoc(doc(db, 'settings', 'diskPricing'), {
+                baseGb: parseInt(diskPriceInput().baseGb) || 10,
+                basePrice: parseInt(diskPriceInput().basePrice) || 5,
+                addGb: parseInt(diskPriceInput().addGb) || 10,
+                addPrice: parseInt(diskPriceInput().addPrice) || 3,
+                maxGb: parseInt(diskPriceInput().maxGb) || 50
+            });
+            setDiskPriceSaveStatus('success');
+            setTimeout(() => setDiskPriceSaveStatus('idle'), 3000);
+        } catch (e) {
+            console.error('Failed to update disk price settings:', e);
+            setDiskPriceSaveStatus('error');
+            setTimeout(() => setDiskPriceSaveStatus('idle'), 3000);
+        } finally {
+            setIsSavingDiskPrice(false);
         }
     };
 
@@ -248,6 +294,47 @@ export default function AdminSettings() {
                                             <div class="w-3 h-3 bg-blue-400 rounded-full ml-auto" />
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Disk Pricing UI */}
+                                <div class="bg-[#15151a] border border-cyan-500/20 rounded-2xl p-5 shadow-lg col-span-1 md:col-span-2 hover:border-cyan-500/40 transition-colors">
+                                    <div class="flex items-center gap-4 mb-4">
+                                        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 border border-cyan-500/20">
+                                            <HardDrive class="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-white">Vision Disk Pricing</h3>
+                                            <p class="text-[10px] text-gray-400 uppercase font-black tracking-widest mt-1">Decentralized Storage Subscriptions</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 my-4">
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Base GB</label>
+                                            <input type="number" value={diskPriceInput().baseGb} onInput={(e) => setDiskPriceInput({ ...diskPriceInput(), baseGb: e.currentTarget.value })} class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50" />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Base Price (VCN)</label>
+                                            <input type="number" value={diskPriceInput().basePrice} onInput={(e) => setDiskPriceInput({ ...diskPriceInput(), basePrice: e.currentTarget.value })} class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50" />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">+ Additional GB</label>
+                                            <input type="number" value={diskPriceInput().addGb} onInput={(e) => setDiskPriceInput({ ...diskPriceInput(), addGb: e.currentTarget.value })} class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50" />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">+ Add Price (VCN)</label>
+                                            <input type="number" value={diskPriceInput().addPrice} onInput={(e) => setDiskPriceInput({ ...diskPriceInput(), addPrice: e.currentTarget.value })} class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50" />
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-black text-gray-500 uppercase tracking-widest block mb-1">Max Limit (GB)</label>
+                                            <input type="number" value={diskPriceInput().maxGb} onInput={(e) => setDiskPriceInput({ ...diskPriceInput(), maxGb: e.currentTarget.value })} class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm font-bold text-white focus:outline-none focus:border-cyan-500/50" />
+                                        </div>
+                                    </div>
+
+                                    <button onClick={handleUpdateDiskPrice} disabled={isSavingDiskPrice()} class={`w-full py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all shadow active:scale-95 flex items-center justify-center gap-2 ${diskPriceSaveStatus() === 'success' ? 'bg-green-600' : diskPriceSaveStatus() === 'error' ? 'bg-red-600' : 'bg-cyan-600 hover:bg-cyan-500'} text-white disabled:opacity-50`}>
+                                        <Show when={isSavingDiskPrice()}><RefreshCw class="w-3 h-3 animate-spin" /></Show>
+                                        {diskPriceSaveStatus() === 'success' ? 'Saved Successfully!' : diskPriceSaveStatus() === 'error' ? 'Error' : isSavingDiskPrice() ? 'Saving...' : 'Update Disk Pricing'}
+                                    </button>
                                 </div>
                             </div>
                         </div>

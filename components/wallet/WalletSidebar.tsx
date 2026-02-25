@@ -20,12 +20,13 @@ import {
     ArrowLeftRight,
     Shield,
     BarChart3,
-    Bot
+    Bot,
+    HardDrive
 } from 'lucide-solid';
 import { VisionLogo } from './VisionLogo';
 import { VisionFullLogo } from './VisionFullLogo';
 
-export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight';
+export type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight' | 'disk';
 
 interface WalletSidebarProps {
     sidebarOpen: boolean;
@@ -71,6 +72,7 @@ export const WalletSidebar = (props: WalletSidebarProps) => {
                 </svg>
             )
         },
+        { id: 'disk' as ViewType, label: 'Disk', icon: HardDrive },
         { id: 'nodes' as ViewType, label: 'Nodes', icon: Camera },
         { id: 'referral' as ViewType, label: 'Referral', icon: UserPlus },
         { id: 'quest' as ViewType, label: 'Quest', icon: Zap },

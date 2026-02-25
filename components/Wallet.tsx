@@ -115,13 +115,15 @@ import ValidatorStaking from './ValidatorStaking';
 const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
 const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
 const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
+import type { Component } from 'solid-js';
+const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{ privateKey?: string; walletAddress?: string; networkMode?: string }>;
 
 import { VisionLogo } from './wallet/VisionLogo';
 import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
-type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight';
+type ViewType = 'chat' | 'assets' | 'campaign' | 'mint' | 'profile' | 'settings' | 'contacts' | 'nodes' | 'notifications' | 'referral' | 'history' | 'quest' | 'send' | 'receive' | 'referral-rules' | 'bridge' | 'staking' | 'cex' | 'agent' | 'insight' | 'disk';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -3983,6 +3985,10 @@ If they say "Yes", output the navigate intent JSON for "referral".
                             <WalletReferral
                                 userProfile={userProfile}
                             />
+                        </Show>
+
+                        <Show when={activeView() === 'disk'}>
+                            <WalletDisk privateKey={currentPrivateKey()} walletAddress={walletAddressSignal()} networkMode={networkMode()} />
                         </Show>
 
                         <Show when={activeView() === 'assets'}>

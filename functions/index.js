@@ -17304,3 +17304,279 @@ exports.tradingArenaAPI = onRequest({ cors: true, invoker: "public" }, async (re
     return res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ============================================================================
+// VISION DISK SUBSCRIPTIONS
+// ============================================================================
+
+// Base configuration
+const DEFAULT_DISK_BASE_GB = 10;
+const DEFAULT_DISK_BASE_PRICE = 5;
+const DEFAULT_DISK_ADD_GB = 10;
+const DEFAULT_DISK_ADD_PRICE = 3;
+const DEFAULT_DISK_MAX_GB = 50;
+
+async function getDiskPricing() {
+  const doc = await db.collection("settings").doc("diskPricing").get();
+  if (doc.exists) {
+    return {
+      baseGb: DEFAULT_DISK_BASE_GB,
+      basePrice: DEFAULT_DISK_BASE_PRICE,
+      addGb: DEFAULT_DISK_ADD_GB,
+      addPrice: DEFAULT_DISK_ADD_PRICE,
+      maxGb: DEFAULT_DISK_MAX_GB,
+      ...doc.data(),
+    };
+  }
+  return {
+    baseGb: DEFAULT_DISK_BASE_GB,
+    basePrice: DEFAULT_DISK_BASE_PRICE,
+    addGb: DEFAULT_DISK_ADD_GB,
+    addPrice: DEFAULT_DISK_ADD_PRICE,
+    maxGb: DEFAULT_DISK_MAX_GB,
+  };
+}
+
+function calcDiskPrice(gb, pricing) {
+  if (gb <= pricing.baseGb) return pricing.basePrice;
+  const extraGb = gb - pricing.baseGb;
+  const tiers = Math.ceil(extraGb / pricing.addGb);
+  return pricing.basePrice + (tiers * pricing.addPrice);
+}
+
+/**
+ * Permanently deletes all disk files and metadata for a user
+ * @param {string} email User email
+ */
+async function deleteUserDiskData(email) {
+  console.log(`[Disk] Permanently deleting all data for ${email}`);
+
+  // 1. Delete from Firebase Storage
+  const bucket = admin.storage().bucket();
+  const folderPath = `disk/${email}/`;
+  try {
+    await bucket.deleteFiles({ prefix: folderPath });
+  } catch (e) {
+    console.warn(`[Disk] Storage deletion failed/skipped for ${email}:`, e.message);
+  }
+
+  // 2. Delete from Firestore
+  const userRef = db.collection("users").doc(email);
+  const filesSnapshot = await userRef.collection("disk_files").get();
+  const foldersSnapshot = await userRef.collection("disk_folders").get();
+
+  const batch = db.batch();
+  filesSnapshot.docs.forEach(d => batch.delete(d.ref));
+  foldersSnapshot.docs.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+
+  console.log(`[Disk] Deleted ${filesSnapshot.size} files and ${foldersSnapshot.size} folders for ${email}`);
+}
+
+// Subscribe or update capacity
+exports.diskSubscribe = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+  const { gb } = request.data;
+
+  const pricing = await getDiskPricing();
+
+  if (!gb || gb < pricing.baseGb || gb > pricing.maxGb) {
+    throw new HttpsError("invalid-argument", `Requested capacity must be between ${pricing.baseGb}GB and ${pricing.maxGb}GB`);
+  }
+
+  const price = calcDiskPrice(gb, pricing);
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const executorWallet = new ethers.Wallet(VCN_EXECUTOR_PK, provider);
+  const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, executorWallet);
+
+  // Get user's wallet address from their profile
+  const userDoc = await db.collection("users").doc(email).get();
+  if (!userDoc.exists || !userDoc.data().walletAddress) {
+    throw new HttpsError("failed-precondition", "Wallet address not found for user.");
+  }
+  const userAddress = userDoc.data().walletAddress;
+
+  // Check allowance (did user approve Executor to spend their VCN?)
+  const allowance = await tokenContract.allowance(userAddress, executorWallet.address);
+  if (allowance < ethers.parseEther(price.toString())) {
+    throw new HttpsError("failed-precondition", "insufficient_allowance");
+  }
+
+  // Deduct the first month price right now if it's a new subscription or upgrade
+  const currentSubDoc = await db.collection("disk_subscriptions").doc(email).get();
+  const currentSub = currentSubDoc.exists ? currentSubDoc.data() : null;
+
+  try {
+    const tx = await tokenContract.transferFrom(userAddress, executorWallet.address, ethers.parseEther(price.toString()));
+    await tx.wait(); // Wait for confirmation
+  } catch (err) {
+    console.error("[Disk] Initial payment failed:", err.message);
+    throw new HttpsError("internal", "Payment failed: " + err.message);
+  }
+
+  const nowMs = Date.now();
+  const cycleEnd = nowMs + 30 * 24 * 60 * 60 * 1000; // +30 days
+
+  await db.collection("disk_subscriptions").doc(email).set({
+    email,
+    status: "active",
+    subscribedGb: gb,
+    priceVcn: price,
+    currentCycleStart: nowMs,
+    currentCycleEnd: cycleEnd,
+    autoRenew: true,
+    cancelAtPeriodEnd: false,
+    overdueSince: null,
+    updatedAt: nowMs,
+  });
+
+  // Send Email
+  const title = currentSub ? "Vision Disk Capacity Updated" : "Welcome to Vision Disk";
+  const body = `
+    ${emailComponents.sectionTitle(title)}
+    ${emailComponents.infoCard([
+    ["Subscription", `${gb} GB Storage`, true],
+    ["Monthly Fee", `${price} VCN`, true],
+    ["Next Billing", new Date(cycleEnd).toLocaleDateString(), false],
+  ])}
+    ${emailComponents.subtitle("Thank you for using our decentralized storage network.")}
+  `;
+  await sendSecurityEmail(email, title, emailBaseLayout(body, "Your Vision Disk subscription is active"));
+
+  return { success: true, gb, price, cycleEnd };
+});
+
+exports.diskCancelSubscription = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const email = request.auth.token.email.toLowerCase();
+
+  const subRef = db.collection("disk_subscriptions").doc(email);
+  const doc = await subRef.get();
+  if (!doc.exists) throw new HttpsError("not-found", "Subscription not found.");
+
+  await subRef.update({ cancelAtPeriodEnd: true, autoRenew: false, updatedAt: Date.now() });
+
+  // Send Cancel Email
+  const body = `
+    ${emailComponents.sectionTitle("Subscription Canceled", "#ef4444")}
+    ${emailComponents.subtitle("Your Vision Disk subscription has been canceled. You can continue using it until the end of your current billing period.")}
+    ${emailComponents.infoCard([
+    ["Access Ends On", new Date(doc.data().currentCycleEnd).toLocaleDateString(), true],
+  ], "#ef4444")}
+  `;
+  await sendSecurityEmail(email, "Vision Disk Subscription Canceled", emailBaseLayout(body, "Subscription cancellation confirmed"));
+
+  return { success: true };
+});
+
+// Daily Cron Job for Disk Subscriptions
+exports.diskDailyBilling = onSchedule("every 24 hours", async (event) => {
+  console.log("[DiskBilling] Starting daily cron job");
+  const nowMs = Date.now();
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const executorWallet = new ethers.Wallet(VCN_EXECUTOR_PK, provider);
+  const tokenContract = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, executorWallet);
+
+  const snapshot = await db.collection("disk_subscriptions").get();
+  const pricing = await getDiskPricing();
+
+  for (const docSnapshot of snapshot.docs) {
+    const sub = docSnapshot.data();
+    const email = sub.email;
+
+    try {
+      // 1. Check if cycle ended
+      if (nowMs > sub.currentCycleEnd && (sub.status === "active" || sub.status === "grace_period")) {
+        // If cancelAtPeriodEnd was requested, it officially expires now
+        if (sub.cancelAtPeriodEnd) {
+          await db.collection("disk_subscriptions").doc(email).update({
+            status: "expired",
+            overdueSince: nowMs,
+          });
+          continue;
+        }
+
+        // Try to charge for renewal
+        const userDoc = await db.collection("users").doc(email).get();
+        if (!userDoc.exists || !userDoc.data().walletAddress) continue;
+        const userAddress = userDoc.data().walletAddress;
+        const price = calcDiskPrice(sub.subscribedGb, pricing);
+
+        try {
+          // Attempt payment
+          const balance = await tokenContract.balanceOf(userAddress);
+          const allowance = await tokenContract.allowance(userAddress, executorWallet.address);
+          if (balance < ethers.parseEther(price.toString()) || allowance < ethers.parseEther(price.toString())) {
+            throw new Error("Insufficient balance or allowance");
+          }
+
+          const tx = await tokenContract.transferFrom(userAddress, executorWallet.address, ethers.parseEther(price.toString()));
+          await tx.wait();
+
+          // Success - renew
+          const nextEnd = nowMs + 30 * 24 * 60 * 60 * 1000;
+          await db.collection("disk_subscriptions").doc(email).update({
+            currentCycleStart: nowMs,
+            currentCycleEnd: nextEnd,
+            status: "active",
+            overdueSince: null,
+          });
+
+          // Send success email
+          const body = `${emailComponents.sectionTitle("Subscription Renewed", "#22d3ee")}
+          ${emailComponents.subtitle(`Your ${sub.subscribedGb}GB Vision Disk plan was successfully renewed.`)}
+          ${emailComponents.infoCard([
+            ["Monthly Charge", `${price} VCN`, true],
+            ["Next Billing", new Date(nextEnd).toLocaleDateString(), false],
+          ])}`;
+          await sendSecurityEmail(email, "Vision Disk Renewed", emailBaseLayout(body, "Renewal successful"));
+        } catch (paymentErr) {
+          console.warn(`[DiskBilling] Failed to charge ${email}: ${paymentErr.message}`);
+          // Mark overdue
+          if (sub.status !== "overdue") {
+            await db.collection("disk_subscriptions").doc(email).update({
+              status: "overdue",
+              overdueSince: nowMs,
+            });
+            // Overdue email
+            const body = `
+               ${emailComponents.sectionTitle("Payment Failed", "#f59e0b")}
+               ${emailComponents.subtitle("We couldn't process the VCN payment for your Vision Disk subscription. Uploads are now blocked.")}
+               ${emailComponents.alertBox("Please ensure you have sufficient VCN balance and allowance within 3 days to avoid cancellation.", "warning")}
+             `;
+            await sendSecurityEmail(email, "Vision Disk Payment Failed", emailBaseLayout(body, "Action Required for Vision Disk"));
+          }
+        }
+      }
+
+      // 2. Handle Overdues & Deletions
+      if (sub.status === "overdue" || sub.status === "expired") {
+        const daysOverdue = Math.floor((nowMs - (sub.overdueSince || sub.currentCycleEnd)) / (24 * 60 * 60 * 1000));
+
+        if (daysOverdue === 3 && sub.status === "overdue") {
+          // Cancel subscription after 3 days
+          await db.collection("disk_subscriptions").doc(email).update({ status: "canceled" });
+          const body = `${emailComponents.sectionTitle("Subscription Canceled", "#ef4444")}
+            ${emailComponents.subtitle("Your subscription was canceled due to unpaid balance. You have 4 remaining days to download your files before permanent deletion.")}`;
+          await sendSecurityEmail(email, "Vision Disk Canceled", emailBaseLayout(body, "Subscription canceled"));
+        } else if (daysOverdue === 6 && sub.status !== "pending_delete") {
+          // 6th day warning
+          const body = `${emailComponents.sectionTitle("Data Deletion Tomorrow", "#ef4444")}
+             ${emailComponents.alertBox("All your Vision Disk data will be permanently deleted tomorrow due to an inactive subscription. Please download your files immediately.", "warning")}`;
+          await sendSecurityEmail(email, "Vision Disk Data Deletion Warning", emailBaseLayout(body, "Final Warning"));
+        } else if (daysOverdue >= 7 && sub.status !== "deleted") {
+          // Delete data
+          const body = `${emailComponents.sectionTitle("Data Deleted", "#ef4444")}
+            ${emailComponents.subtitle("Your Vision Disk data has been permanently deleted as your subscription remained inactive.")}`;
+          await sendSecurityEmail(email, "Vision Disk Data Deleted", emailBaseLayout(body, "Data deletion complete"));
+
+          await deleteUserDiskData(email);
+          await db.collection("disk_subscriptions").doc(email).update({ status: "deleted" });
+        }
+      }
+    } catch (docErr) {
+      console.error(`[DiskBilling] Error processing ${email}: `, docErr);
+    }
+  }
+});
