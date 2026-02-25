@@ -217,6 +217,34 @@
                     "order": "DESCENDING"
                 }
             ]
+        },
+        {
+            "collectionGroup": "disk_files",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "folder",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "disk_folders",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "parentPath",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
         }
     ],
     "fieldOverrides": []
