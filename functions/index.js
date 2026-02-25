@@ -17558,11 +17558,11 @@ exports.purchasePublishedFile = onCall({ cors: true }, async (request) => {
       fileId,
       purchasedAt: Date.now(),
       priceVcn,
-      publisherEmail
+      publisherEmail,
     });
 
     await marketRef.update({
-      purchaseCount: admin.firestore.FieldValue.increment(1)
+      purchaseCount: admin.firestore.FieldValue.increment(1),
     });
 
     const body = `
@@ -17570,7 +17570,7 @@ exports.purchasePublishedFile = onCall({ cors: true }, async (request) => {
       ${emailComponents.infoCard([
       ["Item", item.name, true],
       ["Price", `${priceVcn} VCN`, true],
-      ["Earnings (70%)", `${ethers.formatUnits(publisherAmount, 18)} VCN`, true]
+      ["Earnings (70%)", `${ethers.formatUnits(publisherAmount, 18)} VCN`, true],
     ])}
     `;
     await sendSecurityEmail(publisherEmail, "Vision Disk Sale Notification", emailBaseLayout(body, `You just sold ${item.name}!`));

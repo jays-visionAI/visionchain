@@ -193,7 +193,7 @@ function generateTradingOrders(agent, currentPrice, tradingAdmin, engineBasePric
         }
     }
 
-    // 2. Organic Volume (Self-Trading / Wash) 
+    // 2. Organic Volume (Self-Trading / Wash)
     // This creates "ticks" in the chart without moving the price much
     if (!marketAction && volumeIntensity > 0) {
         const volumeChance = volumeIntensity * 0.8;
