@@ -17374,7 +17374,7 @@ async function deleteUserDiskData(email) {
 }
 
 // Subscribe or update capacity
-exports.diskSubscribe = onCall({ cors: true }, async (request) => {
+exports.diskSubscribe = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
   const { gb, signature, deadline, owner } = request.data;
@@ -17494,7 +17494,7 @@ exports.diskCancelSubscription = onCall({ cors: true }, async (request) => {
   return { success: true };
 });
 
-exports.purchasePublishedFile = onCall({ cors: true }, async (request) => {
+exports.purchasePublishedFile = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const buyerEmail = request.auth.token.email.toLowerCase();
   const { fileId } = request.data;
@@ -17583,7 +17583,7 @@ exports.purchasePublishedFile = onCall({ cors: true }, async (request) => {
 });
 
 // Daily Cron Job for Disk Subscriptions
-exports.diskDailyBilling = onSchedule("every 24 hours", async (_event) => {
+exports.diskDailyBilling = onSchedule({ schedule: "every 24 hours", secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (_event) => {
   console.log("[DiskBilling] Starting daily cron job");
   const nowMs = Date.now();
   const provider = new ethers.JsonRpcProvider(RPC_URL);
