@@ -4021,6 +4021,12 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 networkMode={networkMode()}
                                 onRequestUnlock={requestDiskUnlock}
                                 isWalletMissing={isLocalWalletMissing()}
+                                cloudWalletAvailable={cloudWalletAvailable()}
+                                onCloudRestore={() => setShowCloudRestoreModal(true)}
+                                onRestoreWallet={() => {
+                                    navigate('/wallet/profile');
+                                    setOnboardingStep(2);
+                                }}
                             />
                         </Show>
 

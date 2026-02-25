@@ -107,6 +107,9 @@ export const WalletDisk = (props: {
     networkMode?: string;
     onRequestUnlock?: () => void;
     isWalletMissing?: boolean;
+    cloudWalletAvailable?: boolean;
+    onCloudRestore?: () => void;
+    onRestoreWallet?: () => void;
 }) => {
     const auth = useAuth();
     const email = () => auth.user()?.email || '';
@@ -386,7 +389,15 @@ export const WalletDisk = (props: {
     const handleSubscribe = async () => {
         if (!props.privateKey) {
             if (props.isWalletMissing) {
-                setSubsError('Local wallet not found. Please restore your wallet in Profile settings.');
+                if (props.cloudWalletAvailable && props.onCloudRestore) {
+                    setSubsError('Wallet not found on this device. Restoring from cloud...');
+                    props.onCloudRestore();
+                } else if (props.onRestoreWallet) {
+                    setSubsError('Local wallet not found. Redirecting to Profile settings...');
+                    props.onRestoreWallet();
+                } else {
+                    setSubsError('Local wallet not found. Please restore your wallet in Profile settings.');
+                }
             } else {
                 setSubsError('');
                 if (props.onRequestUnlock) props.onRequestUnlock();
