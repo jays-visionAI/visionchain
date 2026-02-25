@@ -5,6 +5,7 @@ import Logo from './Logo';
 import { Twitter, Github, Linkedin, Send, Youtube, BookOpen, Check } from 'lucide-solid';
 import { useAuth } from './auth/authContext';
 import { useNavigate } from '@solidjs/router';
+import { isProduction } from '../services/envConfig';
 
 const Footer = (): JSX.Element => {
   const [email, setEmail] = createSignal('');
@@ -79,7 +80,7 @@ const Footer = (): JSX.Element => {
               </a>
               <A href="/testnet" class="text-[#86868b] hover:text-white transition-colors">Testnet</A>
               <A href="/visionscan" class="text-[#86868b] hover:text-white transition-colors">Vision Scan</A>
-              {import.meta.env.VITE_CHAIN_ENV !== 'production' && (
+              {!isProduction() && (
                 <A href="/dex" class="text-[#86868b] hover:text-white transition-colors">VisionDEX</A>
               )}
             </div>

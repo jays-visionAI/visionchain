@@ -3,6 +3,7 @@ import { Router, Route, Navigate, useLocation } from '@solidjs/router';
 import { Show, Suspense } from 'solid-js';
 import { AuthProvider, useAuth } from './components/auth/authContext';
 import { I18nProvider } from './i18n/i18nContext';
+import { isProduction } from './services/envConfig';
 
 // Core layout components
 import Navbar from './components/Navbar';
@@ -95,7 +96,7 @@ render(() => (
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
-        {import.meta.env.VITE_CHAIN_ENV !== 'production' && (
+        {!isProduction() && (
           <>
             <Route path="/dex" component={Public.DEXMarketsPage} />
             <Route path="/dex/:pair" component={Public.TradingTerminalPage} />
