@@ -1078,9 +1078,48 @@
 }
 
 @media (max-width: 768px) {
+    .dex-root {
+        overflow-x: hidden;
+    }
+
+    .dex-header {
+        padding: 6px 8px;
+        gap: 8px;
+        min-height: 40px;
+        overflow: hidden;
+    }
+
+    .dex-h-left {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .dex-h-pair {
+        gap: 6px;
+    }
+
+    .dex-h-symbol {
+        font-size: 13px;
+    }
+
+    .dex-h-price {
+        font-size: 14px;
+    }
+
+    .dex-h-right {
+        flex-shrink: 0;
+    }
+
     .dex-main {
         flex-direction: column;
-        overflow: auto;
+        overflow-y: auto !important;
+        height: auto;
+    }
+
+    .dex-left {
+        flex: none;
+        width: 100%;
     }
 
     .dex-right {
@@ -1088,27 +1127,74 @@
         min-width: 100%;
         border-left: none;
         border-top: 1px solid var(--dx-border);
+        flex: none;
     }
 
     .dex-chart-area {
         flex-direction: column;
+        flex: none;
     }
 
     .dex-chart-panel {
+        height: 450px;
         min-height: 450px;
         border-right: none;
         border-bottom: 1px solid var(--dx-border);
+        flex: none;
     }
 
     .dex-ob-panel {
         width: 100%;
         min-width: 100%;
         border-top: 1px solid var(--dx-border);
-        max-height: 400px;
+        height: 400px;
+        flex: none;
     }
 
     .dex-h-meta {
         display: none;
+    }
+
+    /* ── Toolbar: make scrollable on mobile ── */
+    .tv-chart-toolbar {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        /* Firefox */
+    }
+
+    .tv-chart-toolbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .tv-t-left {
+        flex-shrink: 0;
+    }
+
+    .tv-t-right {
+        flex-shrink: 0;
+    }
+
+    /* ── Hide left drawing sidebar on mobile ── */
+    .tv-sidebar {
+        display: none;
+    }
+
+    /* ── Bottom tabs: adapt grid for mobile ── */
+    .bt-thead,
+    .bt-row {
+        grid-template-columns: 50px 1fr 1fr 1fr 60px;
+    }
+
+    .bt-thead span:nth-child(5),
+    .bt-row span:nth-child(5) {
+        display: none;
+    }
+
+    .bt-container {
+        min-height: 160px;
+        max-height: 240px;
     }
 }
 
