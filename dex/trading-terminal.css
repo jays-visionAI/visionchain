@@ -1080,6 +1080,7 @@
 @media (max-width: 768px) {
     .dex-main {
         flex-direction: column;
+        overflow: auto;
     }
 
     .dex-right {
@@ -1093,11 +1094,17 @@
         flex-direction: column;
     }
 
+    .dex-chart-panel {
+        min-height: 450px;
+        border-right: none;
+        border-bottom: 1px solid var(--dx-border);
+    }
+
     .dex-ob-panel {
         width: 100%;
         min-width: 100%;
         border-top: 1px solid var(--dx-border);
-        max-height: 300px;
+        max-height: 400px;
     }
 
     .dex-h-meta {
