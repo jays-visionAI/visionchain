@@ -170,6 +170,10 @@ const SidebarContent = (props: WalletSidebarProps & { menuItems: any[], isDeskto
                     {(item) => (
                         <button
                             onClick={() => {
+                                if (item.id === 'mint') {
+                                    window.location.href = '/mint';
+                                    return;
+                                }
                                 if (props.onboardingStep === 0) {
                                     props.setActiveView(item.id);
                                     if (!props.isDesktop) props.setSidebarOpen(false);

@@ -18220,3 +18220,94 @@ exports.configureStorageCors = onRequest({ cors: true, invoker: "public" }, asyn
     res.status(500).send("Error: " + e.message);
   }
 });
+
+// --- Omni-Mint AI Generator using Gemini 2.5 Pro ---
+exports.generateOmniMintContract = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
+  try {
+    const {
+      tokenType,
+      tokenName,
+      tokenSymbol,
+      initialSupply,
+      isMintable,
+      isBurnable,
+      isPausable,
+      targetChains,
+      aiPrompt
+    } = request.data || {};
+
+    if (!tokenName || !tokenSymbol) {
+      throw new HttpsError("invalid-argument", "Token name and symbol are required.");
+    }
+
+    const GEMINI_KEY = (await getApiKeyFromFirestore("gemini")) || process.env.GEMINI_API_KEY;
+    if (!GEMINI_KEY) throw new HttpsError("internal", "GEMINI_API_KEY not configured");
+
+    const systemPrompt = `You are a world-class smart contract engineer and AI code generator.
+Your task is to generate smart contract code for Omni-Mint (Multi-chain).
+You MUST output ONLY valid JSON containing the generated code for requested target chains.
+Do not wrap it in markdown block quotes (NO \`\`\`json). Just return raw JSON.
+Format:
+{
+  "contracts": {
+    "vision": "solidity code here...",
+    "base": "solidity code here...",
+    "solana": "rust code here...",
+    "ton": "tact code here..."
+  },
+  "explanation": "Brief explanation of the generated code."
+}`;
+
+    const userPromptText = `Generate the following ${tokenType || "VRC-20"} token contracts:
+Name: ${tokenName}
+Symbol: ${tokenSymbol}
+Supply: ${initialSupply || "1000000"}
+Features enabled: ${isMintable ? "Mintable," : ""} ${isBurnable ? "Burnable," : ""} ${isPausable ? "Pausable," : ""}
+Target Chains: ${targetChains ? targetChains.join(", ") : "vision"}
+
+Custom User Request / AI Prompt:
+${aiPrompt || "None. Just generate the standard template."}
+`;
+
+    let axiosInstance;
+    try {
+      axiosInstance = require("axios");
+    } catch (e) {
+      axiosInstance = require("axios");
+    }
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_KEY}`;
+
+    const response = await axiosInstance.post(
+      url,
+      {
+        contents: [{ role: "user", parts: [{ text: userPromptText }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+        },
+      },
+      { timeout: 60000 }
+    );
+
+    const candidate = response.data?.candidates?.[0];
+    const textResp = candidate?.content?.parts?.[0]?.text || "{}";
+
+    try {
+      const parsed = JSON.parse(textResp);
+      return parsed;
+    } catch (e) {
+      // Request might have returned code block markdown despite instruction
+      const cleaned = textResp.replace(/```json/gi, '').replace(/```/g, '').trim();
+      try {
+        return JSON.parse(cleaned);
+      } catch (innerE) {
+        return { contracts: { vision: textResp }, explanation: "Failed to parse AI structure. Returning raw." };
+      }
+    }
+  } catch (error) {
+    console.error("OmniMint AI Generation error:", error);
+    throw new HttpsError("internal", error.message);
+  }
+});

@@ -1,4 +1,6 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createEffect, For, Show } from "solid-js";
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getFirebaseDb } from '../../services/firebaseService';
 import "./mint-studio.css";
 
 // Icons 
@@ -20,7 +22,56 @@ export default function MintStudio() {
     const [isPausable, setIsPausable] = createSignal(false);
 
     // Multi-chain selection
-    const [selectedChains, setSelectedChains] = createSignal<string[]>(["vision", "base"]);
+    const [selectedChains, setSelectedChains] = createSignal<string[]>(["vision", "base", "solana", "ton"]);
+
+    // AI States
+    const [activeTab, setActiveTab] = createSignal("vision");
+    const [aiPrompt, setAiPrompt] = createSignal("");
+    const [isGenerating, setIsGenerating] = createSignal(false);
+    const [aiContracts, setAiContracts] = createSignal<Record<string, string>>({});
+    const [aiExplanation, setAiExplanation] = createSignal("");
+
+    const generateWithAI = async (customPrompt?: string) => {
+        setIsGenerating(true);
+        try {
+            // Ensure Firebase is initialized
+            getFirebaseDb();
+            const functions = getFunctions();
+            // Call the Gemini backend
+            const generateFn = httpsCallable(functions, 'generateOmniMintContract');
+            const p = customPrompt || aiPrompt();
+
+            const result = await generateFn({
+                tokenType: tokenType(),
+                tokenName: tokenName(),
+                tokenSymbol: tokenSymbol(),
+                initialSupply: initialSupply(),
+                isMintable: isMintable(),
+                isBurnable: isBurnable(),
+                isPausable: isPausable(),
+                targetChains: selectedChains(),
+                aiPrompt: p
+            });
+
+            const data = result.data as any;
+            if (data && data.contracts) {
+                setAiContracts(data.contracts);
+                setAiExplanation(data.explanation || "");
+                if (p) setAiPrompt("");
+            }
+        } catch (error) {
+            console.error("Failed to generate AI contract:", error);
+            alert("Failed to generate smart contract. Please try again.");
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // Auto-generate on initial load mount
+    createEffect(() => {
+        // Run once
+        generateWithAI("Generate a standard version of this token based on the parameters.");
+    });
 
     const toggleChain = (id: string) => {
         if (id === "vision") return; // Vision is immutable base
@@ -156,31 +207,33 @@ export default function MintStudio() {
                     {/* Live Code Viewer */}
                     <div class="mint-code-container">
                         <div class="mint-code-header">
-                            <div class="mint-code-tab active">Solidity (Vision/Base)</div>
-                            <div class="mint-code-tab">Rust (Solana)</div>
-                            <div class="mint-code-tab">Tact (TON)</div>
+                            <div class={`mint-code-tab ${activeTab() === 'vision' ? 'active' : ''}`} onClick={() => setActiveTab('vision')}>Vision (Solidity)</div>
+                            <div class={`mint-code-tab ${activeTab() === 'base' ? 'active' : ''}`} onClick={() => setActiveTab('base')}>Base (Solidity)</div>
+                            <div class={`mint-code-tab ${activeTab() === 'solana' ? 'active' : ''}`} onClick={() => setActiveTab('solana')}>Solana (Rust)</div>
+                            <div class={`mint-code-tab ${activeTab() === 'ton' ? 'active' : ''}`} onClick={() => setActiveTab('ton')}>TON (Tact)</div>
                         </div>
-                        <pre class="mint-code-content">
-                            <span style="color: #64748b;">// SPDX-License-Identifier: MIT</span>
-                            <span style="color: #c678dd;">pragma solidity</span> <span style="color: #d19a66;">^0.8.20</span>;
-
-                            <span style="color: #c678dd;">import</span> <span style="color: #98c379;">"@openzeppelin/contracts/token/ERC20/ERC20.sol"</span>;
-                            <span style="color: #c678dd;">import</span> <span style="color: #98c379;">"@openzeppelin/contracts/access/Ownable.sol"</span>;
-
-                            <span style="color: #c678dd;">contract</span> <span style="color: #e5c07b;">{tokenName().replace(/\s/g, '')}</span> <span style="color: #c678dd;">is</span> <span style="color: #e5c07b;">ERC20</span>, <span style="color: #e5c07b;">Ownable</span> {'{'}
-                            <span style="color: #c678dd;">constructor</span>() <span style="color: #e5c07b;">ERC20</span>(<span style="color: #98c379;">"{tokenName()}"</span>, <span style="color: #98c379;">"{tokenSymbol()}"</span>) <span style="color: #e5c07b;">Ownable</span>(msg.sender) {'{'}
-                            _mint(msg.sender, <span style="color: #d19a66;">{initialSupply()}</span> * 10 ** decimals());
-                            {'}'}
-
-                            <Show when={isMintable()}>
-                                <span style="color: #c678dd;">function</span> <span style="color: #61afef;">mint</span>(<span style="color: #e5c07b;">address</span> to, <span style="color: #e5c07b;">uint256</span> amount) <span style="color: #c678dd;">public</span> <span style="color: #e5c07b;">onlyOwner</span> {'{'}
-                                _mint(to, amount);
-                                {'}'}
+                        <pre class="mint-code-content" style={{ position: "relative" }}>
+                            <Show when={isGenerating()}>
+                                <div style={{ position: "absolute", "inset": 0, background: "rgba(15,23,42,0.8)", display: "flex", "align-items": "center", "justify-content": "center", "z-index": 10, "backdrop-filter": "blur(4px)" }}>
+                                    <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "12px" }}>
+                                        <div class="mint-ai-bounce">✨</div>
+                                        <span style={{ color: "#a855f7", "font-weight": "bold" }}>Gemini 2.5 Pro is coding...</span>
+                                    </div>
+                                </div>
                             </Show>
 
-                            <span style="color: #64748b;">// ... UI updates code in real-time as you type or ask AI.</span>
-                            {'}'}
+                            <Show when={aiContracts()[activeTab()]} fallback={
+                                <span>{`// Waiting for AI Generation...\n// Select chains and press Enter to generate.`}</span>
+                            }>
+                                {aiContracts()[activeTab()]}
+                            </Show>
                         </pre>
+                        <Show when={aiExplanation()}>
+                            <div style={{ padding: "12px 20px", background: "rgba(139, 92, 246, 0.1)", "border-top": "1px solid rgba(139, 92, 246, 0.2)", "font-size": "13px", color: "#e2e8f0" }}>
+                                <strong>AI Note:</strong> {aiExplanation()}
+                            </div>
+                        </Show>
+
 
                         <div class="mint-deploy-row" style={{ padding: "16px 20px" }}>
                             <div style={{ flex: 1, "font-size": "13px", color: "#94a3b8" }}>
@@ -201,15 +254,19 @@ export default function MintStudio() {
                             <input
                                 class="mint-ai-input"
                                 placeholder="Describe custom logics: 'Add a 3% tax on transfers sent to marketing wallet'"
+                                value={aiPrompt()}
+                                onInput={(e) => setAiPrompt(e.currentTarget.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && generateWithAI()}
+                                disabled={isGenerating()}
                             />
-                            <button class="mint-ai-submit">
+                            <button class="mint-ai-submit" onClick={() => generateWithAI()} disabled={isGenerating()}>
                                 <IconSend />
                             </button>
                         </div>
                         <div style={{ display: "flex", gap: "8px", "flex-wrap": "wrap" }}>
-                            <span style={{ "font-size": "11px", background: "rgba(139, 92, 246, 0.2)", padding: "4px 8px", "border-radius": "4px", color: "#d8b4fe", cursor: "pointer" }}>+ Add buy/sell tax</span>
-                            <span style={{ "font-size": "11px", background: "rgba(139, 92, 246, 0.2)", padding: "4px 8px", "border-radius": "4px", color: "#d8b4fe", cursor: "pointer" }}>+ Anti-whale limit</span>
-                            <span style={{ "font-size": "11px", background: "rgba(139, 92, 246, 0.2)", padding: "4px 8px", "border-radius": "4px", color: "#d8b4fe", cursor: "pointer" }}>+ Blacklist wallets</span>
+                            <span onClick={() => generateWithAI("Add a buy and sell tax of 3% distributed to marketing wallet")} style={{ "font-size": "11px", background: "rgba(139, 92, 246, 0.2)", padding: "4px 8px", "border-radius": "4px", color: "#d8b4fe", cursor: "pointer" }}>+ Add buy/sell tax</span>
+                            <span onClick={() => generateWithAI("Add an anti-whale limit, preventing any single wallet from holding more than 2% of total supply (exclude owner/dex)")} style={{ "font-size": "11px", background: "rgba(139, 92, 246, 0.2)", padding: "4px 8px", "border-radius": "4px", color: "#d8b4fe", cursor: "pointer" }}>+ Anti-whale limit</span>
+                            <span onClick={() => generateWithAI("Add blacklist functionality so admin can block specific wallets from trading")} style={{ "font-size": "11px", background: "rgba(139, 92, 246, 0.2)", padding: "4px 8px", "border-radius": "4px", color: "#d8b4fe", cursor: "pointer" }}>+ Blacklist wallets</span>
                         </div>
                     </div>
                 </div>
