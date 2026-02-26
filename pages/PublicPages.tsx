@@ -20,6 +20,7 @@ export const AgentGateway = lazy(() => import('../components/AgentGateway'));
 export const ApiHub = lazy(() => import('../components/ApiHub'));
 export const TradingTerminal = lazy(() => import('../dex/TradingTerminal'));
 export const DEXMarkets = lazy(() => import('../dex/DEXMarkets'));
+export const MintStudio = lazy(() => import('../components/mint/MintStudio'));
 
 // Page Wrapper Components
 export const ResearchPage = () => {
@@ -112,6 +113,11 @@ export const AgentApiDocsPage = () => {
 export const ApiHubPage = () => {
     document.title = 'API & Developer Platform | Vision Chain';
     return <div id="api-hub"><ApiHub /></div>;
+};
+
+export const MintStudioPage = () => {
+    document.title = 'Omni-Mint Studio | Vision Chain';
+    return <div><MintStudio /></div>;
 };
 
 export const TradingTerminalPage = () => {

@@ -103,6 +103,9 @@ render(() => (
           </>
         )}
 
+        {/* Studio / Tools Routes */}
+        <Route path="/mint" component={Public.MintStudioPage} />
+
         {/* Admin Routes */}
         <Route path="/adminsystem" component={Admin.AdminDashboardPage} />
         <Route path="/adminsystem/users" component={Admin.AdminUsersPage} />
