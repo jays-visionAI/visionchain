@@ -1504,7 +1504,7 @@ export const userLogout = async (): Promise<void> => {
 // ==================== Password Reset (Logged-out) ====================
 
 const getCloudFunctionUrl = (fnName: string) => {
-    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+    const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || (import.meta.env.VITE_CHAIN_ENV === 'staging' ? 'visionchain-staging' : 'visionchain-d19ed');
     return `https://us-central1-${projectId}.cloudfunctions.net/${fnName}`;
 };
 
@@ -1716,7 +1716,7 @@ export const userRegister = async (email: string, password: string, phone?: stri
 
             // Send referral signup notification email to referrer (fire-and-forget)
             try {
-                const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+                const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || (import.meta.env.VITE_CHAIN_ENV === 'staging' ? 'visionchain-staging' : 'visionchain-d19ed');
                 fetch(`https://us-central1-${projectId}.cloudfunctions.net/notifyReferralSignup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1782,7 +1782,7 @@ export const userRegister = async (email: string, password: string, phone?: stri
 
     // Send welcome email + schedule drip campaign (fire-and-forget)
     try {
-        const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || 'visionchain-d19ed';
+        const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || (import.meta.env.VITE_CHAIN_ENV === 'staging' ? 'visionchain-staging' : 'visionchain-d19ed');
         fetch(`https://us-central1-${projectId}.cloudfunctions.net/notifyWelcome`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
