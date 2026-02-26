@@ -11,6 +11,7 @@ const IconTon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none
 const IconSend = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>;
 const IconCheck = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
 const IconExternal = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>;
+const IconSparkles = (props: { width?: string, height?: string, style?: any }) => <svg width={props.width || "24"} height={props.height || "24"} style={props.style} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" /></svg>;
 
 export default function MintStudio() {
     const [tokenType, setTokenType] = createSignal("VRC-20");
@@ -255,7 +256,7 @@ export default function MintStudio() {
                             <Show when={isGenerating()}>
                                 <div style={{ position: "absolute", "inset": 0, background: "rgba(15,23,42,0.8)", display: "flex", "align-items": "center", "justify-content": "center", "z-index": 10, "backdrop-filter": "blur(4px)" }}>
                                     <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", gap: "12px" }}>
-                                        <div class="mint-ai-bounce">✨</div>
+                                        <div class="mint-ai-bounce" style={{ color: "#a855f7" }}><IconSparkles width="32" height="32" /></div>
                                         <span style={{ color: "#a855f7", "font-weight": "bold" }}>Gemini 2.5 Pro is coding...</span>
                                     </div>
                                 </div>
@@ -287,7 +288,7 @@ export default function MintStudio() {
                     {/* AI Prompt Input */}
                     <div class="mint-ai-panel">
                         <div class="mint-ai-header">
-                            <span style="font-size: 16px;">✨</span> AI Copilot
+                            <IconSparkles width="16" height="16" /> AI Copilot
                         </div>
                         <div class="mint-ai-input-wrapper">
                             <input
