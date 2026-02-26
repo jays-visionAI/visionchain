@@ -9,6 +9,8 @@ const IconSolana = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="n
 const IconBase = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="mint-icon"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="12" r="4" fill="currentColor" /></svg>;
 const IconTon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="mint-icon"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" fill="#0098EA" /><path d="M11.5303 6.96967L6.46967 15.0303L9.5 13L11.5303 6.96967Z" fill="white" /><path d="M11.5303 6.96967L17.5303 15.0303L13.5 13L11.5303 6.96967Z" fill="white" fill-opacity="0.8" /></svg>;
 const IconSend = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>;
+const IconCheck = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
+const IconExternal = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>;
 
 export default function MintStudio() {
     const [tokenType, setTokenType] = createSignal("VRC-20");
@@ -30,6 +32,43 @@ export default function MintStudio() {
     const [isGenerating, setIsGenerating] = createSignal(false);
     const [aiContracts, setAiContracts] = createSignal<Record<string, string>>({});
     const [aiExplanation, setAiExplanation] = createSignal("");
+
+    // Deployment States
+    const [showDeployModal, setShowDeployModal] = createSignal(false);
+    const [deployStep, setDeployStep] = createSignal(0);
+    const [deployComplete, setDeployComplete] = createSignal(false);
+
+    const deploySteps = [
+        "Validating Omni-Contract configuration...",
+        "Compiling Vision & Base (EVM)...",
+        "Compiling Solana (BPF)...",
+        "Compiling TON (Fift/Tact)...",
+        "Deploying to Vision Chain Primary Native Contract...",
+        "Bridging states via LayerZero / CCIP...",
+        "Finalizing Omni-Token Registry..."
+    ];
+
+    const startDeployment = () => {
+        if (!aiContracts()['vision']) {
+            alert("Please wait for AI to generate contracts first.");
+            return;
+        }
+        setShowDeployModal(true);
+        setDeployStep(0);
+        setDeployComplete(false);
+
+        // Simulate deployment flow
+        let currentStep = 0;
+        const interval = setInterval(() => {
+            currentStep++;
+            if (currentStep >= deploySteps.length) {
+                clearInterval(interval);
+                setDeployComplete(true);
+            } else {
+                setDeployStep(currentStep);
+            }
+        }, 1500); // 1.5s per step for dramatic effect
+    };
 
     const generateWithAI = async (customPrompt?: string) => {
         setIsGenerating(true);
@@ -239,7 +278,7 @@ export default function MintStudio() {
                             <div style={{ flex: 1, "font-size": "13px", color: "#94a3b8" }}>
                                 Total estimated deploy fee: <strong style={{ color: "#fff" }}>50 VCN</strong> (Cross-chain included)
                             </div>
-                            <button class="mint-btn-primary">
+                            <button class="mint-btn-primary" onClick={startDeployment}>
                                 Deploy Omni-Contract
                             </button>
                         </div>
@@ -271,6 +310,52 @@ export default function MintStudio() {
                     </div>
                 </div>
             </div>
+
+            {/* Deployment Modal Overlay */}
+            <Show when={showDeployModal()}>
+                <div style={{ position: "fixed", inset: 0, "z-index": 100, background: "rgba(5, 5, 5, 0.8)", "backdrop-filter": "blur(10px)", display: "flex", "align-items": "center", "justify-content": "center" }}>
+                    <div style={{ background: "#0f172a", border: "1px solid rgba(59, 130, 246, 0.3)", "border-radius": "24px", padding: "40px", width: "100%", "max-width": "500px", "box-shadow": "0 20px 40px rgba(0,0,0,0.5)" }}>
+                        <Show when={!deployComplete()} fallback={
+                            <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", "text-align": "center", gap: "20px" }}>
+                                <div style={{ width: "64px", height: "64px", background: "rgba(16, 185, 129, 0.1)", color: "#10b981", "border-radius": "50%", display: "flex", "align-items": "center", "justify-content": "center" }}>
+                                    <IconCheck />
+                                </div>
+                                <div>
+                                    <h2 style={{ margin: "0 0 8px 0", "font-size": "24px", "font-weight": 800, color: "#f8fafc" }}>Omni-Deployed Successfully</h2>
+                                    <p style={{ margin: 0, color: "#94a3b8", "font-size": "14px" }}>{tokenName()} ({tokenSymbol()}) is now live on {selectedChains().length} networks.</p>
+                                </div>
+
+                                <div style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.05)", "border-radius": "12px", padding: "16px", "margin-top": "10px", display: "flex", "flex-direction": "column", gap: "12px" }}>
+                                    <For each={selectedChains()}>{(chain) => (
+                                        <div style={{ display: "flex", "justify-content": "space-between", "align-items": "center", "font-size": "13px" }}>
+                                            <span style={{ color: "#cbd5e1", "text-transform": "capitalize" }}>{chain}</span>
+                                            <a href="#" onClick={e => e.preventDefault()} style={{ color: "#38bdf8", "text-decoration": "none", display: "flex", "align-items": "center", gap: "4px" }}>
+                                                View Tx <IconExternal />
+                                            </a>
+                                        </div>
+                                    )}</For>
+                                </div>
+
+                                <button onClick={() => setShowDeployModal(false)} class="mint-btn-primary" style={{ width: "100%", "justify-content": "center", "margin-top": "16px" }}>
+                                    Manage Token
+                                </button>
+                            </div>
+                        }>
+                            <div style={{ display: "flex", "flex-direction": "column", "align-items": "center", "text-align": "center", gap: "32px" }}>
+                                <div class="vision-loader" style={{ width: "48px", height: "48px", border: "4px solid rgba(59, 130, 246, 0.2)", "border-top-color": "#3b82f6", "border-radius": "50%", animation: "spin 1s linear infinite" }} />
+                                <div>
+                                    <h2 style={{ margin: "0 0 12px 0", "font-size": "20px", "font-weight": 700, color: "#f8fafc" }}>Deploying Omni-Contract...</h2>
+                                    <p style={{ margin: 0, color: "#38bdf8", "font-size": "14px", "font-weight": 600 }}>{deploySteps[deployStep()]}</p>
+                                </div>
+                                <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.1)", "border-radius": "4px", overflow: "hidden" }}>
+                                    <div style={{ height: "100%", background: "linear-gradient(90deg, #3b82f6, #8b5cf6)", width: `${(deployStep() / (deploySteps.length - 1)) * 100}%`, transition: "width 0.3s ease" }} />
+                                </div>
+                            </div>
+                        </Show>
+                    </div>
+                </div>
+            </Show>
         </div>
     );
 }
+
