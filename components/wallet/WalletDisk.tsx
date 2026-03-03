@@ -146,6 +146,7 @@ export const WalletDisk = (props: {
     const [showPublishModal, setShowPublishModal] = createSignal(false);
     const [publishPrice, setPublishPrice] = createSignal('5');
     const [publishLoading, setPublishLoading] = createSignal(false);
+    const [publishingFile, setPublishingFile] = createSignal<DiskFile | null>(null);
 
     // Batch Actions State
     const [selectedItems, setSelectedItems] = createSignal<Set<string>>(new Set());
@@ -526,17 +527,17 @@ export const WalletDisk = (props: {
     };
 
     const handlePublish = async () => {
-        const ctx = contextMenu();
-        if (!ctx || ctx.type !== 'file' || !props.walletAddress) return;
-        const item = ctx.item as DiskFile;
+        const file = publishingFile();
+        if (!file || !email()) return;
 
         setPublishLoading(true);
         try {
             const price = parseFloat(publishPrice());
             if (isNaN(price) || price < 0) throw new Error('Invalid price');
 
-            await publishDiskFile(props.walletAddress, item.id, price);
+            await publishDiskFile(email(), file.id, price);
             setShowPublishModal(false);
+            setPublishingFile(null);
             setContextMenu(null);
             await loadData();
             alert('File published successfully to Vision Market!');
@@ -549,14 +550,14 @@ export const WalletDisk = (props: {
     };
 
     const handleUnpublish = async () => {
-        const ctx = contextMenu();
-        if (!ctx || ctx.type !== 'file' || !props.walletAddress) return;
-        const item = ctx.item as DiskFile;
+        const file = publishingFile() || (contextMenu()?.type === 'file' ? contextMenu()?.item as DiskFile : null);
+        if (!file || !email()) return;
 
         if (!confirm('Are you sure you want to remove this file from Vision Market?')) return;
 
         try {
-            await unpublishDiskFile(props.walletAddress, item.id);
+            await unpublishDiskFile(email(), file.id);
+            setPublishingFile(null);
             await loadData();
             setContextMenu(null);
         } catch (err: any) {
@@ -1374,11 +1375,12 @@ export const WalletDisk = (props: {
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 const file = ctx().item as DiskFile;
+                                                setPublishingFile(file);
                                                 if (file.isPublished) {
                                                     handleUnpublish();
                                                 } else {
                                                     setShowPublishModal(true);
-                                                    setContextMenu({ ...ctx(), y: -2000 }); // visually hide menu but keep state
+                                                    setContextMenu(null);
                                                 }
                                             }}
                                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-cyan-400 hover:bg-cyan-500/10 transition-all font-bold"
