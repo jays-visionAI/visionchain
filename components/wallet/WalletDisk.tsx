@@ -135,6 +135,7 @@ export const WalletDisk = (props: {
     const [videoStreamProgress, setVideoStreamProgress] = createSignal<{ current: number; total: number; bytesLoaded: number } | null>(null);
     const [videoBuffering, setVideoBuffering] = createSignal(false);
     const [videoFullyLoaded, setVideoFullyLoaded] = createSignal(false);
+    const [videoBufferReady, setVideoBufferReady] = createSignal(false); // true when 10MB buffered, play button shown
     const [contextMenu, setContextMenu] = createSignal<{ item: DiskFile | DiskFolder; type: 'file' | 'folder'; x: number; y: number } | null>(null);
     const [showNewFolder, setShowNewFolder] = createSignal(false);
     const [newFolderName, setNewFolderName] = createSignal('');
@@ -709,6 +710,7 @@ export const WalletDisk = (props: {
         setVideoStreamProgress(null);
         setVideoBuffering(false);
         setVideoFullyLoaded(false);
+        setVideoBufferReady(false);
 
         if (!file) return;
 
@@ -723,12 +725,13 @@ export const WalletDisk = (props: {
                         setVideoStreamProgress({ current, total, bytesLoaded });
                     },
                     (blobUrl) => {
-                        // Buffer ready - set URL for early playback
+                        // Buffer ready - show play button, DON'T auto-play
                         prevBlobURL = blobUrl;
                         setPreviewURL(blobUrl);
+                        setVideoBufferReady(true);
                         setVideoBuffering(false);
                     },
-                    2 * 1024 * 1024 // 2MB threshold for early playback
+                    10 * 1024 * 1024 // 10MB threshold before play button appears
                 );
                 // Replace with full blob URL
                 if (prevBlobURL) URL.revokeObjectURL(prevBlobURL);
@@ -1607,8 +1610,8 @@ export const WalletDisk = (props: {
                                             <Show when={file().type.startsWith('video/')}>
                                                 {/* Video Streaming Player */}
                                                 <div class="w-full max-w-2xl relative">
-                                                    {/* Buffering overlay */}
-                                                    <Show when={videoBuffering() && !previewURL()}>
+                                                    {/* Phase 1: Buffering - downloading chunks */}
+                                                    <Show when={videoBuffering() && !videoBufferReady()}>
                                                         <div class="w-full aspect-video bg-black/60 rounded-xl flex flex-col items-center justify-center border border-white/10">
                                                             <div class="relative mb-5">
                                                                 <svg class="w-16 h-16 text-cyan-500/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1640,35 +1643,72 @@ export const WalletDisk = (props: {
                                                             </Show>
                                                         </div>
                                                     </Show>
-                                                    {/* Actual video player */}
-                                                    <Show when={previewURL()}>
-                                                        <div class="relative">
-                                                            <video
-                                                                src={previewURL()}
-                                                                controls
-                                                                autoplay
-                                                                playsinline
-                                                                webkit-playsinline
-                                                                class="max-w-full max-h-full rounded-lg"
-                                                            />
-                                                            {/* Streaming overlay while still loading */}
-                                                            <Show when={!videoFullyLoaded() && videoStreamProgress()}>
-                                                                <div class="absolute bottom-12 left-0 right-0 px-3">
-                                                                    <div class="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
-                                                                        <div class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                                                                        <span class="text-[10px] text-gray-300 font-medium">
-                                                                            Streaming... {videoStreamProgress()!.current}/{videoStreamProgress()!.total} chunks ({formatFileSize(videoStreamProgress()!.bytesLoaded)})
-                                                                        </span>
-                                                                        <div class="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
-                                                                            <div
-                                                                                class="h-full bg-cyan-500 rounded-full transition-all duration-300"
-                                                                                style={{ width: `${(videoStreamProgress()!.current / videoStreamProgress()!.total) * 100}%` }}
-                                                                            />
+                                                    {/* Phase 2: Buffer ready - show play button */}
+                                                    <Show when={videoBufferReady() && !videoFullyLoaded() && previewURL()}>
+                                                        {(() => {
+                                                            const [userPlaying, setUserPlaying] = createSignal(false);
+                                                            let videoRef: HTMLVideoElement | undefined;
+                                                            return (
+                                                                <div class="relative">
+                                                                    <video
+                                                                        ref={videoRef}
+                                                                        src={previewURL()}
+                                                                        controls={userPlaying()}
+                                                                        playsinline
+                                                                        webkit-playsinline
+                                                                        class="max-w-full max-h-full rounded-lg"
+                                                                        style={{ filter: userPlaying() ? 'none' : 'brightness(0.4)' }}
+                                                                    />
+                                                                    {/* Play button overlay */}
+                                                                    <Show when={!userPlaying()}>
+                                                                        <div
+                                                                            class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer group"
+                                                                            onClick={() => {
+                                                                                setUserPlaying(true);
+                                                                                videoRef?.play();
+                                                                            }}
+                                                                        >
+                                                                            <div class="w-20 h-20 rounded-full bg-cyan-500/90 flex items-center justify-center mb-4 group-hover:bg-cyan-400 group-hover:scale-110 transition-all shadow-lg shadow-cyan-500/30">
+                                                                                <svg class="w-9 h-9 text-white ml-1" viewBox="0 0 24 24" fill="currentColor">
+                                                                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                                                                </svg>
+                                                                            </div>
+                                                                            <div class="text-sm font-bold text-white">Ready to Play</div>
+                                                                            <div class="text-xs text-gray-400 mt-1">
+                                                                                {formatFileSize(videoStreamProgress()?.bytesLoaded || 0)} buffered
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
+                                                                    </Show>
+                                                                    {/* Background download progress */}
+                                                                    <Show when={videoStreamProgress()}>
+                                                                        <div class="absolute bottom-12 left-0 right-0 px-3">
+                                                                            <div class="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
+                                                                                <div class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                                                                                <span class="text-[10px] text-gray-300 font-medium">
+                                                                                    Downloading... {videoStreamProgress()!.current}/{videoStreamProgress()!.total} ({formatFileSize(videoStreamProgress()!.bytesLoaded)})
+                                                                                </span>
+                                                                                <div class="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
+                                                                                    <div
+                                                                                        class="h-full bg-cyan-500 rounded-full transition-all duration-300"
+                                                                                        style={{ width: `${(videoStreamProgress()!.current / videoStreamProgress()!.total) * 100}%` }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </Show>
                                                                 </div>
-                                                            </Show>
-                                                        </div>
+                                                            );
+                                                        })()}
+                                                    </Show>
+                                                    {/* Phase 3: Fully loaded - normal video player */}
+                                                    <Show when={videoFullyLoaded() && previewURL()}>
+                                                        <video
+                                                            src={previewURL()}
+                                                            controls
+                                                            playsinline
+                                                            webkit-playsinline
+                                                            class="max-w-full max-h-full rounded-lg"
+                                                        />
                                                     </Show>
                                                 </div>
                                             </Show>
