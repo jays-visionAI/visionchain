@@ -711,6 +711,7 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                     {t('settings.general.logoutButton')}
                                 </button>
                             </div>
+                            <div class="h-[50px]" />
                         </div>
                     </div>
                 </div>
