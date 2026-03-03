@@ -15,7 +15,7 @@ import {
     publishDiskFile, unpublishDiskFile, encryptFile, decryptFile,
     moveDiskFile, moveDiskFolder,
     generateImageThumbnail, generateVideoThumbnail,
-    streamVideoChunks,
+    streamVideoChunks, backfillThumbnail,
     type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
 } from '../../services/diskService';
 import { ethers } from 'ethers';
@@ -178,6 +178,9 @@ export const WalletDisk = (props: {
 
     // ─── Data Loading ───
 
+    // Track files already being backfilled to avoid duplicates
+    const backfillingIds = new Set<string>();
+
     const loadData = async () => {
         if (!email()) return;
         setIsLoading(true);
@@ -190,6 +193,36 @@ export const WalletDisk = (props: {
             setFiles(fileList);
             setFolders(folderList);
             setUsage(storageUsage);
+
+            // Lazy backfill thumbnails for distributed files without thumbnails
+            const filesToBackfill = fileList.filter(f =>
+                !f.thumbnail &&
+                !f.isEncrypted &&
+                (f.storageType === 'distributed' || f.cid) &&
+                (f.type.startsWith('image/') || f.type.startsWith('video/')) &&
+                !backfillingIds.has(f.id)
+            );
+
+            if (filesToBackfill.length > 0) {
+                // Process one at a time in background to avoid overwhelming
+                (async () => {
+                    for (const file of filesToBackfill) {
+                        if (backfillingIds.has(file.id)) continue;
+                        backfillingIds.add(file.id);
+                        try {
+                            const thumb = await backfillThumbnail(email(), file);
+                            if (thumb) {
+                                // Update local state immediately
+                                setFiles(prev => prev.map(f =>
+                                    f.id === file.id ? { ...f, thumbnail: thumb } : f
+                                ));
+                            }
+                        } catch (e) {
+                            console.warn('[Disk] Backfill failed for', file.name, e);
+                        }
+                    }
+                })();
+            }
         } catch (e) {
             console.error('[Disk] Failed to load data:', e);
         } finally {

@@ -207,6 +207,101 @@ export const generateVideoThumbnail = async (file: File, maxSize: number = 200):
     });
 };
 
+/**
+ * Generate thumbnail from a Blob URL (for backfilling distributed files).
+ * Works for images; returns base64 data URL or empty string.
+ */
+export const generateThumbnailFromBlob = async (blobUrl: string, maxSize: number = 200): Promise<string> => {
+    return new Promise((resolve) => {
+        try {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                else { w = Math.round(w * maxSize / h); h = maxSize; }
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/webp', 0.7));
+                } else {
+                    resolve('');
+                }
+            };
+            img.onerror = () => resolve('');
+            setTimeout(() => resolve(''), 8000);
+            img.src = blobUrl;
+        } catch { resolve(''); }
+    });
+};
+
+/**
+ * Backfill thumbnail for a distributed file that doesn't have one.
+ * Downloads the full file, generates thumbnail, saves to Firestore, and returns the data URL.
+ * This is designed to run lazily and in the background.
+ */
+export const backfillThumbnail = async (email: string, file: DiskFile): Promise<string> => {
+    if (!file.chunkHashes?.length || file.isEncrypted) return '';
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return '';
+
+    try {
+        // Download full file
+        const blob = await downloadDiskFileGranular(file, () => { }, 10);
+        const blobUrl = URL.createObjectURL(blob);
+
+        let thumbnail = '';
+        if (file.type.startsWith('image/')) {
+            thumbnail = await generateThumbnailFromBlob(blobUrl);
+        } else if (file.type.startsWith('video/')) {
+            // For video, create a temp video element to capture frame
+            thumbnail = await new Promise<string>((resolve) => {
+                const video = document.createElement('video');
+                video.muted = true;
+                video.preload = 'metadata';
+                video.onloadeddata = () => {
+                    video.currentTime = 1;
+                };
+                video.onseeked = () => {
+                    const canvas = document.createElement('canvas');
+                    let w = video.videoWidth, h = video.videoHeight;
+                    const maxSize = 200;
+                    if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                    else { w = Math.round(w * maxSize / h); h = maxSize; }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(video, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/webp', 0.7));
+                    } else { resolve(''); }
+                    URL.revokeObjectURL(blobUrl);
+                };
+                video.onerror = () => { URL.revokeObjectURL(blobUrl); resolve(''); };
+                setTimeout(() => { URL.revokeObjectURL(blobUrl); resolve(''); }, 15000);
+                video.src = blobUrl;
+            });
+        }
+
+        if (!thumbnail) {
+            URL.revokeObjectURL(blobUrl);
+            return '';
+        }
+
+        // Save to Firestore for future instant loading
+        const col = getUserDiskCollection(email);
+        const fileRef = doc(col, file.id);
+        await updateDoc(fileRef, { thumbnail });
+
+        URL.revokeObjectURL(blobUrl);
+        return thumbnail;
+    } catch (err) {
+        console.error('[Disk] Backfill thumbnail failed:', err);
+        return '';
+    }
+};
+
 // ─── Upload (Distributed Storage via Cloud Function) ───
 
 /**
