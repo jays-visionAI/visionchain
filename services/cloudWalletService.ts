@@ -260,6 +260,7 @@ export const CloudWalletService = {
 
     /**
      * Sync local wallet to cloud (for users who created wallet before cloud sync)
+     * Uses the user's existing wallet password — no separate cloud password needed.
      */
     async syncLocalToCloud(
         password: string,
@@ -272,12 +273,43 @@ export const CloudWalletService = {
                 return { success: false, error: 'No local wallet found' };
             }
 
-            // 2. Decrypt to verify password is correct
-            const mnemonic = await WalletService.decrypt(encryptedWallet, password);
+            // 2. Verify password by decrypting (prove user knows the password)
+            let mnemonic: string;
+            try {
+                mnemonic = await WalletService.decrypt(encryptedWallet, password);
+            } catch {
+                return { success: false, error: 'Incorrect wallet password. Please enter the password you set when creating your wallet.' };
+            }
+
+            // 3. Check password strength — cloud storage requires a stronger password
+            const strength = calculatePasswordStrength(password);
+            if (!strength.isStrongEnough) {
+                return {
+                    success: false,
+                    error: 'Your wallet password is too weak for cloud backup. Please change your wallet password to 10+ characters with uppercase, lowercase, and numbers first (Settings > Password tab), then try again.',
+                };
+            }
+
+            // 4. Derive address for cloud record metadata
             const derived = WalletService.deriveEOA(mnemonic);
 
-            // 3. Re-encrypt and save to cloud
-            return await this.saveToCloud(mnemonic, password, derived.address, userEmail);
+            // 5. Upload the already-encrypted wallet directly to cloud
+            //    No re-encryption needed — the local encrypted data is already AES-256-GCM.
+            //    The server adds its own envelope encryption layer on top.
+            const saveWalletToCloud = httpsCallable(functions, 'saveWalletToCloud');
+            const result = await saveWalletToCloud({
+                clientEncryptedWallet: encryptedWallet,
+                walletAddress: derived.address,
+            });
+
+            const data = result.data as { success: boolean };
+
+            if (data.success) {
+                console.log('[CloudSync] Wallet synced to cloud successfully');
+                return { success: true };
+            } else {
+                return { success: false, error: 'Server error during cloud sync' };
+            }
         } catch (err: any) {
             console.error('[CloudSync] Sync failed:', err);
             return { success: false, error: err.message || 'Failed to sync wallet' };

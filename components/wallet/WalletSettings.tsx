@@ -245,12 +245,6 @@ export function WalletSettings(props: { onBack?: () => void }) {
             return;
         }
 
-        const strength = calculatePasswordStrength(cloudSyncPassword());
-        if (!strength.isStrongEnough) {
-            setCloudSyncError('Password not strong enough for cloud sync. Minimum: 10 chars + 3 of (upper/lower/number/special)');
-            return;
-        }
-
         try {
             setCloudSyncLoading(true);
             setCloudSyncError('');
@@ -1200,27 +1194,6 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                                 </Show>
                                             </button>
                                         </div>
-
-                                        {/* Password Strength */}
-                                        <Show when={cloudSyncPassword()}>
-                                            {(() => {
-                                                const strength = calculatePasswordStrength(cloudSyncPassword());
-                                                return (
-                                                    <div class="mt-3">
-                                                        <div class="flex gap-1 mb-1">
-                                                            {[1, 2, 3, 4].map((i) => (
-                                                                <div class={`h-1 flex-1 rounded-full ${i <= strength.score ? (strength.isStrongEnough ? 'bg-green-500' : 'bg-amber-500') : 'bg-white/10'}`} />
-                                                            ))}
-                                                        </div>
-                                                        <p class={`text-xs ${strength.isStrongEnough ? 'text-green-400' : 'text-amber-400'}`}>
-                                                            {strength.isStrongEnough
-                                                                ? 'Password is strong enough for cloud sync'
-                                                                : `Password needs: ${strength.length < 10 ? '10+ chars, ' : ''}${strength.score < 3 ? '3+ of (upper/lower/number/special)' : ''}`}
-                                                        </p>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </Show>
 
                                         {/* Error */}
                                         <Show when={cloudSyncError()}>
