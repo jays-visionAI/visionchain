@@ -21,86 +21,84 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      chunkSizeWarningLimit: 400,
+      target: 'es2020',
+      chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
           manualChunks: (id) => {
-            // Vendor chunks - split large npm dependencies
+            // ── Vendor: always-needed, split by library ──────────────────
             if (id.includes('node_modules')) {
               if (id.includes('ethers')) return 'vendor-ethers';
               if (id.includes('firebase')) return 'vendor-firebase';
-              if (id.includes('firebase')) return 'vendor-firebase';
               if (id.includes('lucide')) return 'vendor-icons';
               if (id.includes('@google/generative-ai') || id.includes('@google/genai')) return 'vendor-gemini';
-              if (id.includes('axios')) return 'vendor-axios';
-              // Mermaid must be its own async chunk -- it has circular deps that crash if bundled into vendor
-              if (id.includes('mermaid')) return 'vendor-mermaid';
+              if (id.includes('mermaid')) return 'vendor-mermaid'; // circular-dep-safe
               if (id.includes('marked') || id.includes('highlight')) return 'vendor-markdown';
               if (id.includes('apexcharts') || id.includes('chart')) return 'vendor-charts';
               if (id.includes('qrcode')) return 'vendor-qr';
               if (id.includes('motion') || id.includes('animate')) return 'vendor-motion';
-              // Split remaining vendor by first-level package name
+              if (id.includes('axios')) return 'vendor-axios';
+              // Crypto primitives
               const match = id.match(/node_modules\/([^\/]+)/);
               if (match) {
                 const pkg = match[1];
-                if (['@noble', '@scure', 'bn.js', 'hash.js', 'elliptic', 'secp256k1'].some(p => pkg.includes(p))) {
+                if (['@noble', '@scure', 'bn.js', 'hash.js', 'elliptic', 'secp256k1'].some(p => pkg.includes(p)))
                   return 'vendor-crypto';
-                }
-                if (['buffer', 'stream', 'util', 'events', 'process'].some(p => pkg.includes(p))) {
+                if (['buffer', 'stream', 'util', 'events', 'process'].some(p => pkg.includes(p)))
                   return 'vendor-polyfill';
-                }
               }
               return 'vendor';
             }
 
-            // Admin tabs - lazy loaded, separate chunk
-            if (id.includes('/components/admin/tabs/')) {
-              return 'admin-tabs';
-            }
-
-            // Admin dashboard sub-components
-            if (id.includes('/components/admin/dashboard/')) {
-              return 'admin-dashboard';
-            }
-
-            // Admin users sub-components
-            if (id.includes('/components/admin/users/')) {
-              return 'admin-users';
-            }
-
-            // Admin page components - split per page for better lazy loading
+            // ── Admin ─────────────────────────────────────────────────────
+            if (id.includes('/components/admin/tabs/')) return 'admin-tabs';
+            if (id.includes('/components/admin/dashboard/')) return 'admin-dashboard';
+            if (id.includes('/components/admin/users/')) return 'admin-users';
             if (id.includes('/components/admin/')) {
-              // Extract Admin* component name for individual chunks
-              const match = id.match(/\/components\/admin\/Admin(\w+)\.tsx/);
-              if (match) {
-                return `admin-${match[1].toLowerCase()}`;
-              }
-              // Shared admin code (layout, context) - only specific shared files
-              if (id.includes('adminRoleContext') || id.includes('AdminLayout')) {
-                return 'admin-core';
-              }
-              // Let lazy-loaded sub-components (ActivateContract, ManagePartners, 
-              // UploadCSV, Announcement, PaymasterAdmin, etc.) get their own 
-              // auto-generated chunks via Rollup's default code splitting
+              const m = id.match(/\/components\/admin\/Admin(\w+)\.tsx/);
+              if (m) return `admin-${m[1].toLowerCase()}`;
+              if (id.includes('adminRoleContext') || id.includes('AdminLayout')) return 'admin-core';
               return undefined;
             }
 
-            // Wallet components - separate chunk
-            if (id.includes('/components/wallet/')) {
-              return 'wallet';
-            }
+            // ── Wallet: split each view into its own lazy chunk ───────────
+            // Core always-present wallet pieces
+            if (id.includes('/components/wallet/WalletSidebar')) return 'wallet-core';
+            if (id.includes('/components/wallet/WalletViewHeader')) return 'wallet-core';
+            if (id.includes('/components/wallet/VisionLogo')) return 'wallet-core';
+            if (id.includes('/components/wallet/VisionFullLogo')) return 'wallet-core';
 
-            // Main Wallet.tsx - separate chunk
-            if (id.includes('Wallet.tsx')) {
-              return 'wallet-main';
-            }
+            // Heavy views – each gets its own async chunk
+            if (id.includes('/components/wallet/WalletDashboard')) return 'wallet-dashboard';
+            if (id.includes('/components/wallet/WalletDisk')) return 'wallet-disk';
+            if (id.includes('/components/wallet/WalletAssets')) return 'wallet-assets';
+            if (id.includes('/components/wallet/WalletFlowModals')) return 'wallet-modals';
+            if (id.includes('/components/wallet/WalletSend')) return 'wallet-send';
+            if (id.includes('/components/wallet/WalletReceive')) return 'wallet-send';
+            if (id.includes('/components/wallet/WalletMint')) return 'wallet-mint';
+            if (id.includes('/components/wallet/WalletNodes')) return 'wallet-nodes';
+            if (id.includes('/components/wallet/WalletContacts')) return 'wallet-contacts';
+            if (id.includes('/components/wallet/WalletSettings')) return 'wallet-settings';
+            if (id.includes('/components/wallet/WalletNotifications')) return 'wallet-notifications';
+            if (id.includes('/components/wallet/WalletReferral')) return 'wallet-referral';
+            if (id.includes('/components/wallet/WalletActivity')) return 'wallet-activity';
+            if (id.includes('/components/wallet/WalletCampaign')) return 'wallet-campaign';
+            if (id.includes('/components/wallet/VisionInsight')) return 'wallet-insight';
+            if (id.includes('/components/wallet/VisionMarket')) return 'wallet-market';
+            if (id.includes('/components/wallet/VisionChart')) return 'wallet-chart';
+            if (id.includes('/components/wallet/WalletCexPortfolio')) return 'wallet-cex';
+            if (id.includes('/components/wallet/AgentHosting')) return 'wallet-agent';
+            if (id.includes('/components/wallet/')) return 'wallet-core';
 
-            // Chat components
-            if (id.includes('/components/chat/')) {
-              return 'chat';
-            }
+            // Bridge & Staking (heavy, navigated-to only)
+            if (id.includes('/components/Bridge')) return 'bridge';
+            if (id.includes('/components/ValidatorStaking')) return 'staking';
 
+            // Wallet.tsx entry – keep light
+            if (id.includes('/components/Wallet.tsx') || id.includes('Wallet.tsx')) return 'wallet-main';
 
+            // Chat
+            if (id.includes('/components/chat/')) return 'chat';
           }
         }
       }

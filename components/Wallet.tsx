@@ -94,28 +94,33 @@ import { contractService } from '../services/contractService';
 import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
+// Always visible - keep static
 import { WalletSidebar } from './wallet/WalletSidebar';
-import { WalletDashboard } from './wallet/WalletDashboard';
-import { WalletAssets } from './wallet/WalletAssets';
-import { WalletCampaign } from './wallet/WalletCampaign';
-import { WalletMint } from './wallet/WalletMint';
-import { WalletNodes } from './wallet/WalletNodes';
-import { WalletContacts } from './wallet/WalletContacts';
-import { WalletSettings } from './wallet/WalletSettings';
-import { WalletNotifications } from './wallet/WalletNotifications';
-import { WalletReferral } from './wallet/WalletReferral';
-import { WalletActivity } from './wallet/WalletActivity';
-import { WalletFlowModals } from './wallet/WalletFlowModals';
-import { WalletSend } from './wallet/WalletSend';
-import { WalletReceive } from './wallet/WalletReceive';
 import { WalletViewHeader } from './wallet/WalletViewHeader';
-import { WalletReferralDocs } from './wallet/WalletReferralDocs';
-import Bridge from './Bridge';
-import ValidatorStaking from './ValidatorStaking';
+import { VisionLogo } from './wallet/VisionLogo';
+import { VisionFullLogo } from './wallet/VisionFullLogo';
+import type { Component } from 'solid-js';
+
+// Lazy-loaded by view - only load when user navigates to that screen
+const WalletDashboard = lazy(() => import('./wallet/WalletDashboard').then(m => ({ default: m.WalletDashboard })));
+const WalletAssets = lazy(() => import('./wallet/WalletAssets').then(m => ({ default: m.WalletAssets })));
+const WalletCampaign = lazy(() => import('./wallet/WalletCampaign').then(m => ({ default: m.WalletCampaign })));
+const WalletMint = lazy(() => import('./wallet/WalletMint').then(m => ({ default: m.WalletMint })));
+const WalletNodes = lazy(() => import('./wallet/WalletNodes').then(m => ({ default: m.WalletNodes })));
+const WalletContacts = lazy(() => import('./wallet/WalletContacts').then(m => ({ default: m.WalletContacts })));
+const WalletSettings = lazy(() => import('./wallet/WalletSettings').then(m => ({ default: m.WalletSettings })));
+const WalletNotifications = lazy(() => import('./wallet/WalletNotifications').then(m => ({ default: m.WalletNotifications })));
+const WalletReferral = lazy(() => import('./wallet/WalletReferral').then(m => ({ default: m.WalletReferral })));
+const WalletActivity = lazy(() => import('./wallet/WalletActivity').then(m => ({ default: m.WalletActivity })));
+const WalletFlowModals = lazy(() => import('./wallet/WalletFlowModals').then(m => ({ default: m.WalletFlowModals })));
+const WalletSend = lazy(() => import('./wallet/WalletSend').then(m => ({ default: m.WalletSend })));
+const WalletReceive = lazy(() => import('./wallet/WalletReceive').then(m => ({ default: m.WalletReceive })));
+const WalletReferralDocs = lazy(() => import('./wallet/WalletReferralDocs').then(m => ({ default: m.WalletReferralDocs })));
+const Bridge = lazy(() => import('./Bridge'));
+const ValidatorStaking = lazy(() => import('./ValidatorStaking'));
 const WalletCexPortfolio = lazy(() => import('./wallet/WalletCexPortfolio'));
 const AgentHosting = lazy(() => import('./wallet/AgentHosting'));
 const VisionInsight = lazy(() => import('./wallet/VisionInsight'));
-import type { Component } from 'solid-js';
 const VisionMarket = lazy(() => import('./wallet/VisionMarket')) as Component<{ walletAddress?: string }>;
 const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{
     privateKey?: string;
@@ -124,9 +129,6 @@ const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{
     onRequestUnlock?: () => void;
     isWalletMissing?: boolean;
 }>;
-
-import { VisionLogo } from './wallet/VisionLogo';
-import { VisionFullLogo } from './wallet/VisionFullLogo';
 
 
 
@@ -3892,1324 +3894,1334 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                     {/* Main Content Area */}
                     <main class={`flex-1 flex flex-col h-[100dvh] overflow-hidden transition-all duration-300 relative ml-0 lg:ml-[280px] w-full ${onboardingStep() === 0 ? 'pb-[68px] lg:pb-0' : ''}`}>
-
-
-                        {/* Chat View - Always mounted, CSS-hidden when not active for instant switching */}
-                        <div class={`h-full ${activeView() === 'chat' ? '' : 'hidden'}`}>
-                            <WalletDashboard
-                                messages={messages}
-                                isLoading={chatLoading}
-                                onStop={handleStopChat} // Use chat-specific loading
-                                input={input}
-                                setInput={setInput}
-                                handleSend={handleSend}
-                                setActiveView={(v: string) => navigate(`/wallet/${v}`)}
-                                setActiveFlow={setActiveFlow}
-                                totalValueStr={totalValueStr}
-                                getAssetData={getAssetData}
-                                userProfile={userProfile}
-                                onboardingStep={onboardingStep}
-                                networkMode={networkMode()}
-                                history={chatHistory}
-                                currentSessionId={currentSessionId}
-                                onSelectConversation={selectConversation}
-                                onNewChat={startNewChat}
-                                onDeleteConversation={handleDeleteConversation}
-                                // Advanced Features
-                                attachments={attachments}
-                                removeAttachment={removeAttachment}
-                                handleFileSelect={handleFileSelect}
-                                thinkingSteps={thinkingSteps}
-                                streamingContent={streamingContent}
-                                voiceLang={voiceLang}
-                                setVoiceLang={setVoiceLang}
-                                toggleRecording={toggleRecording}
-                                isRecording={isRecording}
-                                // Queue Integration (Time-lock Agent)
-                                queueTasks={queueTasks}
-                                bridgeTasks={bridgeTasks}
-                                onCancelTask={handleCancelTask}
-                                onDismissTask={handleDismissTask}
-                                onForceExecute={handleForceExecute}
-                                onRetryTask={handleRetryTask}
-                                isScheduling={isSchedulingTimeLock()}
-                                chatHistoryOpen={chatHistoryOpen()}
-                                setChatHistoryOpen={setChatHistoryOpen}
-                                batchAgents={batchAgents}
-                                reviewMulti={reviewMulti}
-                                setReviewMulti={setReviewMulti}
-                                unreadCount={0}
-                                contacts={contacts}
-                                showResponseTime={showResponseTime()}
-                                walletAddress={walletAddress}
-                                userEmail={auth.user()?.email || undefined}
-                                batchInterval={batchInterval}
-                                setBatchInterval={setBatchInterval}
-                                onStartBatch={(txs, interval) => {
-                                    console.log("Starting batch with txs:", txs, "interval:", interval);
-                                    setPendingAction({
-                                        type: 'multi_transactions',
-                                        data: { transactions: txs, interval: interval }
-                                    });
-                                    setPasswordMode('verify');
-                                    setWalletPassword('');
-                                    setShowPasswordModal(true);
-                                }}
-                                // Bridge Integration
-                                pendingBridge={pendingBridge}
-                                isBridging={isBridging}
-                                onExecuteBridge={handleExecuteBridge}
-                                onCancelBridge={handleCancelBridge}
-                                bridgeDelay={bridgeDelay}
-                                onBridgeDelayChange={setBridgeDelay}
-                            />
-                        </div>
-
-                        {/* Quest (formerly Campaign) View */}
-                        <Show when={activeView() === 'campaign' || activeView() === 'quest'}>
-                            <WalletCampaign userProfile={userProfile} onNavigate={(view: string) => navigate(`/wallet/${view}`)} />
-                        </Show>
-
-                        {/* History View */}
-                        <Show when={activeView() === 'history'}>
-                            <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32 custom-scrollbar">
-                                <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                    <WalletViewHeader
-                                        tag={t('history.tag')}
-                                        title={t('history.title')}
-                                        titleAccent={t('history.titleAccent')}
-                                        description={t('history.description')}
-                                        icon={HistoryIcon}
-                                    />
-                                    <WalletActivity
-                                        purchases={vcnPurchases}
-                                        walletAddress={walletAddress()}
-                                        contacts={contacts()}
-                                    />
+                        <Suspense fallback={
+                            <div class="flex items-center justify-center h-full">
+                                <div class="flex flex-col items-center gap-3">
+                                    <div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" />
+                                    <span class="text-xs text-gray-500 font-medium">Loading...</span>
                                 </div>
                             </div>
-                        </Show>
+                        }>
 
-                        {/* Bridge View */}
-                        <Show when={activeView() === 'bridge'}>
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <Bridge walletAddress={walletAddress} privateKey={currentPrivateKey} userEmail={() => userProfile()?.email || ''} />
+
+                            {/* Chat View - Always mounted, CSS-hidden when not active for instant switching */}
+                            <div class={`h-full ${activeView() === 'chat' ? '' : 'hidden'}`}>
+                                <WalletDashboard
+                                    messages={messages}
+                                    isLoading={chatLoading}
+                                    onStop={handleStopChat} // Use chat-specific loading
+                                    input={input}
+                                    setInput={setInput}
+                                    handleSend={handleSend}
+                                    setActiveView={(v: string) => navigate(`/wallet/${v}`)}
+                                    setActiveFlow={setActiveFlow}
+                                    totalValueStr={totalValueStr}
+                                    getAssetData={getAssetData}
+                                    userProfile={userProfile}
+                                    onboardingStep={onboardingStep}
+                                    networkMode={networkMode()}
+                                    history={chatHistory}
+                                    currentSessionId={currentSessionId}
+                                    onSelectConversation={selectConversation}
+                                    onNewChat={startNewChat}
+                                    onDeleteConversation={handleDeleteConversation}
+                                    // Advanced Features
+                                    attachments={attachments}
+                                    removeAttachment={removeAttachment}
+                                    handleFileSelect={handleFileSelect}
+                                    thinkingSteps={thinkingSteps}
+                                    streamingContent={streamingContent}
+                                    voiceLang={voiceLang}
+                                    setVoiceLang={setVoiceLang}
+                                    toggleRecording={toggleRecording}
+                                    isRecording={isRecording}
+                                    // Queue Integration (Time-lock Agent)
+                                    queueTasks={queueTasks}
+                                    bridgeTasks={bridgeTasks}
+                                    onCancelTask={handleCancelTask}
+                                    onDismissTask={handleDismissTask}
+                                    onForceExecute={handleForceExecute}
+                                    onRetryTask={handleRetryTask}
+                                    isScheduling={isSchedulingTimeLock()}
+                                    chatHistoryOpen={chatHistoryOpen()}
+                                    setChatHistoryOpen={setChatHistoryOpen}
+                                    batchAgents={batchAgents}
+                                    reviewMulti={reviewMulti}
+                                    setReviewMulti={setReviewMulti}
+                                    unreadCount={0}
+                                    contacts={contacts}
+                                    showResponseTime={showResponseTime()}
+                                    walletAddress={walletAddress}
+                                    userEmail={auth.user()?.email || undefined}
+                                    batchInterval={batchInterval}
+                                    setBatchInterval={setBatchInterval}
+                                    onStartBatch={(txs, interval) => {
+                                        console.log("Starting batch with txs:", txs, "interval:", interval);
+                                        setPendingAction({
+                                            type: 'multi_transactions',
+                                            data: { transactions: txs, interval: interval }
+                                        });
+                                        setPasswordMode('verify');
+                                        setWalletPassword('');
+                                        setShowPasswordModal(true);
+                                    }}
+                                    // Bridge Integration
+                                    pendingBridge={pendingBridge}
+                                    isBridging={isBridging}
+                                    onExecuteBridge={handleExecuteBridge}
+                                    onCancelBridge={handleCancelBridge}
+                                    bridgeDelay={bridgeDelay}
+                                    onBridgeDelayChange={setBridgeDelay}
+                                />
                             </div>
-                        </Show>
 
-                        {/* Staking View */}
-                        <Show when={activeView() === 'staking'}>
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <ValidatorStaking walletAddress={walletAddress} privateKey={currentPrivateKey} userEmail={() => userProfile()?.email || ''} />
-                            </div>
-                        </Show>
+                            {/* Quest (formerly Campaign) View */}
+                            <Show when={activeView() === 'campaign' || activeView() === 'quest'}>
+                                <WalletCampaign userProfile={userProfile} onNavigate={(view: string) => navigate(`/wallet/${view}`)} />
+                            </Show>
 
-                        {/* Agent Hosting View */}
-                        <Show when={activeView() === 'agent'}>
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                    <AgentHosting walletAddress={walletAddress} userEmail={() => userProfile()?.email || ''} />
-                                </Suspense>
-                            </div>
-                        </Show>
+                            {/* History View */}
+                            <Show when={activeView() === 'history'}>
+                                <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32 custom-scrollbar">
+                                    <div class="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                        <WalletViewHeader
+                                            tag={t('history.tag')}
+                                            title={t('history.title')}
+                                            titleAccent={t('history.titleAccent')}
+                                            description={t('history.description')}
+                                            icon={HistoryIcon}
+                                        />
+                                        <WalletActivity
+                                            purchases={vcnPurchases}
+                                            walletAddress={walletAddress()}
+                                            contacts={contacts()}
+                                        />
+                                    </div>
+                                </div>
+                            </Show>
 
-                        {/* Vision Insight View */}
-                        <Show when={activeView() === 'insight'}>
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                    <VisionInsight />
-                                </Suspense>
-                            </div>
-                        </Show>
+                            {/* Bridge View */}
+                            <Show when={activeView() === 'bridge'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <Bridge walletAddress={walletAddress} privateKey={currentPrivateKey} userEmail={() => userProfile()?.email || ''} />
+                                </div>
+                            </Show>
 
-                        {/* CEX Portfolio View */}
-                        <Show when={activeView() === 'cex'}>
-                            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                                <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
-                                    <WalletCexPortfolio />
-                                </Suspense>
-                            </div>
-                        </Show>
+                            {/* Staking View */}
+                            <Show when={activeView() === 'staking'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <ValidatorStaking walletAddress={walletAddress} privateKey={currentPrivateKey} userEmail={() => userProfile()?.email || ''} />
+                                </div>
+                            </Show>
 
-                        {/* Mint View */}
-                        <Show when={activeView() === 'mint'}>
-                            <WalletMint
-                                mintStep={mintStep}
-                                setMintStep={setMintStep}
-                                tokenName={tokenName}
-                                setTokenName={setTokenName}
-                                tokenSymbol={tokenSymbol}
-                                setTokenSymbol={setTokenSymbol}
-                                tokenType={tokenType}
-                                setTokenType={setTokenType}
-                                tokenSupply={tokenSupply}
-                                setTokenSupply={setTokenSupply}
-                                mintingNetworks={mintingNetworks}
-                                setMintingNetworks={setMintingNetworks}
-                                handleMint={handleMint}
-                                isMinting={isMinting}
-                                mintedSuccess={mintedSuccess}
-                                setMintedSuccess={setMintedSuccess}
-                                mintProgress={mintProgress}
-                                setActiveView={(v: string) => navigate(`/wallet/${v}`)}
-                            />
-                        </Show>
+                            {/* Agent Hosting View */}
+                            <Show when={activeView() === 'agent'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                        <AgentHosting walletAddress={walletAddress} userEmail={() => userProfile()?.email || ''} />
+                                    </Suspense>
+                                </div>
+                            </Show>
 
-                        <Show when={activeView() === 'nodes'}>
-                            <WalletNodes
-                                userNodes={ownedNodes()}
-                                claimNodeRewards={claimNodeRewards}
-                                purchaseNode={purchaseNode}
-                                userEmail={auth.user()?.email || undefined}
-                            />
-                        </Show>
+                            {/* Vision Insight View */}
+                            <Show when={activeView() === 'insight'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                        <VisionInsight />
+                                    </Suspense>
+                                </div>
+                            </Show>
 
-                        {/* Referral View */}
-                        <Show when={activeView() === 'referral'}>
-                            <WalletReferral
-                                userProfile={userProfile}
-                            />
-                        </Show>
+                            {/* CEX Portfolio View */}
+                            <Show when={activeView() === 'cex'}>
+                                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                                    <Suspense fallback={<div class="flex items-center justify-center h-full"><div class="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full" /></div>}>
+                                        <WalletCexPortfolio />
+                                    </Suspense>
+                                </div>
+                            </Show>
 
-                        <Show when={activeView() === 'disk'}>
-                            <WalletDisk
-                                privateKey={currentPrivateKey()}
-                                walletAddress={walletAddressSignal()}
-                                networkMode={networkMode()}
-                                onRequestUnlock={requestDiskUnlock}
-                                isWalletMissing={isLocalWalletMissing()}
-                                cloudWalletAvailable={cloudWalletAvailable()}
-                                onCloudRestore={() => setShowCloudRestoreModal(true)}
-                                onRestoreWallet={() => {
-                                    navigate('/wallet/profile');
-                                    setOnboardingStep(2);
-                                }}
-                            />
-                        </Show>
+                            {/* Mint View */}
+                            <Show when={activeView() === 'mint'}>
+                                <WalletMint
+                                    mintStep={mintStep}
+                                    setMintStep={setMintStep}
+                                    tokenName={tokenName}
+                                    setTokenName={setTokenName}
+                                    tokenSymbol={tokenSymbol}
+                                    setTokenSymbol={setTokenSymbol}
+                                    tokenType={tokenType}
+                                    setTokenType={setTokenType}
+                                    tokenSupply={tokenSupply}
+                                    setTokenSupply={setTokenSupply}
+                                    mintingNetworks={mintingNetworks}
+                                    setMintingNetworks={setMintingNetworks}
+                                    handleMint={handleMint}
+                                    isMinting={isMinting}
+                                    mintedSuccess={mintedSuccess}
+                                    setMintedSuccess={setMintedSuccess}
+                                    mintProgress={mintProgress}
+                                    setActiveView={(v: string) => navigate(`/wallet/${v}`)}
+                                />
+                            </Show>
 
-                        <Show when={activeView() === 'market'}>
-                            <VisionMarket walletAddress={walletAddressSignal()} />
-                        </Show>
+                            <Show when={activeView() === 'nodes'}>
+                                <WalletNodes
+                                    userNodes={ownedNodes()}
+                                    claimNodeRewards={claimNodeRewards}
+                                    purchaseNode={purchaseNode}
+                                    userEmail={auth.user()?.email || undefined}
+                                />
+                            </Show>
 
-                        <Show when={activeView() === 'assets'}>
-                            <WalletAssets
-                                totalValueStr={totalValueStr}
-                                portfolioStats={portfolioStats}
-                                getAssetData={getAssetData}
-                                startFlow={(flow) => {
-                                    if (flow === 'send' || flow === 'receive') {
-                                        navigate('/wallet/' + flow);
-                                    } else {
-                                        setActiveFlow(flow);
-                                    }
-                                }}
-                                setActiveView={(v: string) => navigate(`/wallet/${v}`)}
-                                vcnPurchases={vcnPurchases}
-                                totalValue={totalValue}
-                                networkMode={networkMode()}
-                                isLocalWalletMissing={isLocalWalletMissing()}
-                                cloudWalletAvailable={cloudWalletAvailable()}
-                                onRestoreWallet={() => {
-                                    navigate('/wallet/profile');
-                                    setOnboardingStep(2);
-                                }}
-                                onCloudRestore={() => {
-                                    setShowCloudRestoreModal(true);
-                                }}
-                                walletAddress={walletAddress}
-                                contacts={contacts()}
-                                sepoliaVcnBalance={sepoliaVcnBalance}
-                                ethMainnetBalance={ethMainnetBalance}
-                                polygonBalance={polygonBalance}
-                                baseBalance={baseBalance}
-                                polygonAmoyBalance={polygonAmoyBalance}
-                                baseSepoliaBalance={baseSepoliaBalance}
-                            />
-                        </Show>
+                            {/* Referral View */}
+                            <Show when={activeView() === 'referral'}>
+                                <WalletReferral
+                                    userProfile={userProfile}
+                                />
+                            </Show>
 
-                        <Show when={activeView() === 'send'}>
-                            <WalletSend
-                                onBack={() => navigate('/wallet/assets')}
-                                getAssetData={getAssetData}
-                                selectedToken={selectedToken}
-                                setSelectedToken={setSelectedToken}
-                                sendAmount={sendAmount}
-                                setSendAmount={setSendAmount}
-                                recipientAddress={recipientAddress}
-                                setRecipientAddress={setRecipientAddress}
-                                handleTransaction={handleTransaction}
-                                onMultiTransaction={handleMultiTransaction}
-                                flowStep={flowStep}
-                                setFlowStep={setFlowStep}
-                                flowLoading={flowLoading}
-                                resetFlow={() => { resetFlow(); navigate('/wallet/assets'); }}
-                                walletAddress={walletAddress}
-                                lastTxHash={lastTxHash}
-                                contacts={contacts}
-                                userProfile={userProfile}
-                                onContactAdded={loadContacts}
-                                isSchedulingTimeLock={isSchedulingTimeLock}
-                                lockDelaySeconds={lockDelaySeconds}
-                            />
-                        </Show>
+                            <Show when={activeView() === 'disk'}>
+                                <WalletDisk
+                                    privateKey={currentPrivateKey()}
+                                    walletAddress={walletAddressSignal()}
+                                    networkMode={networkMode()}
+                                    onRequestUnlock={requestDiskUnlock}
+                                    isWalletMissing={isLocalWalletMissing()}
+                                    cloudWalletAvailable={cloudWalletAvailable()}
+                                    onCloudRestore={() => setShowCloudRestoreModal(true)}
+                                    onRestoreWallet={() => {
+                                        navigate('/wallet/profile');
+                                        setOnboardingStep(2);
+                                    }}
+                                />
+                            </Show>
 
-                        <Show when={activeView() === 'receive'}>
-                            <WalletReceive
-                                onBack={() => navigate('/wallet/assets')}
-                                walletAddress={walletAddress}
-                                receiveNetwork={receiveNetwork}
-                                setReceiveNetwork={setReceiveNetwork}
-                                copyAddress={copyAddress}
-                                copied={copied}
-                            />
-                        </Show>
+                            <Show when={activeView() === 'market'}>
+                                <VisionMarket walletAddress={walletAddressSignal()} />
+                            </Show>
 
-                        <Show when={activeView() === 'profile'}>
-                            <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32">
-                                <div class="max-w-5xl mx-auto space-y-6">
+                            <Show when={activeView() === 'assets'}>
+                                <WalletAssets
+                                    totalValueStr={totalValueStr}
+                                    portfolioStats={portfolioStats}
+                                    getAssetData={getAssetData}
+                                    startFlow={(flow) => {
+                                        if (flow === 'send' || flow === 'receive') {
+                                            navigate('/wallet/' + flow);
+                                        } else {
+                                            setActiveFlow(flow);
+                                        }
+                                    }}
+                                    setActiveView={(v: string) => navigate(`/wallet/${v}`)}
+                                    vcnPurchases={vcnPurchases}
+                                    totalValue={totalValue}
+                                    networkMode={networkMode()}
+                                    isLocalWalletMissing={isLocalWalletMissing()}
+                                    cloudWalletAvailable={cloudWalletAvailable()}
+                                    onRestoreWallet={() => {
+                                        navigate('/wallet/profile');
+                                        setOnboardingStep(2);
+                                    }}
+                                    onCloudRestore={() => {
+                                        setShowCloudRestoreModal(true);
+                                    }}
+                                    walletAddress={walletAddress}
+                                    contacts={contacts()}
+                                    sepoliaVcnBalance={sepoliaVcnBalance}
+                                    ethMainnetBalance={ethMainnetBalance}
+                                    polygonBalance={polygonBalance}
+                                    baseBalance={baseBalance}
+                                    polygonAmoyBalance={polygonAmoyBalance}
+                                    baseSepoliaBalance={baseSepoliaBalance}
+                                />
+                            </Show>
 
-                                    {/* Onboarding Header (Progress Stepper) - Redesigned to match image */}
-                                    <Show when={onboardingStep() > 0}>
-                                        <div class="max-w-xl mx-auto mb-8">
-                                            <div class="text-center mb-6">
-                                                <h2 class="text-3xl font-bold text-white mb-2">Secure Wallet Setup</h2>
-                                                <p class="text-gray-400 text-sm">Your account is active. Now, let's secure your digital assets by creating your wallet.</p>
+                            <Show when={activeView() === 'send'}>
+                                <WalletSend
+                                    onBack={() => navigate('/wallet/assets')}
+                                    getAssetData={getAssetData}
+                                    selectedToken={selectedToken}
+                                    setSelectedToken={setSelectedToken}
+                                    sendAmount={sendAmount}
+                                    setSendAmount={setSendAmount}
+                                    recipientAddress={recipientAddress}
+                                    setRecipientAddress={setRecipientAddress}
+                                    handleTransaction={handleTransaction}
+                                    onMultiTransaction={handleMultiTransaction}
+                                    flowStep={flowStep}
+                                    setFlowStep={setFlowStep}
+                                    flowLoading={flowLoading}
+                                    resetFlow={() => { resetFlow(); navigate('/wallet/assets'); }}
+                                    walletAddress={walletAddress}
+                                    lastTxHash={lastTxHash}
+                                    contacts={contacts}
+                                    userProfile={userProfile}
+                                    onContactAdded={loadContacts}
+                                    isSchedulingTimeLock={isSchedulingTimeLock}
+                                    lockDelaySeconds={lockDelaySeconds}
+                                />
+                            </Show>
+
+                            <Show when={activeView() === 'receive'}>
+                                <WalletReceive
+                                    onBack={() => navigate('/wallet/assets')}
+                                    walletAddress={walletAddress}
+                                    receiveNetwork={receiveNetwork}
+                                    setReceiveNetwork={setReceiveNetwork}
+                                    copyAddress={copyAddress}
+                                    copied={copied}
+                                />
+                            </Show>
+
+                            <Show when={activeView() === 'profile'}>
+                                <div class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32">
+                                    <div class="max-w-5xl mx-auto space-y-6">
+
+                                        {/* Onboarding Header (Progress Stepper) - Redesigned to match image */}
+                                        <Show when={onboardingStep() > 0}>
+                                            <div class="max-w-xl mx-auto mb-8">
+                                                <div class="text-center mb-6">
+                                                    <h2 class="text-3xl font-bold text-white mb-2">Secure Wallet Setup</h2>
+                                                    <p class="text-gray-400 text-sm">Your account is active. Now, let's secure your digital assets by creating your wallet.</p>
+                                                </div>
+                                                <div class="flex items-center justify-center gap-4 relative">
+                                                    <div class="flex flex-col items-center gap-2 relative z-10">
+                                                        <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 1 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
+                                                            <Leaf class="w-5 h-5" />
+                                                        </div>
+                                                        <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 1 ? 'text-white' : 'text-gray-600'}`}>Seed</span>
+                                                    </div>
+                                                    <div class={`h-[1px] w-20 transition-colors duration-500 ${onboardingStep() >= 1.5 ? 'bg-[#7e61ff]' : 'bg-gray-800'}`} />
+                                                    <div class="flex flex-col items-center gap-2 relative z-10">
+                                                        <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 1.5 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
+                                                            <CheckCircle class="w-5 h-5" />
+                                                        </div>
+                                                        <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 1.5 ? 'text-white' : 'text-gray-600'}`}>Confirm</span>
+                                                    </div>
+                                                    <div class={`h-[1px] w-20 transition-colors duration-500 ${onboardingStep() >= 4 ? 'bg-[#7e61ff]' : 'bg-gray-800'}`} />
+                                                    <div class="flex flex-col items-center gap-2 relative z-10">
+                                                        <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 4 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
+                                                            <Star class="w-5 h-5" />
+                                                        </div>
+                                                        <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 4 ? 'text-white' : 'text-gray-600'}`}>Done</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="flex items-center justify-center gap-4 relative">
-                                                <div class="flex flex-col items-center gap-2 relative z-10">
-                                                    <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 1 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
-                                                        <Leaf class="w-5 h-5" />
-                                                    </div>
-                                                    <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 1 ? 'text-white' : 'text-gray-600'}`}>Seed</span>
-                                                </div>
-                                                <div class={`h-[1px] w-20 transition-colors duration-500 ${onboardingStep() >= 1.5 ? 'bg-[#7e61ff]' : 'bg-gray-800'}`} />
-                                                <div class="flex flex-col items-center gap-2 relative z-10">
-                                                    <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 1.5 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
-                                                        <CheckCircle class="w-5 h-5" />
-                                                    </div>
-                                                    <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 1.5 ? 'text-white' : 'text-gray-600'}`}>Confirm</span>
-                                                </div>
-                                                <div class={`h-[1px] w-20 transition-colors duration-500 ${onboardingStep() >= 4 ? 'bg-[#7e61ff]' : 'bg-gray-800'}`} />
-                                                <div class="flex flex-col items-center gap-2 relative z-10">
-                                                    <div class={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${onboardingStep() >= 4 ? 'bg-[#7e61ff] text-white shadow-[0_0_15px_rgba(126,97,255,0.5)]' : 'bg-gray-800 text-gray-500'}`}>
-                                                        <Star class="w-5 h-5" />
-                                                    </div>
-                                                    <span class={`text-[11px] font-bold uppercase tracking-widest ${onboardingStep() >= 4 ? 'text-white' : 'text-gray-600'}`}>Done</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Show>
+                                        </Show>
 
-                                    <Switch>
-                                        {/* Step 0: Main Dashboard */}
-                                        <Match when={onboardingStep() === 0}>
-                                            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="space-y-6">
-                                                <WalletViewHeader
-                                                    tag={t('profile.tag')}
-                                                    title={t('profile.title')}
-                                                    titleAccent={t('profile.titleAccent')}
-                                                    description={t('profile.description')}
-                                                    icon={User}
-                                                />
-                                                {/* Profile Card */}
-                                                <div class="relative overflow-hidden group">
-                                                    <div class="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-cyan-500/20 to-purple-600/20 rounded-[32px] blur-xl opacity-50 group-hover:opacity-100 transition-opacity" />
-                                                    <div class="relative bg-[#111113] border border-white/[0.08] rounded-[32px] p-8 flex flex-col md:flex-row items-center gap-8">
-                                                        <div class="relative">
-                                                            <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-2xl relative">
-                                                                <Show when={userProfile().photoURL} fallback={
-                                                                    <span class="text-6xl font-black text-white/90">
-                                                                        {userProfile().displayName.charAt(0)}
-                                                                    </span>
-                                                                }>
-                                                                    <img src={userProfile().photoURL} class="w-full h-full object-cover" />
-                                                                </Show>
-                                                                <Show when={isUploadingImage()}>
-                                                                    <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                                                        <RefreshCw class="w-6 h-6 text-white animate-spin" />
-                                                                    </div>
-                                                                </Show>
-                                                            </div>
-                                                            <input
-                                                                type="file"
-                                                                ref={fileInputRef}
-                                                                class="hidden"
-                                                                accept="image/*"
-                                                                onChange={handleFileChange}
-                                                            />
-                                                            <button
-                                                                onClick={() => fileInputRef?.click()}
-                                                                disabled={isUploadingImage()}
-                                                                class="absolute -bottom-2 -right-2 p-2 bg-blue-600 rounded-xl border-4 border-[#111113] text-white hover:scale-110 active:scale-95 transition-transform disabled:opacity-50"
-                                                            >
-                                                                <Camera class="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-
-                                                        <div class="flex-1">
-                                                            <div class="flex items-center gap-3 mb-1">
-                                                                <h3 class="text-2xl font-black text-white">{userProfile().displayName}</h3>
-                                                                <Show when={userProfile().isVerified}>
-                                                                    <div class="p-1 bg-cyan-500/20 rounded-full border border-cyan-500/50">
-                                                                        <Check class="w-3 h-3 text-cyan-400" />
-                                                                    </div>
-                                                                </Show>
-                                                                {/* Rank Badge */}
-                                                                <div class={`px-2 py-0.5 rounded-lg border flex items-center gap-1.5 ${(() => {
-                                                                    const count = userProfile().referralCount || 0;
-                                                                    const RANKS = [
-                                                                        { minLvl: 1, bg: 'bg-gray-500', border: 'border-gray-500/30' },
-                                                                        { minLvl: 10, bg: 'bg-blue-500', border: 'border-blue-500/30' },
-                                                                        { minLvl: 20, bg: 'bg-emerald-500', border: 'border-emerald-500/30' },
-                                                                        { minLvl: 30, bg: 'bg-cyan-500', border: 'border-cyan-500/30' },
-                                                                        { minLvl: 40, bg: 'bg-indigo-500', border: 'border-indigo-500/30' },
-                                                                        { minLvl: 50, bg: 'bg-violet-500', border: 'border-violet-500/30' },
-                                                                        { minLvl: 60, bg: 'bg-orange-500', border: 'border-orange-500/30' },
-                                                                        { minLvl: 70, bg: 'bg-red-500', border: 'border-red-500/30' },
-                                                                        { minLvl: 80, bg: 'bg-rose-500', border: 'border-rose-500/30' },
-                                                                        { minLvl: 90, bg: 'bg-yellow-500', border: 'border-yellow-500/30' }
-                                                                    ];
-                                                                    let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
-                                                                    if (level > 100) level = 100;
-
-                                                                    const rank = RANKS.slice().reverse().find(r => level >= r.minLvl) || RANKS[0];
-                                                                    return `${rank.bg}/10 ${rank.border}`;
-                                                                })()
-                                                                    }`}>
-                                                                    <Trophy class="w-3 h-3 text-white" />
-                                                                    <span class="text-[10px] font-black text-white uppercase tracking-widest">
-                                                                        {(() => {
-                                                                            const count = userProfile().referralCount || 0;
-                                                                            let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
-                                                                            if (level > 100) level = 100;
-
-                                                                            const names = ['Novice', 'Scout', 'Ranger', 'Guardian', 'Elite', 'Captain', 'Commander', 'Warlord', 'Titan', 'Visionary'];
-                                                                            const idx = Math.min(9, Math.floor((level - 1) / 10)); // Correct logic: Lvl 1-9=0 (Novice), Lvl 10-19=1 (Scout)...
-                                                                            const rankName = (level >= 10 && level < 20) ? 'Scout' :
-                                                                                (level >= 20 && level < 30) ? 'Ranger' :
-                                                                                    names.find((_, i) => level >= (i * 10) && level < ((i + 1) * 10)) || (level === 100 ? 'Visionary' : names[Math.min(9, Math.floor(level / 10))]);
-
-                                                                            // Simpler logic for name mapping
-                                                                            const getRankName = (lvl: number) => {
-                                                                                if (lvl >= 90) return 'Visionary';
-                                                                                if (lvl >= 80) return 'Titan';
-                                                                                if (lvl >= 70) return 'Warlord';
-                                                                                if (lvl >= 60) return 'Commander';
-                                                                                if (lvl >= 50) return 'Captain';
-                                                                                if (lvl >= 40) return 'Elite';
-                                                                                if (lvl >= 30) return 'Guardian';
-                                                                                if (lvl >= 20) return 'Ranger';
-                                                                                if (lvl >= 10) return 'Scout';
-                                                                                return 'Novice';
-                                                                            };
-
-                                                                            return `${getRankName(level)} LVL.${level}`;
-                                                                        })()}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <div class="flex items-center gap-4 text-sm text-gray-400 font-mono mb-4">
-                                                                <span>{userProfile().email}</span>
-                                                                <span class="w-1 h-1 rounded-full bg-gray-700" />
-                                                                <span>{userProfile().phone || t('profile.noPhoneLinked')}</span>
-                                                            </div>
-
-                                                            {/* XP / Level Progress Bar */}
-                                                            {(() => {
-                                                                const count = userProfile().referralCount || 0;
-                                                                let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
-                                                                if (level > 100) level = 100;
-
-                                                                // Triangular: level L requires L*(L-1)/2 total refs
-                                                                const currentLevelBaseRefs = level * (level - 1) / 2;
-                                                                const refsPerLevel = level; // Need 'level' refs to advance
-                                                                const nextLevelRefs = level >= 100 ? currentLevelBaseRefs : currentLevelBaseRefs + level;
-                                                                const progressIntoLevel = count - currentLevelBaseRefs;
-                                                                const progressPercent = level >= 100 ? 100 : Math.min(100, Math.max(0, (progressIntoLevel / refsPerLevel) * 100));
-                                                                const refsToNext = Math.max(0, nextLevelRefs - count);
-
-                                                                // Rank Gradient Helper
-                                                                const getGradient = (lvl: number) => {
-                                                                    if (lvl >= 90) return 'from-yellow-500 to-amber-300';
-                                                                    if (lvl >= 80) return 'from-rose-600 to-pink-600';
-                                                                    if (lvl >= 70) return 'from-red-600 to-orange-600';
-                                                                    if (lvl >= 60) return 'from-orange-600 to-amber-500';
-                                                                    if (lvl >= 50) return 'from-violet-600 to-purple-600';
-                                                                    if (lvl >= 40) return 'from-indigo-600 to-blue-600';
-                                                                    if (lvl >= 30) return 'from-cyan-600 to-sky-500';
-                                                                    if (lvl >= 20) return 'from-emerald-600 to-green-500';
-                                                                    if (lvl >= 10) return 'from-blue-600 to-cyan-500';
-                                                                    return 'from-gray-600 to-gray-500';
-                                                                };
-
-                                                                return (
-                                                                    <div class="bg-black/20 rounded-xl p-3 border border-white/5 w-full max-w-md">
-                                                                        <div class="flex justify-between items-center mb-2">
-                                                                            <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                                                                                {t('profile.xpProgress')}
-                                                                            </span>
-                                                                            <span class="text-[9px] font-bold text-gray-400">
-                                                                                <span class="text-white">{refsToNext}</span> {t('profile.invitesToLvl')} {level + 1}
-                                                                            </span>
+                                        <Switch>
+                                            {/* Step 0: Main Dashboard */}
+                                            <Match when={onboardingStep() === 0}>
+                                                <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="space-y-6">
+                                                    <WalletViewHeader
+                                                        tag={t('profile.tag')}
+                                                        title={t('profile.title')}
+                                                        titleAccent={t('profile.titleAccent')}
+                                                        description={t('profile.description')}
+                                                        icon={User}
+                                                    />
+                                                    {/* Profile Card */}
+                                                    <div class="relative overflow-hidden group">
+                                                        <div class="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-cyan-500/20 to-purple-600/20 rounded-[32px] blur-xl opacity-50 group-hover:opacity-100 transition-opacity" />
+                                                        <div class="relative bg-[#111113] border border-white/[0.08] rounded-[32px] p-8 flex flex-col md:flex-row items-center gap-8">
+                                                            <div class="relative">
+                                                                <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden shadow-2xl relative">
+                                                                    <Show when={userProfile().photoURL} fallback={
+                                                                        <span class="text-6xl font-black text-white/90">
+                                                                            {userProfile().displayName.charAt(0)}
+                                                                        </span>
+                                                                    }>
+                                                                        <img src={userProfile().photoURL} class="w-full h-full object-cover" />
+                                                                    </Show>
+                                                                    <Show when={isUploadingImage()}>
+                                                                        <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                                            <RefreshCw class="w-6 h-6 text-white animate-spin" />
                                                                         </div>
-                                                                        <div class="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
-                                                                            <div
-                                                                                class={`h-full bg-gradient-to-r ${getGradient(level)} relative shadow-[0_0_15px_rgba(255,255,255,0.2)]`}
-                                                                                style={{ width: `${progressPercent}%` }}
-                                                                            >
-                                                                                <div class="absolute inset-0 bg-white/20" />
-                                                                            </div>
+                                                                    </Show>
+                                                                </div>
+                                                                <input
+                                                                    type="file"
+                                                                    ref={fileInputRef}
+                                                                    class="hidden"
+                                                                    accept="image/*"
+                                                                    onChange={handleFileChange}
+                                                                />
+                                                                <button
+                                                                    onClick={() => fileInputRef?.click()}
+                                                                    disabled={isUploadingImage()}
+                                                                    class="absolute -bottom-2 -right-2 p-2 bg-blue-600 rounded-xl border-4 border-[#111113] text-white hover:scale-110 active:scale-95 transition-transform disabled:opacity-50"
+                                                                >
+                                                                    <Camera class="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+
+                                                            <div class="flex-1">
+                                                                <div class="flex items-center gap-3 mb-1">
+                                                                    <h3 class="text-2xl font-black text-white">{userProfile().displayName}</h3>
+                                                                    <Show when={userProfile().isVerified}>
+                                                                        <div class="p-1 bg-cyan-500/20 rounded-full border border-cyan-500/50">
+                                                                            <Check class="w-3 h-3 text-cyan-400" />
                                                                         </div>
-                                                                        <div class="flex justify-end mt-1">
-                                                                            <span class="text-[9px] font-mono font-bold text-gray-600">{progressPercent.toFixed(0)}%</span>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })()}
-                                                        </div>
-                                                        <Show when={!userProfile().isVerified}>
-                                                            <button
-                                                                onClick={() => setOnboardingStep(0.5)}
-                                                                class="px-6 py-3 bg-white text-black rounded-2xl font-bold text-sm hover:bg-white/90 transition-all flex items-center gap-2"
-                                                            >
-                                                                {t('profile.setupWallet')}
-                                                                <ArrowRight class="w-4 h-4" />
-                                                            </button>
-                                                            <button onClick={() => setOnboardingStep(3)} class="ml-4 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs rounded-2xl hover:bg-red-500/20 transition-all">
-                                                                [Debug] Skip
-                                                            </button>
-                                                        </Show>
-                                                    </div>
-                                                </div>
+                                                                    </Show>
+                                                                    {/* Rank Badge */}
+                                                                    <div class={`px-2 py-0.5 rounded-lg border flex items-center gap-1.5 ${(() => {
+                                                                        const count = userProfile().referralCount || 0;
+                                                                        const RANKS = [
+                                                                            { minLvl: 1, bg: 'bg-gray-500', border: 'border-gray-500/30' },
+                                                                            { minLvl: 10, bg: 'bg-blue-500', border: 'border-blue-500/30' },
+                                                                            { minLvl: 20, bg: 'bg-emerald-500', border: 'border-emerald-500/30' },
+                                                                            { minLvl: 30, bg: 'bg-cyan-500', border: 'border-cyan-500/30' },
+                                                                            { minLvl: 40, bg: 'bg-indigo-500', border: 'border-indigo-500/30' },
+                                                                            { minLvl: 50, bg: 'bg-violet-500', border: 'border-violet-500/30' },
+                                                                            { minLvl: 60, bg: 'bg-orange-500', border: 'border-orange-500/30' },
+                                                                            { minLvl: 70, bg: 'bg-red-500', border: 'border-red-500/30' },
+                                                                            { minLvl: 80, bg: 'bg-rose-500', border: 'border-rose-500/30' },
+                                                                            { minLvl: 90, bg: 'bg-yellow-500', border: 'border-yellow-500/30' }
+                                                                        ];
+                                                                        let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
+                                                                        if (level > 100) level = 100;
 
-                                                {/* Action Buttons */}
-                                                <div class="grid grid-cols-2 gap-3 mb-6">
-                                                    <button
-                                                        onClick={() => navigate('/wallet/referral-rules')}
-                                                        class="w-full py-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-white/20 transition-all group"
-                                                    >
-                                                        <div class="w-8 h-8 rounded-full bg-yellow-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                            <Trophy class="w-4 h-4 text-yellow-400" />
-                                                        </div>
-                                                        <div class="text-center">
-                                                            <div class="text-xs font-bold text-white uppercase tracking-wider">{t('profile.rewardLogic')}</div>
-                                                            <div class="text-[9px] text-gray-400">{t('profile.viewRankBenefits')}</div>
-                                                        </div>
-                                                    </button>
+                                                                        const rank = RANKS.slice().reverse().find(r => level >= r.minLvl) || RANKS[0];
+                                                                        return `${rank.bg}/10 ${rank.border}`;
+                                                                    })()
+                                                                        }`}>
+                                                                        <Trophy class="w-3 h-3 text-white" />
+                                                                        <span class="text-[10px] font-black text-white uppercase tracking-widest">
+                                                                            {(() => {
+                                                                                const count = userProfile().referralCount || 0;
+                                                                                let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
+                                                                                if (level > 100) level = 100;
 
-                                                    <Show when={deferredPrompt() || isIOS()}>
-                                                        <button
-                                                            onClick={handleInstallClick}
-                                                            class="w-full py-4 bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-white/20 transition-all group"
-                                                        >
-                                                            <div class="w-8 h-8 rounded-full bg-emerald-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                <Download class="w-4 h-4 text-emerald-400" />
-                                                            </div>
-                                                            <div class="text-center">
-                                                                <div class="text-xs font-bold text-white uppercase tracking-wider">{t('profile.installApp')}</div>
-                                                                <div class="text-[9px] text-gray-400">{t('profile.addToHomeScreen')}</div>
-                                                            </div>
-                                                        </button>
-                                                    </Show>
-                                                </div>
+                                                                                const names = ['Novice', 'Scout', 'Ranger', 'Guardian', 'Elite', 'Captain', 'Commander', 'Warlord', 'Titan', 'Visionary'];
+                                                                                const idx = Math.min(9, Math.floor((level - 1) / 10)); // Correct logic: Lvl 1-9=0 (Novice), Lvl 10-19=1 (Scout)...
+                                                                                const rankName = (level >= 10 && level < 20) ? 'Scout' :
+                                                                                    (level >= 20 && level < 30) ? 'Ranger' :
+                                                                                        names.find((_, i) => level >= (i * 10) && level < ((i + 1) * 10)) || (level === 100 ? 'Visionary' : names[Math.min(9, Math.floor(level / 10))]);
 
-                                                {/* Security & Stats */}
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <div class="bg-white/[0.02] border border-white/[0.06] rounded-[24px] p-6 space-y-4">
-                                                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">{t('profile.identitySecurity')}</h3>
-                                                        <div class="space-y-3">
-                                                            <div class="flex items-center justify-between p-4 bg-white/[0.03] rounded-2xl">
-                                                                <div class="flex items-center gap-3">
-                                                                    <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                                                                        <Lock class="w-5 h-5 text-blue-400" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <div class="text-sm font-bold text-white">{t('profile.seedPhrase')}</div>
-                                                                        <div class="text-[11px] text-gray-500">{userProfile().isVerified ? t('profile.securelyVaulted') : t('profile.notGenerated')}</div>
+                                                                                // Simpler logic for name mapping
+                                                                                const getRankName = (lvl: number) => {
+                                                                                    if (lvl >= 90) return 'Visionary';
+                                                                                    if (lvl >= 80) return 'Titan';
+                                                                                    if (lvl >= 70) return 'Warlord';
+                                                                                    if (lvl >= 60) return 'Commander';
+                                                                                    if (lvl >= 50) return 'Captain';
+                                                                                    if (lvl >= 40) return 'Elite';
+                                                                                    if (lvl >= 30) return 'Guardian';
+                                                                                    if (lvl >= 20) return 'Ranger';
+                                                                                    if (lvl >= 10) return 'Scout';
+                                                                                    return 'Novice';
+                                                                                };
+
+                                                                                return `${getRankName(level)} LVL.${level}`;
+                                                                            })()}
+                                                                        </span>
                                                                     </div>
                                                                 </div>
-                                                                <Show when={userProfile().isVerified} fallback={<CheckCircle class="w-5 h-5 text-gray-700" />}>
-                                                                    <CheckCircle class="w-5 h-5 text-green-500" />
-                                                                </Show>
-                                                            </div>
-                                                            <div class="flex items-center justify-between p-4 bg-white/[0.03] rounded-2xl">
-                                                                <div class="flex items-center gap-3 flex-1">
-                                                                    <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                                                        <Phone class="w-5 h-5 text-purple-400" />
-                                                                    </div>
-                                                                    <div class="flex-1">
-                                                                        <div class="text-sm font-bold text-white">{t('profile.phoneNumber')}</div>
-                                                                        <Show when={onboardingStep() === 0}>
-                                                                            <div class="flex items-center gap-2 mt-1">
-                                                                                <input
-                                                                                    type="tel"
-                                                                                    value={editPhone()}
-                                                                                    onInput={(e) => setEditPhone(e.currentTarget.value)}
-                                                                                    placeholder={t('profile.addPhonePlaceholder')}
-                                                                                    class="flex-1 bg-black/20 border border-white/5 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-purple-500/50"
-                                                                                />
-                                                                                <button
-                                                                                    onClick={handleUpdatePhone}
-                                                                                    disabled={isSavingPhone() || editPhone() === userProfile().phone}
-                                                                                    class="p-1 px-2 bg-purple-600 rounded text-[10px] font-bold text-white disabled:opacity-30"
-                                                                                >
-                                                                                    {isSavingPhone() ? '...' : t('profile.save')}
-                                                                                </button>
-                                                                            </div>
-                                                                        </Show>
-                                                                    </div>
+                                                                <div class="flex items-center gap-4 text-sm text-gray-400 font-mono mb-4">
+                                                                    <span>{userProfile().email}</span>
+                                                                    <span class="w-1 h-1 rounded-full bg-gray-700" />
+                                                                    <span>{userProfile().phone || t('profile.noPhoneLinked')}</span>
                                                                 </div>
-                                                                <Show when={userProfile().phone} fallback={<CheckCircle class="w-5 h-5 text-gray-700" />}>
-                                                                    <CheckCircle class="w-5 h-5 text-green-500" />
-                                                                </Show>
-                                                            </div>
 
-                                                            {/* Wallet Address Card */}
-                                                            <Show when={onboardingStep() > 1 || userProfile().isVerified}>
-                                                                <div class="p-4 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
-                                                                    <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">{t('profile.visionWalletAddress')}</div>
-                                                                    <div class="flex items-center gap-3">
-                                                                        <code class="text-white font-mono text-[12px] flex-1 truncate">{walletAddress()}</code>
-                                                                        <button onClick={copyAddress} class="p-2 hover:bg-white/[0.08] rounded-lg transition-colors">
-                                                                            <Show when={copied()} fallback={<Copy class="w-3 h-3 text-gray-400" />}>
-                                                                                <Check class="w-3 h-3 text-green-400" />
-                                                                            </Show>
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            </Show>
-                                                        </div>
-                                                    </div>
-
-                                                    <div class="bg-white/[0.02] border border-white/[0.06] rounded-[24px] p-6 space-y-4">
-                                                        <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">{t('profile.networkActivity')}</h3>
-                                                        <div class="grid grid-cols-2 gap-4">
-                                                            <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
-                                                                <div class="text-2xl font-black text-white">{txSentCount()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.txSent')}</div>
-                                                            </div>
-                                                            <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
-                                                                <div class="text-2xl font-black text-white">{(() => {
-                                                                    // Trust score: base 100%, reduce by failed tx ratio
-                                                                    // For now, all verified users start at 100%
-                                                                    const verified = userProfile().isVerified;
-                                                                    return verified ? '100%' : '0%';
-                                                                })()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.trustScore')}</div>
-                                                            </div>
-                                                            <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
-                                                                <div class="text-lg font-black">{(() => {
+                                                                {/* XP / Level Progress Bar */}
+                                                                {(() => {
                                                                     const count = userProfile().referralCount || 0;
                                                                     let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
                                                                     if (level > 100) level = 100;
 
-                                                                    const getRankName = (lvl: number) => {
-                                                                        if (lvl >= 90) return 'Visionary';
-                                                                        if (lvl >= 80) return 'Titan';
-                                                                        if (lvl >= 70) return 'Warlord';
-                                                                        if (lvl >= 60) return 'Commander';
-                                                                        if (lvl >= 50) return 'Captain';
-                                                                        if (lvl >= 40) return 'Elite';
-                                                                        if (lvl >= 30) return 'Guardian';
-                                                                        if (lvl >= 20) return 'Ranger';
-                                                                        if (lvl >= 10) return 'Scout';
-                                                                        return 'Novice';
+                                                                    // Triangular: level L requires L*(L-1)/2 total refs
+                                                                    const currentLevelBaseRefs = level * (level - 1) / 2;
+                                                                    const refsPerLevel = level; // Need 'level' refs to advance
+                                                                    const nextLevelRefs = level >= 100 ? currentLevelBaseRefs : currentLevelBaseRefs + level;
+                                                                    const progressIntoLevel = count - currentLevelBaseRefs;
+                                                                    const progressPercent = level >= 100 ? 100 : Math.min(100, Math.max(0, (progressIntoLevel / refsPerLevel) * 100));
+                                                                    const refsToNext = Math.max(0, nextLevelRefs - count);
+
+                                                                    // Rank Gradient Helper
+                                                                    const getGradient = (lvl: number) => {
+                                                                        if (lvl >= 90) return 'from-yellow-500 to-amber-300';
+                                                                        if (lvl >= 80) return 'from-rose-600 to-pink-600';
+                                                                        if (lvl >= 70) return 'from-red-600 to-orange-600';
+                                                                        if (lvl >= 60) return 'from-orange-600 to-amber-500';
+                                                                        if (lvl >= 50) return 'from-violet-600 to-purple-600';
+                                                                        if (lvl >= 40) return 'from-indigo-600 to-blue-600';
+                                                                        if (lvl >= 30) return 'from-cyan-600 to-sky-500';
+                                                                        if (lvl >= 20) return 'from-emerald-600 to-green-500';
+                                                                        if (lvl >= 10) return 'from-blue-600 to-cyan-500';
+                                                                        return 'from-gray-600 to-gray-500';
                                                                     };
 
-                                                                    return `${getRankName(level)} Lvl.${level}`;
-                                                                })()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.accountTier')}</div>
-                                                            </div>
-                                                            <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-purple-400">
-                                                                <div class="text-2xl font-black">{(() => {
-                                                                    const created = userProfile().createdAt;
-                                                                    if (!created) return '0d';
-                                                                    const createdDate = new Date(created);
-                                                                    if (isNaN(createdDate.getTime())) return '0d';
-                                                                    const now = new Date();
-                                                                    const diffMs = now.getTime() - createdDate.getTime();
-                                                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                                                                    if (diffDays >= 365) return `${Math.floor(diffDays / 365)}y ${diffDays % 365}d`;
-                                                                    if (diffDays >= 30) return `${Math.floor(diffDays / 30)}m ${diffDays % 30}d`;
-                                                                    return `${diffDays}d`;
-                                                                })()}</div>
-                                                                <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.age')}</div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
-
-                                        {/* Step 0.5: Choice Screen */}
-                                        <Match when={onboardingStep() === 0.5}>
-                                            <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto py-12">
-                                                <div class="text-center mb-10">
-                                                    <h2 class="text-3xl font-black text-white mb-2">{t('profile.walletSetup')}</h2>
-                                                    <p class="text-gray-400 font-medium">{t('profile.walletSetupDesc')}</p>
-                                                </div>
-
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                    <button
-                                                        onClick={() => { generateSeedPhrase(); setIsRestoring(false); setOnboardingStep(1); }}
-                                                        class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-blue-500/50 transition-all group relative overflow-hidden"
-                                                    >
-                                                        <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                                                            <Plus class="w-20 h-20 text-blue-400" />
-                                                        </div>
-                                                        <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                                            <Plus class="w-6 h-6 text-blue-400" />
-                                                        </div>
-                                                        <div class="text-xl font-bold text-white mb-2">Create New</div>
-                                                        <p class="text-sm text-gray-500 leading-relaxed">Generate a new 15-word recovery phrase for your account.</p>
-                                                    </button>
-
-                                                    <button
-                                                        onClick={() => setOnboardingStep(2)}
-                                                        class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-cyan-500/50 transition-all group relative overflow-hidden"
-                                                    >
-                                                        <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                                                            <Download class="w-20 h-20 text-cyan-400" />
-                                                        </div>
-                                                        <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                                            <RefreshCw class="w-6 h-6 text-cyan-400" />
-                                                        </div>
-                                                        <div class="text-xl font-bold text-white mb-2">Restore Wallet</div>
-                                                        <p class="text-sm text-gray-500 leading-relaxed">Import an existing wallet using your 15-word phrase.</p>
-                                                    </button>
-                                                </div>
-
-                                                <div class="text-center mt-8">
-                                                    <button onClick={() => setOnboardingStep(0)} class="text-gray-500 font-bold hover:text-white transition-colors text-sm uppercase tracking-widest">Cancel</button>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
-
-                                        {/* Step 2: Restore Input */}
-                                        <Match when={onboardingStep() === 2}>
-                                            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto py-12">
-                                                <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[32px] overflow-hidden shadow-2xl">
-                                                    <div class="bg-gradient-to-b from-cyan-900/10 to-transparent p-10 flex flex-col items-center text-center">
-                                                        <div class="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
-                                                            <RefreshCw class="w-8 h-8 text-cyan-400" />
-                                                        </div>
-                                                        <h2 class="text-3xl font-black text-white mb-2">Restore Wallet</h2>
-                                                        <p class="text-gray-400 font-medium">Enter your 15-word recovery phrase</p>
-                                                    </div>
-
-                                                    <div class="p-8 space-y-6 overflow-hidden">
-                                                        <div>
-                                                            <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Recovery Phrase</label>
-                                                            <textarea
-                                                                spellcheck={false}
-                                                                rows="4"
-                                                                placeholder="Enter 15 words separated by spaces..."
-                                                                value={restoringMnemonic()}
-                                                                onInput={(e) => setRestoringMnemonic(e.currentTarget.value)}
-                                                                autofocus
-                                                                class="w-full max-w-full box-border bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed relative z-20"
-                                                            />
-                                                        </div>
-
-                                                        <div class="flex items-center gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
-                                                            <Info class="w-4 h-4 text-blue-400 shrink-0" />
-                                                            <p class="text-[12px] text-blue-300 font-medium">Ensure you have no extra spaces and all words are spelled correctly.</p>
-                                                        </div>
-
-                                                        <div class="flex gap-4">
-                                                            <button
-                                                                onClick={() => setOnboardingStep(0.5)}
-                                                                class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
-                                                            >
-                                                                Back
-                                                            </button>
-                                                            <button
-                                                                onClick={handleRestoreWallet}
-                                                                disabled={!restoringMnemonic().trim() || restoringMnemonic().trim().split(/\s+/).length < 15}
-                                                                class="flex-[2] py-4 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                                                            >
-                                                                Verify Phrase
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
-
-                                        {/* Step 1: Wallet Setup - Redesigned to match image 0 & 1 */}
-                                        <Match when={onboardingStep() === 1}>
-                                            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto">
-                                                <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
-                                                    <div class="bg-gradient-to-b from-blue-900/10 to-transparent p-10 flex flex-col items-center text-center">
-                                                        <div class="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-                                                            <Leaf class="w-8 h-8 text-blue-400" />
-                                                        </div>
-                                                        <h2 class="text-3xl font-black text-white mb-2">Secret Recovery Phrase</h2>
-                                                        <p class="text-gray-400 font-medium">Write down these 15 words in the exact order shown</p>
-                                                    </div>
-
-                                                    <div class="p-8 space-y-8">
-                                                        {/* Critical Security Link Style */}
-                                                        <div class="p-6 bg-red-500/5 border border-red-500/20 rounded-xl">
-                                                            <div class="flex items-center gap-2 text-red-400 font-black uppercase tracking-widest text-xs mb-4">
-                                                                <AlertTriangle class="w-4 h-4" />
-                                                                Critical Security Information
-                                                            </div>
-                                                            <ul class="space-y-2 text-[13px] font-bold text-red-500/80">
-                                                                <li>• Never share this phrase with anyone</li>
-                                                                <li>• Store it in a secure, offline location</li>
-                                                                <li>• Anyone with this phrase can access your wallet</li>
-                                                                <li>• We cannot recover this phrase if lost</li>
-                                                            </ul>
-                                                        </div>
-
-                                                        <div class="space-y-4">
-                                                            <div class="flex items-center justify-between px-2">
-                                                                <span class="text-[13px] font-bold text-gray-400">Recovery Phrase</span>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (seedPhrase().length === 0) {
-                                                                            generateSeedPhrase();
-                                                                        } else {
-                                                                            setShowSeed(!showSeed());
-                                                                        }
-                                                                    }}
-                                                                    class="flex items-center gap-2 text-blue-400 text-[13px] font-bold hover:text-blue-300 transition-colors"
-                                                                >
-                                                                    {showSeed() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
-                                                                    {showSeed() ? 'Hide Phrase' : 'Show Phrase'}
-                                                                </button>
-                                                            </div>
-
-                                                            <Show when={showSeed()} fallback={
-                                                                <div class="p-12 bg-blue-500/5 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center gap-4 group cursor-pointer" onClick={() => { if (seedPhrase().length === 0) generateSeedPhrase(); setShowSeed(true); }}>
-                                                                    <Leaf class="w-8 h-8 text-blue-500/40 group-hover:text-blue-500 transition-colors" />
-                                                                    <div class="text-[13px] font-medium text-gray-500">
-                                                                        Recovery phrase is hidden<br />
-                                                                        <span class="text-blue-400/60 font-bold group-hover:text-blue-400">Click "Show Phrase" to reveal</span>
-                                                                    </div>
-                                                                </div>
-                                                            }>
-                                                                <div class="grid grid-cols-3 gap-3">
-                                                                    <For each={seedPhrase()}>
-                                                                        {(word, i) => (
-                                                                            <div class="flex items-center gap-3 p-3.5 bg-white/5 text-white rounded-xl border border-white/10 font-mono text-[14px] font-bold tracking-wide">
-                                                                                <span class="text-gray-500 w-4 text-left">{i() + 1}.</span>
-                                                                                <span class="flex-1 text-cyan-500/90">{word}</span>
+                                                                    return (
+                                                                        <div class="bg-black/20 rounded-xl p-3 border border-white/5 w-full max-w-md">
+                                                                            <div class="flex justify-between items-center mb-2">
+                                                                                <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                                                                                    {t('profile.xpProgress')}
+                                                                                </span>
+                                                                                <span class="text-[9px] font-bold text-gray-400">
+                                                                                    <span class="text-white">{refsToNext}</span> {t('profile.invitesToLvl')} {level + 1}
+                                                                                </span>
                                                                             </div>
-                                                                        )}
-                                                                    </For>
-                                                                </div>
+                                                                            <div class="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
+                                                                                <div
+                                                                                    class={`h-full bg-gradient-to-r ${getGradient(level)} relative shadow-[0_0_15px_rgba(255,255,255,0.2)]`}
+                                                                                    style={{ width: `${progressPercent}%` }}
+                                                                                >
+                                                                                    <div class="absolute inset-0 bg-white/20" />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div class="flex justify-end mt-1">
+                                                                                <span class="text-[9px] font-mono font-bold text-gray-600">{progressPercent.toFixed(0)}%</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
+                                                            <Show when={!userProfile().isVerified}>
+                                                                <button
+                                                                    onClick={() => setOnboardingStep(0.5)}
+                                                                    class="px-6 py-3 bg-white text-black rounded-2xl font-bold text-sm hover:bg-white/90 transition-all flex items-center gap-2"
+                                                                >
+                                                                    {t('profile.setupWallet')}
+                                                                    <ArrowRight class="w-4 h-4" />
+                                                                </button>
+                                                                <button onClick={() => setOnboardingStep(3)} class="ml-4 px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs rounded-2xl hover:bg-red-500/20 transition-all">
+                                                                    [Debug] Skip
+                                                                </button>
                                                             </Show>
                                                         </div>
+                                                    </div>
 
-                                                        <Show when={showSeed()}>
-                                                            <div class="flex gap-4">
-                                                                <button
-                                                                    onClick={copySeedPhrase}
-                                                                    class={`flex-1 flex items-center justify-center gap-2 py-4 border rounded-2xl font-black text-sm transition-all ${copiedSeed() ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20'}`}
-                                                                >
-                                                                    <Show when={copiedSeed()} fallback={<Copy class="w-4 h-4 text-gray-400" />}>
-                                                                        <Check class="w-4 h-4 text-green-400" />
-                                                                    </Show>
-                                                                    {copiedSeed() ? 'Copied!' : 'Copy Phrase'}
-                                                                </button>
-                                                                <button
-                                                                    class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"
-                                                                    onClick={downloadSeedPhrase}
-                                                                >
-                                                                    <Download class="w-4 h-4 text-gray-400" />
-                                                                    Download
-                                                                </button>
-                                                            </div>
-                                                        </Show>
-
+                                                    {/* Action Buttons */}
+                                                    <div class="grid grid-cols-2 gap-3 mb-6">
                                                         <button
-                                                            onClick={() => setOnboardingStep(1.5)}
-                                                            disabled={seedPhrase().length === 0 || !showSeed()}
-                                                            class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
+                                                            onClick={() => navigate('/wallet/referral-rules')}
+                                                            class="w-full py-4 bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-white/20 transition-all group"
                                                         >
-                                                            Continue
+                                                            <div class="w-8 h-8 rounded-full bg-yellow-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                <Trophy class="w-4 h-4 text-yellow-400" />
+                                                            </div>
+                                                            <div class="text-center">
+                                                                <div class="text-xs font-bold text-white uppercase tracking-wider">{t('profile.rewardLogic')}</div>
+                                                                <div class="text-[9px] text-gray-400">{t('profile.viewRankBenefits')}</div>
+                                                            </div>
                                                         </button>
+
+                                                        <Show when={deferredPrompt() || isIOS()}>
+                                                            <button
+                                                                onClick={handleInstallClick}
+                                                                class="w-full py-4 bg-gradient-to-r from-emerald-900/30 to-teal-900/30 border border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 hover:border-white/20 transition-all group"
+                                                            >
+                                                                <div class="w-8 h-8 rounded-full bg-emerald-400/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                    <Download class="w-4 h-4 text-emerald-400" />
+                                                                </div>
+                                                                <div class="text-center">
+                                                                    <div class="text-xs font-bold text-white uppercase tracking-wider">{t('profile.installApp')}</div>
+                                                                    <div class="text-[9px] text-gray-400">{t('profile.addToHomeScreen')}</div>
+                                                                </div>
+                                                            </button>
+                                                        </Show>
                                                     </div>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
 
-                                        {/* Step 1.5: Smart Quiz Verification */}
-                                        <Match when={onboardingStep() === 1.5}>
-                                            <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto pb-10">
-                                                <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
-                                                    <div class="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-6 flex flex-col items-center text-center">
-                                                        <h2 class="text-xl font-black text-white mb-2 uppercase tracking-tight">Security Check</h2>
-                                                        <p class="text-gray-400 font-bold text-xs">Verify your backup by selecting the correct words</p>
-                                                    </div>
-
-                                                    <div class="p-8 space-y-6">
-                                                        <div class="flex justify-between items-end px-1">
-                                                            <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
-                                                                Quiz: <span class="text-white">{Object.keys(quizAnswers()).length}/3</span>
-                                                            </div>
-                                                            <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
-                                                                Smart Verify
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Quiz Slots Area */}
-                                                        <div class="grid grid-cols-3 gap-3 p-6 bg-black/40 rounded-3xl border border-white/[0.05]">
-                                                            <For each={quizIndices()}>
-                                                                {(idx) => (
-                                                                    <div class="flex flex-col gap-2">
-                                                                        <span class="text-[10px] font-bold text-gray-500 text-center uppercase">Word #{idx + 1}</span>
-                                                                        <div class={`min-h-[50px] flex items-center justify-center p-2 bg-white/5 border rounded-xl font-mono text-[13px] font-black transition-all ${quizAnswers()[idx] ? 'border-blue-500/50 bg-blue-500/10 text-white' : 'border-white/5 text-gray-700 dashed-border'}`}>
-                                                                            <Show when={quizAnswers()[idx]} fallback={<span class="text-gray-700">?</span>}>
-                                                                                <span class="animate-in zoom-in-95">{quizAnswers()[idx]}</span>
+                                                    {/* Security & Stats */}
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div class="bg-white/[0.02] border border-white/[0.06] rounded-[24px] p-6 space-y-4">
+                                                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">{t('profile.identitySecurity')}</h3>
+                                                            <div class="space-y-3">
+                                                                <div class="flex items-center justify-between p-4 bg-white/[0.03] rounded-2xl">
+                                                                    <div class="flex items-center gap-3">
+                                                                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                                                                            <Lock class="w-5 h-5 text-blue-400" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div class="text-sm font-bold text-white">{t('profile.seedPhrase')}</div>
+                                                                            <div class="text-[11px] text-gray-500">{userProfile().isVerified ? t('profile.securelyVaulted') : t('profile.notGenerated')}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <Show when={userProfile().isVerified} fallback={<CheckCircle class="w-5 h-5 text-gray-700" />}>
+                                                                        <CheckCircle class="w-5 h-5 text-green-500" />
+                                                                    </Show>
+                                                                </div>
+                                                                <div class="flex items-center justify-between p-4 bg-white/[0.03] rounded-2xl">
+                                                                    <div class="flex items-center gap-3 flex-1">
+                                                                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                                            <Phone class="w-5 h-5 text-purple-400" />
+                                                                        </div>
+                                                                        <div class="flex-1">
+                                                                            <div class="text-sm font-bold text-white">{t('profile.phoneNumber')}</div>
+                                                                            <Show when={onboardingStep() === 0}>
+                                                                                <div class="flex items-center gap-2 mt-1">
+                                                                                    <input
+                                                                                        type="tel"
+                                                                                        value={editPhone()}
+                                                                                        onInput={(e) => setEditPhone(e.currentTarget.value)}
+                                                                                        placeholder={t('profile.addPhonePlaceholder')}
+                                                                                        class="flex-1 bg-black/20 border border-white/5 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-purple-500/50"
+                                                                                    />
+                                                                                    <button
+                                                                                        onClick={handleUpdatePhone}
+                                                                                        disabled={isSavingPhone() || editPhone() === userProfile().phone}
+                                                                                        class="p-1 px-2 bg-purple-600 rounded text-[10px] font-bold text-white disabled:opacity-30"
+                                                                                    >
+                                                                                        {isSavingPhone() ? '...' : t('profile.save')}
+                                                                                    </button>
+                                                                                </div>
                                                                             </Show>
                                                                         </div>
                                                                     </div>
-                                                                )}
-                                                            </For>
+                                                                    <Show when={userProfile().phone} fallback={<CheckCircle class="w-5 h-5 text-gray-700" />}>
+                                                                        <CheckCircle class="w-5 h-5 text-green-500" />
+                                                                    </Show>
+                                                                </div>
+
+                                                                {/* Wallet Address Card */}
+                                                                <Show when={onboardingStep() > 1 || userProfile().isVerified}>
+                                                                    <div class="p-4 bg-white/[0.03] rounded-2xl border border-white/[0.06]">
+                                                                        <div class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 px-1">{t('profile.visionWalletAddress')}</div>
+                                                                        <div class="flex items-center gap-3">
+                                                                            <code class="text-white font-mono text-[12px] flex-1 truncate">{walletAddress()}</code>
+                                                                            <button onClick={copyAddress} class="p-2 hover:bg-white/[0.08] rounded-lg transition-colors">
+                                                                                <Show when={copied()} fallback={<Copy class="w-3 h-3 text-gray-400" />}>
+                                                                                    <Check class="w-3 h-3 text-green-400" />
+                                                                                </Show>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
                                                         </div>
 
-                                                        <div class="flex justify-end">
-                                                            <button onClick={() => setQuizAnswers({})} class="text-[11px] font-black text-blue-400 uppercase tracking-widest hover:text-white transition-colors">Reset Quiz</button>
+                                                        <div class="bg-white/[0.02] border border-white/[0.06] rounded-[24px] p-6 space-y-4">
+                                                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-widest px-1">{t('profile.networkActivity')}</h3>
+                                                            <div class="grid grid-cols-2 gap-4">
+                                                                <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
+                                                                    <div class="text-2xl font-black text-white">{txSentCount()}</div>
+                                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.txSent')}</div>
+                                                                </div>
+                                                                <div class="p-4 bg-white/[0.03] rounded-2xl text-center">
+                                                                    <div class="text-2xl font-black text-white">{(() => {
+                                                                        // Trust score: base 100%, reduce by failed tx ratio
+                                                                        // For now, all verified users start at 100%
+                                                                        const verified = userProfile().isVerified;
+                                                                        return verified ? '100%' : '0%';
+                                                                    })()}</div>
+                                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.trustScore')}</div>
+                                                                </div>
+                                                                <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-cyan-400">
+                                                                    <div class="text-lg font-black">{(() => {
+                                                                        const count = userProfile().referralCount || 0;
+                                                                        let level = Math.max(1, Math.floor((1 + Math.sqrt(1 + 8 * count)) / 2));
+                                                                        if (level > 100) level = 100;
+
+                                                                        const getRankName = (lvl: number) => {
+                                                                            if (lvl >= 90) return 'Visionary';
+                                                                            if (lvl >= 80) return 'Titan';
+                                                                            if (lvl >= 70) return 'Warlord';
+                                                                            if (lvl >= 60) return 'Commander';
+                                                                            if (lvl >= 50) return 'Captain';
+                                                                            if (lvl >= 40) return 'Elite';
+                                                                            if (lvl >= 30) return 'Guardian';
+                                                                            if (lvl >= 20) return 'Ranger';
+                                                                            if (lvl >= 10) return 'Scout';
+                                                                            return 'Novice';
+                                                                        };
+
+                                                                        return `${getRankName(level)} Lvl.${level}`;
+                                                                    })()}</div>
+                                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.accountTier')}</div>
+                                                                </div>
+                                                                <div class="p-4 bg-white/[0.03] rounded-2xl text-center text-purple-400">
+                                                                    <div class="text-2xl font-black">{(() => {
+                                                                        const created = userProfile().createdAt;
+                                                                        if (!created) return '0d';
+                                                                        const createdDate = new Date(created);
+                                                                        if (isNaN(createdDate.getTime())) return '0d';
+                                                                        const now = new Date();
+                                                                        const diffMs = now.getTime() - createdDate.getTime();
+                                                                        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                                                        if (diffDays >= 365) return `${Math.floor(diffDays / 365)}y ${diffDays % 365}d`;
+                                                                        if (diffDays >= 30) return `${Math.floor(diffDays / 30)}m ${diffDays % 30}d`;
+                                                                        return `${diffDays}d`;
+                                                                    })()}</div>
+                                                                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{t('profile.age')}</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </Motion.div>
+                                            </Match>
+
+                                            {/* Step 0.5: Choice Screen */}
+                                            <Match when={onboardingStep() === 0.5}>
+                                                <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto py-12">
+                                                    <div class="text-center mb-10">
+                                                        <h2 class="text-3xl font-black text-white mb-2">{t('profile.walletSetup')}</h2>
+                                                        <p class="text-gray-400 font-medium">{t('profile.walletSetupDesc')}</p>
+                                                    </div>
+
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <button
+                                                            onClick={() => { generateSeedPhrase(); setIsRestoring(false); setOnboardingStep(1); }}
+                                                            class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-blue-500/50 transition-all group relative overflow-hidden"
+                                                        >
+                                                            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                                                                <Plus class="w-20 h-20 text-blue-400" />
+                                                            </div>
+                                                            <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                                                <Plus class="w-6 h-6 text-blue-400" />
+                                                            </div>
+                                                            <div class="text-xl font-bold text-white mb-2">Create New</div>
+                                                            <p class="text-sm text-gray-500 leading-relaxed">Generate a new 15-word recovery phrase for your account.</p>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => setOnboardingStep(2)}
+                                                            class="p-8 bg-[#0e0e12] border border-white/[0.05] rounded-[32px] text-left hover:border-cyan-500/50 transition-all group relative overflow-hidden"
+                                                        >
+                                                            <div class="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                                                                <Download class="w-20 h-20 text-cyan-400" />
+                                                            </div>
+                                                            <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                                                                <RefreshCw class="w-6 h-6 text-cyan-400" />
+                                                            </div>
+                                                            <div class="text-xl font-bold text-white mb-2">Restore Wallet</div>
+                                                            <p class="text-sm text-gray-500 leading-relaxed">Import an existing wallet using your 15-word phrase.</p>
+                                                        </button>
+                                                    </div>
+
+                                                    <div class="text-center mt-8">
+                                                        <button onClick={() => setOnboardingStep(0)} class="text-gray-500 font-bold hover:text-white transition-colors text-sm uppercase tracking-widest">Cancel</button>
+                                                    </div>
+                                                </Motion.div>
+                                            </Match>
+
+                                            {/* Step 2: Restore Input */}
+                                            <Match when={onboardingStep() === 2}>
+                                                <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto py-12">
+                                                    <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[32px] overflow-hidden shadow-2xl">
+                                                        <div class="bg-gradient-to-b from-cyan-900/10 to-transparent p-10 flex flex-col items-center text-center">
+                                                            <div class="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                                                                <RefreshCw class="w-8 h-8 text-cyan-400" />
+                                                            </div>
+                                                            <h2 class="text-3xl font-black text-white mb-2">Restore Wallet</h2>
+                                                            <p class="text-gray-400 font-medium">Enter your 15-word recovery phrase</p>
                                                         </div>
 
-                                                        {/* Word Pool Area */}
-                                                        <div class="grid grid-cols-3 gap-3 pt-4 border-t border-white/[0.04]">
-                                                            <For each={shuffledSeed()}>
-                                                                {(word) => {
-                                                                    const isSelected = Object.values(quizAnswers()).includes(word);
-                                                                    return (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                if (!isSelected) {
-                                                                                    const currentAnswers = quizAnswers();
-                                                                                    const nextIndex = quizIndices().find(idx => !currentAnswers[idx]);
-                                                                                    if (nextIndex !== undefined) {
-                                                                                        setQuizAnswers({ ...currentAnswers, [nextIndex]: word });
-                                                                                    }
-                                                                                }
-                                                                            }}
-                                                                            disabled={isSelected}
-                                                                            class={`p-3 rounded-xl border font-bold text-xs transition-all ${isSelected
-                                                                                ? 'bg-white/5 border-white/5 text-transparent select-none opacity-20'
-                                                                                : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 text-center active:scale-95'
-                                                                                }`}
-                                                                        >
-                                                                            {word}
-                                                                        </button>
-                                                                    );
-                                                                }}
-                                                            </For>
+                                                        <div class="p-8 space-y-6 overflow-hidden">
+                                                            <div>
+                                                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Recovery Phrase</label>
+                                                                <textarea
+                                                                    spellcheck={false}
+                                                                    rows="4"
+                                                                    placeholder="Enter 15 words separated by spaces..."
+                                                                    value={restoringMnemonic()}
+                                                                    onInput={(e) => setRestoringMnemonic(e.currentTarget.value)}
+                                                                    autofocus
+                                                                    class="w-full max-w-full box-border bg-white/[0.03] border border-white/[0.08] rounded-2xl py-5 px-6 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-mono text-base resize-none leading-relaxed relative z-20"
+                                                                />
+                                                            </div>
+
+                                                            <div class="flex items-center gap-2 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl">
+                                                                <Info class="w-4 h-4 text-blue-400 shrink-0" />
+                                                                <p class="text-[12px] text-blue-300 font-medium">Ensure you have no extra spaces and all words are spelled correctly.</p>
+                                                            </div>
+
+                                                            <div class="flex gap-4">
+                                                                <button
+                                                                    onClick={() => setOnboardingStep(0.5)}
+                                                                    class="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-2xl border border-white/5 hover:bg-white/10 transition-all"
+                                                                >
+                                                                    Back
+                                                                </button>
+                                                                <button
+                                                                    onClick={handleRestoreWallet}
+                                                                    disabled={!restoringMnemonic().trim() || restoringMnemonic().trim().split(/\s+/).length < 15}
+                                                                    class="flex-[2] py-4 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all border border-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                                >
+                                                                    Verify Phrase
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </Motion.div>
+                                            </Match>
+
+                                            {/* Step 1: Wallet Setup - Redesigned to match image 0 & 1 */}
+                                            <Match when={onboardingStep() === 1}>
+                                                <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto">
+                                                    <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                                        <div class="bg-gradient-to-b from-blue-900/10 to-transparent p-10 flex flex-col items-center text-center">
+                                                            <div class="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                                                                <Leaf class="w-8 h-8 text-blue-400" />
+                                                            </div>
+                                                            <h2 class="text-3xl font-black text-white mb-2">Secret Recovery Phrase</h2>
+                                                            <p class="text-gray-400 font-medium">Write down these 15 words in the exact order shown</p>
                                                         </div>
 
-                                                        <div class="pt-6 space-y-4">
+                                                        <div class="p-8 space-y-8">
+                                                            {/* Critical Security Link Style */}
+                                                            <div class="p-6 bg-red-500/5 border border-red-500/20 rounded-xl">
+                                                                <div class="flex items-center gap-2 text-red-400 font-black uppercase tracking-widest text-xs mb-4">
+                                                                    <AlertTriangle class="w-4 h-4" />
+                                                                    Critical Security Information
+                                                                </div>
+                                                                <ul class="space-y-2 text-[13px] font-bold text-red-500/80">
+                                                                    <li>• Never share this phrase with anyone</li>
+                                                                    <li>• Store it in a secure, offline location</li>
+                                                                    <li>• Anyone with this phrase can access your wallet</li>
+                                                                    <li>• We cannot recover this phrase if lost</li>
+                                                                </ul>
+                                                            </div>
+
+                                                            <div class="space-y-4">
+                                                                <div class="flex items-center justify-between px-2">
+                                                                    <span class="text-[13px] font-bold text-gray-400">Recovery Phrase</span>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (seedPhrase().length === 0) {
+                                                                                generateSeedPhrase();
+                                                                            } else {
+                                                                                setShowSeed(!showSeed());
+                                                                            }
+                                                                        }}
+                                                                        class="flex items-center gap-2 text-blue-400 text-[13px] font-bold hover:text-blue-300 transition-colors"
+                                                                    >
+                                                                        {showSeed() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
+                                                                        {showSeed() ? 'Hide Phrase' : 'Show Phrase'}
+                                                                    </button>
+                                                                </div>
+
+                                                                <Show when={showSeed()} fallback={
+                                                                    <div class="p-12 bg-blue-500/5 border border-white/5 rounded-2xl flex flex-col items-center justify-center text-center gap-4 group cursor-pointer" onClick={() => { if (seedPhrase().length === 0) generateSeedPhrase(); setShowSeed(true); }}>
+                                                                        <Leaf class="w-8 h-8 text-blue-500/40 group-hover:text-blue-500 transition-colors" />
+                                                                        <div class="text-[13px] font-medium text-gray-500">
+                                                                            Recovery phrase is hidden<br />
+                                                                            <span class="text-blue-400/60 font-bold group-hover:text-blue-400">Click "Show Phrase" to reveal</span>
+                                                                        </div>
+                                                                    </div>
+                                                                }>
+                                                                    <div class="grid grid-cols-3 gap-3">
+                                                                        <For each={seedPhrase()}>
+                                                                            {(word, i) => (
+                                                                                <div class="flex items-center gap-3 p-3.5 bg-white/5 text-white rounded-xl border border-white/10 font-mono text-[14px] font-bold tracking-wide">
+                                                                                    <span class="text-gray-500 w-4 text-left">{i() + 1}.</span>
+                                                                                    <span class="flex-1 text-cyan-500/90">{word}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </For>
+                                                                    </div>
+                                                                </Show>
+                                                            </div>
+
+                                                            <Show when={showSeed()}>
+                                                                <div class="flex gap-4">
+                                                                    <button
+                                                                        onClick={copySeedPhrase}
+                                                                        class={`flex-1 flex items-center justify-center gap-2 py-4 border rounded-2xl font-black text-sm transition-all ${copiedSeed() ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-white/5 border-white/10 text-white hover:bg-white/10 hover:border-white/20'}`}
+                                                                    >
+                                                                        <Show when={copiedSeed()} fallback={<Copy class="w-4 h-4 text-gray-400" />}>
+                                                                            <Check class="w-4 h-4 text-green-400" />
+                                                                        </Show>
+                                                                        {copiedSeed() ? 'Copied!' : 'Copy Phrase'}
+                                                                    </button>
+                                                                    <button
+                                                                        class="flex-1 flex items-center justify-center gap-2 py-4 bg-white/5 text-white border border-white/10 rounded-2xl font-black text-sm hover:bg-white/10 transition-all hover:border-white/20"
+                                                                        onClick={downloadSeedPhrase}
+                                                                    >
+                                                                        <Download class="w-4 h-4 text-gray-400" />
+                                                                        Download
+                                                                    </button>
+                                                                </div>
+                                                            </Show>
+
                                                             <button
-                                                                onClick={() => {
-                                                                    const validSeed = seedPhrase();
-                                                                    const currentAnswers = quizAnswers();
-                                                                    const indices = quizIndices();
-                                                                    const allCorrect = indices.every(idx => currentAnswers[idx] === validSeed[idx]);
-
-                                                                    if (allCorrect) {
-                                                                        // Derive address immediately
-                                                                        try {
-                                                                            const phrase = validSeed.join(' ');
-                                                                            const { address } = WalletService.deriveEOA(phrase);
-                                                                            console.log("Quiz Success - Derived Address:", address);
-
-                                                                            // Update all possible state holders for reactivity
-                                                                            setWalletAddressSignal(address);
-                                                                            setUserProfile(prev => ({ ...prev, address: address }));
-
-                                                                            // Prompt for password immediately
-                                                                            setShowPasswordModal(true);
-                                                                        } catch (err) {
-                                                                            console.error("Failed to derive address:", err);
-                                                                            alert("Error generating wallet address. Please try again.");
-                                                                        }
-                                                                    } else {
-                                                                        alert('Incorrect words. Please check your backup and try again.');
-                                                                        setQuizAnswers({});
-                                                                    }
-                                                                }}
-                                                                disabled={Object.keys(quizAnswers()).length !== 3}
-                                                                class={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl ${Object.keys(quizAnswers()).length === 3 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20 hover:scale-[1.02]' : 'bg-[#1a1a1e] text-gray-500 border border-white/5 cursor-not-allowed'}`}
+                                                                onClick={() => setOnboardingStep(1.5)}
+                                                                disabled={seedPhrase().length === 0 || !showSeed()}
+                                                                class="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
                                                             >
-                                                                Verify & Create
+                                                                Continue
                                                             </button>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
+                                                </Motion.div>
+                                            </Match>
 
-                                        {/* Step 2: Phone Verification - Styled to match current theme */}
-                                        <Match when={onboardingStep() === 2}>
-                                            <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto">
-                                                <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
-                                                    <div class="bg-gradient-to-b from-purple-900/10 to-transparent p-10 flex flex-col items-center text-center">
-                                                        <div class="w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
-                                                            <Phone class="w-8 h-8 text-purple-400" />
+                                            {/* Step 1.5: Smart Quiz Verification */}
+                                            <Match when={onboardingStep() === 1.5}>
+                                                <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="max-w-xl mx-auto pb-10">
+                                                    <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                                        <div class="bg-gradient-to-r from-blue-900/20 to-purple-900/20 p-6 flex flex-col items-center text-center">
+                                                            <h2 class="text-xl font-black text-white mb-2 uppercase tracking-tight">Security Check</h2>
+                                                            <p class="text-gray-400 font-bold text-xs">Verify your backup by selecting the correct words</p>
                                                         </div>
-                                                        <h2 class="text-3xl font-black text-white mb-2 uppercase tracking-tight">Identity Access</h2>
-                                                        <p class="text-gray-400 font-medium">Verify your phone to unlock advanced features</p>
+
+                                                        <div class="p-8 space-y-6">
+                                                            <div class="flex justify-between items-end px-1">
+                                                                <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
+                                                                    Quiz: <span class="text-white">{Object.keys(quizAnswers()).length}/3</span>
+                                                                </div>
+                                                                <div class="text-[13px] font-black text-gray-500 uppercase tracking-widest">
+                                                                    Smart Verify
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Quiz Slots Area */}
+                                                            <div class="grid grid-cols-3 gap-3 p-6 bg-black/40 rounded-3xl border border-white/[0.05]">
+                                                                <For each={quizIndices()}>
+                                                                    {(idx) => (
+                                                                        <div class="flex flex-col gap-2">
+                                                                            <span class="text-[10px] font-bold text-gray-500 text-center uppercase">Word #{idx + 1}</span>
+                                                                            <div class={`min-h-[50px] flex items-center justify-center p-2 bg-white/5 border rounded-xl font-mono text-[13px] font-black transition-all ${quizAnswers()[idx] ? 'border-blue-500/50 bg-blue-500/10 text-white' : 'border-white/5 text-gray-700 dashed-border'}`}>
+                                                                                <Show when={quizAnswers()[idx]} fallback={<span class="text-gray-700">?</span>}>
+                                                                                    <span class="animate-in zoom-in-95">{quizAnswers()[idx]}</span>
+                                                                                </Show>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </For>
+                                                            </div>
+
+                                                            <div class="flex justify-end">
+                                                                <button onClick={() => setQuizAnswers({})} class="text-[11px] font-black text-blue-400 uppercase tracking-widest hover:text-white transition-colors">Reset Quiz</button>
+                                                            </div>
+
+                                                            {/* Word Pool Area */}
+                                                            <div class="grid grid-cols-3 gap-3 pt-4 border-t border-white/[0.04]">
+                                                                <For each={shuffledSeed()}>
+                                                                    {(word) => {
+                                                                        const isSelected = Object.values(quizAnswers()).includes(word);
+                                                                        return (
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (!isSelected) {
+                                                                                        const currentAnswers = quizAnswers();
+                                                                                        const nextIndex = quizIndices().find(idx => !currentAnswers[idx]);
+                                                                                        if (nextIndex !== undefined) {
+                                                                                            setQuizAnswers({ ...currentAnswers, [nextIndex]: word });
+                                                                                        }
+                                                                                    }
+                                                                                }}
+                                                                                disabled={isSelected}
+                                                                                class={`p-3 rounded-xl border font-bold text-xs transition-all ${isSelected
+                                                                                    ? 'bg-white/5 border-white/5 text-transparent select-none opacity-20'
+                                                                                    : 'bg-[#1a1a1e] text-gray-300 border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 text-center active:scale-95'
+                                                                                    }`}
+                                                                            >
+                                                                                {word}
+                                                                            </button>
+                                                                        );
+                                                                    }}
+                                                                </For>
+                                                            </div>
+
+                                                            <div class="pt-6 space-y-4">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const validSeed = seedPhrase();
+                                                                        const currentAnswers = quizAnswers();
+                                                                        const indices = quizIndices();
+                                                                        const allCorrect = indices.every(idx => currentAnswers[idx] === validSeed[idx]);
+
+                                                                        if (allCorrect) {
+                                                                            // Derive address immediately
+                                                                            try {
+                                                                                const phrase = validSeed.join(' ');
+                                                                                const { address } = WalletService.deriveEOA(phrase);
+                                                                                console.log("Quiz Success - Derived Address:", address);
+
+                                                                                // Update all possible state holders for reactivity
+                                                                                setWalletAddressSignal(address);
+                                                                                setUserProfile(prev => ({ ...prev, address: address }));
+
+                                                                                // Prompt for password immediately
+                                                                                setShowPasswordModal(true);
+                                                                            } catch (err) {
+                                                                                console.error("Failed to derive address:", err);
+                                                                                alert("Error generating wallet address. Please try again.");
+                                                                            }
+                                                                        } else {
+                                                                            alert('Incorrect words. Please check your backup and try again.');
+                                                                            setQuizAnswers({});
+                                                                        }
+                                                                    }}
+                                                                    disabled={Object.keys(quizAnswers()).length !== 3}
+                                                                    class={`w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl ${Object.keys(quizAnswers()).length === 3 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-500/20 hover:scale-[1.02]' : 'bg-[#1a1a1e] text-gray-500 border border-white/5 cursor-not-allowed'}`}
+                                                                >
+                                                                    Verify & Create
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </Motion.div>
+                                            </Match>
+
+                                            {/* Step 2: Phone Verification - Styled to match current theme */}
+                                            <Match when={onboardingStep() === 2}>
+                                                <Motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} class="max-w-xl mx-auto">
+                                                    <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                                        <div class="bg-gradient-to-b from-purple-900/10 to-transparent p-10 flex flex-col items-center text-center">
+                                                            <div class="w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+                                                                <Phone class="w-8 h-8 text-purple-400" />
+                                                            </div>
+                                                            <h2 class="text-3xl font-black text-white mb-2 uppercase tracking-tight">Identity Access</h2>
+                                                            <p class="text-gray-400 font-medium">Verify your phone to unlock advanced features</p>
+                                                        </div>
+
+                                                        <div class="p-8 space-y-8">
+                                                            <div class="space-y-4">
+                                                                <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Phone Number</label>
+                                                                <div class="relative group">
+                                                                    <Phone class="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-purple-400 transition-colors" />
+                                                                    <input
+                                                                        type="tel"
+                                                                        placeholder="+1 (555) 000-0000"
+                                                                        value={userProfile().phone}
+                                                                        onInput={(e) => setUserProfile({ ...userProfile(), phone: e.currentTarget.value })}
+                                                                        class="w-full bg-white/[0.03] border border-white/[0.1] rounded-2xl py-4.5 pl-12 pr-4 text-white placeholder:text-gray-600 outline-none focus:border-purple-500/50 transition-all font-medium"
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <Show when={verificationStep() < 2}>
+                                                                <button
+                                                                    onClick={startVerification}
+                                                                    disabled={isVerifying()}
+                                                                    class="w-full py-5 bg-[#a855f7] text-white rounded-2xl font-black text-lg hover:bg-[#9333ea] transition-all flex items-center justify-center gap-3 shadow-xl shadow-purple-500/20 disabled:opacity-50"
+                                                                >
+                                                                    <Show when={isVerifying()}>
+                                                                        <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                                                        Sending SMS...
+                                                                    </Show>
+                                                                    <Show when={!isVerifying()}>
+                                                                        Verify via SMS
+                                                                    </Show>
+                                                                </button>
+                                                            </Show>
+
+                                                            <Show when={verificationStep() === 2}>
+                                                                <div class="p-6 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center gap-4 text-green-400">
+                                                                    <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                                                                        <CheckCircle class="w-6 h-6" />
+                                                                    </div>
+                                                                    <div class="text-sm font-black uppercase tracking-widest">Verified!</div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={nextOnboardingStep}
+                                                                    class="w-full py-5 bg-white text-black rounded-2xl font-black text-lg hover:bg-white/90 transition-all shadow-xl"
+                                                                >
+                                                                    Continue
+                                                                </button>
+                                                            </Show>
+
+                                                            <button
+                                                                onClick={() => setOnboardingStep(3)}
+                                                                class="w-full py-3 text-gray-500 font-bold text-xs uppercase tracking-widest hover:text-white transition-colors"
+                                                            >
+                                                                Skip for now
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </Motion.div>
+                                            </Match>
+
+                                            {/* Step 3: Personal Info (Keep existing but align style) */}
+                                            <Match when={onboardingStep() === 3}>
+                                                <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} class="max-w-xl mx-auto space-y-8">
+                                                    <div class="text-center">
+                                                        <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                                                            <User class="w-8 h-8 text-cyan-400" />
+                                                        </div>
+                                                        <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Personalize Your ID</h2>
+                                                        <p class="text-gray-400 font-medium">Choose how you appear to others on Vision Chain.</p>
                                                     </div>
 
-                                                    <div class="p-8 space-y-8">
+                                                    <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] p-8 space-y-6 shadow-2xl">
                                                         <div class="space-y-4">
-                                                            <label class="block text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Phone Number</label>
-                                                            <div class="relative group">
-                                                                <Phone class="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-purple-400 transition-colors" />
+                                                            <div>
+                                                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Display Name</label>
                                                                 <input
-                                                                    type="tel"
-                                                                    placeholder="+1 (555) 000-0000"
-                                                                    value={userProfile().phone}
-                                                                    onInput={(e) => setUserProfile({ ...userProfile(), phone: e.currentTarget.value })}
-                                                                    class="w-full bg-white/[0.03] border border-white/[0.1] rounded-2xl py-4.5 pl-12 pr-4 text-white placeholder:text-gray-600 outline-none focus:border-purple-500/50 transition-all font-medium"
+                                                                    type="text"
+                                                                    placeholder="Visionary Pioneer"
+                                                                    value={userProfile().displayName}
+                                                                    onInput={(e) => setUserProfile({ ...userProfile(), displayName: e.currentTarget.value })}
+                                                                    class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-medium"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Short Bio</label>
+                                                                <textarea
+                                                                    rows="3"
+                                                                    placeholder="Describe your vision..."
+                                                                    value={userProfile().bio}
+                                                                    onInput={(e) => setUserProfile({ ...userProfile(), bio: e.currentTarget.value })}
+                                                                    class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all resize-none font-medium"
                                                                 />
                                                             </div>
                                                         </div>
 
-                                                        <Show when={verificationStep() < 2}>
-                                                            <button
-                                                                onClick={startVerification}
-                                                                disabled={isVerifying()}
-                                                                class="w-full py-5 bg-[#a855f7] text-white rounded-2xl font-black text-lg hover:bg-[#9333ea] transition-all flex items-center justify-center gap-3 shadow-xl shadow-purple-500/20 disabled:opacity-50"
-                                                            >
-                                                                <Show when={isVerifying()}>
-                                                                    <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                                                    Sending SMS...
-                                                                </Show>
-                                                                <Show when={!isVerifying()}>
-                                                                    Verify via SMS
-                                                                </Show>
-                                                            </button>
-                                                        </Show>
-
-                                                        <Show when={verificationStep() === 2}>
-                                                            <div class="p-6 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-center gap-4 text-green-400">
-                                                                <div class="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                                                                    <CheckCircle class="w-6 h-6" />
-                                                                </div>
-                                                                <div class="text-sm font-black uppercase tracking-widest">Verified!</div>
-                                                            </div>
-                                                            <button
-                                                                onClick={nextOnboardingStep}
-                                                                class="w-full py-5 bg-white text-black rounded-2xl font-black text-lg hover:bg-white/90 transition-all shadow-xl"
-                                                            >
-                                                                Continue
-                                                            </button>
-                                                        </Show>
-
                                                         <button
-                                                            onClick={() => setOnboardingStep(3)}
-                                                            class="w-full py-3 text-gray-500 font-bold text-xs uppercase tracking-widest hover:text-white transition-colors"
+                                                            onClick={() => {
+                                                                setOnboardingStep(4);
+                                                            }}
+                                                            class="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all border border-white/10"
                                                         >
-                                                            Skip for now
+                                                            Review Account
                                                         </button>
                                                     </div>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
+                                                </Motion.div>
+                                            </Match>
 
-                                        {/* Step 3: Personal Info (Keep existing but align style) */}
-                                        <Match when={onboardingStep() === 3}>
-                                            <Motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} class="max-w-xl mx-auto space-y-8">
-                                                <div class="text-center">
-                                                    <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mx-auto mb-6 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
-                                                        <User class="w-8 h-8 text-cyan-400" />
-                                                    </div>
-                                                    <h2 class="text-3xl font-black text-white mb-2 tracking-tight">Personalize Your ID</h2>
-                                                    <p class="text-gray-400 font-medium">Choose how you appear to others on Vision Chain.</p>
-                                                </div>
-
-                                                <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] p-8 space-y-6 shadow-2xl">
-                                                    <div class="space-y-4">
-                                                        <div>
-                                                            <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Display Name</label>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Visionary Pioneer"
-                                                                value={userProfile().displayName}
-                                                                onInput={(e) => setUserProfile({ ...userProfile(), displayName: e.currentTarget.value })}
-                                                                class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all font-medium"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label class="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 px-1">Short Bio</label>
-                                                            <textarea
-                                                                rows="3"
-                                                                placeholder="Describe your vision..."
-                                                                value={userProfile().bio}
-                                                                onInput={(e) => setUserProfile({ ...userProfile(), bio: e.currentTarget.value })}
-                                                                class="w-full bg-white/[0.03] border border-white/[0.06] rounded-2xl py-3.5 px-4 text-white placeholder:text-gray-600 outline-none focus:border-cyan-500/50 transition-all resize-none font-medium"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <button
-                                                        onClick={() => {
-                                                            setOnboardingStep(4);
-                                                        }}
-                                                        class="w-full py-4 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase tracking-widest text-sm hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] transition-all border border-white/10"
-                                                    >
-                                                        Review Account
-                                                    </button>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
-
-                                        {/* Step 4: Success/Done - Match image 3 */}
-                                        <Match when={onboardingStep() === 4}>
-                                            <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="w-full max-w-xl mx-auto px-4 md:px-0">
-                                                <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
-                                                    <div class="bg-gradient-to-b from-green-900/20 to-transparent p-6 md:p-12 flex flex-col items-center text-center">
-                                                        <div class="w-14 h-14 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-                                                            <Check class="w-8 h-8 text-green-400" />
-                                                        </div>
-                                                        <h2 class="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">
-                                                            {isWalletRestored() ? 'Wallet Restored' : 'Account Created'}
-                                                        </h2>
-                                                        <p class="text-gray-400 font-medium text-sm md:text-base">
-                                                            {isWalletRestored()
-                                                                ? 'Your wallet has been successfully restored from your recovery phrase'
-                                                                : 'Your Vision Chain Account has been successfully created'}
-                                                        </p>
-                                                    </div>
-
-                                                    <div class="p-6 md:p-8 space-y-6">
-                                                        <div class="p-5 md:p-6 bg-white/[0.02] border border-white/[0.05] rounded-3xl space-y-4">
-                                                            <div class="space-y-2">
-                                                                <label class="text-[10px] md:text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Your Wallet Address</label>
-                                                                <div class="flex items-center gap-2 md:gap-3 p-3 md:p-4 bg-black/40 rounded-2xl border border-white/[0.05] group overflow-hidden">
-                                                                    <code class="flex-1 font-mono text-[10px] md:text-xs text-green-400 break-all">{walletAddress()}</code>
-                                                                    <button onClick={copyAddress} class="p-2 hover:bg-white/5 rounded-lg transition-all shrink-0">
-                                                                        <Copy class="w-3.5 h-3.5 text-gray-500 group-hover:text-white" />
-                                                                    </button>
-                                                                </div>
+                                            {/* Step 4: Success/Done - Match image 3 */}
+                                            <Match when={onboardingStep() === 4}>
+                                                <Motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} class="w-full max-w-xl mx-auto px-4 md:px-0">
+                                                    <div class="bg-[#0e0e12] border border-white/[0.05] rounded-[24px] overflow-hidden shadow-2xl">
+                                                        <div class="bg-gradient-to-b from-green-900/20 to-transparent p-6 md:p-12 flex flex-col items-center text-center">
+                                                            <div class="w-14 h-14 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+                                                                <Check class="w-8 h-8 text-green-400" />
                                                             </div>
-
-                                                            <div class="pt-4 border-t border-white/[0.05] space-y-3">
-                                                                <div class="flex items-center justify-between text-[11px] md:text-[13px]">
-                                                                    <span class="font-bold text-gray-500">Wallet Details</span>
-                                                                </div>
-                                                                <div class="flex items-center justify-between gap-4">
-                                                                    <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Network:</span>
-                                                                    <span class="text-[10px] md:text-xs font-bold text-white text-right break-words max-w-[150px] md:max-w-none">VisionChain Mainnet</span>
-                                                                </div>
-                                                                <div class="flex items-center justify-between gap-4">
-                                                                    <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Type:</span>
-                                                                    <span class="text-[10px] md:text-xs font-bold text-white text-right">HD Wallet</span>
-                                                                </div>
-                                                                <div class="flex items-center justify-between gap-4">
-                                                                    <span class="text-[10px] md:text-xs text-gray-400 shrink-0">
-                                                                        {isWalletRestored() ? 'Restored:' : 'Created:'}
-                                                                    </span>
-                                                                    <span class="text-[10px] md:text-xs font-bold text-white text-right">{new Date().toLocaleDateString()}</span>
-                                                                </div>
-                                                            </div>
+                                                            <h2 class="text-2xl md:text-3xl font-black text-white mb-2 tracking-tight">
+                                                                {isWalletRestored() ? 'Wallet Restored' : 'Account Created'}
+                                                            </h2>
+                                                            <p class="text-gray-400 font-medium text-sm md:text-base">
+                                                                {isWalletRestored()
+                                                                    ? 'Your wallet has been successfully restored from your recovery phrase'
+                                                                    : 'Your Vision Chain Account has been successfully created'}
+                                                            </p>
                                                         </div>
 
-                                                        <div class="space-y-4">
-                                                            <button onClick={copyAddress} class="w-full py-4 bg-[#1e1e24] text-white border border-white/5 rounded-2xl font-black text-sm hover:bg-[#2a2a35] transition-all">
-                                                                Copy Address
-                                                            </button>
-                                                            <button
-                                                                onClick={finishOnboarding}
-                                                                class="w-full py-5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all border border-white/10"
-                                                            >
-                                                                Go to Wallet
-                                                            </button>
-                                                        </div>
-
-                                                        <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl space-y-2">
-                                                            <div class="flex items-center gap-2 text-amber-500 font-black uppercase tracking-widest text-[10px]">
-                                                                <AlertTriangle class="w-3 h-3" />
-                                                                Security Reminder
-                                                            </div>
-                                                            <ul class="text-[11px] font-medium text-amber-500/80 space-y-1">
-                                                                <li>• Your wallet is now eligible for token distribution</li>
-                                                                <li>• Keep your recovery phrase and keystore file safe</li>
-                                                                <li>• Never share your private keys with anyone</li>
-                                                            </ul>
-                                                        </div>
-
-                                                        {/* Cloud Backup + 2FA Recommendation */}
-                                                        {(() => {
-                                                            const pwStrength = calculatePasswordStrength(walletPassword());
-                                                            const isCloudSynced = pwStrength.isStrongEnough;
-                                                            return (
-                                                                <div class={`p-4 border rounded-2xl space-y-2 ${isCloudSynced ? 'bg-cyan-500/5 border-cyan-500/10' : 'bg-orange-500/5 border-orange-500/10'}`}>
-                                                                    <div class={`flex items-center gap-2 font-black uppercase tracking-widest text-[10px] ${isCloudSynced ? 'text-cyan-400' : 'text-orange-400'}`}>
-                                                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                                                                        </svg>
-                                                                        {isCloudSynced ? 'Cloud Backup Active' : 'Cloud Backup Unavailable'}
+                                                        <div class="p-6 md:p-8 space-y-6">
+                                                            <div class="p-5 md:p-6 bg-white/[0.02] border border-white/[0.05] rounded-3xl space-y-4">
+                                                                <div class="space-y-2">
+                                                                    <label class="text-[10px] md:text-[11px] font-black text-gray-500 uppercase tracking-widest px-1">Your Wallet Address</label>
+                                                                    <div class="flex items-center gap-2 md:gap-3 p-3 md:p-4 bg-black/40 rounded-2xl border border-white/[0.05] group overflow-hidden">
+                                                                        <code class="flex-1 font-mono text-[10px] md:text-xs text-green-400 break-all">{walletAddress()}</code>
+                                                                        <button onClick={copyAddress} class="p-2 hover:bg-white/5 rounded-lg transition-all shrink-0">
+                                                                            <Copy class="w-3.5 h-3.5 text-gray-500 group-hover:text-white" />
+                                                                        </button>
                                                                     </div>
-                                                                    {isCloudSynced ? (
-                                                                        <p class="text-[11px] font-medium text-cyan-400/80">
-                                                                            Your wallet key is securely backed up to the cloud with double encryption.
-                                                                            For maximum security, enable <strong>2-Factor Authentication</strong> in <strong>Settings &gt; Security</strong> to protect your cloud backup.
-                                                                        </p>
-                                                                    ) : (
-                                                                        <p class="text-[11px] font-medium text-orange-400/80">
-                                                                            Your password did not meet the strength requirement for cloud backup (10+ characters with uppercase, lowercase, and numbers).
-                                                                            You can strengthen your password in <strong>Settings &gt; Password</strong>, then enable cloud sync in <strong>Settings &gt; Security</strong>.
-                                                                        </p>
-                                                                    )}
                                                                 </div>
-                                                            );
-                                                        })()}
+
+                                                                <div class="pt-4 border-t border-white/[0.05] space-y-3">
+                                                                    <div class="flex items-center justify-between text-[11px] md:text-[13px]">
+                                                                        <span class="font-bold text-gray-500">Wallet Details</span>
+                                                                    </div>
+                                                                    <div class="flex items-center justify-between gap-4">
+                                                                        <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Network:</span>
+                                                                        <span class="text-[10px] md:text-xs font-bold text-white text-right break-words max-w-[150px] md:max-w-none">VisionChain Mainnet</span>
+                                                                    </div>
+                                                                    <div class="flex items-center justify-between gap-4">
+                                                                        <span class="text-[10px] md:text-xs text-gray-400 shrink-0">Type:</span>
+                                                                        <span class="text-[10px] md:text-xs font-bold text-white text-right">HD Wallet</span>
+                                                                    </div>
+                                                                    <div class="flex items-center justify-between gap-4">
+                                                                        <span class="text-[10px] md:text-xs text-gray-400 shrink-0">
+                                                                            {isWalletRestored() ? 'Restored:' : 'Created:'}
+                                                                        </span>
+                                                                        <span class="text-[10px] md:text-xs font-bold text-white text-right">{new Date().toLocaleDateString()}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="space-y-4">
+                                                                <button onClick={copyAddress} class="w-full py-4 bg-[#1e1e24] text-white border border-white/5 rounded-2xl font-black text-sm hover:bg-[#2a2a35] transition-all">
+                                                                    Copy Address
+                                                                </button>
+                                                                <button
+                                                                    onClick={finishOnboarding}
+                                                                    class="w-full py-5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-2xl font-black text-lg hover:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all border border-white/10"
+                                                                >
+                                                                    Go to Wallet
+                                                                </button>
+                                                            </div>
+
+                                                            <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-2xl space-y-2">
+                                                                <div class="flex items-center gap-2 text-amber-500 font-black uppercase tracking-widest text-[10px]">
+                                                                    <AlertTriangle class="w-3 h-3" />
+                                                                    Security Reminder
+                                                                </div>
+                                                                <ul class="text-[11px] font-medium text-amber-500/80 space-y-1">
+                                                                    <li>• Your wallet is now eligible for token distribution</li>
+                                                                    <li>• Keep your recovery phrase and keystore file safe</li>
+                                                                    <li>• Never share your private keys with anyone</li>
+                                                                </ul>
+                                                            </div>
+
+                                                            {/* Cloud Backup + 2FA Recommendation */}
+                                                            {(() => {
+                                                                const pwStrength = calculatePasswordStrength(walletPassword());
+                                                                const isCloudSynced = pwStrength.isStrongEnough;
+                                                                return (
+                                                                    <div class={`p-4 border rounded-2xl space-y-2 ${isCloudSynced ? 'bg-cyan-500/5 border-cyan-500/10' : 'bg-orange-500/5 border-orange-500/10'}`}>
+                                                                        <div class={`flex items-center gap-2 font-black uppercase tracking-widest text-[10px] ${isCloudSynced ? 'text-cyan-400' : 'text-orange-400'}`}>
+                                                                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                                                            </svg>
+                                                                            {isCloudSynced ? 'Cloud Backup Active' : 'Cloud Backup Unavailable'}
+                                                                        </div>
+                                                                        {isCloudSynced ? (
+                                                                            <p class="text-[11px] font-medium text-cyan-400/80">
+                                                                                Your wallet key is securely backed up to the cloud with double encryption.
+                                                                                For maximum security, enable <strong>2-Factor Authentication</strong> in <strong>Settings &gt; Security</strong> to protect your cloud backup.
+                                                                            </p>
+                                                                        ) : (
+                                                                            <p class="text-[11px] font-medium text-orange-400/80">
+                                                                                Your password did not meet the strength requirement for cloud backup (10+ characters with uppercase, lowercase, and numbers).
+                                                                                You can strengthen your password in <strong>Settings &gt; Password</strong>, then enable cloud sync in <strong>Settings &gt; Security</strong>.
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </Motion.div>
-                                        </Match>
-                                    </Switch>
-                                </div>
-                            </div>
-                        </Show>
-
-
-
-                        <Show when={activeView() === 'settings'}>
-                            <div class="flex-1 overflow-y-auto p-4 lg:p-8">
-                                <div class="max-w-5xl mx-auto">
-                                    <WalletSettings onBack={() => navigate('/wallet/assets')} />
-                                </div>
-                            </div>
-                        </Show>
-
-                        <Show when={activeView() === 'notifications'}>
-                            <div class="flex-1 h-full overflow-y-auto p-4 lg:p-8 pb-32">
-                                <WalletNotifications />
-                            </div>
-                        </Show>
-
-                        <Show when={activeView() === 'contacts'}>
-                            <WalletContacts
-                                userProfile={userProfile}
-                                startFlow={setActiveFlow}
-                                setRecipientAddress={setRecipientAddress}
-                                onContactsChanged={loadContacts}
-                            />
-                        </Show>
-
-                        <Presence>
-                            <Show when={isImporting()}>
-                                <div class="fixed inset-0 z-[200] flex items-center justify-center p-4">
-                                    <Motion.div
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        class="absolute inset-0 bg-black/80 backdrop-blur-xl"
-                                    />
-                                    <Motion.div
-                                        initial={{ scale: 0.9, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        exit={{ scale: 0.9, opacity: 0 }}
-                                        class="relative w-full max-w-md bg-[#111113] border border-white/[0.08] rounded-[32px] p-10 text-center space-y-8"
-                                    >
-                                        <div class="relative w-24 h-24 mx-auto">
-                                            <div class="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-20 animate-pulse" />
-                                            <div class="relative w-24 h-24 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin flex items-center justify-center">
-                                                <Smartphone class="w-10 h-10 text-blue-400" />
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <h3 class="text-2xl font-bold text-white mb-2">
-                                                <Show when={importStep() === 1}>Accessing Contacts</Show>
-                                                <Show when={importStep() === 2}>Matching Accounts</Show>
-                                                <Show when={importStep() === 3}>Syncing Network</Show>
-                                            </h3>
-                                            <div class="flex justify-center gap-1.2">
-                                                <For each={[1, 2, 3]}>
-                                                    {(step) => (
-                                                        <div class={`h-1 rounded-full transition-all duration-500 ${importStep() >= step ? 'w-8 bg-blue-500' : 'w-4 bg-white/10'}`} />
-                                                    )}
-                                                </For>
-                                            </div>
-                                            <p class="text-gray-500 text-sm mt-4">Vision AI is securely scanning your phone book to find Vision Chain users.</p>
-                                        </div>
-                                    </Motion.div>
+                                                </Motion.div>
+                                            </Match>
+                                        </Switch>
+                                    </div>
                                 </div>
                             </Show>
-                        </Presence>
 
-                        {/* Interaction Modals */}
-                        <Presence>
-                            <WalletFlowModals
-                                activeFlow={activeFlow}
-                                setActiveFlow={setActiveFlow}
-                                flowStep={flowStep}
-                                setFlowStep={setFlowStep}
-                                networkMode={networkMode}
-                                selectedToken={selectedToken}
-                                setSelectedToken={setSelectedToken}
-                                toToken={toToken}
-                                setToToken={setToToken}
-                                sendAmount={sendAmount}
-                                setSendAmount={setSendAmount}
-                                swapAmount={swapAmount}
-                                setSwapAmount={setSwapAmount}
-                                recipientAddress={recipientAddress}
-                                setRecipientAddress={setRecipientAddress}
-                                stakeAmount={stakeAmount}
-                                setStakeAmount={setStakeAmount}
-                                batchInput={batchInput}
-                                setBatchInput={setBatchInput}
-                                parsedBatchTransactions={parsedBatchTransactions}
-                                multiTransactions={multiTransactions}
-                                handleTransaction={handleTransaction}
-                                handleBatchTransaction={handleBatchTransaction}
-                                flowLoading={flowLoading}
-                                resetFlow={resetFlow}
-                                walletAddress={walletAddress}
-                                getAssetData={getAssetData}
-                                lastTxHash={lastTxHash}
-                                copyToClipboard={copyToClipboard}
-                                isSchedulingTimeLock={isSchedulingTimeLock}
-                                lockDelaySeconds={lockDelaySeconds}
-                                userProfile={userProfile}
-                                contacts={contacts}
-                                onContactAdded={loadContacts}
-                            />
-                        </Presence>
-                        {/* Mobile Bottom Navigation - Hidden in Chat */}
-                        <Show when={activeView() !== 'chat'}>
-                            <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[68px]">
-                                {
-                                    [
-                                        { id: 'assets', label: 'Assets', icon: PieChart },
-                                        { id: 'nodes', label: 'Nodes', icon: Camera },
-                                        { id: 'chat', label: 'Vision AI', icon: AiChatIcon, primary: true },
-                                        { id: 'referral', label: 'Earn', icon: UserPlus },
-                                        { id: 'settings', label: 'Settings', icon: Settings },
-                                    ].map((item) => (
-                                        <button
-                                            onClick={() => {
-                                                if (onboardingStep() === 0) {
-                                                    navigate('/wallet/' + item.id);
-                                                    setSidebarOpen(false);
-                                                }
-                                            }}
-                                            class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+
+
+                            <Show when={activeView() === 'settings'}>
+                                <div class="flex-1 overflow-y-auto p-4 lg:p-8">
+                                    <div class="max-w-5xl mx-auto">
+                                        <WalletSettings onBack={() => navigate('/wallet/assets')} />
+                                    </div>
+                                </div>
+                            </Show>
+
+                            <Show when={activeView() === 'notifications'}>
+                                <div class="flex-1 h-full overflow-y-auto p-4 lg:p-8 pb-32">
+                                    <WalletNotifications />
+                                </div>
+                            </Show>
+
+                            <Show when={activeView() === 'contacts'}>
+                                <WalletContacts
+                                    userProfile={userProfile}
+                                    startFlow={setActiveFlow}
+                                    setRecipientAddress={setRecipientAddress}
+                                    onContactsChanged={loadContacts}
+                                />
+                            </Show>
+
+                            <Presence>
+                                <Show when={isImporting()}>
+                                    <div class="fixed inset-0 z-[200] flex items-center justify-center p-4">
+                                        <Motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            class="absolute inset-0 bg-black/80 backdrop-blur-xl"
+                                        />
+                                        <Motion.div
+                                            initial={{ scale: 0.9, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            exit={{ scale: 0.9, opacity: 0 }}
+                                            class="relative w-full max-w-md bg-[#111113] border border-white/[0.08] rounded-[32px] p-10 text-center space-y-8"
                                         >
-                                            <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>
-                                                <item.icon class={`${item.primary ? 'w-5 h-5' : 'w-4.5 h-4.5'}`} />
+                                            <div class="relative w-24 h-24 mx-auto">
+                                                <div class="absolute inset-0 bg-blue-500 rounded-full blur-2xl opacity-20 animate-pulse" />
+                                                <div class="relative w-24 h-24 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin flex items-center justify-center">
+                                                    <Smartphone class="w-10 h-10 text-blue-400" />
+                                                </div>
                                             </div>
-                                            <span class={`text-[8px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
-                                            {activeView() === item.id && !item.primary && (
-                                                <div class="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
-                                            )}
-                                        </button>
-                                    ))
-                                }
-                            </div>
-                        </Show>
+
+                                            <div>
+                                                <h3 class="text-2xl font-bold text-white mb-2">
+                                                    <Show when={importStep() === 1}>Accessing Contacts</Show>
+                                                    <Show when={importStep() === 2}>Matching Accounts</Show>
+                                                    <Show when={importStep() === 3}>Syncing Network</Show>
+                                                </h3>
+                                                <div class="flex justify-center gap-1.2">
+                                                    <For each={[1, 2, 3]}>
+                                                        {(step) => (
+                                                            <div class={`h-1 rounded-full transition-all duration-500 ${importStep() >= step ? 'w-8 bg-blue-500' : 'w-4 bg-white/10'}`} />
+                                                        )}
+                                                    </For>
+                                                </div>
+                                                <p class="text-gray-500 text-sm mt-4">Vision AI is securely scanning your phone book to find Vision Chain users.</p>
+                                            </div>
+                                        </Motion.div>
+                                    </div>
+                                </Show>
+                            </Presence>
+
+                            {/* Interaction Modals */}
+                            <Presence>
+                                <WalletFlowModals
+                                    activeFlow={activeFlow}
+                                    setActiveFlow={setActiveFlow}
+                                    flowStep={flowStep}
+                                    setFlowStep={setFlowStep}
+                                    networkMode={networkMode}
+                                    selectedToken={selectedToken}
+                                    setSelectedToken={setSelectedToken}
+                                    toToken={toToken}
+                                    setToToken={setToToken}
+                                    sendAmount={sendAmount}
+                                    setSendAmount={setSendAmount}
+                                    swapAmount={swapAmount}
+                                    setSwapAmount={setSwapAmount}
+                                    recipientAddress={recipientAddress}
+                                    setRecipientAddress={setRecipientAddress}
+                                    stakeAmount={stakeAmount}
+                                    setStakeAmount={setStakeAmount}
+                                    batchInput={batchInput}
+                                    setBatchInput={setBatchInput}
+                                    parsedBatchTransactions={parsedBatchTransactions}
+                                    multiTransactions={multiTransactions}
+                                    handleTransaction={handleTransaction}
+                                    handleBatchTransaction={handleBatchTransaction}
+                                    flowLoading={flowLoading}
+                                    resetFlow={resetFlow}
+                                    walletAddress={walletAddress}
+                                    getAssetData={getAssetData}
+                                    lastTxHash={lastTxHash}
+                                    copyToClipboard={copyToClipboard}
+                                    isSchedulingTimeLock={isSchedulingTimeLock}
+                                    lockDelaySeconds={lockDelaySeconds}
+                                    userProfile={userProfile}
+                                    contacts={contacts}
+                                    onContactAdded={loadContacts}
+                                />
+                            </Presence>
+                            {/* Mobile Bottom Navigation - Hidden in Chat */}
+                            <Show when={activeView() !== 'chat'}>
+                                <div class="lg:hidden fixed bottom-0 left-0 right-0 z-[60] bg-[#0a0a0b]/90 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-2 flex items-center justify-around h-[68px]">
+                                    {
+                                        [
+                                            { id: 'assets', label: 'Assets', icon: PieChart },
+                                            { id: 'nodes', label: 'Nodes', icon: Camera },
+                                            { id: 'chat', label: 'Vision AI', icon: AiChatIcon, primary: true },
+                                            { id: 'referral', label: 'Earn', icon: UserPlus },
+                                            { id: 'settings', label: 'Settings', icon: Settings },
+                                        ].map((item) => (
+                                            <button
+                                                onClick={() => {
+                                                    if (onboardingStep() === 0) {
+                                                        navigate('/wallet/' + item.id);
+                                                        setSidebarOpen(false);
+                                                    }
+                                                }}
+                                                class={`flex flex-col items-center gap-1 transition-all relative ${activeView() === item.id ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+                                            >
+                                                <div class={`w-10 h-9 rounded-xl flex items-center justify-center transition-all ${item.primary ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)] text-white -mt-4 scale-110' : ''}`}>
+                                                    <item.icon class={`${item.primary ? 'w-5 h-5' : 'w-4.5 h-4.5'}`} />
+                                                </div>
+                                                <span class={`text-[8px] font-black uppercase tracking-widest ${item.primary ? 'text-blue-400 opacity-0' : ''}`}>{item.label}</span>
+                                                {activeView() === item.id && !item.primary && (
+                                                    <div class="absolute -bottom-0.5 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
+                                                )}
+                                            </button>
+                                        ))
+                                    }
+                                </div>
+                            </Show>
+                        </Suspense>
                     </main>
+
                 </section>
                 <canvas ref={cropCanvasRef} class="hidden" />
                 <Portal>
