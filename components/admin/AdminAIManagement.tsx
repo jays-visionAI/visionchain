@@ -141,7 +141,9 @@ export default function AdminAIManagement() {
                 });
             }
 
-            setApiKeys(keys);
+            // Filter out soft-deleted or malformed keys (no key field)
+            const validKeys = keys.filter(k => !(k as any).deleted && k.key);
+            setApiKeys(validKeys);
             setRealConversations(convs);
             setAllPurchases(purchases);
         } catch (error) {

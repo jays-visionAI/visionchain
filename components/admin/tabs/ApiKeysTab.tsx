@@ -102,7 +102,9 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                                         <span class="px-2 py-1 rounded-md bg-white/5 text-[10px] font-bold uppercase tracking-wider text-gray-500">{key.provider}</span>
                                     </td>
                                     <td class="p-4 font-mono text-xs text-gray-500">
-                                        {key.key.slice(0, 6)}••••••••{key.key.slice(-4)}
+                                        {key.key
+                                            ? `${key.key.slice(0, 6)}••••••••${key.key.slice(-4)}`
+                                            : '••••••••••••'}
                                     </td>
                                     <td class="p-4">
                                         <button
