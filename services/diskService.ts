@@ -235,11 +235,14 @@ export const uploadDiskFile = async (
     });
 
     // Generate thumbnail for images and videos
-    let thumbnailDataUrl = '';
-    if (file.type.startsWith('image/')) {
-        thumbnailDataUrl = await generateImageThumbnail(file);
-    } else if (file.type.startsWith('video/')) {
-        thumbnailDataUrl = await generateVideoThumbnail(file);
+    // For encrypted files, use pre-generated thumbnail from original file
+    let thumbnailDataUrl = extraMetadata?.preEncryptionThumbnail || '';
+    if (!thumbnailDataUrl) {
+        if (file.type.startsWith('image/')) {
+            thumbnailDataUrl = await generateImageThumbnail(file);
+        } else if (file.type.startsWith('video/')) {
+            thumbnailDataUrl = await generateVideoThumbnail(file);
+        }
     }
 
     onProgress?.({

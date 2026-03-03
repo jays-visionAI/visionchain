@@ -14,6 +14,7 @@ import {
     subscribeToDisk, cancelDiskSubscription,
     publishDiskFile, unpublishDiskFile, encryptFile, decryptFile,
     moveDiskFile, moveDiskFolder,
+    generateImageThumbnail, generateVideoThumbnail,
     type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
 } from '../../services/diskService';
 import { ethers } from 'ethers';
@@ -262,8 +263,17 @@ export const WalletDisk = (props: {
 
             try {
                 let fileToUpload: File | Blob = file;
-                let encryptionMeta = {};
+                let encryptionMeta: any = {};
+
+                // Generate thumbnail from ORIGINAL file BEFORE encryption
+                let preEncryptionThumbnail = '';
                 if (useEncryption()) {
+                    if (file.type.startsWith('image/')) {
+                        preEncryptionThumbnail = await generateImageThumbnail(file);
+                    } else if (file.type.startsWith('video/')) {
+                        preEncryptionThumbnail = await generateVideoThumbnail(file);
+                    }
+
                     const encrypted = await encryptFile(file, encryptionPassword());
                     fileToUpload = new File([encrypted.encryptedData], file.name, { type: file.type });
                     encryptionMeta = {
@@ -275,7 +285,8 @@ export const WalletDisk = (props: {
 
                 const extraMeta = {
                     ...encryptionMeta,
-                    storageType: useDistributed() ? 'distributed' : 'cloud'
+                    storageType: useDistributed() ? 'distributed' : 'cloud',
+                    ...(preEncryptionThumbnail ? { preEncryptionThumbnail } : {})
                 };
 
                 await uploadDiskFile(email(), fileToUpload as File, currentPath(), (p) => {
@@ -647,12 +658,17 @@ export const WalletDisk = (props: {
     const activeUploads = createMemo(() => uploadQueue().filter(u => u.status === 'uploading').length);
 
     // ─── Preview Handler ───
+    let prevBlobURL = '';
     createEffect(async () => {
         const file = previewFile();
-        if (previewURL()) {
-            URL.revokeObjectURL(previewURL());
-            setPreviewURL('');
+
+        // Revoke previous blob URL (non-reactive, use local var)
+        if (prevBlobURL) {
+            URL.revokeObjectURL(prevBlobURL);
+            prevBlobURL = '';
         }
+        setPreviewURL('');
+
         if (!file) return;
 
         if (file.storageType === 'distributed' || file.isEncrypted) {
@@ -680,7 +696,9 @@ export const WalletDisk = (props: {
                     const buffer = await blob.arrayBuffer();
                     blob = await decryptFile(buffer, encryptionPassword(), file.salt!, file.iv!, file.type);
                 }
-                setPreviewURL(URL.createObjectURL(blob));
+                const blobUrl = URL.createObjectURL(blob);
+                prevBlobURL = blobUrl;
+                setPreviewURL(blobUrl);
             } catch (err) {
                 console.error('[Disk] Preview load failed:', err);
             } finally {
@@ -1468,14 +1486,13 @@ export const WalletDisk = (props: {
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <a
-                                            href={file().downloadURL}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        <button
+                                            onClick={() => handleDownload(file())}
                                             class="p-2 text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-all"
+                                            title="Download"
                                         >
                                             <Download class="w-4 h-4" />
-                                        </a>
+                                        </button>
                                         <button
                                             onClick={() => handleDeleteFile(file())}
                                             class="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
