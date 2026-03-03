@@ -1,5 +1,5 @@
 import { createSignal, For, Show } from 'solid-js';
-import { Key, Plus, Eye, EyeOff, Trash2, Loader2 } from 'lucide-solid';
+import { Key, Plus, Eye, EyeOff, Trash2, Loader2, AlertTriangle } from 'lucide-solid';
 import { ApiKeyData } from '../../../services/firebaseService';
 
 interface ApiKeysTabProps {
@@ -23,6 +23,60 @@ const PROVIDER_COLOR: Record<string, string> = {
     anthropic: 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
 };
 
+// ── Custom Confirm Modal ────────────────────────────────────────────────────
+interface ConfirmModalProps {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+}
+
+function ConfirmModal(props: ConfirmModalProps) {
+    return (
+        <div
+            class="fixed inset-0 z-[9999] flex items-center justify-center"
+            style="background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);"
+            onClick={(e) => { if (e.target === e.currentTarget) props.onCancel(); }}
+        >
+            <div
+                class="w-full max-w-sm mx-4 rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+                style="background: #141418; animation: fadeInUp 0.18s ease-out;"
+            >
+                {/* Header */}
+                <div class="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-white/5">
+                    <div class="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                        <AlertTriangle class="w-5 h-5 text-red-400" />
+                    </div>
+                    <span class="text-white font-bold text-base">{props.title}</span>
+                </div>
+
+                {/* Body */}
+                <div class="px-6 py-5">
+                    <p class="text-gray-400 text-sm leading-relaxed">{props.message}</p>
+                </div>
+
+                {/* Actions */}
+                <div class="flex gap-3 px-6 pb-6">
+                    <button
+                        onClick={props.onCancel}
+                        class="flex-1 py-3 rounded-xl border border-white/10 text-gray-400 text-sm font-bold hover:bg-white/5 transition-all"
+                    >
+                        취소
+                    </button>
+                    <button
+                        onClick={props.onConfirm}
+                        class="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+                    >
+                        {props.confirmLabel ?? '삭제'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
 export function ApiKeysTab(props: ApiKeysTabProps) {
     const [newKeyName, setNewKeyName] = createSignal('');
     const [newKeyValue, setNewKeyValue] = createSignal('');
@@ -31,8 +85,15 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
     const [isSaving, setIsSaving] = createSignal(false);
     const [isDeleting, setIsDeleting] = createSignal(false);
 
-    // Multi-select for bulk delete
+    // Multi-select
     const [selected, setSelected] = createSignal<Set<string>>(new Set());
+
+    // Modal state: null = hidden, {type:'single',key} | {type:'bulk',count}
+    const [modal, setModal] = createSignal<
+        null
+        | { type: 'single'; key: ApiKeyData }
+        | { type: 'bulk'; count: number }
+    >(null);
 
     const toggleSelect = (id: string) => {
         setSelected(prev => {
@@ -56,11 +117,18 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
         setIsSaving(false);
     };
 
-    const handleBulkDelete = async () => {
-        const ids = [...selected()];
-        if (ids.length === 0) return;
-        if (!confirm(`선택한 ${ids.length}개의 키를 삭제하시겠습니까?`)) return;
+    // Confirm callbacks
+    const confirmSingleDelete = async () => {
+        const m = modal();
+        if (!m || m.type !== 'single') return;
+        setModal(null);
+        await props.onDeleteKey(m.key.id!, m.key.provider);
+    };
+
+    const confirmBulkDelete = async () => {
+        setModal(null);
         setIsDeleting(true);
+        const ids = [...selected()];
         for (const id of ids) {
             const key = props.apiKeys().find(k => k.id === id);
             if (key) await props.onDeleteKey(id, key.provider);
@@ -71,6 +139,31 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
 
     return (
         <div class="space-y-6">
+            {/* Custom Modal */}
+            <Show when={modal()}>
+                {(m) => (
+                    <Show
+                        when={m().type === 'single'}
+                        fallback={
+                            <ConfirmModal
+                                title="선택 키 삭제"
+                                message={`선택한 ${(m() as any).count}개의 API 키를 삭제합니다. 이 작업은 되돌릴 수 없습니다.`}
+                                confirmLabel={`${(m() as any).count}개 삭제`}
+                                onConfirm={confirmBulkDelete}
+                                onCancel={() => setModal(null)}
+                            />
+                        }
+                    >
+                        <ConfirmModal
+                            title="API 키 삭제"
+                            message={`"${(m() as any).key?.name || 'unnamed'}" 키를 삭제합니다. 이 키를 사용하는 기능이 중단될 수 있습니다.`}
+                            onConfirm={confirmSingleDelete}
+                            onCancel={() => setModal(null)}
+                        />
+                    </Show>
+                )}
+            </Show>
+
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-semibold text-white flex items-center gap-2">
                     <Key class="w-5 h-5 text-cyan-400" />
@@ -78,7 +171,7 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                 </h2>
                 <Show when={selected().size > 0}>
                     <button
-                        onClick={handleBulkDelete}
+                        onClick={() => setModal({ type: 'bulk', count: selected().size })}
                         disabled={isDeleting()}
                         class="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-bold hover:bg-red-500/20 transition-all disabled:opacity-50"
                     >
@@ -103,7 +196,7 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                     />
                     <div class="relative">
                         <input
-                            type={showNewKeyValue() ? "text" : "password"}
+                            type={showNewKeyValue() ? 'text' : 'password'}
                             placeholder="API Key Value"
                             value={newKeyValue()}
                             onInput={(e) => setNewKeyValue(e.currentTarget.value)}
@@ -113,9 +206,7 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                             onClick={() => setShowNewKeyValue(!showNewKeyValue())}
                             class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
                         >
-                            {showNewKeyValue()
-                                ? <EyeOff class="w-4 h-4" />
-                                : <Eye class="w-4 h-4" />}
+                            {showNewKeyValue() ? <EyeOff class="w-4 h-4" /> : <Eye class="w-4 h-4" />}
                         </button>
                     </div>
                     <select
@@ -201,8 +292,8 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                                     </td>
                                     <td class="p-4">
                                         <button
-                                            onClick={() => props.onDeleteKey(key.id!, key.provider)}
-                                            class="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors"
+                                            onClick={() => setModal({ type: 'single', key })}
+                                            class="p-2 rounded-lg hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
                                         >
                                             <Trash2 class="w-4 h-4" />
                                         </button>
@@ -218,6 +309,13 @@ export function ApiKeysTab(props: ApiKeysTabProps) {
                     </tbody>
                 </table>
             </div>
+
+            <style>{`
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+                    to   { opacity: 1; transform: translateY(0) scale(1); }
+                }
+            `}</style>
         </div>
     );
 }
