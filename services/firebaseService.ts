@@ -4251,7 +4251,7 @@ export interface BridgeNetwork {
 const DEFAULT_BRIDGE_NETWORKS: BridgeNetwork[] = [
     {
         name: 'VisionChain',
-        chainId: 20261337,
+        chainId: 3151909,
         rpcUrl: 'https://api.visionchain.co/rpc-proxy',
         explorerUrl: 'https://www.visionchain.co/visionscan',
         icon: 'vision',

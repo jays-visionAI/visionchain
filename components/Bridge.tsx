@@ -39,7 +39,7 @@ const MESSAGE_INBOX_ADDRESS = '0x785bcD75294b45D855883B75CdDE3e3bA237EF40';
 const VISION_BRIDGE_SECURE_ADDRESS = '0xFDA890183E1e18eE7b02A94d9DF195515D914655';
 
 // Chain IDs
-const VISION_CHAIN_ID = 20261337; // Vision Chain Testnet
+const VISION_CHAIN_ID = 3151909; // Vision Chain v2 Testnet
 const SEPOLIA_CHAIN_ID = 11155111;
 const POLYGON_AMOY_CHAIN_ID = 80002;
 const BASE_SEPOLIA_CHAIN_ID = 84532;
@@ -134,7 +134,7 @@ interface NetworkConfig {
 const NETWORKS: NetworkConfig[] = [
     {
         name: 'VisionChain',
-        chainId: 20261337,
+        chainId: 3151909,
         rpcUrl: 'https://api.visionchain.co/rpc-proxy',
         explorerUrl: 'https://www.visionchain.co/visionscan',
         enabled: true,
@@ -364,7 +364,7 @@ const Bridge: Component<BridgeProps> = (props) => {
         const network = networks().find(n => n.chainId === chainId);
         if (network) return network.name;
         if (chainId === 11155111) return 'Ethereum Sepolia';
-        if (chainId === 1337 || chainId === 20261337) return 'VisionChain';
+        if (chainId === 3151909) return 'VisionChain';
         return `Chain ${chainId}`;
     };
 

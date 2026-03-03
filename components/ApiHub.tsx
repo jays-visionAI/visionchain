@@ -36,7 +36,7 @@ const Icon = (props: { name: keyof typeof icons; class?: string }) => (
 // Network config — sourced from contractService.ts & firebaseService.ts
 const NETWORK_CONFIG = {
     chainName: 'Vision Chain',
-    chainId: 20261337,
+    chainId: 3151909,
     rpcUrl: 'https://api.visionchain.co/rpc-proxy',
     rpcFallback: 'https://rpc.visionchain.co',
     tokenSymbol: 'VCN',

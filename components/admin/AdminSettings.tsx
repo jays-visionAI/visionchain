@@ -348,8 +348,8 @@ export default function AdminSettings() {
                                         <Shield class="w-5 h-5" />
                                     </div>
                                     <div>
-                                        <div class="font-bold text-white">Vision Chain Testnet</div>
-                                        <div class="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">Chain ID: 1337</div>
+                                        <div class="font-bold text-white">Vision Chain v2</div>
+                                        <div class="text-[9px] text-gray-600 font-bold uppercase tracking-tighter">Chain ID: 3151909</div>
                                     </div>
                                 </div>
                                 <div class="overflow-x-auto">

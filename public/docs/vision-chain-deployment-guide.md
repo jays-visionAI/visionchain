@@ -14,9 +14,9 @@ If you are not a developer and want to experience Vision Chain v2 immediately, f
 ### 2. Connect to Vision v2
 1.  Open MetaMask -> Click Network Selection -> **Add Network Manually**.
 2.  Enter the following details:
-    -   **Network Name**: Vision Testnet v2
-    -   **RPC URL**: `https://rpc.visionchain.co`
-    -   **Chain ID**: `1337`
+    -   **Network Name**: Vision Chain v2
+    -   **RPC URL**: `https://api.visionchain.co/rpc-proxy`
+    -   **Chain ID**: `3151909`
     -   **Currency Symbol**: `VCN`
     -   **Explorer**: `https://www.visionchain.co/visionscan`
 
@@ -35,9 +35,9 @@ For engineers building on Vision Chain, proceed with the technical steps below.
 ## Step 1: Network Configuration
 To interact with the testnet, add the following network settings to your wallet (MetaMask) or development environment (Hardhat/Foundry):
 
--   **Network Name**: Vision Testnet v2
--   **New RPC URL**: `https://rpc.visionchain.co`
--   **Chain ID**: `1337`
+-   **Network Name**: Vision Chain v2
+-   **New RPC URL**: `https://api.visionchain.co/rpc-proxy`
+-   **Chain ID**: `3151909`
 -   **Currency Symbol**: `VCN`
 -   **Block Explorer**: `https://www.visionchain.co/visionscan`
 
@@ -63,7 +63,7 @@ Instead of broadcast, send the signed transaction to our Gateway:
 -   **Request Body**:
     ```json
     {
-      "chainId": 1337,
+      "chainId": 3151909,
       "signedTx": "0xSIGNED_DATA",
       "type": "A110",
       "metadata": {
@@ -95,7 +95,7 @@ Deploying smart contracts to Vision Chain is identical to any EVM chain.
     module.exports = {
       networks: {
         vision: {
-          url: "https://rpc.visionchain.co",
+          url: "https://api.visionchain.co/rpc-proxy",
           accounts: [YOUR_PRIVATE_KEY]
         }
       }

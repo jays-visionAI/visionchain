@@ -306,7 +306,7 @@ const endpoints: ApiEndpoint[] = [
             success: true,
             network: {
                 name: 'Vision Chain',
-                chain_id: 20261337,
+                chain_id: 3151909,
                 rpc_url: 'https://api.visionchain.co/rpc-proxy',
                 latest_block: 123456,
                 token: { name: 'VCN Token', symbol: 'VCN', address: '0x5FbDB2315678afecb367f032d93F642f64180aa3', decimals: 18 },
@@ -449,7 +449,7 @@ const endpoints: ApiEndpoint[] = [
         requestExample: { action: 'bridge.status', api_key: 'vcn_your_api_key', bridge_id: 'br_abc123' },
         responseExample: {
             success: true,
-            bridge: { bridge_id: 'br_abc123', status: 'completed', amount: '100', fee: '1', source_chain: 1337, destination_chain: 11155111 },
+            bridge: { bridge_id: 'br_abc123', status: 'completed', amount: '100', fee: '1', source_chain: 3151909, destination_chain: 11155111 },
         },
     },
     {

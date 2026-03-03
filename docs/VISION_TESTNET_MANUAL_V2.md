@@ -23,11 +23,11 @@ To interact with the testnet, add the following custom network to your wallet (e
 
 | Parameter | Value |
 | :--- | :--- |
-| **Network Name** | `Vision Testnet v2` |
-| **RPC URL** | `https://rpc.visionchain.co` |
-| **Chain ID** | `1337` |
+| **Network Name** | `Vision Chain v2` |
+| **RPC URL** | `https://api.visionchain.co/rpc-proxy` |
+| **Chain ID** | `3151909` |
 | **Currency Symbol** | `VCN` |
-| **Block Explorer** | *(Coming Soon)* |
+| **Block Explorer** | `https://www.visionchain.co/visionscan` |
 
 > **Note:** Since this is a custom testnet, MetaMask might warn that the Chain ID doesn't match a known network. This is normal.
 
@@ -73,8 +73,8 @@ module.exports = {
   solidity: "0.8.28",
   networks: {
     vision_v1: {
-      url: "https://rpc.visionchain.co",
-      chainId: 1337,
+      url: "https://api.visionchain.co/rpc-proxy",
+      chainId: 3151909,
       accounts: ["YOUR_PRIVATE_KEY"] // Do not share this key!
     }
   }
@@ -100,7 +100,7 @@ Vision Chain allows you to "teleport" assets from other chains without wrapping/
 ### High-Speed Sequencer
 For automated agents requiring sub-second latency, submit signed transactions directly to the Sequencer API instead of the standard RPC.
 *   **Endpoint:** `POST https://api.visionchain.co/rpc/submit`
-*   **Payload:** `{ "verified": true, "signedTx": "0x...", "chainId": 1337 }`
+*   **Payload:** `{ "verified": true, "signedTx": "0x...", "chainId": 3151909 }`
 
 ---
 

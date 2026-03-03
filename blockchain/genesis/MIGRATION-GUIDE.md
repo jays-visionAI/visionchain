@@ -6,7 +6,7 @@
 This genesis file configures Vision Chain with VCN as the native token (gas currency).
 
 ## Chain Configuration
-- Chain ID: 1337
+- Chain ID: 3151909
 - Native Token: VCN
 - Consensus: Clique PoA
 - Block Time: 3 seconds
@@ -37,7 +37,7 @@ geth init --datadir /root/vision-chain/data genesis-vcn-native.json
 ### 4. Start new chain
 ```bash
 geth --datadir /root/vision-chain/data \
-  --networkid 1337 \
+  --networkid 3151909 \
   --http --http.addr 0.0.0.0 --http.port 8545 \
   --http.api eth,net,web3,personal,debug \
   --http.corsdomain "*" \

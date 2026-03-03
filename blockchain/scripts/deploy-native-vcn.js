@@ -58,7 +58,7 @@ async function main() {
 
     console.log("\n=== Update services/contractService.ts ===");
     console.log("const ADDRESSES = {");
-    console.log(`    // Vision Chain v2 - VCN Native (Chain ID: 1337)`);
+    console.log(`    // Vision Chain v2 - VCN Native (Chain ID: 3151909)`);
     console.log(`    VCN_VESTING: "${deployedAddresses.VCN_VESTING}",`);
     console.log(`    NODE_LICENSE: "${deployedAddresses.NODE_LICENSE}",`);
     console.log(`    MINING_POOL: "${deployedAddresses.MINING_POOL}",`);

@@ -42,7 +42,7 @@ const BridgeAgentChip = (props: BridgeAgentChipProps) => {
     // Get chain name from chainId
     const getChainName = (chainId: number): string => {
         if (chainId === 11155111) return 'Sepolia';
-        if (chainId === 1337 || chainId === 20261337) return 'Vision';
+        if (chainId === 3151909) return 'Vision';
         return `Chain ${chainId}`;
     };
 

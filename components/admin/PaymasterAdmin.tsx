@@ -32,8 +32,8 @@ const PaymasterAdmin: Component = () => {
             if (chainList.length === 0) {
                 console.log("[PaymasterAdmin] No chains found. Auto-seeding Testnet v2...");
                 const V2_CHAIN: ChainConfig = {
-                    chainId: 1337,
-                    name: 'Vision Testnet v2',
+                    chainId: 3151909,
+                    name: 'Vision Chain v2',
                     rpcConfig: {
                         primary: 'https://api.visionchain.co/rpc-proxy',
                         nodeType: 'MANAGED'
@@ -49,8 +49,8 @@ const PaymasterAdmin: Component = () => {
                 const freshChains = await AdminService.getAllChains();
                 setChains(freshChains);
                 // Also ensure pool exists
-                const pool = await AdminService.getPool(1337);
-                if (pool) setPools({ ...pools(), 1337: pool });
+                const pool = await AdminService.getPool(3151909);
+                if (pool) setPools({ ...pools(), 3151909: pool });
             } else {
                 setChains(chainList);
                 const poolMap: Record<number, PaymasterPool> = {};
@@ -61,7 +61,7 @@ const PaymasterAdmin: Component = () => {
                     if (pool) poolMap[c.chainId] = pool;
 
                     // Fetch On-Chain Balance
-                    if (c.chainId === 1337) { // Targeting Testnet v2
+                    if (c.chainId === 3151909) { // Targeting Testnet v2
                         try {
                             const onChainBal = await contractService.getPaymasterBalance();
                             balanceMap[c.chainId] = onChainBal;
@@ -94,7 +94,7 @@ const PaymasterAdmin: Component = () => {
         // 1. Start Mock Agent & Orchestrator
         try {
             // Vision Testnet v2 Configuration
-            const VISION_TESTNET_ID = 1337;
+            const VISION_TESTNET_ID = 3151909;
             agent = new PaymasterAgent({
                 chainId: VISION_TESTNET_ID,
                 rpcUrl: 'https://api.visionchain.co/rpc-proxy', // Testnet v2 RPC Proxy

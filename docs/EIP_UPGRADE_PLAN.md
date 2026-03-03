@@ -4,7 +4,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| Chain ID | 3151909 (genesis는 1337이지만 실제 네트워크는 3151909) |
+| Chain ID | 3151909 |
 | Geth 버전 | v1.13.15 (`ethereum/client-go:v1.13.15`) |
 | 활성 포크 | Homestead → Istanbul (Berlin/London/Shanghai 없음) |
 | 현재 블록 | ~301,000+ |
@@ -91,7 +91,7 @@ cd /root/vision-chain && docker-compose down
 cat > /tmp/genesis-upgrade.json << 'GENEOF'
 {
   "config": {
-    "chainId": 1337,
+    "chainId": 3151909,
     "homesteadBlock": 0,
     "eip150Block": 0,
     "eip155Block": 0,

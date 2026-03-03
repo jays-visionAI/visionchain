@@ -217,7 +217,7 @@ export class ActionResolverService {
         }
 
         // Chain IDs
-        const VISION_CHAIN_ID = 1337;
+        const VISION_CHAIN_ID = 3151909;
         const SEPOLIA_CHAIN_ID = 11155111;
 
         // Detect reverse bridge direction (Sepolia/Ethereum -> Vision Chain)
