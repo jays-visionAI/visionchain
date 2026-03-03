@@ -93,6 +93,17 @@ import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
 import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
+import { parseVoiceIntent, resolveIntentRecipient } from '../services/voiceIntentService';
+import type { VoiceIntent } from '../services/voiceIntentService';
+import {
+    isBiometricAvailable,
+    hasPlatformAuthenticator,
+    registerBiometric,
+    authenticateWithBiometric,
+    isBiometricRegistered,
+    getBiometricLabel,
+} from '../services/biometricAuthService';
+
 import { useTimeLockAgent } from '../hooks/useTimeLockAgent';
 // Always visible - keep static
 import { WalletSidebar } from './wallet/WalletSidebar';
@@ -1019,6 +1030,31 @@ const Wallet = (): JSX.Element => {
     };
     const [isRecording, setIsRecording] = createSignal(false);
     const [loadingType, setLoadingType] = createSignal<'text' | 'image' | 'voice'>('text');
+
+    // ── Voice Intent ──────────────────────────────────────────────────────────
+    // When a voice command is detected as a transaction intent, we show a
+    // confirmation card before asking for biometric / password approval.
+    const [voiceIntent, setVoiceIntent] = createSignal<VoiceIntent | null>(null);
+    const [voiceIntentRecipientAddress, setVoiceIntentRecipientAddress] = createSignal<string | null>(null);
+    const [showVoiceIntentModal, setShowVoiceIntentModal] = createSignal(false);
+
+    // ── Biometric Auth ────────────────────────────────────────────────────────
+    const [biometricLabel, setBiometricLabel] = createSignal('Biometric');
+    const [biometricSupported, setBiometricSupported] = createSignal(false);
+    const [biometricRegistered, setBiometricRegistered] = createSignal(false);
+    const [isBiometricPending, setIsBiometricPending] = createSignal(false);
+
+    // Check biometric availability on mount
+    onMount(async () => {
+        const available = await hasPlatformAuthenticator();
+        setBiometricSupported(available);
+        setBiometricRegistered(isBiometricRegistered());
+        if (available) {
+            const label = await getBiometricLabel();
+            setBiometricLabel(label);
+        }
+    });
+
 
     const fetchHistory = async () => {
         if (!userProfile().email) return;
@@ -2526,29 +2562,41 @@ const Wallet = (): JSX.Element => {
         const recognitionInstance = new SpeechRecognition();
         recognitionInstance.lang = voiceLang();
         recognitionInstance.interimResults = true;
-        recognitionInstance.continuous = true;
+        recognitionInstance.continuous = false; // single utterance for intent mode
         recognitionInstance.maxAlternatives = 1;
 
         recognitionInstance.onstart = () => setIsRecording(true);
 
         recognitionInstance.onresult = (event: any) => {
             let finalTranscript = '';
-            let interimTranscript = '';
 
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
                     finalTranscript += transcript;
-                } else {
-                    interimTranscript += transcript;
                 }
             }
 
             if (finalTranscript) {
-                setInput(prev => {
-                    const cleanPrev = prev.trim();
-                    return cleanPrev ? `${cleanPrev} ${finalTranscript}` : finalTranscript;
-                });
+                // ── Intent analysis ──────────────────────────────────────
+                const intent = parseVoiceIntent(finalTranscript);
+
+                if (intent.action === 'send' && intent.confidence >= 0.7 && intent.amount) {
+                    // Resolve recipient from contacts
+                    const resolved = resolveIntentRecipient(intent, contacts() as any);
+                    setVoiceIntent(intent);
+                    setVoiceIntentRecipientAddress(resolved);
+                    setShowVoiceIntentModal(true);
+                    // Stop recording — user will confirm in modal
+                    recognitionInstance.stop();
+                    setIsRecording(false);
+                } else {
+                    // Not a transaction intent → paste into chat input as usual
+                    setInput(prev => {
+                        const cleanPrev = prev.trim();
+                        return cleanPrev ? `${cleanPrev} ${finalTranscript}` : finalTranscript;
+                    });
+                }
             }
         };
 
@@ -2561,14 +2609,7 @@ const Wallet = (): JSX.Element => {
         };
 
         recognitionInstance.onend = () => {
-            // Auto-restart if still in recording mode (continuous dictation)
-            if (isRecording()) {
-                try {
-                    recognitionInstance.start();
-                } catch (e) {
-                    setIsRecording(false);
-                }
-            }
+            setIsRecording(false);
         };
 
         try {
@@ -2579,6 +2620,70 @@ const Wallet = (): JSX.Element => {
             setIsRecording(false);
         }
     };
+
+    /**
+     * Called when user confirms the voice intent modal.
+     * Fills in the send flow fields and triggers biometric/password auth.
+     */
+    const handleVoiceIntentConfirm = async () => {
+        const intent = voiceIntent();
+        if (!intent || intent.action !== 'send') return;
+
+        const resolvedAddress = voiceIntentRecipientAddress();
+
+        setShowVoiceIntentModal(false);
+
+        // Prefill send fields
+        setSendAmount(intent.amount || '');
+        setRecipientAddress(resolvedAddress || intent.recipient || '');
+        setSelectedToken(intent.token as any);
+
+        // Try biometric first, fall back to password
+        if (biometricSupported() && biometricRegistered()) {
+            setIsBiometricPending(true);
+            const ok = await authenticateWithBiometric(
+                `Send ${intent.amount} ${intent.token} to ${intent.recipient}`
+            );
+            setIsBiometricPending(false);
+
+            if (ok) {
+                // Biometric passed → trigger send directly
+                setPasswordMode('verify');
+                setPendingAction({
+                    type: 'send_tokens',
+                    data: {
+                        amount: intent.amount || '',
+                        recipient: resolvedAddress || intent.recipient || '',
+                        symbol: intent.token
+                    }
+                });
+                // Skip the password modal — go straight to execution
+                setActiveFlow('send');
+                setShowPasswordModal(false);
+                // Execute directly using the stored private key
+                // The handlePasswordSubmit flow handles this via pendingAction
+                handleTransaction();
+                return;
+            }
+            // Biometric failed/cancelled → fall through to password
+        }
+
+        // Open password confirmation modal as fallback
+        setPasswordMode('verify');
+        setPendingAction({
+            type: 'send_tokens',
+            data: {
+                amount: intent.amount || '',
+                recipient: resolvedAddress || intent.recipient || '',
+                symbol: intent.token
+            }
+        });
+        setWalletPassword('');
+        setActiveFlow('send');
+        setShowPasswordModal(true);
+    };
+
+
 
     const resetFlow = () => {
         setActiveFlow(null);
@@ -5224,7 +5329,152 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                 </section>
                 <canvas ref={cropCanvasRef} class="hidden" />
+
+                {/* ── Voice Intent Confirmation Modal ───────────────────────────── */}
+                <Show when={showVoiceIntentModal() && voiceIntent()}>
+                    <div class="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        {/* Backdrop */}
+                        <div
+                            class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                            onClick={() => setShowVoiceIntentModal(false)}
+                        />
+                        <div class="relative w-full max-w-sm bg-[#0d1117] border border-blue-500/30 rounded-2xl shadow-2xl shadow-blue-500/20 overflow-hidden">
+                            {/* Header */}
+                            <div class="px-5 pt-5 pb-4 border-b border-white/5 flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center">
+                                    {/* Mic SVG */}
+                                    <svg class="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" stroke-linecap="round" stroke-linejoin="round" />
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke-linecap="round" stroke-linejoin="round" />
+                                        <line x1="12" y1="19" x2="12" y2="23" stroke-linecap="round" />
+                                        <line x1="8" y1="23" x2="16" y2="23" stroke-linecap="round" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-blue-400 font-medium uppercase tracking-widest">음성 명령 인식됨</p>
+                                    <p class="text-sm text-gray-300 mt-0.5 italic">"{voiceIntent()?.rawText}"</p>
+                                </div>
+                            </div>
+
+                            {/* Transaction Details */}
+                            <div class="px-5 py-4 space-y-3">
+                                <p class="text-xs text-gray-500 uppercase tracking-widest font-medium">거래 내용</p>
+
+                                <div class="bg-white/4 rounded-xl p-4 space-y-2.5">
+                                    {/* Action */}
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">유형</span>
+                                        <span class="text-sm text-white font-semibold capitalize">{voiceIntent()?.action}</span>
+                                    </div>
+                                    {/* Amount */}
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">금액</span>
+                                        <span class="text-lg text-white font-bold">
+                                            {voiceIntent()?.amount} <span class="text-blue-400">{voiceIntent()?.token}</span>
+                                        </span>
+                                    </div>
+                                    {/* Recipient */}
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm text-gray-400">받는 사람</span>
+                                        <div class="text-right">
+                                            <p class="text-sm text-white font-semibold">{voiceIntent()?.recipient || '—'}</p>
+                                            <Show when={voiceIntentRecipientAddress()}>
+                                                <p class="text-xs text-gray-500 font-mono">
+                                                    {voiceIntentRecipientAddress()?.slice(0, 8)}...{voiceIntentRecipientAddress()?.slice(-6)}
+                                                </p>
+                                            </Show>
+                                            <Show when={!voiceIntentRecipientAddress()}>
+                                                <p class="text-xs text-amber-400">주소를 찾을 수 없음 — 직접 입력 필요</p>
+                                            </Show>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Confidence bar */}
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-600">인식 정확도</span>
+                                    <div class="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                        <div
+                                            class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all"
+                                            style={{ width: `${Math.round((voiceIntent()?.confidence || 0) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <span class="text-xs text-gray-500">{Math.round((voiceIntent()?.confidence || 0) * 100)}%</span>
+                                </div>
+                            </div>
+
+                            {/* Auth section */}
+                            <div class="px-5 pb-5 space-y-2">
+                                {/* Biometric button - shown if supported */}
+                                <Show when={biometricSupported()}>
+                                    <Show
+                                        when={biometricRegistered()}
+                                        fallback={
+                                            <button
+                                                class="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-sm font-medium hover:bg-purple-500/20 transition-colors"
+                                                onClick={async () => {
+                                                    const ok = await registerBiometric(
+                                                        auth.user()?.uid || 'user',
+                                                        auth.user()?.displayName || auth.user()?.email || 'Vision User'
+                                                    );
+                                                    if (ok) setBiometricRegistered(true);
+                                                }}
+                                            >
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                                                </svg>
+                                                {biometricLabel()} 등록하기
+                                            </button>
+                                        }
+                                    >
+                                        <button
+                                            class="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:opacity-90 transition-all active:scale-95"
+                                            onClick={handleVoiceIntentConfirm}
+                                        >
+                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                                            </svg>
+                                            {biometricLabel()}로 승인
+                                        </button>
+                                    </Show>
+                                </Show>
+
+                                {/* Password fallback button */}
+                                <button
+                                    class="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-sm font-medium hover:bg-white/8 transition-colors"
+                                    onClick={handleVoiceIntentConfirm}
+                                >
+                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke-linecap="round" stroke-linejoin="round" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    비밀번호로 서명
+                                </button>
+
+                                <button
+                                    class="w-full text-center text-xs text-gray-600 hover:text-gray-400 transition-colors py-1"
+                                    onClick={() => setShowVoiceIntentModal(false)}
+                                >
+                                    취소
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Show>
+
+                {/* Biometric pending overlay */}
+                <Show when={isBiometricPending()}>
+                    <div class="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                        <div class="flex flex-col items-center gap-4 p-8 bg-[#0d1117]/80 rounded-2xl border border-blue-500/20">
+                            <div class="w-16 h-16 rounded-full border-2 border-blue-400/30 border-t-blue-400 animate-spin" />
+                            <p class="text-white font-semibold">{biometricLabel()} 인증 중...</p>
+                            <p class="text-xs text-gray-500">기기의 생체 인식을 확인해주세요</p>
+                        </div>
+                    </div>
+                </Show>
+
                 <Portal>
+
                     <Presence>
                         <Show when={showPasswordModal()}>
                             <div class="fixed inset-0 z-[100] flex items-center justify-center p-4">

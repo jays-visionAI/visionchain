@@ -38,7 +38,7 @@ services:
       - ./deploy/v2-testnet/node2:/root/.ethereum
       - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.12 --maxpeers 25
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.12 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -60,7 +60,7 @@ services:
       - ./deploy/v2-testnet/node3:/root/.ethereum
       - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.13 --maxpeers 25
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.13 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -82,7 +82,7 @@ services:
       - ./deploy/v2-testnet/node4:/root/.ethereum
       - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.14 --maxpeers 25
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.14 --maxpeers 25
     deploy:
       resources:
         limits:
@@ -104,7 +104,7 @@ services:
       - ./deploy/v2-testnet/node5:/root/.ethereum
       - ./deploy/v2-testnet/static-nodes.json:/root/.ethereum/static-nodes.json:ro
     command: >
-      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://b51e15b9ce0121d142bf7adeeaaa66b5bfcb07fe11b1927156623afcf97c4e5a1f4fbafeba8320f9490caa2607b50df97fce31dbdbfc21960e3465ad81ebba22@172.20.0.11:30303" --nat extip:172.20.0.15 --maxpeers 25
+      --networkid 3151909 --http --http.addr "0.0.0.0" --http.port 8545 --http.api "eth,net,web3,admin" --bootnodes "enode://433fcf02a546539646c28b6e9f2d11f96b05f4a96aa320c62961003ba9d758ad2d362db6e70d4418ef43eff2d73d8ccece3c037a4501da399e082d87b021c48e@172.20.0.11:30303" --nat extip:172.20.0.15 --maxpeers 25
     deploy:
       resources:
         limits:
