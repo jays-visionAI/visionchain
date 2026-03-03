@@ -2636,10 +2636,11 @@ const Wallet = (): JSX.Element => {
 
                         processVoiceTranscript(transcript);
                     } catch (transcribeErr: any) {
-                        console.warn('[Voice/Gemini] Transcription failed, showing raw text:', transcribeErr.message);
-                        // On Gemini failure, just paste into input
-                        setInput(prev => prev ? `${prev.trim()} [음성 인식 오류]` : '[음성 인식 오류]');
+                        console.warn('[Voice/Gemini] Transcription failed, falling back to Web Speech API:', transcribeErr.message);
+                        // Gemini 실패(쿼터 초과, 네트워크 오류 등) → Web Speech API로 자동 재시도
+                        startWebSpeechFallback();
                     }
+
                 };
 
                 // Store mediaRecorder reference so we can stop it
@@ -2731,7 +2732,57 @@ const Wallet = (): JSX.Element => {
         }
     };
 
+    /**
+     * Web Speech API fallback — triggered when Gemini transcription fails
+     * (e.g. 429 quota exceeded, network error).
+     * Silently starts a new recognition session — no error text written to input.
+     */
+    const startWebSpeechFallback = () => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            console.warn('[Voice] Web Speech API not available — cannot fallback');
+            return;
+        }
 
+        const recognitionInstance = new SpeechRecognition();
+        recognitionInstance.lang = voiceLang();
+        recognitionInstance.interimResults = true;
+        recognitionInstance.continuous = false;
+        recognitionInstance.maxAlternatives = 1;
+
+        const grammar = buildBlockchainGrammar();
+        if (grammar) recognitionInstance.grammars = grammar;
+
+        // Re-enter recording state so the UI mic icon stays active
+        setIsRecording(true);
+
+        recognitionInstance.onresult = (event: any) => {
+            let finalTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+            }
+            if (finalTranscript) {
+                const normalized = normalizeBlockchainTerms(finalTranscript);
+                console.log('[Voice/Fallback] Transcript:', normalized);
+                processVoiceTranscript(normalized);
+            }
+        };
+
+        recognitionInstance.onerror = (event: any) => {
+            console.warn('[Voice/Fallback] Error:', event.error);
+            setIsRecording(false);
+        };
+
+        recognitionInstance.onend = () => setIsRecording(false);
+
+        try {
+            recognitionInstance.start();
+            setRecognition(recognitionInstance);
+        } catch (e) {
+            console.error('[Voice/Fallback] Failed to start:', e);
+            setIsRecording(false);
+        }
+    };
 
     /**
      * Called when user confirms the voice intent modal.
