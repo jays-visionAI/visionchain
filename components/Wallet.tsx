@@ -981,7 +981,9 @@ const Wallet = (): JSX.Element => {
     const [attachments, setAttachments] = createSignal<any[]>([]);
     const [thinkingSteps, setThinkingSteps] = createSignal<any[]>([]);
     const [streamingContent, setStreamingContent] = createSignal<string>(''); // Streaming text shown below thinking
-    const [voiceLang, setVoiceLang] = createSignal('en-US');
+    const [voiceLang, setVoiceLang] = createSignal(
+        typeof navigator !== 'undefined' ? navigator.language : 'en-US'
+    );
 
     const handleFileChange = (e: Event) => {
         const file = (e.target as HTMLInputElement).files?.[0];

@@ -2006,81 +2006,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                     onChange={props.handleFileSelect}
                                                 />
 
-                                                {/* Language Selection Popover */}
-                                                <div class="relative" ref={langDropdownRef}>
-                                                    <button
-                                                        onClick={() => { setShowLangDropdown(!showLangDropdown()); setLangSearch(''); }}
-                                                        class="flex items-center gap-2 px-3 py-2 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest"
-                                                    >
-                                                        <span>{currentLangInfo().native || currentLangInfo().label}</span>
-                                                        <svg class={`w-3 h-3 transition-transform ${showLangDropdown() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9" /></svg>
-                                                    </button>
-                                                    <Show when={showLangDropdown()}>
-                                                        <div class="absolute bottom-full right-0 mb-2 w-64 bg-[#121214] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50" style="animation: fadeIn 0.15s ease-out">
-                                                            {/* Search input */}
-                                                            <div class="p-2 border-b border-white/5">
-                                                                <div class="relative">
-                                                                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Search language..."
-                                                                        value={langSearch()}
-                                                                        onInput={(e) => setLangSearch(e.currentTarget.value)}
-                                                                        class="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-3 py-2.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            {/* Language list */}
-                                                            <div class="max-h-[280px] overflow-y-auto scrollbar-hide">
-                                                                <Show when={priorityLangs().length > 0}>
-                                                                    <div class="px-3 pt-2 pb-1">
-                                                                        <span class="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.25em]">Priority</span>
-                                                                    </div>
-                                                                    <For each={priorityLangs()}>
-                                                                        {(lang) => (
-                                                                            <button
-                                                                                onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
-                                                                                class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
-                                                                            >
-                                                                                <div class="flex flex-col">
-                                                                                    <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
-                                                                                    <span class="text-[9px] text-gray-600">{lang.label}</span>
-                                                                                </div>
-                                                                                <Show when={props.voiceLang() === lang.code}>
-                                                                                    <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
-                                                                                </Show>
-                                                                            </button>
-                                                                        )}
-                                                                    </For>
-                                                                </Show>
-                                                                <Show when={allLangs().length > 0}>
-                                                                    <div class="px-3 pt-3 pb-1 border-t border-white/5">
-                                                                        <span class="text-[8px] font-black text-gray-500/60 uppercase tracking-[0.25em]">All Languages</span>
-                                                                    </div>
-                                                                    <For each={allLangs()}>
-                                                                        {(lang) => (
-                                                                            <button
-                                                                                onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
-                                                                                class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
-                                                                            >
-                                                                                <div class="flex flex-col">
-                                                                                    <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
-                                                                                    <span class="text-[9px] text-gray-600">{lang.label}</span>
-                                                                                </div>
-                                                                                <Show when={props.voiceLang() === lang.code}>
-                                                                                    <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
-                                                                                </Show>
-                                                                            </button>
-                                                                        )}
-                                                                    </For>
-                                                                </Show>
-                                                                <Show when={filteredLanguages().length === 0}>
-                                                                    <div class="px-4 py-6 text-center text-gray-600 text-[10px] font-bold">No languages found</div>
-                                                                </Show>
-                                                            </div>
-                                                        </div>
-                                                    </Show>
-                                                </div>
+                                                {/* Language selection removed — voiceLang auto-detected from navigator.language */}
 
                                                 {/* Voice Button */}
                                                 <button
@@ -2134,81 +2060,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                                 onChange={props.handleFileSelect}
                                             />
 
-                                            {/* Language Selection Popover */}
-                                            <div class="relative" ref={(el: HTMLDivElement) => langDropdownRef = el}>
-                                                <button
-                                                    onClick={() => { setShowLangDropdown(!showLangDropdown()); setLangSearch(''); }}
-                                                    class="w-11 h-11 flex items-center justify-center gap-1 rounded-xl bg-black/40 border border-white/5 text-[10px] font-black text-gray-500 hover:text-white transition-all uppercase tracking-widest"
-                                                >
-                                                    <span>{currentLangInfo().code.split('-')[0]}</span>
-                                                    <svg class={`w-2.5 h-2.5 transition-transform ${showLangDropdown() ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6,9 12,15 18,9" /></svg>
-                                                </button>
-                                                <Show when={showLangDropdown()}>
-                                                    <div class="absolute bottom-full right-0 mb-2 w-64 bg-[#121214] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50" style="animation: fadeIn 0.15s ease-out">
-                                                        {/* Search input */}
-                                                        <div class="p-2 border-b border-white/5">
-                                                            <div class="relative">
-                                                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Search language..."
-                                                                    value={langSearch()}
-                                                                    onInput={(e) => setLangSearch(e.currentTarget.value)}
-                                                                    class="w-full bg-white/5 border border-white/5 rounded-xl pl-9 pr-3 py-2.5 text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        {/* Language list */}
-                                                        <div class="max-h-[280px] overflow-y-auto scrollbar-hide">
-                                                            <Show when={priorityLangs().length > 0}>
-                                                                <div class="px-3 pt-2 pb-1">
-                                                                    <span class="text-[8px] font-black text-blue-400/60 uppercase tracking-[0.25em]">Priority</span>
-                                                                </div>
-                                                                <For each={priorityLangs()}>
-                                                                    {(lang) => (
-                                                                        <button
-                                                                            onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
-                                                                            class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
-                                                                        >
-                                                                            <div class="flex flex-col">
-                                                                                <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
-                                                                                <span class="text-[9px] text-gray-600">{lang.label}</span>
-                                                                            </div>
-                                                                            <Show when={props.voiceLang() === lang.code}>
-                                                                                <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
-                                                                            </Show>
-                                                                        </button>
-                                                                    )}
-                                                                </For>
-                                                            </Show>
-                                                            <Show when={allLangs().length > 0}>
-                                                                <div class="px-3 pt-3 pb-1 border-t border-white/5">
-                                                                    <span class="text-[8px] font-black text-gray-500/60 uppercase tracking-[0.25em]">All Languages</span>
-                                                                </div>
-                                                                <For each={allLangs()}>
-                                                                    {(lang) => (
-                                                                        <button
-                                                                            onClick={() => { props.setVoiceLang(lang.code); setShowLangDropdown(false); }}
-                                                                            class={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors ${props.voiceLang() === lang.code ? 'bg-blue-500/10' : ''}`}
-                                                                        >
-                                                                            <div class="flex flex-col">
-                                                                                <span class={`text-[11px] font-bold ${props.voiceLang() === lang.code ? 'text-blue-400' : 'text-gray-300'}`}>{lang.native}</span>
-                                                                                <span class="text-[9px] text-gray-600">{lang.label}</span>
-                                                                            </div>
-                                                                            <Show when={props.voiceLang() === lang.code}>
-                                                                                <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20,6 9,17 4,12" /></svg>
-                                                                            </Show>
-                                                                        </button>
-                                                                    )}
-                                                                </For>
-                                                            </Show>
-                                                            <Show when={filteredLanguages().length === 0}>
-                                                                <div class="px-4 py-6 text-center text-gray-600 text-[10px] font-bold">No languages found</div>
-                                                            </Show>
-                                                        </div>
-                                                    </div>
-                                                </Show>
-                                            </div>
+                                            {/* Language selection removed — voiceLang auto-detected from navigator.language */}
 
                                             {/* Row 2: Mic + Send */}
                                             <button
@@ -2245,12 +2097,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
 
                         </div>
-                    </div >
+                    </div>
                 </Show>
-            </div >
+            </div>
 
             {/* Right Sidebar - Portfolio & Analytics (Always Fixed for Wallet context) */}
-            < div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block scrollbar-hide" >
+            <div class="w-[320px] h-full border-l border-white/[0.04] bg-[#0c0c0e]/40 backdrop-blur-3xl overflow-y-auto hidden xl:block scrollbar-hide">
                 <div class="p-8 space-y-10">
                     {/* Chat History Section (Moved from Left Sidebar) */}
                     <div class="h-[45vh] min-h-[400px] flex flex-col bg-white/[0.02] border border-white/[0.04] rounded-[30px] overflow-hidden shrink-0">
