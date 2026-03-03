@@ -93,7 +93,7 @@ import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
 import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
-import { parseVoiceIntent, resolveIntentRecipient } from '../services/voiceIntentService';
+import { parseVoiceIntent, resolveIntentRecipient, normalizeBlockchainTerms, buildBlockchainGrammar } from '../services/voiceIntentService';
 import type { VoiceIntent } from '../services/voiceIntentService';
 import {
     isBiometricAvailable,
@@ -2546,71 +2546,160 @@ const Wallet = (): JSX.Element => {
         setAttachments(prev => prev.filter((_, i) => i !== index));
     };
 
-    const toggleRecording = () => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            alert("Your browser does not support Speech Recognition. Please use Chrome or Edge.");
+    /**
+     * toggleRecording — Gemini Audio primary, Web Speech API fallback
+     *
+     * Primary path (Gemini Audio):
+     *   1. Start MediaRecorder → collect WebM chunks
+     *   2. On stop: convert chunks → base64 → send to Gemini 2.0 Flash
+     *   3. Gemini transcribes with blockchain vocabulary awareness
+     *   4. Apply normalizeBlockchainTerms() as second safety net
+     *   5. Parse intent → show confirm modal if transaction detected
+     *
+     * Fallback (Web Speech API):
+     *   - Used when MediaRecorder is unavailable
+     *   - Applies SpeechGrammarList + normalizeBlockchainTerms() post-processing
+     */
+    const toggleRecording = async () => {
+        if (isRecording()) {
+            // Stop MediaRecorder if running (Gemini path)
+            const mr = (recognition() as any)?._mediaRecorder;
+            if (mr && mr.state !== 'inactive') {
+                mr.stop(); // will trigger onstop → Gemini transcription
+            } else {
+                // Web Speech API path
+                recognition()?.stop();
+            }
+            setIsRecording(false);
             return;
         }
 
-        if (isRecording()) {
-            recognition()?.stop();
-            setIsRecording(false);
+        // ── Primary: Gemini Audio via MediaRecorder ───────────────────────
+        const hasMediaRecorder = typeof MediaRecorder !== 'undefined' && navigator.mediaDevices?.getUserMedia;
+
+        if (hasMediaRecorder) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                    ? 'audio/webm;codecs=opus'
+                    : MediaRecorder.isTypeSupported('audio/webm')
+                        ? 'audio/webm'
+                        : 'audio/ogg';
+
+                const mediaRecorder = new MediaRecorder(stream, { mimeType });
+                const chunks: BlobPart[] = [];
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) chunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    // Stop all tracks to release the mic
+                    stream.getTracks().forEach(t => t.stop());
+                    setIsRecording(false);
+
+                    if (chunks.length === 0) return;
+
+                    try {
+                        // Convert audio to base64
+                        const blob = new Blob(chunks, { type: mimeType });
+                        const arrayBuffer = await blob.arrayBuffer();
+                        const base64 = btoa(
+                            new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+                        );
+
+                        // Detect primary language from voiceLang setting
+                        const langHint = voiceLang().split('-')[0]; // 'ko-KR' → 'ko'
+
+                        // Get Gemini API key from firebase settings
+                        const { getActiveGlobalApiKey } = await import('../services/firebaseService');
+                        const geminiKey = await getActiveGlobalApiKey('gemini');
+
+                        if (!geminiKey) throw new Error('No Gemini API key');
+
+                        const { GeminiProvider } = await import('../services/ai/providers/geminiProvider');
+                        const provider = new GeminiProvider();
+
+                        let transcript = await provider.transcribeAudio(
+                            base64,
+                            mimeType.split(';')[0], // strip codec suffix for MIME
+                            geminiKey,
+                            langHint
+                        );
+
+                        // Secondary safety net: phonetic normalization
+                        transcript = normalizeBlockchainTerms(transcript);
+
+                        console.log('[Voice/Gemini] Transcript:', transcript);
+
+                        if (!transcript) return;
+
+                        processVoiceTranscript(transcript);
+                    } catch (transcribeErr: any) {
+                        console.warn('[Voice/Gemini] Transcription failed, showing raw text:', transcribeErr.message);
+                        // On Gemini failure, just paste into input
+                        setInput(prev => prev ? `${prev.trim()} [음성 인식 오류]` : '[음성 인식 오류]');
+                    }
+                };
+
+                // Store mediaRecorder reference so we can stop it
+                const fakeRecognition = { stop: () => mediaRecorder.stop(), _mediaRecorder: mediaRecorder };
+                setRecognition(fakeRecognition as any);
+
+                mediaRecorder.start();
+                setIsRecording(true);
+                return;
+
+            } catch (micErr: any) {
+                if (micErr.name === 'NotAllowedError') {
+                    alert('마이크 접근 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해주세요.');
+                    return;
+                }
+                console.warn('[Voice] MediaRecorder failed, falling back to Web Speech API:', micErr.message);
+            }
+        }
+
+        // ── Fallback: Web Speech API + phonetic normalization ─────────────
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('이 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Edge를 사용해주세요.');
             return;
         }
 
         const recognitionInstance = new SpeechRecognition();
         recognitionInstance.lang = voiceLang();
         recognitionInstance.interimResults = true;
-        recognitionInstance.continuous = false; // single utterance for intent mode
+        recognitionInstance.continuous = false;
         recognitionInstance.maxAlternatives = 1;
+
+        // Apply blockchain grammar hints (Chrome only)
+        const grammar = buildBlockchainGrammar();
+        if (grammar) recognitionInstance.grammars = grammar;
 
         recognitionInstance.onstart = () => setIsRecording(true);
 
         recognitionInstance.onresult = (event: any) => {
             let finalTranscript = '';
-
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-                const transcript = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    finalTranscript += transcript;
-                }
+                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
             }
-
             if (finalTranscript) {
-                // ── Intent analysis ──────────────────────────────────────
-                const intent = parseVoiceIntent(finalTranscript);
-
-                if (intent.action === 'send' && intent.confidence >= 0.7 && intent.amount) {
-                    // Resolve recipient from contacts
-                    const resolved = resolveIntentRecipient(intent, contacts() as any);
-                    setVoiceIntent(intent);
-                    setVoiceIntentRecipientAddress(resolved);
-                    setShowVoiceIntentModal(true);
-                    // Stop recording — user will confirm in modal
-                    recognitionInstance.stop();
-                    setIsRecording(false);
-                } else {
-                    // Not a transaction intent → paste into chat input as usual
-                    setInput(prev => {
-                        const cleanPrev = prev.trim();
-                        return cleanPrev ? `${cleanPrev} ${finalTranscript}` : finalTranscript;
-                    });
-                }
+                // Apply phonetic normalization before intent parsing
+                const normalized = normalizeBlockchainTerms(finalTranscript);
+                console.log('[Voice/WebSpeech] Raw:', finalTranscript, '→ Normalized:', normalized);
+                processVoiceTranscript(normalized);
             }
         };
 
         recognitionInstance.onerror = (event: any) => {
             console.warn('[Speech] Recognition error:', event.error);
             if (event.error === 'not-allowed') {
-                alert('Microphone access denied. Please allow microphone permission in your browser settings.');
+                alert('마이크 접근 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해주세요.');
             }
             setIsRecording(false);
         };
 
-        recognitionInstance.onend = () => {
-            setIsRecording(false);
-        };
+        recognitionInstance.onend = () => setIsRecording(false);
 
         try {
             recognitionInstance.start();
@@ -2620,6 +2709,29 @@ const Wallet = (): JSX.Element => {
             setIsRecording(false);
         }
     };
+
+    /**
+     * Shared transcript processor — used by both Gemini and Web Speech API paths.
+     * Parses intent and either opens confirm modal or pastes text into chat input.
+     */
+    const processVoiceTranscript = (transcript: string) => {
+        const intent = parseVoiceIntent(transcript);
+
+        if (intent.action === 'send' && intent.confidence >= 0.7 && intent.amount) {
+            const resolved = resolveIntentRecipient(intent, contacts() as any);
+            setVoiceIntent(intent);
+            setVoiceIntentRecipientAddress(resolved);
+            setShowVoiceIntentModal(true);
+        } else {
+            // Not a transaction intent → paste into chat input
+            setInput(prev => {
+                const cleanPrev = prev.trim();
+                return cleanPrev ? `${cleanPrev} ${transcript}` : transcript;
+            });
+        }
+    };
+
+
 
     /**
      * Called when user confirms the voice intent modal.

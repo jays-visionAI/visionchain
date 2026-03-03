@@ -1,8 +1,15 @@
 /**
  * voiceIntentService.ts
  *
- * Parses natural language voice commands into structured transaction intents.
- * Supports Korean and English.
+ * 1. normalizeBlockchainTerms() — phonetic post-processing layer
+ *    Corrects common Korean/Japanese pronunciations of crypto terms
+ *    that Web Speech API (or even Gemini) might transcribe phonetically.
+ *
+ * 2. buildBlockchainGrammar() — SpeechGrammarList helper
+ *    Hints the browser's speech engine about known blockchain vocabulary.
+ *
+ * 3. parseVoiceIntent() — NLP intent parser
+ *    Extracts { action, amount, token, recipient } from natural language.
  *
  * Examples:
  *   "박지현에게 10 VCN 보내줘" → { action: 'send', amount: '10', token: 'VCN', recipient: '박지현' }
@@ -21,7 +28,91 @@ export interface VoiceIntent {
     confidence: number;       // 0–1
 }
 
-// ── Token aliases ────────────────────────────────────────────────────────────
+// ── Phonetic normalization map ───────────────────────────────────────────────
+// Maps Korean/Japanese phonetic spellings → correct English crypto term
+// This acts as a post-processing layer AFTER speech-to-text
+const PHONETIC_CORRECTIONS: [RegExp, string][] = [
+    // ── VCN ──
+    [/비씨엔/g, 'VCN'],
+    [/브이씨엔/g, 'VCN'],
+    [/브씨엔/g, 'VCN'],
+    [/ビーシーエヌ/g, 'VCN'],
+    // ── ETH / Ethereum ──
+    [/이더리움/g, 'Ethereum'],
+    [/이더(?!리움)/g, 'ETH'],             // "이더" alone → ETH, not if followed by 리움
+    [/イーサリアム/g, 'Ethereum'],
+    [/イーサ(?!リアム)/g, 'ETH'],
+    // ── Bitcoin / BTC ──
+    [/비트코인/g, 'Bitcoin'],
+    [/비트/g, 'BTC'],
+    [/ビットコイン/g, 'Bitcoin'],
+    [/ビット(?!コイン)/g, 'BTC'],
+    // ── Solana / SOL ──
+    [/솔라나/g, 'Solana'],
+    [/솔/g, 'SOL'],
+    [/ソラナ/g, 'Solana'],
+    // ── USDT / Tether ──
+    [/테더/g, 'USDT'],
+    [/테더코인/g, 'USDT'],
+    [/テザー/g, 'USDT'],
+    // ── BNB ──
+    [/비앤비/g, 'BNB'],
+    [/바이낸스코인/g, 'BNB'],
+    [/バイナンスコイン/g, 'BNB'],
+    // ── XRP ──
+    [/엑스알피/g, 'XRP'],
+    [/리플/g, 'XRP'],
+    [/リップル/g, 'XRP'],
+    // ── MATIC / Polygon ──
+    [/매틱/g, 'MATIC'],
+    [/폴리곤/g, 'MATIC'],
+    [/ポリゴン/g, 'MATIC'],
+    // ── AVAX / Avalanche ──
+    [/아발란체/g, 'AVAX'],
+    [/アバランチ/g, 'AVAX'],
+    // ── Action words — keep in Korean but normalize common typos ──
+    [/스테이킹/g, '스테이킹'],    // already correct, keep
+    [/언스테이킹/g, '언스테이킹'],
+    [/브릿지/g, '브릿지'],
+    [/스왑/g, '스왑'],
+];
+
+/**
+ * Apply phonetic corrections to a raw speech transcript.
+ * Run this BEFORE parseVoiceIntent() when using Web Speech API (fallback mode).
+ * When using Gemini transcription, this acts as a secondary safety net.
+ */
+export function normalizeBlockchainTerms(text: string): string {
+    let result = text;
+    for (const [pattern, replacement] of PHONETIC_CORRECTIONS) {
+        result = result.replace(pattern, replacement);
+    }
+    return result;
+}
+
+/**
+ * Build a SpeechGrammarList with known blockchain vocabulary.
+ * Assign to recognition.grammars to boost recognition confidence for these terms.
+ * Only has effect in Chrome / Chromium-based browsers.
+ */
+export function buildBlockchainGrammar(): any | null {
+    const SpeechGrammarList = (window as any).SpeechGrammarList || (window as any).webkitSpeechGrammarList;
+    if (!SpeechGrammarList) return null;
+
+    const tokens = [
+        'VCN', 'ETH', 'BTC', 'USDT', 'SOL', 'BNB', 'XRP', 'MATIC', 'AVAX', 'LINK', 'DOT', 'ADA',
+        'Ethereum', 'Bitcoin', 'Solana', 'Tether', 'Polygon', 'Avalanche',
+        'staking', 'unstaking', 'bridge', 'swap', 'send', 'transfer',
+        '보내', '전송', '송금', '스테이킹', '언스테이킹', '브릿지', '스왑'
+    ];
+
+    // JSGF (Java Speech Grammar Format) — the format browsers accept
+    const grammar = `#JSGF V1.0; grammar blockchain; public <token> = ${tokens.join(' | ')} ;`;
+    const list = new SpeechGrammarList();
+    list.addFromString(grammar, 1); // weight = 1 (highest priority)
+    return list;
+}
+
 const TOKEN_ALIASES: Record<string, string> = {
     'vcn': 'VCN',
     'vision': 'VCN',

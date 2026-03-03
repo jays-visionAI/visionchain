@@ -48,11 +48,98 @@ export class GeminiProvider implements AIProvider {
             return response;
         } catch (e: any) {
             const errorMsg = JSON.stringify(e).toLowerCase();
-            // Fallback to Nano Banana (gemini-2.0-flash-exp) - Only use gemini-1.5-pro via DeepSeek router fallback
+            // Fallback to gemini-2.0-flash-exp on errors
             if ((errorMsg.includes('404') || errorMsg.includes('429') || errorMsg.includes('400')) && model !== 'gemini-2.0-flash-exp') {
                 return await executeRequest('gemini-2.0-flash-exp');
             }
             throw e;
+        }
+    }
+
+    /**
+     * Transcribe audio using Gemini 2.0 Flash.
+     * Handles multilingual code-switching (e.g. Korean + English crypto terms).
+     * This is the core improvement over Web Speech API — Gemini can handle:
+     *   - "박지현에게 10 VCN 보내줘" (Korean with English token name)
+     *   - "이더리움" → corrected to "Ethereum"
+     *   - "비씨엔" → corrected to "VCN"
+     *
+     * @param audioBase64 - base64-encoded audio (WebM/WAV/OGG)
+     * @param mimeType    - audio MIME type (default: 'audio/webm')
+     * @param apiKey      - Gemini API key
+     * @param langHint    - primary language hint: 'ko', 'en', 'ja', 'zh', etc.
+     */
+    async transcribeAudio(
+        audioBase64: string,
+        mimeType: string = 'audio/webm',
+        apiKey: string,
+        langHint: string = 'ko'
+    ): Promise<string> {
+        const ai = this.createClient(apiKey);
+
+        const langName = langHint === 'ko' ? 'Korean'
+            : langHint === 'ja' ? 'Japanese'
+                : langHint === 'zh' ? 'Chinese'
+                    : langHint === 'es' ? 'Spanish'
+                        : langHint === 'fr' ? 'French'
+                            : 'the user\'s native language';
+
+        // Blockchain-domain-aware transcription prompt
+        const transcriptionPrompt = `You are a blockchain transaction voice transcription assistant.
+Transcribe the audio exactly as spoken. The user may mix ${langName} with English cryptocurrency terms.
+
+IMPORTANT RULES:
+1. Transcribe the audio verbatim — do NOT translate or summarise.
+2. Preserve all cryptocurrency / blockchain proper nouns exactly as standard English:
+   - Token names: VCN, ETH, BTC, USDT, SOL, BNB, XRP, MATIC, AVAX, LINK, DOT, ADA, etc.
+   - Blockchain terms: Ethereum, Bitcoin, Solana, DeFi, NFT, staking, bridge, swap, wallet
+   - Numbers: output as digits (e.g. '10', '100', '1,000', '10000')
+3. Correct native-language pronunciations of crypto terms to their standard English form:
+   Korean examples:
+     '비씨엔' or '브이씨엔' → 'VCN'
+     '이더리움' → 'Ethereum'
+     '비트코인' → 'Bitcoin'
+     '솔라나' → 'Solana'
+     '테더' → 'USDT'
+     '이더' → 'ETH'
+     '스테이킹' → 'staking'  (keep Korean grammar around it)
+     '브릿지' → 'bridge'
+     '스왑' → 'swap'
+   Japanese examples:
+     'ビーティーシー' → 'BTC'
+     'イーサリアム' → 'Ethereum'
+     'ビットコイン' → 'Bitcoin'
+4. Keep all non-crypto words in the original spoken language.
+5. Output ONLY the transcription text. Do not add any explanation, punctuation beyond what was spoken, or formatting.
+
+Audio:`;
+
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.0-flash',
+                contents: [{
+                    role: 'user',
+                    parts: [
+                        { text: transcriptionPrompt },
+                        {
+                            inlineData: {
+                                mimeType,
+                                data: audioBase64
+                            }
+                        }
+                    ]
+                }],
+                config: {
+                    temperature: 0.1,       // Low temperature = deterministic transcription
+                    maxOutputTokens: 256,
+                }
+            });
+
+            const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            return text.trim();
+        } catch (err: any) {
+            console.error('[GeminiProvider] Audio transcription error:', err.message);
+            throw err;
         }
     }
 
