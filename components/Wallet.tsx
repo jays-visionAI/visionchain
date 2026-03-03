@@ -569,6 +569,9 @@ const Wallet = (): JSX.Element => {
     const [cloudRestoreError, setCloudRestoreError] = createSignal('');
     const [cloudRestoreNeedsVerification, setCloudRestoreNeedsVerification] = createSignal(false);
     const [cloudRestoreVerificationCode, setCloudRestoreVerificationCode] = createSignal('');
+    const [cloudRestoreNeeds2FA, setCloudRestoreNeeds2FA] = createSignal(false);
+    const [cloudRestore2FACode, setCloudRestore2FACode] = createSignal('');
+    const [cloudRestore2FAUseBackup, setCloudRestore2FAUseBackup] = createSignal(false);
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
     const [editPhone, setEditPhone] = createSignal('');
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
@@ -2368,8 +2371,18 @@ const Wallet = (): JSX.Element => {
 
             const result = await CloudWalletService.loadFromCloud(
                 cloudRestorePassword(),
-                userProfile().email
+                userProfile().email,
+                cloudRestoreNeeds2FA() ? cloudRestore2FACode() : undefined,
+                cloudRestoreNeeds2FA() ? cloudRestore2FAUseBackup() : undefined
             );
+
+            // Handle 2FA requirement
+            if (result.requires2FA) {
+                setCloudRestoreNeeds2FA(true);
+                setCloudRestoreError('');
+                setCloudRestoreLoading(false);
+                return;
+            }
 
             // Handle device verification requirement
             if (result.requiresVerification) {
@@ -2393,6 +2406,9 @@ const Wallet = (): JSX.Element => {
                 setCloudRestorePassword('');
                 setCloudRestoreNeedsVerification(false);
                 setCloudRestoreVerificationCode('');
+                setCloudRestoreNeeds2FA(false);
+                setCloudRestore2FACode('');
+                setCloudRestore2FAUseBackup(false);
 
                 // Update user profile
                 setUserProfile(prev => ({
@@ -5019,6 +5035,33 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                                 <li>• Never share your private keys with anyone</li>
                                                             </ul>
                                                         </div>
+
+                                                        {/* Cloud Backup + 2FA Recommendation */}
+                                                        {(() => {
+                                                            const pwStrength = calculatePasswordStrength(walletPassword());
+                                                            const isCloudSynced = pwStrength.isStrongEnough;
+                                                            return (
+                                                                <div class={`p-4 border rounded-2xl space-y-2 ${isCloudSynced ? 'bg-cyan-500/5 border-cyan-500/10' : 'bg-orange-500/5 border-orange-500/10'}`}>
+                                                                    <div class={`flex items-center gap-2 font-black uppercase tracking-widest text-[10px] ${isCloudSynced ? 'text-cyan-400' : 'text-orange-400'}`}>
+                                                                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                                                                        </svg>
+                                                                        {isCloudSynced ? 'Cloud Backup Active' : 'Cloud Backup Unavailable'}
+                                                                    </div>
+                                                                    {isCloudSynced ? (
+                                                                        <p class="text-[11px] font-medium text-cyan-400/80">
+                                                                            Your wallet key is securely backed up to the cloud with double encryption.
+                                                                            For maximum security, enable <strong>2-Factor Authentication</strong> in <strong>Settings &gt; Security</strong> to protect your cloud backup.
+                                                                        </p>
+                                                                    ) : (
+                                                                        <p class="text-[11px] font-medium text-orange-400/80">
+                                                                            Your password did not meet the strength requirement for cloud backup (10+ characters with uppercase, lowercase, and numbers).
+                                                                            You can strengthen your password in <strong>Settings &gt; Password</strong>, then enable cloud sync in <strong>Settings &gt; Security</strong>.
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             </Motion.div>
@@ -5297,6 +5340,9 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         setShowCloudRestoreModal(false);
                                         setCloudRestoreNeedsVerification(false);
                                         setCloudRestoreVerificationCode('');
+                                        setCloudRestoreNeeds2FA(false);
+                                        setCloudRestore2FACode('');
+                                        setCloudRestore2FAUseBackup(false);
                                     }}
                                 />
 
@@ -5314,19 +5360,21 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                             </svg>
                                         </div>
                                         <h2 class="text-2xl font-black text-white mb-2">
-                                            {cloudRestoreNeedsVerification() ? 'Verify Device' : 'Restore from Cloud'}
+                                            {cloudRestoreNeeds2FA() ? '2-Factor Authentication' : cloudRestoreNeedsVerification() ? 'Verify Device' : 'Restore from Cloud'}
                                         </h2>
                                         <p class="text-sm text-gray-400">
-                                            {cloudRestoreNeedsVerification()
-                                                ? 'Enter the verification code sent to your email.'
-                                                : 'Enter your wallet password to restore your wallet from the cloud.'
+                                            {cloudRestoreNeeds2FA()
+                                                ? 'Enter your authenticator code to verify your identity.'
+                                                : cloudRestoreNeedsVerification()
+                                                    ? 'Enter the verification code sent to your email.'
+                                                    : 'Enter your wallet password to restore your wallet from the cloud.'
                                             }
                                         </p>
                                     </div>
 
                                     {/* Form */}
                                     <div class="px-6 pb-6 space-y-4">
-                                        <Show when={!cloudRestoreNeedsVerification()}>
+                                        <Show when={!cloudRestoreNeedsVerification() && !cloudRestoreNeeds2FA()}>
                                             <div>
                                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                                                     Wallet Password
@@ -5340,6 +5388,40 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                     class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                                                 />
                                             </div>
+                                        </Show>
+
+                                        {/* 2FA TOTP Input */}
+                                        <Show when={cloudRestoreNeeds2FA()}>
+                                            <div>
+                                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                                                    {cloudRestore2FAUseBackup() ? 'Backup Code' : 'Authenticator Code'}
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={cloudRestore2FACode()}
+                                                    onInput={(e) => setCloudRestore2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, cloudRestore2FAUseBackup() ? 8 : 6))}
+                                                    onKeyPress={(e) => e.key === 'Enter' && handleCloudRestore()}
+                                                    placeholder={cloudRestore2FAUseBackup() ? 'XXXXXXXX' : '000000'}
+                                                    class="w-full px-4 py-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all text-center text-xl tracking-[0.3em] font-mono"
+                                                    maxLength={cloudRestore2FAUseBackup() ? 8 : 6}
+                                                    autofocus
+                                                />
+                                            </div>
+                                            <div class="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                                                <p class="text-xs text-purple-300/80">
+                                                    Your account has 2-Factor Authentication enabled. Enter your Google Authenticator code to proceed.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCloudRestore2FAUseBackup(!cloudRestore2FAUseBackup());
+                                                    setCloudRestore2FACode('');
+                                                }}
+                                                class="w-full py-2 text-gray-500 hover:text-gray-300 text-xs transition-colors"
+                                            >
+                                                {cloudRestore2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
+                                            </button>
                                         </Show>
 
                                         <Show when={cloudRestoreNeedsVerification()}>
@@ -5373,7 +5455,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         </Show>
 
                                         {/* Info */}
-                                        <Show when={!cloudRestoreNeedsVerification()}>
+                                        <Show when={!cloudRestoreNeedsVerification() && !cloudRestoreNeeds2FA()}>
                                             <div class="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
                                                 <p class="text-xs text-blue-300/80">
                                                     Your wallet is protected by double encryption. Only you can decrypt it with your password.
@@ -5390,6 +5472,9 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                     setCloudRestoreError('');
                                                     setCloudRestoreNeedsVerification(false);
                                                     setCloudRestoreVerificationCode('');
+                                                    setCloudRestoreNeeds2FA(false);
+                                                    setCloudRestore2FACode('');
+                                                    setCloudRestore2FAUseBackup(false);
                                                 }}
                                                 class="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl transition-all border border-white/5"
                                             >
@@ -5399,12 +5484,16 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                                 fallback={
                                                     <button
                                                         onClick={handleCloudRestore}
-                                                        disabled={!cloudRestorePassword() || cloudRestoreLoading()}
-                                                        class="flex-[2] py-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2"
+                                                        disabled={
+                                                            cloudRestoreNeeds2FA()
+                                                                ? cloudRestore2FACode().length < 6 || cloudRestoreLoading()
+                                                                : !cloudRestorePassword() || cloudRestoreLoading()
+                                                        }
+                                                        class={`flex-[2] py-4 text-white font-bold rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 disabled:opacity-40 transition-all flex items-center justify-center gap-2 ${cloudRestoreNeeds2FA() ? 'bg-gradient-to-r from-purple-500 to-indigo-500 shadow-purple-500/20' : 'bg-gradient-to-r from-blue-500 to-cyan-500 shadow-blue-500/20'}`}
                                                     >
-                                                        <Show when={cloudRestoreLoading()} fallback="Restore Wallet">
+                                                        <Show when={cloudRestoreLoading()} fallback={cloudRestoreNeeds2FA() ? 'Verify & Restore' : 'Restore Wallet'}>
                                                             <RefreshCw class="w-4 h-4 animate-spin" />
-                                                            Restoring...
+                                                            {cloudRestoreNeeds2FA() ? 'Verifying...' : 'Restoring...'}
                                                         </Show>
                                                     </button>
                                                 }
