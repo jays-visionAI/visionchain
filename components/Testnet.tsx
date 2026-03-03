@@ -260,7 +260,7 @@ const Testnet: Component = () => {
                                 </div>
                                 <div class="pt-6">
                                     <A
-                                        href="/bridge"
+                                        href="/wallet/bridge"
                                         class="inline-flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-xl shadow-purple-500/20 active:scale-95"
                                     >
                                         <ArrowRightLeft class="w-4 h-4" />
