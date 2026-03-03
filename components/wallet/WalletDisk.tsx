@@ -15,6 +15,7 @@ import {
     publishDiskFile, unpublishDiskFile, encryptFile, decryptFile,
     moveDiskFile, moveDiskFolder,
     generateImageThumbnail, generateVideoThumbnail,
+    streamVideoChunks,
     type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
 } from '../../services/diskService';
 import { ethers } from 'ethers';
@@ -130,6 +131,10 @@ export const WalletDisk = (props: {
     const [previewURL, setPreviewURL] = createSignal<string>('');
     const [previewLoading, setPreviewLoading] = createSignal(false);
     const [previewProgress, setPreviewProgress] = createSignal<{ current: number; total: number } | null>(null);
+    // Video streaming state
+    const [videoStreamProgress, setVideoStreamProgress] = createSignal<{ current: number; total: number; bytesLoaded: number } | null>(null);
+    const [videoBuffering, setVideoBuffering] = createSignal(false);
+    const [videoFullyLoaded, setVideoFullyLoaded] = createSignal(false);
     const [contextMenu, setContextMenu] = createSignal<{ item: DiskFile | DiskFolder; type: 'file' | 'folder'; x: number; y: number } | null>(null);
     const [showNewFolder, setShowNewFolder] = createSignal(false);
     const [newFolderName, setNewFolderName] = createSignal('');
@@ -668,8 +673,43 @@ export const WalletDisk = (props: {
             prevBlobURL = '';
         }
         setPreviewURL('');
+        setVideoStreamProgress(null);
+        setVideoBuffering(false);
+        setVideoFullyLoaded(false);
 
         if (!file) return;
+
+        // Video streaming path (non-encrypted distributed video)
+        if (file.type.startsWith('video/') && (file.storageType === 'distributed' || file.cid) && !file.isEncrypted) {
+            setVideoBuffering(true);
+            setPreviewLoading(false); // Don't show generic spinner
+            try {
+                const fullBlob = await streamVideoChunks(
+                    file,
+                    (current, total, bytesLoaded) => {
+                        setVideoStreamProgress({ current, total, bytesLoaded });
+                    },
+                    (blobUrl) => {
+                        // Buffer ready - set URL for early playback
+                        prevBlobURL = blobUrl;
+                        setPreviewURL(blobUrl);
+                        setVideoBuffering(false);
+                    },
+                    2 * 1024 * 1024 // 2MB threshold for early playback
+                );
+                // Replace with full blob URL
+                if (prevBlobURL) URL.revokeObjectURL(prevBlobURL);
+                const fullUrl = URL.createObjectURL(fullBlob);
+                prevBlobURL = fullUrl;
+                setPreviewURL(fullUrl);
+                setVideoFullyLoaded(true);
+                setVideoStreamProgress(null);
+            } catch (err) {
+                console.error('[Disk] Video stream failed:', err);
+                setVideoBuffering(false);
+            }
+            return;
+        }
 
         if (file.storageType === 'distributed' || file.isEncrypted) {
             setPreviewLoading(true);
@@ -677,10 +717,11 @@ export const WalletDisk = (props: {
             try {
                 let blob: Blob;
                 if (file.storageType === 'distributed') {
-                    // Use granular download for better UX and progress tracking
+                    // Use larger batch for video, normal for others
+                    const batchSize = file.type.startsWith('video/') ? 12 : 8;
                     blob = await downloadDiskFileGranular(file, (current, total) => {
                         setPreviewProgress({ current, total });
-                    });
+                    }, batchSize);
                 } else {
                     const resp = await fetch(file.downloadURL);
                     blob = await resp.blob();
@@ -1531,13 +1572,72 @@ export const WalletDisk = (props: {
                                                 <img src={previewURL()} alt={file().name} class="max-w-full max-h-full object-contain rounded-lg" />
                                             </Show>
                                             <Show when={file().type.startsWith('video/')}>
-                                                <video
-                                                    src={previewURL()}
-                                                    controls
-                                                    playsinline
-                                                    webkit-playsinline
-                                                    class="max-w-full max-h-full rounded-lg"
-                                                />
+                                                {/* Video Streaming Player */}
+                                                <div class="w-full max-w-2xl relative">
+                                                    {/* Buffering overlay */}
+                                                    <Show when={videoBuffering() && !previewURL()}>
+                                                        <div class="w-full aspect-video bg-black/60 rounded-xl flex flex-col items-center justify-center border border-white/10">
+                                                            <div class="relative mb-5">
+                                                                <svg class="w-16 h-16 text-cyan-500/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                                                </svg>
+                                                                <div class="absolute inset-0 flex items-center justify-center">
+                                                                    <div class="w-10 h-10 border-3 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin" />
+                                                                </div>
+                                                            </div>
+                                                            <div class="text-sm font-bold text-white mb-1">Buffering...</div>
+                                                            <Show when={videoStreamProgress()}>
+                                                                <div class="text-xs text-gray-400 mb-3">
+                                                                    Chunks {videoStreamProgress()!.current}/{videoStreamProgress()!.total}
+                                                                    <span class="mx-1.5 text-gray-600">|</span>
+                                                                    {formatFileSize(videoStreamProgress()!.bytesLoaded)} loaded
+                                                                </div>
+                                                                <div class="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        class="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300"
+                                                                        style={{ width: `${(videoStreamProgress()!.current / videoStreamProgress()!.total) * 100}%` }}
+                                                                    />
+                                                                </div>
+                                                            </Show>
+                                                            <Show when={file().size > 100 * 1024 * 1024}>
+                                                                <div class="text-[10px] text-amber-400/70 mt-3 flex items-center gap-1">
+                                                                    <AlertTriangle class="w-3 h-3" />
+                                                                    Large file ({formatFileSize(file().size)}) - buffering may take longer
+                                                                </div>
+                                                            </Show>
+                                                        </div>
+                                                    </Show>
+                                                    {/* Actual video player */}
+                                                    <Show when={previewURL()}>
+                                                        <div class="relative">
+                                                            <video
+                                                                src={previewURL()}
+                                                                controls
+                                                                autoplay
+                                                                playsinline
+                                                                webkit-playsinline
+                                                                class="max-w-full max-h-full rounded-lg"
+                                                            />
+                                                            {/* Streaming overlay while still loading */}
+                                                            <Show when={!videoFullyLoaded() && videoStreamProgress()}>
+                                                                <div class="absolute bottom-12 left-0 right-0 px-3">
+                                                                    <div class="bg-black/70 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
+                                                                        <div class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                                                                        <span class="text-[10px] text-gray-300 font-medium">
+                                                                            Streaming... {videoStreamProgress()!.current}/{videoStreamProgress()!.total} chunks ({formatFileSize(videoStreamProgress()!.bytesLoaded)})
+                                                                        </span>
+                                                                        <div class="flex-1 h-0.5 bg-white/10 rounded-full overflow-hidden">
+                                                                            <div
+                                                                                class="h-full bg-cyan-500 rounded-full transition-all duration-300"
+                                                                                style={{ width: `${(videoStreamProgress()!.current / videoStreamProgress()!.total) * 100}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+                                                        </div>
+                                                    </Show>
+                                                </div>
                                             </Show>
                                             <Show when={file().type.startsWith('audio/')}>
                                                 <div class="w-full max-w-md">

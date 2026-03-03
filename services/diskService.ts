@@ -373,14 +373,15 @@ export const downloadDiskFile = async (email: string, fileId: string): Promise<{
 /**
  * Download a file from distributed storage chunk by chunk.
  * Allows for progress tracking and prioritization of front chunks.
+ * @param batchSize - Number of parallel chunk requests (default 5, recommended 10-15 for video)
  */
 export const downloadDiskFileGranular = async (
     file: DiskFile,
-    onProgress: (chunkIndex: number, totalChunks: number) => void
+    onProgress: (chunkIndex: number, totalChunks: number) => void,
+    batchSize: number = 5
 ): Promise<Blob> => {
     const chunkHashes = file.chunkHashes || [];
     if (chunkHashes.length === 0) {
-        // Fallback if no hashes (maybe it's a legacy or cloud-only file)
         const resp = await fetch(file.downloadURL);
         return await resp.blob();
     }
@@ -393,10 +394,8 @@ export const downloadDiskFileGranular = async (
 
     const chunks: Uint8Array[] = [];
 
-    // Fetch in batches of 5 for a balance of speed and progress visibility
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < chunkHashes.length; i += BATCH_SIZE) {
-        const batch = chunkHashes.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < chunkHashes.length; i += batchSize) {
+        const batch = chunkHashes.slice(i, i + batchSize);
         const results = await Promise.all(
             batch.map(hash => getChunkCall({ chunkHash: hash }))
         );
@@ -410,11 +409,86 @@ export const downloadDiskFileGranular = async (
             chunks.push(bytes);
         }
 
-        const currentCount = Math.min(i + BATCH_SIZE, chunkHashes.length);
+        const currentCount = Math.min(i + batchSize, chunkHashes.length);
         onProgress(currentCount, chunkHashes.length);
     }
 
     return new Blob(chunks, { type: file.type });
+};
+
+/**
+ * Stream video chunks progressively.
+ * Downloads chunks in order with high parallelism and provides intermediate blobs
+ * for early playback start. Returns a Promise that resolves with the full blob.
+ *
+ * @param file - The DiskFile to stream
+ * @param onProgress - Called after each batch with current/total chunks downloaded
+ * @param onBufferReady - Called when enough data is buffered for playback (partial blob URL)
+ * @param bufferThresholdBytes - Minimum bytes before calling onBufferReady (default 2MB)
+ */
+export const streamVideoChunks = async (
+    file: DiskFile,
+    onProgress: (current: number, total: number, bytesLoaded: number) => void,
+    onBufferReady: (blobUrl: string) => void,
+    bufferThresholdBytes: number = 2 * 1024 * 1024
+): Promise<Blob> => {
+    const chunkHashes = file.chunkHashes || [];
+    if (chunkHashes.length === 0) {
+        const resp = await fetch(file.downloadURL);
+        const blob = await resp.blob();
+        onBufferReady(URL.createObjectURL(blob));
+        return blob;
+    }
+
+    const functions = getFunctions(getFirebaseApp());
+    const getChunkCall = httpsCallable<
+        { chunkHash: string },
+        { success: boolean; data: string }
+    >(functions, 'diskGetChunk');
+
+    const chunks: Uint8Array[] = [];
+    let totalBytesLoaded = 0;
+    let bufferNotified = false;
+
+    // Use larger batch size for video streaming (12 parallel)
+    const STREAM_BATCH = 12;
+
+    for (let i = 0; i < chunkHashes.length; i += STREAM_BATCH) {
+        const batch = chunkHashes.slice(i, i + STREAM_BATCH);
+        const results = await Promise.all(
+            batch.map(hash => getChunkCall({ chunkHash: hash }))
+        );
+
+        for (const res of results) {
+            const binaryStr = atob(res.data.data);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let j = 0; j < binaryStr.length; j++) {
+                bytes[j] = binaryStr.charCodeAt(j);
+            }
+            chunks.push(bytes);
+            totalBytesLoaded += bytes.length;
+        }
+
+        const currentCount = Math.min(i + STREAM_BATCH, chunkHashes.length);
+        onProgress(currentCount, chunkHashes.length, totalBytesLoaded);
+
+        // Notify when buffer threshold reached (first time only)
+        if (!bufferNotified && totalBytesLoaded >= bufferThresholdBytes) {
+            const partialBlob = new Blob(chunks, { type: file.type });
+            onBufferReady(URL.createObjectURL(partialBlob));
+            bufferNotified = true;
+        }
+    }
+
+    // Final complete blob
+    const fullBlob = new Blob(chunks, { type: file.type });
+
+    // If buffer wasn't enough for early notification, notify now with full blob
+    if (!bufferNotified) {
+        onBufferReady(URL.createObjectURL(fullBlob));
+    }
+
+    return fullBlob;
 };
 
 // ─── List / Read ───
