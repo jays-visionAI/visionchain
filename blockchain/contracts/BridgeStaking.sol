@@ -19,7 +19,7 @@ contract BridgeStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ============ Constants ============
-    uint256 public constant MINIMUM_STAKE = 10_000 * 1e18; // 10,000 VCN
+    uint256 public constant MINIMUM_STAKE = 100 * 1e18; // 100 VCN
     uint256 public constant COOLDOWN_PERIOD = 7 days;
     uint256 public constant SLASH_PERCENTAGE = 50; // 50%
     uint256 public constant PRECISION = 1e18;

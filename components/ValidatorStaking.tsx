@@ -85,7 +85,7 @@ export default function ValidatorStaking(props: ValidatorStakingProps) {
     const isConnected = () => !!(props.walletAddress?.() || '');
     const [totalStaked, setTotalStaked] = createSignal('0');
     const [activeValidatorCount, setActiveValidatorCount] = createSignal(0);
-    const [minStake, setMinStake] = createSignal('10,000');
+    const [minStake, setMinStake] = createSignal('100');
     const [cooldownDays, setCooldownDays] = createSignal(7);
     const [slashPercent, setSlashPercent] = createSignal(50);
 
