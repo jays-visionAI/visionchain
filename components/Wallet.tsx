@@ -2577,7 +2577,14 @@ const Wallet = (): JSX.Element => {
         }
 
         // ── Primary: Gemini Audio via MediaRecorder ───────────────────────
-        const hasMediaRecorder = typeof MediaRecorder !== 'undefined' && navigator.mediaDevices?.getUserMedia;
+        // Skip Gemini if quota was recently exceeded (5-min backoff)
+        const geminiQuotaExceededUntil = (window as any).__geminiVoiceQuotaUntil || 0;
+        const geminiAvailable = Date.now() > geminiQuotaExceededUntil;
+        const hasMediaRecorder = geminiAvailable && typeof MediaRecorder !== 'undefined' && navigator.mediaDevices?.getUserMedia;
+
+        if (!geminiAvailable) {
+            console.info('[Voice] Gemini quota backoff active, using Web Speech API directly');
+        }
 
         if (hasMediaRecorder) {
             try {
@@ -2638,11 +2645,17 @@ const Wallet = (): JSX.Element => {
 
                         processVoiceTranscript(transcript);
                     } catch (transcribeErr: any) {
-                        console.warn('[Voice/Gemini] Transcription failed, falling back to Web Speech API:', transcribeErr.message);
-                        // Gemini 실패(쿼터 초과, 네트워크 오류 등) → Web Speech API로 자동 재시도
+                        const errMsg = transcribeErr.message || '';
+                        const is429 = errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED');
+                        if (is429) {
+                            // Cache quota exceeded state for 5 minutes
+                            (window as any).__geminiVoiceQuotaUntil = Date.now() + 5 * 60 * 1000;
+                            console.warn('[Voice/Gemini] Quota exceeded — switching to Web Speech API for 5 min');
+                        } else {
+                            console.warn('[Voice/Gemini] Transcription failed:', errMsg);
+                        }
                         startWebSpeechFallback();
                     }
-
                 };
 
                 // Store mediaRecorder reference so we can stop it
