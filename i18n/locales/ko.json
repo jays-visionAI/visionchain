@@ -223,7 +223,9 @@
             "totalValue": "총 자산 가치",
             "swap": "브릿지",
             "mint": "민트",
-            "localMissing": "로컬 지갑이 없습니다"
+            "localMissing": "로컬 지갑이 없습니다",
+            "useRecoveryPhrase": "복구 구문으로 지갑 복원",
+            "seedPhrase": "15단어 시드 구문을 사용하여 접근을 복원하세요"
         },
         "send": {
             "title": "자산",

@@ -223,7 +223,9 @@
             "totalValue": "Total Value",
             "swap": "Bridge",
             "mint": "Mint",
-            "localMissing": "Local Wallet Not Found"
+            "localMissing": "Local Wallet Not Found",
+            "useRecoveryPhrase": "Restore with Recovery Phrase",
+            "seedPhrase": "Use your 15-word seed phrase to restore access"
         },
         "send": {
             "title": "SEND",
