@@ -95,7 +95,7 @@ const Testnet: Component = () => {
     };
 
     const networkInfo = () => [
-        { label: 'Network Name', value: 'Vision Testnet v2', id: 'name' },
+        { label: 'Network Name', value: 'Vision Chain v2', id: 'name' },
         { label: 'RPC URL', value: activeRpc(), id: 'rpc' },
         { label: 'Sequencer API', value: 'https://api.visionchain.co/submit', id: 'seq' },
         { label: 'Chain ID', value: '3151909', id: 'chainid' },
@@ -232,7 +232,7 @@ const Testnet: Component = () => {
                                     </div>
                                     <div class="flex items-center gap-2 text-sm text-slate-400">
                                         <ShieldCheck class="w-4 h-4 text-green-500" />
-                                        10 ETH for Gas Included
+                                        10 VCN for Gas Included
                                     </div>
                                 </div>
                             </div>
@@ -335,7 +335,7 @@ const Testnet: Component = () => {
                                 >
                                     <div class="flex items-center gap-3">
                                         <BookOpen class="w-4 h-4 text-slate-400" />
-                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Step-by-Step Manual (EN)</span>
+                                        <span class="text-xs font-bold uppercase tracking-widest text-slate-400">Step-by-Step Manual (KO)</span>
                                     </div>
                                     <ExternalLink class="w-4 h-4 text-slate-500" />
                                 </a>
@@ -393,7 +393,7 @@ const Testnet: Component = () => {
                             target="_blank"
                             class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group"
                         >
-                            <span class="text-xs font-black text-white uppercase tracking-widest text-[10px]">Manual (EN)</span>
+                            <span class="text-xs font-black text-white uppercase tracking-widest text-[10px]">Manual (KO)</span>
                         </a>
                         <A href="/trafficsim" class="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center gap-3 transition-all group">
                             <span class="text-xs font-black text-white uppercase tracking-widest text-[10px]">Enter Console</span>
