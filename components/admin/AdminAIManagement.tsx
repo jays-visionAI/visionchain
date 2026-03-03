@@ -184,7 +184,7 @@ export default function AdminAIManagement() {
     };
 
     const handleDeleteKey = async (id: string) => {
-        if (!confirm('Are you sure you want to remove this API key?')) return;
+        // Confirmation is handled by the custom modal in ApiKeysTab
         try {
             await deleteFireKey(id);
             setApiKeys(apiKeys().filter(k => k.id !== id));
