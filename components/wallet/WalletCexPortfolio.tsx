@@ -858,7 +858,20 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     </div>
                                 </div>
 
-                                {/* Upbit Guide */}
+                                {/* PC Access Notice */}
+                                <div class="p-3 bg-blue-500/8 border border-blue-500/15 rounded-xl">
+                                    <div class="flex items-start gap-2">
+                                        <svg class="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="2" y="3" width="20" height="14" rx="2" />
+                                            <line x1="8" y1="21" x2="16" y2="21" />
+                                            <line x1="12" y1="17" x2="12" y2="21" />
+                                        </svg>
+                                        <p class="text-[11px] text-blue-300 font-bold leading-relaxed">
+                                            {t('cex.pcAccessNotice')}
+                                        </p>
+                                    </div>
+                                </div>
+
                                 <div class="space-y-3">
                                     <div class="flex items-center gap-2">
                                         <div class="p-1.5 bg-[#093687]/20 rounded-lg"><UpbitIcon /></div>
@@ -867,19 +880,27 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     <div class="space-y-2 pl-2">
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                                            <p class="text-xs text-gray-400">Open API Management page at <a href="https://upbit.com/mypage/open_api_management" target="_blank" rel="noopener" class="text-cyan-400 hover:underline inline-flex items-center gap-0.5">upbit.com <ExternalLink class="w-2.5 h-2.5" /></a></p>
+                                            <p class="text-xs text-gray-400">{t('cex.upbitStep1')} <a href="https://upbit.com/mypage/open_api_management" target="_blank" rel="noopener" class="text-cyan-400 hover:underline inline-flex items-center gap-0.5">upbit.com <ExternalLink class="w-2.5 h-2.5" /></a></p>
                                         </div>
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                                            <p class="text-xs text-gray-400">Click <span class="font-bold text-white">"Open API Key"</span> and select <span class="font-bold text-white">"Balance inquiry"</span> permission only.</p>
+                                            <p class="text-xs text-gray-400">{t('cex.upbitStep2')}</p>
                                         </div>
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-                                            <p class="text-xs text-gray-400">In the <span class="font-bold text-white">"IP Address"</span> field, enter: <code class="px-1.5 py-0.5 bg-white/5 rounded text-cyan-400 font-mono text-[11px]">{STATIC_IP}</code></p>
+                                            <p class="text-xs text-gray-400">{t('cex.upbitStep3Prefix')} <span class="font-bold text-white">{t('cex.upbitStep3BoldBtn')}</span>{t('cex.upbitStep3Mid')} <span class="font-bold text-white">{t('cex.upbitStep3BoldPerm')}</span>{t('cex.upbitStep3Suffix')}</p>
                                         </div>
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
-                                            <p class="text-xs text-gray-400">Complete verification and copy the <span class="font-bold text-white">Access Key</span> and <span class="font-bold text-white">Secret Key</span>.</p>
+                                            <p class="text-xs text-gray-400">{t('cex.upbitStep4Prefix')} <span class="font-bold text-white">{t('cex.upbitStep4Bold')}</span>{t('cex.upbitStep4Suffix')} <code class="px-1.5 py-0.5 bg-white/5 rounded text-cyan-400 font-mono text-[11px]">{STATIC_IP}</code></p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-cyan-500/15 text-cyan-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">5</span>
+                                            <p class="text-xs text-gray-400">{t('cex.upbitStep5Prefix')} <span class="font-bold text-white">Access Key</span>{t('cex.upbitStep5Mid')} <span class="font-bold text-white">Secret Key</span>{t('cex.upbitStep5Suffix')}</p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-green-500/15 text-green-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">6</span>
+                                            <p class="text-xs text-green-400/80 font-medium">{t('cex.finalStepConnect')}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -887,7 +908,6 @@ const WalletCexPortfolio = (): JSX.Element => {
                                 {/* Divider */}
                                 <div class="border-t border-white/[0.04]" />
 
-                                {/* Bithumb Guide */}
                                 <div class="space-y-3">
                                     <div class="flex items-center gap-2">
                                         <div class="p-1.5 bg-[#F37021]/20 rounded-lg"><BithumbIcon /></div>
@@ -896,19 +916,27 @@ const WalletCexPortfolio = (): JSX.Element => {
                                     <div class="space-y-2 pl-2">
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                                            <p class="text-xs text-gray-400">Go to API Management at <a href="https://www.bithumb.com/api_support/management_api" target="_blank" rel="noopener" class="text-orange-400 hover:underline inline-flex items-center gap-0.5">bithumb.com <ExternalLink class="w-2.5 h-2.5" /></a></p>
+                                            <p class="text-xs text-gray-400">{t('cex.bithumbStep1')} <a href="https://www.bithumb.com/api_support/management_api" target="_blank" rel="noopener" class="text-orange-400 hover:underline inline-flex items-center gap-0.5">bithumb.com <ExternalLink class="w-2.5 h-2.5" /></a></p>
                                         </div>
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                                            <p class="text-xs text-gray-400">Click <span class="font-bold text-white">"API Key"</span> and select <span class="font-bold text-white">"Account Info"</span> permission only.</p>
+                                            <p class="text-xs text-gray-400">{t('cex.bithumbStep2')}</p>
                                         </div>
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-                                            <p class="text-xs text-gray-400">In <span class="font-bold text-white">"Allowed IPs"</span>, enter: <code class="px-1.5 py-0.5 bg-white/5 rounded text-orange-400 font-mono text-[11px]">{STATIC_IP}</code></p>
+                                            <p class="text-xs text-gray-400">{t('cex.bithumbStep3Prefix')} <span class="font-bold text-white">{t('cex.bithumbStep3BoldBtn')}</span>{t('cex.bithumbStep3Mid')} <span class="font-bold text-white">{t('cex.bithumbStep3BoldPerm')}</span>{t('cex.bithumbStep3Suffix')}</p>
                                         </div>
                                         <div class="flex items-start gap-3">
                                             <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
-                                            <p class="text-xs text-gray-400">Complete registration and copy the <span class="font-bold text-white">API Key</span> and <span class="font-bold text-white">Secret Key</span>.</p>
+                                            <p class="text-xs text-gray-400">{t('cex.bithumbStep4Prefix')} <span class="font-bold text-white">{t('cex.bithumbStep4Bold')}</span>{t('cex.bithumbStep4Suffix')} <code class="px-1.5 py-0.5 bg-white/5 rounded text-orange-400 font-mono text-[11px]">{STATIC_IP}</code></p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-orange-500/15 text-orange-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">5</span>
+                                            <p class="text-xs text-gray-400">{t('cex.bithumbStep5Prefix')} <span class="font-bold text-white">API Key</span>{t('cex.bithumbStep5Mid')} <span class="font-bold text-white">Secret Key</span>{t('cex.bithumbStep5Suffix')}</p>
+                                        </div>
+                                        <div class="flex items-start gap-3">
+                                            <span class="w-5 h-5 rounded-full bg-green-500/15 text-green-400 text-[10px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">6</span>
+                                            <p class="text-xs text-green-400/80 font-medium">{t('cex.finalStepConnect')}</p>
                                         </div>
                                     </div>
                                 </div>
