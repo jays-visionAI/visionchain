@@ -479,6 +479,14 @@ export default function AdminDocuments() {
                                             setSelectedDoc(d);
                                             setIsViewerOpen(true);
                                         }}
+                                        onDelete={(d) => {
+                                            setSelectedDoc(d);
+                                            setShowDeleteConfirm(true);
+                                        }}
+                                        onEdit={(d) => {
+                                            setSelectedDoc(d);
+                                            setIsEditorOpen(true);
+                                        }}
                                     />
                                 )}
                             </For>
