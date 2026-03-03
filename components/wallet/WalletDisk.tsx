@@ -1103,7 +1103,10 @@ export const WalletDisk = (props: {
                             ) : 'Subscribe Now'}
                         </button>
                         <div class="text-[10px] text-gray-500 mt-4 max-w-md">By subscribing, you approve Vision Network to deduct VCN automatically purely for storage usage. You can cancel anytime.</div>
+                        {/* Mobile NavBar clearance */}
+                        <div class="h-14 lg:hidden" />
                     </div>
+
                 </Show>
 
                 <Show
