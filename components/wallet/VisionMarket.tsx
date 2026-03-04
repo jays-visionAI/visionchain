@@ -128,11 +128,17 @@ const VisionMarket = (props: { walletAddress?: string }) => {
 
     // ── Determine preview type from MIME ──
     const getPreviewType = (mime: string, name: string): 'video' | 'image' | 'audio' | 'pdf' | 'document' | 'other' => {
+        // Check MIME type first
         if (mime.startsWith('video/')) return 'video';
         if (mime.startsWith('image/')) return 'image';
         if (mime.startsWith('audio/')) return 'audio';
         if (mime.includes('pdf')) return 'pdf';
+        // Fallback: check file extension
         const ext = name.split('.').pop()?.toLowerCase() || '';
+        if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v', 'ogv', '3gp'].includes(ext)) return 'video';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(ext)) return 'image';
+        if (['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma'].includes(ext)) return 'audio';
+        if (ext === 'pdf') return 'pdf';
         if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv'].includes(ext)) return 'document';
         return 'other';
     };
@@ -158,33 +164,35 @@ const VisionMarket = (props: { walletAddress?: string }) => {
         try {
             const userEmail = auth.user()?.email || '';
             let blob: Blob;
-            const mime = item.type || 'application/octet-stream';
-            const pType = getPreviewType(mime, item.name);
+            let fileName = item.name;
+            let fileType = item.type || 'application/octet-stream';
 
             if (item.storageType === 'distributed' || item.cid) {
                 // Ensure we have chunkHashes (market listing might not include them)
                 let chunkHashes = item.chunkHashes || [];
-                let fileType = item.type || mime;
 
-                if (chunkHashes.length === 0) {
-                    // Fetch full metadata from published_materials to get chunkHashes
+                // Always try to enrich metadata from published_materials if type or chunkHashes are missing
+                if (chunkHashes.length === 0 || !item.type || item.type === 'application/octet-stream') {
                     try {
                         const { doc, getDoc } = await import('firebase/firestore');
                         const db = getFirebaseDb();
                         const marketDoc = await getDoc(doc(db, 'published_materials', item.id));
                         if (marketDoc.exists()) {
                             const data = marketDoc.data();
-                            chunkHashes = data?.chunkHashes || [];
-                            fileType = data?.type || fileType;
+                            if (!chunkHashes.length) chunkHashes = data?.chunkHashes || [];
+                            if (data?.type) fileType = data.type;
+                            if (data?.name) fileName = data.name;
                         }
                     } catch (metaErr) {
                         console.warn('[Market] Failed to fetch file metadata:', metaErr);
                     }
                 }
 
-                if (pType === 'video' && chunkHashes.length > 0) {
-                    // Stream video for faster preview
-                    const streamItem = { ...item, chunkHashes, type: fileType };
+                // Re-evaluate preview type with enriched metadata
+                const enrichedPType = getPreviewType(fileType, fileName);
+
+                if (enrichedPType === 'video' && chunkHashes.length > 0) {
+                    const streamItem = { ...item, chunkHashes, type: fileType, name: fileName };
                     blob = await streamVideoChunks(
                         streamItem,
                         (current, total, bytesLoaded) => {
@@ -199,8 +207,7 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                         2 * 1024 * 1024
                     );
                 } else if (chunkHashes.length > 0) {
-                    // Granular chunk download with progress
-                    const dlItem = { ...item, chunkHashes, type: fileType };
+                    const dlItem = { ...item, chunkHashes, type: fileType, name: fileName };
                     blob = await downloadDiskFileGranular(
                         dlItem,
                         (current, total) => {
@@ -209,7 +216,6 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                         10
                     );
                 } else if (item.downloadURL) {
-                    // No chunks available but has downloadURL
                     const response = await fetch(item.downloadURL);
                     blob = await response.blob();
                 } else {
@@ -222,8 +228,9 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                 throw new Error('Download URL not available.');
             }
 
-            const finalMime = item.type || blob.type || 'application/octet-stream';
-            const finalPType = getPreviewType(finalMime, item.name);
+            // Use enriched metadata for final preview type decision
+            const finalMime = fileType || blob.type || 'application/octet-stream';
+            const finalPType = getPreviewType(finalMime, fileName);
 
             // Cleanup old preview URL
             if (previewUrl()) window.URL.revokeObjectURL(previewUrl());
@@ -244,10 +251,10 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                 setPreviewType('pdf');
                 setPurchaseStep('success');
             } else if (finalPType === 'document') {
-                triggerBlobDownload(blob, item.name);
+                triggerBlobDownload(blob, fileName);
                 setPurchaseStep('success');
             } else {
-                triggerBlobDownload(blob, item.name);
+                triggerBlobDownload(blob, fileName);
                 setPurchaseStep('success');
             }
         } catch (err: any) {
