@@ -502,11 +502,10 @@ export const WalletDisk = (props: {
         try {
             // Distributed storage files (new architecture)
             if (file.storageType === 'distributed' || file.cid) {
-                const { user } = useAuth();
-                const email = user()?.email;
-                if (!email) { alert('Login required'); return; }
+                const userEmail = email();
+                if (!userEmail) { alert('Login required'); return; }
 
-                const result = await downloadDiskFile(email, file.id);
+                const result = await downloadDiskFile(userEmail, file.id);
 
                 // If encrypted, decrypt the blob
                 if (file.isEncrypted) {
