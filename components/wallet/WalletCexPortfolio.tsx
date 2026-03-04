@@ -673,7 +673,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                 {/* Add Exchange Modal */}
                 <Show when={showAddModal()}>
                     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}>
-                        <div class="w-full max-w-md bg-[#111113] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl">
+                        <div class="w-full max-w-md bg-[#111113] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl pb-[50px]">
                             {/* Header */}
                             <div class="flex items-center justify-between p-5 border-b border-white/[0.04]">
                                 <div class="flex items-center gap-3">
