@@ -54,6 +54,12 @@ export interface DiskFile {
     abstract?: string;
     // Server-generated thumbnail URL (Firebase Storage signed URL)
     thumbnailURL?: string;
+    // Media optimization metadata
+    optimized?: boolean;
+    preserveOriginal?: boolean;
+    originalType?: string;
+    originalSize?: number;
+    originalExtension?: string;
 }
 
 export interface DiskFolder {
@@ -143,6 +149,65 @@ export const getFileExtension = (name: string): string => {
  * Generate a thumbnail from an image file using canvas.
  * Returns a base64 data URL or empty string on failure.
  */
+/**
+ * Optimize image: convert to WebP with resize and compression.
+ * Uses Canvas API (client-side). Returns a new File with .webp extension.
+ * Falls back to original file on any error.
+ */
+export const optimizeImage = async (
+    file: File,
+    maxDimension: number = 2048,
+    quality: number = 0.85
+): Promise<File> => {
+    // Skip if already WebP and small enough
+    if (file.type === 'image/webp' && file.size < 500 * 1024) return file;
+    // Skip SVG (vector, can't rasterize well)
+    if (file.type === 'image/svg+xml') return file;
+
+    return new Promise((resolve) => {
+        try {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                try {
+                    let w = img.width, h = img.height;
+                    // Resize if larger than maxDimension
+                    if (w > maxDimension || h > maxDimension) {
+                        if (w > h) {
+                            h = Math.round(h * maxDimension / w);
+                            w = maxDimension;
+                        } else {
+                            w = Math.round(w * maxDimension / h);
+                            h = maxDimension;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) { URL.revokeObjectURL(url); resolve(file); return; }
+                    ctx.drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(
+                        (blob) => {
+                            URL.revokeObjectURL(url);
+                            if (!blob) { resolve(file); return; }
+                            // Build new filename with .webp extension
+                            const baseName = file.name.replace(/\.[^.]+$/, '');
+                            const optimizedFile = new File([blob], `${baseName}.webp`, { type: 'image/webp' });
+                            console.log(`[Disk] Image optimized: ${file.name} (${(file.size / 1024).toFixed(0)}KB) → ${optimizedFile.name} (${(optimizedFile.size / 1024).toFixed(0)}KB)`);
+                            resolve(optimizedFile);
+                        },
+                        'image/webp',
+                        quality
+                    );
+                } catch { URL.revokeObjectURL(url); resolve(file); }
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        } catch { resolve(file); }
+    });
+};
+
 export const generateImageThumbnail = async (file: File, maxSize: number = 200): Promise<string> => {
     return new Promise((resolve) => {
         try {

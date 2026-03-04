@@ -15,7 +15,7 @@ import {
     publishDiskFile, unpublishDiskFile, encryptFile, decryptFile,
     moveDiskFile, moveDiskFolder,
     generateImageThumbnail, generateVideoThumbnail,
-    streamVideoChunks, backfillThumbnail,
+    optimizeImage, streamVideoChunks, backfillThumbnail,
     type DiskFile, type DiskFolder, type DiskUsage, type UploadProgress
 } from '../../services/diskService';
 import { ethers } from 'ethers';
@@ -166,6 +166,7 @@ export const WalletDisk = (props: {
     const [pendingFiles, setPendingFiles] = createSignal<(FileList | File[]) | null>(null);
     const [decryptingFileId, setDecryptingFileId] = createSignal('');
     const [useDistributed, setUseDistributed] = createSignal(true);
+    const [preserveOriginal, setPreserveOriginal] = createSignal(false);
 
     // Tooltip State
     const [showVNetTooltip, setShowVNetTooltip] = createSignal(false);
@@ -301,7 +302,16 @@ export const WalletDisk = (props: {
             setUploadQueue(prev => [...prev, progressEntry]);
 
             try {
-                let fileToUpload: File | Blob = file;
+                // ── Media Optimization (when preserveOriginal is OFF) ──
+                let processedFile: File = file;
+                if (!preserveOriginal()) {
+                    if (file.type.startsWith('image/') && !file.type.includes('svg')) {
+                        processedFile = await optimizeImage(file, 2048, 0.85);
+                    }
+                    // Video transcoding is handled server-side in Phase 2
+                }
+
+                let fileToUpload: File | Blob = processedFile;
                 let encryptionMeta: any = {};
 
                 // Generate thumbnail from ORIGINAL file BEFORE encryption
@@ -313,8 +323,8 @@ export const WalletDisk = (props: {
                         preEncryptionThumbnail = await generateVideoThumbnail(file);
                     }
 
-                    const encrypted = await encryptFile(file, encryptionPassword());
-                    fileToUpload = new File([encrypted.encryptedData], file.name, { type: file.type });
+                    const encrypted = await encryptFile(processedFile, encryptionPassword());
+                    fileToUpload = new File([encrypted.encryptedData], processedFile.name, { type: processedFile.type });
                     encryptionMeta = {
                         isEncrypted: true,
                         salt: encrypted.salt,
@@ -325,6 +335,7 @@ export const WalletDisk = (props: {
                 const extraMeta = {
                     ...encryptionMeta,
                     storageType: useDistributed() ? 'distributed' : 'cloud',
+                    preserveOriginal: preserveOriginal(),
                     ...(preEncryptionThumbnail ? { preEncryptionThumbnail } : {})
                 };
 
@@ -973,6 +984,27 @@ export const WalletDisk = (props: {
                         </Show>
                     </div>
 
+                    {/* Preserve Original Toggle */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setPreserveOriginal(!preserveOriginal());
+                        }}
+                        class={`h-10 px-3 flex items-center gap-2 border rounded-xl text-sm font-bold transition-all ${preserveOriginal()
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                            : 'bg-white/[0.04] border-white/[0.08] text-gray-400 hover:text-white'
+                            }`}
+                        title={preserveOriginal() ? 'Original: files uploaded without optimization' : 'Optimized: images → WebP, videos → MP4'}
+                    >
+                        <svg class={`w-4 h-4 ${preserveOriginal() ? 'text-emerald-400' : 'text-gray-600'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="12" y1="18" x2="12" y2="12" />
+                            <line x1="9" y1="15" x2="15" y2="15" />
+                        </svg>
+                        <span class="hidden md:inline">Original</span>
+                    </button>
+
                     {/* New Folder */}
                     <button
                         onClick={() => setShowNewFolder(true)}
@@ -1311,8 +1343,10 @@ export const WalletDisk = (props: {
                                             <Show when={file.abstract}>
                                                 <div class="text-[9px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{file.abstract}</div>
                                             </Show>
-                                            <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                            <div class="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-1">
                                                 {formatFileSize(file.size)} &bull; {new Date(file.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                                {file.optimized && <span class="px-1 py-0.5 rounded bg-green-500/10 text-green-400 text-[8px] font-bold">MP4</span>}
+                                                {file.preserveOriginal && <span class="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[8px] font-bold">RAW</span>}
                                             </div>
                                         </div>
 

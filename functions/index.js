@@ -17821,10 +17821,10 @@ function chunkBuffer(data) {
  * Receives file as base64, chunks it, stages chunks in Firestore,
  * registers in chunk_registry for Vision Nodes to pull.
  */
-exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 300, memory: "1GiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
+exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 540, memory: "2GiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
-  const { fileData, tempStoragePath, fileName, fileType, folder, fileSize, thumbnail } = request.data;
+  const { fileData, tempStoragePath, fileName, fileType, folder, fileSize, thumbnail, preserveOriginal } = request.data;
 
   if (!fileData && !tempStoragePath) {
     throw new HttpsError("invalid-argument", "fileData (base64) or tempStoragePath is required.");
@@ -17906,10 +17906,84 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 300,
       console.warn("[Disk] AI abstract generation failed (non-blocking):", aiErr.message);
     }
   }
+  // ── Video Transcoding (when not preserveOriginal) ──
+  let finalBuffer = buffer;
+  let finalFileName = fileName;
+  let finalFileType = fileType || "application/octet-stream";
+  let optimizationMeta = {};
+
+  const isVideo = (finalFileType || "").startsWith("video/");
+  const videoExt = fileName.split(".").pop()?.toLowerCase() || "";
+  const webPlayableFormats = ["mp4", "webm", "ogg"];
+  const needsTranscode = isVideo && !preserveOriginal && buffer.length <= 100 * 1024 * 1024; // Only transcode under 100MB
+
+  if (needsTranscode) {
+    try {
+      const ffmpegInstaller = require("@ffmpeg-installer/ffmpeg");
+      const ffmpeg = require("fluent-ffmpeg");
+      ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+      const os = require("os");
+      const path = require("path");
+      const fs = require("fs");
+
+      const tmpDir = os.tmpdir();
+      const inputPath = path.join(tmpDir, `input_${Date.now()}.${videoExt || "mp4"}`);
+      const outputPath = path.join(tmpDir, `output_${Date.now()}.mp4`);
+
+      fs.writeFileSync(inputPath, buffer);
+
+      // Transcode to H.264/MP4
+      await new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .outputOptions([
+            "-c:v libx264",
+            "-preset fast",
+            "-crf 23",
+            "-c:a aac",
+            "-b:a 192k",
+            "-movflags +faststart",
+            "-vf scale='min(1920,iw)':'-2'",  // Max 1080p width
+            "-max_muxing_queue_size 1024",
+          ])
+          .output(outputPath)
+          .on("end", resolve)
+          .on("error", reject)
+          .run();
+      });
+
+      const transcodedBuffer = fs.readFileSync(outputPath);
+      const originalSize = buffer.length;
+
+      console.log(`[Disk] Transcoded ${fileName}: ${(originalSize / 1024 / 1024).toFixed(1)}MB → ${(transcodedBuffer.length / 1024 / 1024).toFixed(1)}MB`);
+
+      optimizationMeta = {
+        optimized: true,
+        originalType: finalFileType,
+        originalSize,
+        originalExtension: videoExt,
+      };
+
+      finalBuffer = transcodedBuffer;
+      finalFileName = fileName.replace(/\.[^.]+$/, ".mp4");
+      finalFileType = "video/mp4";
+
+      // Cleanup temp files
+      try { fs.unlinkSync(inputPath); } catch (e) { /* ignore */ }
+      try { fs.unlinkSync(outputPath); } catch (e) { /* ignore */ }
+    } catch (transcodeErr) {
+      console.warn(`[Disk] Transcoding failed (using original): ${transcodeErr.message}`);
+      // Continue with original buffer if transcoding fails
+    }
+  }
+
+  // Record preserveOriginal flag
+  if (preserveOriginal) {
+    optimizationMeta = { preserveOriginal: true };
+  }
 
   // ── Try Distributed Storage (Primary) ──
   try {
-    const result = chunkBuffer(buffer);
+    const result = chunkBuffer(finalBuffer);
     const cid = `vcn://${result.merkleRoot}`;
     const fileKey = `file_${Date.now()}_${require("crypto").randomBytes(4).toString("hex")}`;
 
@@ -17991,9 +18065,9 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 300,
 
     const fileMetadata = {
       id: fileId,
-      name: fileName,
-      size: buffer.length,
-      type: fileType || "application/octet-stream",
+      name: finalFileName,
+      size: finalBuffer.length,
+      type: finalFileType,
       folder: targetFolder,
       storagePath: `distributed://${cid}`,
       storageType: "distributed",
@@ -18006,13 +18080,14 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 300,
       createdAt: now,
       updatedAt: now,
       category,
-      extension: ext,
+      extension: finalFileName.split(".").pop()?.toLowerCase() || ext,
       replicationStatus: "staging",
       targetReplicas: 3,
       currentReplicas: 0,
       thumbnail: thumbnail || "",
       thumbnailURL,
       abstract: fileAbstract,
+      ...optimizationMeta,
     };
 
     const fileRef = db.collection("users").doc(email).collection("disk_files").doc(fileId);

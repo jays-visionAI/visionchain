@@ -533,7 +533,15 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                             <div class="text-base font-black text-white leading-tight truncate px-1">{item.name}</div>
                                             <div class="flex items-center justify-between text-[11px] text-gray-500 px-1">
                                                 <span class="flex items-center gap-1"><Clock class="w-3 h-3" /> {new Date(item.publishedAt || item.createdAt).toLocaleDateString()}</span>
-                                                <span>{formatFileSize(item.size)}</span>
+                                                <span class="flex items-center gap-1.5">
+                                                    {formatFileSize(item.size)}
+                                                    {item.optimized && (
+                                                        <span class="px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 text-[9px] font-bold">MP4</span>
+                                                    )}
+                                                    {item.preserveOriginal && (
+                                                        <span class="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[9px] font-bold">RAW</span>
+                                                    )}
+                                                </span>
                                             </div>
                                             <div class="flex items-center gap-2 px-1 pt-1 mb-4">
                                                 <div class="w-5 h-5 rounded-full bg-white/[0.05] flex items-center justify-center border border-white/5">
