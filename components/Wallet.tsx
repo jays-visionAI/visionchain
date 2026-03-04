@@ -93,8 +93,8 @@ import { useAuth } from './auth/authContext';
 import { contractService } from '../services/contractService';
 import { sendTransfer, scheduleTransfer, initiateBridge, reverseBridgePrepare, reverseBridge, sepoliaTransfer } from '../services/transferService';
 import { useNavigate, useLocation, useBeforeLeave } from '@solidjs/router';
-import { parseVoiceIntent, resolveIntentRecipient, normalizeBlockchainTerms, buildBlockchainGrammar } from '../services/voiceIntentService';
-import type { VoiceIntent } from '../services/voiceIntentService';
+import { parseVoiceIntent, resolveIntentRecipient, findFuzzyContactMatches, normalizeBlockchainTerms, buildBlockchainGrammar } from '../services/voiceIntentService';
+import type { VoiceIntent, FuzzyContactMatch } from '../services/voiceIntentService';
 import {
     isBiometricAvailable,
     hasPlatformAuthenticator,
@@ -1039,6 +1039,7 @@ const Wallet = (): JSX.Element => {
     const [voiceIntent, setVoiceIntent] = createSignal<VoiceIntent | null>(null);
     const [voiceIntentRecipientAddress, setVoiceIntentRecipientAddress] = createSignal<string | null>(null);
     const [showVoiceIntentModal, setShowVoiceIntentModal] = createSignal(false);
+    const [fuzzyContactCandidates, setFuzzyContactCandidates] = createSignal<FuzzyContactMatch[]>([]);
 
     // ── Biometric Auth ────────────────────────────────────────────────────────
     const [biometricLabel, setBiometricLabel] = createSignal('Biometric');
@@ -2737,6 +2738,15 @@ const Wallet = (): JSX.Element => {
             const resolved = resolveIntentRecipient(intent, contacts() as any);
             setVoiceIntent(intent);
             setVoiceIntentRecipientAddress(resolved);
+
+            // If no exact match, try fuzzy matching
+            if (!resolved && intent.recipient) {
+                const fuzzyResults = findFuzzyContactMatches(intent.recipient, contacts() as any);
+                setFuzzyContactCandidates(fuzzyResults);
+            } else {
+                setFuzzyContactCandidates([]);
+            }
+
             setShowVoiceIntentModal(true);
         } else {
             // Not a transaction intent → paste into chat input
@@ -2810,43 +2820,14 @@ const Wallet = (): JSX.Element => {
         const resolvedAddress = voiceIntentRecipientAddress();
 
         setShowVoiceIntentModal(false);
+        setFuzzyContactCandidates([]);
 
         // Prefill send fields
         setSendAmount(intent.amount || '');
         setRecipientAddress(resolvedAddress || intent.recipient || '');
         setSelectedToken(intent.token as any);
 
-        // Try biometric first, fall back to password
-        if (biometricSupported() && biometricRegistered()) {
-            setIsBiometricPending(true);
-            const ok = await authenticateWithBiometric(
-                `Send ${intent.amount} ${intent.token} to ${intent.recipient}`
-            );
-            setIsBiometricPending(false);
-
-            if (ok) {
-                // Biometric passed → trigger send directly
-                setPasswordMode('verify');
-                setPendingAction({
-                    type: 'send_tokens',
-                    data: {
-                        amount: intent.amount || '',
-                        recipient: resolvedAddress || intent.recipient || '',
-                        symbol: intent.token
-                    }
-                });
-                // Skip the password modal — go straight to execution
-                setActiveFlow('send');
-                setShowPasswordModal(false);
-                // Execute directly using the stored private key
-                // The handlePasswordSubmit flow handles this via pendingAction
-                handleTransaction();
-                return;
-            }
-            // Biometric failed/cancelled → fall through to password
-        }
-
-        // Open password confirmation modal as fallback
+        // Open password confirmation modal
         setPasswordMode('verify');
         setPendingAction({
             type: 'send_tokens',
@@ -2859,6 +2840,17 @@ const Wallet = (): JSX.Element => {
         setWalletPassword('');
         setActiveFlow('send');
         setShowPasswordModal(true);
+    };
+
+    /** Handle user selecting a fuzzy contact candidate */
+    const handleFuzzyContactSelect = (candidate: FuzzyContactMatch) => {
+        setVoiceIntentRecipientAddress(candidate.address);
+        setFuzzyContactCandidates([]);
+        // Update the intent's recipient name to the selected contact
+        const intent = voiceIntent();
+        if (intent) {
+            setVoiceIntent({ ...intent, recipient: candidate.name });
+        }
     };
 
 
@@ -5557,16 +5549,47 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                         <div class="text-right">
                                             <p class="text-sm text-white font-semibold">{voiceIntent()?.recipient || '—'}</p>
                                             <Show when={voiceIntentRecipientAddress()}>
-                                                <p class="text-xs text-gray-500 font-mono">
+                                                <p class="text-xs text-green-400 font-mono">
                                                     {voiceIntentRecipientAddress()?.slice(0, 8)}...{voiceIntentRecipientAddress()?.slice(-6)}
                                                 </p>
                                             </Show>
-                                            <Show when={!voiceIntentRecipientAddress()}>
+                                            <Show when={!voiceIntentRecipientAddress() && fuzzyContactCandidates().length === 0}>
                                                 <p class="text-xs text-amber-400">주소를 찾을 수 없음 — 직접 입력 필요</p>
                                             </Show>
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Fuzzy Contact Candidates */}
+                                <Show when={!voiceIntentRecipientAddress() && fuzzyContactCandidates().length > 0}>
+                                    <div class="mt-2">
+                                        <p class="text-xs text-cyan-400 font-medium mb-2">혹시 이 분을 찾으셨나요?</p>
+                                        <div class="space-y-1.5 max-h-40 overflow-y-auto">
+                                            {fuzzyContactCandidates().map((candidate) => (
+                                                <button
+                                                    class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-all group"
+                                                    onClick={() => handleFuzzyContactSelect(candidate)}
+                                                >
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center">
+                                                            <svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke-linecap="round" stroke-linejoin="round" />
+                                                                <circle cx="12" cy="7" r="4" stroke-linecap="round" stroke-linejoin="round" />
+                                                            </svg>
+                                                        </div>
+                                                        <div class="text-left">
+                                                            <p class="text-sm text-white font-medium group-hover:text-cyan-300 transition-colors">{candidate.name}</p>
+                                                            <p class="text-[10px] text-gray-500 font-mono">{candidate.address.slice(0, 8)}...{candidate.address.slice(-6)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span class="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded-full">
+                                                        {Math.round(candidate.similarity * 100)}% 일치
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </Show>
 
                                 {/* Confidence bar */}
                                 <div class="flex items-center gap-2">
@@ -5581,45 +5604,11 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 </div>
                             </div>
 
-                            {/* Auth section */}
+                            {/* Action buttons */}
                             <div class="px-5 pb-5 space-y-2">
-                                {/* Biometric button - shown if supported */}
-                                <Show when={biometricSupported()}>
-                                    <Show
-                                        when={biometricRegistered()}
-                                        fallback={
-                                            <button
-                                                class="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-sm font-medium hover:bg-purple-500/20 transition-colors"
-                                                onClick={async () => {
-                                                    const ok = await registerBiometric(
-                                                        auth.user()?.uid || 'user',
-                                                        auth.user()?.displayName || auth.user()?.email || 'Vision User'
-                                                    );
-                                                    if (ok) setBiometricRegistered(true);
-                                                }}
-                                            >
-                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
-                                                </svg>
-                                                {biometricLabel()} 등록하기
-                                            </button>
-                                        }
-                                    >
-                                        <button
-                                            class="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:opacity-90 transition-all active:scale-95"
-                                            onClick={handleVoiceIntentConfirm}
-                                        >
-                                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04.054-.09A13.916 13.916 0 0 0 8 11a4 4 0 1 1 8 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0 0 15.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 0 0 8 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
-                                            </svg>
-                                            {biometricLabel()}로 승인
-                                        </button>
-                                    </Show>
-                                </Show>
-
-                                {/* Password fallback button */}
+                                {/* Password confirm button (primary) */}
                                 <button
-                                    class="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-sm font-medium hover:bg-white/8 transition-colors"
+                                    class="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:opacity-90 transition-all active:scale-95"
                                     onClick={handleVoiceIntentConfirm}
                                 >
                                     <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -5631,7 +5620,7 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                                 <button
                                     class="w-full text-center text-xs text-gray-600 hover:text-gray-400 transition-colors py-1"
-                                    onClick={() => setShowVoiceIntentModal(false)}
+                                    onClick={() => { setShowVoiceIntentModal(false); setFuzzyContactCandidates([]); }}
                                 >
                                     취소
                                 </button>

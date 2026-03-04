@@ -326,3 +326,100 @@ export function resolveIntentRecipient(intent: VoiceIntent, contacts: Contact[])
 
     return null;
 }
+
+// ── Korean Jamo Decomposition (자모 분리) ──────────────────────────────────────
+// Decomposes Hangul syllables into constituent jamo (consonants + vowels)
+// e.g. '박' → 'ㅂㅏㄱ', '지' → 'ㅈㅣ', '현' → 'ㅎㅕㄴ'
+const CHO = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+const JUNG = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'];
+const JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+
+function decomposeKorean(text: string): string {
+    let result = '';
+    for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        // Hangul syllable range: 0xAC00 ~ 0xD7A3
+        if (code >= 0xAC00 && code <= 0xD7A3) {
+            const offset = code - 0xAC00;
+            const cho = Math.floor(offset / (21 * 28));
+            const jung = Math.floor((offset % (21 * 28)) / 28);
+            const jong = offset % 28;
+            result += CHO[cho] + JUNG[jung] + JONG[jong];
+        } else {
+            result += ch.toLowerCase();
+        }
+    }
+    return result;
+}
+
+/**
+ * Calculate similarity between two strings using jamo decomposition.
+ * Returns 0~1 (1 = identical).
+ */
+function jamoSimilarity(a: string, b: string): number {
+    const ja = decomposeKorean(a);
+    const jb = decomposeKorean(b);
+    if (ja === jb) return 1;
+    if (!ja || !jb) return 0;
+
+    // Levenshtein distance on jamo sequences
+    const m = ja.length, n = jb.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = ja[i - 1] === jb[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return 1 - dp[m][n] / Math.max(m, n);
+}
+
+// ── Fuzzy Contact Matching ────────────────────────────────────────────────────
+export interface FuzzyContactMatch {
+    name: string;
+    alias?: string;
+    address: string;
+    similarity: number; // 0~1
+}
+
+/**
+ * Find contacts with names similar to the query using Korean jamo decomposition.
+ * Returns candidates sorted by similarity (highest first), filtered by threshold.
+ * Also catches exact substring matches and same-name (동명이인) cases.
+ */
+export function findFuzzyContactMatches(
+    query: string,
+    contacts: Contact[],
+    threshold: number = 0.5
+): FuzzyContactMatch[] {
+    if (!query || contacts.length === 0) return [];
+    const q = query.trim();
+
+    const results: FuzzyContactMatch[] = [];
+
+    for (const c of contacts) {
+        const name = c.internalName || '';
+        const alias = c.alias || '';
+
+        // Compare against both name and alias, take the higher score
+        const nameSim = jamoSimilarity(q, name);
+        const aliasSim = alias ? jamoSimilarity(q, alias) : 0;
+        const bestSim = Math.max(nameSim, aliasSim);
+
+        if (bestSim >= threshold) {
+            results.push({
+                name: name,
+                alias: alias || undefined,
+                address: c.address,
+                similarity: bestSim,
+            });
+        }
+    }
+
+    // Sort by similarity descending
+    results.sort((a, b) => b.similarity - a.similarity);
+    return results;
+}
