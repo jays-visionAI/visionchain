@@ -328,7 +328,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                         rel="noopener noreferrer"
                                         class="flex items-center gap-3 px-5 py-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-blue-500/30 rounded-2xl transition-all group"
                                     >
-                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center shrink-0">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center shrink-0 text-white">
                                             {windowsSvg()}
                                         </div>
                                         <div class="flex-1 min-w-0">
@@ -345,7 +345,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
                                         onClick={() => setShowCLI(!showCLI())}
                                         class="flex items-center gap-3 px-5 py-4 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] hover:border-emerald-500/30 rounded-2xl transition-all group text-left"
                                     >
-                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center shrink-0">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-green-500/20 flex items-center justify-center shrink-0 text-white">
                                             {terminalSvg()}
                                         </div>
                                         <div class="flex-1 min-w-0">
