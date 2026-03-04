@@ -807,7 +807,7 @@ const WalletCexPortfolio = (): JSX.Element => {
                 {/* IP Setup Guide Modal */}
                 <Show when={showIpGuide()}>
                     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setShowIpGuide(false); }}>
-                        <div class="w-full max-w-lg bg-[#111113] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl max-h-[85vh] overflow-y-auto">
+                        <div class="w-full max-w-lg bg-[#111113] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl max-h-[85vh] overflow-y-auto pb-[50px]">
                             {/* Header */}
                             <div class="flex items-center justify-between p-5 border-b border-white/[0.04] sticky top-0 bg-[#111113] z-10">
                                 <div class="flex items-center gap-3">
