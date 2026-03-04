@@ -11,6 +11,7 @@ import {
     streamVideoChunks,
     formatFileSize
 } from '../../services/diskService';
+import { getFirebaseDb } from '../../services/firebaseService';
 import { WalletService } from '../../services/walletService';
 import { contractService } from '../../services/contractService';
 import VCNTokenABI from '../../services/abi/VCNToken.json';
@@ -161,36 +162,58 @@ const VisionMarket = (props: { walletAddress?: string }) => {
             const pType = getPreviewType(mime, item.name);
 
             if (item.storageType === 'distributed' || item.cid) {
-                // Use chunked download for distributed files
-                if (pType === 'video' && item.chunkHashes?.length) {
+                // Ensure we have chunkHashes (market listing might not include them)
+                let chunkHashes = item.chunkHashes || [];
+                let fileType = item.type || mime;
+
+                if (chunkHashes.length === 0) {
+                    // Fetch full metadata from published_materials to get chunkHashes
+                    try {
+                        const { doc, getDoc } = await import('firebase/firestore');
+                        const db = getFirebaseDb();
+                        const marketDoc = await getDoc(doc(db, 'published_materials', item.id));
+                        if (marketDoc.exists()) {
+                            const data = marketDoc.data();
+                            chunkHashes = data?.chunkHashes || [];
+                            fileType = data?.type || fileType;
+                        }
+                    } catch (metaErr) {
+                        console.warn('[Market] Failed to fetch file metadata:', metaErr);
+                    }
+                }
+
+                if (pType === 'video' && chunkHashes.length > 0) {
                     // Stream video for faster preview
+                    const streamItem = { ...item, chunkHashes, type: fileType };
                     blob = await streamVideoChunks(
-                        item,
+                        streamItem,
                         (current, total, bytesLoaded) => {
                             setDownloadProgress(Math.round((current / total) * 100));
                         },
                         (partialUrl) => {
-                            // Early preview with partial data
                             if (previewUrl()) window.URL.revokeObjectURL(previewUrl());
                             setPreviewUrl(partialUrl);
                             setPreviewType('video');
                             setPurchaseStep('preview');
                         },
-                        2 * 1024 * 1024 // 2MB buffer before preview
+                        2 * 1024 * 1024
                     );
-                } else if (item.chunkHashes?.length) {
+                } else if (chunkHashes.length > 0) {
                     // Granular chunk download with progress
+                    const dlItem = { ...item, chunkHashes, type: fileType };
                     blob = await downloadDiskFileGranular(
-                        item,
+                        dlItem,
                         (current, total) => {
                             setDownloadProgress(Math.round((current / total) * 100));
                         },
                         10
                     );
+                } else if (item.downloadURL) {
+                    // No chunks available but has downloadURL
+                    const response = await fetch(item.downloadURL);
+                    blob = await response.blob();
                 } else {
-                    // Fallback to single call (small distributed files)
-                    const result = await downloadDiskFile(userEmail, item.id);
-                    blob = new Blob([await result.blob.arrayBuffer()], { type: item.type || result.fileType });
+                    throw new Error('File chunks not available. Please try again later.');
                 }
             } else if (item.downloadURL) {
                 const response = await fetch(item.downloadURL);
