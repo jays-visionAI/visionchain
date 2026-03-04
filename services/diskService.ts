@@ -14,6 +14,7 @@
 import { getFirebaseDb, getFirebaseApp } from './firebaseService';
 import { collection, doc, setDoc, getDocs, deleteDoc, query, where, orderBy, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getStorage, ref, uploadBytesResumable } from 'firebase/storage';
 
 // ─── Types ───
 
@@ -383,43 +384,97 @@ export const uploadDiskFile = async (
         status: 'uploading',
     });
 
-    // Read file as base64
-    const arrayBuffer = await file.arrayBuffer();
-    const base64 = arrayBufferToBase64(arrayBuffer);
-
-    onProgress?.({
-        fileName: file.name,
-        progress: 30,
-        bytesTransferred: file.size * 0.3,
-        totalBytes: file.size,
-        status: 'uploading',
-    });
+    // Threshold for direct base64 upload via callable function
+    const DIRECT_UPLOAD_LIMIT = 8 * 1024 * 1024; // 8MB
 
     // Call Cloud Function for distributed upload
     const functions = getFunctions(getFirebaseApp());
     const diskUploadCall = httpsCallable<
-        { fileData: string; fileName: string; fileType: string; folder: string; fileSize: number; thumbnail?: string },
+        { fileData?: string; tempStoragePath?: string; fileName: string; fileType: string; folder: string; fileSize: number; thumbnail?: string },
         {
             success: boolean; fileId: string; fileKey: string; cid: string;
             merkleRoot: string; chunkCount: number; totalSize: number; storageType: string;
             abstract?: string; thumbnailURL?: string;
         }
-    >(functions, 'diskUpload');
+    >(functions, 'diskUpload', { timeout: 300000 });
 
-    onProgress?.({
-        fileName: file.name,
-        progress: 50,
-        bytesTransferred: file.size * 0.5,
-        totalBytes: file.size,
-        status: 'uploading',
-    });
+    let callPayload: any;
 
-    // Simulate gradual progress during Cloud Function call (50% → 95%)
-    let simulatedProgress = 50;
+    if (file.size <= DIRECT_UPLOAD_LIMIT) {
+        // Small files: send base64 directly (fast path)
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = arrayBufferToBase64(arrayBuffer);
+
+        onProgress?.({
+            fileName: file.name,
+            progress: 40,
+            bytesTransferred: file.size * 0.4,
+            totalBytes: file.size,
+            status: 'uploading',
+        });
+
+        callPayload = {
+            fileData: base64,
+            fileName: file.name,
+            fileType: file.type,
+            folder,
+            fileSize: file.size,
+            thumbnail: thumbnailDataUrl || undefined,
+        };
+    } else {
+        // Large files: upload to Firebase Storage first, then pass path
+        const storage = getStorage(getFirebaseApp());
+        const tempId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const tempPath = `disk_temp/${email}/${tempId}`;
+        const storageRef = ref(storage, tempPath);
+
+        // Upload with real progress tracking
+        await new Promise<void>((resolve, reject) => {
+            const uploadTask = uploadBytesResumable(storageRef, file, {
+                contentType: file.type,
+            });
+
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    // Map Storage upload progress to 15% - 70% range
+                    const pct = (snapshot.bytesTransferred / snapshot.totalBytes);
+                    const mappedProgress = 15 + Math.round(pct * 55);
+                    onProgress?.({
+                        fileName: file.name,
+                        progress: mappedProgress,
+                        bytesTransferred: snapshot.bytesTransferred,
+                        totalBytes: snapshot.totalBytes,
+                        status: 'uploading',
+                    });
+                },
+                (error) => reject(error),
+                () => resolve(),
+            );
+        });
+
+        onProgress?.({
+            fileName: file.name,
+            progress: 70,
+            bytesTransferred: file.size * 0.7,
+            totalBytes: file.size,
+            status: 'uploading',
+        });
+
+        callPayload = {
+            tempStoragePath: tempPath,
+            fileName: file.name,
+            fileType: file.type,
+            folder,
+            fileSize: file.size,
+            thumbnail: thumbnailDataUrl || undefined,
+        };
+    }
+
+    // Simulate gradual progress during Cloud Function call (70% → 95%)
+    let simulatedProgress = callPayload.fileData ? 40 : 70;
     const progressInterval = setInterval(() => {
         if (simulatedProgress < 95) {
-            // Slow down as we approach 95% for a natural feel
-            const increment = simulatedProgress < 70 ? 3 : simulatedProgress < 85 ? 2 : 0.5;
+            const increment = simulatedProgress < 80 ? 3 : simulatedProgress < 90 ? 2 : 0.5;
             simulatedProgress = Math.min(95, simulatedProgress + increment);
             onProgress?.({
                 fileName: file.name,
@@ -433,14 +488,7 @@ export const uploadDiskFile = async (
 
     let result;
     try {
-        result = await diskUploadCall({
-            fileData: base64,
-            fileName: file.name,
-            fileType: file.type,
-            folder,
-            fileSize: file.size,
-            thumbnail: thumbnailDataUrl || undefined,
-        });
+        result = await diskUploadCall(callPayload);
     } finally {
         clearInterval(progressInterval);
     }

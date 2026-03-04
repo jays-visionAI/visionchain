@@ -17786,13 +17786,16 @@ function chunkBuffer(data) {
  * Receives file as base64, chunks it, stages chunks in Firestore,
  * registers in chunk_registry for Vision Nodes to pull.
  */
-exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120, memory: "512MiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
+exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 300, memory: "1GiB", secrets: ["EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const email = request.auth.token.email.toLowerCase();
-  const { fileData, fileName, fileType, folder, fileSize, thumbnail } = request.data;
+  const { fileData, tempStoragePath, fileName, fileType, folder, fileSize, thumbnail } = request.data;
 
-  if (!fileData || !fileName) {
-    throw new HttpsError("invalid-argument", "fileData (base64) and fileName are required.");
+  if (!fileData && !tempStoragePath) {
+    throw new HttpsError("invalid-argument", "fileData (base64) or tempStoragePath is required.");
+  }
+  if (!fileName) {
+    throw new HttpsError("invalid-argument", "fileName is required.");
   }
 
   // Check subscription
@@ -17801,8 +17804,24 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120,
     throw new HttpsError("failed-precondition", "Active disk subscription required.");
   }
 
-  const buffer = Buffer.from(fileData, "base64");
-  const maxFileSize = 100 * 1024 * 1024; // 100MB per file via Cloud Function
+  // Get file buffer - either from base64 or from temp Storage
+  let buffer;
+  if (tempStoragePath) {
+    // Large file: read from Firebase Storage temp path
+    try {
+      const tempFile = admin.storage().bucket().file(tempStoragePath);
+      const [fileBuffer] = await tempFile.download();
+      buffer = fileBuffer;
+      // Clean up temp file after reading
+      tempFile.delete().catch(() => { });
+    } catch (storageErr) {
+      throw new HttpsError("internal", "Failed to read temp file from storage: " + storageErr.message);
+    }
+  } else {
+    buffer = Buffer.from(fileData, "base64");
+  }
+
+  const maxFileSize = 500 * 1024 * 1024; // 500MB per file
   if (buffer.length > maxFileSize) {
     throw new HttpsError("invalid-argument", `File exceeds ${maxFileSize / (1024 * 1024)}MB limit.`);
   }
