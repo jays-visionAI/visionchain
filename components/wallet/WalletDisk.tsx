@@ -711,6 +711,7 @@ export const WalletDisk = (props: {
             prevBlobURL = '';
         }
         setPreviewURL('');
+        setPreviewLoading(false);
         setVideoStreamProgress(null);
         setVideoBuffering(false);
         setVideoFullyLoaded(false);
