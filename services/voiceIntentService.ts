@@ -324,6 +324,34 @@ export function resolveIntentRecipient(intent: VoiceIntent, contacts: Contact[])
     });
     if (partialMatch?.address) return partialMatch.address;
 
+    // Phase 3: Cross-language phonetic matching
+    // Romanizes Korean voice input and compares with English contact names
+    let bestPhoneticMatch: Contact | null = null;
+    let bestPhoneticScore = 0;
+    for (const c of contacts) {
+        const nameSim = crossLanguagePhoneticSimilarity(intent.recipient, c.internalName || '');
+        const aliasSim = c.alias ? crossLanguagePhoneticSimilarity(intent.recipient, c.alias) : 0;
+        const best = Math.max(nameSim, aliasSim);
+        if (best > bestPhoneticScore) {
+            bestPhoneticScore = best;
+            bestPhoneticMatch = c;
+        }
+    }
+    // Only auto-resolve if a single high-confidence phonetic match is found
+    // Lower-confidence matches will be shown as fuzzy candidates in the UI
+    if (bestPhoneticMatch && bestPhoneticScore >= 0.6) {
+        // Check if there are other contacts with similar scores (potential ambiguity)
+        const closeMatches = contacts.filter(c => {
+            const nameSim = crossLanguagePhoneticSimilarity(intent.recipient!, c.internalName || '');
+            const aliasSim = c.alias ? crossLanguagePhoneticSimilarity(intent.recipient!, c.alias) : 0;
+            return Math.max(nameSim, aliasSim) >= bestPhoneticScore - 0.1;
+        });
+        // Only auto-resolve if there's exactly one clear winner
+        if (closeMatches.length === 1 && bestPhoneticScore >= 0.7) {
+            return bestPhoneticMatch.address;
+        }
+    }
+
     return null;
 }
 
@@ -377,6 +405,131 @@ function jamoSimilarity(a: string, b: string): number {
     return 1 - dp[m][n] / Math.max(m, n);
 }
 
+// ── Cross-Language Phonetic Matching (한국어 ↔ English) ──────────────────────
+// Romanizes Korean jamo into approximate English phonetics for cross-language
+// name matching. e.g. "징크" → "jingk" ≈ "zynk"
+
+// Initial consonant (초성) → romanized English sound
+const CHO_ROMAN: Record<string, string> = {
+    'ㄱ': 'g', 'ㄲ': 'kk', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'tt',
+    'ㄹ': 'r', 'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'pp', 'ㅅ': 's',
+    'ㅆ': 'ss', 'ㅇ': '', 'ㅈ': 'j', 'ㅉ': 'jj', 'ㅊ': 'ch',
+    'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
+};
+
+// Vowel (중성) → romanized English sound
+const JUNG_ROMAN: Record<string, string> = {
+    'ㅏ': 'a', 'ㅐ': 'ae', 'ㅑ': 'ya', 'ㅒ': 'yae', 'ㅓ': 'eo',
+    'ㅔ': 'e', 'ㅕ': 'yeo', 'ㅖ': 'ye', 'ㅗ': 'o', 'ㅘ': 'wa',
+    'ㅙ': 'wae', 'ㅚ': 'oe', 'ㅛ': 'yo', 'ㅜ': 'u', 'ㅝ': 'wo',
+    'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'yu', 'ㅡ': 'eu', 'ㅢ': 'ui',
+    'ㅣ': 'i',
+};
+
+// Final consonant (종성) → romanized English sound
+const JONG_ROMAN: Record<string, string> = {
+    '': '', 'ㄱ': 'k', 'ㄲ': 'k', 'ㄳ': 'ks', 'ㄴ': 'n',
+    'ㄵ': 'nj', 'ㄶ': 'n', 'ㄷ': 't', 'ㄹ': 'l', 'ㄺ': 'lk',
+    'ㄻ': 'lm', 'ㄼ': 'lb', 'ㄽ': 'ls', 'ㄾ': 'lt', 'ㄿ': 'lp',
+    'ㅀ': 'l', 'ㅁ': 'm', 'ㅂ': 'p', 'ㅄ': 'ps', 'ㅅ': 't',
+    'ㅆ': 't', 'ㅇ': 'ng', 'ㅈ': 't', 'ㅊ': 't', 'ㅋ': 'k',
+    'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h',
+};
+
+/**
+ * Convert Korean text to romanized phonetic form.
+ * e.g. "징크" → "jingk", "박지현" → "bakjihyeon"
+ */
+function koreanToRomanized(text: string): string {
+    let result = '';
+    for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        if (code >= 0xAC00 && code <= 0xD7A3) {
+            const offset = code - 0xAC00;
+            const cho = Math.floor(offset / (21 * 28));
+            const jung = Math.floor((offset % (21 * 28)) / 28);
+            const jong = offset % 28;
+            result += (CHO_ROMAN[CHO[cho]] || '') + (JUNG_ROMAN[JUNG[jung]] || '') + (JONG_ROMAN[JONG[jong]] || '');
+        } else {
+            result += ch.toLowerCase();
+        }
+    }
+    return result;
+}
+
+/**
+ * Normalize an English string to a simplified phonetic key.
+ * Strips common silent patterns and simplifies phonemes for better
+ * cross-language comparison.
+ * e.g. "ZYNK" → "zink", "phone" → "fone"
+ */
+function englishPhoneticNormalize(text: string): string {
+    let s = text.toLowerCase().trim();
+    // Simplify common English phoneme patterns
+    s = s.replace(/ph/g, 'f');
+    s = s.replace(/ck/g, 'k');
+    s = s.replace(/gh/g, '');       // silent gh (e.g. "knight")
+    s = s.replace(/wr/g, 'r');      // wr → r
+    s = s.replace(/kn/g, 'n');      // kn → n
+    s = s.replace(/wh/g, 'w');      // wh → w
+    s = s.replace(/th/g, 't');      // approximation for cross-lang
+    s = s.replace(/sh/g, 's');      // approximation
+    s = s.replace(/ch/g, 'ch');     // keep ch
+    // Map y → i when used as a vowel (between/after consonants)
+    s = s.replace(/([bcdfghjklmnpqrstvwxz])y([bcdfghjklmnpqrstvwxz]|$)/g, '$1i$2');
+    // Remove doubled consonants
+    s = s.replace(/([bcdfghjklmnpqrstvwxz])\1/g, '$1');
+    // Remove trailing silent e
+    s = s.replace(/([bcdfghjklmnpqrstvwxz])e$/, '$1');
+    return s;
+}
+
+/**
+ * Levenshtein distance between two strings.
+ */
+function levenshteinDistance(a: string, b: string): number {
+    const m = a.length, n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return dp[m][n];
+}
+
+/**
+ * Check if a string contains any Hangul characters.
+ */
+function containsKorean(text: string): boolean {
+    return /[\uAC00-\uD7A3\u3131-\u3163]/.test(text);
+}
+
+/**
+ * Cross-language phonetic similarity.
+ * Converts Korean to romanized form and English to a phonetic key,
+ * then compares using Levenshtein distance.
+ * Returns 0~1 (1 = identical phonetics).
+ */
+function crossLanguagePhoneticSimilarity(a: string, b: string): number {
+    if (!a || !b) return 0;
+
+    // Romanize each side depending on language
+    const phoneticA = containsKorean(a) ? koreanToRomanized(a) : englishPhoneticNormalize(a);
+    const phoneticB = containsKorean(b) ? koreanToRomanized(b) : englishPhoneticNormalize(b);
+
+    if (phoneticA === phoneticB) return 1;
+    if (!phoneticA || !phoneticB) return 0;
+
+    const dist = levenshteinDistance(phoneticA, phoneticB);
+    const maxLen = Math.max(phoneticA.length, phoneticB.length);
+    return 1 - dist / maxLen;
+}
+
 // ── Fuzzy Contact Matching ────────────────────────────────────────────────────
 export interface FuzzyContactMatch {
     name: string;
@@ -386,14 +539,15 @@ export interface FuzzyContactMatch {
 }
 
 /**
- * Find contacts with names similar to the query using Korean jamo decomposition.
+ * Find contacts with names similar to the query using both Korean jamo
+ * decomposition AND cross-language phonetic matching.
  * Returns candidates sorted by similarity (highest first), filtered by threshold.
- * Also catches exact substring matches and same-name (동명이인) cases.
+ * Handles Korean↔Korean (jamo) and Korean↔English (romanization) comparisons.
  */
 export function findFuzzyContactMatches(
     query: string,
     contacts: Contact[],
-    threshold: number = 0.5
+    threshold: number = 0.45
 ): FuzzyContactMatch[] {
     if (!query || contacts.length === 0) return [];
     const q = query.trim();
@@ -404,10 +558,16 @@ export function findFuzzyContactMatches(
         const name = c.internalName || '';
         const alias = c.alias || '';
 
-        // Compare against both name and alias, take the higher score
-        const nameSim = jamoSimilarity(q, name);
-        const aliasSim = alias ? jamoSimilarity(q, alias) : 0;
-        const bestSim = Math.max(nameSim, aliasSim);
+        // Method 1: Korean jamo similarity (best for Korean↔Korean)
+        const jamoNameSim = jamoSimilarity(q, name);
+        const jamoAliasSim = alias ? jamoSimilarity(q, alias) : 0;
+
+        // Method 2: Cross-language phonetic similarity (best for Korean↔English)
+        const phoneticNameSim = crossLanguagePhoneticSimilarity(q, name);
+        const phoneticAliasSim = alias ? crossLanguagePhoneticSimilarity(q, alias) : 0;
+
+        // Take the best score from all methods
+        const bestSim = Math.max(jamoNameSim, jamoAliasSim, phoneticNameSim, phoneticAliasSim);
 
         if (bestSim >= threshold) {
             results.push({

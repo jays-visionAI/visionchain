@@ -5,6 +5,7 @@ import {
     listPublishedMaterials,
     purchaseMaterial,
     checkPurchaseStatus,
+    downloadDiskFile,
     formatFileSize
 } from '../../services/diskService';
 import {
@@ -93,11 +94,44 @@ const VisionMarket = (props: { walletAddress?: string }) => {
             return;
         }
 
-        if (purchasedIds().has(item.id) || item.publisherEmail === auth.user()?.email) {
-            window.open(item.downloadURL, '_blank');
+        const userEmail = auth.user()?.email || '';
+
+        // Helper: download distributed file as blob
+        const downloadDistributedFile = async (file: DiskFile) => {
+            setPurchasingId(file.id);
+            try {
+                const result = await downloadDiskFile(userEmail, file.id);
+                const blob = new Blob([await result.blob.arrayBuffer()], { type: file.type || result.fileType });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.name;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            } catch (err: any) {
+                console.error('Download failed:', err);
+                alert('Download failed: ' + (err.message || 'Unknown error'));
+            } finally {
+                setPurchasingId('');
+            }
+        };
+
+        // Already purchased or own file - direct download
+        if (purchasedIds().has(item.id) || item.publisherEmail === userEmail) {
+            if (item.storageType === 'distributed' || item.cid) {
+                await downloadDistributedFile(item);
+            } else if (item.downloadURL) {
+                window.open(item.downloadURL, '_blank');
+            } else {
+                alert('Download URL not available.');
+            }
             return;
         }
 
+        // New purchase
         if (!confirm(`Purchase "${item.name}" for ${item.priceVcn} VCN?`)) return;
 
         setPurchasingId(item.id);
@@ -106,7 +140,12 @@ const VisionMarket = (props: { walletAddress?: string }) => {
             if (result.success) {
                 setPurchasedIds(prev => new Set(prev).add(item.id));
                 alert('Purchase successful!');
-                window.open(result.downloadURL, '_blank');
+                // Download the file
+                if (item.storageType === 'distributed' || item.cid) {
+                    await downloadDistributedFile(item);
+                } else if (result.downloadURL) {
+                    window.open(result.downloadURL, '_blank');
+                }
             }
         } catch (err: any) {
             console.error('Purchase failed:', err);
@@ -195,12 +234,12 @@ const VisionMarket = (props: { walletAddress?: string }) => {
 
                                         {/* Thumbnail Area */}
                                         <div class="w-full aspect-video rounded-2xl bg-black/40 mb-4 flex items-center justify-center overflow-hidden border border-white/5 relative">
-                                            <Show when={item.type.startsWith('image/')} fallback={
+                                            <Show when={item.thumbnailURL || item.thumbnail || (item.type.startsWith('image/') && item.downloadURL)} fallback={
                                                 <div class={`${fileTypeColor(item.type)} opacity-40 group-hover:opacity-100 transition-all`}>
                                                     <FileTypeIcon type={item.type} name={item.name} class="w-12 h-12" />
                                                 </div>
                                             }>
-                                                <img src={item.downloadURL} alt={item.name} class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
+                                                <img src={item.thumbnailURL || item.thumbnail || item.downloadURL} alt={item.name} class="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-all" />
                                             </Show>
                                             {/* Overlay for non-purchased */}
                                             <Show when={!purchasedIds().has(item.id) && item.publisherEmail !== auth.user()?.email}>
@@ -236,8 +275,8 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                                 onClick={() => handlePurchase(item)}
                                                 disabled={purchasingId() === item.id}
                                                 class={`h-10 px-5 flex items-center justify-center gap-2 rounded-xl font-black text-xs uppercase tracking-tight transition-all active:scale-95 ${purchasedIds().has(item.id) || item.publisherEmail === auth.user()?.email
-                                                        ? 'bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10'
-                                                        : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-lg shadow-cyan-500/20'
+                                                    ? 'bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/10'
+                                                    : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-lg shadow-cyan-500/20'
                                                     }`}
                                             >
                                                 {purchasingId() === item.id ? (
