@@ -17900,6 +17900,41 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120,
     }
 
     // Save file metadata
+    // ── Server-Side Thumbnail Generation & Storage ──
+    let thumbnailURL = "";
+    try {
+      const bucket = admin.storage().bucket();
+      const thumbPath = `disk_thumbnails/${email}/${fileId}.webp`;
+      const thumbFile = bucket.file(thumbPath);
+
+      if (fileType && fileType.startsWith("image/")) {
+        // Generate thumbnail from image using sharp
+        const sharp = require("sharp");
+        const thumbBuffer = await sharp(buffer)
+          .resize(400, 400, { fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 75 })
+          .toBuffer();
+        await thumbFile.save(thumbBuffer, { contentType: "image/webp" });
+        const [signedUrl] = await thumbFile.getSignedUrl({ action: "read", expires: "2030-01-01" });
+        thumbnailURL = signedUrl;
+        console.log(`[Disk] Generated image thumbnail: ${thumbPath} (${thumbBuffer.length} bytes)`);
+      } else if (fileType && fileType.startsWith("video/") && thumbnail) {
+        // For video: save client-provided base64 thumbnail to Storage
+        const base64Match = thumbnail.match(/^data:([^;]+);base64,(.+)$/);
+        if (base64Match) {
+          const thumbBuffer = Buffer.from(base64Match[2], "base64");
+          const thumbContentType = base64Match[1] || "image/webp";
+          await thumbFile.save(thumbBuffer, { contentType: thumbContentType });
+          const [signedUrl] = await thumbFile.getSignedUrl({ action: "read", expires: "2030-01-01" });
+          thumbnailURL = signedUrl;
+          console.log(`[Disk] Saved video thumbnail: ${thumbPath} (${thumbBuffer.length} bytes)`);
+        }
+      }
+    } catch (thumbErr) {
+      console.warn("[Disk] Thumbnail generation/upload failed (non-blocking):", thumbErr.message);
+      // thumbnailURL stays empty, fallback to client base64
+    }
+
     const fileMetadata = {
       id: fileId,
       name: fileName,
@@ -17922,6 +17957,7 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120,
       targetReplicas: 3,
       currentReplicas: 0,
       thumbnail: thumbnail || "",
+      thumbnailURL,
       abstract: fileAbstract,
     };
 
@@ -17945,6 +17981,7 @@ exports.diskUpload = onCall({ cors: true, maxInstances: 10, timeoutSeconds: 120,
       totalSize: buffer.length,
       storageType: "distributed",
       abstract: fileAbstract,
+      thumbnailURL,
     };
   } catch (distributedErr) {
     // ── Fallback: Firebase Storage ──

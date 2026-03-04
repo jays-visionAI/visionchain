@@ -51,6 +51,8 @@ export interface DiskFile {
     currentReplicas?: number;
     // AI-generated abstract for documents
     abstract?: string;
+    // Server-generated thumbnail URL (Firebase Storage signed URL)
+    thumbnailURL?: string;
 }
 
 export interface DiskFolder {
@@ -367,7 +369,7 @@ export const uploadDiskFile = async (
         {
             success: boolean; fileId: string; fileKey: string; cid: string;
             merkleRoot: string; chunkCount: number; totalSize: number; storageType: string;
-            abstract?: string;
+            abstract?: string; thumbnailURL?: string;
         }
     >(functions, 'diskUpload');
 
@@ -430,6 +432,7 @@ export const uploadDiskFile = async (
         chunkCount: data.chunkCount,
         replicationStatus: 'staging',
         thumbnail: thumbnailDataUrl || undefined,
+        thumbnailURL: data.thumbnailURL || undefined,
         abstract: data.abstract || undefined,
     };
 

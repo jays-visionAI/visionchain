@@ -198,7 +198,7 @@ export const WalletDisk = (props: {
 
             // Lazy backfill thumbnails for distributed files without thumbnails
             const filesToBackfill = fileList.filter(f =>
-                !f.thumbnail &&
+                !f.thumbnailURL && !f.thumbnail &&
                 !f.isEncrypted &&
                 (f.storageType === 'distributed' || f.cid) &&
                 (f.type.startsWith('image/') || f.type.startsWith('video/')) &&
@@ -1233,7 +1233,7 @@ export const WalletDisk = (props: {
                                         {/* Thumbnail or Icon */}
                                         <div class="w-full aspect-square rounded-lg bg-white/[0.03] flex items-center justify-center overflow-hidden border border-white/5 relative">
                                             <Show
-                                                when={file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
+                                                when={file.thumbnailURL || file.thumbnail || (file.type.startsWith('image/') && file.downloadURL)}
                                                 fallback={
                                                     <Show
                                                         when={file.type.startsWith('video/')}
@@ -1253,7 +1253,7 @@ export const WalletDisk = (props: {
                                                 }
                                             >
                                                 <img
-                                                    src={file.thumbnail || file.downloadURL}
+                                                    src={file.thumbnailURL || file.thumbnail || file.downloadURL}
                                                     alt={file.name}
                                                     class="w-full h-full object-cover"
                                                     loading="lazy"
