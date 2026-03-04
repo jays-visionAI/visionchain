@@ -3791,6 +3791,7 @@ export interface AdminDocument {
     author: string;
     updatedAt: string;
     attachments: string[];
+    isAnnouncement?: boolean;
 }
 
 export const getDocuments = async (): Promise<AdminDocument[]> => {
@@ -3819,6 +3820,42 @@ export const deleteAdminDocument = async (id: string): Promise<void> => {
     const db = getFirebaseDb();
     const docRef = doc(db, 'system_documents', id);
     await deleteDoc(docRef);
+};
+
+// Toggle document as announcement: syncs with global_announcements collection
+export const toggleDocumentAnnouncement = async (docData: AdminDocument, isAnnouncement: boolean): Promise<void> => {
+    const db = getFirebaseDb();
+    const docRef = doc(db, 'system_documents', docData.id);
+
+    // Update the isAnnouncement flag on the document
+    await updateDoc(docRef, { isAnnouncement });
+
+    if (isAnnouncement) {
+        // Create a corresponding global_announcement linked to this document
+        await addDoc(collection(db, 'global_announcements'), {
+            title: docData.title,
+            content: docData.content,
+            type: 'feature' as const,
+            priority: 'normal' as const,
+            isActive: true,
+            createdBy: docData.author,
+            sourceDocId: docData.id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        console.log(`[Announcements] Document "${docData.title}" published as announcement`);
+    } else {
+        // Remove the linked announcement(s)
+        const q = query(
+            collection(db, 'global_announcements'),
+            where('sourceDocId', '==', docData.id)
+        );
+        const snapshot = await getDocs(q);
+        for (const announcementDoc of snapshot.docs) {
+            await deleteDoc(announcementDoc.ref);
+        }
+        console.log(`[Announcements] Removed announcement for document "${docData.title}"`);
+    }
 };
 
 // --- Notification Engine ---

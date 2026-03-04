@@ -6,7 +6,7 @@ import {
     FileText,
     Upload
 } from 'lucide-solid';
-import { getDocuments, saveAdminDocument, deleteAdminDocument, AdminDocument } from '../../services/firebaseService';
+import { getDocuments, saveAdminDocument, deleteAdminDocument, toggleDocumentAnnouncement, AdminDocument } from '../../services/firebaseService';
 
 // Sub-components
 import { DocTableRow } from './documents/DocTableRow';
@@ -131,6 +131,16 @@ export default function AdminDocuments() {
             alert("Failed to delete.");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleToggleAnnouncement = async (doc: AdminDocument) => {
+        try {
+            await toggleDocumentAnnouncement(doc, !doc.isAnnouncement);
+            await loadDocuments();
+        } catch (error) {
+            console.error('Failed to toggle announcement:', error);
+            alert('Failed to toggle announcement.');
         }
     };
 
@@ -487,6 +497,7 @@ export default function AdminDocuments() {
                                             setSelectedDoc(d);
                                             setIsEditorOpen(true);
                                         }}
+                                        onToggleAnnouncement={handleToggleAnnouncement}
                                     />
                                 )}
                             </For>

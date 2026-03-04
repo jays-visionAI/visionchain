@@ -1,5 +1,5 @@
 import { Component, createSignal, Show } from 'solid-js';
-import { FileText, MoreHorizontal, Trash2, Eye, Edit } from 'lucide-solid';
+import { FileText, MoreHorizontal, Trash2, Eye, Edit, Megaphone } from 'lucide-solid';
 import { AdminDocument } from '../../../services/firebaseService';
 
 interface DocTableRowProps {
@@ -7,6 +7,7 @@ interface DocTableRowProps {
     onClick: (doc: AdminDocument) => void;
     onDelete?: (doc: AdminDocument) => void;
     onEdit?: (doc: AdminDocument) => void;
+    onToggleAnnouncement?: (doc: AdminDocument) => void;
 }
 
 export const DocTableRow: Component<DocTableRowProps> = (props) => {
@@ -19,10 +20,21 @@ export const DocTableRow: Component<DocTableRowProps> = (props) => {
         >
             <td class="px-8 py-6">
                 <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-cyan-500/10 group-hover:border-cyan-500/20 transition-all">
-                        <FileText class="w-5 h-5 text-gray-400 group-hover:text-cyan-400" />
+                    <div class={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${props.doc.isAnnouncement
+                            ? 'bg-amber-500/10 border-amber-500/30'
+                            : 'bg-white/5 border-white/10 group-hover:bg-cyan-500/10 group-hover:border-cyan-500/20'
+                        }`}>
+                        {props.doc.isAnnouncement
+                            ? <Megaphone class="w-5 h-5 text-amber-400" />
+                            : <FileText class="w-5 h-5 text-gray-400 group-hover:text-cyan-400" />
+                        }
                     </div>
-                    <span class="text-[13px] font-bold group-hover:text-cyan-400 transition-colors">{props.doc.title}</span>
+                    <div class="flex flex-col">
+                        <span class="text-[13px] font-bold group-hover:text-cyan-400 transition-colors">{props.doc.title}</span>
+                        <Show when={props.doc.isAnnouncement}>
+                            <span class="text-[9px] font-black text-amber-400 uppercase tracking-widest mt-0.5">Published as Announcement</span>
+                        </Show>
+                    </div>
                 </div>
             </td>
             <td class="px-8 py-6">
@@ -62,7 +74,7 @@ export const DocTableRow: Component<DocTableRowProps> = (props) => {
                             }}
                         />
                         {/* Dropdown menu */}
-                        <div class="absolute right-0 top-full mt-1 w-44 bg-[#12121a] border border-white/10 rounded-xl shadow-2xl shadow-black/60 z-50 overflow-hidden py-1">
+                        <div class="absolute right-0 top-full mt-1 w-52 bg-[#12121a] border border-white/10 rounded-xl shadow-2xl shadow-black/60 z-50 overflow-hidden py-1">
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -85,6 +97,23 @@ export const DocTableRow: Component<DocTableRowProps> = (props) => {
                                 >
                                     <Edit class="w-4 h-4" />
                                     Edit
+                                </button>
+                            </Show>
+                            <Show when={props.onToggleAnnouncement}>
+                                <div class="h-px bg-white/[0.06] my-1" />
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpen(false);
+                                        props.onToggleAnnouncement?.(props.doc);
+                                    }}
+                                    class={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm transition-all ${props.doc.isAnnouncement
+                                            ? 'text-amber-400 hover:bg-amber-500/10'
+                                            : 'text-emerald-400 hover:bg-emerald-500/10'
+                                        }`}
+                                >
+                                    <Megaphone class="w-4 h-4" />
+                                    {props.doc.isAnnouncement ? 'Remove Announcement' : 'Publish as Announcement'}
                                 </button>
                             </Show>
                             <Show when={props.onDelete}>
