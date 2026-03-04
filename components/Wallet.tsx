@@ -2811,13 +2811,23 @@ const Wallet = (): JSX.Element => {
 
     /**
      * Called when user confirms the voice intent modal.
-     * Fills in the send flow fields and triggers biometric/password auth.
+     * Fills in the send flow fields and triggers password auth.
      */
     const handleVoiceIntentConfirm = async () => {
         const intent = voiceIntent();
         if (!intent || intent.action !== 'send') return;
 
         const resolvedAddress = voiceIntentRecipientAddress();
+
+        // Pre-check: is the wallet available for transactions?
+        const email = userProfile().email;
+        const encrypted = email ? WalletService.getEncryptedWallet(email) : null;
+        if (!encrypted) {
+            setShowVoiceIntentModal(false);
+            setFuzzyContactCandidates([]);
+            alert('지갑 키를 찾을 수 없습니다. 읽기 전용 모드입니다.\n15단어 복구 문구를 사용하여 지갑을 복원한 후 다시 시도해주세요.');
+            return;
+        }
 
         setShowVoiceIntentModal(false);
         setFuzzyContactCandidates([]);
