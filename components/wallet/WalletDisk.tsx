@@ -163,6 +163,7 @@ export const WalletDisk = (props: {
     const [useEncryption, setUseEncryption] = createSignal(true);
     const [encryptionPassword, setEncryptionPassword] = createSignal('');
     const [showPasswordModal, setShowPasswordModal] = createSignal(false);
+    const [pendingFiles, setPendingFiles] = createSignal<(FileList | File[]) | null>(null);
     const [decryptingFileId, setDecryptingFileId] = createSignal('');
     const [useDistributed, setUseDistributed] = createSignal(true);
 
@@ -281,9 +282,8 @@ export const WalletDisk = (props: {
         if (!email() || usage().status === 'overdue' || usage().status === 'none') return;
 
         if (useEncryption() && !encryptionPassword()) {
+            setPendingFiles(Array.from(fileList));
             setShowPasswordModal(true);
-            // We'll resume after password is set? Actually let's just ask for password first.
-            alert('Please set an encryption password in the settings first.');
             return;
         }
 
@@ -1955,6 +1955,12 @@ export const WalletDisk = (props: {
                                         }
                                         setShowPasswordModal(false);
                                         setUseEncryption(true);
+                                        // Auto-resume upload with pending files
+                                        const files = pendingFiles();
+                                        if (files && files.length > 0) {
+                                            setPendingFiles(null);
+                                            handleFiles(files);
+                                        }
                                     }}
                                     class="flex-1 h-14 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-black text-sm font-black uppercase tracking-tight shadow-lg shadow-cyan-500/20 transition-all"
                                 >

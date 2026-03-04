@@ -379,14 +379,36 @@ export const uploadDiskFile = async (
         status: 'uploading',
     });
 
-    const result = await diskUploadCall({
-        fileData: base64,
-        fileName: file.name,
-        fileType: file.type,
-        folder,
-        fileSize: file.size,
-        thumbnail: thumbnailDataUrl || undefined,
-    });
+    // Simulate gradual progress during Cloud Function call (50% → 95%)
+    let simulatedProgress = 50;
+    const progressInterval = setInterval(() => {
+        if (simulatedProgress < 95) {
+            // Slow down as we approach 95% for a natural feel
+            const increment = simulatedProgress < 70 ? 3 : simulatedProgress < 85 ? 2 : 0.5;
+            simulatedProgress = Math.min(95, simulatedProgress + increment);
+            onProgress?.({
+                fileName: file.name,
+                progress: Math.round(simulatedProgress),
+                bytesTransferred: file.size * (simulatedProgress / 100),
+                totalBytes: file.size,
+                status: 'uploading',
+            });
+        }
+    }, 500);
+
+    let result;
+    try {
+        result = await diskUploadCall({
+            fileData: base64,
+            fileName: file.name,
+            fileType: file.type,
+            folder,
+            fileSize: file.size,
+            thumbnail: thumbnailDataUrl || undefined,
+        });
+    } finally {
+        clearInterval(progressInterval);
+    }
 
     const data = result.data;
     const now = new Date().toISOString();
