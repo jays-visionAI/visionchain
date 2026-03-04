@@ -26,7 +26,62 @@ export function startDashboard(port: number): void {
     // JSON body parser for Agent API
     app.use(express.json({ limit: '50mb' }));
 
-    // Mount Agent API
+    // ── Public Chunk Serving (no auth, CORS enabled) ──
+
+    // CORS middleware for chunk endpoints
+    const chunkCors = (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type');
+        if (_req.method === 'OPTIONS') { res.sendStatus(204); return; }
+        next();
+    };
+
+    // Health check
+    app.get('/health', chunkCors, (_req, res) => {
+        const status = nodeManager.getStatus();
+        res.json({
+            ok: status.isRunning,
+            nodeId: status.nodeId,
+            nodeClass: status.nodeClass,
+            storage: {
+                totalChunks: status.storage.totalChunks,
+                usedBytes: status.storage.usedBytes,
+                maxGB: status.storage.maxGB,
+                usagePercent: status.storage.usagePercent,
+            },
+            uptime: status.uptimeSeconds,
+        });
+    });
+
+    // Check if chunk exists
+    app.get('/chunks/:hash/exists', chunkCors, (req, res) => {
+        const { hash } = req.params;
+        if (!hash || hash.length < 16) {
+            return res.status(400).json({ exists: false, error: 'Invalid hash' });
+        }
+        const exists = storageService.hasChunk(hash);
+        res.json({ exists, hash });
+    });
+
+    // Serve chunk data (binary)
+    app.get('/chunks/:hash', chunkCors, (req, res) => {
+        const { hash } = req.params;
+        if (!hash || hash.length < 16) {
+            return res.status(400).send('Invalid hash');
+        }
+        const data = storageService.getChunk(hash);
+        if (!data) {
+            return res.status(404).send('Chunk not found');
+        }
+        res.set('Content-Type', 'application/octet-stream');
+        res.set('Content-Length', String(data.length));
+        res.set('X-Chunk-Hash', hash);
+        res.set('Cache-Control', 'public, max-age=31536000, immutable'); // chunks are immutable
+        res.send(data);
+    });
+
+    // Mount Agent API (auth required)
     app.use('/agent/v1', createAgentRouter());
 
     // Serve static files

@@ -17,6 +17,9 @@ let tray = null;
 let nodeRunning = false;
 let heartbeatTimer = null;
 let config = null;
+let storageServer = null;
+let chunkSyncTimer = null;
+let isOnWifi = true; // Desktop defaults to WiFi
 let nodeStats = {
     heartbeatCount: 0,
     lastHeartbeat: null,
@@ -26,6 +29,9 @@ let nodeStats = {
     uptimeSeconds: 0,
     startedAt: null,
     errors: [],
+    storageChunks: 0,
+    storageBytes: 0,
+    chunkServed: 0,
 };
 
 // ── Force dark mode ──
@@ -175,6 +181,7 @@ async function sendHeartbeat() {
             node_class: config.nodeClass,
             storage_max_gb: config.storageMaxGB,
             version: '1.0.0',
+            chunk_endpoint: `http://${os.hostname()}:${CHUNK_PORT}`,
         });
 
         nodeStats.heartbeatCount++;
@@ -228,10 +235,232 @@ function getNodeStatus() {
         weight: nodeStats.weight,
         uptimeSeconds: uptime,
         errors: nodeStats.errors.slice(-5),
+        // Storage stats
+        storageChunks: nodeStats.storageChunks,
+        storageBytes: nodeStats.storageBytes,
+        chunkServed: nodeStats.chunkServed,
+        isOnWifi,
     };
 }
 
 // ── Node Start/Stop ──
+
+// ── Local Chunk Storage ──
+const CHUNKS_DIR = path.join(STORAGE_DIR, 'chunks');
+const DB_PATH = path.join(STORAGE_DIR, 'chunks.db');
+let chunkDb = null;
+
+function initChunkStorage() {
+    if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true });
+
+    try {
+        // Use better-sqlite3 if available, otherwise fallback to JSON file index
+        const Database = require('better-sqlite3');
+        chunkDb = new Database(DB_PATH);
+        chunkDb.pragma('journal_mode = WAL');
+        chunkDb.exec(`
+            CREATE TABLE IF NOT EXISTS chunks (
+                hash TEXT PRIMARY KEY,
+                file_key TEXT,
+                chunk_index INTEGER,
+                size INTEGER,
+                created_at INTEGER,
+                last_accessed INTEGER
+            )
+        `);
+        console.log('[Storage] SQLite chunk index initialized');
+    } catch {
+        console.warn('[Storage] better-sqlite3 not available, using filesystem-only mode');
+        chunkDb = null;
+    }
+}
+
+function getChunkPath(hash) {
+    const prefix = hash.substring(0, 2);
+    const dir = path.join(CHUNKS_DIR, prefix);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return path.join(dir, hash);
+}
+
+function storeChunk(hash, data, fileKey = '', chunkIndex = 0) {
+    const chunkPath = getChunkPath(hash);
+    if (fs.existsSync(chunkPath)) return true; // Already stored
+
+    // Check storage limit
+    const maxBytes = (config?.storageMaxGB || 5) * 1024 * 1024 * 1024;
+    if (nodeStats.storageBytes + data.length > maxBytes) return false;
+
+    fs.writeFileSync(chunkPath, data);
+
+    if (chunkDb) {
+        try {
+            chunkDb.prepare(
+                'INSERT OR REPLACE INTO chunks (hash, file_key, chunk_index, size, created_at, last_accessed) VALUES (?, ?, ?, ?, ?, ?)'
+            ).run(hash, fileKey, chunkIndex, data.length, Date.now(), Date.now());
+        } catch { /* ignore */ }
+    }
+
+    nodeStats.storageChunks++;
+    nodeStats.storageBytes += data.length;
+    return true;
+}
+
+function getChunk(hash) {
+    const chunkPath = getChunkPath(hash);
+    if (!fs.existsSync(chunkPath)) return null;
+    return fs.readFileSync(chunkPath);
+}
+
+function hasChunk(hash) {
+    return fs.existsSync(getChunkPath(hash));
+}
+
+function getStorageStats() {
+    let totalChunks = 0;
+    let totalBytes = 0;
+    if (chunkDb) {
+        try {
+            const row = chunkDb.prepare('SELECT COUNT(*) as cnt, COALESCE(SUM(size),0) as total FROM chunks').get();
+            totalChunks = row.cnt;
+            totalBytes = row.total;
+        } catch { /* ignore */ }
+    }
+    nodeStats.storageChunks = totalChunks;
+    nodeStats.storageBytes = totalBytes;
+    return { totalChunks, totalBytes };
+}
+
+// ── HTTP Chunk Server ──
+const CHUNK_PORT = 9001;
+
+function startChunkServer() {
+    if (storageServer) return;
+    try {
+        const express = require('express');
+        const app = express();
+
+        // CORS
+        app.use((req, res, next) => {
+            res.header('Access-Control-Allow-Origin', '*');
+            res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
+            next();
+        });
+
+        app.get('/health', (req, res) => {
+            const stats = getStorageStats();
+            res.json({
+                ok: nodeRunning,
+                nodeId: config?.nodeId || '',
+                storage: { totalChunks: stats.totalChunks, usedBytes: stats.totalBytes },
+            });
+        });
+
+        app.get('/chunks/:hash/exists', (req, res) => {
+            const exists = hasChunk(req.params.hash);
+            res.json({ exists, hash: req.params.hash });
+        });
+
+        app.get('/chunks/:hash', (req, res) => {
+            const data = getChunk(req.params.hash);
+            if (!data) return res.status(404).send('Chunk not found');
+            nodeStats.chunkServed++;
+            res.set('Content-Type', 'application/octet-stream');
+            res.set('Content-Length', String(data.length));
+            res.set('Cache-Control', 'public, max-age=31536000, immutable');
+            res.send(data);
+        });
+
+        storageServer = app.listen(CHUNK_PORT, () => {
+            console.log(`[Storage] Chunk server running at http://localhost:${CHUNK_PORT}`);
+        });
+    } catch (err) {
+        console.warn('[Storage] Could not start chunk server:', err.message);
+    }
+}
+
+function stopChunkServer() {
+    if (storageServer) {
+        storageServer.close();
+        storageServer = null;
+        console.log('[Storage] Chunk server stopped');
+    }
+}
+
+// ── Chunk Registry Sync ──
+async function syncChunkRegistry() {
+    if (!nodeRunning || !config?.apiKey || !isOnWifi) return;
+
+    try {
+        const apiUrl = config.apiUrl || PRODUCTION_API;
+
+        // Register local chunks
+        const localChunks = [];
+        if (chunkDb) {
+            try {
+                const rows = chunkDb.prepare('SELECT hash, file_key, size, chunk_index FROM chunks LIMIT 500').all();
+                for (const r of rows) {
+                    localChunks.push({ hash: r.hash, file_key: r.file_key, size: r.size, index: r.chunk_index });
+                }
+            } catch { /* ignore */ }
+        }
+
+        if (localChunks.length > 0) {
+            await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'chunk.register',
+                    node_id: config.nodeId,
+                    chunks: localChunks,
+                }),
+            });
+        }
+
+        // Get replication assignments
+        const assignResp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'chunk.assignments',
+                node_id: config.nodeId,
+                capacity: (config.storageMaxGB || 5) * 1024 * 1024 * 1024 - nodeStats.storageBytes,
+            }),
+        });
+
+        if (assignResp.ok) {
+            const data = await assignResp.json();
+            const assignments = data.assignments || [];
+
+            for (const a of assignments.slice(0, 10)) {
+                if (hasChunk(a.hash)) continue;
+                // Fetch chunk from staging
+                try {
+                    const chunkResp = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'chunk.fetch_staging',
+                            hash: a.hash,
+                        }),
+                    });
+                    if (chunkResp.ok) {
+                        const chunkData = await chunkResp.json();
+                        if (chunkData.data) {
+                            const buf = Buffer.from(chunkData.data, 'base64');
+                            storeChunk(a.hash, buf, a.file_key || '', a.index || 0);
+                        }
+                    }
+                } catch { /* ignore individual chunk failures */ }
+            }
+        }
+
+        sendToRenderer('node:stats', getNodeStatus());
+    } catch (err) {
+        console.warn('[ChunkSync] Error:', err.message);
+    }
+}
+
 function startNode() {
     if (nodeRunning) return { success: true };
 
@@ -253,11 +482,20 @@ function startNode() {
         fs.mkdirSync(STORAGE_DIR, { recursive: true });
     }
 
+    // Initialize chunk storage and HTTP server
+    initChunkStorage();
+    startChunkServer();
+    getStorageStats();
+
     // Send first heartbeat immediately
     sendHeartbeat();
 
     // Then every 5 minutes
     heartbeatTimer = setInterval(sendHeartbeat, config?.heartbeatIntervalMs || 300000);
+
+    // Start chunk registry sync (every 2 minutes)
+    syncChunkRegistry();
+    chunkSyncTimer = setInterval(syncChunkRegistry, 120000);
 
     sendToRenderer('node:started', getNodeStatus());
     updateTrayMenu();
@@ -271,6 +509,15 @@ function stopNode() {
     if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
+    }
+    if (chunkSyncTimer) {
+        clearInterval(chunkSyncTimer);
+        chunkSyncTimer = null;
+    }
+    stopChunkServer();
+    if (chunkDb) {
+        try { chunkDb.close(); } catch { /* ignore */ }
+        chunkDb = null;
     }
     releaseLock();
     sendToRenderer('node:stopped', getNodeStatus());

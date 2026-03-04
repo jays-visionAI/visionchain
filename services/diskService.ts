@@ -638,8 +638,54 @@ export const downloadDiskFile = async (email: string, fileId: string): Promise<{
 };
 
 /**
+ * Resolve chunk hashes to storage node endpoints via agentGateway.
+ */
+const fetchChunkLocations = async (
+    hashes: string[]
+): Promise<Record<string, Array<{ node_id: string; endpoint: string }>>> => {
+    try {
+        const app = getFirebaseApp();
+        const projectId = (app as any).options?.projectId || 'visionchain-staging';
+        const gatewayUrl = `https://us-central1-${projectId}.cloudfunctions.net/agentGateway`;
+        const resp = await fetch(gatewayUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'chunk.locations', hashes }),
+        });
+        if (!resp.ok) return {};
+        const data = await resp.json();
+        return data.locations || {};
+    } catch {
+        return {};
+    }
+};
+
+/**
+ * Fetch a single chunk directly from a storage node via HTTP.
+ */
+const fetchChunkFromNode = async (
+    endpoint: string,
+    hash: string,
+    timeoutMs: number = 8000
+): Promise<Uint8Array | null> => {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const resp = await fetch(`${endpoint}/chunks/${hash}`, {
+            signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!resp.ok) return null;
+        const buf = await resp.arrayBuffer();
+        return new Uint8Array(buf);
+    } catch {
+        return null;
+    }
+};
+
+/**
  * Download a file from distributed storage chunk by chunk.
- * Allows for progress tracking and prioritization of front chunks.
+ * Tries direct download from storage nodes first, falls back to Firestore.
  * @param batchSize - Number of parallel chunk requests (default 5, recommended 10-15 for video)
  */
 export const downloadDiskFileGranular = async (
@@ -659,28 +705,49 @@ export const downloadDiskFileGranular = async (
         { success: boolean; data: string }
     >(functions, 'diskGetChunk');
 
+    // Resolve chunk locations from storage nodes
+    const locations = await fetchChunkLocations(chunkHashes);
+
     const chunks: Uint8Array[] = [];
+    let nodeHits = 0;
+    let firestoreHits = 0;
 
     for (let i = 0; i < chunkHashes.length; i += batchSize) {
         const batch = chunkHashes.slice(i, i + batchSize);
         const results = await Promise.all(
-            batch.map(hash => getChunkCall({ chunkHash: hash }))
+            batch.map(async (hash) => {
+                // Try storage nodes first
+                const nodeEndpoints = locations[hash] || [];
+                for (const node of nodeEndpoints) {
+                    const data = await fetchChunkFromNode(node.endpoint, hash);
+                    if (data) {
+                        nodeHits++;
+                        return data;
+                    }
+                }
+
+                // Fallback to Firestore via Cloud Function
+                const res = await getChunkCall({ chunkHash: hash });
+                const binaryStr = atob(res.data.data);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let j = 0; j < binaryStr.length; j++) {
+                    bytes[j] = binaryStr.charCodeAt(j);
+                }
+                firestoreHits++;
+                return bytes;
+            })
         );
 
-        for (const res of results) {
-            const binaryStr = atob(res.data.data);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let j = 0; j < binaryStr.length; j++) {
-                bytes[j] = binaryStr.charCodeAt(j);
-            }
-            chunks.push(bytes);
+        for (const data of results) {
+            chunks.push(data);
         }
 
         const currentCount = Math.min(i + batchSize, chunkHashes.length);
         onProgress(currentCount, chunkHashes.length);
     }
 
-    return new Blob(chunks, { type: file.type });
+    console.log(`[Disk] Download complete: ${nodeHits} from nodes, ${firestoreHits} from Firestore`);
+    return new Blob(chunks as BlobPart[], { type: file.type });
 };
 
 /**
@@ -713,6 +780,9 @@ export const streamVideoChunks = async (
         { success: boolean; data: string }
     >(functions, 'diskGetChunk');
 
+    // Resolve chunk locations from storage nodes
+    const locations = await fetchChunkLocations(chunkHashes);
+
     const chunks: Uint8Array[] = [];
     let totalBytesLoaded = 0;
     let bufferNotified = false;
@@ -723,17 +793,28 @@ export const streamVideoChunks = async (
     for (let i = 0; i < chunkHashes.length; i += STREAM_BATCH) {
         const batch = chunkHashes.slice(i, i + STREAM_BATCH);
         const results = await Promise.all(
-            batch.map(hash => getChunkCall({ chunkHash: hash }))
+            batch.map(async (hash) => {
+                // Try storage nodes first
+                const nodeEndpoints = locations[hash] || [];
+                for (const node of nodeEndpoints) {
+                    const data = await fetchChunkFromNode(node.endpoint, hash);
+                    if (data) return data;
+                }
+
+                // Fallback to Firestore via Cloud Function
+                const res = await getChunkCall({ chunkHash: hash });
+                const binaryStr = atob(res.data.data);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let j = 0; j < binaryStr.length; j++) {
+                    bytes[j] = binaryStr.charCodeAt(j);
+                }
+                return bytes;
+            })
         );
 
-        for (const res of results) {
-            const binaryStr = atob(res.data.data);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let j = 0; j < binaryStr.length; j++) {
-                bytes[j] = binaryStr.charCodeAt(j);
-            }
-            chunks.push(bytes);
-            totalBytesLoaded += bytes.length;
+        for (const data of results) {
+            chunks.push(data);
+            totalBytesLoaded += data.length;
         }
 
         const currentCount = Math.min(i + STREAM_BATCH, chunkHashes.length);
@@ -741,14 +822,14 @@ export const streamVideoChunks = async (
 
         // Notify when buffer threshold reached (first time only)
         if (!bufferNotified && totalBytesLoaded >= bufferThresholdBytes) {
-            const partialBlob = new Blob(chunks, { type: file.type });
+            const partialBlob = new Blob(chunks as BlobPart[], { type: file.type });
             onBufferReady(URL.createObjectURL(partialBlob));
             bufferNotified = true;
         }
     }
 
     // Final complete blob
-    const fullBlob = new Blob(chunks, { type: file.type });
+    const fullBlob = new Blob(chunks as BlobPart[], { type: file.type });
 
     // If buffer wasn't enough for early notification, notify now with full blob
     if (!bufferNotified) {

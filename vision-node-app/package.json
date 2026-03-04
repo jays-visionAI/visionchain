@@ -1,6 +1,6 @@
 {
     "name": "vision-node-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Vision Chain Node - Desktop Application",
     "main": "src/main/index.js",
     "author": "Vision Chain <hello@visionchain.co>",
@@ -26,6 +26,7 @@
     "build": {
         "appId": "co.visionchain.node",
         "productName": "Vision Node",
+        "afterSign": "scripts/notarize.js",
         "directories": {
             "output": "dist"
         },

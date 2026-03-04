@@ -97,6 +97,8 @@ export class GatewayClient {
             storage_max_gb: config.storageMaxGB,
             version: '1.0.0',
             system_info: this.getSystemInfo(),
+            // Report chunk serving endpoint for direct downloads
+            chunk_endpoint: `http://${osHostname()}:${config.dashboardPort}`,
         };
 
         if (storageStats) {

@@ -20,6 +20,8 @@ import { heartbeatService } from './src/services/heartbeat';
 import { blockObserver } from './src/services/blockObserver';
 import { microRelay } from './src/services/microRelay';
 import { storageCache } from './src/services/storageCache';
+import { chunkStorage } from './src/services/chunkStorage';
+import { chunkSync } from './src/services/chunkSync';
 import { startBackgroundService, stopBackgroundService } from './src/services/nativeService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -132,6 +134,7 @@ const App: React.FC = () => {
     blockObserver.stop();
     microRelay.stop();
     storageCache.stop();
+    chunkSync.stop();
     console.log('[Battery] Node paused due to low battery');
   }, []);
 
@@ -151,6 +154,11 @@ const App: React.FC = () => {
           console.warn('[Battery] Failed to restart block observer:', err);
         }
       }
+      // Resume chunk sync on WiFi
+      if (level.mode === 'wifi') {
+        await chunkStorage.start();
+        chunkSync.start(creds.apiKey, creds.nodeId);
+      }
     }
     console.log('[Battery] Node resumed after battery recovery');
   }, []);
@@ -162,6 +170,16 @@ const App: React.FC = () => {
 
   const handleRegistered = () => {
     startBackgroundService();
+    // Start chunk storage on registration
+    loadCredentials().then(async (creds) => {
+      if (creds) {
+        await chunkStorage.start();
+        const level = networkAdapter.getContributionLevel();
+        if (level.mode === 'wifi') {
+          chunkSync.start(creds.apiKey, creds.nodeId);
+        }
+      }
+    });
     setScreen('dashboard');
   };
 
@@ -171,6 +189,8 @@ const App: React.FC = () => {
     await blockObserver.stop();
     microRelay.stop();
     await storageCache.stop();
+    chunkSync.stop();
+    await chunkStorage.stop();
     networkAdapter.stop();
     await stopBackgroundService();
 

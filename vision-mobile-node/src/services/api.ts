@@ -111,10 +111,17 @@ export const register = async (
 export const sendHeartbeat = async (
     apiKey: string,
     mode: string,
+    chunkEndpoint?: string,
+    chunkStats?: { total_chunks: number; total_size_bytes: number },
 ): Promise<HeartbeatResponse> => {
     return api<HeartbeatResponse>(
         'mobile_node.heartbeat',
-        { mode, device_type: 'android' },
+        {
+            mode,
+            device_type: 'android',
+            ...(chunkEndpoint ? { chunk_endpoint: chunkEndpoint } : {}),
+            ...(chunkStats ? { chunk_stats: chunkStats } : {}),
+        },
         apiKey,
     );
 };

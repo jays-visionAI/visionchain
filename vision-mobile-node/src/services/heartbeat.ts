@@ -8,6 +8,7 @@
 
 import { sendHeartbeat, HeartbeatResponse } from './api';
 import { networkAdapter, ContributionLevel } from './networkAdapter';
+import { chunkStorage } from './chunkStorage';
 
 type HeartbeatCallback = (data: HeartbeatData) => void;
 
@@ -122,10 +123,22 @@ class HeartbeatService {
 
         try {
             // Map network mode to server-expected format
-            // Server expects: 'wifi_full' or 'cellular_min'
-            // networkAdapter returns: 'wifi' or 'cellular'
             const apiMode = mode === 'wifi' ? 'wifi_full' : 'cellular_min';
-            const result: HeartbeatResponse = await sendHeartbeat(this.apiKey, apiMode);
+
+            // Include chunk storage info on WiFi
+            const chunkStats = chunkStorage.getStats();
+            const chunkEndpoint = mode === 'wifi' && chunkStats.totalChunks > 0
+                ? undefined // Mobile nodes can't easily serve HTTP externally (NAT)
+                : undefined;
+
+            const result: HeartbeatResponse = await sendHeartbeat(
+                this.apiKey,
+                apiMode,
+                chunkEndpoint,
+                chunkStats.totalChunks > 0
+                    ? { total_chunks: chunkStats.totalChunks, total_size_bytes: chunkStats.totalSizeBytes }
+                    : undefined,
+            );
 
             if (result.success) {
                 this.data.lastHeartbeat = Date.now();
@@ -134,7 +147,7 @@ class HeartbeatService {
                 this.data.consecutiveFailures = 0;
 
                 console.log(
-                    `[Heartbeat] OK - mode: ${mode}, weight: ${result.weight}x, reward: ${result.pending_reward}`,
+                    `[Heartbeat] OK - mode: ${mode}, weight: ${result.weight}x, reward: ${result.pending_reward}, chunks: ${chunkStats.totalChunks}`,
                 );
             } else {
                 this.data.consecutiveFailures++;

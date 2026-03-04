@@ -12599,11 +12599,14 @@ exports.agentGateway = onRequest({
         if (dataUsedMb !== undefined) updateData.last_data_used_mb = dataUsedMb;
 
         // Track platform info from desktop/CLI nodes
-        const { platform: hbPlatform, node_class: hbNodeClass, storage_max_gb: hbStorageMaxGB, version: hbVersion } = req.body;
+        const { platform: hbPlatform, node_class: hbNodeClass, storage_max_gb: hbStorageMaxGB, version: hbVersion, chunk_endpoint: hbChunkEndpoint } = req.body;
         if (hbPlatform && !mnData.platform) updateData.platform = hbPlatform;
         if (hbNodeClass && mnData.node_class !== hbNodeClass) updateData.node_class = hbNodeClass;
         if (hbStorageMaxGB && !mnData.storage_max_gb) updateData.storage_max_gb = hbStorageMaxGB;
         if (hbVersion) updateData.client_version = hbVersion;
+
+        // Track chunk serving endpoint (public HTTP URL for direct chunk downloads)
+        if (hbChunkEndpoint) updateData.chunk_endpoint = hbChunkEndpoint;
 
         await mnDoc.ref.update(updateData);
 
@@ -12896,6 +12899,62 @@ exports.agentGateway = onRequest({
     // =====================================================
     // CHUNK REGISTRY + REPLICATION + STORAGE PROOF
     // =====================================================
+
+    // --- chunk.locations ---
+    // Client asks which nodes hold specific chunks (for direct download)
+    if (action === "chunk.locations") {
+      try {
+        const { hashes } = body;
+        if (!Array.isArray(hashes) || hashes.length === 0) {
+          return res.status(400).json({ error: "hashes[] required (array of chunk hashes)" });
+        }
+
+        // Limit to 50 hashes per request
+        const queryHashes = hashes.slice(0, 50);
+        const locations = {};
+
+        // For each hash, find holder nodes
+        for (const hash of queryHashes) {
+          const holdersSnap = await db.collection("chunk_registry").doc(hash)
+            .collection("holders").where("status", "==", "active").limit(5).get();
+
+          if (holdersSnap.empty) {
+            locations[hash] = [];
+            continue;
+          }
+
+          // Get node endpoints for each holder
+          const nodeIds = holdersSnap.docs.map(d => d.data().node_id);
+          const endpoints = [];
+
+          for (const nid of nodeIds) {
+            // Look up mobile_nodes for chunk_endpoint
+            const nodeSnap = await db.collection("mobile_nodes")
+              .where("node_id", "==", nid)
+              .where("status", "==", "active")
+              .limit(1).get();
+
+            if (!nodeSnap.empty) {
+              const nd = nodeSnap.docs[0].data();
+              if (nd.chunk_endpoint) {
+                endpoints.push({
+                  node_id: nid,
+                  endpoint: nd.chunk_endpoint,
+                  last_heartbeat: nd.last_heartbeat?.toDate?.()?.toISOString() || null,
+                });
+              }
+            }
+          }
+
+          locations[hash] = endpoints;
+        }
+
+        return res.json({ success: true, locations });
+      } catch (e) {
+        console.error("[Chunk Locations] error:", e);
+        return res.status(500).json({ error: e.message });
+      }
+    }
 
     // --- storage_node.register_chunks ---
     // Node reports which chunks it currently holds
@@ -17656,6 +17715,53 @@ exports.purchasePublishedFile = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK"
   } catch (err) {
     console.error("[DiskPurchase] Payment failed:", err);
     throw new HttpsError("internal", "Purchase failed: " + err.message);
+  }
+});
+
+// ── Cleanup old staging chunks after nodes have replicated them ──
+exports.cleanupStagingChunks = onSchedule({ schedule: "every 24 hours" }, async () => {
+  console.log("[ChunkCleanup] Starting daily staging_chunks cleanup");
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days ago
+  let deleted = 0;
+  let skipped = 0;
+
+  try {
+    // Find old staging chunks
+    const stagingSnap = await db.collection("staging_chunks")
+      .where("created_at", "<", cutoff)
+      .limit(500)
+      .get();
+
+    if (stagingSnap.empty) {
+      console.log("[ChunkCleanup] No old staging chunks to clean up");
+      return;
+    }
+
+    const batch = db.batch();
+
+    for (const chunkDoc of stagingSnap.docs) {
+      const hash = chunkDoc.id;
+
+      // Check if chunk has been replicated to enough nodes
+      const holdersSnap = await db.collection("chunk_registry").doc(hash)
+        .collection("holders").where("status", "==", "active").get();
+
+      if (holdersSnap.size >= 2) {
+        // Safe to delete from staging - enough replicas exist
+        batch.delete(chunkDoc.ref);
+        deleted++;
+      } else {
+        skipped++;
+      }
+    }
+
+    if (deleted > 0) {
+      await batch.commit();
+    }
+
+    console.log(`[ChunkCleanup] Done: deleted ${deleted}, skipped ${skipped} (insufficient replicas)`);
+  } catch (err) {
+    console.error("[ChunkCleanup] Error:", err.message);
   }
 });
 

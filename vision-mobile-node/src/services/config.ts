@@ -28,6 +28,9 @@ export const CONFIG = {
     // Storage Cache
     MAX_CACHE_SIZE_MB: 50,
 
+    // Chunk Storage (distributed storage participation)
+    MAX_CHUNK_STORAGE_MB: 50 * 1024, // 50GB max for mobile
+
     // App Info
     APP_VERSION: '1.0.2',
     BUILD_NUMBER: 3,
