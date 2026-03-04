@@ -18270,7 +18270,7 @@ exports.generateOmniMintContract = onCall({ cors: true, timeoutSeconds: 60 }, as
       isBurnable,
       isPausable,
       targetChains,
-      aiPrompt
+      aiPrompt,
     } = request.data || {};
 
     if (!tokenName || !tokenSymbol) {
@@ -18325,7 +18325,7 @@ ${aiPrompt || "None. Just generate the standard template."}
           responseMimeType: "application/json",
         },
       },
-      { timeout: 60000 }
+      { timeout: 60000 },
     );
 
     const candidate = response.data?.candidates?.[0];
@@ -18336,7 +18336,7 @@ ${aiPrompt || "None. Just generate the standard template."}
       return parsed;
     } catch (e) {
       // Request might have returned code block markdown despite instruction
-      const cleaned = textResp.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const cleaned = textResp.replace(/```json/gi, "").replace(/```/g, "").trim();
       try {
         return JSON.parse(cleaned);
       } catch (innerE) {
