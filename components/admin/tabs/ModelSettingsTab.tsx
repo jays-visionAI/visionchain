@@ -68,11 +68,11 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                         <div class="space-y-1.5">
                             <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Vision / Image Analysis</label>
                             <select
-                                value={props.intentBot().visionModel || 'gemini-2.0-flash-exp'}
+                                value={props.intentBot().visionModel || 'gemini-2.5-flash'}
                                 onChange={(e) => props.setIntentBot({ ...props.intentBot(), visionModel: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                             >
-                                <option value="gemini-2.0-flash-exp">Nano Banana (gemini-2.0-flash-exp)</option>
+                                <option value="gemini-2.5-flash">Nano Banana (gemini-2.5-flash)</option>
                                 <option value="gemini-2.5-pro-preview-06-05">Nano Banana Pro (gemini-2.5-pro)</option>
                             </select>
                         </div>
@@ -113,11 +113,11 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                         <div class="space-y-1.5">
                             <label class="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Vision / Image Analysis</label>
                             <select
-                                value={props.helpdeskBot().visionModel || 'gemini-2.0-flash-exp'}
+                                value={props.helpdeskBot().visionModel || 'gemini-2.5-flash'}
                                 onChange={(e) => props.setHelpdeskBot({ ...props.helpdeskBot(), visionModel: e.currentTarget.value })}
                                 class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                             >
-                                <option value="gemini-2.0-flash-exp">Nano Banana (gemini-2.0-flash-exp)</option>
+                                <option value="gemini-2.5-flash">Nano Banana (gemini-2.5-flash)</option>
                                 <option value="gemini-2.5-pro-preview-06-05">Nano Banana Pro (gemini-2.5-pro)</option>
                             </select>
                         </div>
@@ -145,8 +145,8 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                             onChange={(e) => props.setImageSettings({ ...props.imageSettings(), model: e.currentTarget.value })}
                             class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-cyan-500/50"
                         >
-                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Image Gen)</option>
+                            <option value="imagen-3.0-generate-002">Imagen 3 (High Quality)</option>
                         </select>
                         <select
                             value={props.imageSettings().size}
@@ -176,8 +176,8 @@ export function ModelSettingsTab(props: ModelSettingsTabProps) {
                             onChange={(e) => props.setVoiceSettings({ ...props.voiceSettings(), model: e.currentTarget.value })}
                             class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-amber-500/50"
                         >
-                            <option value="gemini-1.5-flash">Gemini Flash</option>
-                            <option value="gemini-1.5-pro">Gemini Pro</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (STT)</option>
+                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
                         </select>
                         <select
                             value={props.voiceSettings().ttsVoice}

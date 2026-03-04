@@ -444,9 +444,9 @@ const eps: Endpoint[] = [
     // --- HOSTING ---
     {
         id: 'hosting_configure', action: 'hosting.configure', title: 'Configure Hosting', cat: 'Hosting', desc: 'Configure your agent\'s autonomous hosting settings (model, system prompt, enabled actions).', auth: true,
-        fields: [{ name: 'model', type: 'string', required: false, desc: 'LLM model (default: gemini-2.0-flash)' }, { name: 'system_prompt', type: 'string', required: false, desc: 'Custom system prompt' }, { name: 'enabled_actions', type: 'array', required: false, desc: 'Actions the agent can use' }],
-        req: { action: 'hosting.configure', api_key: 'vcn_your_api_key', model: 'gemini-2.0-flash', enabled_actions: ['wallet.balance', 'transfer.send'] },
-        res: { success: true, hosting: { model: 'gemini-2.0-flash', enabled_actions: ['wallet.balance', 'transfer.send'], status: 'configured' } },
+        fields: [{ name: 'model', type: 'string', required: false, desc: 'LLM model (default: gemini-2.5-flash)' }, { name: 'system_prompt', type: 'string', required: false, desc: 'Custom system prompt' }, { name: 'enabled_actions', type: 'array', required: false, desc: 'Actions the agent can use' }],
+        req: { action: 'hosting.configure', api_key: 'vcn_your_api_key', model: 'gemini-2.5-flash', enabled_actions: ['wallet.balance', 'transfer.send'] },
+        res: { success: true, hosting: { model: 'gemini-2.5-flash', enabled_actions: ['wallet.balance', 'transfer.send'], status: 'configured' } },
     },
     {
         id: 'hosting_toggle', action: 'hosting.toggle', title: 'Toggle Hosting', cat: 'Hosting', desc: 'Enable or disable your agent\'s autonomous hosting.', auth: true,

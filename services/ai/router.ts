@@ -28,7 +28,7 @@ export class LLMRouter {
 
         // Route 1: Image present - Use visionModel (Gemini Nano Banana variants)
         if (hasImage) {
-            const visionModel = config.visionModel || 'gemini-2.0-flash-exp';
+            const visionModel = config.visionModel || 'gemini-2.5-flash';
             const geminiKey = await getActiveGlobalApiKey('gemini');
 
             if (geminiKey) {
@@ -55,7 +55,7 @@ export class LLMRouter {
             if (isDeepSeekPrimary) {
                 const geminiKey = await getActiveGlobalApiKey('gemini');
                 if (geminiKey) {
-                    const fallbackModel = config.visionModel || 'gemini-2.0-flash-exp';
+                    const fallbackModel = config.visionModel || 'gemini-2.5-flash';
                     console.log(`[LLMRouter] Falling back to Gemini (${fallbackModel})...`);
                     const result = await this.factory.getProvider('gemini').generateText(
                         prompt,

@@ -118,7 +118,7 @@ class ProviderFactory {
 
         const botConfig = botType === 'helpdesk' ? settings.helpdeskBot : settings.intentBot;
         const model = botConfig?.model || 'deepseek-chat';
-        const visionModel = botConfig?.visionModel || 'gemini-2.0-flash-exp';
+        const visionModel = botConfig?.visionModel || 'gemini-2.5-flash';
         const providerId = getProviderFromModel(model) as AIProviderID;
         const apiKey = await getActiveGlobalApiKey(providerId);
 

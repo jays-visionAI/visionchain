@@ -1,7 +1,7 @@
 // Service Worker for Vision Chain PWA
 // Version: 1.0.0 - Cache control for proper data fetching
 
-const CACHE_NAME = 'vision-chain-v1';
+const CACHE_NAME = 'vision-chain-v2';
 const STATIC_ASSETS = [
     '/pwa-icon-192.png',
     '/pwa-icon-512.png',
@@ -54,6 +54,8 @@ self.addEventListener('fetch', (event) => {
         url.hostname.includes('firebaseio.com') ||
         url.hostname.includes('firebase.googleapis.com') ||
         url.hostname.includes('googleapis.com') ||
+        url.hostname.includes('generativelanguage.googleapis.com') ||
+        url.hostname.includes('generativelanguage.google') ||
         url.hostname.includes('firestore.') ||
         url.pathname.includes('/rpc') ||
         url.pathname.includes('/api/')

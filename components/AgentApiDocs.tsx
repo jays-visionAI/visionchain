@@ -932,12 +932,12 @@ const endpoints: ApiEndpoint[] = [
         id: 'hosting_configure', action: 'hosting.configure', title: 'Configure Hosting', category: 'Hosting',
         description: 'Configure your agent\'s autonomous hosting settings (model, system prompt, enabled actions).', auth: true, method: 'POST',
         fields: [
-            { name: 'model', type: 'string', required: false, description: 'LLM model (default: gemini-2.0-flash)' },
+            { name: 'model', type: 'string', required: false, description: 'LLM model (default: gemini-2.5-flash)' },
             { name: 'system_prompt', type: 'string', required: false, description: 'Custom system prompt' },
             { name: 'enabled_actions', type: 'array', required: false, description: 'Actions the agent can use autonomously' },
         ],
-        requestExample: { action: 'hosting.configure', api_key: 'vcn_your_api_key', model: 'gemini-2.0-flash', enabled_actions: ['wallet.balance', 'transfer.send'] },
-        responseExample: { success: true, hosting: { model: 'gemini-2.0-flash', enabled_actions: ['wallet.balance', 'transfer.send'], status: 'configured' } },
+        requestExample: { action: 'hosting.configure', api_key: 'vcn_your_api_key', model: 'gemini-2.5-flash', enabled_actions: ['wallet.balance', 'transfer.send'] },
+        responseExample: { success: true, hosting: { model: 'gemini-2.5-flash', enabled_actions: ['wallet.balance', 'transfer.send'], status: 'configured' } },
     },
     {
         id: 'hosting_toggle', action: 'hosting.toggle', title: 'Toggle Hosting', category: 'Hosting',

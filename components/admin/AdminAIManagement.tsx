@@ -100,10 +100,10 @@ export default function AdminAIManagement() {
     // Global Data States
     const [apiKeys, setApiKeys] = createSignal<ApiKeyData[]>([]);
     const [knowledgeContent, setKnowledgeContent] = createSignal(defaultKnowledge);
-    const [intentBot, setIntentBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
-    const [helpdeskBot, setHelpdeskBot] = createSignal<BotConfig>({ model: 'gemini-1.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
-    const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-1.5-pro', size: '1k', quality: 'standard' });
-    const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-1.5-flash', ttsVoice: 'Kore', sttModel: 'whisper-1' });
+    const [intentBot, setIntentBot] = createSignal<BotConfig>({ model: 'gemini-2.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
+    const [helpdeskBot, setHelpdeskBot] = createSignal<BotConfig>({ model: 'gemini-2.5-flash', systemPrompt: '', temperature: 0.7, maxTokens: 2048 });
+    const [imageSettings, setImageSettings] = createSignal({ model: 'gemini-2.5-flash', size: '1k', quality: 'standard' });
+    const [voiceSettings, setVoiceSettings] = createSignal({ model: 'gemini-2.5-flash', ttsVoice: 'Kore', sttModel: 'whisper-1' });
     const [promptTuning, setPromptTuning] = createSignal({
         systemRules: '',
         recipientIntent: '',

@@ -3235,14 +3235,14 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
             intentBot: {
                 systemPrompt: 'You are Vision AI, an advanced financial and blockchain assistant. You can execute on-chain transactions, analyze chain data, AND analyze CEX (centralized exchange) portfolio data when provided. Never say CEX analysis is unavailable.',
                 model: 'deepseek-chat',
-                visionModel: 'gemini-2.0-flash-exp',
+                visionModel: 'gemini-2.5-flash',
                 temperature: 0.7,
                 maxTokens: 2048
             },
             helpdeskBot: {
                 systemPrompt: 'You are a helpful support agent for Vision Chain.',
                 model: 'deepseek-chat',
-                visionModel: 'gemini-2.0-flash-exp',
+                visionModel: 'gemini-2.5-flash',
                 temperature: 0.7,
                 maxTokens: 2048
             },
@@ -3284,8 +3284,8 @@ export const getChatbotSettings = async (): Promise<ChatbotSettings | null> => {
         // Fallback robustly
         return {
             knowledgeBase: '',
-            intentBot: { systemPrompt: '', model: 'deepseek-chat', visionModel: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
-            helpdeskBot: { systemPrompt: '', model: 'deepseek-chat', visionModel: 'gemini-2.0-flash-exp', temperature: 0.7, maxTokens: 2048 },
+            intentBot: { systemPrompt: '', model: 'deepseek-chat', visionModel: 'gemini-2.5-flash', temperature: 0.7, maxTokens: 2048 },
+            helpdeskBot: { systemPrompt: '', model: 'deepseek-chat', visionModel: 'gemini-2.5-flash', temperature: 0.7, maxTokens: 2048 },
             imageSettings: { model: 'imagen-3.0-generate-001', quality: 'standard', size: '1024x1024' },
             voiceSettings: { model: 'deepseek-chat', ttsVoice: 'Kore', sttModel: 'deepseek-chat' }
         };

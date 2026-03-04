@@ -213,10 +213,23 @@ function extractToken(text: string): string {
 function extractRecipient(text: string, amount: string | null, token: string): string | null {
     let cleaned = text;
 
-    // Remove action keywords
-    const actionWords = ['보내줘', '보내', '전송해줘', '전송해', '전송', '송금해', '송금', '에게', '한테',
-        'send', 'transfer', 'to', 'for', 'stake', 'bridge', 'swap'];
-    for (const w of actionWords) {
+    // Phase 1: Strip Korean postpositions/particles attached to names (no space between)
+    // These attach directly: 박지현에게 → 박지현, 박지현한테 → 박지현
+    const koreanSuffixes = ['에게서', '에게로', '에게', '한테서', '한테', '으로', '로', '을', '를', '이', '가', '의'];
+    for (const suffix of koreanSuffixes) {
+        cleaned = cleaned.replace(new RegExp(suffix, 'g'), ' ');
+    }
+
+    // Phase 2: Remove Korean action words (standalone)
+    const koreanActions = ['보내줘', '보내', '전송해줘', '전송해', '전송', '송금해줘', '송금해', '송금',
+        '줘', '해줘', '주세요', '보내주세요', '전송하다'];
+    for (const w of koreanActions) {
+        cleaned = cleaned.replace(new RegExp(w, 'g'), ' ');
+    }
+
+    // Phase 3: Remove English action words (word boundary works for English)
+    const englishActions = ['send', 'transfer', 'to', 'for', 'stake', 'bridge', 'swap'];
+    for (const w of englishActions) {
         cleaned = cleaned.replace(new RegExp(`\\b${w}\\b`, 'gi'), ' ');
     }
 
@@ -282,7 +295,7 @@ export interface Contact {
 }
 
 /**
- * Given a parsed intent and a contact list, try to resolve recipient name → address.
+ * Given a parsed intent and a contact list, try to resolve recipient name -> address.
  * Returns the address if found, or null.
  */
 export function resolveIntentRecipient(intent: VoiceIntent, contacts: Contact[]): string | null {
@@ -291,10 +304,25 @@ export function resolveIntentRecipient(intent: VoiceIntent, contacts: Contact[])
     // If it's already an address
     if (/^0x[0-9a-fA-F]{40}$/.test(intent.recipient)) return intent.recipient;
 
-    const needle = intent.recipient.toLowerCase();
-    const match = contacts.find(c =>
-        c.internalName?.toLowerCase().includes(needle) ||
-        c.alias?.toLowerCase().includes(needle)
+    const needle = intent.recipient.toLowerCase().trim();
+
+    // Phase 1: Exact match
+    const exactMatch = contacts.find(c =>
+        c.internalName?.toLowerCase() === needle ||
+        c.alias?.toLowerCase() === needle
     );
-    return match?.address || null;
+    if (exactMatch?.address) return exactMatch.address;
+
+    // Phase 2: Bidirectional partial match (contact name in query, or query in contact name)
+    const partialMatch = contacts.find(c => {
+        const name = c.internalName?.toLowerCase() || '';
+        const alias = c.alias?.toLowerCase() || '';
+        return (
+            name.includes(needle) || needle.includes(name) ||
+            (alias && (alias.includes(needle) || needle.includes(alias)))
+        );
+    });
+    if (partialMatch?.address) return partialMatch.address;
+
+    return null;
 }

@@ -48,9 +48,9 @@ export class GeminiProvider implements AIProvider {
             return response;
         } catch (e: any) {
             const errorMsg = JSON.stringify(e).toLowerCase();
-            // Fallback to gemini-2.0-flash-exp on errors
-            if ((errorMsg.includes('404') || errorMsg.includes('429') || errorMsg.includes('400')) && model !== 'gemini-2.0-flash-exp') {
-                return await executeRequest('gemini-2.0-flash-exp');
+            // Fallback to gemini-2.5-flash on errors
+            if ((errorMsg.includes('404') || errorMsg.includes('429') || errorMsg.includes('400')) && model !== 'gemini-2.5-flash') {
+                return await executeRequest('gemini-2.5-flash');
             }
             throw e;
         }
@@ -114,9 +114,9 @@ IMPORTANT RULES:
 
 Audio:`;
 
-        try {
+        const executeTranscription = async (model: string) => {
             const response = await ai.models.generateContent({
-                model: 'gemini-1.5-flash',
+                model,
                 contents: [{
                     role: 'user',
                     parts: [
@@ -134,12 +134,21 @@ Audio:`;
                     maxOutputTokens: 256,
                 }
             });
-
             const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
             return text.trim();
+        };
+
+        try {
+            return await executeTranscription('gemini-2.5-flash');
         } catch (err: any) {
-            console.error('[GeminiProvider] Audio transcription error:', err.message);
-            throw err;
+            console.error('[GeminiProvider] Audio transcription error (primary):', err.message);
+            // Fallback to gemini-2.5-flash-lite if primary model fails
+            try {
+                return await executeTranscription('gemini-2.5-flash-lite');
+            } catch (fallbackErr: any) {
+                console.error('[GeminiProvider] Audio transcription error (fallback):', fallbackErr.message);
+                throw fallbackErr;
+            }
         }
     }
 
