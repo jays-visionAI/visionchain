@@ -522,9 +522,11 @@ export const WalletDisk = (props: {
                         const a = document.createElement('a');
                         a.href = url;
                         a.download = file.name;
+                        a.style.display = 'none';
                         document.body.appendChild(a);
                         a.click();
-                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
                     } finally {
                         setDecryptingFileId('');
                     }
@@ -532,13 +534,16 @@ export const WalletDisk = (props: {
                 }
 
                 // Normal distributed file download
-                const url = window.URL.createObjectURL(result.blob);
+                const blob = new Blob([await result.blob.arrayBuffer()], { type: file.type || result.fileType });
+                const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = result.fileName;
+                a.download = file.name;
+                a.style.display = 'none';
                 document.body.appendChild(a);
                 a.click();
-                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
                 return;
             }
 
