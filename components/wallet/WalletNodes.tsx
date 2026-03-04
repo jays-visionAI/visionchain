@@ -16,11 +16,11 @@ const VCN_PRICE = 0.375;
 const VALIDATOR_PRICE_USD = 10000;
 const ENTERPRISE_PRICE_USD = 100000;
 
-// Download URLs - pinned to node-v1.0.0 release
+// Download URLs - pinned to node-v1.1.0 release
 const DOWNLOAD_URLS = {
-    mac_arm64: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.0.0/VisionNode-arm64.dmg',
-    mac_x64: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.0.0/VisionNode-x64.dmg',
-    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.0.0/VisionNode-Setup.exe',
+    mac_arm64: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.0/Vision.Node-1.1.0-arm64.dmg',
+    mac_x64: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.0/Vision.Node-1.1.0.dmg',
+    windows: 'https://github.com/jays-visionAI/visionchain/releases/download/node-v1.1.0/Vision.Node.Setup.1.1.0.exe',
 };
 
 const CLI_CMD = 'curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash';
@@ -43,6 +43,7 @@ export const WalletNodes = (props: WalletNodesProps) => {
     const [showCLI, setShowCLI] = createSignal(false);
     const [copied, setCopied] = createSignal(false);
     const [activeTab, setActiveTab] = createSignal<'dashboard' | 'leaderboard'>('dashboard');
+    const [showReleaseNotes, setShowReleaseNotes] = createSignal(false);
 
     const validatorPriceVCN = Math.ceil(VALIDATOR_PRICE_USD / VCN_PRICE);
     const enterprisePriceVCN = Math.ceil(ENTERPRISE_PRICE_USD / VCN_PRICE);
@@ -217,9 +218,63 @@ export const WalletNodes = (props: WalletNodesProps) => {
                             <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-cyan-500/3 pointer-events-none" />
 
                             <div class="relative z-10">
-                                <p class="text-sm text-gray-400 leading-relaxed mb-6">
+                                <p class="text-sm text-gray-400 leading-relaxed mb-4">
                                     Share your storage and earn VCN rewards. Download the desktop app or install via CLI.
                                 </p>
+
+                                {/* What's New Banner */}
+                                <div class="mb-5">
+                                    <button
+                                        onClick={() => setShowReleaseNotes(!showReleaseNotes())}
+                                        class="w-full flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-indigo-500/[0.08] to-purple-500/[0.05] border border-indigo-500/20 hover:border-indigo-500/40 rounded-2xl transition-all group"
+                                    >
+                                        <div class="flex items-center gap-2 flex-1 min-w-0">
+                                            <span class="px-2 py-0.5 bg-emerald-500/20 border border-emerald-500/30 rounded-md text-[9px] font-black text-emerald-400 uppercase tracking-wider shrink-0">NEW</span>
+                                            <span class="text-xs font-bold text-white">v1.1.0</span>
+                                            <span class="text-[11px] text-gray-400 truncate">-- Distributed Storage Network</span>
+                                        </div>
+                                        <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider shrink-0 hidden sm:inline">Release Notes</span>
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-4 h-4 text-gray-500 shrink-0 transition-transform" style={`transform:rotate(${showReleaseNotes() ? '180' : '0'}deg)`}>
+                                            <polyline points="6 9 12 15 18 9" />
+                                        </svg>
+                                    </button>
+
+                                    <Show when={showReleaseNotes()}>
+                                        <div class="mt-2 px-5 py-4 bg-black/30 border border-white/[0.06] rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div class="flex items-center gap-2 mb-3">
+                                                <span class="text-xs font-bold text-white">v1.1.0</span>
+                                                <span class="text-[10px] text-gray-500">2026-03-04</span>
+                                            </div>
+                                            <div class="space-y-2">
+                                                {[
+                                                    { label: 'Distributed Chunk Storage', desc: 'Store and serve encrypted data chunks directly from your node' },
+                                                    { label: 'Automatic Replication', desc: 'Under-replicated chunks are automatically distributed to nodes' },
+                                                    { label: 'Direct Node Downloads', desc: 'Data downloads route directly to storage nodes with cloud fallback' },
+                                                    { label: 'Apple Notarization', desc: 'macOS builds are notarized for seamless installation' },
+                                                ].map(item => (
+                                                    <div class="flex items-start gap-2.5">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5">
+                                                            <polyline points="20 6 9 17 4 12" />
+                                                        </svg>
+                                                        <div>
+                                                            <span class="text-[11px] font-bold text-white">{item.label}</span>
+                                                            <span class="text-[11px] text-gray-500 ml-1.5">-- {item.desc}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Previous version */}
+                                            <div class="mt-4 pt-3 border-t border-white/[0.06]">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-[10px] font-bold text-gray-500">v1.0.0</span>
+                                                    <span class="text-[10px] text-gray-600">2026-02-20</span>
+                                                    <span class="text-[10px] text-gray-600">-- Initial release: Desktop node with heartbeat, rewards dashboard, and tray icon</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Show>
+                                </div>
 
                                 {/* Download Buttons Row */}
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
