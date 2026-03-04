@@ -745,8 +745,23 @@ export const WalletDisk = (props: {
                 setVideoFullyLoaded(true);
                 setVideoStreamProgress(null);
             } catch (err) {
-                console.error('[Disk] Video stream failed:', err);
-                setVideoBuffering(false);
+                console.error('[Disk] Video stream failed, trying fallback download:', err);
+                // Fallback: download entire file via granular chunks
+                try {
+                    const blob = await downloadDiskFileGranular(file, (current, total) => {
+                        setVideoStreamProgress({ current, total, bytesLoaded: current * 256 * 1024 });
+                    }, 12);
+                    const fullUrl = URL.createObjectURL(blob);
+                    prevBlobURL = fullUrl;
+                    setPreviewURL(fullUrl);
+                    setVideoFullyLoaded(true);
+                    setVideoBuffering(false);
+                    setVideoStreamProgress(null);
+                } catch (fallbackErr) {
+                    console.error('[Disk] Video fallback download also failed:', fallbackErr);
+                    setVideoBuffering(false);
+                    setVideoStreamProgress(null);
+                }
             }
             return;
         }
@@ -1716,6 +1731,21 @@ export const WalletDisk = (props: {
                                                             webkit-playsinline
                                                             class="max-w-full max-h-full rounded-lg"
                                                         />
+                                                    </Show>
+                                                    {/* Phase 4: All streaming failed - show download fallback */}
+                                                    <Show when={!videoBuffering() && !videoBufferReady() && !videoFullyLoaded() && !previewURL()}>
+                                                        <div class="w-full aspect-video bg-black/40 rounded-xl flex flex-col items-center justify-center border border-white/10">
+                                                            <svg class="w-12 h-12 text-gray-500 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                                <polygon points="5 3 19 12 5 21 5 3" />
+                                                            </svg>
+                                                            <div class="text-sm text-gray-400 mb-3">Streaming unavailable</div>
+                                                            <button
+                                                                onClick={() => handleDownload(file())}
+                                                                class="px-4 py-2 bg-cyan-500/20 text-cyan-400 rounded-lg text-sm font-medium hover:bg-cyan-500/30 transition border border-cyan-500/20"
+                                                            >
+                                                                Download to play
+                                                            </button>
+                                                        </div>
                                                     </Show>
                                                 </div>
                                             </Show>
