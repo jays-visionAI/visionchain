@@ -178,33 +178,66 @@ export const generateVideoThumbnail = async (file: File, maxSize: number = 200):
         try {
             const video = document.createElement('video');
             const url = URL.createObjectURL(file);
-            video.preload = 'metadata';
+            video.preload = 'auto';
             video.muted = true;
             video.playsInline = true;
+            video.setAttribute('playsinline', '');
+            video.setAttribute('webkit-playsinline', '');
+            video.crossOrigin = 'anonymous';
+
+            let resolved = false;
+            const cleanup = () => {
+                if (!resolved) {
+                    resolved = true;
+                    URL.revokeObjectURL(url);
+                }
+            };
+
+            const captureFrame = () => {
+                if (resolved) return;
+                try {
+                    const canvas = document.createElement('canvas');
+                    let w = video.videoWidth, h = video.videoHeight;
+                    if (!w || !h) { cleanup(); resolve(''); return; }
+                    if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                    else { w = Math.round(w * maxSize / h); h = maxSize; }
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(video, 0, 0, w, h);
+                        resolved = true;
+                        resolve(canvas.toDataURL('image/webp', 0.7));
+                    } else {
+                        resolve('');
+                    }
+                    video.pause();
+                    cleanup();
+                } catch {
+                    cleanup();
+                    resolve('');
+                }
+            };
+
+            video.onseeked = captureFrame;
             video.onloadeddata = () => {
                 // Seek to 1 second or 10% of video, whichever is less
                 video.currentTime = Math.min(1, video.duration * 0.1);
             };
-            video.onseeked = () => {
-                const canvas = document.createElement('canvas');
-                let w = video.videoWidth, h = video.videoHeight;
-                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
-                else { w = Math.round(w * maxSize / h); h = maxSize; }
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(video, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/webp', 0.7));
-                } else {
-                    resolve('');
+            // Fallback: try capturing on canplay if loadeddata/seeked doesn't fire (mobile)
+            video.oncanplay = () => {
+                if (!resolved && video.currentTime === 0) {
+                    video.currentTime = Math.min(1, video.duration * 0.1);
                 }
-                URL.revokeObjectURL(url);
             };
-            video.onerror = () => { URL.revokeObjectURL(url); resolve(''); };
-            // Timeout fallback
-            setTimeout(() => { URL.revokeObjectURL(url); resolve(''); }, 10000);
+            video.onerror = () => { cleanup(); resolve(''); };
+            // Timeout fallback - longer for mobile
+            setTimeout(() => {
+                if (!resolved) { cleanup(); resolve(''); }
+            }, 15000);
             video.src = url;
+            // On iOS, call load() explicitly to start buffering
+            video.load();
         } catch { resolve(''); }
     });
 };
@@ -447,14 +480,15 @@ export const uploadDiskFile = async (
     return diskFile;
 };
 
-/** Convert ArrayBuffer to base64 string */
+/** Convert ArrayBuffer to base64 string (mobile-safe) */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
     let binary = '';
-    const chunkSize = 8192;
+    // Use small chunks with String.fromCharCode.apply to avoid stack overflow on mobile
+    const chunkSize = 1024;
     for (let i = 0; i < bytes.length; i += chunkSize) {
         const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-        binary += String.fromCharCode(...Array.from(chunk));
+        binary += String.fromCharCode.apply(null, chunk as any);
     }
     return btoa(binary);
 }
