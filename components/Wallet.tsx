@@ -2659,8 +2659,58 @@ const Wallet = (): JSX.Element => {
                     }
                 };
 
+                // ── Silence detection using Web Audio API ─────────────────────
+                // Auto-stop after 3 seconds of silence once speech has started
+                const audioCtx = new AudioContext();
+                const source = audioCtx.createMediaStreamSource(stream);
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.3;
+                source.connect(analyser);
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                const SILENCE_THRESHOLD = 15;   // Volume level below which is "silence"
+                const SILENCE_DURATION = 3000;   // 3 seconds
+                let silenceStart: number | null = null;
+                let hasSpeechStarted = false;
+
+                const silenceCheckInterval = setInterval(() => {
+                    if (mediaRecorder.state !== 'recording') {
+                        clearInterval(silenceCheckInterval);
+                        audioCtx.close();
+                        return;
+                    }
+
+                    analyser.getByteFrequencyData(dataArray);
+                    const avgVolume = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
+
+                    if (avgVolume > SILENCE_THRESHOLD) {
+                        // Speech detected
+                        hasSpeechStarted = true;
+                        silenceStart = null;
+                    } else if (hasSpeechStarted) {
+                        // Silence after speech
+                        if (!silenceStart) {
+                            silenceStart = Date.now();
+                        } else if (Date.now() - silenceStart >= SILENCE_DURATION) {
+                            // 3 seconds of silence → auto-stop
+                            console.log('[Voice] Auto-stopping after 3s silence');
+                            clearInterval(silenceCheckInterval);
+                            audioCtx.close();
+                            mediaRecorder.stop();
+                        }
+                    }
+                }, 100); // Check every 100ms
+
                 // Store mediaRecorder reference so we can stop it
-                const fakeRecognition = { stop: () => mediaRecorder.stop(), _mediaRecorder: mediaRecorder };
+                const fakeRecognition = {
+                    stop: () => {
+                        clearInterval(silenceCheckInterval);
+                        audioCtx.close();
+                        mediaRecorder.stop();
+                    },
+                    _mediaRecorder: mediaRecorder
+                };
                 setRecognition(fakeRecognition as any);
 
                 mediaRecorder.start();
