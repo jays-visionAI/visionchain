@@ -1,5 +1,6 @@
 import { createSignal, onMount, For, Show, createMemo } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
+import { ethers } from 'ethers';
 import {
     DiskFile,
     listPublishedMaterials,
@@ -8,6 +9,9 @@ import {
     downloadDiskFile,
     formatFileSize
 } from '../../services/diskService';
+import { WalletService } from '../../services/walletService';
+import { contractService } from '../../services/contractService';
+import VCNTokenABI from '../../services/abi/VCNToken.json';
 import {
     ShoppingBag,
     Search,
@@ -26,9 +30,19 @@ import {
     FileImage,
     FileVideo,
     FileAudio,
-    File as FileIcon
+    File as FileIcon,
+    X,
+    AlertTriangle,
+    Loader2,
+    ShieldCheck,
 } from 'lucide-solid';
 import { useAuth } from '../auth/authContext';
+
+// Contract constants (must match transferService.ts)
+const VCN_TOKEN = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+const PAYMASTER_ADMIN = '0x08A1B183a53a0f8f1D875945D504272738E3AF34';
+const CHAIN_ID = 3151909;
+const RPC_URL = 'https://api.visionchain.co/rpc-proxy';
 
 const FileTypeIcon = (props: { type: string; name: string; class?: string }) => {
     const mime = () => props.type || '';
@@ -55,6 +69,14 @@ const VisionMarket = (props: { walletAddress?: string }) => {
     const [searchQuery, setSearchQuery] = createSignal('');
     const [purchasingId, setPurchasingId] = createSignal('');
     const [purchasedIds, setPurchasedIds] = createSignal<Set<string>>(new Set());
+
+    // Purchase modal state
+    const [showPurchaseModal, setShowPurchaseModal] = createSignal(false);
+    const [selectedItem, setSelectedItem] = createSignal<DiskFile | null>(null);
+    const [walletPassword, setWalletPassword] = createSignal('');
+    const [purchaseStep, setPurchaseStep] = createSignal<'confirm' | 'password' | 'processing' | 'downloading' | 'success' | 'error'>('confirm');
+    const [purchaseError, setPurchaseError] = createSignal('');
+    const [downloadProgress, setDownloadProgress] = createSignal(0);
 
     const loadMarket = async () => {
         setIsLoading(true);
@@ -88,6 +110,51 @@ const VisionMarket = (props: { walletAddress?: string }) => {
         );
     });
 
+    // ── Download file (distributed or URL) ──
+    const downloadFile = async (item: DiskFile) => {
+        setPurchasingId(item.id);
+        setPurchaseStep('downloading');
+        try {
+            const userEmail = auth.user()?.email || '';
+            if (item.storageType === 'distributed' || item.cid) {
+                const result = await downloadDiskFile(userEmail, item.id);
+                const blob = new Blob([await result.blob.arrayBuffer()], { type: item.type || result.fileType });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = item.name;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            } else if (item.downloadURL) {
+                // For non-distributed files with a valid download URL
+                const response = await fetch(item.downloadURL);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = item.name;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            } else {
+                throw new Error('Download URL not available.');
+            }
+            setPurchaseStep('success');
+        } catch (err: any) {
+            console.error('Download failed:', err);
+            setPurchaseError('Download failed: ' + (err.message || 'Unknown error'));
+            setPurchaseStep('error');
+        } finally {
+            setPurchasingId('');
+        }
+    };
+
+    // ── Open purchase/download flow ──
     const handlePurchase = async (item: DiskFile) => {
         if (!auth.user()) {
             alert('Please login to purchase.');
@@ -95,64 +162,157 @@ const VisionMarket = (props: { walletAddress?: string }) => {
         }
 
         const userEmail = auth.user()?.email || '';
+        const isOwned = purchasedIds().has(item.id) || item.publisherEmail === userEmail;
 
-        // Helper: download distributed file as blob
-        const downloadDistributedFile = async (file: DiskFile) => {
-            setPurchasingId(file.id);
+        if (isOwned) {
+            // Already purchased or own file - direct download
+            setSelectedItem(item);
+            setShowPurchaseModal(true);
+            setPurchaseStep('downloading');
+            await downloadFile(item);
+            return;
+        }
+
+        // New purchase -- show confirmation modal
+        setSelectedItem(item);
+        setWalletPassword('');
+        setPurchaseError('');
+        setPurchaseStep('confirm');
+        setShowPurchaseModal(true);
+    };
+
+    // ── Execute purchase with Permit signature ──
+    const executePurchase = async () => {
+        const item = selectedItem();
+        if (!item) return;
+
+        const userEmail = auth.user()?.email || '';
+        const priceVcn = item.priceVcn || 0;
+
+        if (priceVcn <= 0) {
+            // Free item - skip payment
+            setPurchaseStep('processing');
             try {
-                const result = await downloadDiskFile(userEmail, file.id);
-                const blob = new Blob([await result.blob.arrayBuffer()], { type: file.type || result.fileType });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = file.name;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                const result = await purchaseMaterial(item.id);
+                if (result.success) {
+                    setPurchasedIds(prev => new Set(prev).add(item.id));
+                    await downloadFile(item);
+                }
             } catch (err: any) {
-                console.error('Download failed:', err);
-                alert('Download failed: ' + (err.message || 'Unknown error'));
-            } finally {
-                setPurchasingId('');
-            }
-        };
-
-        // Already purchased or own file - direct download
-        if (purchasedIds().has(item.id) || item.publisherEmail === userEmail) {
-            if (item.storageType === 'distributed' || item.cid) {
-                await downloadDistributedFile(item);
-            } else if (item.downloadURL) {
-                window.open(item.downloadURL, '_blank');
-            } else {
-                alert('Download URL not available.');
+                setPurchaseError(err.message || 'Purchase failed');
+                setPurchaseStep('error');
             }
             return;
         }
 
-        // New purchase
-        if (!confirm(`Purchase "${item.name}" for ${item.priceVcn} VCN?`)) return;
+        // Paid item - need wallet password for Permit signing
+        setPurchaseStep('password');
+    };
 
-        setPurchasingId(item.id);
+    const executePermitPurchase = async () => {
+        const item = selectedItem();
+        if (!item || !walletPassword()) return;
+
+        const userEmail = auth.user()?.email || '';
+        const priceVcn = item.priceVcn || 0;
+
+        setPurchaseStep('processing');
+
         try {
-            const result = await purchaseMaterial(item.id);
+            // 1. Decrypt wallet to get signer
+            const encrypted = WalletService.getEncryptedWallet(userEmail);
+            if (!encrypted) {
+                throw new Error('Wallet not found. Please restore your wallet first.');
+            }
+
+            const mnemonic = await WalletService.decrypt(encrypted, walletPassword());
+            if (!WalletService.validateMnemonic(mnemonic)) {
+                throw new Error('Incorrect password. Please try again.');
+            }
+
+            const { privateKey } = WalletService.deriveEOA(mnemonic);
+            const address = await contractService.connectInternalWallet(privateKey);
+            const signer = contractService.getSigner();
+            if (!signer) throw new Error('Failed to initialize wallet signer.');
+
+            // 2. Sign EIP-712 Permit for the exact price (no extra fee)
+            const rpcProvider = new ethers.JsonRpcProvider(RPC_URL);
+            const vcnContract = new ethers.Contract(VCN_TOKEN, VCNTokenABI.abi, rpcProvider);
+            const totalAmount = ethers.parseUnits(priceVcn.toString(), 18);
+            const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+            // Check balance
+            const balance = await vcnContract.balanceOf(address);
+            if (balance < totalAmount) {
+                throw new Error(`Insufficient balance. You have ${ethers.formatEther(balance)} VCN but need ${priceVcn} VCN.`);
+            }
+
+            const [tokenName, nonce] = await Promise.all([
+                vcnContract.name(),
+                vcnContract.nonces(address),
+            ]);
+
+            const domain = {
+                name: tokenName,
+                version: '1',
+                chainId: CHAIN_ID,
+                verifyingContract: VCN_TOKEN,
+            };
+
+            const types = {
+                Permit: [
+                    { name: 'owner', type: 'address' },
+                    { name: 'spender', type: 'address' },
+                    { name: 'value', type: 'uint256' },
+                    { name: 'nonce', type: 'uint256' },
+                    { name: 'deadline', type: 'uint256' },
+                ],
+            };
+
+            const values = {
+                owner: address,
+                spender: PAYMASTER_ADMIN,
+                value: totalAmount,
+                nonce: nonce,
+                deadline: deadline,
+            };
+
+            const signature = await signer.signTypedData(domain, types, values);
+
+            // 3. Call purchaseMaterial with Permit data
+            const result = await purchaseMaterial(item.id, {
+                signature,
+                deadline,
+                owner: address,
+            });
+
             if (result.success) {
                 setPurchasedIds(prev => new Set(prev).add(item.id));
-                alert('Purchase successful!');
-                // Download the file
-                if (item.storageType === 'distributed' || item.cid) {
-                    await downloadDistributedFile(item);
-                } else if (result.downloadURL) {
-                    window.open(result.downloadURL, '_blank');
-                }
+                // 4. Download the file
+                await downloadFile(item);
+            } else {
+                throw new Error('Purchase failed.');
             }
         } catch (err: any) {
             console.error('Purchase failed:', err);
-            alert('Purchase failed: ' + (err.message || 'Check balance and allowance.'));
-        } finally {
-            setPurchasingId('');
+            const errorMsg = err.message || 'Purchase failed';
+            if (errorMsg.includes('Decryption failed') || errorMsg.includes('Incorrect password')) {
+                setPurchaseError('Incorrect wallet password. Please try again.');
+                setPurchaseStep('password');
+            } else {
+                setPurchaseError(errorMsg);
+                setPurchaseStep('error');
+            }
         }
+    };
+
+    const closePurchaseModal = () => {
+        setShowPurchaseModal(false);
+        setSelectedItem(null);
+        setWalletPassword('');
+        setPurchaseError('');
+        setPurchaseStep('confirm');
+        setPurchasingId('');
     };
 
     return (
@@ -295,6 +455,221 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                     </Show>
                 </Show>
             </div>
+
+            {/* ── Purchase / Download Modal ── */}
+            <Show when={showPurchaseModal() && selectedItem()}>
+                <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ "background-color": "rgba(0,0,0,0.7)", "backdrop-filter": "blur(8px)" }}>
+                    <Motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        class="w-full max-w-md bg-[#0d0d14] border border-white/[0.08] rounded-3xl p-6 shadow-2xl relative"
+                    >
+                        {/* Close button */}
+                        <button
+                            onClick={closePurchaseModal}
+                            class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-gray-400 hover:text-white transition-all"
+                        >
+                            <X class="w-4 h-4" />
+                        </button>
+
+                        {/* ── Step: Confirm Purchase ── */}
+                        <Show when={purchaseStep() === 'confirm'}>
+                            <div class="space-y-6">
+                                <div class="text-center">
+                                    <div class="w-16 h-16 mx-auto rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-4">
+                                        <ShoppingBag class="w-8 h-8 text-cyan-400" />
+                                    </div>
+                                    <h3 class="text-xl font-black text-white">Confirm Purchase</h3>
+                                    <p class="text-sm text-gray-500 mt-1">You are about to purchase this content</p>
+                                </div>
+
+                                <div class="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05] space-y-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-12 h-12 rounded-xl bg-black/40 flex items-center justify-center overflow-hidden border border-white/5 shrink-0">
+                                            <Show when={selectedItem()!.thumbnailURL || selectedItem()!.thumbnail} fallback={
+                                                <FileTypeIcon type={selectedItem()!.type} name={selectedItem()!.name} class="w-6 h-6 text-gray-500" />
+                                            }>
+                                                <img src={selectedItem()!.thumbnailURL || selectedItem()!.thumbnail || ''} alt="" class="w-full h-full object-cover" />
+                                            </Show>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="text-sm font-bold text-white truncate">{selectedItem()!.name}</div>
+                                            <div class="text-[11px] text-gray-500 flex items-center gap-1">
+                                                <User class="w-3 h-3" /> {selectedItem()!.publisherEmail?.split('@')[0]}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="border-t border-white/[0.04] pt-3 flex items-center justify-between">
+                                        <span class="text-sm text-gray-400 font-medium">Total Price</span>
+                                        <span class="text-2xl font-black text-cyan-400">{selectedItem()!.priceVcn} <span class="text-sm">VCN</span></span>
+                                    </div>
+
+                                    <div class="border-t border-white/[0.04] pt-3 space-y-1.5">
+                                        <div class="flex items-center justify-between text-[11px]">
+                                            <span class="text-gray-500">File Size</span>
+                                            <span class="text-gray-400">{formatFileSize(selectedItem()!.size)}</span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-[11px]">
+                                            <span class="text-gray-500">Transaction Fee</span>
+                                            <span class="text-green-400 font-bold">FREE (Gasless)</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={executePurchase}
+                                    class="w-full h-12 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-sm rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                >
+                                    <ShieldCheck class="w-5 h-5" />
+                                    Purchase for {selectedItem()!.priceVcn} VCN
+                                </button>
+
+                                <p class="text-[10px] text-gray-600 text-center">
+                                    By purchasing, you agree to pay via gasless VCN transfer. No additional gas fees required.
+                                </p>
+                            </div>
+                        </Show>
+
+                        {/* ── Step: Password ── */}
+                        <Show when={purchaseStep() === 'password'}>
+                            <div class="space-y-6">
+                                <div class="text-center">
+                                    <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
+                                        <Lock class="w-8 h-8 text-amber-400" />
+                                    </div>
+                                    <h3 class="text-xl font-black text-white">Wallet Password</h3>
+                                    <p class="text-sm text-gray-500 mt-1">Enter your wallet password to authorize this payment</p>
+                                </div>
+
+                                <Show when={purchaseError()}>
+                                    <div class="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-xs text-red-300">
+                                        <AlertTriangle class="w-4 h-4 text-red-400 shrink-0" />
+                                        <span>{purchaseError()}</span>
+                                    </div>
+                                </Show>
+
+                                <div class="bg-white/[0.03] rounded-2xl p-4 border border-white/[0.05]">
+                                    <div class="flex items-center justify-between mb-3 text-[11px]">
+                                        <span class="text-gray-500">Amount</span>
+                                        <span class="text-cyan-400 font-black">{selectedItem()!.priceVcn} VCN</span>
+                                    </div>
+                                    <input
+                                        type="password"
+                                        placeholder="Enter wallet password..."
+                                        value={walletPassword()}
+                                        onInput={(e) => setWalletPassword(e.currentTarget.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && walletPassword()) {
+                                                executePermitPurchase();
+                                            }
+                                        }}
+                                        class="w-full h-12 px-4 bg-black/40 border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all"
+                                        autofocus
+                                    />
+                                </div>
+
+                                <div class="flex gap-3">
+                                    <button
+                                        onClick={() => { setPurchaseStep('confirm'); setPurchaseError(''); }}
+                                        class="flex-1 h-12 bg-white/[0.05] hover:bg-white/[0.1] text-gray-300 font-bold text-sm rounded-xl transition-all border border-white/[0.05]"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        onClick={executePermitPurchase}
+                                        disabled={!walletPassword()}
+                                        class="flex-1 h-12 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-black text-sm rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                    >
+                                        <ShieldCheck class="w-4 h-4" />
+                                        Authorize
+                                    </button>
+                                </div>
+                            </div>
+                        </Show>
+
+                        {/* ── Step: Processing ── */}
+                        <Show when={purchaseStep() === 'processing'}>
+                            <div class="space-y-6 text-center py-8">
+                                <div class="w-16 h-16 mx-auto rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                                    <Loader2 class="w-8 h-8 text-cyan-400 animate-spin" />
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-black text-white">Processing Payment</h3>
+                                    <p class="text-sm text-gray-500 mt-2">Signing permit and executing gasless payment...</p>
+                                </div>
+                                <div class="flex items-center justify-center gap-3 text-xs text-gray-600">
+                                    <div class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                                    <span>This may take a few moments</span>
+                                </div>
+                            </div>
+                        </Show>
+
+                        {/* ── Step: Downloading ── */}
+                        <Show when={purchaseStep() === 'downloading'}>
+                            <div class="space-y-6 text-center py-8">
+                                <div class="w-16 h-16 mx-auto rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                                    <Download class="w-8 h-8 text-green-400 animate-bounce" />
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-black text-white">Downloading File</h3>
+                                    <p class="text-sm text-gray-500 mt-2">Retrieving file from decentralized storage...</p>
+                                </div>
+                                <div class="flex items-center justify-center gap-3 text-xs text-gray-600">
+                                    <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                                    <span>{selectedItem()?.name}</span>
+                                </div>
+                            </div>
+                        </Show>
+
+                        {/* ── Step: Success ── */}
+                        <Show when={purchaseStep() === 'success'}>
+                            <div class="space-y-6 text-center py-8">
+                                <div class="w-16 h-16 mx-auto rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                                    <CheckCircle class="w-8 h-8 text-green-400" />
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-black text-white">Download Complete</h3>
+                                    <p class="text-sm text-gray-500 mt-2">The file has been saved to your device.</p>
+                                </div>
+                                <button
+                                    onClick={closePurchaseModal}
+                                    class="mx-auto h-10 px-8 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-sm rounded-xl transition-all border border-white/10"
+                                >
+                                    Done
+                                </button>
+                            </div>
+                        </Show>
+
+                        {/* ── Step: Error ── */}
+                        <Show when={purchaseStep() === 'error'}>
+                            <div class="space-y-6 text-center py-8">
+                                <div class="w-16 h-16 mx-auto rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                                    <AlertTriangle class="w-8 h-8 text-red-400" />
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-black text-white">Error</h3>
+                                    <p class="text-sm text-red-400 mt-2 px-4">{purchaseError()}</p>
+                                </div>
+                                <div class="flex gap-3 justify-center">
+                                    <button
+                                        onClick={closePurchaseModal}
+                                        class="h-10 px-6 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-sm rounded-xl transition-all border border-white/10"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        onClick={() => { setPurchaseError(''); setPurchaseStep('confirm'); }}
+                                        class="h-10 px-6 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-sm rounded-xl transition-all"
+                                    >
+                                        Try Again
+                                    </button>
+                                </div>
+                            </div>
+                        </Show>
+                    </Motion.div>
+                </div>
+            </Show>
         </div>
     );
 };

@@ -169,6 +169,7 @@ export default function ActivateContract() {
                                     <th class="p-4">Partner</th>
                                     <th class="p-4">Wallet</th>
                                     <th class="p-4">Amount</th>
+                                    <th class="p-4 text-right">Admin Sent</th>
                                     <th class="p-4 text-center">Action</th>
                                 </tr>
                             </thead>
@@ -180,6 +181,12 @@ export default function ActivateContract() {
                                             <td class="p-4">{user.partnerCode || 'SELF'}</td>
                                             <td class="p-4 font-mono text-xs text-slate-400">{user.walletAddress}</td>
                                             <td class="p-4">{(user.amountToken || 0).toLocaleString()} VCN</td>
+                                            <td class="p-4 text-right">
+                                                <Show when={(user as any).adminSentTotal > 0} fallback={<span class="text-slate-600 text-xs">--</span>}>
+                                                    <span class="text-blue-400 font-mono text-sm">{((user as any).adminSentTotal || 0).toLocaleString()}</span>
+                                                    <span class="text-slate-500 text-xs ml-1">VCN</span>
+                                                </Show>
+                                            </td>
                                             <td class="p-4 text-center space-x-2 flex justify-center">
                                                 {/* Testnet Token Button */}
                                                 <button
@@ -202,10 +209,22 @@ export default function ActivateContract() {
                                                                 user.walletAddress!,
                                                                 amount.toString()
                                                             );
-                                                            alert(`Successfully sent ${amount} VCN to ${user.email} `);
+                                                            // Record adminSentTotal in Firestore
+                                                            try {
+                                                                const { getFirebaseDb } = await import('../../services/firebaseService');
+                                                                const { doc, updateDoc, increment } = await import('firebase/firestore');
+                                                                const db = getFirebaseDb();
+                                                                await updateDoc(doc(db, 'users', user.email.toLowerCase()), {
+                                                                    adminSentTotal: increment(amount)
+                                                                });
+                                                            } catch (updateErr) {
+                                                                console.warn('[ActivateContract] Failed to update adminSentTotal:', updateErr);
+                                                            }
+                                                            alert(`Successfully sent ${amount} VCN to ${user.email}`);
+                                                            refetch();
                                                         } catch (e: any) {
                                                             console.error(e);
-                                                            alert(`Failed: ${e.message} `);
+                                                            alert(`Failed: ${e.message}`);
                                                         } finally {
                                                             setSendingFor(null);
                                                         }
@@ -254,18 +273,25 @@ export default function ActivateContract() {
                                 <th class="p-4">Email</th>
                                 <th class="p-4">Partner</th>
                                 <th class="p-4 text-right">Amount</th>
+                                <th class="p-4 text-right">Admin Sent</th>
                                 <th class="p-4 text-right">Status</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800">
                             <For each={participants() ? filterBySearch([...otherParticipants(), ...deployedParticipants()]) : []} fallback={
-                                <tr><td colspan="4" class="p-8 text-center text-slate-500 italic">No registered users found. Upload CSV first.</td></tr>
+                                <tr><td colspan="5" class="p-8 text-center text-slate-500 italic">No registered users found. Upload CSV first.</td></tr>
                             }>
                                 {(user) => (
                                     <tr class="hover:bg-slate-800/20 border-b border-slate-800/50">
                                         <td class="p-4 text-slate-300">{user.email}</td>
                                         <td class="p-4 text-slate-500">{user.partnerCode || 'SELF'}</td>
                                         <td class="p-4 text-right font-mono text-slate-400">{(user.amountToken || 0).toLocaleString()}</td>
+                                        <td class="p-4 text-right">
+                                            <Show when={(user as any).adminSentTotal > 0} fallback={<span class="text-slate-600 text-xs">--</span>}>
+                                                <span class="text-blue-400 font-mono text-sm">{((user as any).adminSentTotal || 0).toLocaleString()}</span>
+                                                <span class="text-slate-500 text-xs ml-1">VCN</span>
+                                            </Show>
+                                        </td>
                                         <td class="p-4 text-right">
                                             <span class={`text - xs font - bold px - 2 py - 1 rounded - full ${user.vestingTx ? 'bg-green-900/30 text-green-400' :
                                                 user.status === 'WalletCreated' ? 'bg-indigo-900/30 text-indigo-400' :

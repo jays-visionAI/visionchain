@@ -17539,7 +17539,7 @@ exports.diskCancelSubscription = onCall({ cors: true }, async (request) => {
 exports.purchasePublishedFile = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK", "EMAIL_USER", "EMAIL_APP_PASSWORD"] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const buyerEmail = request.auth.token.email.toLowerCase();
-  const { fileId } = request.data;
+  const { fileId, signature, deadline, owner } = request.data;
 
   if (!fileId) throw new HttpsError("invalid-argument", "fileId required.");
 
@@ -17564,10 +17564,10 @@ exports.purchasePublishedFile = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK"
     return { success: true, downloadURL: item.downloadURL };
   }
 
-  // Handle Payment
+  // Handle Payment via Paymaster
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const executorWallet = new ethers.Wallet(VCN_EXECUTOR_PK, provider);
-  const token = new ethers.Contract(VCN_TOKEN_ADDRESS, ERC20_ABI, executorWallet);
+  const token = new ethers.Contract(VCN_TOKEN_ADDRESS, VCN_TOKEN_ABI, executorWallet);
 
   const buyerDoc = await db.collection("users").doc(buyerEmail).get();
   const publisherDoc = await db.collection("users").doc(publisherEmail).get();
@@ -17575,38 +17575,73 @@ exports.purchasePublishedFile = onCall({ cors: true, secrets: ["VCN_EXECUTOR_PK"
   if (!buyerDoc.exists || !buyerDoc.data().walletAddress) throw new HttpsError("failed-precondition", "Buyer wallet not linked.");
   if (!publisherDoc.exists || !publisherDoc.data().walletAddress) throw new HttpsError("failed-precondition", "Publisher wallet not found.");
 
-  const buyerAddress = buyerDoc.data().walletAddress;
+  const buyerAddress = owner || buyerDoc.data().walletAddress;
   const publisherAddress = publisherDoc.data().walletAddress;
 
   const amountWei = ethers.parseUnits(priceVcn.toString(), 18);
 
-  // Split calculations
+  // Split calculations: 30% platform fee, 70% to publisher
   const platformFee = (amountWei * 30n) / 100n;
   const publisherAmount = amountWei - platformFee;
 
   try {
-    const allowance = await token.allowance(buyerAddress, executorWallet.address);
-    if (allowance < amountWei) throw new HttpsError("failed-precondition", "insufficient_allowance");
-
-    const tx1 = await token.transferFrom(buyerAddress, executorWallet.address, amountWei);
-    await tx1.wait();
-
-    if (publisherAmount > 0n) {
-      const tx2 = await token.transfer(publisherAddress, publisherAmount);
-      await tx2.wait();
+    // === Gasless Payment via Permit (EIP-2612) ===
+    if (signature && deadline) {
+      // Execute Permit: Executor pays gas, buyer signs off-chain
+      try {
+        const sig = ethers.Signature.from(signature);
+        console.log(`[DiskPurchase] Executing permit for ${priceVcn} VCN from ${buyerAddress}...`);
+        const startNonce = await provider.getTransactionCount(executorWallet.address, "pending");
+        const permitTx = await token.permit(
+          buyerAddress,
+          executorWallet.address,
+          amountWei,
+          deadline,
+          sig.v,
+          sig.r,
+          sig.s,
+          { nonce: startNonce },
+        );
+        await permitTx.wait();
+        console.log(`[DiskPurchase] Permit confirmed: ${permitTx.hash}`);
+      } catch (permitErr) {
+        console.error("[DiskPurchase] Permit failed:", permitErr.message);
+        throw new HttpsError("failed-precondition", `Permit failed: ${permitErr.reason || permitErr.message}`);
+      }
+    } else {
+      // Fallback: check existing allowance (legacy)
+      const allowance = await token.allowance(buyerAddress, executorWallet.address);
+      if (allowance < amountWei) throw new HttpsError("failed-precondition", "insufficient_allowance");
     }
 
+    // Transfer full price from buyer to executor
+    const nonce1 = await provider.getTransactionCount(executorWallet.address, "pending");
+    const tx1 = await token.transferFrom(buyerAddress, executorWallet.address, amountWei, { nonce: nonce1 });
+    await tx1.wait();
+    console.log(`[DiskPurchase] Collected ${priceVcn} VCN from buyer: ${tx1.hash}`);
+
+    // Transfer publisher's share (70%) from executor to publisher
+    if (publisherAmount > 0n) {
+      const nonce2 = await provider.getTransactionCount(executorWallet.address, "pending");
+      const tx2 = await token.transfer(publisherAddress, publisherAmount, { nonce: nonce2 });
+      await tx2.wait();
+      console.log(`[DiskPurchase] Paid ${ethers.formatUnits(publisherAmount, 18)} VCN to publisher: ${tx2.hash}`);
+    }
+
+    // Record purchase
     await purchaseRef.set({
       fileId,
       purchasedAt: Date.now(),
       priceVcn,
       publisherEmail,
+      txHash: tx1.hash,
     });
 
     await marketRef.update({
       purchaseCount: admin.firestore.FieldValue.increment(1),
     });
 
+    // Notify publisher via email
     const body = `
       ${emailComponents.sectionTitle("New Sale on Vision Disk!")}
       ${emailComponents.infoCard([

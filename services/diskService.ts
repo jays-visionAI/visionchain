@@ -1015,11 +1015,25 @@ export const checkPurchaseStatus = async (email: string, fileId: string): Promis
 
 /**
  * Purchase a published material. Calls a Cloud Function to handle VCN split.
+ * Uses Permit (EIP-2612) for gasless payment via Paymaster.
  */
-export const purchaseMaterial = async (fileId: string): Promise<{ success: boolean; downloadURL: string }> => {
+export const purchaseMaterial = async (
+    fileId: string,
+    permitData?: { signature: string; deadline: number; owner: string }
+): Promise<{ success: boolean; downloadURL: string }> => {
     const functions = getFunctions(getFirebaseApp());
-    const purchaseCall = httpsCallable<{ fileId: string }, { success: boolean; downloadURL: string }>(functions, 'purchasePublishedFile');
-    const result = await purchaseCall({ fileId });
+    const purchaseCall = httpsCallable<
+        { fileId: string; signature?: string; deadline?: number; owner?: string },
+        { success: boolean; downloadURL: string }
+    >(functions, 'purchasePublishedFile');
+    const result = await purchaseCall({
+        fileId,
+        ...(permitData ? {
+            signature: permitData.signature,
+            deadline: permitData.deadline,
+            owner: permitData.owner,
+        } : {}),
+    });
     return result.data;
 };
 
