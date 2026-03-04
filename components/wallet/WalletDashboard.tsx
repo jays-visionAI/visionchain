@@ -1094,7 +1094,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.15 }}
-                            class="fixed inset-0 bg-black/60 z-[55] md:hidden"
+                            class="fixed inset-0 bg-black/60 z-[70] md:hidden"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 setIsMobileHistoryOpen(false);
@@ -1106,7 +1106,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             animate={{ x: 0 }}
                             exit={{ x: '100%' }}
                             transition={{ duration: 0.2, easing: [0.32, 0.72, 0, 1] }}
-                            class="fixed inset-y-0 right-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-l border-white/10 shadow-2xl z-[60] flex flex-col md:hidden will-change-transform"
+                            class="fixed inset-y-0 right-0 w-[85%] max-w-[320px] bg-[#0c0c0e] border-l border-white/10 shadow-2xl z-[75] flex flex-col md:hidden will-change-transform"
                         >
                             {/* Header */}
                             <div class="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0a0b]">
@@ -1760,6 +1760,12 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                             class="w-10 h-10 flex items-center justify-center rounded-xl text-gray-500 hover:text-white hover:bg-white/10"
                                         >
                                             <Plus class="w-5 h-5" />
+                                        </button>
+                                        <button
+                                            onClick={props.toggleRecording}
+                                            class={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${props.isRecording() ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
+                                        >
+                                            <Mic class="w-5 h-5" />
                                         </button>
                                     </div>
                                     <button
