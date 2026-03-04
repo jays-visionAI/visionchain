@@ -7,6 +7,8 @@ import {
     purchaseMaterial,
     checkPurchaseStatus,
     downloadDiskFile,
+    downloadDiskFileGranular,
+    streamVideoChunks,
     formatFileSize
 } from '../../services/diskService';
 import { WalletService } from '../../services/walletService';
@@ -151,13 +153,45 @@ const VisionMarket = (props: { walletAddress?: string }) => {
     const downloadFile = async (item: DiskFile) => {
         setPurchasingId(item.id);
         setPurchaseStep('downloading');
+        setDownloadProgress(0);
         try {
             const userEmail = auth.user()?.email || '';
             let blob: Blob;
+            const mime = item.type || 'application/octet-stream';
+            const pType = getPreviewType(mime, item.name);
 
             if (item.storageType === 'distributed' || item.cid) {
-                const result = await downloadDiskFile(userEmail, item.id);
-                blob = new Blob([await result.blob.arrayBuffer()], { type: item.type || result.fileType });
+                // Use chunked download for distributed files
+                if (pType === 'video' && item.chunkHashes?.length) {
+                    // Stream video for faster preview
+                    blob = await streamVideoChunks(
+                        item,
+                        (current, total, bytesLoaded) => {
+                            setDownloadProgress(Math.round((current / total) * 100));
+                        },
+                        (partialUrl) => {
+                            // Early preview with partial data
+                            if (previewUrl()) window.URL.revokeObjectURL(previewUrl());
+                            setPreviewUrl(partialUrl);
+                            setPreviewType('video');
+                            setPurchaseStep('preview');
+                        },
+                        2 * 1024 * 1024 // 2MB buffer before preview
+                    );
+                } else if (item.chunkHashes?.length) {
+                    // Granular chunk download with progress
+                    blob = await downloadDiskFileGranular(
+                        item,
+                        (current, total) => {
+                            setDownloadProgress(Math.round((current / total) * 100));
+                        },
+                        10
+                    );
+                } else {
+                    // Fallback to single call (small distributed files)
+                    const result = await downloadDiskFile(userEmail, item.id);
+                    blob = new Blob([await result.blob.arrayBuffer()], { type: item.type || result.fileType });
+                }
             } else if (item.downloadURL) {
                 const response = await fetch(item.downloadURL);
                 blob = await response.blob();
@@ -165,20 +199,20 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                 throw new Error('Download URL not available.');
             }
 
-            const mime = item.type || blob.type || 'application/octet-stream';
-            const pType = getPreviewType(mime, item.name);
+            const finalMime = item.type || blob.type || 'application/octet-stream';
+            const finalPType = getPreviewType(finalMime, item.name);
 
             // Cleanup old preview URL
             if (previewUrl()) window.URL.revokeObjectURL(previewUrl());
 
-            if (pType === 'video' || pType === 'image' || pType === 'audio') {
+            if (finalPType === 'video' || finalPType === 'image' || finalPType === 'audio') {
                 // Show inline preview
                 const url = window.URL.createObjectURL(blob);
                 setPreviewUrl(url);
-                setPreviewType(pType);
+                setPreviewType(finalPType);
                 setPreviewBlob(blob);
                 setPurchaseStep('preview');
-            } else if (pType === 'pdf') {
+            } else if (finalPType === 'pdf') {
                 // Open PDF in new tab for viewing
                 const url = window.URL.createObjectURL(blob);
                 window.open(url, '_blank');
@@ -186,12 +220,10 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                 setPreviewUrl(url);
                 setPreviewType('pdf');
                 setPurchaseStep('success');
-            } else if (pType === 'document') {
-                // Download and auto-open document
+            } else if (finalPType === 'document') {
                 triggerBlobDownload(blob, item.name);
                 setPurchaseStep('success');
             } else {
-                // Other file types: just download
                 triggerBlobDownload(blob, item.name);
                 setPurchaseStep('success');
             }
@@ -672,6 +704,17 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                                     <h3 class="text-xl font-black text-white">Downloading File</h3>
                                     <p class="text-sm text-gray-500 mt-2">Retrieving file from decentralized storage...</p>
                                 </div>
+                                <Show when={downloadProgress() > 0}>
+                                    <div class="px-4">
+                                        <div class="w-full h-2 bg-white/[0.05] rounded-full overflow-hidden">
+                                            <div
+                                                class="h-full bg-gradient-to-r from-green-500 to-cyan-400 rounded-full transition-all duration-300"
+                                                style={{ width: `${downloadProgress()}%` }}
+                                            />
+                                        </div>
+                                        <div class="text-xs text-gray-500 mt-2">{downloadProgress()}% complete</div>
+                                    </div>
+                                </Show>
                                 <div class="flex items-center justify-center gap-3 text-xs text-gray-600">
                                     <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                                     <span>{selectedItem()?.name}</span>
