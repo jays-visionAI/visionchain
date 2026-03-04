@@ -4200,29 +4200,34 @@ If they say "Yes", output the navigate intent JSON for "referral".
                     {/* Edge Swipe Handle / Sidebar Toggle Handle */}
                     <Show when={onboardingStep() === 0}>
                         <div
-                            class={`lg:hidden fixed left-0 top-0 bottom-[68px] w-8 z-[34] group touch-none transition-all duration-300 ${sidebarOpen() ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                            class={`lg:hidden fixed left-0 top-0 bottom-[68px] w-8 z-[34] group transition-all duration-300 ${sidebarOpen() ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
                             onTouchStart={(e) => {
                                 setTouchStartX(e.touches[0].clientX);
                             }}
                             onTouchMove={(e) => {
                                 const currentX = e.touches[0].clientX;
                                 const deltaX = currentX - touchStartX();
-                                // Threshold for swipe opening
-                                if (deltaX > 30 && !sidebarOpen()) {
+                                if (deltaX > 20 && !sidebarOpen()) {
+                                    setSidebarOpen(true);
+                                }
+                            }}
+                            onTouchEnd={(e) => {
+                                // Tap detection: if no significant swipe, treat as tap
+                                if (!sidebarOpen()) {
                                     setSidebarOpen(true);
                                 }
                             }}
                             onClick={() => setSidebarOpen(true)}
                         >
                             <div
-                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[28px] h-[100px] bg-blue-950/90 border-2 border-blue-400/60 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[0_0_40px_rgba(59,130,246,0.9),0_0_20px_rgba(59,130,246,0.7)] flex items-center justify-center transition-all duration-300 group-hover:w-[36px] group-hover:bg-blue-900 group-hover:border-blue-300/80 group-hover:shadow-[0_0_60px_rgba(59,130,246,1),0_0_30px_rgba(96,165,250,0.9)] animate-pulse"
+                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[28px] h-[100px] bg-orange-950/90 border-2 border-orange-400/60 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[0_0_40px_rgba(249,115,22,0.9),0_0_20px_rgba(249,115,22,0.7)] flex items-center justify-center transition-all duration-300 active:w-[36px] active:bg-orange-900 active:border-orange-300/80"
                             >
                                 <div class="flex flex-col gap-1.5 items-center">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-125 transition-all duration-300 shadow-[0_0_12px_rgba(147,197,253,1)]" />
-                                    <div class="w-1.5 h-4 rounded-full bg-blue-400 group-hover:bg-white group-hover:h-6 transition-all duration-300 shadow-[0_0_15px_rgba(96,165,250,1)]" />
-                                    <div class="w-1.5 h-1.5 rounded-full bg-blue-300 group-hover:bg-white group-hover:scale-125 transition-all duration-300 shadow-[0_0_12px_rgba(147,197,253,1)]" />
+                                    <div class="w-1.5 h-1.5 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(253,186,116,1)]" />
+                                    <div class="w-1.5 h-4 rounded-full bg-orange-400 shadow-[0_0_15px_rgba(251,146,60,1)]" />
+                                    <div class="w-1.5 h-1.5 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(253,186,116,1)]" />
                                 </div>
-                                <ChevronRight class="w-3.5 h-3.5 text-blue-200 group-hover:text-white transition-colors ml-0.5 animate-pulse" />
+                                <ChevronRight class="w-3.5 h-3.5 text-orange-200 ml-0.5" />
                             </div>
                         </div>
                     </Show>
