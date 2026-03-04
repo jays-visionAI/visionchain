@@ -1214,9 +1214,10 @@ export const WalletDisk = (props: {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setContextMenu({ item: folder, type: 'folder', x: e.clientX, y: e.clientY });
+                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
                                             }}
-                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all"
+                                            class="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
                                         >
                                             <MoreVertical class="w-3.5 h-3.5" />
                                         </button>
@@ -1230,10 +1231,6 @@ export const WalletDisk = (props: {
                                         class={`group relative bg-white/[0.02] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-500/20 rounded-xl p-4 flex flex-col items-center gap-3 transition-all cursor-pointer ${selectedItems().has(file.id) ? 'ring-2 ring-cyan-500 bg-cyan-500/5' : ''
                                             } ${deletingId() === file.id ? 'opacity-40' : ''}`}
                                         onClick={() => isSelectMode() ? toggleSelection(file.id) : setPreviewFile(file)}
-                                        onContextMenu={(e) => {
-                                            e.preventDefault();
-                                            setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
-                                        }}
                                     >
                                         {/* Selection Checkbox */}
                                         <div
@@ -1329,9 +1326,10 @@ export const WalletDisk = (props: {
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
+                                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                    setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
                                                 }}
-                                                class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all"
+                                                class="p-1.5 rounded-lg bg-black/40 text-gray-400 hover:text-white opacity-100 transition-all"
                                             >
                                                 <MoreVertical class="w-3.5 h-3.5" />
                                             </button>
@@ -1368,9 +1366,10 @@ export const WalletDisk = (props: {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setContextMenu({ item: folder, type: 'folder', x: e.clientX, y: e.clientY });
+                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                setContextMenu({ item: folder, type: 'folder', x: rect.right, y: rect.bottom + 4 });
                                             }}
-                                            class="p-1 rounded-md text-gray-500 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all"
+                                            class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all"
                                         >
                                             <MoreVertical class="w-4 h-4" />
                                         </button>
@@ -1421,9 +1420,10 @@ export const WalletDisk = (props: {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setContextMenu({ item: file, type: 'file', x: e.clientX, y: e.clientY });
+                                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                                setContextMenu({ item: file, type: 'file', x: rect.right, y: rect.bottom + 4 });
                                             }}
-                                            class="p-1 rounded-md text-gray-500 hover:text-white lg:opacity-0 lg:group-hover:opacity-100 transition-all active:bg-white/10"
+                                            class="p-1 rounded-md text-gray-500 hover:text-white opacity-100 transition-all active:bg-white/10"
                                         >
                                             <MoreVertical class="w-4 h-4" />
                                         </button>
@@ -1444,7 +1444,10 @@ export const WalletDisk = (props: {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9 }}
                             class="fixed z-[100] bg-[#1a1a20] border border-white/10 rounded-xl shadow-2xl py-1.5 min-w-[160px]"
-                            style={{ left: `${ctx().x}px`, top: `${ctx().y}px` }}
+                            style={{
+                                left: `${Math.min(ctx().x, window.innerWidth - 180)}px`,
+                                top: `${Math.min(ctx().y, window.innerHeight - 320)}px`,
+                            }}
                             onClick={(e) => e.stopPropagation()}
                         >
                             <Show when={renamingId() === ctx().item.id} fallback={
