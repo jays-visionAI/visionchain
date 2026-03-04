@@ -908,8 +908,8 @@ exports.paymaster = onRequest({ cors: true, invoker: "public", timeoutSeconds: 3
       return res.status(200).json({ flushed, latestNonce, pendingNonce });
     }
 
-    // Basic validation (skip for info-only endpoints)
-    if (!user && type !== "reverse_bridge_info") {
+    // Basic validation (skip for info-only and admin endpoints)
+    if (!user && !["reverse_bridge_info", "admin_transfer", "flush_nonce"].includes(type)) {
       return res.status(400).json({ error: "Missing required field: user" });
     }
 
