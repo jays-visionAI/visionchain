@@ -1732,7 +1732,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             </Show>
 
                             {/* Input Container */}
-                            <div class="relative bg-[#121214] rounded-2xl border border-white/10 overflow-hidden">
+                            <div class="relative bg-[#121214] rounded-2xl border-[1.5px] border-white/10">
                                 <textarea
                                     value={props.input()}
                                     placeholder={t('chat.placeholder')}
