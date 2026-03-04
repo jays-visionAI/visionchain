@@ -1,4 +1,4 @@
-import { createSignal, onMount, For, Show, createMemo } from 'solid-js';
+import { createSignal, onMount, onCleanup, For, Show, createMemo } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';
 import { ethers } from 'ethers';
 import {
@@ -35,6 +35,9 @@ import {
     AlertTriangle,
     Loader2,
     ShieldCheck,
+    Play,
+    Eye,
+    Maximize2,
 } from 'lucide-solid';
 import { useAuth } from '../auth/authContext';
 
@@ -74,9 +77,19 @@ const VisionMarket = (props: { walletAddress?: string }) => {
     const [showPurchaseModal, setShowPurchaseModal] = createSignal(false);
     const [selectedItem, setSelectedItem] = createSignal<DiskFile | null>(null);
     const [walletPassword, setWalletPassword] = createSignal('');
-    const [purchaseStep, setPurchaseStep] = createSignal<'confirm' | 'password' | 'processing' | 'downloading' | 'success' | 'error'>('confirm');
+    const [purchaseStep, setPurchaseStep] = createSignal<'confirm' | 'password' | 'processing' | 'downloading' | 'success' | 'preview' | 'error'>('confirm');
     const [purchaseError, setPurchaseError] = createSignal('');
     const [downloadProgress, setDownloadProgress] = createSignal(0);
+
+    // Preview state
+    const [previewUrl, setPreviewUrl] = createSignal('');
+    const [previewType, setPreviewType] = createSignal<'video' | 'image' | 'audio' | 'pdf' | 'document' | 'other'>('other');
+    const [previewBlob, setPreviewBlob] = createSignal<Blob | null>(null);
+
+    // Cleanup preview URLs on unmount
+    onCleanup(() => {
+        if (previewUrl()) window.URL.revokeObjectURL(previewUrl());
+    });
 
     const loadMarket = async () => {
         setIsLoading(true);
@@ -110,41 +123,78 @@ const VisionMarket = (props: { walletAddress?: string }) => {
         );
     });
 
-    // ── Download file (distributed or URL) ──
+    // ── Determine preview type from MIME ──
+    const getPreviewType = (mime: string, name: string): 'video' | 'image' | 'audio' | 'pdf' | 'document' | 'other' => {
+        if (mime.startsWith('video/')) return 'video';
+        if (mime.startsWith('image/')) return 'image';
+        if (mime.startsWith('audio/')) return 'audio';
+        if (mime.includes('pdf')) return 'pdf';
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'md', 'csv'].includes(ext)) return 'document';
+        return 'other';
+    };
+
+    // ── Trigger browser download from blob ──
+    const triggerBlobDownload = (blob: Blob, fileName: string) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    };
+
+    // ── Download file and show preview ──
     const downloadFile = async (item: DiskFile) => {
         setPurchasingId(item.id);
         setPurchaseStep('downloading');
         try {
             const userEmail = auth.user()?.email || '';
+            let blob: Blob;
+
             if (item.storageType === 'distributed' || item.cid) {
                 const result = await downloadDiskFile(userEmail, item.id);
-                const blob = new Blob([await result.blob.arrayBuffer()], { type: item.type || result.fileType });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = item.name;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                blob = new Blob([await result.blob.arrayBuffer()], { type: item.type || result.fileType });
             } else if (item.downloadURL) {
-                // For non-distributed files with a valid download URL
                 const response = await fetch(item.downloadURL);
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = item.name;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                blob = await response.blob();
             } else {
                 throw new Error('Download URL not available.');
             }
-            setPurchaseStep('success');
+
+            const mime = item.type || blob.type || 'application/octet-stream';
+            const pType = getPreviewType(mime, item.name);
+
+            // Cleanup old preview URL
+            if (previewUrl()) window.URL.revokeObjectURL(previewUrl());
+
+            if (pType === 'video' || pType === 'image' || pType === 'audio') {
+                // Show inline preview
+                const url = window.URL.createObjectURL(blob);
+                setPreviewUrl(url);
+                setPreviewType(pType);
+                setPreviewBlob(blob);
+                setPurchaseStep('preview');
+            } else if (pType === 'pdf') {
+                // Open PDF in new tab for viewing
+                const url = window.URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                setPreviewBlob(blob);
+                setPreviewUrl(url);
+                setPreviewType('pdf');
+                setPurchaseStep('success');
+            } else if (pType === 'document') {
+                // Download and auto-open document
+                triggerBlobDownload(blob, item.name);
+                setPurchaseStep('success');
+            } else {
+                // Other file types: just download
+                triggerBlobDownload(blob, item.name);
+                setPurchaseStep('success');
+            }
         } catch (err: any) {
             console.error('Download failed:', err);
             setPurchaseError('Download failed: ' + (err.message || 'Unknown error'));
@@ -313,6 +363,13 @@ const VisionMarket = (props: { walletAddress?: string }) => {
         setPurchaseError('');
         setPurchaseStep('confirm');
         setPurchasingId('');
+        // Cleanup preview
+        if (previewUrl()) {
+            window.URL.revokeObjectURL(previewUrl());
+            setPreviewUrl('');
+        }
+        setPreviewBlob(null);
+        setPreviewType('other');
     };
 
     return (
@@ -462,7 +519,7 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                     <Motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        class="w-full max-w-md bg-[#0d0d14] border border-white/[0.08] rounded-3xl p-6 shadow-2xl relative"
+                        class={`w-full bg-[#0d0d14] border border-white/[0.08] rounded-3xl p-6 shadow-2xl relative ${purchaseStep() === 'preview' ? 'max-w-2xl' : 'max-w-md'}`}
                     >
                         {/* Close button */}
                         <button
@@ -622,7 +679,77 @@ const VisionMarket = (props: { walletAddress?: string }) => {
                             </div>
                         </Show>
 
-                        {/* ── Step: Success ── */}
+                        {/* ── Step: Preview (Video / Image / Audio) ── */}
+                        <Show when={purchaseStep() === 'preview'}>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <h3 class="text-lg font-black text-white truncate pr-8">{selectedItem()?.name}</h3>
+                                </div>
+
+                                {/* Video Player */}
+                                <Show when={previewType() === 'video'}>
+                                    <div class="rounded-2xl overflow-hidden bg-black border border-white/10">
+                                        <video
+                                            src={previewUrl()}
+                                            controls
+                                            autoplay
+                                            playsinline
+                                            class="w-full max-h-[60vh] object-contain"
+                                            style={{ "background-color": "#000" }}
+                                        />
+                                    </div>
+                                </Show>
+
+                                {/* Image Viewer */}
+                                <Show when={previewType() === 'image'}>
+                                    <div class="rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                                        <img
+                                            src={previewUrl()}
+                                            alt={selectedItem()?.name || ''}
+                                            class="w-full max-h-[60vh] object-contain"
+                                        />
+                                    </div>
+                                </Show>
+
+                                {/* Audio Player */}
+                                <Show when={previewType() === 'audio'}>
+                                    <div class="rounded-2xl bg-white/[0.03] border border-white/10 p-6 flex flex-col items-center gap-4">
+                                        <div class="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                                            <FileAudio class="w-10 h-10 text-amber-400" />
+                                        </div>
+                                        <audio
+                                            src={previewUrl()}
+                                            controls
+                                            autoplay
+                                            class="w-full"
+                                        />
+                                    </div>
+                                </Show>
+
+                                {/* Action Buttons */}
+                                <div class="flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            const blob = previewBlob();
+                                            const item = selectedItem();
+                                            if (blob && item) triggerBlobDownload(blob, item.name);
+                                        }}
+                                        class="flex-1 h-10 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                    >
+                                        <Download class="w-4 h-4" />
+                                        Save to Device
+                                    </button>
+                                    <button
+                                        onClick={closePurchaseModal}
+                                        class="h-10 px-6 bg-white/[0.06] hover:bg-white/[0.1] text-white font-bold text-xs rounded-xl transition-all border border-white/10"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </Show>
+
+                        {/* ── Step: Success (for documents/other) ── */}
                         <Show when={purchaseStep() === 'success'}>
                             <div class="space-y-6 text-center py-8">
                                 <div class="w-16 h-16 mx-auto rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
