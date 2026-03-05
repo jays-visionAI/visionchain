@@ -1,5 +1,5 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
-import { collection, query, where, orderBy, getDocs, getFirestore } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, getFirestore } from 'firebase/firestore';
 import { getFirebaseApp } from '../../services/firebaseService';
 
 interface DailyTip {
@@ -25,13 +25,15 @@ export function DailyTipCard(props: DailyTipCardProps) {
             const db = getFirestore(getFirebaseApp());
             const q = query(
                 collection(db, 'daily_tips'),
-                where('enabled', '==', true),
                 orderBy('order', 'asc')
             );
             const snapshot = await getDocs(q);
             const loaded: DailyTip[] = [];
             snapshot.forEach(doc => {
-                loaded.push({ id: doc.id, ...doc.data() } as DailyTip);
+                const data = doc.data() as DailyTip;
+                if (data.enabled) {
+                    loaded.push({ id: doc.id, ...data });
+                }
             });
             setTips(loaded);
 
