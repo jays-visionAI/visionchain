@@ -132,6 +132,7 @@ render(() => (
         <Route path="/adminsystem/api-pricing" component={Admin.AdminApiPricingPage} />
         <Route path="/adminsystem/vision-nodes" component={Admin.AdminVisionNodesPage} />
         <Route path="/adminsystem/node-health" component={Admin.AdminNodeHealthPage} />
+        <Route path="/adminsystem/daily-tips" component={Admin.AdminDailyTipsPage} />
 
         {/* Trading Admin Routes (Separate system) */}
         <Route path="/trading-login" component={TradingAdmin.TradingAdminLoginPage} />

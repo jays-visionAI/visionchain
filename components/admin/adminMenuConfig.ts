@@ -28,7 +28,8 @@ import {
     Share2,
     Coins,
     Server,
-    Globe
+    Globe,
+    Lightbulb
 } from 'lucide-solid';
 
 
@@ -60,7 +61,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Share2,
     Coins,
     Server,
-    Globe
+    Globe,
+    Lightbulb
 };
 
 // Menu item interface with optional children for sub-menus
@@ -193,6 +195,15 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'core',
         order: 11
+    },
+    {
+        id: 'daily-tips',
+        path: '/adminsystem/daily-tips',
+        label: 'Daily Tips',
+        icon: 'Lightbulb',
+        badge: 'NEW',
+        category: 'core',
+        order: 11.5
     },
     {
         id: 'vcn-settings',

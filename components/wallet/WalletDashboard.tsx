@@ -46,6 +46,7 @@ import {
     X
 } from 'lucide-solid';
 import { useI18n } from '../../i18n/i18nContext';
+import { DailyTipCard } from './DailyTipCard';
 
 
 interface WalletDashboardProps {
@@ -1213,6 +1214,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 </div>
 
                                 <div class="flex flex-col gap-2 w-full items-start">
+                                    {/* Daily Tip Card */}
+                                    <DailyTipCard setActiveView={props.setActiveView} />
                                     <For each={quickActions()}>
                                         {(action) => {
                                             // Icon mapping

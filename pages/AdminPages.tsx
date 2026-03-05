@@ -26,6 +26,7 @@ export const AdminSocialMedia = lazy(() => import('../components/admin/AdminSoci
 export const AdminApiPricing = lazy(() => import('../components/admin/AdminApiPricing'));
 export const AdminNodeHealth = lazy(() => import('../components/admin/AdminNodeHealth'));
 export const AdminVisionNodes = lazy(() => import('../components/admin/AdminVisionNodes'));
+export const AdminDailyTips = lazy(() => import('../components/admin/AdminDailyTips'));
 
 
 // Loading spinner component
@@ -296,6 +297,17 @@ export function AdminNodeHealthPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminNodeHealth />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminDailyTipsPage() {
+    document.title = 'Daily Tips | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminDailyTips />
             </AdminLayout>
         </Suspense>
     );
