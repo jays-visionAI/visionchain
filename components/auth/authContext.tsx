@@ -7,7 +7,8 @@ import {
     userRegister,
     userLogout,
     onUserAuthStateChanged,
-    onAdminAuthStateChanged
+    onAdminAuthStateChanged,
+    trackUserLogin
 } from '../../services/firebaseService';
 
 interface AuthContextType {
@@ -30,6 +31,10 @@ export function AuthProvider(props: { children: JSX.Element }) {
             if (firebaseUser) {
                 setUser(firebaseUser);
                 setLoading(false);
+                // Track daily login (fire-and-forget)
+                if (firebaseUser.email) {
+                    trackUserLogin(firebaseUser.email).catch(() => { });
+                }
             } else {
                 // If not logged in as user, check if logged in as admin
                 const aAuth = getAdminFirebaseAuth();

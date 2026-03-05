@@ -14,7 +14,7 @@ import {
     PieChart,
     Menu,
     Plus,
-    ChevronRight,
+
     RefreshCw,
     TrendingUp,
     Copy,
@@ -82,7 +82,8 @@ import {
     findUserByAddress,
     uploadProfileImage,
     addRewardPoints,
-    getRPConfig
+    getRPConfig,
+    trackPageVisit
 } from '../services/firebaseService';
 
 import { collection, query, where, onSnapshot, doc, setDoc, limit, orderBy } from 'firebase/firestore';
@@ -241,6 +242,15 @@ const Wallet = (): JSX.Element => {
         // default to 'assets' if no sub-route provided
         return (path[2] as ViewType) || 'assets';
     };
+
+    // Track page visits for admin analytics (fire-and-forget)
+    createEffect(() => {
+        const view = activeView();
+        const email = userProfile?.()?.email;
+        if (email && view) {
+            trackPageVisit(email, view).catch(() => { });
+        }
+    });
     const [networkMode, setNetworkMode] = createSignal<'mainnet' | 'testnet'>('testnet');
     const [selectedToken, setSelectedToken] = createSignal('VCN');
     const [toToken, setToToken] = createSignal('USDT');
@@ -930,7 +940,7 @@ const Wallet = (): JSX.Element => {
     };
     const [contacts, setContacts] = createSignal([]);
     const [sidebarOpen, setSidebarOpen] = createSignal(false);
-    const [touchStartX, setTouchStartX] = createSignal(0);
+
     const [input, setInput] = createSignal('');
     const [isLoading, setIsLoading] = createSignal(false);
     const [lastLocale, setLastLocale] = createSignal<string>('en');
@@ -4206,39 +4216,25 @@ If they say "Yes", output the navigate intent JSON for "referral".
                         unreadCount={unreadNotificationsCount()}
                     />
 
-                    {/* Edge Swipe Handle / Sidebar Toggle Handle */}
-                    <Show when={onboardingStep() === 0}>
-                        <div
-                            class={`lg:hidden fixed left-0 top-0 bottom-[68px] w-8 z-[34] group transition-all duration-300 ${sidebarOpen() ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-                            onTouchStart={(e) => {
-                                setTouchStartX(e.touches[0].clientX);
-                            }}
-                            onTouchMove={(e) => {
-                                const currentX = e.touches[0].clientX;
-                                const deltaX = currentX - touchStartX();
-                                if (deltaX > 20 && !sidebarOpen()) {
-                                    setSidebarOpen(true);
-                                }
+                    {/* Mobile Hamburger Menu Button - Top Left */}
+                    <Show when={onboardingStep() === 0 && !sidebarOpen()}>
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSidebarOpen(true);
                             }}
                             onTouchEnd={(e) => {
-                                // Tap detection: if no significant swipe, treat as tap
-                                if (!sidebarOpen()) {
-                                    setSidebarOpen(true);
-                                }
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSidebarOpen(true);
                             }}
-                            onClick={() => setSidebarOpen(true)}
+                            class="lg:hidden fixed top-20 left-4 z-[52] w-12 h-12 bg-[#1a1a1c]/95 backdrop-blur-lg border border-white/15 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-90 transition-all"
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            title="Menu"
                         >
-                            <div
-                                class="absolute left-0 top-1/2 -translate-y-1/2 w-[28px] h-[100px] bg-orange-950/90 border-2 border-orange-400/60 border-l-0 rounded-r-2xl backdrop-blur-xl shadow-[0_0_40px_rgba(249,115,22,0.9),0_0_20px_rgba(249,115,22,0.7)] flex items-center justify-center transition-all duration-300 active:w-[36px] active:bg-orange-900 active:border-orange-300/80"
-                            >
-                                <div class="flex flex-col gap-1.5 items-center">
-                                    <div class="w-1.5 h-1.5 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(253,186,116,1)]" />
-                                    <div class="w-1.5 h-4 rounded-full bg-orange-400 shadow-[0_0_15px_rgba(251,146,60,1)]" />
-                                    <div class="w-1.5 h-1.5 rounded-full bg-orange-300 shadow-[0_0_12px_rgba(253,186,116,1)]" />
-                                </div>
-                                <ChevronRight class="w-3.5 h-3.5 text-orange-200 ml-0.5" />
-                            </div>
-                        </div>
+                            <Menu class="w-5 h-5 text-cyan-400" />
+                        </button>
                     </Show>
 
                     {/* Main Content Area */}

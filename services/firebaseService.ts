@@ -19,7 +19,9 @@ import {
     initializeFirestore,
     onSnapshot,
     Timestamp,
-    serverTimestamp
+    serverTimestamp,
+    arrayUnion,
+    increment
 } from 'firebase/firestore';
 
 import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
@@ -1077,6 +1079,169 @@ export const updateRPConfig = async (config: Partial<RPConfig>): Promise<void> =
     _rpConfigCache = null;
     _rpConfigCacheAt = 0;
     console.log('[RP] Config updated:', config);
+};
+
+// ── User Activity Tracking ──
+
+/**
+ * Get today's date string in YYYY-MM-DD format (KST)
+ */
+const getTodayKST = (): string => {
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    return kst.toISOString().split('T')[0];
+};
+
+/**
+ * Track user login event (once per day per user).
+ * Writes to: user_activity_daily/{YYYY-MM-DD} with user list and count.
+ */
+export const trackUserLogin = async (email: string): Promise<void> => {
+    if (!email) return;
+    try {
+        const db = getFirebaseDb();
+        const today = getTodayKST();
+        const activityRef = doc(db, 'user_activity_daily', today);
+
+        // Check if already tracked today for this user
+        const existing = await getDoc(activityRef);
+        if (existing.exists()) {
+            const data = existing.data();
+            const users: string[] = data.users || [];
+            if (users.includes(email)) return; // already tracked
+            await updateDoc(activityRef, {
+                users: arrayUnion(email),
+                count: increment(1),
+                updatedAt: new Date().toISOString(),
+            });
+        } else {
+            await setDoc(activityRef, {
+                date: today,
+                users: [email],
+                count: 1,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+        }
+    } catch (e) {
+        console.warn('[Activity] Login tracking failed:', e);
+    }
+};
+
+/**
+ * Track page/menu visit.
+ * Writes to: user_activity_pages/{YYYY-MM-DD} with page visit counts.
+ */
+export const trackPageVisit = async (email: string, page: string): Promise<void> => {
+    if (!email || !page) return;
+    try {
+        const db = getFirebaseDb();
+        const today = getTodayKST();
+        const pageRef = doc(db, 'user_activity_pages', today);
+
+        const existing = await getDoc(pageRef);
+        if (existing.exists()) {
+            await updateDoc(pageRef, {
+                [`pages.${page}`]: increment(1),
+                [`visitors.${page}`]: arrayUnion(email),
+                totalVisits: increment(1),
+                updatedAt: new Date().toISOString(),
+            });
+        } else {
+            await setDoc(pageRef, {
+                date: today,
+                pages: { [page]: 1 },
+                visitors: { [page]: [email] },
+                totalVisits: 1,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+        }
+    } catch (e) {
+        console.warn('[Activity] Page tracking failed:', e);
+    }
+};
+
+export interface DailyActivityRecord {
+    date: string;
+    count: number;
+    users: string[];
+}
+
+export interface PageActivityRecord {
+    date: string;
+    pages: Record<string, number>;
+    visitors: Record<string, string[]>;
+    totalVisits: number;
+}
+
+/**
+ * Get daily activity records for a date range (for admin analytics).
+ */
+export const getDailyActivityRecords = async (days: number = 30): Promise<DailyActivityRecord[]> => {
+    const db = getFirebaseDb();
+    const results: DailyActivityRecord[] = [];
+    const now = new Date();
+
+    for (let i = 0; i < days; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+        const dateStr = kst.toISOString().split('T')[0];
+
+        try {
+            const snap = await getDoc(doc(db, 'user_activity_daily', dateStr));
+            if (snap.exists()) {
+                const data = snap.data();
+                results.push({
+                    date: dateStr,
+                    count: data.count || 0,
+                    users: data.users || [],
+                });
+            } else {
+                results.push({ date: dateStr, count: 0, users: [] });
+            }
+        } catch {
+            results.push({ date: dateStr, count: 0, users: [] });
+        }
+    }
+
+    return results;
+};
+
+/**
+ * Get page activity records for a date range (for admin analytics).
+ */
+export const getPageActivityRecords = async (days: number = 7): Promise<PageActivityRecord[]> => {
+    const db = getFirebaseDb();
+    const results: PageActivityRecord[] = [];
+    const now = new Date();
+
+    for (let i = 0; i < days; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+        const dateStr = kst.toISOString().split('T')[0];
+
+        try {
+            const snap = await getDoc(doc(db, 'user_activity_pages', dateStr));
+            if (snap.exists()) {
+                const data = snap.data();
+                results.push({
+                    date: dateStr,
+                    pages: data.pages || {},
+                    visitors: data.visitors || {},
+                    totalVisits: data.totalVisits || 0,
+                });
+            } else {
+                results.push({ date: dateStr, pages: {}, visitors: {}, totalVisits: 0 });
+            }
+        } catch {
+            results.push({ date: dateStr, pages: {}, visitors: {}, totalVisits: 0 });
+        }
+    }
+
+    return results;
 };
 
 const LEVELUP_INTERVAL = 10; // Every 10 levels

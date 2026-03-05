@@ -204,33 +204,31 @@ export const AdminDashboard: Component = () => {
     const fetchDAUData = async () => {
         try {
             const db = getFirebaseDb();
-            // Get users grouped by creation date (last 7 days)
-            const now = new Date();
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const result: { day: string; value: number }[] = [];
 
-            // Build all 7 day queries in parallel instead of sequential
-            const dayPromises = Array.from({ length: 7 }, (_, idx) => {
-                const i = 6 - idx;
+            // Fetch last 7 days of actual login activity from user_activity_daily
+            const now = new Date();
+            for (let i = 6; i >= 0; i--) {
                 const date = new Date(now);
                 date.setDate(date.getDate() - i);
+                const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+                const dateStr = kst.toISOString().split('T')[0];
                 const dayName = days[date.getDay()];
-                const startOfDay = new Date(new Date(date).setHours(0, 0, 0, 0)).toISOString();
-                const endOfDay = new Date(new Date(date).setHours(23, 59, 59, 999)).toISOString();
 
-                const usersRef = collection(db, 'users');
-                const q = query(
-                    usersRef,
-                    where('createdAt', '>=', startOfDay),
-                    where('createdAt', '<=', endOfDay)
-                );
-                return getDocs(q).then(snapshot => ({ day: dayName, value: snapshot.size }));
-            });
+                try {
+                    const snap = await getDocs(query(collection(db, 'user_activity_daily'), where('date', '==', dateStr)));
+                    let count = 0;
+                    snap.forEach(d => { count = d.data().count || 0; });
+                    result.push({ day: dayName, value: count });
+                } catch {
+                    result.push({ day: dayName, value: 0 });
+                }
+            }
 
-            const result = await Promise.all(dayPromises);
             setDauData(result);
         } catch (e) {
             console.error("Failed to fetch DAU data:", e);
-            // Fallback to empty data
             setDauData([
                 { day: 'Mon', value: 0 },
                 { day: 'Tue', value: 0 },
@@ -579,8 +577,14 @@ export const AdminDashboard: Component = () => {
                     {/* User Activity Bar Chart */}
                     <div class="h-64 bg-[#13161F] border border-white/5 rounded-2xl p-6">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Active User Trends (DAU)</h3>
-                            <button class="text-xs text-blue-400 hover:text-white transition-colors">View Report</button>
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest">Active User Trends (DAU)</h3>
+                                <Show when={dauData().length > 0}>
+                                    <span class="text-lg font-black text-white">{dauData()[dauData().length - 1]?.value || 0}</span>
+                                    <span class="text-[10px] text-slate-600 font-bold">today</span>
+                                </Show>
+                            </div>
+                            <a href="/adminsystem/user-analytics" class="text-xs text-blue-400 hover:text-white transition-colors">View Report</a>
                         </div>
                         <ActivityMap data={dauData()} />
                     </div>

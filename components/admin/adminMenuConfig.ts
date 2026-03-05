@@ -30,7 +30,8 @@ import {
     Server,
     Globe,
     Lightbulb,
-    Gift
+    Gift,
+    BarChart3
 } from 'lucide-solid';
 
 
@@ -64,7 +65,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Server,
     Globe,
     Lightbulb,
-    Gift
+    Gift,
+    BarChart3
 };
 
 // Menu item interface with optional children for sub-menus
@@ -215,6 +217,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'core',
         order: 11.7,
+        requiredRole: 'admin'
+    },
+    {
+        id: 'user-analytics',
+        path: '/adminsystem/user-analytics',
+        label: 'User Analytics',
+        icon: 'BarChart3',
+        badge: 'NEW',
+        category: 'core',
+        order: 11.8,
         requiredRole: 'admin'
     },
     {

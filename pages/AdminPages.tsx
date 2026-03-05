@@ -28,6 +28,7 @@ export const AdminNodeHealth = lazy(() => import('../components/admin/AdminNodeH
 export const AdminVisionNodes = lazy(() => import('../components/admin/AdminVisionNodes'));
 export const AdminDailyTips = lazy(() => import('../components/admin/AdminDailyTips'));
 export const AdminRPConfig = lazy(() => import('../components/admin/AdminRPConfig'));
+export const AdminUserAnalytics = lazy(() => import('../components/admin/AdminUserAnalytics'));
 
 
 // Loading spinner component
@@ -320,6 +321,17 @@ export function AdminRPConfigPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminRPConfig />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminUserAnalyticsPage() {
+    document.title = 'User Analytics | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminUserAnalytics />
             </AdminLayout>
         </Suspense>
     );
