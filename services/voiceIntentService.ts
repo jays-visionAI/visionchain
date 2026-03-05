@@ -40,10 +40,6 @@ const PHONETIC_CORRECTIONS: [RegExp, string][] = [
     [/비전 코인/g, 'VCN'],
     [/비전체인/g, 'Vision Chain'],
     [/ビーシーエヌ/g, 'VCN'],
-    // ── V (shorthand for VCN in voice) ──
-    // "500 브이 보내줘" → "500 V 보내줘"
-    [/(\d+)\s*브이\b/g, '$1 V'],
-    [/(\d+)\s*뷔\b/g, '$1 V'],
     // ── ETH / Ethereum ──
     [/이더리움/g, 'Ethereum'],
     [/이더(?!리움)/g, 'ETH'],             // "이더" alone → ETH, not if followed by 리움
@@ -140,7 +136,6 @@ export function buildBlockchainGrammar(): any | null {
 
 const TOKEN_ALIASES: Record<string, string> = {
     'vcn': 'VCN',
-    'v': 'VCN',
     'vision': 'VCN',
     'eth': 'ETH',
     'ethereum': 'ETH',

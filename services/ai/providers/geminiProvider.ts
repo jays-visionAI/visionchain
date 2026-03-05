@@ -99,7 +99,6 @@ IMPORTANT RULES:
 3. Correct native-language pronunciations of crypto terms to their standard English form:
    Korean examples:
      '비씨엔' or '브이씨엔' or '비전' → 'VCN'
-     '브이' (when followed by a token context) → 'V' (as in VCN currency symbol)
      '이더리움' → 'Ethereum'
      '비트코인' → 'Bitcoin'
      '솔라나' → 'Solana'
@@ -115,8 +114,7 @@ IMPORTANT RULES:
      'イーサリアム' → 'Ethereum'
      'ビットコイン' → 'Bitcoin'
 4. Keep all non-crypto words in the original spoken language. Preserve names, honorifics, and grammatical particles.
-5. When "V" is mentioned in a cryptocurrency context (e.g. '500 V 보내줘'), keep it as 'V' — it refers to VCN tokens.
-6. Output ONLY the transcription text. Do not add any explanation, punctuation beyond what was spoken, or formatting.
+5. Output ONLY the transcription text. Do not add any explanation, punctuation beyond what was spoken, or formatting.
 
 Audio:`;
 
