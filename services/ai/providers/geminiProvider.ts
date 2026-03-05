@@ -94,9 +94,12 @@ IMPORTANT RULES:
    - Token names: VCN, ETH, BTC, USDT, SOL, BNB, XRP, MATIC, AVAX, LINK, DOT, ADA, etc.
    - Blockchain terms: Ethereum, Bitcoin, Solana, DeFi, NFT, staking, bridge, swap, wallet
    - Numbers: output as digits (e.g. '10', '100', '1,000', '10000')
+   - Korean number words: '십' = 10, '백' = 100, '천' = 1000, '만' = 10000, '억' = 100000000
+   - When user says '오백 VCN' → '500 VCN', '삼천' → '3000'
 3. Correct native-language pronunciations of crypto terms to their standard English form:
    Korean examples:
-     '비씨엔' or '브이씨엔' → 'VCN'
+     '비씨엔' or '브이씨엔' or '비전' → 'VCN'
+     '브이' (when followed by a token context) → 'V' (as in VCN currency symbol)
      '이더리움' → 'Ethereum'
      '비트코인' → 'Bitcoin'
      '솔라나' → 'Solana'
@@ -105,12 +108,15 @@ IMPORTANT RULES:
      '스테이킹' → 'staking'  (keep Korean grammar around it)
      '브릿지' → 'bridge'
      '스왑' → 'swap'
+     '대표님' → '대표님' (keep honorific titles as-is)
+     '님' → '님' (keep Korean honorific suffix)
    Japanese examples:
      'ビーティーシー' → 'BTC'
      'イーサリアム' → 'Ethereum'
      'ビットコイン' → 'Bitcoin'
-4. Keep all non-crypto words in the original spoken language.
-5. Output ONLY the transcription text. Do not add any explanation, punctuation beyond what was spoken, or formatting.
+4. Keep all non-crypto words in the original spoken language. Preserve names, honorifics, and grammatical particles.
+5. When "V" is mentioned in a cryptocurrency context (e.g. '500 V 보내줘'), keep it as 'V' — it refers to VCN tokens.
+6. Output ONLY the transcription text. Do not add any explanation, punctuation beyond what was spoken, or formatting.
 
 Audio:`;
 

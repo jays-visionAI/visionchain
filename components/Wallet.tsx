@@ -2753,19 +2753,29 @@ const Wallet = (): JSX.Element => {
                 };
 
                 // ── Silence detection using Web Audio API ─────────────────────
-                // Auto-stop after 3 seconds of silence once speech has started
+                // Auto-stop after 1.5 seconds of silence once speech has started
                 const audioCtx = new AudioContext();
                 const source = audioCtx.createMediaStreamSource(stream);
                 const analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 512;
-                analyser.smoothingTimeConstant = 0.3;
+                analyser.fftSize = 2048;           // Higher resolution for better frequency analysis
+                analyser.smoothingTimeConstant = 0.4;
                 source.connect(analyser);
 
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                const SILENCE_THRESHOLD = 15;   // Volume level below which is "silence"
-                const SILENCE_DURATION = 3000;   // 3 seconds
+
+                // Dynamic noise floor calibration
+                // Sample ambient noise for the first 300ms to set adaptive threshold
+                let noiseFloor = 5;
+                let calibrationSamples: number[] = [];
+                const CALIBRATION_PERIOD = 300;  // ms
+                const SILENCE_MARGIN = 8;        // threshold = noiseFloor + margin
+                const SILENCE_DURATION = 1500;   // 1.5 seconds (was 3s — too slow for short commands)
+                const MIN_SPEECH_DURATION = 800;  // Minimum recording time after speech starts
+                const MAX_RECORDING_TIME = 15000; // Safety: max 15 seconds
                 let silenceStart: number | null = null;
                 let hasSpeechStarted = false;
+                let speechStartTime: number | null = null;
+                const recordingStartTime = Date.now();
 
                 const silenceCheckInterval = setInterval(() => {
                     if (mediaRecorder.state !== 'recording') {
@@ -2774,26 +2784,54 @@ const Wallet = (): JSX.Element => {
                         return;
                     }
 
-                    analyser.getByteFrequencyData(dataArray);
-                    const avgVolume = dataArray.reduce((sum, v) => sum + v, 0) / dataArray.length;
+                    // Safety: force stop after MAX_RECORDING_TIME
+                    if (Date.now() - recordingStartTime > MAX_RECORDING_TIME) {
+                        console.log('[Voice] Max recording time reached, stopping');
+                        clearInterval(silenceCheckInterval);
+                        audioCtx.close();
+                        mediaRecorder.stop();
+                        return;
+                    }
 
-                    if (avgVolume > SILENCE_THRESHOLD) {
+                    analyser.getByteFrequencyData(dataArray);
+                    // Use RMS (root mean square) for more accurate volume measurement
+                    const sumOfSquares = dataArray.reduce((sum, v) => sum + v * v, 0);
+                    const rmsVolume = Math.sqrt(sumOfSquares / dataArray.length);
+
+                    // Calibration phase: measure ambient noise
+                    if (Date.now() - recordingStartTime < CALIBRATION_PERIOD) {
+                        calibrationSamples.push(rmsVolume);
+                        if (calibrationSamples.length >= 3) {
+                            noiseFloor = calibrationSamples.reduce((s, v) => s + v, 0) / calibrationSamples.length;
+                        }
+                        return;
+                    }
+
+                    const effectiveThreshold = noiseFloor + SILENCE_MARGIN;
+
+                    if (rmsVolume > effectiveThreshold) {
                         // Speech detected
-                        hasSpeechStarted = true;
+                        if (!hasSpeechStarted) {
+                            hasSpeechStarted = true;
+                            speechStartTime = Date.now();
+                            console.log(`[Voice] Speech detected (RMS: ${rmsVolume.toFixed(1)}, threshold: ${effectiveThreshold.toFixed(1)})`);
+                        }
                         silenceStart = null;
                     } else if (hasSpeechStarted) {
-                        // Silence after speech
+                        // Silence after speech — but ensure minimum recording time
+                        const elapsed = Date.now() - (speechStartTime || recordingStartTime);
+                        if (elapsed < MIN_SPEECH_DURATION) return; // too early to stop
+
                         if (!silenceStart) {
                             silenceStart = Date.now();
                         } else if (Date.now() - silenceStart >= SILENCE_DURATION) {
-                            // 3 seconds of silence → auto-stop
-                            console.log('[Voice] Auto-stopping after 3s silence');
+                            console.log(`[Voice] Auto-stopping after ${SILENCE_DURATION}ms silence (noise floor: ${noiseFloor.toFixed(1)})`);
                             clearInterval(silenceCheckInterval);
                             audioCtx.close();
                             mediaRecorder.stop();
                         }
                     }
-                }, 100); // Check every 100ms
+                }, 80); // Check every 80ms (was 100ms — slightly faster response)
 
                 // Store mediaRecorder reference so we can stop it
                 const fakeRecognition = {
@@ -2806,7 +2844,7 @@ const Wallet = (): JSX.Element => {
                 };
                 setRecognition(fakeRecognition as any);
 
-                mediaRecorder.start();
+                mediaRecorder.start(250); // timeslice=250ms — ensures data is captured even for short recordings
                 setIsRecording(true);
                 return;
 
@@ -2830,7 +2868,7 @@ const Wallet = (): JSX.Element => {
         recognitionInstance.lang = voiceLang();
         recognitionInstance.interimResults = true;
         recognitionInstance.continuous = false;
-        recognitionInstance.maxAlternatives = 1;
+        recognitionInstance.maxAlternatives = 3;  // Get multiple candidates for better accuracy
 
         // Apply blockchain grammar hints (Chrome only)
         const grammar = buildBlockchainGrammar();
@@ -2838,11 +2876,31 @@ const Wallet = (): JSX.Element => {
 
         recognitionInstance.onstart = () => setIsRecording(true);
 
+        let hasReceivedFinal = false;
         recognitionInstance.onresult = (event: any) => {
             let finalTranscript = '';
+            let interimTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    // Pick the alternative with the highest confidence
+                    let bestAlt = event.results[i][0];
+                    for (let a = 1; a < event.results[i].length; a++) {
+                        if (event.results[i][a].confidence > bestAlt.confidence) {
+                            bestAlt = event.results[i][a];
+                        }
+                    }
+                    finalTranscript += bestAlt.transcript;
+                    hasReceivedFinal = true;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
             }
+
+            // Show interim results in the input field for real-time feedback
+            if (interimTranscript && !finalTranscript) {
+                setInput(interimTranscript);
+            }
+
             if (finalTranscript) {
                 // Apply phonetic normalization before intent parsing
                 const normalized = normalizeBlockchainTerms(finalTranscript);
@@ -2851,15 +2909,28 @@ const Wallet = (): JSX.Element => {
             }
         };
 
+        let retryCount = 0;
         recognitionInstance.onerror = (event: any) => {
             console.warn('[Speech] Recognition error:', event.error);
             if (event.error === 'not-allowed') {
                 alert('마이크 접근 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해주세요.');
+                setIsRecording(false);
+            } else if (event.error === 'no-speech' && retryCount < 1) {
+                // Auto-retry once on no-speech (user may have paused before speaking)
+                retryCount++;
+                console.log('[Speech] No speech detected, retrying...');
+                try { recognitionInstance.start(); } catch { setIsRecording(false); }
+            } else {
+                setIsRecording(false);
             }
-            setIsRecording(false);
         };
 
-        recognitionInstance.onend = () => setIsRecording(false);
+        recognitionInstance.onend = () => {
+            // Only stop recording if we got a final result or exhausted retries
+            if (hasReceivedFinal || retryCount >= 1) {
+                setIsRecording(false);
+            }
+        };
 
         try {
             recognitionInstance.start();

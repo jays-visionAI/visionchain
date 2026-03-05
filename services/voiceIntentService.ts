@@ -36,7 +36,14 @@ const PHONETIC_CORRECTIONS: [RegExp, string][] = [
     [/비씨엔/g, 'VCN'],
     [/브이씨엔/g, 'VCN'],
     [/브씨엔/g, 'VCN'],
+    [/비전코인/g, 'VCN'],
+    [/비전 코인/g, 'VCN'],
+    [/비전체인/g, 'Vision Chain'],
     [/ビーシーエヌ/g, 'VCN'],
+    // ── V (shorthand for VCN in voice) ──
+    // "500 브이 보내줘" → "500 V 보내줘"
+    [/(\d+)\s*브이\b/g, '$1 V'],
+    [/(\d+)\s*뷔\b/g, '$1 V'],
     // ── ETH / Ethereum ──
     [/이더리움/g, 'Ethereum'],
     [/이더(?!리움)/g, 'ETH'],             // "이더" alone → ETH, not if followed by 리움
@@ -44,12 +51,12 @@ const PHONETIC_CORRECTIONS: [RegExp, string][] = [
     [/イーサ(?!リアム)/g, 'ETH'],
     // ── Bitcoin / BTC ──
     [/비트코인/g, 'Bitcoin'],
-    [/비트/g, 'BTC'],
+    [/비트(?!코인)/g, 'BTC'],
     [/ビットコイン/g, 'Bitcoin'],
     [/ビット(?!コイン)/g, 'BTC'],
     // ── Solana / SOL ──
     [/솔라나/g, 'Solana'],
-    [/솔/g, 'SOL'],
+    [/솔(?![라])/g, 'SOL'],
     [/ソラナ/g, 'Solana'],
     // ── USDT / Tether ──
     [/테더/g, 'USDT'],
@@ -70,6 +77,24 @@ const PHONETIC_CORRECTIONS: [RegExp, string][] = [
     // ── AVAX / Avalanche ──
     [/아발란체/g, 'AVAX'],
     [/アバランチ/g, 'AVAX'],
+    // ── Korean number words → digits ──
+    // These handle spoken Korean numbers that STT may leave as text
+    [/오백/g, '500'],
+    [/삼백/g, '300'],
+    [/이백/g, '200'],
+    [/백(?=\s|$)/g, '100'],
+    [/오천/g, '5000'],
+    [/삼천/g, '3000'],
+    [/이천/g, '2000'],
+    [/천(?=\s|$)/g, '1000'],
+    [/오만/g, '50000'],
+    [/삼만/g, '30000'],
+    [/이만/g, '20000'],
+    [/만(?=\s|$)/g, '10000'],
+    [/오십/g, '50'],
+    [/삼십/g, '30'],
+    [/이십/g, '20'],
+    [/십(?=\s|$)/g, '10'],
     // ── Action words — keep in Korean but normalize common typos ──
     [/스테이킹/g, '스테이킹'],    // already correct, keep
     [/언스테이킹/g, '언스테이킹'],
@@ -115,6 +140,7 @@ export function buildBlockchainGrammar(): any | null {
 
 const TOKEN_ALIASES: Record<string, string> = {
     'vcn': 'VCN',
+    'v': 'VCN',
     'vision': 'VCN',
     'eth': 'ETH',
     'ethereum': 'ETH',
