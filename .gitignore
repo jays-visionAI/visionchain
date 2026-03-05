@@ -32,3 +32,4 @@ dist-ssr
 .env.*.local
 vision_key
 vision_key.pub
+functions/find-duplicate-phones.cjs

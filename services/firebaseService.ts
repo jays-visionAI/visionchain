@@ -270,6 +270,27 @@ export const searchUserByPhone = async (phone: string) => {
     return results.length > 0 ? results[0] : null;
 };
 
+/**
+ * Check if a user's transfer/withdrawal is blocked due to duplicate phone number.
+ * Returns the block reason if blocked, or null if allowed.
+ */
+export const checkTransferBlock = async (userEmail: string): Promise<string | null> => {
+    try {
+        const db = getFirebaseDb();
+        const userRef = doc(db, 'users', userEmail.toLowerCase());
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) return null;
+        const data = userSnap.data();
+        if (data.phoneDuplicateBlocked) {
+            return 'PHONE_DUPLICATE_BLOCKED';
+        }
+        return null;
+    } catch (e) {
+        console.error('[checkTransferBlock] Error:', e);
+        return null; // Fail-open to not break existing users
+    }
+};
+
 export const searchUserByEmail = async (email: string): Promise<{ vid: string, email: string, name: string, address: string } | null> => {
     try {
         const db = getFirebaseDb();
@@ -1969,6 +1990,15 @@ export const userRegister = async (email: string, password: string, phone?: stri
     const db = getFirebaseDb();
     const emailLower = email.toLowerCase().trim();
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : '';
+
+    // ── Phone duplicate prevention ──────────────────────────────────────
+    // Block registration if this phone number is already used by another account
+    if (normalizedPhone) {
+        const existingUsers = await searchUsersByPhone(normalizedPhone);
+        if (existingUsers.length > 0) {
+            throw new Error('PHONE_ALREADY_REGISTERED');
+        }
+    }
 
     const { createUserWithEmailAndPassword, sendEmailVerification } = await import('firebase/auth');
     const userCredential = await createUserWithEmailAndPassword(auth, emailLower, password);

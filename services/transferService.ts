@@ -9,7 +9,7 @@
  */
 
 import { ethers } from 'ethers';
-import { getFirebaseAuth } from './firebaseService';
+import { getFirebaseAuth, checkTransferBlock } from './firebaseService';
 import VCNTokenABI from './abi/VCNToken.json';
 import { contractService } from './contractService';
 
@@ -169,6 +169,16 @@ export async function sendTransfer(
     amount: string,
     signer?: any
 ): Promise<TransferResult> {
+    // ── Phone duplicate transfer block ──
+    const auth = getFirebaseAuth();
+    const currentUser = auth.currentUser;
+    if (currentUser?.email) {
+        const blockReason = await checkTransferBlock(currentUser.email);
+        if (blockReason) {
+            return { success: false, error: 'TRANSFER_BLOCKED_PHONE_DUPLICATE' };
+        }
+    }
+
     const activeSigner = signer || contractService.getSigner();
     if (!activeSigner) {
         throw new Error('Wallet not connected. Please connect your wallet first.');
@@ -243,6 +253,16 @@ export async function initiateBridge(
     recipient?: string,
     signer?: any
 ): Promise<TransferResult> {
+    // ── Phone duplicate transfer block ──
+    const auth = getFirebaseAuth();
+    const currentUser = auth.currentUser;
+    if (currentUser?.email) {
+        const blockReason = await checkTransferBlock(currentUser.email);
+        if (blockReason) {
+            return { success: false, error: 'TRANSFER_BLOCKED_PHONE_DUPLICATE' };
+        }
+    }
+
     const activeSigner = signer || contractService.getSigner();
     if (!activeSigner) {
         throw new Error('Wallet not connected.');

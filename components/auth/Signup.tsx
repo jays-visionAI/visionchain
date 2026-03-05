@@ -109,7 +109,9 @@ export default function Signup() {
             }, 5000);
         } catch (err: any) {
             console.error('Signup error:', err);
-            if (err.code === 'auth/email-already-in-use') {
+            if (err.message === 'PHONE_ALREADY_REGISTERED') {
+                setError('이 전화번호는 이미 다른 계정에 등록되어 있습니다. 기존 계정으로 로그인해 주세요.');
+            } else if (err.code === 'auth/email-already-in-use') {
                 setError('Email already in use.');
             } else if (err.code === 'auth/invalid-email') {
                 setError('Invalid email format.');

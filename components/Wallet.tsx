@@ -1376,9 +1376,15 @@ const Wallet = (): JSX.Element => {
                         if (result.txHash) setLastTxHash(result.txHash);
                     } catch (error: any) {
                         console.error("Transfer Failed:", error);
-                        const errorMsg = error.message?.includes('insufficient') || error.message?.includes('Insufficient')
-                            ? 'Insufficient balance. You need the transfer amount plus fees.'
-                            : `Transfer failed: ${error.message || 'Unknown error'}`;
+                        const msg = error.message || '';
+                        let errorMsg: string;
+                        if (msg.includes('TRANSFER_BLOCKED_PHONE_DUPLICATE')) {
+                            errorMsg = '동일 전화번호로 복수 계정이 감지되어 전송이 차단되었습니다. SMS 인증 후 이용 가능합니다. 고객센터에 문의해 주세요.';
+                        } else if (msg.includes('insufficient') || msg.includes('Insufficient')) {
+                            errorMsg = 'Insufficient balance. You need the transfer amount plus fees.';
+                        } else {
+                            errorMsg = `Transfer failed: ${msg || 'Unknown error'}`;
+                        }
                         alert(errorMsg);
                         throw error;
                     }
