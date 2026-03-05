@@ -1,0 +1,1 @@
+import{o as n}from"./index-DYr5Ysoi.js";const r=()=>{let e;return n(()=>{}),React.createElement("canvas",{ref:e,class:"absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"})};export{r as L};

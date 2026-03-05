@@ -610,16 +610,48 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         // ─── Staking ───
         case 'staking-overview': return (
             <div class="space-y-6">
-                <SectionHeader title="Staking Overview" desc="Stake VCN tokens to earn rewards and participate in network validation." />
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SectionHeader title="Staking Overview" desc="Stake VCN tokens as a Bridge Validator to earn rewards from bridge fees and subsidy pools. All staking transactions are gasless." />
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                        { n: 'Earn Rewards', d: 'Receive VCN rewards proportional to your stake' },
-                        { n: 'Secure Network', d: 'Your stake helps secure the Vision Chain network' },
-                        { n: 'Flexible Plans', d: 'Choose from various staking durations and APY rates' },
+                        { t: 'Annual APY 12-20%', d: 'Rewards are dynamically calculated based on total network stake, bridge volume, and subsidy pool balance. The actual APY is displayed in real-time on the staking page.' },
+                        { t: 'Dual Reward Source', d: 'Validators earn from two pools: (1) Bridge Fee Pool - 1% of every bridge transaction, and (2) Subsidy Pool - additional VCN rewards distributed over time.' },
+                        { t: 'Gasless Staking', d: 'All staking operations use the Vision Paymaster system and EIP-2612 Permit signatures. You never pay gas fees - only a 1 VCN service fee per stake transaction.' },
+                        { t: '50% Slashing Risk', d: 'Validators who submit invalid bridge proofs may lose 50% of their staked amount. This protects the integrity of cross-chain transactions.' },
                     ].map(c => (
                         <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                            <div class="text-sm font-bold text-white mb-1">{c.n}</div>
+                            <div class="text-sm font-bold text-white mb-1">{c.t}</div>
                             <div class="text-xs text-gray-500">{c.d}</div>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Dashboard Stats</h3>
+                <p class="text-sm text-gray-400 mb-3">When you open the Staking page, a stats bar at the top shows the following network-wide information:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Total Staked', d: 'The total amount of VCN staked across all validators network-wide' },
+                        { n: 'Active Validators', d: 'Number of validators currently running and validating bridge transactions (shown with a green pulse indicator)' },
+                        { n: 'Minimum Stake', d: 'The minimum amount required to become a validator: 100 VCN' },
+                        { n: 'Cooldown Period', d: 'Number of days your tokens are locked after requesting unstake: 7 days' },
+                        { n: 'Slash Rate', d: 'Percentage of stake that can be slashed for invalid proofs: 50% (shown in red)' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[60%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Your Staking Balance Panel</h3>
+                <p class="text-sm text-gray-400 mb-3">Below the stats bar, your personal staking information is displayed in an amber-highlighted panel:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Your VCN Balance', d: 'Available VCN in your wallet that can be staked' },
+                        { n: 'Your Staked Amount', d: 'VCN currently locked in the staking contract (shown in amber)' },
+                        { n: 'Pending Unstake', d: 'If you have requested an unstake, shows amount and time remaining (e.g., "3d 12h remaining")' },
+                        { n: 'Pending Rewards', d: 'Unclaimed VCN rewards with current APY percentage. A green "Claim" button appears next to the amount' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[60%] text-right">{item.d}</span>
                         </div>
                     ))}
                 </div>
@@ -627,47 +659,90 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         );
         case 'staking-how': return (
             <div class="space-y-6">
-                <SectionHeader title="How to Stake VCN" desc="Step-by-step guide to staking your VCN tokens." />
-                <Prerequisites items={['VCN tokens in your wallet', 'Wallet password set up']} />
+                <SectionHeader title="How to Stake VCN" desc="Detailed step-by-step guide to staking VCN as a Bridge Validator." />
+                <Prerequisites items={['Minimum 100 VCN in your wallet (plus 1 VCN service fee)', 'Wallet password set up (used to sign the EIP-712 Permit)', 'Logged in to Vision Chain wallet']} />
                 <StepList steps={[
-                    { title: 'Navigate to Staking', desc: 'Open "Earn" from the sidebar menu.' },
-                    { title: 'Choose Amount', desc: 'Enter the amount of VCN you want to stake. Minimum stake requirements are displayed.' },
-                    { title: 'Select Duration', desc: 'Choose a staking plan. Longer durations offer higher APY rates.' },
-                    { title: 'Confirm Stake', desc: 'Review the terms and confirm. Enter your wallet password to sign.' },
-                    { title: 'Start Earning', desc: 'Rewards begin accumulating immediately. View them in the staking dashboard.' },
+                    { title: 'Open the Staking Page', desc: 'From the sidebar menu, tap "Earn" to navigate to the Validator Staking page. The page displays network stats, your balance, and the staking form.' },
+                    { title: 'Check the "Stake" Tab', desc: 'The staking form has three tabs: Stake, Unstake, and Withdraw. Make sure you are on the "Stake" tab (highlighted in amber). If not, tap it to switch.' },
+                    { title: 'Enter Stake Amount', desc: 'Type the amount of VCN you wish to stake in the input field. The minimum is 100 VCN (displayed as placeholder text "Min: 100 VCN"). You can tap the "MAX" button to stake your entire available balance.' },
+                    { title: 'Click "Stake VCN"', desc: 'Tap the amber "STAKE VCN" button at the bottom of the form. This begins the staking process.' },
+                    { title: 'Enter Wallet Password', desc: 'A modal popup titled "Spending Password Required" appears. Enter your wallet password (the one you set during wallet setup, not your login password) and tap "Confirm".' },
+                    { title: 'Wait for EIP-712 Permit Signing', desc: 'The button changes to "Approving..." while your wallet signs an EIP-712 typed data permit. This is a gasless signature that authorizes the Paymaster to transfer VCN (stake amount + 1 VCN fee) on your behalf.' },
+                    { title: 'Transaction Processing', desc: 'After signing, the button changes to "Staking..." while the Paymaster submits the transaction on-chain. The Paymaster pays the gas fee, you pay only the 1 VCN service fee via the permit.' },
+                    { title: 'Confirmation', desc: 'On success, a green success indicator appears with the transaction hash. Your "Your Staked Amount" updates, your VCN Balance decreases, and you are now an Active Validator. Rewards begin accumulating immediately.' },
                 ]} />
-                <Note><>Staked tokens are locked for the selected duration. You can unstake early, but a cooldown period of 7 days applies before withdrawal.</></Note>
+                <Warning><>The minimum stake is 100 VCN. If you try to stake less, an error message appears: "Minimum stake is 100 VCN". Each staking transaction charges a 1 VCN service fee to the Paymaster.</></Warning>
+                <Tip><>After staking, your status changes to "Active Validator" and you begin earning rewards proportional to your stake. The rewards come from bridge transaction fees (1% of each bridge transfer) and the subsidy pool.</></Tip>
             </div>
         );
         case 'staking-rewards': return (
             <div class="space-y-6">
-                <SectionHeader title="Rewards & Unstaking" desc="Claim your staking rewards and manage unstaking." />
+                <SectionHeader title="Rewards, Unstaking & Withdrawal" desc="Comprehensive guide to claiming rewards, requesting unstake, and withdrawing your tokens." />
+
+                <h3 class="text-lg font-bold text-white mb-3">Claiming Rewards</h3>
+                <p class="text-sm text-gray-400 mb-3">Rewards accumulate continuously as long as you are an Active Validator. They are visible in the "Pending Rewards" row of your balance panel.</p>
                 <StepList steps={[
-                    { title: 'View Rewards', desc: 'The staking dashboard shows your pending (unclaimed) rewards in real-time.' },
-                    { title: 'Claim Rewards', desc: 'Tap "Claim" to transfer pending rewards to your wallet balance.' },
-                    { title: 'Compound (Optional)', desc: 'Use "Compound" to automatically re-stake your claimed rewards for higher returns.' },
-                    { title: 'Unstake', desc: 'Tap "Unstake" to begin the withdrawal process. A 7-day cooldown period starts.' },
-                    { title: 'Withdraw', desc: 'After the cooldown, tap "Withdraw" to return your tokens to your wallet.' },
+                    { title: 'Check Pending Rewards', desc: 'Look at the "Pending Rewards" line in the amber balance panel. It shows the exact VCN amount with up to 4 decimal places, along with the current APY percentage.' },
+                    { title: 'Tap "Claim"', desc: 'The green "Claim" button appears next to your pending rewards. Tap it to claim. The button is disabled (grayed out) if you have no rewards to claim.' },
+                    { title: 'Transaction Processing', desc: 'The claim transaction is submitted via the Paymaster (gasless). The button shows a spinner while processing.' },
+                    { title: 'Rewards Added to Balance', desc: 'On success, your VCN wallet balance increases by the claimed amount. The pending rewards counter resets to 0 and begins accumulating again immediately.' },
                 ]} />
-                <Warning><>Unstaking initiates a 7-day cooldown. Your tokens remain locked during this period and do not earn rewards.</></Warning>
+                <Tip><>Claiming rewards is gasless and has no fee. You can claim as often as you want, but since each claim is a transaction, it is practical to let rewards accumulate before claiming.</></Tip>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Requesting Unstake</h3>
+                <p class="text-sm text-gray-400 mb-3">Unstaking is a two-step process: first you request unstake (which starts a 7-day cooldown), then you withdraw after the cooldown period.</p>
+                <StepList steps={[
+                    { title: 'Switch to "Unstake" Tab', desc: 'In the staking form, tap the "Unstake" tab. The label shows your maximum unstakeable amount (e.g., "Unstake Amount (Max: 1,000 VCN)").' },
+                    { title: 'Enter Unstake Amount', desc: 'Type the amount to unstake. You can tap "MAX" to unstake everything. Important: if you partially unstake, the remaining amount must be either 0 or at least 100 VCN (the minimum stake). Otherwise you will see an error: "Remaining stake would be below minimum 100 VCN."' },
+                    { title: 'Tap "Request Unstake"', desc: 'Tap the amber button. The transaction is submitted via Paymaster (gasless).' },
+                    { title: 'Cooldown Begins', desc: 'On success, a new "Pending Unstake" row appears in your balance panel showing the amount and a countdown timer (e.g., "7d 0h remaining"). Your staked amount decreases accordingly.' },
+                ]} />
+                <Warning><>During the 7-day cooldown period, your unstaking tokens do NOT earn rewards. You cannot cancel an unstake request. Make sure you are ready to wait before proceeding.</></Warning>
+                <Note><>If you unstake your entire balance, you will no longer be an Active Validator and will stop earning rewards. You can re-stake at any time with the minimum 100 VCN.</></Note>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Withdrawing After Cooldown</h3>
+                <p class="text-sm text-gray-400 mb-3">After the 7-day cooldown period is complete, a third "Withdraw" tab appears in the staking form.</p>
+                <StepList steps={[
+                    { title: 'Wait for Cooldown', desc: 'Monitor the countdown timer in the "Pending Unstake" row. When it changes to "Ready to withdraw", the 7-day period is complete.' },
+                    { title: 'Switch to "Withdraw" Tab', desc: 'A green "Withdraw" tab appears automatically in the form tabs when your cooldown is complete. Tap it.' },
+                    { title: 'Tap "Withdraw"', desc: 'Tap the green "WITHDRAW" button. The Paymaster handles the gasless withdrawal.' },
+                    { title: 'Tokens Returned', desc: 'Your VCN balance increases by the withdrawn amount. The "Pending Unstake" row disappears. The process is complete.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Validator Table</h3>
+                <p class="text-sm text-gray-400">At the bottom of the page, a table shows the top 5 active validators with their shortened addresses and staked amounts. This gives you a sense of the network's validator distribution.</p>
             </div>
         );
 
         // ─── Agent ───
         case 'agent-overview': return (
             <div class="space-y-6">
-                <SectionHeader title="What is Agent Hosting?" desc="AI Agent Hosting lets you create autonomous agents that perform on-chain actions on your behalf." />
-                <p class="text-sm text-gray-400">Agents are AI-powered bots that can execute blockchain operations automatically. They can transfer tokens, monitor prices, execute trading strategies, and more -- all without manual intervention.</p>
+                <SectionHeader title="What is Agent Hosting?" desc="AI Agent Hosting lets you deploy autonomous AI-powered bots on Vision Chain that execute actions on your behalf -- from automated transfers to social media content generation." />
+                <p class="text-sm text-gray-400">Each agent gets its own dedicated wallet address, API key, and VCN balance. Agents are powered by the ZYNK AI Router (DeepSeek model) and execute at intervals you configure. You earn Reward Points (RP) for creating agents.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                        { t: 'On-chain Actions', d: 'Transfer, stake, bridge, and interact with smart contracts automatically' },
-                        { t: 'Growth Actions', d: 'Referral management, community engagement, and social media posting' },
-                        { t: 'Custom Prompts', d: 'Define agent behavior using natural language system prompts' },
-                        { t: 'Scheduling', d: 'Set agents to run at specific intervals or triggered by conditions' },
+                        { t: '7 On-chain Actions', d: 'Balance Monitor, Auto Transfer, Auto Stake, Conditional Unstake, Network Monitor, Staking Dashboard, and Leaderboard Tracker' },
+                        { t: '5 Growth Actions', d: 'Referral Outreach, Social Promotion, Content Creator, Invite Distribution, and Community Engagement' },
+                        { t: 'Cost Tiers', d: 'Actions have three cost levels: Read-only (0.05 VCN), Medium (0.1 VCN), and Write (0.5 VCN) per execution' },
+                        { t: 'Flexible Scheduling', d: 'Run agents every 5 min (~7.2 VCN/mo), 30 min (~1.2 VCN/mo), hourly (~0.6 VCN/mo), or daily (~0.05 VCN/mo)' },
                     ].map(c => (
                         <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                             <div class="text-sm font-bold text-white mb-1">{c.t}</div>
                             <div class="text-xs text-gray-500">{c.d}</div>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Agent Dashboard Tabs</h3>
+                <p class="text-sm text-gray-400 mb-3">The Agent page has three tabs at the top:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Overview', d: 'Shows your registered agents with status badges (Active/Paused/Setup), VCN balance, execution count, and action buttons' },
+                        { n: 'Setup', d: 'The 4-step agent creation wizard: Name > Select Action > Configure Settings > Schedule & Deploy' },
+                        { n: 'Logs', d: 'Detailed execution history with timestamps, action types, results, and VCN costs for the last 50 executions' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[60%] text-right">{item.d}</span>
                         </div>
                     ))}
                 </div>
@@ -675,145 +750,287 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
         );
         case 'agent-create': return (
             <div class="space-y-6">
-                <SectionHeader title="Creating an Agent" desc="Create a new AI agent and configure its behavior." />
+                <SectionHeader title="Creating an Agent" desc="Step-by-step guide through the 4-step agent creation wizard." />
+                <Prerequisites items={['Logged in to Vision Chain wallet', 'No existing agent (one agent per account initially)']} />
+
+                <h3 class="text-lg font-bold text-white mb-3">Step 1: Name Your Agent</h3>
                 <StepList steps={[
-                    { title: 'Open Agent Hosting', desc: 'Navigate to "Agent" from the sidebar menu.' },
-                    { title: 'Tap Create Agent', desc: 'Click the "Create Agent" button to start the setup wizard.' },
-                    { title: 'Name Your Agent', desc: 'Give your agent a unique name (e.g., "Trading Bot Alpha").' },
-                    { title: 'Select Action Type', desc: 'Choose between On-chain actions (transfers, staking) or Growth actions (referrals, social).' },
-                    { title: 'Configure Prompt', desc: 'Write a system prompt that defines how your agent should behave and make decisions.' },
-                    { title: 'Set VCN Budget', desc: 'Allocate VCN tokens for the agent to use in its operations.' },
-                    { title: 'Activate', desc: 'Review settings and activate the agent. It will begin executing based on your configuration.' },
+                    { title: 'Open Agent Hosting', desc: 'From the sidebar menu, tap "Agent" to open the Agent Hosting page.' },
+                    { title: 'Click "Create Your First Agent"', desc: 'If you have no agents, the Overview tab shows an empty state with a prominent "Create Your First Agent" button. Click it.' },
+                    { title: 'Enter Agent Name', desc: 'Type a unique name for your agent (e.g., "Balance Watcher", "Auto Staker"). This name is displayed on your dashboard and in logs.' },
+                    { title: 'Click "Register & Continue"', desc: 'The system registers your agent via the Agent Gateway API. On success, your agent receives a dedicated wallet address and 100 VCN initial balance, and you move to Step 2.' },
                 ]} />
-                <Tip><>Start with a small VCN budget and conservative settings. Monitor the agent's execution logs before scaling up.</></Tip>
+                <Tip><>You earn Reward Points (RP) for creating your first agent. The amount is configured by administrators.</></Tip>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 2: Select Action</h3>
+                <p class="text-sm text-gray-400 mb-3">A grid of action cards appears, organized by category. Each card shows the action name, description, cost tier badge (green/amber/red), and VCN cost per execution. Select one action:</p>
+                <StepList steps={[
+                    { title: 'Browse Actions', desc: 'Cards are organized into "On-chain" (blue border) and "Growth" (purple border) categories. Each shows a cost badge: Read-only (green, 0.05 VCN), Medium (amber, 0.1 VCN), or Write (red, 0.5 VCN).' },
+                    { title: 'Tap an Action Card', desc: 'Click any action to select it. The selected card highlights with a cyan border. A detailed description of what the agent will do appears.' },
+                    { title: 'Click "Configure Action"', desc: 'Proceed to the action-specific settings screen.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 3: Configure Action Settings</h3>
+                <p class="text-sm text-gray-400 mb-3">Each action has its own set of configuration fields. For example, "Auto Transfer" has: Recipient Address, Amount per Transfer, Daily Limit, Transfer Condition, and Minimum Balance to Keep. Fill in each field according to your requirements.</p>
+                <StepList steps={[
+                    { title: 'Fill Settings Fields', desc: 'Each field has a label, description, and helper text. Numeric fields show min/max ranges and units. Select fields offer dropdown options. Toggle fields are on/off switches.' },
+                    { title: 'Review System Prompt', desc: 'A pre-filled system prompt appears at the bottom based on your selected action. You can edit this to customize the agent behavior further.' },
+                    { title: 'Click "Set Schedule"', desc: 'Move to the final step to choose execution frequency.' },
+                ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Step 4: Schedule & Deploy</h3>
+                <StepList steps={[
+                    { title: 'Choose Execution Interval', desc: 'Select from 4 options: Every 5 min, Every 30 min, Every hour, or Once daily. Each shows estimated monthly VCN cost.' },
+                    { title: 'Set Max VCN Per Action', desc: 'Set the maximum VCN the agent can spend in a single execution (safety limit). Default is 5 VCN.' },
+                    { title: 'Review Monthly Cost Estimate', desc: 'A summary shows your estimated monthly VCN cost based on interval and action cost tier.' },
+                    { title: 'Click "Deploy Agent"', desc: 'The system saves your configuration and activates the agent. It immediately begins executing at your chosen interval.' },
+                ]} />
+                <Warning><>Agents spend real VCN from their dedicated wallet. Start with conservative settings (longer intervals, lower limits) and monitor the execution logs before increasing frequency or budgets.</></Warning>
             </div>
         );
         case 'agent-actions': return (
             <div class="space-y-6">
-                <SectionHeader title="Action Types" desc="Agents can perform two categories of actions." />
-                <div class="space-y-4">
-                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                        <h4 class="text-sm font-bold text-cyan-400 mb-2">On-chain Actions</h4>
-                        <ul class="space-y-1.5 text-xs text-gray-400">
-                            <li>- Token transfers to specified addresses or contacts</li>
-                            <li>- Staking and reward claiming automation</li>
-                            <li>- Bridge transfers between chains</li>
-                            <li>- Smart contract interactions</li>
-                            <li>- Conditional transfers (trigger-based)</li>
-                        </ul>
-                    </div>
-                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                        <h4 class="text-sm font-bold text-purple-400 mb-2">Growth Actions</h4>
-                        <ul class="space-y-1.5 text-xs text-gray-400">
-                            <li>- Referral link distribution and tracking</li>
-                            <li>- Community engagement and outreach</li>
-                            <li>- Social media content posting</li>
-                            <li>- Campaign participation automation</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        );
-        case 'agent-manage': return (
-            <div class="space-y-6">
-                <SectionHeader title="Managing Agents" desc="Start, pause, edit, and delete your AI agents." />
-                <p class="text-sm text-gray-400">The Agent dashboard shows all your created agents with their current status. You can manage each agent individually.</p>
-                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                <SectionHeader title="Available Action Types" desc="Complete reference of all 12 agent actions with their costs, settings, and use cases." />
+
+                <h3 class="text-lg font-bold text-cyan-400 mb-3">On-chain Actions (7)</h3>
+                <div class="space-y-3">
                     {[
-                        { a: 'Start', d: 'Activate a paused agent to resume operations' },
-                        { a: 'Pause', d: 'Temporarily stop an agent without deleting it' },
-                        { a: 'Edit', d: 'Modify agent configuration, prompts, or budget' },
-                        { a: 'Delete', d: 'Permanently remove an agent and return remaining budget' },
+                        { n: 'Balance Monitor', cost: '0.05 VCN (Read)', d: 'Watches your agent wallet balance and alerts when it drops below a threshold. Settings: Alert Threshold (VCN amount), Alert Method (Log or Webhook).' },
+                        { n: 'Auto Transfer', cost: '0.5 VCN (Write)', d: 'Automatically sends VCN to a specified address on each execution. Settings: Recipient Address, Amount per Transfer, Daily Limit, Transfer Condition (always or above-balance), Minimum Balance to Keep.' },
+                        { n: 'Auto Stake', cost: '0.5 VCN (Write)', d: 'Automatically stakes VCN for rewards. Settings: Stake Mode (fixed amount or percentage), Stake Amount/Percentage, Auto-Compound toggle, Minimum Balance to Keep.' },
+                        { n: 'Conditional Unstake', cost: '0.5 VCN (Write)', d: 'Unstakes VCN when conditions are met (e.g., APY drops below target). Settings: Unstake Amount (full or partial), Trigger Condition (every execution or APY-based), Target APY Threshold.' },
+                        { n: 'Network Monitor', cost: '0.05 VCN (Read)', d: 'Monitors Vision Chain health and block production. Settings: Block Delay Alert threshold (seconds).' },
+                        { n: 'Staking Dashboard', cost: '0.05 VCN (Read)', d: 'Tracks your staking position and pending rewards. Settings: Auto-Claim Alert Threshold (VCN, 0 to disable).' },
+                        { n: 'Leaderboard Tracker', cost: '0.05 VCN (Read)', d: 'Tracks the RP leaderboard and reports your ranking. No configuration needed.' },
                     ].map(item => (
-                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
-                            <span class="text-sm font-medium text-white">{item.a}</span>
-                            <span class="text-xs text-gray-400">{item.d}</span>
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-sm font-bold text-white">{item.n}</span>
+                                <span class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded">{item.cost}</span>
+                            </div>
+                            <p class="text-xs text-gray-400">{item.d}</p>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-purple-400 mt-8 mb-3">Growth Actions (5)</h3>
+                <div class="space-y-3">
+                    {[
+                        { n: 'Referral Outreach', cost: '0.1 VCN (Medium)', d: 'Generates and distributes referral link content for selected channels. Settings: Target Channels (Twitter, Telegram, Discord, Email), Custom Message template, Max Outreach per Day.' },
+                        { n: 'Social Promotion', cost: '0.1 VCN (Medium)', d: 'Creates social media posts about Vision Chain. Settings: Topic Focus (General, Staking, Agents, Bridge), Tone & Style (Professional, Casual, Hype, Educational), Custom Hashtags.' },
+                        { n: 'Content Creator', cost: '0.05 VCN (Read)', d: 'Generates long-form content like threads and articles. Settings: Content Type (Twitter Thread, Blog Article, Newsletter), Target Platform (Twitter, Medium, Blog).' },
+                        { n: 'Invite Distribution', cost: '0.1 VCN (Medium)', d: 'Crafts personalized invitation messages for different audiences. Settings: Target Audience (General, Developers, Investors, DeFi Users), Custom Invite Message, Daily Invite Limit.' },
+                        { n: 'Community Engagement', cost: '0.1 VCN (Medium)', d: 'Prepares talking points for community channels. Settings: Channels (Discord, Telegram, Twitter), Focus Topics (Staking FAQ, Network Updates, Onboarding, Technical), Engagement Style.' },
+                    ].map(item => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-sm font-bold text-white">{item.n}</span>
+                                <span class="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">{item.cost}</span>
+                            </div>
+                            <p class="text-xs text-gray-400">{item.d}</p>
                         </div>
                     ))}
                 </div>
             </div>
         );
+        case 'agent-manage': return (
+            <div class="space-y-6">
+                <SectionHeader title="Managing Your Agent" desc="Detailed guide to the agent Overview dashboard -- monitoring status, toggling, and deleting agents." />
+                <p class="text-sm text-gray-400 mb-3">The Overview tab shows each registered agent as a card with the following information:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Agent Name', d: 'Your agent name with a status badge (Active = green pulse, Paused = amber, Setup = gray)' },
+                        { n: 'Agent Wallet', d: 'The dedicated wallet address assigned to your agent. Tap the copy icon to copy it to clipboard' },
+                        { n: 'API Key', d: 'Your unique API key for programmatic access. Shown partially masked with a copy button' },
+                        { n: 'VCN Balance', d: 'Current VCN balance in the agent wallet. This is the fuel for agent operations' },
+                        { n: 'Executions', d: 'Total number of times the agent has executed its action since creation' },
+                        { n: 'Total VCN Spent', d: 'Cumulative VCN spent across all executions' },
+                        { n: 'Last Execution', d: 'Timestamp of the most recent execution (or "Never" if not yet run)' },
+                        { n: 'Selected Action', d: 'The action type currently configured (e.g., "Auto Transfer", "Balance Monitor")' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Agent Controls</h3>
+                <StepList steps={[
+                    { title: 'Pause / Resume', desc: 'Tap the Play/Pause button on the agent card. When paused, the agent stops executing but retains its configuration and balance. Resume to start executing again at the configured interval.' },
+                    { title: 'Delete Agent', desc: 'Tap the trash icon. A confirmation dialog appears: "Are you sure? This will permanently delete the agent and cannot be undone." Tap "Delete" to confirm. The agent is removed, its API key is invalidated, and your local storage is cleared.' },
+                    { title: 'Top Up Balance', desc: 'Transfer VCN to the agent wallet address shown on the card. The agent needs VCN to pay for executions. If balance reaches zero, the agent status changes to "insufficient_balance".' },
+                ]} />
+                <Warning><>Deleting an agent is permanent and cannot be undone. Any remaining VCN in the agent wallet should be transferred out before deletion. The API key becomes immediately invalid.</></Warning>
+            </div>
+        );
         case 'agent-logs': return (
             <div class="space-y-6">
-                <SectionHeader title="Logs & Monitoring" desc="View detailed execution logs for each agent." />
-                <p class="text-sm text-gray-400">Every action performed by your agent is logged with timestamps, action type, parameters, results, and VCN cost. Use these logs to monitor performance and debug issues.</p>
-                <Tip><>Review agent logs regularly. If an agent is making unexpected decisions, adjust its system prompt or reduce its budget and action permissions.</></Tip>
+                <SectionHeader title="Execution Logs & Monitoring" desc="Understand your agent's activity through detailed execution logs." />
+                <p class="text-sm text-gray-400 mb-3">Switch to the "Logs" tab on the Agent page to view the execution history. Logs are loaded from the Agent Gateway API and show the last 50 executions.</p>
+                <h3 class="text-lg font-bold text-white mb-3">Log Entry Fields</h3>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Timestamp', d: 'Date and time of execution in your local timezone' },
+                        { n: 'Action', d: 'The action type that was executed (e.g., "balance", "transfer", "stake")' },
+                        { n: 'Status', d: 'Success (green checkmark) or Error (red X). Error entries include the error message' },
+                        { n: 'Result', d: 'Detailed output from the execution -- for example, balance amounts, transfer hashes, or generated content' },
+                        { n: 'VCN Cost', d: 'The VCN amount charged for this execution' },
+                        { n: 'Duration', d: 'How long the execution took in milliseconds' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Monitoring Best Practices</h3>
+                <StepList steps={[
+                    { title: 'Check Logs After First Execution', desc: 'After deploying, wait for the first execution interval and check logs to confirm the agent is working correctly.' },
+                    { title: 'Watch for Error Patterns', desc: 'If you see repeated errors (red X), the agent may have misconfigured settings or insufficient balance. Review the error message for details.' },
+                    { title: 'Monitor VCN Burn Rate', desc: 'Compare "Total VCN Spent" against your budget expectations. Adjust interval frequency if spending is too high.' },
+                    { title: 'Review Generated Content', desc: 'For Growth actions (Social Promotion, Content Creator), review the generated content in log results to ensure quality and accuracy before sharing.' },
+                ]} />
+                <Tip><>If your agent shows "insufficient_balance" status, it means the agent wallet ran out of VCN. Transfer more VCN to the agent wallet address and resume the agent.</></Tip>
             </div>
         );
 
         // ─── Insight ───
         case 'insight-overview': return (
             <div class="space-y-6">
-                <SectionHeader title="Vision Insight Dashboard" desc="AI-curated market intelligence with real-time analysis of crypto markets and Vision Chain ecosystem." />
-                <p class="text-sm text-gray-400">Vision Insight aggregates data from multiple sources including market feeds, social media, and on-chain analytics to provide actionable intelligence. Content is curated and analyzed by AI to highlight the most relevant information.</p>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SectionHeader title="Vision Insight Dashboard" desc="AI-curated market intelligence powered by Gemini AI, aggregating news from 10+ sources with real-time sentiment analysis." />
+                <p class="text-sm text-gray-400">Vision Insight collects crypto news every 2 hours from sources like CoinDesk, CoinTelegraph, Bitcoin Magazine, Decrypt, The Block, and Korean outlets (Decenter, BlockMedia). Each article is analyzed by Gemini AI for sentiment, impact score, and category.</p>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Dashboard Components</h3>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
                     {[
-                        { n: 'AI Analysis', d: 'Machine-learning powered market sentiment analysis' },
-                        { n: 'Real-time Feed', d: 'Continuously updated news and market data' },
-                        { n: 'Categories', d: 'Filter by market, technology, regulation, and more' },
-                    ].map(c => (
-                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                            <div class="text-sm font-bold text-white mb-1">{c.n}</div>
-                            <div class="text-xs text-gray-500">{c.d}</div>
+                        { n: 'Agent Sentiment Index (ASI)', d: 'A 0-100 gauge showing overall market sentiment. Colors range from red (bearish, 0-25) through amber (neutral, 45-60) to green (bullish, 75-100). Updated with each data refresh.' },
+                        { n: 'Live Articles Count', d: 'Total number of articles currently loaded in the feed, displayed as a cyan number.' },
+                        { n: 'Whale Flow', d: 'Net whale wallet flow direction: "accumulation" (green, buying) or "distribution" (red, selling) with dollar amount.' },
+                        { n: 'AI Market Brief', d: 'Gemini AI-generated analysis with trading bias (LONG/SHORT/NEUTRAL), confidence score, category highlights, key risks, and opportunities.' },
+                        { n: 'Category Tabs', d: 'Horizontally scrollable filter tabs: All, Bitcoin, Ethereum, DeFi, Regulation, AI & Web3, NFT & Gaming, Altcoin, Korea. Each shows article count badge.' },
+                        { n: 'News Feed', d: 'Scrollable list of articles with title, sentiment badge, severity level, source, time ago, and impact score (60+ highlighted in amber).' },
+                        { n: 'Trending Keywords', d: 'Top trending terms extracted from articles. Top 3 highlighted in purple.' },
+                        { n: 'Macro Calendar', d: 'Upcoming economic events (FOMC, CPI, etc.) with days-until countdown and impact level (high/medium/low).' },
+                    ].map(item => (
+                        <div class="flex items-start gap-3 px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white min-w-[180px] flex-shrink-0">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
                         </div>
                     ))}
                 </div>
+                <Tip><>Tap the "API" button in the top-right corner to toggle Agent Data Stream view, which shows the raw JSON data that AI agents can consume programmatically.</></Tip>
             </div>
         );
         case 'insight-news': return (
             <div class="space-y-6">
-                <SectionHeader title="AI News Feed" desc="Browse AI-curated news articles with sentiment analysis and impact assessment." />
-                <p class="text-sm text-gray-400">Each news article in the feed includes an AI-generated summary, sentiment score (bullish/bearish/neutral), relevance rating, and source attribution. Articles are refreshed multiple times per day.</p>
-                <Tip><>Use category filters to focus on topics that matter to your investment strategy. The AI learns from your reading patterns to improve curation over time.</></Tip>
+                <SectionHeader title="Reading the News Feed" desc="Step-by-step guide to navigating and using the AI-curated news feed." />
+                <StepList steps={[
+                    { title: 'Open Vision Insight', desc: 'From the sidebar menu, tap "Insight" to open the Vision Insight page. Data loads automatically from the server.' },
+                    { title: 'Browse the AI Market Brief', desc: 'At the top, the AI Market Brief card (purple border) shows the Gemini-generated analysis. Read the trading bias (LONG/SHORT/NEUTRAL with confidence %) and the written analysis paragraph.' },
+                    { title: 'Filter by Category', desc: 'Scroll the horizontal category tabs to filter articles. Each tab shows the number of articles in that category. Tap a category to filter; tap "All" to show everything.' },
+                    { title: 'Read Article Cards', desc: 'Each article card shows: category badge (color-coded), severity badge (critical=red, warning=amber), sentiment arrow (up=bullish, down=bearish, right=neutral), time since publication, title (2-line truncated), source name with color dot, language badge if non-English, and impact score (60+ = star icon).' },
+                    { title: 'Open Full Article', desc: 'Tap any article card to open the full article in a new browser tab. The link goes to the original source.' },
+                    { title: 'Check Trending & Calendar', desc: 'Scroll down to see Trending Keywords (purple tags) and Macro Calendar (upcoming economic events with D-countdown and impact severity).' },
+                ]} />
+                <Note><>Articles are collected every 2 hours. If a category shows "No articles in this category yet", data collection is still in progress. The "Last updated" timestamp at the bottom shows when data was last refreshed.</></Note>
             </div>
         );
         case 'insight-signals': return (
             <div class="space-y-6">
-                <SectionHeader title="Trading Signals" desc="AI-generated trading signals based on technical analysis, sentiment, and on-chain data." />
-                <Warning><>Trading signals are for informational purposes only and do not constitute financial advice. Always do your own research before making investment decisions.</></Warning>
+                <SectionHeader title="AI Market Brief & Trading Signals" desc="Understanding the Gemini AI-generated market analysis and trading signals." />
+                <p class="text-sm text-gray-400 mb-3">The AI Market Brief is the centerpiece of Vision Insight. It is generated by Gemini AI analyzing all collected articles and market data.</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Trading Bias', d: 'LONG (green, bullish), SHORT (red, bearish), or NEUTRAL (amber). Shown with confidence percentage.' },
+                        { n: 'Analysis Text', d: 'A paragraph summarizing the current market situation, key drivers, and outlook.' },
+                        { n: 'Category Highlights', d: 'Per-category sentiment summaries (e.g., "Bitcoin: bullish - ETF inflows continue").' },
+                        { n: 'Key Risks', d: 'Red-flagged risk factors identified from current news (e.g., "Regulatory crackdown in EU").' },
+                        { n: 'Opportunities', d: 'Green-flagged opportunities identified from current news (e.g., "DeFi TVL growth accelerating").' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[60%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <Warning><>The AI Market Brief and trading signals are for informational purposes only and do not constitute financial advice. Always do your own research before making investment decisions. Past AI analysis accuracy does not guarantee future results.</></Warning>
             </div>
         );
 
         // ─── CEX Portfolio ───
         case 'cex-connect': return (
             <div class="space-y-6">
-                <SectionHeader title="Connecting Exchanges" desc="Link your centralized exchange accounts to view all your crypto holdings in one place." />
-                <Prerequisites items={['Exchange account on Upbit or Bithumb', 'API keys generated from the exchange']} />
+                <SectionHeader title="Connecting Your Exchange" desc="Link your Upbit or Bithumb account to view all crypto holdings in one unified dashboard." />
+                <Prerequisites items={['An active account on Upbit or Bithumb', 'API key and Secret key generated from the exchange (read-only recommended)', 'The server IP address whitelisted on your exchange API settings']} />
                 <StepList steps={[
-                    { title: 'Open CEX Portfolio', desc: 'Navigate to "CEX Portfolio" from the sidebar menu.' },
-                    { title: 'Add Exchange', desc: 'Tap "Add Exchange" and select your exchange (Upbit or Bithumb).' },
-                    { title: 'Enter API Keys', desc: 'Input your API Key and Secret Key generated from the exchange settings.' },
-                    { title: 'Whitelist IP', desc: 'Add the displayed server IP to your exchange API whitelist for security.' },
-                    { title: 'Connect', desc: 'Tap "Connect" to verify and sync your portfolio data.' },
+                    { title: 'Open CEX Portfolio', desc: 'From the sidebar menu, tap "CEX Portfolio" to open the exchange integration page.' },
+                    { title: 'Tap "Add Exchange"', desc: 'Click the "Add Exchange" button. A modal form appears with fields for exchange selection, API key, and Secret key.' },
+                    { title: 'Select Exchange', desc: 'Choose either "Upbit" or "Bithumb" from the dropdown. Each exchange has its own icon displayed next to the name.' },
+                    { title: 'Enter API Key & Secret', desc: 'Paste your API Key and Secret Key into the respective fields. These are generated from your exchange account settings under "API Management".' },
+                    { title: 'Whitelist Server IP', desc: 'The modal displays the server IP address that needs to be whitelisted on your exchange. Tap the copy icon next to the IP address, then add it to your exchange API whitelist. This ensures only our server can read your data.' },
+                    { title: 'Click "Connect"', desc: 'The system verifies your credentials by making a test API call. On success, your exchange appears in the connected list and portfolio data syncs automatically.' },
                 ]} />
-                <Warning><>Only use read-only API keys. Do not grant trading or withdrawal permissions to protect your funds.</></Warning>
+                <Warning><>Only use read-only API keys. Never enable trading or withdrawal permissions. Vision Chain only reads balance data and never executes trades or withdrawals on your behalf.</></Warning>
             </div>
         );
         case 'cex-portfolio': return (
             <div class="space-y-6">
-                <SectionHeader title="Portfolio Overview" desc="View aggregated portfolio data across all connected exchanges." />
-                <p class="text-sm text-gray-400">The CEX Portfolio page displays a unified view of all your exchange holdings. A donut chart shows asset allocation, and detailed tables list each coin with its balance, value, and 24h change.</p>
-                <Tip><>Tap "Sync" to fetch the latest balances from your connected exchanges. Data is cached to reduce API calls.</></Tip>
+                <SectionHeader title="Portfolio Overview" desc="Understanding the unified portfolio view with charts, asset breakdown, and sync controls." />
+                <p class="text-sm text-gray-400 mb-3">After connecting at least one exchange, the CEX Portfolio page shows your aggregated holdings:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Total Portfolio Value', d: 'Combined value of all connected exchanges displayed in both KRW and USD. Conversion uses real-time exchange rate.' },
+                        { n: 'Donut Chart', d: 'Visual SVG asset allocation chart. Each coin gets a proportional colored segment. Hover to see percentage and value.' },
+                        { n: 'Asset List', d: 'Detailed table showing: Coin name/icon, balance amount, current value (KRW & USD), 24h change percentage with color (green=up, red=down).' },
+                        { n: 'Exchange Badges', d: 'Each asset shows which exchange it belongs to (Upbit icon or Bithumb icon).' },
+                        { n: 'Coin Icons', d: 'Automatically loaded from CoinGecko API based on coin symbol for visual identification.' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Syncing Data</h3>
+                <StepList steps={[
+                    { title: 'Manual Sync', desc: 'Tap the "Sync" button (refresh icon) to fetch the latest balances from all connected exchanges. A loading spinner shows while syncing.' },
+                    { title: 'Auto-refresh', desc: 'Portfolio snapshots are saved with timestamps. The "Last synced" timestamp shows at the bottom of the page.' },
+                    { title: 'View History', desc: 'Previous portfolio snapshots are stored, allowing you to track portfolio changes over time.' },
+                ]} />
+                <Tip><>Sync your portfolio before and after major trades to keep your dashboard accurate. Data is cached to minimize API calls to exchanges.</></Tip>
             </div>
         );
         case 'cex-security': return (
             <div class="space-y-6">
-                <SectionHeader title="Security & IP Whitelist" desc="Secure your exchange API connections." />
-                <p class="text-sm text-gray-400">Your API keys are encrypted and stored securely. The system uses read-only API access and never performs trades or withdrawals on your behalf.</p>
-                <Note><>Always use read-only API keys. The IP whitelist ensures that only our server can access your exchange data. You can disconnect an exchange at any time by deleting the API credentials.</></Note>
+                <SectionHeader title="API Security & Best Practices" desc="How your exchange credentials are protected and best practices for secure API usage." />
+                <div class="space-y-3">
+                    {[
+                        { q: 'How are my API keys stored?', a: 'API credentials are encrypted and stored in Firebase Firestore. The Secret Key is never displayed in full after initial entry -- it is partially masked with asterisks.' },
+                        { q: 'Can Vision Chain trade on my behalf?', a: 'No. The system only uses read-only API access to fetch balances. It cannot and will not execute any trades, withdrawals, or account changes.' },
+                        { q: 'What is IP whitelisting?', a: 'Exchanges allow you to restrict API access to specific IP addresses. By whitelisting only our server IP, you ensure that even if someone obtains your API key, they cannot use it from a different server.' },
+                        { q: 'How do I disconnect an exchange?', a: 'Tap the trash icon next to a connected exchange. A confirmation dialog appears. After confirming, the API credentials are permanently deleted from our server. The exchange-side API key remains valid until you revoke it on the exchange.' },
+                        { q: 'What if my API key expires?', a: 'Some exchanges rotate API keys periodically. If sync fails, delete the old connection and add a new one with fresh API credentials.' },
+                    ].map(item => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <h4 class="text-sm font-bold text-white mb-1">{item.q}</h4>
+                            <p class="text-xs text-gray-400">{item.a}</p>
+                        </div>
+                    ))}
+                </div>
+                <Note><>For maximum security: (1) Use read-only API keys, (2) Always whitelist our server IP, (3) Revoke API keys on the exchange if you stop using this feature, (4) Never share API keys with anyone.</></Note>
             </div>
         );
 
         // ─── Disk ───
         case 'disk-overview': return (
             <div class="space-y-6">
-                <SectionHeader title="Vision Disk - Encrypted Cloud Storage" desc="Store files securely on the blockchain with end-to-end encryption powered by your wallet keys." />
+                <SectionHeader title="Vision Disk - Encrypted Cloud Storage" desc="Store, share, and manage files with end-to-end encryption powered by your wallet private key and EIP-2612 gasless payments." />
+                <p class="text-sm text-gray-400">Vision Disk encrypts files locally in your browser using AES-GCM with a key derived from your wallet private key. Encrypted data is stored on Vision Cloud, and file metadata is anchored on-chain. Only you can decrypt your files.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                        { t: 'End-to-End Encrypted', d: 'Files are encrypted with your wallet keys before upload. Only you can decrypt them.' },
-                        { t: 'Blockchain-anchored', d: 'File metadata and integrity proofs are stored on Vision Chain' },
-                        { t: 'Gasless Operations', d: 'Upload, download, and manage files without paying gas fees via EIP-2612 Permits' },
-                        { t: 'Shareable', d: 'Publish files with public links or share with specific wallet addresses' },
+                        { t: 'AES-GCM Encryption', d: 'Files are encrypted client-side before upload using AES-256-GCM. The encryption key is derived from your wallet private key, so only you can decrypt.' },
+                        { t: 'Gasless Payments', d: 'Storage subscriptions use EIP-2612 Permit signatures. You sign a permit, and the Paymaster executes the VCN transfer on-chain without you paying gas.' },
+                        { t: 'Drag & Drop Upload', d: 'Drag files directly onto the Disk page or click the upload area to select files. Multiple file upload supported.' },
+                        { t: 'File Operations', d: 'Rename, move, delete, publish/unpublish, and download files. Context menu available via right-click or long-press.' },
                     ].map(c => (
                         <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                             <div class="text-sm font-bold text-white mb-1">{c.t}</div>
@@ -821,60 +1038,193 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                         </div>
                     ))}
                 </div>
+                <Note><>Your wallet must be unlocked (password entered) to upload or download files, since encryption/decryption requires your private key.</></Note>
             </div>
         );
         case 'disk-upload': return (
             <div class="space-y-6">
-                <SectionHeader title="Upload & Download Files" desc="Upload files to Vision Disk and download them on any device." />
+                <SectionHeader title="Uploading & Downloading Files" desc="Step-by-step guide to uploading encrypted files and downloading them on any device." />
+                <Prerequisites items={['Active Disk subscription (or free tier)', 'Wallet unlocked with password', 'Sufficient storage quota remaining']} />
+                <h3 class="text-lg font-bold text-white mb-3">Uploading Files</h3>
                 <StepList steps={[
-                    { title: 'Open Vision Disk', desc: 'Navigate to "Disk" from the sidebar menu.' },
-                    { title: 'Upload File', desc: 'Tap the upload button and select a file from your device. Files are automatically encrypted.' },
-                    { title: 'Wait for Processing', desc: 'The file is encrypted, chunked, and uploaded. Progress is shown in real-time.' },
-                    { title: 'Download', desc: 'To download, simply click on any file in your Disk. It will be decrypted and saved to your device.' },
+                    { title: 'Open Vision Disk', desc: 'From the sidebar menu, tap "Disk". Your file browser loads showing current folder contents.' },
+                    { title: 'Drag & Drop or Click Upload', desc: 'Either drag files onto the upload zone (dashed border area) or click the upload area and select files from the file picker. Multiple files can be uploaded at once.' },
+                    { title: 'Encryption & Upload Progress', desc: 'Each file is encrypted locally with AES-GCM, then uploaded to Vision Cloud. A progress bar shows the upload status for each file.' },
+                    { title: 'Verify Upload', desc: 'Once complete, the file appears in your current folder with its name, size, type icon, and upload timestamp.' },
                 ]} />
-                <Note><>Maximum file size depends on your storage plan. Files are automatically chunked for reliable upload of large files.</></Note>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Downloading Files</h3>
+                <StepList steps={[
+                    { title: 'Locate the File', desc: 'Navigate to the folder containing the file you want to download.' },
+                    { title: 'Click the Download Button', desc: 'Right-click (or long-press on mobile) and select "Download" from the context menu. Or click the download icon.' },
+                    { title: 'Decryption & Download', desc: 'The encrypted file is fetched from Vision Cloud, decrypted locally using your private key, and saved to your device as the original file.' },
+                ]} />
+                <Tip><>You earn +3 RP for each file upload and +1 RP for each download. Uploads trigger gasless VCN transactions if your subscription includes on-chain metadata anchoring.</></Tip>
             </div>
         );
         case 'disk-folders': return (
             <div class="space-y-6">
-                <SectionHeader title="Folder Management" desc="Organize your files with folders, move, rename, and delete." />
-                <p class="text-sm text-gray-400">Create folders to organize your encrypted files. You can move files between folders, rename them, and perform batch operations (select multiple files for move or delete).</p>
+                <SectionHeader title="Folder & File Management" desc="Complete guide to organizing files with folders, batch operations, and context menus." />
+                <h3 class="text-lg font-bold text-white mb-3">Create Folders</h3>
                 <StepList steps={[
-                    { title: 'Create Folder', desc: 'Tap "New Folder" and enter a name.' },
-                    { title: 'Move Files', desc: 'Long-press or select files, then use "Move to" to organize.' },
-                    { title: 'Batch Delete', desc: 'Select multiple files and tap "Delete" for batch removal.' },
+                    { title: 'Click "New Folder"', desc: 'Tap the "New Folder" button in the toolbar. A dialog asks for the folder name.' },
+                    { title: 'Enter Folder Name', desc: 'Type a name and click "Create". The folder appears in your current directory.' },
+                    { title: 'Navigate Into Folder', desc: 'Click on a folder to open it. Breadcrumbs at the top show your current path (e.g., "Home / Documents / Projects").' },
+                ]} />
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">File Context Menu</h3>
+                <p class="text-sm text-gray-400 mb-3">Right-click any file or folder (long-press on mobile) to open the context menu with these options:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Download', d: 'Decrypt and save the file to your device' },
+                        { n: 'Rename', d: 'Change the file or folder name' },
+                        { n: 'Move', d: 'Move to a different folder (folder picker appears)' },
+                        { n: 'Publish', d: 'Make the file publicly accessible via a generated link' },
+                        { n: 'Unpublish', d: 'Revoke public access (file becomes private again)' },
+                        { n: 'Delete', d: 'Permanently delete the file or folder' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Batch Operations</h3>
+                <StepList steps={[
+                    { title: 'Select Multiple Files', desc: 'Click the checkbox on each file/folder you want to select. A selection bar appears at the top showing count.' },
+                    { title: 'Batch Move', desc: 'Click "Move" to move all selected items to a target folder.' },
+                    { title: 'Batch Delete', desc: 'Click "Delete" to permanently remove all selected files. A confirmation dialog appears.' },
+                    { title: 'Clear Selection', desc: 'Click "Clear" or tap outside to deselect all items.' },
                 ]} />
             </div>
         );
         case 'disk-share': return (
             <div class="space-y-6">
-                <SectionHeader title="Sharing & Publishing" desc="Share files with others via public links or direct wallet-to-wallet sharing." />
+                <SectionHeader title="Publishing & Sharing Files" desc="Make files publicly accessible or share with specific wallet addresses." />
+                <h3 class="text-lg font-bold text-white mb-3">Publishing a File (Public Link)</h3>
                 <StepList steps={[
-                    { title: 'Select a File', desc: 'Open the file details in Vision Disk.' },
-                    { title: 'Tap Share/Publish', desc: 'Choose to create a public link or share with a specific wallet address.' },
-                    { title: 'Copy Link', desc: 'For public sharing, copy the generated link and send it to recipients.' },
+                    { title: 'Right-Click the File', desc: 'Open the context menu on the file you want to share.' },
+                    { title: 'Select "Publish"', desc: 'The file is marked as public. A globe icon appears next to the filename, and a public URL is generated.' },
+                    { title: 'Copy the Public Link', desc: 'The URL is shown in a green info bar. Copy it and share with anyone -- they can download the file without a Vision Chain account.' },
+                    { title: 'Unpublish', desc: 'To revoke access, right-click and select "Unpublish". The public link immediately stops working.' },
                 ]} />
-                <Warning><>Published files are accessible to anyone with the link. Make sure you do not share sensitive information publicly.</></Warning>
+                <p class="text-sm text-gray-400 mt-4">Published files are indicated by a green globe icon and "Public" badge. The public link format is: <code class="text-cyan-400 text-xs">https://api.visionchain.co/disk/public/[fileId]</code></p>
+                <Warning><>Published files are accessible to anyone with the link. The file content is decrypted server-side for public access. Only publish files you intend to share publicly.</></Warning>
             </div>
         );
         case 'disk-plans': return (
             <div class="space-y-6">
-                <SectionHeader title="Storage Plans" desc="Choose a storage plan that fits your needs. Pay with VCN tokens." />
-                <p class="text-sm text-gray-400">Vision Disk offers tiered storage plans paid with VCN tokens. Each plan includes a storage quota, upload limits, and access to advanced features like version history and team sharing.</p>
-                <Tip><>Storage payments use gasless EIP-2612 Permit signatures, so you don't need ETH for gas to purchase or upgrade your plan.</></Tip>
+                <SectionHeader title="Storage Subscription Plans" desc="Choose a storage plan paid with VCN tokens via gasless EIP-2612 Permit signatures." />
+                <p class="text-sm text-gray-400 mb-3">Vision Disk subscriptions are managed through on-chain VCN payments. The payment flow uses EIP-2612 Permit: you sign an off-chain message authorizing the transfer, and the Paymaster executes the transaction on-chain.</p>
+                <StepList steps={[
+                    { title: 'View Plans', desc: 'On the Disk page, if you have no subscription, a "Subscribe" section shows available plans.' },
+                    { title: 'Select a Plan', desc: 'Browse the available storage tiers. Each shows storage capacity, price in VCN, and features included.' },
+                    { title: 'Sign Permit', desc: 'Click "Subscribe". Your wallet prompts you to enter your password to sign an EIP-2612 Permit for the VCN payment amount.' },
+                    { title: 'Payment Processing', desc: 'The signed permit is sent to the Paymaster API, which executes the VCN transfer on-chain. No gas fees required from you.' },
+                    { title: 'Start Using Disk', desc: 'Once payment is confirmed, your subscription activates immediately and you can start uploading files.' },
+                ]} />
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Cancel Subscription</h3>
+                <p class="text-sm text-gray-400 mb-3">You can cancel your subscription at any time. Your files remain accessible until the subscription period ends. After expiration, files are retained but you cannot upload new files until you renew.</p>
+                <Tip><>Storage plan payments are gasless -- the Paymaster covers all on-chain transaction fees. You only pay the VCN subscription price.</></Tip>
             </div>
         );
 
         // ─── Nodes ───
         case 'nodes-overview': return (
             <div class="space-y-6">
-                <SectionHeader title="Vision Node Overview" desc="Run a Vision Node to support the network and earn VCN rewards." />
+                <SectionHeader title="Vision Node Overview" desc="Run a Vision Node to support the network, validate transactions, and earn VCN + RP rewards." />
+                <p class="text-sm text-gray-400">Vision Chain is a 5-node Proof-of-Authority (PoA) network. You can participate by running a full Validator Node, an Enterprise Node, or a lightweight Mobile Node directly in your browser.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
-                        { t: 'Validator Node', d: 'Full node that participates in block validation. Requires dedicated hardware.' },
-                        { t: 'Enterprise Node', d: 'High-capacity node for enterprise-grade applications with premium support.' },
-                        { t: 'Mobile Node', d: 'Lightweight node that runs in your browser (PWA). Earn VCN by staying online.' },
-                        { t: 'Desktop App', d: 'Download the Vision Node desktop app for macOS, Windows, or Linux.' },
+                        { t: 'Validator Node', d: 'Full Geth node participating in IBFT 2.0 consensus. Validates blocks, earns highest VCN rewards. Requires dedicated server hardware (4+ CPU, 8GB+ RAM, 200GB+ SSD).' },
+                        { t: 'Enterprise Node', d: 'High-capacity node for enterprise applications. Includes SLA, dedicated support, custom API endpoints, and priority block processing.' },
+                        { t: 'Mobile Node (PWA)', d: 'Lightweight browser-based node. Earns +5 RP per day just by staying online. Dashboard shows node status, uptime, peers, and daily earnings. Accessible from the "Nodes" sidebar menu.' },
+                        { t: 'Desktop App', d: 'Standalone desktop application for macOS (.dmg) and Windows (.exe). Provides a local node dashboard at http://localhost:9090 with storage, peer, and reward monitoring.' },
+                    ].map(c => (
+                        <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
+                            <div class="text-sm font-bold text-white mb-1">{c.t}</div>
+                            <div class="text-xs text-gray-500">{c.d}</div>
+                        </div>
+                    ))}
+                </div>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Mobile Node Dashboard</h3>
+                <p class="text-sm text-gray-400 mb-3">The Mobile Node page (accessible from sidebar "Nodes") shows:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Node Status', d: 'Active (green pulse) or Offline. Shows uptime counter and last sync timestamp.' },
+                        { n: 'Peer Count', d: 'Number of connected peers in the Vision Chain P2P network.' },
+                        { n: 'Block Height', d: 'Current block number synced from the network.' },
+                        { n: 'Daily RP Earnings', d: '+5 RP per day credited automatically while the Mobile Node tab is active.' },
+                        { n: 'Cumulative Stats', d: 'Total uptime hours, total RP earned, and days active since first activation.' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[55%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+                <Tip><>The Mobile Node earns you passive RP just by keeping the page open. It is the lowest barrier way to contribute to the network and earn rewards.</></Tip>
+            </div>
+        );
+        case 'nodes-purchase': return (
+            <div class="space-y-6">
+                <SectionHeader title="Purchasing a Node" desc="Step-by-step guide to purchasing Validator or Enterprise node tiers." />
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="grid grid-cols-4 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Tier</div><div>Price</div><div>Hardware</div><div>Benefits</div></div>
+                    {[
+                        { t: 'Validator', p: '$10,000 USD', h: '4 CPU, 8GB RAM, 200GB SSD', b: 'Block validation, highest VCN rewards, governance voting' },
+                        { t: 'Enterprise', p: '$100,000 USD', h: '8 CPU, 32GB RAM, 1TB SSD', b: 'Enterprise SLA, custom APIs, dedicated support, priority processing' },
+                    ].map(r => (
+                        <div class="grid grid-cols-4 gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
+                            <span class="text-white font-medium">{r.t}</span>
+                            <span class="text-cyan-400 text-xs font-bold">{r.p}</span>
+                            <span class="text-gray-500 text-xs">{r.h}</span>
+                            <span class="text-gray-400 text-xs">{r.b}</span>
+                        </div>
+                    ))}
+                </div>
+                <StepList steps={[
+                    { title: 'Contact Vision Chain Team', desc: 'Node purchases require identity verification and hardware review. Contact the team via support@visionchain.co or through the community channels.' },
+                    { title: 'Hardware Setup', desc: 'Prepare your dedicated server according to the minimum specifications for your chosen tier.' },
+                    { title: 'Payment & Registration', desc: 'Complete payment via approved methods. Your node address is registered in the validator set by the network administrators.' },
+                    { title: 'Node Configuration', desc: 'Receive your genesis.json, static-nodes.json, and node key. Configure your Geth node with IBFT 2.0 consensus settings.' },
+                    { title: 'Go Live', desc: 'Start your node and verify it syncs with the network. Monitor peer connections and block production through the node dashboard.' },
+                ]} />
+                <Note><>Mobile Nodes are free and require no purchase. Simply open the Nodes page in your browser to start earning RP passively.</></Note>
+            </div>
+        );
+        case 'nodes-install': return (
+            <div class="space-y-6">
+                <SectionHeader title="Installation Guide" desc="Install the Vision Node desktop application or run via CLI on your server." />
+                <h3 class="text-lg font-bold text-white mb-3">macOS / Linux (CLI)</h3>
+                <StepList steps={[
+                    { title: 'Run Install Script', desc: 'Open Terminal and run the following command:' },
+                ]} />
+                <code class="text-xs text-cyan-400 bg-black/30 rounded-lg px-4 py-3 block font-mono break-all border border-white/5">curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash</code>
+                <StepList steps={[
+                    { title: 'Verify Installation', desc: 'The script installs Geth, configures the Vision Chain genesis block, and starts the node service. Check status with: systemctl status vision-node (Linux) or the process list (macOS).' },
+                    { title: 'Access Dashboard', desc: 'Open http://localhost:9090 in your browser to view the node dashboard with status, peers, blocks, and storage metrics.' },
+                ]} />
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Desktop App</h3>
+                <StepList steps={[
+                    { title: 'Download', desc: 'Visit the Vision Node downloads page. Select your platform: macOS (.dmg) or Windows (.exe).' },
+                    { title: 'Install', desc: 'macOS: Open the .dmg and drag to Applications. Windows: Run the .exe installer and follow prompts.' },
+                    { title: 'Launch', desc: 'Open "Vision Node" from your Applications. The app starts the node and opens the dashboard automatically.' },
+                    { title: 'Monitor', desc: 'The desktop app shows node status, peer connections, block height, storage usage, and VCN rewards in a visual dashboard.' },
+                ]} />
+                <Tip><>After installation, the node dashboard is accessible at http://localhost:9090. RPC endpoint runs on port 8545. WebSocket on port 8546.</></Tip>
+            </div>
+        );
+
+        // ─── Mint ───
+        case 'mint-overview': return (
+            <div class="space-y-6">
+                <SectionHeader title="Mint Studio" desc="Create and deploy custom ERC-20 tokens on Vision Chain and other supported networks with a no-code wizard." />
+                <p class="text-sm text-gray-400">Mint Studio provides a guided interface for deploying tokens without writing any Solidity code. You configure the token parameters, and the system deploys a verified smart contract on your behalf.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                        { t: 'No-Code Deployment', d: 'Fill in a form -- no Solidity or developer tools needed. The contract is deployed and verified automatically.' },
+                        { t: 'Multi-Chain Support', d: 'Deploy on Vision Chain (gasless via Paymaster), Ethereum, Polygon, Base, and more.' },
+                        { t: 'Token Types', d: 'Standard ERC-20 with configurable properties: mintable, burnable, pausable, capped supply.' },
+                        { t: 'Gasless on Vision Chain', d: 'Deployment on Vision Chain uses the Paymaster system, so you only pay VCN deployment fee with no ETH gas required.' },
                     ].map(c => (
                         <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
                             <div class="text-sm font-bold text-white mb-1">{c.t}</div>
@@ -884,120 +1234,204 @@ function getContent(id: string, onNavigate?: (id: string) => void): JSX.Element 
                 </div>
             </div>
         );
-        case 'nodes-purchase': return (
-            <div class="space-y-6">
-                <SectionHeader title="Purchasing Nodes" desc="Purchase a Vision Node tier to unlock additional earning potential." />
-                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
-                    <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Tier</div><div>Price</div><div>Benefits</div></div>
-                    {[
-                        { t: 'Validator', p: '$10,000 USD', b: 'Block validation, highest rewards' },
-                        { t: 'Enterprise', p: '$100,000 USD', b: 'Enterprise support, SLA, custom APIs' },
-                    ].map(r => (
-                        <div class="grid grid-cols-3 gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
-                            <span class="text-white font-medium">{r.t}</span>
-                            <span class="text-gray-400 text-xs">{r.p}</span>
-                            <span class="text-gray-500 text-xs">{r.b}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-        case 'nodes-install': return (
-            <div class="space-y-6">
-                <SectionHeader title="Installation Guide" desc="Install the Vision Node desktop application on your system." />
-                <div class="space-y-4">
-                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                        <h4 class="text-sm font-bold text-white mb-2">macOS (CLI)</h4>
-                        <code class="text-xs text-cyan-400 bg-black/30 rounded-lg px-3 py-2 block font-mono break-all">curl -fsSL https://raw.githubusercontent.com/jays-visionAI/visionchain/main/vision-node/installers/install-macos.sh | bash</code>
-                    </div>
-                    <div class="bg-[#0a0a12] border border-white/5 rounded-xl p-5">
-                        <h4 class="text-sm font-bold text-white mb-2">Desktop App</h4>
-                        <p class="text-xs text-gray-400">Download the latest release from the Vision Node downloads page. Available for macOS (.dmg) and Windows (.exe).</p>
-                    </div>
-                </div>
-                <Tip><>After installation, the node dashboard is accessible at http://localhost:9090. Use this to monitor node status, storage, and rewards.</></Tip>
-            </div>
-        );
-
-        // ─── Mint ───
-        case 'mint-overview': return (
-            <div class="space-y-6">
-                <SectionHeader title="Mint Studio" desc="Create and deploy custom tokens on Vision Chain with the Mint Studio." />
-                <p class="text-sm text-gray-400">Mint Studio provides a no-code interface for deploying ERC-20 tokens on Vision Chain and other supported networks. Configure your token's name, symbol, total supply, and properties through a guided wizard.</p>
-            </div>
-        );
         case 'mint-create': return (
             <div class="space-y-6">
-                <SectionHeader title="Creating a Token" desc="Step-by-step guide to minting a custom token." />
-                <Prerequisites items={['VCN balance for deployment fees', 'Wallet password configured']} />
+                <SectionHeader title="Creating a Token" desc="Step-by-step guide through the Mint Studio token creation wizard." />
+                <Prerequisites items={['VCN balance for deployment fees', 'Wallet unlocked with password', 'Token name and symbol decided']} />
                 <StepList steps={[
-                    { title: 'Open Mint Studio', desc: 'Navigate to "Mint" from the sidebar menu.' },
-                    { title: 'Token Details', desc: 'Enter your token name, symbol (3-5 characters), and select the token type.' },
-                    { title: 'Set Supply', desc: 'Define the initial token supply and whether it is mintable or fixed.' },
-                    { title: 'Select Networks', desc: 'Choose which networks to deploy on (Vision Chain, Ethereum, Polygon, Base).' },
-                    { title: 'Deploy', desc: 'Review all settings, confirm deployment, and sign the transaction.' },
+                    { title: 'Open Mint Studio', desc: 'From the sidebar menu, tap "Mint" to open the Mint Studio page.' },
+                    { title: 'Enter Token Name', desc: 'Type your token name (e.g., "My Community Token"). This is the full display name shown on explorers and wallets.' },
+                    { title: 'Enter Token Symbol', desc: 'Enter a 3-5 character ticker symbol (e.g., "MCT"). Must be unique and is displayed next to balances.' },
+                    { title: 'Set Initial Supply', desc: 'Enter the initial token supply (e.g., 1,000,000). Choose whether the supply is fixed or mintable (owner can create more).' },
+                    { title: 'Configure Properties', desc: 'Toggle optional properties: Mintable (owner can mint more), Burnable (holders can burn tokens), Pausable (owner can pause transfers).' },
+                    { title: 'Select Target Networks', desc: 'Choose which networks to deploy on. Vision Chain deployment is gasless. Other chains require native gas tokens (ETH, MATIC, etc.).' },
+                    { title: 'Review & Deploy', desc: 'Review all settings on the confirmation screen. Click "Deploy" and enter your wallet password to sign the deployment transaction.' },
+                    { title: 'Verify Deployment', desc: 'After deployment, the contract address is displayed. You can view it on the block explorer. The token is automatically added to your wallet.' },
                 ]} />
-                <Note><>Token deployment costs are paid in VCN. Multi-network deployment incurs additional gas costs on each target chain.</></Note>
+                <Note><>Token deployment costs are paid in VCN on Vision Chain. For multi-chain deployment, you need native gas tokens on each target chain. Each network deployment is independent.</></Note>
             </div>
         );
 
         // ─── Social ───
         case 'contacts-manage': return (
             <div class="space-y-6">
-                <SectionHeader title="Contacts Management" desc="Save, edit, and organize your frequently used wallet addresses." />
+                <SectionHeader title="Contacts Management" desc="Save, edit, and organize frequently used wallet addresses with phonetic search and VNS lookup." />
                 <StepList steps={[
-                    { title: 'Add Contact', desc: 'Tap "Add Contact" and enter a name and wallet address. Optionally add email, phone, and notes.' },
-                    { title: 'Phone Sync', desc: 'Import contacts from your phone to quickly find friends who use Vision Chain.' },
-                    { title: 'VNS Lookup', desc: 'Search by Vision Name Service (VNS) to find contacts by their human-readable names.' },
-                    { title: 'Edit / Delete', desc: 'Tap any contact to edit details or swipe to delete.' },
-                    { title: 'Favorites', desc: 'Star contacts to pin them at the top for quick access during transfers.' },
+                    { title: 'Open Contacts', desc: 'From the sidebar menu, tap "Contacts" to view your address book.' },
+                    { title: 'Add New Contact', desc: 'Tap "Add Contact". Fill in: Name (required), Wallet Address (0x...), Email (optional), Phone (optional), and Notes.' },
+                    { title: 'Phone Sync', desc: 'Tap "Sync Phone" to import contacts from your device. The system uses phonetic matching to find friends who may already be on Vision Chain.' },
+                    { title: 'VNS Lookup', desc: 'Search by Vision Name Service (VNS) to find contacts by their human-readable name (e.g., "alice.vision") instead of a hex address.' },
+                    { title: 'Edit a Contact', desc: 'Tap any contact row to open the edit modal. Change any field and tap "Save".' },
+                    { title: 'Delete a Contact', desc: 'In the edit modal, tap "Delete Contact". A confirmation dialog appears before permanent deletion.' },
+                    { title: 'Use in Send Flow', desc: 'When sending VCN, your contacts appear in the recipient field. Tap a contact name to auto-fill their address -- no manual copy needed.' },
                 ]} />
-                <Tip><>Saved contacts appear automatically in the send flow, making transfers faster and reducing address errors.</></Tip>
+                <h3 class="text-lg font-bold text-white mt-6 mb-3">Phonetic Search</h3>
+                <p class="text-sm text-gray-400">The contact search supports cross-language phonetic matching. For example, searching for a Korean name will match the English phonetic equivalent and vice versa. This is especially useful for voice-input scenarios where names may be transcribed differently.</p>
+                <Tip><>Saved contacts appear automatically in the send flow, making transfers faster and reducing address errors. Star your most-used contacts for quick access.</></Tip>
             </div>
         );
         case 'referral-program': return (
             <div class="space-y-6">
-                <SectionHeader title="Referral Program" desc="Invite friends to Vision Chain and earn VCN rewards for each signup." />
+                <SectionHeader title="Referral Program & Marketing" desc="Complete guide to the referral system -- links, levels, direct/indirect rewards, daily rounds, and the Referral Rush leaderboard." />
+
+                <h3 class="text-lg font-bold text-white mb-3">Your Referral Link & Code</h3>
+                <p class="text-sm text-gray-400 mb-3">Each user receives a unique referral code at signup. Your referral link is:</p>
+                <code class="text-xs text-cyan-400 bg-black/30 rounded-lg px-4 py-3 block font-mono break-all border border-white/5">https://visionchain.co/signup?ref=YOUR_CODE</code>
                 <StepList steps={[
-                    { title: 'Get Your Code', desc: 'Navigate to "Referral" from sidebar. Your unique referral code and link are displayed.' },
-                    { title: 'Share', desc: 'Copy your referral link or code and share it via social media, messaging, or email.' },
-                    { title: 'Track Progress', desc: 'View how many friends have signed up, your current level, and earned rewards.' },
-                    { title: 'Claim Rewards', desc: 'Referral rewards are automatically credited to your wallet. Check the reward history for details.' },
+                    { title: 'Find Your Link', desc: 'Open "Referral" from the sidebar. Your unique referral link and code are displayed at the top of the page.' },
+                    { title: 'Copy Link', desc: 'Tap the copy icon next to the URL to copy it to clipboard.' },
+                    { title: 'Share via Native Share', desc: 'Tap "Share Link" to use your device native share menu (SMS, WhatsApp, Telegram, Email, etc.).' },
+                    { title: 'Copy Code Only', desc: 'Your short referral code (e.g., "ABC123") is also shown. Recipients can enter this code during signup instead of using the link.' },
                 ]} />
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Referral Level System</h3>
+                <p class="text-sm text-gray-400 mb-3">Your referral level is calculated using a triangular number formula: Level L requires L*(L-1)/2 total referrals. This means later levels require progressively more referrals, rewarding sustained effort.</p>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
-                    <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Level</div><div>Referrals</div><div>Benefits</div></div>
+                    <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Level</div><div>Total Referrals Needed</div><div>New Referrals for This Level</div></div>
                     {[
-                        { l: 'Starter', r: '0-4', b: 'Basic referral link' },
-                        { l: 'Advocate', r: '5-19', b: 'Enhanced rewards, badge' },
-                        { l: 'Ambassador', r: '20-49', b: 'Premium multiplier' },
-                        { l: 'Champion', r: '50+', b: 'Highest rewards, exclusive access' },
+                        { l: 'Level 1', r: '0', n: '0 (starting level)' },
+                        { l: 'Level 2', r: '1', n: '1' },
+                        { l: 'Level 5', r: '10', n: '4' },
+                        { l: 'Level 10', r: '45', n: '9' },
+                        { l: 'Level 20', r: '190', n: '19' },
+                        { l: 'Level 50', r: '1,225', n: '49' },
+                        { l: 'Level 100 (max)', r: '4,950', n: '99' },
                     ].map(r => (
-                        <div class="grid grid-cols-3 gap-4 px-5 py-3 border-b border-white/[0.03] text-sm">
+                        <div class="grid grid-cols-3 gap-4 px-5 py-2.5 border-b border-white/[0.03] text-sm">
                             <span class="text-white font-medium">{r.l}</span>
-                            <span class="text-gray-400 text-xs">{r.r}</span>
-                            <span class="text-gray-500 text-xs">{r.b}</span>
+                            <span class="text-cyan-400 text-xs font-bold">{r.r}</span>
+                            <span class="text-gray-400 text-xs">{r.n}</span>
                         </div>
                     ))}
                 </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Rank System</h3>
+                <p class="text-sm text-gray-400 mb-3">As your level increases, you unlock ranks with visual badges, icons, and gradient colors displayed on your Referral page. Ranks are configured by administrators and can include:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Novice', d: 'Starting rank. Gray badge.' },
+                        { n: 'Scout', d: 'Earned early. Blue badge with Users icon.' },
+                        { n: 'Warrior', d: 'Mid-level. Green badge with Award icon.' },
+                        { n: 'Elite', d: 'Advanced. Purple badge with Star icon.' },
+                        { n: 'Champion', d: 'High level. Gold badge with Crown icon.' },
+                        { n: 'Legend', d: 'Top ranks. Red-orange badge with Trophy icon.' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Direct & Indirect Referral Activity</h3>
+                <p class="text-sm text-gray-400 mb-3">When someone signs up using your referral link, they become your <strong class="text-white">direct referral</strong>. Your Referral page shows a table of all your direct referrals with:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Identity', d: 'Name/email with initials avatar' },
+                        { n: 'Contact Info', d: 'Phone and email of the referred user' },
+                        { n: 'Status', d: 'Verified (green pulse) or Pending (yellow). Verified means wallet created.' },
+                        { n: 'Rewards Generated', d: 'Total VCN rewards attributed to this referral' },
+                        { n: 'Join Date', d: 'When the referred user signed up' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">Referral Rush (Daily Rounds)</h3>
+                <p class="text-sm text-gray-400 mb-3">Vision Chain runs a "Referral Rush" competition with 24-hour daily rounds. Each round has a reward pool of 1,000 VCN distributed based on contribution rate:</p>
+                <StepList steps={[
+                    { title: 'Rounds Start Daily at 00:00 UTC', desc: 'A new round begins automatically every day. The round number increments from the epoch date (Feb 9, 2026).' },
+                    { title: 'Invite During the Round', desc: 'Each referral you bring during a round counts toward your contribution rate for that round.' },
+                    { title: 'Contribution Rate = Your Invites / Total Invites', desc: 'Your share of the reward pool is proportional to your contribution. e.g., 10 invites out of 50 total = 20% = 200 VCN.' },
+                    { title: 'Check Leaderboard', desc: 'The leaderboard shows all participants ranked by invite count, with estimated rewards.' },
+                    { title: 'Claim After Round Ends', desc: 'Once a round completes (24 hours), rewards are finalized and can be claimed.' },
+                ]} />
+                <Tip><>Each referral also earns you +10 RP instantly and contributes to your Level. Every 10th level milestone (Level 10, 20, 30...) earns a bonus +100 RP.</></Tip>
+                <Warning><>Referral link integrity is tracked via security measures. Fraudulent or self-referral activity may be detected and result in rewards being revoked.</></Warning>
             </div>
         );
         case 'quest-campaign': return (
             <div class="space-y-6">
-                <SectionHeader title="Quests & Campaigns" desc="Complete quests to earn Reward Points (RP) and unlock exclusive benefits." />
-                <p class="text-sm text-gray-400">Vision Chain runs periodic campaigns with quests that reward users for engaging with the ecosystem. Quests range from simple actions (first transfer, first stake) to advanced challenges (referral milestones, bridge usage).</p>
+                <SectionHeader title="Reward Points (RP) System" desc="Complete guide to earning, tracking, and spending Reward Points across all Vision Chain activities." />
+                <p class="text-sm text-gray-400 mb-3">Reward Points (RP) are earned by performing various actions within the Vision Chain ecosystem. RP values are admin-configurable and may change. The current default values are shown below.</p>
+
+                <h3 class="text-lg font-bold text-amber-400 mb-3">User Action RP Rewards</h3>
                 <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    <div class="grid grid-cols-3 gap-4 px-5 py-3 bg-white/[0.03] border-b border-white/5 text-[10px] font-black uppercase tracking-[0.15em] text-gray-500"><div>Action</div><div>RP Amount</div><div>Details</div></div>
                     {[
-                        { q: 'First Transfer', d: 'Send your first VCN transaction', r: '+50 RP' },
-                        { q: 'Stake Champion', d: 'Stake at least 100 VCN', r: '+100 RP' },
-                        { q: 'Bridge Explorer', d: 'Complete a cross-chain bridge transfer', r: '+150 RP' },
-                        { q: 'Social Butterfly', d: 'Invite 5 friends via referral', r: '+250 RP' },
-                    ].map(item => (
-                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
-                            <div><span class="text-sm text-white font-medium">{item.q}</span><span class="text-xs text-gray-500 ml-2">{item.d}</span></div>
-                            <span class="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded">{item.r}</span>
+                        { a: 'Referral Signup', rp: '+10 RP', d: 'Each time someone signs up using your referral link' },
+                        { a: 'Level Up Bonus', rp: '+100 RP', d: 'Every 10th level milestone (Level 10, 20, 30... up to 100)' },
+                        { a: 'Daily Login', rp: '+5 RP', d: 'Login once per day (KST timezone, de-duplicated)' },
+                        { a: 'Mobile Node', rp: '+5 RP', d: 'Keep Mobile Node page active per day' },
+                        { a: 'Agent Create', rp: '+15 RP', d: 'Create your first AI agent' },
+                        { a: 'Staking Deposit', rp: '+10 RP', d: 'Each time you stake VCN' },
+                        { a: 'Market Purchase', rp: '+10 RP', d: 'Purchase an item on the marketplace' },
+                        { a: 'Market Publish', rp: '+5 RP', d: 'Publish an item to the marketplace' },
+                        { a: 'Transfer Send', rp: '+3 RP', d: 'Send VCN to another wallet' },
+                        { a: 'Disk Upload', rp: '+3 RP', d: 'Upload a file to Vision Disk' },
+                        { a: 'Profile Update', rp: '+2 RP', d: 'Update your profile (name, photo, etc.)' },
+                        { a: 'AI Chat', rp: '+1 RP', d: 'Send a message to the AI chatbot' },
+                        { a: 'Disk Download', rp: '+1 RP', d: 'Download a file from Vision Disk' },
+                    ].map(r => (
+                        <div class="grid grid-cols-3 gap-4 px-5 py-2.5 border-b border-white/[0.03] text-sm">
+                            <span class="text-white font-medium text-xs">{r.a}</span>
+                            <span class="text-amber-400 text-xs font-bold">{r.rp}</span>
+                            <span class="text-gray-400 text-[11px]">{r.d}</span>
                         </div>
                     ))}
                 </div>
+
+                <h3 class="text-lg font-bold text-cyan-400 mt-8 mb-3">Agent API Action RP Rewards</h3>
+                <p class="text-sm text-gray-400 mb-3">When AI agents perform on-chain actions via the Agent API, both the agent owner and related parties earn RP:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { a: 'Agent Referral (Inviter)', rp: '+50 RP', d: 'Agent invites someone and they sign up' },
+                        { a: 'Agent NFT Mint', rp: '+30 RP', d: 'Agent mints an NFT on-chain' },
+                        { a: 'Agent Referral (Invitee)', rp: '+25 RP', d: 'Being invited by an agent' },
+                        { a: 'Agent Staking (Deposit)', rp: '+20 RP', d: 'Agent stakes VCN automatically' },
+                        { a: 'Agent Staking (Compound)', rp: '+25 RP', d: 'Agent auto-compounds staking rewards' },
+                        { a: 'Agent Bridge', rp: '+15 RP', d: 'Agent initiates a cross-chain bridge transfer' },
+                        { a: 'Agent Staking (Claim/Withdraw)', rp: '+10 RP', d: 'Agent claims rewards or withdraws stake' },
+                        { a: 'Agent Transfer (Send/Batch)', rp: '+5 RP', d: 'Agent sends VCN to an address' },
+                        { a: 'Agent Unstake', rp: '+5 RP', d: 'Agent requests unstake' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-2.5 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.a}</span>
+                            <div class="text-right">
+                                <span class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded">{item.rp}</span>
+                                <span class="text-xs text-gray-500 ml-2">{item.d}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">RP Dashboard</h3>
+                <p class="text-sm text-gray-400 mb-3">Your RP summary is shown on the Referral page in three cards:</p>
+                <div class="bg-[#0a0a12] border border-white/5 rounded-xl overflow-hidden">
+                    {[
+                        { n: 'Total Earned', d: 'Cumulative RP earned across all actions since account creation.' },
+                        { n: 'Available', d: 'RP that can be claimed/converted to VCN (totalRP - claimedRP).' },
+                        { n: 'Claimed', d: 'RP already converted to VCN tokens.' },
+                    ].map(item => (
+                        <div class="flex items-center justify-between px-5 py-3 border-b border-white/[0.03]">
+                            <span class="text-sm font-medium text-white">{item.n}</span>
+                            <span class="text-xs text-gray-400 max-w-[60%] text-right">{item.d}</span>
+                        </div>
+                    ))}
+                </div>
+
+                <h3 class="text-lg font-bold text-white mt-8 mb-3">RP History</h3>
+                <p class="text-sm text-gray-400 mb-3">Below the RP summary, a detailed activity log shows your recent 20 RP events with:</p>
+                <StepList steps={[
+                    { title: 'Event Icon', desc: 'Amber icon for referral RP, purple icon for level-up bonuses.' },
+                    { title: 'Event Type', desc: 'Shows "Referral Bonus" or "Level-up Bonus" with the source (e.g., referred user email or "Reached LVL 10").' },
+                    { title: 'RP Amount', desc: 'The RP earned for this event (e.g., +10 RP, +100 RP).' },
+                    { title: 'Date', desc: 'When the RP was earned.' },
+                ]} />
+                <Note><>RP amounts are configured by administrators and may change. The values shown in this guide reflect current defaults. Check the Referral page for the most up-to-date values.</></Note>
             </div>
         );
 

@@ -1,0 +1,2330 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Vision Chain Agent Gateway API",
+        "version": "5.0.0",
+        "description": "EVM-compatible L1 blockchain with gasless transactions for AI agents. Single POST endpoint with action-based routing. 59 actions across 15 domains.",
+        "contact": {
+            "url": "https://visionchain.co"
+        },
+        "x-chain": {
+            "name": "Vision Chain",
+            "chain_id": 3151909,
+            "token": "VCN",
+            "decimals": 18,
+            "gasless": true
+        }
+    },
+    "servers": [
+        {
+            "url": "https://us-central1-visionchain-d19ed.cloudfunctions.net",
+            "description": "Production"
+        },
+        {
+            "url": "https://us-central1-visionchain-staging.cloudfunctions.net",
+            "description": "Staging"
+        }
+    ],
+    "security": [
+        {
+            "BearerAuth": []
+        },
+        {
+            "ApiKeyHeader": []
+        }
+    ],
+    "components": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "API key as Bearer token. Obtain via system.register."
+            },
+            "ApiKeyHeader": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "x-api-key",
+                "description": "API key in x-api-key header"
+            }
+        },
+        "schemas": {
+            "BaseRequest": {
+                "type": "object",
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Action to execute (e.g., wallet.balance)"
+                    },
+                    "api_key": {
+                        "type": "string",
+                        "description": "API key (alternative to header auth)"
+                    }
+                }
+            },
+            "SuccessResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "fee": {
+                        "$ref": "#/components/schemas/FeeInfo"
+                    }
+                }
+            },
+            "FeeInfo": {
+                "type": "object",
+                "properties": {
+                    "charged": {
+                        "type": "boolean"
+                    },
+                    "amount_vcn": {
+                        "type": "string",
+                        "example": "0.1"
+                    },
+                    "tier": {
+                        "type": "string",
+                        "enum": [
+                            "T1",
+                            "T2",
+                            "T3",
+                            "T4"
+                        ]
+                    },
+                    "tx_hash": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "InsufficientBalanceError": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string",
+                        "example": "Insufficient VCN balance for API fee"
+                    },
+                    "required_fee": {
+                        "type": "string",
+                        "example": "0.1 VCN"
+                    },
+                    "your_balance": {
+                        "type": "string",
+                        "example": "0.05"
+                    },
+                    "tier": {
+                        "type": "string"
+                    },
+                    "action": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    },
+    "paths": {
+        "/agentGateway": {
+            "get": {
+                "summary": "API Discovery",
+                "description": "Returns full API catalog with all 59 actions, parameter schemas, response fields, error codes, and pricing tiers.",
+                "security": [],
+                "responses": {
+                    "200": {
+                        "description": "Discovery JSON with all domains and actions"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Execute Action",
+                "description": "Single endpoint for all 59 actions. Set 'action' field to specify which action to execute.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BaseRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SuccessResponse"
+                                }
+                            }
+                        }
+                    },
+                    "201": {
+                        "description": "Created (agent registered)"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid API key"
+                    },
+                    "402": {
+                        "description": "Insufficient balance",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InsufficientBalanceError"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict"
+                    },
+                    "429": {
+                        "description": "Rate limited (60 req/min)"
+                    }
+                }
+            }
+        }
+    },
+    "x-actions": {
+        "system.register": {
+            "domain": "system",
+            "auth": false,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Register a new AI agent. Creates wallet, issues API key, mints SBT identity, funds 99 VCN.",
+            "request": {
+                "required": [
+                    "action",
+                    "agent_name",
+                    "platform",
+                    "owner_email"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "system.register"
+                    },
+                    "agent_name": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9-]+$",
+                        "description": "Unique agent identifier"
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": [
+                            "openai",
+                            "anthropic",
+                            "moltbook",
+                            "custom"
+                        ]
+                    },
+                    "owner_email": {
+                        "type": "string",
+                        "format": "email"
+                    },
+                    "platform_id": {
+                        "type": "string"
+                    },
+                    "referral_code": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "agent": {
+                        "properties": {
+                            "agent_name": {
+                                "type": "string"
+                            },
+                            "wallet_address": {
+                                "type": "string"
+                            },
+                            "api_key": {
+                                "type": "string",
+                                "description": "Shown only once"
+                            },
+                            "referral_code": {
+                                "type": "string"
+                            },
+                            "sbt": {
+                                "properties": {
+                                    "token_id": {
+                                        "type": "string"
+                                    },
+                                    "tx_hash": {
+                                        "type": "string"
+                                    },
+                                    "contract": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "user": {
+                        "properties": {
+                            "uid": {
+                                "type": "string"
+                            },
+                            "email": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "initial_balance": {
+                        "type": "string",
+                        "example": "99 VCN"
+                    }
+                }
+            },
+            "errors": {
+                "400": "Missing required fields",
+                "409": "Agent already registered"
+            }
+        },
+        "system.network_info": {
+            "domain": "system",
+            "auth": false,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get chain configuration, RPC URL, contract addresses, and current block height.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "system.network_info"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "chain_id": {
+                        "type": "integer"
+                    },
+                    "rpc_url": {
+                        "type": "string"
+                    },
+                    "block_height": {
+                        "type": "integer"
+                    },
+                    "contracts": {
+                        "type": "object"
+                    },
+                    "token": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        "system.delete_agent": {
+            "domain": "system",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Permanently delete an agent and its wallet.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "system.delete_agent"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "deleted": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "wallet.balance": {
+            "domain": "wallet",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get VCN balance, RP points, and staking info.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "wallet.balance"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "balance": {
+                        "type": "string"
+                    },
+                    "rp_points": {
+                        "type": "integer"
+                    },
+                    "staking": {
+                        "type": "object"
+                    },
+                    "wallet_address": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "wallet.tx_history": {
+            "domain": "wallet",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get transaction history with filtering.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "wallet.tx_history"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 20
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "transfer",
+                            "stake",
+                            "unstake",
+                            "claim_rewards"
+                        ]
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "transactions": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "wallet.token_info": {
+            "domain": "wallet",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get ERC-20 token details.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "wallet.token_info"
+                    },
+                    "token_address": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "symbol": {
+                        "type": "string"
+                    },
+                    "decimals": {
+                        "type": "integer"
+                    },
+                    "total_supply": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "wallet.gas_estimate": {
+            "domain": "wallet",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Estimate gas for an operation (informational only, gas is free).",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "wallet.gas_estimate"
+                    },
+                    "tx_type": {
+                        "type": "string",
+                        "enum": [
+                            "transfer",
+                            "stake",
+                            "unstake"
+                        ]
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "gas_limit": {
+                        "type": "string"
+                    },
+                    "gas_price": {
+                        "type": "string"
+                    },
+                    "estimated_cost": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "wallet.approve": {
+            "domain": "wallet",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Approve an ERC-20 spender.",
+            "request": {
+                "required": [
+                    "action",
+                    "spender",
+                    "amount"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "wallet.approve"
+                    },
+                    "spender": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "token_address": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "spender": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "transfer.send": {
+            "domain": "transfer",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Send VCN to any address. Gasless via Paymaster.",
+            "request": {
+                "required": [
+                    "action",
+                    "to",
+                    "amount"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "transfer.send"
+                    },
+                    "to": {
+                        "type": "string",
+                        "description": "Recipient address or agent name"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "description": "Amount in VCN (max 10000)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "rp_earned": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "errors": {
+                "400": "Invalid address or amount",
+                "402": "Insufficient balance"
+            }
+        },
+        "transfer.batch": {
+            "domain": "transfer",
+            "auth": true,
+            "tier": "T4",
+            "cost": "1.0 VCN",
+            "description": "Send VCN to multiple recipients in one call.",
+            "request": {
+                "required": [
+                    "action",
+                    "transfers"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "transfer.batch"
+                    },
+                    "transfers": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "to": {
+                                    "type": "string"
+                                },
+                                "amount": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "maxItems": 50
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "results": {
+                        "type": "array"
+                    },
+                    "total_sent": {
+                        "type": "string"
+                    },
+                    "rp_earned": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "transfer.scheduled": {
+            "domain": "transfer",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Schedule a future transfer.",
+            "request": {
+                "required": [
+                    "action",
+                    "to",
+                    "amount",
+                    "execute_at"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "transfer.scheduled"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "execute_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "schedule_id": {
+                        "type": "string"
+                    },
+                    "execute_at": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "transfer.conditional": {
+            "domain": "transfer",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Transfer VCN when a condition is met.",
+            "request": {
+                "required": [
+                    "action",
+                    "to",
+                    "amount",
+                    "condition"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "transfer.conditional"
+                    },
+                    "to": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "condition": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": [
+                                    "balance_above",
+                                    "balance_below",
+                                    "time_after"
+                                ]
+                            },
+                            "value": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "condition_id": {
+                        "type": "string"
+                    },
+                    "condition": {
+                        "type": "object"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "staking.deposit": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Stake VCN tokens. Minimum 1 VCN.",
+            "request": {
+                "required": [
+                    "action",
+                    "amount"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.deposit"
+                    },
+                    "amount": {
+                        "type": "string",
+                        "description": "Min 1 VCN"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "staked_amount": {
+                        "type": "string"
+                    },
+                    "total_staked": {
+                        "type": "string"
+                    },
+                    "rp_earned": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "staking.request_unstake": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Request unstake. Starts cooldown period.",
+            "request": {
+                "required": [
+                    "action",
+                    "amount"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.request_unstake"
+                    },
+                    "amount": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "cooldown_ends": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "staking.withdraw": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Withdraw after cooldown completes.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.withdraw"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "staking.claim": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Claim accumulated staking rewards.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.claim"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "rewards_claimed": {
+                        "type": "string"
+                    },
+                    "rp_earned": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "staking.compound": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Claim rewards and re-stake them atomically.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.compound"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "compounded": {
+                        "type": "string"
+                    },
+                    "new_total": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "staking.rewards": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Query pending staking rewards.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.rewards"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "pending_rewards": {
+                        "type": "string"
+                    },
+                    "last_claim": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "staking.apy": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get current APY and network staking stats.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.apy"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "apy": {
+                        "type": "string"
+                    },
+                    "total_staked": {
+                        "type": "string"
+                    },
+                    "stakers": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "staking.cooldown": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Check cooldown status for unstake requests.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.cooldown"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "active": {
+                        "type": "boolean"
+                    },
+                    "ends_at": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "staking.position": {
+            "domain": "staking",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get full staking position info.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "staking.position"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "staked": {
+                        "type": "string"
+                    },
+                    "rewards": {
+                        "type": "string"
+                    },
+                    "cooldown": {
+                        "type": "object"
+                    },
+                    "history": {
+                        "type": "array"
+                    }
+                }
+            }
+        },
+        "bridge.initiate": {
+            "domain": "bridge",
+            "auth": true,
+            "tier": "T4",
+            "cost": "1.0 VCN",
+            "description": "Start cross-chain bridge transfer. 1 VCN bridge fee.",
+            "request": {
+                "required": [
+                    "action",
+                    "amount",
+                    "destination_chain"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "bridge.initiate"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "destination_chain": {
+                        "type": "string",
+                        "description": "Target chain ID"
+                    },
+                    "recipient": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "bridge_id": {
+                        "type": "string"
+                    },
+                    "intent_hash": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "estimated_time": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "bridge.status": {
+            "domain": "bridge",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Check bridge transaction status.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "bridge.status"
+                    },
+                    "bridge_id": {
+                        "type": "string"
+                    },
+                    "intent_hash": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "pending",
+                            "committed",
+                            "delivered",
+                            "failed"
+                        ]
+                    },
+                    "bridge_id": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "bridge.finalize": {
+            "domain": "bridge",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Finalize a committed bridge transaction.",
+            "request": {
+                "required": [
+                    "action",
+                    "bridge_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "bridge.finalize"
+                    },
+                    "bridge_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "bridge.history": {
+            "domain": "bridge",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List bridge transaction history.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "bridge.history"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "bridges": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "bridge.fee": {
+            "domain": "bridge",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get bridge fee estimate.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "bridge.fee"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "destination_chain": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "fee": {
+                        "type": "string"
+                    },
+                    "estimated_time": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "nft.mint": {
+            "domain": "nft",
+            "auth": true,
+            "tier": "T4",
+            "cost": "1.0 VCN",
+            "description": "Mint an NFT or SBT on Vision Chain.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "nft.mint"
+                    },
+                    "token_type": {
+                        "type": "string",
+                        "enum": [
+                            "nft",
+                            "sbt"
+                        ],
+                        "default": "nft"
+                    },
+                    "mint_to": {
+                        "type": "string"
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "description": {
+                                "type": "string"
+                            },
+                            "image": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "tx_hash": {
+                        "type": "string"
+                    },
+                    "token_id": {
+                        "type": "string"
+                    },
+                    "contract": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "nft.balance": {
+            "domain": "nft",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Check NFT/SBT balance.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "nft.balance"
+                    },
+                    "wallet_address": {
+                        "type": "string"
+                    },
+                    "contract_address": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "balance": {
+                        "type": "integer"
+                    },
+                    "tokens": {
+                        "type": "array"
+                    }
+                }
+            }
+        },
+        "nft.metadata": {
+            "domain": "nft",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get token metadata.",
+            "request": {
+                "required": [
+                    "action",
+                    "token_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "nft.metadata"
+                    },
+                    "token_id": {
+                        "type": "string"
+                    },
+                    "contract_address": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "image": {
+                        "type": "string"
+                    },
+                    "attributes": {
+                        "type": "array"
+                    }
+                }
+            }
+        },
+        "authority.grant": {
+            "domain": "authority",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Delegate permissions to another agent.",
+            "request": {
+                "required": [
+                    "action",
+                    "delegate_to",
+                    "permissions"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "authority.grant"
+                    },
+                    "delegate_to": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "limits": {
+                        "type": "object"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "delegation_id": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array"
+                    },
+                    "expires_at": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "authority.revoke": {
+            "domain": "authority",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Revoke a delegation.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "authority.revoke"
+                    },
+                    "delegation_id": {
+                        "type": "string"
+                    },
+                    "delegate_to": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "revoked": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "authority.status": {
+            "domain": "authority",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List active delegations.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "authority.status"
+                    },
+                    "delegate_to": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "delegations": {
+                        "type": "array"
+                    }
+                }
+            }
+        },
+        "authority.usage": {
+            "domain": "authority",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Check delegation usage stats.",
+            "request": {
+                "required": [
+                    "action",
+                    "delegation_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "authority.usage"
+                    },
+                    "delegation_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "total_calls": {
+                        "type": "integer"
+                    },
+                    "last_used": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "authority.audit": {
+            "domain": "authority",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Audit trail of grant/revoke events.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "authority.audit"
+                    },
+                    "limit": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "events": {
+                        "type": "array"
+                    }
+                }
+            }
+        },
+        "settlement.set_wallet": {
+            "domain": "settlement",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Set payout wallet address for settlements.",
+            "request": {
+                "required": [
+                    "action",
+                    "wallet_address"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "settlement.set_wallet"
+                    },
+                    "wallet_address": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "wallet_address": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "settlement.get_wallet": {
+            "domain": "settlement",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get current settlement wallet.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "settlement.get_wallet"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "wallet_address": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "node.register": {
+            "domain": "node",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Register a Vision Node.",
+            "request": {
+                "required": [
+                    "action",
+                    "version"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "node.register"
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "os": {
+                        "type": "string"
+                    },
+                    "arch": {
+                        "type": "string"
+                    },
+                    "capabilities": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "rpc_cache",
+                                "tx_relay",
+                                "bridge_relay"
+                            ]
+                        }
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "node_id": {
+                        "type": "string"
+                    },
+                    "tier_access": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "node.heartbeat": {
+            "domain": "node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Send heartbeat signal (every 5 min recommended).",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "node.heartbeat"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "acknowledged": {
+                        "type": "boolean"
+                    },
+                    "next_heartbeat": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "node.status": {
+            "domain": "node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get node status and tier access.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "node.status"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "uptime": {
+                        "type": "string"
+                    },
+                    "tier_access": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "node.peers": {
+            "domain": "node",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List active network peers.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "node.peers"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "peers": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "storage.set": {
+            "domain": "storage",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Store a key-value pair. Max 10KB per value, 1000 keys per agent.",
+            "request": {
+                "required": [
+                    "action",
+                    "key",
+                    "value"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "storage.set"
+                    },
+                    "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                    },
+                    "value": {
+                        "description": "String, number, or JSON object (max 10KB)"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "stored": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "storage.get": {
+            "domain": "storage",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Retrieve a stored value by key.",
+            "request": {
+                "required": [
+                    "action",
+                    "key"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "storage.get"
+                    },
+                    "key": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "key": {
+                        "type": "string"
+                    },
+                    "value": {}
+                }
+            }
+        },
+        "storage.list": {
+            "domain": "storage",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List all stored keys.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "storage.list"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "keys": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "storage.delete": {
+            "domain": "storage",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Delete a stored key.",
+            "request": {
+                "required": [
+                    "action",
+                    "key"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "storage.delete"
+                    },
+                    "key": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "deleted": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "pipeline.create": {
+            "domain": "pipeline",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Create a multi-step pipeline for automated workflows.",
+            "request": {
+                "required": [
+                    "action",
+                    "name",
+                    "steps"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "pipeline.create"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "action": {
+                                    "type": "string"
+                                },
+                                "params": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "trigger": {
+                        "type": "string",
+                        "enum": [
+                            "manual",
+                            "schedule"
+                        ]
+                    },
+                    "schedule": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "pipeline_id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "steps": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "pipeline.execute": {
+            "domain": "pipeline",
+            "auth": true,
+            "tier": "T3",
+            "cost": "0.5 VCN",
+            "description": "Execute a pipeline, running all steps sequentially.",
+            "request": {
+                "required": [
+                    "action",
+                    "pipeline_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "pipeline.execute"
+                    },
+                    "pipeline_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "execution_id": {
+                        "type": "string"
+                    },
+                    "results": {
+                        "type": "array"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "pipeline.list": {
+            "domain": "pipeline",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List all pipelines.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "pipeline.list"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "pipelines": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "pipeline.delete": {
+            "domain": "pipeline",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Delete a pipeline.",
+            "request": {
+                "required": [
+                    "action",
+                    "pipeline_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "pipeline.delete"
+                    },
+                    "pipeline_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "deleted": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "webhook.subscribe": {
+            "domain": "webhook",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Subscribe to real-time event notifications. Max 20 per agent.",
+            "request": {
+                "required": [
+                    "action",
+                    "event",
+                    "callback_url"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "webhook.subscribe"
+                    },
+                    "event": {
+                        "type": "string",
+                        "enum": [
+                            "transfer.received",
+                            "transfer.sent",
+                            "staking.reward_earned",
+                            "bridge.completed",
+                            "authority.used"
+                        ]
+                    },
+                    "callback_url": {
+                        "type": "string",
+                        "format": "uri"
+                    },
+                    "filters": {
+                        "type": "object"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "subscription_id": {
+                        "type": "string"
+                    },
+                    "event": {
+                        "type": "string"
+                    },
+                    "secret": {
+                        "type": "string",
+                        "description": "HMAC-SHA256 verification secret"
+                    }
+                }
+            }
+        },
+        "webhook.unsubscribe": {
+            "domain": "webhook",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Remove a webhook subscription.",
+            "request": {
+                "required": [
+                    "action",
+                    "subscription_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "webhook.unsubscribe"
+                    },
+                    "subscription_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "removed": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "webhook.list": {
+            "domain": "webhook",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "List active webhook subscriptions.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "webhook.list"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "webhooks": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "webhook.test": {
+            "domain": "webhook",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Send a test event to verify endpoint.",
+            "request": {
+                "required": [
+                    "action",
+                    "subscription_id"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "webhook.test"
+                    },
+                    "subscription_id": {
+                        "type": "string"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "delivered": {
+                        "type": "boolean"
+                    },
+                    "response_code": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "webhook.logs": {
+            "domain": "webhook",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "View webhook delivery history.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "webhook.logs"
+                    },
+                    "limit": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "deliveries": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "hosting.configure": {
+            "domain": "hosting",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Configure autonomous agent hosting settings.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "hosting.configure"
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "system_prompt": {
+                        "type": "string"
+                    },
+                    "enabled_actions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "configured": {
+                        "type": "boolean"
+                    },
+                    "settings": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        "hosting.toggle": {
+            "domain": "hosting",
+            "auth": true,
+            "tier": "T2",
+            "cost": "0.1 VCN",
+            "description": "Enable or disable agent hosting.",
+            "request": {
+                "required": [
+                    "action",
+                    "enabled"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "hosting.toggle"
+                    },
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "enabled": {
+                        "type": "boolean"
+                    }
+                }
+            }
+        },
+        "hosting.logs": {
+            "domain": "hosting",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "View agent execution logs.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "hosting.logs"
+                    },
+                    "limit": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "logs": {
+                        "type": "array"
+                    },
+                    "total": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "social.referral": {
+            "domain": "social",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get your referral code and stats.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "social.referral"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "referral_code": {
+                        "type": "string"
+                    },
+                    "total_referrals": {
+                        "type": "integer"
+                    },
+                    "rewards_earned": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "social.leaderboard": {
+            "domain": "social",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get top agents leaderboard.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "social.leaderboard"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "rp",
+                            "referrals",
+                            "transfers"
+                        ]
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "leaderboard": {
+                        "type": "array"
+                    },
+                    "your_rank": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "social.profile": {
+            "domain": "social",
+            "auth": true,
+            "tier": "T1",
+            "cost": "0 VCN",
+            "description": "Get full agent profile.",
+            "request": {
+                "required": [
+                    "action"
+                ],
+                "properties": {
+                    "action": {
+                        "const": "social.profile"
+                    }
+                }
+            },
+            "response": {
+                "properties": {
+                    "agent_name": {
+                        "type": "string"
+                    },
+                    "wallet_address": {
+                        "type": "string"
+                    },
+                    "rp_points": {
+                        "type": "integer"
+                    },
+                    "rank": {
+                        "type": "integer"
+                    },
+                    "created_at": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}
