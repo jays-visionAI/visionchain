@@ -217,15 +217,30 @@ export const searchUsersByPhone = async (phone: string): Promise<{ vid: string, 
 
         // Phase 1: Exact match found
         if (snapshot.docs.length > 0) {
-            return snapshot.docs.map(doc => {
+            const allResults = snapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     vid: doc.id,
                     email: data.email,
                     name: data.displayName || data.name || data.email?.split('@')[0] || 'New User',
-                    address: data.walletAddress || data.address || ''
+                    address: data.walletAddress || data.address || '',
+                    isPhonePrimary: data.isPhonePrimary,
+                    accountStatus: data.accountStatus,
                 };
             });
+
+            // If any account has isPhonePrimary set, filter to primary only
+            // (Skip archived accounts from results)
+            const activeResults = allResults.filter(r => r.accountStatus !== 'archived');
+            const primaryAccounts = activeResults.filter(r => r.isPhonePrimary === true);
+
+            if (primaryAccounts.length > 0) {
+                // Primary is designated - return only primary
+                return primaryAccounts.map(({ isPhonePrimary, accountStatus, ...rest }) => rest);
+            }
+
+            // No primary designated yet - return all active (caller may show disambiguation)
+            return activeResults.map(({ isPhonePrimary, accountStatus, ...rest }) => rest);
         }
 
         // Phase 2: Suffix-based fuzzy match for legacy formats
@@ -288,6 +303,109 @@ export const checkTransferBlock = async (userEmail: string): Promise<string | nu
     } catch (e) {
         console.error('[checkTransferBlock] Error:', e);
         return null; // Fail-open to not break existing users
+    }
+};
+
+/**
+ * Get all accounts sharing the same phone number as the given user.
+ */
+export const getDuplicatePhoneAccounts = async (userEmail: string): Promise<{
+    email: string;
+    name: string;
+    address: string;
+    phone: string;
+    isPhonePrimary?: boolean;
+    accountStatus?: string;
+    createdAt?: string;
+}[]> => {
+    try {
+        const db = getFirebaseDb();
+        const userRef = doc(db, 'users', userEmail.toLowerCase());
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) return [];
+
+        const userData = userSnap.data();
+        const phone = userData.phone;
+        if (!phone) return [];
+
+        const results = await searchUsersByPhone(phone);
+        if (results.length <= 1) return [];
+
+        // Enrich with extra fields
+        const enriched = [];
+        for (const r of results) {
+            const rRef = doc(db, 'users', r.email.toLowerCase());
+            const rSnap = await getDoc(rRef);
+            const rData = rSnap.exists() ? rSnap.data() : {};
+            enriched.push({
+                email: r.email,
+                name: r.name || rData?.name || r.email.split('@')[0],
+                address: r.address || rData?.walletAddress || '',
+                phone: rData?.phone || phone,
+                isPhonePrimary: rData?.isPhonePrimary,
+                accountStatus: rData?.accountStatus || 'active',
+                createdAt: rData?.createdAt || '',
+            });
+        }
+        return enriched;
+    } catch (e) {
+        console.error('[getDuplicatePhoneAccounts] Error:', e);
+        return [];
+    }
+};
+
+/**
+ * Resolve duplicate phone accounts: set primary/secondary/archived status.
+ */
+export const resolvePhoneAccounts = async (
+    primaryEmail: string,
+    secondaryEmails: string[],
+    archiveEmails: string[],
+    phoneOwnerGroup: string
+): Promise<boolean> => {
+    try {
+        const db = getFirebaseDb();
+        const now = new Date().toISOString();
+
+        // Set primary account
+        const primaryRef = doc(db, 'users', primaryEmail.toLowerCase());
+        await setDoc(primaryRef, {
+            isPhonePrimary: true,
+            phoneOwnerGroup,
+            accountStatus: 'active',
+            phoneDuplicateBlocked: false,
+            phoneDuplicateResolvedAt: now,
+        }, { merge: true });
+
+        // Set secondary accounts
+        for (const email of secondaryEmails) {
+            const secRef = doc(db, 'users', email.toLowerCase());
+            await setDoc(secRef, {
+                isPhonePrimary: false,
+                phoneOwnerGroup,
+                accountStatus: 'secondary',
+                phoneDuplicateBlocked: false,
+                phoneDuplicateResolvedAt: now,
+            }, { merge: true });
+        }
+
+        // Set archived accounts
+        for (const email of archiveEmails) {
+            const archRef = doc(db, 'users', email.toLowerCase());
+            await setDoc(archRef, {
+                isPhonePrimary: false,
+                phoneOwnerGroup,
+                accountStatus: 'archived',
+                phoneDuplicateBlocked: true,
+                phoneDuplicateResolvedAt: now,
+            }, { merge: true });
+        }
+
+        console.log(`[resolvePhoneAccounts] primary=${primaryEmail}, secondary=${secondaryEmails.length}, archived=${archiveEmails.length}`);
+        return true;
+    } catch (e) {
+        console.error('[resolvePhoneAccounts] Error:', e);
+        return false;
     }
 };
 
@@ -2273,6 +2391,13 @@ export interface UserData {
 
     // Admin Sent Tracking
     adminSentTotal?: number;   // Total VCN sent by admin to this user
+
+    // Phone Duplicate Resolution
+    phoneDuplicateBlocked?: boolean;
+    phoneDuplicateResolvedAt?: string;
+    isPhonePrimary?: boolean;
+    phoneOwnerGroup?: string;
+    accountStatus?: 'active' | 'secondary' | 'archived';
 }
 
 export interface ReferralReward {

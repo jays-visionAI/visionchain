@@ -144,6 +144,7 @@ const WalletDisk = lazy(() => import('./wallet/WalletDisk')) as Component<{
     onRequestUnlock?: () => void;
     isWalletMissing?: boolean;
 }>;
+const PhoneAccountResolver = lazy(() => import('./auth/PhoneAccountResolver'));
 
 
 
@@ -491,6 +492,7 @@ const Wallet = (): JSX.Element => {
     };
 
     const [onboardingStep, setOnboardingStep] = createSignal(0);
+    const [showPhoneAccountResolver, setShowPhoneAccountResolver] = createSignal(false);
     const [userProfile, setUserProfile] = createSignal({
         username: '',
         displayName: '',
@@ -1868,6 +1870,11 @@ const Wallet = (): JSX.Element => {
                     photoURL: data.photoURL || user.photoURL || '',
                     createdAt: data.createdAt || user.metadata?.creationTime || ''
                 });
+
+                // ── Check if user is blocked for duplicate phone ──
+                if (data.phoneDuplicateBlocked && !data.phoneDuplicateResolvedAt) {
+                    setShowPhoneAccountResolver(true);
+                }
 
                 // Check if wallet exists in backend OR locally
                 const hasBackendWallet = !!data.walletAddress;
@@ -5727,6 +5734,20 @@ If they say "Yes", output the navigate intent JSON for "referral".
 
                 </section>
                 <canvas ref={cropCanvasRef} class="hidden" />
+
+                {/* ── Phone Account Resolution Modal ────────────────────────────── */}
+                <Show when={showPhoneAccountResolver()}>
+                    <Suspense>
+                        <PhoneAccountResolver
+                            userEmail={userProfile().email}
+                            onResolved={() => {
+                                setShowPhoneAccountResolver(false);
+                                // Refresh profile to update block status
+                                fetchFullProfile();
+                            }}
+                        />
+                    </Suspense>
+                </Show>
 
                 {/* ── Voice Intent Confirmation Modal ───────────────────────────── */}
                 <Show when={showVoiceIntentModal() && voiceIntent()}>
