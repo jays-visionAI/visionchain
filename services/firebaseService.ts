@@ -2109,12 +2109,13 @@ export const userRegister = async (email: string, password: string, phone?: stri
     const emailLower = email.toLowerCase().trim();
     const normalizedPhone = phone ? normalizePhoneNumber(phone) : '';
 
-    // ── Phone duplicate prevention ──────────────────────────────────────
-    // Block registration if this phone number is already used by another account
+    // ── Phone duplicate detection (Policy C: allow registration, block transfers) ──
+    // Check if phone is already used - if so, flag for transfer block (resolved via SMS OTP later)
+    let isPhoneDuplicate = false;
     if (normalizedPhone) {
         const existingUsers = await searchUsersByPhone(normalizedPhone);
         if (existingUsers.length > 0) {
-            throw new Error('PHONE_ALREADY_REGISTERED');
+            isPhoneDuplicate = true;
         }
     }
 
@@ -2251,9 +2252,29 @@ export const userRegister = async (email: string, password: string, phone?: stri
             referralCount: 0,
             totalRewardsVCN: 0,
             totalRewardsUSD: 0,
+            // Phone duplicate: block transfers until SMS OTP verification
+            ...(isPhoneDuplicate ? {
+                phoneDuplicateBlocked: true,
+                phoneDuplicateBlockedAt: new Date().toISOString(),
+            } : {}),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
+    }
+
+    // If phone is duplicate, also flag existing accounts that share this phone
+    if (isPhoneDuplicate && normalizedPhone) {
+        const existingUsers = await searchUsersByPhone(normalizedPhone);
+        for (const u of existingUsers) {
+            if (u.email.toLowerCase() !== emailLower) {
+                const existingRef = doc(db, 'users', u.email.toLowerCase());
+                await setDoc(existingRef, {
+                    phoneDuplicateBlocked: true,
+                    phoneDuplicateBlockedAt: new Date().toISOString(),
+                }, { merge: true });
+            }
+        }
+        console.log(`[Registration] Phone duplicate detected for ${emailLower}. Transfer blocked until SMS verification.`);
     }
 
     // Send welcome email + schedule drip campaign (fire-and-forget)
