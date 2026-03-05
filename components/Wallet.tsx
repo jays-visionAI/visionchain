@@ -83,7 +83,8 @@ import {
     uploadProfileImage,
     addRewardPoints,
     getRPConfig,
-    trackPageVisit
+    trackPageVisit,
+    getTransferThreshold
 } from '../services/firebaseService';
 
 import { collection, query, where, onSnapshot, doc, setDoc, limit, orderBy } from 'firebase/firestore';
@@ -597,6 +598,16 @@ const Wallet = (): JSX.Element => {
     const [cloudRestoreNeeds2FA, setCloudRestoreNeeds2FA] = createSignal(false);
     const [cloudRestore2FACode, setCloudRestore2FACode] = createSignal('');
     const [cloudRestore2FAUseBackup, setCloudRestore2FAUseBackup] = createSignal(false);
+
+    // Transfer 2FA threshold state
+    const [transfer2FARequired, setTransfer2FARequired] = createSignal(false);
+    const [transfer2FACode, setTransfer2FACode] = createSignal('');
+    const [transfer2FAUseBackup, setTransfer2FAUseBackup] = createSignal(false);
+    const [transfer2FAError, setTransfer2FAError] = createSignal('');
+    const [transfer2FALoading, setTransfer2FALoading] = createSignal(false);
+    const [transfer2FAPendingAction, setTransfer2FAPendingAction] = createSignal<(() => void) | null>(null);
+    const [transferThresholdCache, setTransferThresholdCache] = createSignal<{ vcnAmount: number; usdAmount: number; enabled: boolean } | null>(null);
+    const [totpEnabledForTransfer, setTotpEnabledForTransfer] = createSignal(false);
     const [restoringMnemonic, setRestoringMnemonic] = createSignal('');
     const [editPhone, setEditPhone] = createSignal('');
     const [isSavingPhone, setIsSavingPhone] = createSignal(false);
@@ -1889,6 +1900,14 @@ const Wallet = (): JSX.Element => {
                     // *** PERFORMANCE: End loading as soon as wallet address is known ***
                     setIsLoading(false);
 
+                    // Load 2FA & transfer threshold in background (non-blocking)
+                    CloudWalletService.getTOTPStatus().then(status => {
+                        setTotpEnabledForTransfer(status.enabled);
+                        if (status.enabled) {
+                            getTransferThreshold(user.email).then(th => setTransferThresholdCache(th)).catch(() => { });
+                        }
+                    }).catch(() => { });
+
                     // Update userProfile with verified status if wallet exists anywhere
                     setUserProfile(prev => ({
                         ...prev,
@@ -2211,6 +2230,39 @@ const Wallet = (): JSX.Element => {
     const handleTransaction = async () => {
         // Check for send flow - either via modal (activeFlow) or via route (activeView)
         if (activeFlow() === 'send' || activeView() === 'send') {
+            const amount = parseFloat(sendAmount().replace(/,/g, '')) || 0;
+            const symbol = selectedToken();
+
+            // Check 2FA threshold
+            const threshold = transferThresholdCache();
+            if (threshold && threshold.enabled && totpEnabledForTransfer()) {
+                let exceeds = false;
+                if (symbol === 'VCN' || symbol === 'VCN_SEPOLIA') {
+                    exceeds = amount >= threshold.vcnAmount;
+                } else {
+                    const assetData = getAssetData(symbol);
+                    const usdValue = amount * (assetData.price || 0);
+                    exceeds = usdValue >= threshold.usdAmount;
+                }
+
+                if (exceeds) {
+                    // Show 2FA modal, store the continuation
+                    setTransfer2FARequired(true);
+                    setTransfer2FACode('');
+                    setTransfer2FAError('');
+                    setTransfer2FAPendingAction(() => () => {
+                        setPasswordMode('verify');
+                        setPendingAction({
+                            type: 'send_tokens',
+                            data: { amount: sendAmount().replace(/,/g, ''), recipient: recipientAddress(), symbol: selectedToken() }
+                        });
+                        setWalletPassword('');
+                        setShowPasswordModal(true);
+                    });
+                    return;
+                }
+            }
+
             setPasswordMode('verify');
             setPendingAction({
                 type: 'send_tokens',
@@ -2223,6 +2275,35 @@ const Wallet = (): JSX.Element => {
             setWalletPassword('');
             setShowPasswordModal(true);
         } else if (activeFlow() === 'multi') {
+            // Check 2FA threshold for multi-transactions
+            const threshold = transferThresholdCache();
+            if (threshold && threshold.enabled && totpEnabledForTransfer()) {
+                const txList = multiTransactions();
+                let totalExceeds = false;
+                for (const tx of txList) {
+                    const txAmount = parseFloat(String(tx.amount || '0').replace(/,/g, '')) || 0;
+                    const sym = tx.symbol || selectedToken();
+                    if (sym === 'VCN' || sym === 'VCN_SEPOLIA') {
+                        if (txAmount >= threshold.vcnAmount) { totalExceeds = true; break; }
+                    } else {
+                        const assetData = getAssetData(sym);
+                        if (txAmount * (assetData.price || 0) >= threshold.usdAmount) { totalExceeds = true; break; }
+                    }
+                }
+                if (totalExceeds) {
+                    setTransfer2FARequired(true);
+                    setTransfer2FACode('');
+                    setTransfer2FAError('');
+                    setTransfer2FAPendingAction(() => () => {
+                        setPasswordMode('verify');
+                        setPendingAction({ type: 'multi_transactions', data: { transactions: multiTransactions() } });
+                        setWalletPassword('');
+                        setShowPasswordModal(true);
+                    });
+                    return;
+                }
+            }
+
             setPasswordMode('verify');
             setPendingAction({
                 type: 'multi_transactions',
@@ -5711,6 +5792,101 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 </Show>
 
                 <Portal>
+
+                    {/* Transfer 2FA Verification Modal */}
+                    <Presence>
+                        <Show when={transfer2FARequired()}>
+                            <div class="fixed inset-0 z-[101] flex items-center justify-center p-4">
+                                <Motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    class="absolute inset-0 bg-black/80 backdrop-blur-md"
+                                    onClick={() => { setTransfer2FARequired(false); setTransfer2FAPendingAction(null); }}
+                                />
+                                <Motion.div
+                                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                    class="relative z-10 w-full max-w-sm bg-[#111113] border border-white/10 rounded-3xl p-6 shadow-2xl"
+                                >
+                                    <div class="text-center mb-5">
+                                        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                                            <svg class="w-7 h-7 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
+                                        </div>
+                                        <h3 class="text-lg font-bold text-white">2FA Verification Required</h3>
+                                        <p class="text-xs text-gray-500 mt-1">This transfer exceeds your security threshold. Enter your authenticator code to proceed.</p>
+                                    </div>
+
+                                    <div class="space-y-4">
+                                        <input
+                                            type="text"
+                                            maxLength={transfer2FAUseBackup() ? 8 : 6}
+                                            value={transfer2FACode()}
+                                            onInput={(e) => setTransfer2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, transfer2FAUseBackup() ? 8 : 6))}
+                                            placeholder={transfer2FAUseBackup() ? 'Backup code' : '6-digit code'}
+                                            class="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white text-center text-xl font-mono tracking-[0.4em] placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+                                            autofocus
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransfer2FAUseBackup(!transfer2FAUseBackup())}
+                                            class="text-xs text-gray-500 hover:text-gray-300 transition-colors w-full text-center"
+                                        >
+                                            {transfer2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
+                                        </button>
+
+                                        <Show when={transfer2FAError()}>
+                                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2 text-center">
+                                                {transfer2FAError()}
+                                            </div>
+                                        </Show>
+
+                                        <button
+                                            onClick={async () => {
+                                                if (!transfer2FACode() || transfer2FACode().length < 6) {
+                                                    setTransfer2FAError('Please enter a valid code.');
+                                                    return;
+                                                }
+                                                setTransfer2FALoading(true);
+                                                setTransfer2FAError('');
+                                                try {
+                                                    const result = await CloudWalletService.verifyTOTP(transfer2FACode(), transfer2FAUseBackup());
+                                                    if (!result.success) {
+                                                        setTransfer2FAError(result.error || 'Invalid code. Please try again.');
+                                                        return;
+                                                    }
+                                                    // Success - proceed with transfer
+                                                    const pending = transfer2FAPendingAction();
+                                                    setTransfer2FARequired(false);
+                                                    setTransfer2FACode('');
+                                                    setTransfer2FAPendingAction(null);
+                                                    if (pending) pending();
+                                                } catch (err: any) {
+                                                    setTransfer2FAError(err.message || 'Verification failed.');
+                                                } finally {
+                                                    setTransfer2FALoading(false);
+                                                }
+                                            }}
+                                            disabled={transfer2FALoading() || transfer2FACode().length < 6}
+                                            class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-amber-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            <Show when={transfer2FALoading()} fallback="Verify & Continue">
+                                                <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                Verifying...
+                                            </Show>
+                                        </button>
+                                        <button
+                                            onClick={() => { setTransfer2FARequired(false); setTransfer2FAPendingAction(null); }}
+                                            class="w-full py-2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </Motion.div>
+                            </div>
+                        </Show>
+                    </Presence>
 
                     <Presence>
                         <Show when={showPasswordModal()}>
