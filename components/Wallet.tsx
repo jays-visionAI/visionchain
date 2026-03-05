@@ -239,8 +239,8 @@ const Wallet = (): JSX.Element => {
     // Replaced Signal with Derived State from URL
     const activeView = () => {
         const path = location.pathname.split('/');
-        // default to 'assets' if no sub-route provided
-        return (path[2] as ViewType) || 'assets';
+        // default to 'chat' if no sub-route provided
+        return (path[2] as ViewType) || 'chat';
     };
 
     // Track page visits for admin analytics (fire-and-forget)
