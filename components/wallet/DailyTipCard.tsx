@@ -159,7 +159,7 @@ export function DailyTipCard(props: DailyTipCardProps) {
 
     return (
         <Show when={!loading() && tips().length > 0 && getDisplayTip()}>
-            <div class="w-full rounded-2xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 backdrop-blur-sm overflow-hidden transition-all duration-300 hover:border-purple-500/30">
+            <div class="w-full min-w-0 rounded-2xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 backdrop-blur-sm overflow-hidden transition-all duration-300 hover:border-purple-500/30" style="box-sizing: border-box;">
                 {/* Header Row */}
                 <div class="flex items-center justify-between px-4 pt-3 pb-1">
                     <div class="flex items-center gap-2">
@@ -190,11 +190,11 @@ export function DailyTipCard(props: DailyTipCardProps) {
 
                 {/* Content */}
                 <div class="px-4 pb-3 pt-1">
-                    <p class="text-[13px] font-bold text-gray-100 leading-relaxed mb-0.5">
+                    <p class="text-[13px] font-bold text-gray-100 leading-relaxed mb-0.5" style="word-break: break-word; overflow-wrap: break-word;">
                         {getDisplayTip()!.title}
                     </p>
                     <Show when={getDisplayTip()!.body}>
-                        <p class="text-[11px] text-gray-400 leading-relaxed">
+                        <p class="text-[11px] text-gray-400 leading-relaxed" style="word-break: break-word; overflow-wrap: break-word;">
                             {getDisplayTip()!.body}
                         </p>
                     </Show>

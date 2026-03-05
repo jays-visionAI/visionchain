@@ -1198,13 +1198,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-16 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
+                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-16 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64 min-w-0" style="box-sizing: border-box;">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
-                                class="w-full md:max-w-sm flex flex-col gap-6 self-center overflow-hidden"
+                                class="w-full md:max-w-sm flex flex-col gap-6 self-center overflow-hidden min-w-0"
                             >
                                 <div class="flex flex-col gap-1">
                                     <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
