@@ -57,6 +57,14 @@ const Navbar = (): JSX.Element => {
         { label: 'Whitepaper', href: 'https://drive.google.com/file/d/1gdZwkZ39ilNVy0dn7YuXYUrmpbnglv0v/view?usp=sharing', target: '_blank' },
         { label: 'Token Dynamics', href: 'https://drive.google.com/file/d/1j1Zxg1LbKiZnJTOMUkbMjn7eQLFFRk5f/view?usp=sharing', target: '_blank' }
       ]
+    },
+    {
+      label: 'Docs',
+      type: 'dropdown',
+      children: [
+        { label: 'User Guide', path: '/docs/user-guide' },
+        { label: 'API Documentation', path: '/docs/agent-api' },
+      ]
     }
   ];
 

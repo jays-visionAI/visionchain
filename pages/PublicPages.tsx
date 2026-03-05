@@ -110,6 +110,13 @@ export const AgentApiDocsPage = () => {
     return <div id="agent-api-docs"><AgentApiDocs /></div>;
 };
 
+export const UserManual = lazy(() => import('../components/UserManual'));
+
+export const UserManualPage = () => {
+    document.title = 'User Manual | Vision Chain';
+    return <div id="user-manual"><UserManual /></div>;
+};
+
 export const ApiHubPage = () => {
     document.title = 'API & Developer Platform | Vision Chain';
     return <div id="api-hub"><ApiHub /></div>;

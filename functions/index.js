@@ -18608,3 +18608,106 @@ ${aiPrompt || "None. Just generate the standard template."}
     throw new HttpsError("internal", error.message);
   }
 });
+
+// ============================================================
+// translateDailyTips - Translate tips to target locale via Gemini
+// ============================================================
+exports.translateDailyTips = onCall({ timeoutSeconds: 30, memory: "256MiB" }, async (request) => {
+  const { locale, tips } = request.data;
+  if (!locale || !tips || !Array.isArray(tips) || tips.length === 0) {
+    throw new HttpsError("invalid-argument", "locale and tips[] are required");
+  }
+
+  // Supported locales (extend as needed)
+  const SUPPORTED = ["ko", "ja", "zh", "es", "fr", "de", "pt", "vi", "th", "id", "ar", "hi", "ru"];
+  if (!SUPPORTED.includes(locale)) {
+    throw new HttpsError("invalid-argument", `Unsupported locale: ${locale}. Supported: ${SUPPORTED.join(", ")}`);
+  }
+
+  const db = admin.firestore();
+  const result = {};
+  const toTranslate = [];
+
+  // 1. Check Firestore cache for each tip
+  for (const tip of tips) {
+    try {
+      const cached = await db.doc(`daily_tips/${tip.id}/translations/${locale}`).get();
+      if (cached.exists) {
+        const data = cached.data();
+        // Only use cache if source hasn't been updated since translation
+        if (data.sourceUpdatedAt >= (tip.updatedAt || 0)) {
+          result[tip.id] = { title: data.title, body: data.body };
+          continue;
+        }
+      }
+    } catch (e) { /* cache miss, translate */ }
+    toTranslate.push(tip);
+  }
+
+  // 2. Batch translate missing tips
+  if (toTranslate.length > 0) {
+    const LOCALE_NAMES = {
+      ko: "Korean", ja: "Japanese", zh: "Chinese (Simplified)", es: "Spanish",
+      fr: "French", de: "German", pt: "Portuguese", vi: "Vietnamese",
+      th: "Thai", id: "Indonesian", ar: "Arabic", hi: "Hindi", ru: "Russian"
+    };
+    const langName = LOCALE_NAMES[locale] || locale;
+
+    const tipsJson = toTranslate.map(t => ({
+      id: t.id,
+      title: t.title,
+      body: t.body || ""
+    }));
+
+    const systemPrompt = `You are a professional translator for a crypto wallet application called Vision Chain. 
+Translate the following JSON array of tips from English to ${langName}. 
+Keep translations natural, concise, and appropriate for a mobile UI.
+Maintain the same JSON structure. Do NOT translate proper nouns like "Vision Chain", "VCN", "RP", etc.
+Output ONLY valid JSON array, no markdown, no explanation.`;
+
+    const userInput = JSON.stringify(tipsJson);
+
+    try {
+      const translated = await callLLM("gemini-2.0-flash", systemPrompt, userInput);
+
+      // Parse response
+      let parsed;
+      try {
+        const cleaned = translated.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch (parseErr) {
+        console.error("[translateDailyTips] Failed to parse LLM response:", parseErr);
+        // Return originals for untranslated tips
+        for (const tip of toTranslate) {
+          result[tip.id] = { title: tip.title, body: tip.body || "" };
+        }
+        return { translations: result, locale, fromCache: Object.keys(result).length - toTranslate.length };
+      }
+
+      // 3. Cache translations and add to result
+      const batch = db.batch();
+      for (const item of parsed) {
+        if (item.id && item.title) {
+          result[item.id] = { title: item.title, body: item.body || "" };
+          const ref = db.doc(`daily_tips/${item.id}/translations/${locale}`);
+          batch.set(ref, {
+            title: item.title,
+            body: item.body || "",
+            locale,
+            sourceUpdatedAt: toTranslate.find(t => t.id === item.id)?.updatedAt || Date.now(),
+            translatedAt: Date.now()
+          });
+        }
+      }
+      await batch.commit();
+    } catch (llmErr) {
+      console.error("[translateDailyTips] LLM call failed:", llmErr);
+      // Fallback: return originals
+      for (const tip of toTranslate) {
+        result[tip.id] = { title: tip.title, body: tip.body || "" };
+      }
+    }
+  }
+
+  return { translations: result, locale, fromCache: Object.keys(result).length - toTranslate.length };
+});

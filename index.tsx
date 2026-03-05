@@ -32,7 +32,7 @@ function Layout(props: { children?: any }) {
   const location = useLocation();
 
   // Hide Navbar, Footer, and AI button for Admin pages
-  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/trading-login') || location.pathname.startsWith('/trading-admin') || location.pathname.startsWith('/mm-admin') || location.pathname.startsWith('/mm-login');
+  const isAdminRoute = () => location.pathname.startsWith('/admin') || location.pathname.startsWith('/adminsystem') || location.pathname.startsWith('/docs') || location.pathname.startsWith('/trading-login') || location.pathname.startsWith('/trading-admin') || location.pathname.startsWith('/mm-admin') || location.pathname.startsWith('/mm-login') || location.pathname.startsWith('/user-guide');
   const isDexRoute = () => location.pathname.startsWith('/dex');
 
   return (
@@ -96,6 +96,7 @@ render(() => (
         <Route path="/agent/*" component={Public.AgentGatewayPage} />
         <Route path="/api" component={Public.ApiHubPage} />
         <Route path="/docs/agent-api" component={Public.AgentApiDocsPage} />
+        <Route path="/docs/user-guide" component={Public.UserManualPage} />
         {!isProduction() && (
           <>
             <Route path="/dex" component={Public.DEXMarketsPage} />

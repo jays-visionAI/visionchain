@@ -1,6 +1,8 @@
 import { createSignal, onMount, Show, For } from 'solid-js';
 import { collection, query, orderBy, getDocs, getFirestore } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getFirebaseApp } from '../../services/firebaseService';
+import { useI18n } from '../../i18n/i18nContext';
 
 interface DailyTip {
     id: string;
@@ -9,6 +11,7 @@ interface DailyTip {
     targetView: string;
     order: number;
     enabled: boolean;
+    updatedAt?: number;
 }
 
 interface DailyTipCardProps {
@@ -17,8 +20,11 @@ interface DailyTipCardProps {
 
 export function DailyTipCard(props: DailyTipCardProps) {
     const [tips, setTips] = createSignal<DailyTip[]>([]);
+    const [translatedTips, setTranslatedTips] = createSignal<Record<string, { title: string; body: string }>>({});
     const [currentIndex, setCurrentIndex] = createSignal(0);
     const [loading, setLoading] = createSignal(true);
+
+    const { locale } = useI18n();
 
     onMount(async () => {
         try {
@@ -42,6 +48,11 @@ export function DailyTipCard(props: DailyTipCardProps) {
                 const daysSinceEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
                 setCurrentIndex(daysSinceEpoch % loaded.length);
             }
+
+            // Request translations if locale is not English
+            if (locale() !== 'en' && loaded.length > 0) {
+                requestTranslations(loaded, locale());
+            }
         } catch (e) {
             console.error('[DailyTipCard] Failed to load tips:', e);
         } finally {
@@ -49,7 +60,61 @@ export function DailyTipCard(props: DailyTipCardProps) {
         }
     });
 
-    const currentTip = () => tips()[currentIndex()];
+    const requestTranslations = async (tipsData: DailyTip[], targetLocale: string) => {
+        try {
+            // Check sessionStorage cache first (avoid re-calling on same session)
+            const cacheKey = `dailytip_translations_${targetLocale}`;
+            try {
+                const cached = sessionStorage.getItem(cacheKey);
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    // Validate cache has all tip IDs
+                    const allPresent = tipsData.every(t => parsed[t.id]);
+                    if (allPresent) {
+                        setTranslatedTips(parsed);
+                        return;
+                    }
+                }
+            } catch { /* ignore */ }
+
+            const functions = getFunctions(getFirebaseApp());
+            const translateFn = httpsCallable(functions, 'translateDailyTips');
+            const result = await translateFn({
+                locale: targetLocale,
+                tips: tipsData.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    body: t.body || '',
+                    updatedAt: t.updatedAt || 0
+                }))
+            });
+
+            const data = result.data as any;
+            if (data?.translations) {
+                setTranslatedTips(data.translations);
+                // Cache in sessionStorage
+                try {
+                    sessionStorage.setItem(cacheKey, JSON.stringify(data.translations));
+                } catch { /* storage full, ignore */ }
+            }
+        } catch (err) {
+            console.warn('[DailyTipCard] Translation failed, showing originals:', err);
+        }
+    };
+
+    const getDisplayTip = () => {
+        const tip = tips()[currentIndex()];
+        if (!tip) return null;
+
+        // If locale is English or no translation available, show original
+        if (locale() === 'en') return tip;
+
+        const translated = translatedTips()[tip.id];
+        if (translated) {
+            return { ...tip, title: translated.title, body: translated.body };
+        }
+        return tip;
+    };
 
     const goNext = (e: Event) => {
         e.stopPropagation();
@@ -93,7 +158,7 @@ export function DailyTipCard(props: DailyTipCardProps) {
     );
 
     return (
-        <Show when={!loading() && tips().length > 0 && currentTip()}>
+        <Show when={!loading() && tips().length > 0 && getDisplayTip()}>
             <div class="w-full rounded-2xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20 backdrop-blur-sm overflow-hidden transition-all duration-300 hover:border-purple-500/30">
                 {/* Header Row */}
                 <div class="flex items-center justify-between px-4 pt-3 pb-1">
@@ -126,11 +191,11 @@ export function DailyTipCard(props: DailyTipCardProps) {
                 {/* Content */}
                 <div class="px-4 pb-3 pt-1">
                     <p class="text-[13px] font-bold text-gray-100 leading-relaxed mb-0.5">
-                        {currentTip()!.title}
+                        {getDisplayTip()!.title}
                     </p>
-                    <Show when={currentTip()!.body}>
+                    <Show when={getDisplayTip()!.body}>
                         <p class="text-[11px] text-gray-400 leading-relaxed">
-                            {currentTip()!.body}
+                            {getDisplayTip()!.body}
                         </p>
                     </Show>
 
@@ -139,7 +204,7 @@ export function DailyTipCard(props: DailyTipCardProps) {
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                const view = currentTip()!.targetView;
+                                const view = getDisplayTip()!.targetView;
                                 if (view) props.setActiveView(view);
                             }}
                             class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/20 text-purple-300 text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95"
