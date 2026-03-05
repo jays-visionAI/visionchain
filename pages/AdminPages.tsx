@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'solid-js';
+import AdminLayout from '../components/admin/AdminLayout';
 
 // Admin components (lazy-loaded)
-export const AdminLayout = lazy(() => import('../components/admin/AdminLayout'));
 export const AdminDashboard = lazy(() => import('../components/admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 export const AdminUsers = lazy(() => import('../components/admin/AdminUsers'));
 export const AdminSettings = lazy(() => import('../components/admin/AdminSettings'));

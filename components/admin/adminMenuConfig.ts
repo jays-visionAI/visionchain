@@ -386,8 +386,10 @@ const [partnerMenuLoaded, setPartnerMenuLoaded] = createSignal(false);
 export const getPartnerMenuAccess = () => partnerMenuAccess();
 export const isPartnerMenuLoaded = () => partnerMenuLoaded();
 
-// Load partner menu access settings from Firestore
+// Load partner menu access settings from Firestore (once only)
 export const loadPartnerMenuAccess = async () => {
+    // Skip if already loaded
+    if (partnerMenuLoaded()) return;
     try {
         const db = getFirestore(getFirebaseApp());
         const snap = await getDoc(doc(db, PARTNER_MENU_DOC));
