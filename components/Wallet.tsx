@@ -4229,8 +4229,8 @@ If they say "Yes", output the navigate intent JSON for "referral".
                                 e.stopPropagation();
                                 setSidebarOpen(true);
                             }}
-                            class="lg:hidden fixed top-20 left-4 z-[52] w-12 h-12 bg-[#1a1a1c]/95 backdrop-blur-lg border border-white/15 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-90 transition-all"
-                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                            class="lg:hidden fixed top-3 left-4 z-[52] w-11 h-11 bg-[#1a1a1c]/95 backdrop-blur-lg border border-white/15 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-90 transition-all"
+                            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; top: max(12px, env(safe-area-inset-top, 12px));"
                             title="Menu"
                         >
                             <Menu class="w-5 h-5 text-cyan-400" />

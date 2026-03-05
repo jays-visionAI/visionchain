@@ -432,4 +432,27 @@ export const CloudWalletService = {
             return { success: false, error: err.message || 'Failed to disable 2FA' };
         }
     },
+
+    /**
+     * Verify TOTP code - Used for sensitive operations (password change, seed reveal, etc.)
+     * Returns success if 2FA is not enabled (skipped) or if the code is valid.
+     */
+    async verifyTOTP(totpCode: string, useBackupCode = false): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+        try {
+            const verifyTOTP = httpsCallable(functions, 'verifyTOTP');
+            const result = await verifyTOTP({ totpCode, useBackupCode });
+
+            const data = result.data as { success: boolean; skipped?: boolean; message?: string };
+
+            if (data.success) {
+                console.log('[TOTP] Verification passed', data.skipped ? '(2FA not enabled, skipped)' : '');
+                return { success: true, skipped: data.skipped };
+            } else {
+                return { success: false, error: 'Verification failed' };
+            }
+        } catch (err: any) {
+            console.error('[TOTP] Verification failed:', err);
+            return { success: false, error: err.message || 'Invalid code. Please try again.' };
+        }
+    },
 };

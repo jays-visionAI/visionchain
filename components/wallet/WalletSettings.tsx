@@ -103,6 +103,10 @@ export function WalletSettings(props: { onBack?: () => void }) {
     const [totpDisableMode, setTotpDisableMode] = createSignal(false);
     const [totpDisableCode, setTotpDisableCode] = createSignal('');
 
+    // 2FA verification for password change
+    const [pwChange2FACode, setPwChange2FACode] = createSignal('');
+    const [pwChange2FAUseBackup, setPwChange2FAUseBackup] = createSignal(false);
+
     // Email preferences state
     const [emailCategories, setEmailCategories] = createSignal<EmailCategory[]>([]);
     const [emailPrefs, setEmailPrefs] = createSignal<Record<string, boolean>>({});
@@ -207,7 +211,22 @@ export function WalletSettings(props: { onBack?: () => void }) {
             const credential = EmailAuthProvider.credential(user.email, currentPassword());
             await reauthenticateWithCredential(user, credential);
 
-            // Step 2: Update to new password
+            // Step 2: Verify 2FA if enabled
+            if (totpEnabled()) {
+                if (!pwChange2FACode() || pwChange2FACode().length < 6) {
+                    setPasswordError('Please enter your 2FA verification code.');
+                    setPasswordLoading(false);
+                    return;
+                }
+                const totpResult = await CloudWalletService.verifyTOTP(pwChange2FACode(), pwChange2FAUseBackup());
+                if (!totpResult.success) {
+                    setPasswordError(totpResult.error || 'Invalid 2FA code. Please try again.');
+                    setPasswordLoading(false);
+                    return;
+                }
+            }
+
+            // Step 3: Update to new password
             await updatePassword(user, newPassword());
 
             // Success
@@ -217,6 +236,8 @@ export function WalletSettings(props: { onBack?: () => void }) {
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
+            setPwChange2FACode('');
+            setPwChange2FAUseBackup(false);
 
             // Hide success after 5 seconds
             setTimeout(() => setPasswordSuccess(false), 5000);
@@ -1288,6 +1309,32 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 </button>
                             </div>
                         </div>
+
+                        {/* 2FA Verification (conditional) */}
+                        <Show when={totpEnabled()}>
+                            <div class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-3">
+                                <div class="flex items-center gap-2">
+                                    <Shield class="w-4 h-4 text-amber-400" />
+                                    <span class="text-sm font-medium text-amber-300">2FA Verification Required</span>
+                                </div>
+                                <p class="text-xs text-gray-500">Your account has 2FA enabled. Enter your authenticator code to change your password.</p>
+                                <input
+                                    type="text"
+                                    maxLength={pwChange2FAUseBackup() ? 8 : 6}
+                                    value={pwChange2FACode()}
+                                    onInput={(e) => setPwChange2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, pwChange2FAUseBackup() ? 8 : 6))}
+                                    placeholder={pwChange2FAUseBackup() ? 'Backup code' : '6-digit code'}
+                                    class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-center font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setPwChange2FAUseBackup(!pwChange2FAUseBackup())}
+                                    class="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                                >
+                                    {pwChange2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
+                                </button>
+                            </div>
+                        </Show>
 
                         {/* Error Message */}
                         <Show when={passwordError()}>

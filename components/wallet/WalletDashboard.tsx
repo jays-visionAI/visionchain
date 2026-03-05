@@ -1183,8 +1183,8 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                             e.stopPropagation();
                             setIsMobileHistoryOpen(true);
                         }}
-                        class="fixed top-20 right-4 z-[52] w-12 h-12 bg-[#1a1a1c]/95 backdrop-blur-lg border border-white/15 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-90 transition-all"
-                        style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+                        class="fixed top-3 right-4 z-[52] w-11 h-11 bg-[#1a1a1c]/95 backdrop-blur-lg border border-white/15 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] active:scale-90 transition-all"
+                        style="touch-action: manipulation; -webkit-tap-highlight-color: transparent; top: max(12px, env(safe-area-inset-top, 12px));"
                         title="Chat History"
                     >
                         <History class="w-5 h-5 text-purple-400" />
@@ -1198,13 +1198,13 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     style="-webkit-overflow-scrolling: touch; max-width: 100vw;"
                 >
                     <Show when={props.messages().length === 0}>
-                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-24 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
+                        <div class="min-h-full h-full flex flex-col items-center justify-start p-6 pt-16 md:pt-32 w-full max-w-2xl mx-auto z-10 pb-48 md:pb-64">
                             {/* Welcome & Quick Actions */}
                             <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
-                                class="w-full max-w-sm flex flex-col gap-6 self-center px-1"
+                                class="w-full md:max-w-sm flex flex-col gap-6 self-center overflow-hidden"
                             >
                                 <div class="flex flex-col gap-1">
                                     <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
