@@ -1204,7 +1204,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.5 }}
-                                class="w-full max-w-sm flex flex-col gap-6 self-center"
+                                class="w-full max-w-sm flex flex-col gap-6 self-center px-1"
                             >
                                 <div class="flex flex-col gap-1">
                                     <h2 class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-white">
@@ -1623,7 +1623,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
                     {/* Collapsed State - Always show mini bar when collapsed */}
                     <Show when={!bottomSheetExpanded()}>
                         <div
-                            class="px-4 pb-6 flex items-center gap-3"
+                            class="px-5 pb-6 flex items-center gap-3"
                             onClick={() => setBottomSheetExpanded(true)}
                         >
                             <div class="flex-1 bg-[#1a1a1c] rounded-2xl px-5 py-3 text-gray-400 text-base border border-white/10">
@@ -1639,7 +1639,7 @@ export const WalletDashboard = (props: WalletDashboardProps) => {
 
                     {/* Expanded State - Full Input */}
                     <Show when={bottomSheetExpanded()}>
-                        <div class="px-4 pb-6">
+                        <div class="px-5 pb-6">
                             {/* Mobile Agent Desk - Show when there are active agents or bridge monitoring possible */}
                             <Show when={activeTimeTasks().length > 0 || activeBatchAgents().length > 0 || props.userProfile()?.address}>
                                 <div class="mb-3">
