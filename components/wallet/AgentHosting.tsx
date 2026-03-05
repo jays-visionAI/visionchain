@@ -1,6 +1,7 @@
 import { createSignal, Show, For, onMount, createMemo, createEffect } from 'solid-js';
 import { Bot, Play, Pause, Settings, Clock, Zap, ArrowUpRight, Shield, RefreshCw, ChevronRight, AlertTriangle, CheckCircle, Trash2, Copy } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
+import { addRewardPoints, getRPConfig } from '../../services/firebaseService';
 
 // Agent Gateway API URL - environment-aware
 const AGENT_API_URL = (() => {
@@ -366,6 +367,16 @@ export default function AgentHosting(props: AgentHostingProps) {
                     vcn_balance: '100',
                 }]);
                 setSetupStep(2); // Skip to behavior config (was step 3)
+
+                // Award RP for agent creation (fire-and-forget)
+                const ownerEmail = props.userEmail();
+                if (ownerEmail) {
+                    getRPConfig().then(rpCfg => {
+                        if (rpCfg.agent_create > 0) {
+                            addRewardPoints(ownerEmail, rpCfg.agent_create, 'agent_create', data.agent.agent_name).catch(() => { });
+                        }
+                    }).catch(() => { });
+                }
             } else {
                 setRegisterError(data.error || 'Registration failed');
             }

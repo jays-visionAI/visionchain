@@ -11,7 +11,7 @@ import {
     streamVideoChunks,
     formatFileSize
 } from '../../services/diskService';
-import { getFirebaseDb } from '../../services/firebaseService';
+import { getFirebaseDb, addRewardPoints, getRPConfig } from '../../services/firebaseService';
 import { WalletService } from '../../services/walletService';
 import { contractService } from '../../services/contractService';
 import VCNTokenABI from '../../services/abi/VCNToken.json';
@@ -401,6 +401,17 @@ const VisionMarket = (props: { walletAddress?: string }) => {
 
             if (result.success) {
                 setPurchasedIds(prev => new Set(prev).add(item.id));
+
+                // Award RP for market_purchase (fire-and-forget)
+                const userEmail = auth.user()?.email;
+                if (userEmail) {
+                    getRPConfig().then(rpCfg => {
+                        if (rpCfg.market_purchase > 0) {
+                            addRewardPoints(userEmail, rpCfg.market_purchase, 'market_purchase', item.name).catch(() => { });
+                        }
+                    }).catch(() => { });
+                }
+
                 // 4. Download the file
                 await downloadFile(item);
             } else {

@@ -80,7 +80,9 @@ import {
     getUserContacts,
     updateScheduledTaskStatus,
     findUserByAddress,
-    uploadProfileImage
+    uploadProfileImage,
+    addRewardPoints,
+    getRPConfig
 } from '../services/firebaseService';
 
 import { collection, query, where, onSnapshot, doc, setDoc, limit, orderBy } from 'firebase/firestore';
@@ -4081,6 +4083,13 @@ If they say "Yes", output the navigate intent JSON for "referral".
                 // Extract and store user memory (fire-and-forget, non-blocking)
                 import('../services/ai/userMemory').then(({ extractAndStoreMemory }) => {
                     extractAndStoreMemory(userProfile().email, userMessage, cleanResponse).catch(() => { });
+                }).catch(() => { });
+
+                // Award RP for AI chat (fire-and-forget)
+                getRPConfig().then(rpCfg => {
+                    if (rpCfg.ai_chat > 0) {
+                        addRewardPoints(userProfile().email, rpCfg.ai_chat, 'ai_chat', 'AI conversation').catch(() => { });
+                    }
                 }).catch(() => { });
             }
         } catch (error) {

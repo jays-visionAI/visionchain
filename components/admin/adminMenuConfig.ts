@@ -29,7 +29,8 @@ import {
     Coins,
     Server,
     Globe,
-    Lightbulb
+    Lightbulb,
+    Gift
 } from 'lucide-solid';
 
 
@@ -62,7 +63,8 @@ export const iconMap: Record<string, Component<{ class?: string }>> = {
     Coins,
     Server,
     Globe,
-    Lightbulb
+    Lightbulb,
+    Gift
 };
 
 // Menu item interface with optional children for sub-menus
@@ -204,6 +206,16 @@ export const adminMenuConfig: AdminMenuItem[] = [
         badge: 'NEW',
         category: 'core',
         order: 11.5
+    },
+    {
+        id: 'rp-config',
+        path: '/adminsystem/rp-config',
+        label: 'RP Rewards',
+        icon: 'Gift',
+        badge: 'NEW',
+        category: 'core',
+        order: 11.7,
+        requiredRole: 'admin'
     },
     {
         id: 'vcn-settings',

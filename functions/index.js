@@ -8442,6 +8442,30 @@ async function authenticateFirebaseUser(idToken) {
 let _gwPricingCache = null;
 let _gwPricingCacheAt = 0;
 
+// ── RP Config: Reads per-action RP amounts from Firestore config/rp_rewards ──
+const RP_DEFAULTS = {
+  referral: 10, levelup: 100,
+  agent_transfer_send: 5, agent_transfer_batch: 5,
+  agent_staking_deposit: 20, agent_staking_unstake: 5,
+  agent_staking_claim: 10, agent_staking_withdraw: 10,
+  agent_staking_compound: 25, agent_bridge_initiate: 15,
+  agent_nft_mint: 30, agent_referral_inviter: 50, agent_referral_invitee: 25,
+};
+let _rpCfg = null;
+let _rpCfgAt = 0;
+async function getRPConfig() {
+  if (_rpCfg && Date.now() - _rpCfgAt < 5 * 60 * 1000) return _rpCfg;
+  try {
+    const snap = await admin.firestore().collection("config").doc("rp_rewards").get();
+    _rpCfg = snap.exists ? { ...RP_DEFAULTS, ...snap.data() } : { ...RP_DEFAULTS };
+    _rpCfgAt = Date.now();
+    return _rpCfg;
+  } catch (e) {
+    console.warn("[RP] Config load failed:", e.message);
+    return { ...RP_DEFAULTS };
+  }
+}
+
 exports.agentGateway = onRequest({
   cors: true,
   invoker: "public",
@@ -8634,6 +8658,7 @@ exports.agentGateway = onRequest({
   }
 
   try {
+    const rpCfg = await getRPConfig();
     const body = req.body;
     const action = body.action;
     // Support header-based auth (preferred) with body fallback (legacy)
@@ -8927,10 +8952,10 @@ exports.agentGateway = onRequest({
             const referrerData = referrerDoc.data();
             await referrerDoc.ref.update({
               referralCount: admin.firestore.FieldValue.increment(1),
-              rpPoints: admin.firestore.FieldValue.increment(50),
+              rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_referral_inviter),
             });
             await agentDocRef.update({
-              rpPoints: admin.firestore.FieldValue.increment(25),
+              rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_referral_invitee),
             });
             console.log(`[Agent Gateway] Referral processed: ${refCode} -> ${agentName}`);
 
@@ -9400,7 +9425,7 @@ exports.agentGateway = onRequest({
       // Update stats
       await db.collection("agents").doc(agent.id).update({
         transferCount: admin.firestore.FieldValue.increment(1),
-        rpPoints: admin.firestore.FieldValue.increment(5),
+        rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_transfer_send),
       });
 
       // Save transaction record
@@ -9420,7 +9445,7 @@ exports.agentGateway = onRequest({
         from: agent.walletAddress,
         to: to,
         amount: amount.toString(),
-        rp_earned: 5,
+        rp_earned: rpCfg.agent_transfer_send,
       });
     }
 
@@ -9652,7 +9677,7 @@ exports.agentGateway = onRequest({
 
         // Update stats
         await db.collection("agents").doc(agent.id).update({
-          rpPoints: admin.firestore.FieldValue.increment(20),
+          rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_staking_deposit),
         });
 
         // Record transaction
@@ -9671,7 +9696,7 @@ exports.agentGateway = onRequest({
           tx_hash: stakeTx.hash,
           agent_name: agent.agentName,
           amount_staked: stakeAmount.toString(),
-          rp_earned: 20,
+          rp_earned: rpCfg.agent_staking_deposit,
           message: "VCN staked successfully as a validator node",
         });
       } catch (stakeErr) {
@@ -9716,7 +9741,7 @@ exports.agentGateway = onRequest({
 
         // Update stats
         await db.collection("agents").doc(agent.id).update({
-          rpPoints: admin.firestore.FieldValue.increment(5),
+          rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_staking_unstake),
         });
 
         // Record transaction
@@ -9736,7 +9761,7 @@ exports.agentGateway = onRequest({
           agent_name: agent.agentName,
           amount_unstaking: unstakeAmount.toString(),
           cooldown_info: "Unstaking requires a cooldown period before withdrawal",
-          rp_earned: 5,
+          rp_earned: rpCfg.agent_staking_unstake,
         });
       } catch (unstakeErr) {
         console.error("[Agent Gateway] Unstake error:", unstakeErr.message);
@@ -9775,7 +9800,7 @@ exports.agentGateway = onRequest({
 
         // Update stats
         await db.collection("agents").doc(agent.id).update({
-          rpPoints: admin.firestore.FieldValue.increment(10),
+          rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_staking_claim),
         });
 
         // Record transaction
@@ -9794,7 +9819,7 @@ exports.agentGateway = onRequest({
           tx_hash: claimTx.hash,
           agent_name: agent.agentName,
           rewards_claimed: rewardAmount,
-          rp_earned: 10,
+          rp_earned: rpCfg.agent_staking_claim,
         });
       } catch (claimErr) {
         console.error("[Agent Gateway] Claim error:", claimErr.message);
@@ -10319,7 +10344,7 @@ exports.agentGateway = onRequest({
         if (!agent._isUser) {
           await db.collection("agents").doc(agent.id).update({
             transferCount: admin.firestore.FieldValue.increment(successCount),
-            rpPoints: admin.firestore.FieldValue.increment(successCount * 5),
+            rpPoints: admin.firestore.FieldValue.increment(successCount * rpCfg.agent_transfer_batch),
           });
         }
 
@@ -10350,7 +10375,7 @@ exports.agentGateway = onRequest({
           completed: successCount,
           failed: transactions.length - successCount,
           results,
-          rp_earned: agent._isUser ? 0 : successCount * 5,
+          rp_earned: agent._isUser ? 0 : successCount * rpCfg.agent_transfer_batch,
         });
       } catch (e) {
         return res.status(500).json({ error: `Batch transfer failed: ${e.reason || e.message}` });
@@ -10462,7 +10487,7 @@ exports.agentGateway = onRequest({
         await withdrawTx.wait();
 
         await db.collection("agents").doc(agent.id).update({
-          rpPoints: admin.firestore.FieldValue.increment(10),
+          rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_staking_withdraw),
         });
 
         await db.collection("agents").doc(agent.id).collection("transactions").add({
@@ -10480,7 +10505,7 @@ exports.agentGateway = onRequest({
           tx_hash: withdrawTx.hash,
           agent_name: agent.agentName,
           amount_withdrawn: ethers.formatEther(unstakeAmount),
-          rp_earned: 10,
+          rp_earned: rpCfg.agent_staking_withdraw,
         });
       } catch (e) {
         console.error("[Agent Gateway] Withdraw error:", e.message);
@@ -10542,7 +10567,7 @@ exports.agentGateway = onRequest({
         const rewardAmount = ethers.formatEther(pendingReward);
 
         await db.collection("agents").doc(agent.id).update({
-          rpPoints: admin.firestore.FieldValue.increment(25),
+          rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_staking_compound),
         });
 
         await db.collection("agents").doc(agent.id).collection("transactions").add({
@@ -10562,7 +10587,7 @@ exports.agentGateway = onRequest({
           restake_tx: stakeTx.hash,
           agent_name: agent.agentName,
           amount_compounded: rewardAmount,
-          rp_earned: 25,
+          rp_earned: rpCfg.agent_staking_compound,
           message: "Rewards claimed and re-staked successfully",
         });
       } catch (e) {
@@ -11178,7 +11203,7 @@ exports.agentGateway = onRequest({
 
         if (!agent._isUser) {
           await db.collection("agents").doc(agent.id).update({
-            rpPoints: admin.firestore.FieldValue.increment(15),
+            rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_bridge_initiate),
           });
         }
 
@@ -11207,7 +11232,7 @@ exports.agentGateway = onRequest({
           destination_chain: destChainId,
           recipient: bridgeRecipient,
           status: "committed",
-          rp_earned: agent._isUser ? 0 : 15,
+          rp_earned: agent._isUser ? 0 : rpCfg.agent_bridge_initiate,
         });
       } catch (e) {
         console.error("[Agent Gateway] Bridge error:", e.message);
@@ -11638,7 +11663,7 @@ exports.agentGateway = onRequest({
           sbtTokenId: tokenId,
           sbtTxHash: mintTx.hash,
           sbtStatus: "completed",
-          rpPoints: admin.firestore.FieldValue.increment(30),
+          rpPoints: admin.firestore.FieldValue.increment(rpCfg.agent_nft_mint),
         });
 
         return res.status(200).json({
@@ -11648,7 +11673,7 @@ exports.agentGateway = onRequest({
           token_type: "VisionAgentSBT (VRC-5192)",
           minted_to: targetAddress,
           soulbound: true,
-          rp_earned: 30,
+          rp_earned: rpCfg.agent_nft_mint,
         });
       } catch (e) {
         return res.status(500).json({ error: `NFT mint failed: ${e.reason || e.message}` });

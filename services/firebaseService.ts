@@ -950,10 +950,19 @@ export const getUserClaimableRewards = async (email: string): Promise<{
 
 // ==================== Reward Point (RP) System ====================
 
+export type RPActionType =
+    | 'referral' | 'levelup'
+    | 'disk_upload' | 'disk_download'
+    | 'market_purchase' | 'market_publish'
+    | 'ai_chat' | 'agent_create'
+    | 'profile_update' | 'daily_login'
+    | 'staking_deposit' | 'transfer_send'
+    | 'mobile_node_daily';
+
 export interface RPEntry {
     id?: string;
     userId: string;         // email
-    type: 'referral' | 'levelup';
+    type: RPActionType;
     amount: number;         // RP earned
     source: string;         // e.g. "user@email.com" or "Reached LVL 10"
     roundId?: number;
@@ -966,8 +975,110 @@ export interface UserRP {
     availableRP: number;    // totalRP - claimedRP
 }
 
-const RP_PER_REFERRAL = 10;
-const RP_LEVELUP_BONUS = 100;
+// ── RP Config (Admin-managed via Firestore config/rp_rewards) ──
+
+export interface RPConfig {
+    // User actions
+    referral: number;
+    levelup: number;
+    disk_upload: number;
+    disk_download: number;
+    market_purchase: number;
+    market_publish: number;
+    ai_chat: number;
+    agent_create: number;
+    profile_update: number;
+    daily_login: number;
+    staking_deposit: number;
+    transfer_send: number;
+    mobile_node_daily: number;
+    // Agent API actions
+    agent_transfer_send: number;
+    agent_transfer_batch: number;
+    agent_staking_deposit: number;
+    agent_staking_unstake: number;
+    agent_staking_claim: number;
+    agent_staking_withdraw: number;
+    agent_staking_compound: number;
+    agent_bridge_initiate: number;
+    agent_nft_mint: number;
+    agent_referral_inviter: number;
+    agent_referral_invitee: number;
+}
+
+const DEFAULT_RP_CONFIG: RPConfig = {
+    referral: 10,
+    levelup: 100,
+    disk_upload: 3,
+    disk_download: 1,
+    market_purchase: 10,
+    market_publish: 5,
+    ai_chat: 1,
+    agent_create: 15,
+    profile_update: 2,
+    daily_login: 5,
+    staking_deposit: 10,
+    transfer_send: 3,
+    mobile_node_daily: 5,
+    // Agent API defaults
+    agent_transfer_send: 5,
+    agent_transfer_batch: 5,
+    agent_staking_deposit: 20,
+    agent_staking_unstake: 5,
+    agent_staking_claim: 10,
+    agent_staking_withdraw: 10,
+    agent_staking_compound: 25,
+    agent_bridge_initiate: 15,
+    agent_nft_mint: 30,
+    agent_referral_inviter: 50,
+    agent_referral_invitee: 25,
+};
+
+let _rpConfigCache: RPConfig | null = null;
+let _rpConfigCacheAt = 0;
+const RP_CONFIG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Loads RP config from Firestore config/rp_rewards (cached 5 min).
+ * Falls back to DEFAULT_RP_CONFIG if doc doesn't exist.
+ */
+export const getRPConfig = async (): Promise<RPConfig> => {
+    if (_rpConfigCache && Date.now() - _rpConfigCacheAt < RP_CONFIG_CACHE_TTL) {
+        return _rpConfigCache;
+    }
+    try {
+        const db = getFirebaseDb();
+        const snap = await getDoc(doc(db, 'config', 'rp_rewards'));
+        if (snap.exists()) {
+            _rpConfigCache = { ...DEFAULT_RP_CONFIG, ...snap.data() } as RPConfig;
+        } else {
+            _rpConfigCache = { ...DEFAULT_RP_CONFIG };
+        }
+        _rpConfigCacheAt = Date.now();
+        return _rpConfigCache;
+    } catch (e) {
+        console.warn('[RP] Config load failed, using defaults:', e);
+        return { ...DEFAULT_RP_CONFIG };
+    }
+};
+
+/**
+ * Updates RP config in Firestore (admin only). Clears cache.
+ */
+export const updateRPConfig = async (config: Partial<RPConfig>): Promise<void> => {
+    const db = getFirebaseDb();
+    const configRef = doc(db, 'config', 'rp_rewards');
+    const snap = await getDoc(configRef);
+    if (snap.exists()) {
+        await updateDoc(configRef, { ...config, updatedAt: new Date().toISOString() });
+    } else {
+        await setDoc(configRef, { ...DEFAULT_RP_CONFIG, ...config, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    _rpConfigCache = null;
+    _rpConfigCacheAt = 0;
+    console.log('[RP] Config updated:', config);
+};
+
 const LEVELUP_INTERVAL = 10; // Every 10 levels
 
 /**
@@ -984,7 +1095,7 @@ const calculateLevelFromRefs = (count: number): number => {
 export const addRewardPoints = async (
     userId: string,
     amount: number,
-    type: 'referral' | 'levelup',
+    type: RPActionType,
     source: string,
     roundId?: number
 ): Promise<void> => {
@@ -1097,9 +1208,10 @@ export const awardReferralRP = async (
     let referralRP = 0;
     let levelupRP = 0;
     const roundId = calculateCurrentRoundId();
+    const rpConfig = await getRPConfig();
 
-    // 1. Award referral RP (10 RP per referral)
-    referralRP = RP_PER_REFERRAL;
+    // 1. Award referral RP (config-driven)
+    referralRP = rpConfig.referral;
     await addRewardPoints(
         referrerId,
         referralRP,
@@ -1115,10 +1227,10 @@ export const awardReferralRP = async (
     if (newLevel > prevLevel) {
         for (let lvl = prevLevel + 1; lvl <= newLevel; lvl++) {
             if (lvl % LEVELUP_INTERVAL === 0) {
-                levelupRP += RP_LEVELUP_BONUS;
+                levelupRP += rpConfig.levelup;
                 await addRewardPoints(
                     referrerId,
-                    RP_LEVELUP_BONUS,
+                    rpConfig.levelup,
                     'levelup',
                     `Reached LVL ${lvl}`,
                     roundId
@@ -1164,14 +1276,14 @@ export const backfillAllUsersRP = async (): Promise<{
         processed++;
 
         // Calculate expected total RP
-        const referralRP = referralCount * RP_PER_REFERRAL;
+        const referralRP = referralCount * DEFAULT_RP_CONFIG.referral;
 
         // Calculate level-up bonuses
         const currentLevel = calculateLevelFromRefs(referralCount);
         let levelupRP = 0;
         for (let lvl = 1; lvl <= currentLevel; lvl++) {
             if (lvl % LEVELUP_INTERVAL === 0) {
-                levelupRP += RP_LEVELUP_BONUS;
+                levelupRP += DEFAULT_RP_CONFIG.levelup;
             }
         }
 

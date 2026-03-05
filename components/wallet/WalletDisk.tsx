@@ -8,6 +8,7 @@ import {
 } from 'lucide-solid';
 import { WalletViewHeader } from './WalletViewHeader';
 import { useAuth } from '../auth/authContext';
+import { addRewardPoints, getRPConfig } from '../../services/firebaseService';
 import {
     uploadDiskFile, downloadDiskFile, downloadDiskFileGranular, listDiskFiles, deleteDiskFile, renameDiskFile,
     createDiskFolder, listDiskFolders, deleteDiskFolder, renameDiskFolder,
@@ -347,6 +348,14 @@ export const WalletDisk = (props: {
                         )
                     );
                 }, extraMeta);
+
+                // Award RP for disk upload
+                try {
+                    const rpCfg = await getRPConfig();
+                    if (rpCfg.disk_upload > 0) {
+                        await addRewardPoints(email(), rpCfg.disk_upload, 'disk_upload', file.name);
+                    }
+                } catch (_rpErr) { /* non-blocking */ }
             } catch (err: any) {
                 setUploadQueue(prev =>
                     prev.map(item =>
@@ -519,6 +528,13 @@ export const WalletDisk = (props: {
 
                 const result = await downloadDiskFile(userEmail, file.id);
 
+                // Award RP for disk download (fire-and-forget)
+                getRPConfig().then(rpCfg => {
+                    if (rpCfg.disk_download > 0) {
+                        addRewardPoints(userEmail, rpCfg.disk_download, 'disk_download', file.name).catch(() => { });
+                    }
+                }).catch(() => { });
+
                 // If encrypted, decrypt the blob
                 if (file.isEncrypted) {
                     if (!encryptionPassword()) {
@@ -602,6 +618,15 @@ export const WalletDisk = (props: {
             if (isNaN(price) || price < 0) throw new Error('Invalid price');
 
             await publishDiskFile(email(), file.id, price);
+
+            // Award RP for market_publish
+            try {
+                const rpCfg = await getRPConfig();
+                if (rpCfg.market_publish > 0) {
+                    await addRewardPoints(email(), rpCfg.market_publish, 'market_publish', file.name);
+                }
+            } catch (_rpErr) { /* non-blocking */ }
+
             setShowPublishModal(false);
             setPublishingFile(null);
             setContextMenu(null);

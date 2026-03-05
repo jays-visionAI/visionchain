@@ -27,6 +27,7 @@ export const AdminApiPricing = lazy(() => import('../components/admin/AdminApiPr
 export const AdminNodeHealth = lazy(() => import('../components/admin/AdminNodeHealth'));
 export const AdminVisionNodes = lazy(() => import('../components/admin/AdminVisionNodes'));
 export const AdminDailyTips = lazy(() => import('../components/admin/AdminDailyTips'));
+export const AdminRPConfig = lazy(() => import('../components/admin/AdminRPConfig'));
 
 
 // Loading spinner component
@@ -308,6 +309,17 @@ export function AdminDailyTipsPage() {
         <Suspense fallback={<PageLoader />}>
             <AdminLayout>
                 <AdminDailyTips />
+            </AdminLayout>
+        </Suspense>
+    );
+}
+
+export function AdminRPConfigPage() {
+    document.title = 'RP Rewards Config | Admin';
+    return (
+        <Suspense fallback={<PageLoader />}>
+            <AdminLayout>
+                <AdminRPConfig />
             </AdminLayout>
         </Suspense>
     );
