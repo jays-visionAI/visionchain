@@ -23,8 +23,8 @@ import {
     Cloud,
     RefreshCw,
 } from 'lucide-solid';
-import { getUserPreset, saveUserPreset, getUserData, updateUserData, getEmailPreferences, updateEmailPreferences } from '../../services/firebaseService';
-import type { EmailCategory } from '../../services/firebaseService';
+import { getUserPreset, saveUserPreset, getUserData, updateUserData, getEmailPreferences, updateEmailPreferences, getTransferThreshold, saveTransferThreshold } from '../../services/firebaseService';
+import type { EmailCategory, TransferThreshold } from '../../services/firebaseService';
 import { CloudWalletService, calculatePasswordStrength } from '../../services/cloudWalletService';
 import { WalletService } from '../../services/walletService';
 import { countries, Country } from './CountryData';
@@ -106,6 +106,17 @@ export function WalletSettings(props: { onBack?: () => void }) {
     // 2FA verification for password change
     const [pwChange2FACode, setPwChange2FACode] = createSignal('');
     const [pwChange2FAUseBackup, setPwChange2FAUseBackup] = createSignal(false);
+
+    // Transfer threshold state
+    const [thresholdSettings, setThresholdSettings] = createSignal<TransferThreshold>({ vcnAmount: 1000, usdAmount: 1000, enabled: true });
+    const [thresholdVcnInput, setThresholdVcnInput] = createSignal('1000');
+    const [thresholdUsdInput, setThresholdUsdInput] = createSignal('1000');
+    const [thresholdEditing, setThresholdEditing] = createSignal(false);
+    const [thresholdSaving, setThresholdSaving] = createSignal(false);
+    const [threshold2FACode, setThreshold2FACode] = createSignal('');
+    const [threshold2FAUseBackup, setThreshold2FAUseBackup] = createSignal(false);
+    const [thresholdError, setThresholdError] = createSignal('');
+    const [thresholdSuccess, setThresholdSuccess] = createSignal('');
 
     // Email preferences state
     const [emailCategories, setEmailCategories] = createSignal<EmailCategory[]>([]);
@@ -456,6 +467,16 @@ export function WalletSettings(props: { onBack?: () => void }) {
 
             // Check TOTP 2FA status
             await loadTOTPStatus();
+
+            // Load transfer threshold
+            try {
+                const threshold = await getTransferThreshold(auth.user().email);
+                setThresholdSettings(threshold);
+                setThresholdVcnInput(String(threshold.vcnAmount));
+                setThresholdUsdInput(String(threshold.usdAmount));
+            } catch (e) {
+                console.warn('[Settings] Failed to load transfer threshold:', e);
+            }
         }
 
         setSelectedCountry(initialCountry);
@@ -1227,6 +1248,174 @@ export function WalletSettings(props: { onBack?: () => void }) {
                                 </Show>
                             </div>
                         </div>
+
+                        {/* Transfer Threshold Section */}
+                        <Show when={totpEnabled()}>
+                            <div class="p-6 hover:bg-white/[0.01] transition-colors">
+                                <div class="flex items-start gap-4 mb-4">
+                                    <div class="p-2 rounded-lg bg-amber-500/10">
+                                        <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <p class="text-white font-medium">Transfer 2FA Threshold</p>
+                                                <p class="text-gray-500 text-sm mt-0.5">Require 2FA verification for transfers exceeding this amount</p>
+                                            </div>
+                                            <Toggle checked={thresholdSettings().enabled} onChange={(val) => {
+                                                if (!val) {
+                                                    // Disabling requires 2FA too
+                                                    setThresholdEditing(true);
+                                                } else {
+                                                    const updated = { ...thresholdSettings(), enabled: true };
+                                                    setThresholdSettings(updated);
+                                                    const email = auth.user()?.email;
+                                                    if (email) saveTransferThreshold(email, updated);
+                                                }
+                                            }} />
+                                        </div>
+
+                                        <Show when={thresholdSettings().enabled}>
+                                            <div class="mt-4 space-y-4">
+                                                <Show when={!thresholdEditing()}>
+                                                    <div class="flex flex-col sm:flex-row gap-3">
+                                                        <div class="flex-1 p-3 bg-white/[0.03] border border-white/10 rounded-xl">
+                                                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">VCN Threshold</div>
+                                                            <div class="text-lg font-black text-white">{thresholdSettings().vcnAmount.toLocaleString()} <span class="text-cyan-400 text-sm">VCN</span></div>
+                                                        </div>
+                                                        <div class="flex-1 p-3 bg-white/[0.03] border border-white/10 rounded-xl">
+                                                            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">USD Threshold (Other Assets)</div>
+                                                            <div class="text-lg font-black text-white">${thresholdSettings().usdAmount.toLocaleString()} <span class="text-green-400 text-sm">USD</span></div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setThresholdEditing(true)}
+                                                        class="text-sm text-cyan-400 hover:text-cyan-300 font-bold transition-colors"
+                                                    >
+                                                        Change Threshold
+                                                    </button>
+                                                </Show>
+
+                                                <Show when={thresholdEditing()}>
+                                                    <div class="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-4">
+                                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label class="text-xs text-gray-400 font-medium block mb-1.5">VCN Amount</label>
+                                                                <div class="relative">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="100"
+                                                                        value={thresholdVcnInput()}
+                                                                        onInput={(e) => setThresholdVcnInput(e.currentTarget.value)}
+                                                                        class="w-full p-3 pr-14 bg-white/5 border border-white/10 rounded-xl text-white font-mono focus:outline-none focus:border-amber-500/50"
+                                                                    />
+                                                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-cyan-400">VCN</span>
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <label class="text-xs text-gray-400 font-medium block mb-1.5">USD Amount (Other Assets)</label>
+                                                                <div class="relative">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="100"
+                                                                        value={thresholdUsdInput()}
+                                                                        onInput={(e) => setThresholdUsdInput(e.currentTarget.value)}
+                                                                        class="w-full p-3 pr-14 bg-white/5 border border-white/10 rounded-xl text-white font-mono focus:outline-none focus:border-amber-500/50"
+                                                                    />
+                                                                    <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-green-400">USD</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-xs text-gray-500">Set to 0 to require 2FA on every transfer. Enter your 2FA code to confirm changes.</p>
+                                                        <input
+                                                            type="text"
+                                                            maxLength={threshold2FAUseBackup() ? 8 : 6}
+                                                            value={threshold2FACode()}
+                                                            onInput={(e) => setThreshold2FACode(e.currentTarget.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, threshold2FAUseBackup() ? 8 : 6))}
+                                                            placeholder={threshold2FAUseBackup() ? 'Backup code' : '6-digit 2FA code'}
+                                                            class="w-full p-3 bg-white/5 border border-white/10 rounded-xl text-white text-center font-mono tracking-[0.3em] placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setThreshold2FAUseBackup(!threshold2FAUseBackup())}
+                                                            class="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                                                        >
+                                                            {threshold2FAUseBackup() ? 'Use Authenticator App instead' : 'Use Backup Code instead'}
+                                                        </button>
+                                                        <Show when={thresholdError()}>
+                                                            <div class="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{thresholdError()}</div>
+                                                        </Show>
+                                                        <Show when={thresholdSuccess()}>
+                                                            <div class="text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
+                                                                <Check class="w-4 h-4" />
+                                                                {thresholdSuccess()}
+                                                            </div>
+                                                        </Show>
+                                                        <div class="flex gap-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={async () => {
+                                                                    if (!threshold2FACode() || threshold2FACode().length < 6) {
+                                                                        setThresholdError('Please enter your 2FA code.');
+                                                                        return;
+                                                                    }
+                                                                    setThresholdSaving(true);
+                                                                    setThresholdError('');
+                                                                    try {
+                                                                        const verifyResult = await CloudWalletService.verifyTOTP(threshold2FACode(), threshold2FAUseBackup());
+                                                                        if (!verifyResult.success) {
+                                                                            setThresholdError(verifyResult.error || 'Invalid 2FA code.');
+                                                                            return;
+                                                                        }
+                                                                        const updated: TransferThreshold = {
+                                                                            vcnAmount: Math.max(0, parseInt(thresholdVcnInput()) || 0),
+                                                                            usdAmount: Math.max(0, parseInt(thresholdUsdInput()) || 0),
+                                                                            enabled: true,
+                                                                        };
+                                                                        const email = auth.user()?.email;
+                                                                        if (email) await saveTransferThreshold(email, updated);
+                                                                        setThresholdSettings(updated);
+                                                                        setThresholdEditing(false);
+                                                                        setThreshold2FACode('');
+                                                                        setThresholdSuccess('Threshold updated successfully.');
+                                                                        setTimeout(() => setThresholdSuccess(''), 3000);
+                                                                    } catch (err: any) {
+                                                                        setThresholdError(err.message || 'Failed to save.');
+                                                                    } finally {
+                                                                        setThresholdSaving(false);
+                                                                    }
+                                                                }}
+                                                                disabled={thresholdSaving() || threshold2FACode().length < 6}
+                                                                class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                                            >
+                                                                <Show when={thresholdSaving()} fallback="Save">
+                                                                    <RefreshCw class="w-4 h-4 animate-spin" />
+                                                                </Show>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setThresholdEditing(false);
+                                                                    setThresholdVcnInput(String(thresholdSettings().vcnAmount));
+                                                                    setThresholdUsdInput(String(thresholdSettings().usdAmount));
+                                                                    setThreshold2FACode('');
+                                                                    setThresholdError('');
+                                                                }}
+                                                                class="px-6 py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-all"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </Show>
+                                            </div>
+                                        </Show>
+                                    </div>
+                                </div>
+                            </div>
+                        </Show>
                     </div>
                 </div>
             </Show>

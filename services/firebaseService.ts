@@ -1081,6 +1081,57 @@ export const updateRPConfig = async (config: Partial<RPConfig>): Promise<void> =
     console.log('[RP] Config updated:', config);
 };
 
+// ── 2FA Transfer Threshold ──
+
+export interface TransferThreshold {
+    vcnAmount: number;    // VCN amount threshold (default: 1000)
+    usdAmount: number;    // USD equivalent threshold for other assets (default: 1000)
+    enabled: boolean;     // Whether threshold-based 2FA is enabled
+}
+
+const DEFAULT_TRANSFER_THRESHOLD: TransferThreshold = {
+    vcnAmount: 1000,
+    usdAmount: 1000,
+    enabled: true,
+};
+
+/**
+ * Get user's 2FA transfer threshold settings
+ */
+export const getTransferThreshold = async (email: string): Promise<TransferThreshold> => {
+    try {
+        const db = getFirebaseDb();
+        const snap = await getDoc(doc(db, 'user_security_settings', email.toLowerCase()));
+        if (snap.exists()) {
+            const data = snap.data();
+            return {
+                vcnAmount: data.transferThreshold?.vcnAmount ?? DEFAULT_TRANSFER_THRESHOLD.vcnAmount,
+                usdAmount: data.transferThreshold?.usdAmount ?? DEFAULT_TRANSFER_THRESHOLD.usdAmount,
+                enabled: data.transferThreshold?.enabled ?? DEFAULT_TRANSFER_THRESHOLD.enabled,
+            };
+        }
+        return { ...DEFAULT_TRANSFER_THRESHOLD };
+    } catch (err) {
+        console.warn('[Security] Failed to load transfer threshold:', err);
+        return { ...DEFAULT_TRANSFER_THRESHOLD };
+    }
+};
+
+/**
+ * Save user's 2FA transfer threshold settings
+ */
+export const saveTransferThreshold = async (email: string, threshold: TransferThreshold): Promise<void> => {
+    const db = getFirebaseDb();
+    const ref = doc(db, 'user_security_settings', email.toLowerCase());
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+        await updateDoc(ref, { transferThreshold: threshold, updatedAt: new Date().toISOString() });
+    } else {
+        await setDoc(ref, { transferThreshold: threshold, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    console.log('[Security] Transfer threshold updated:', threshold);
+};
+
 // ── User Activity Tracking ──
 
 /**
